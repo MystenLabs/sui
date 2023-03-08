@@ -850,8 +850,7 @@ async fn restart_with_new_committee() {
 }
 
 /// The test ensures the following things:
-/// * garbage collection is removing the certificates from lower rounds according to gc depth
-/// * we garbage collect/delete certificates bellow the last commit round immediately once we commit them
+/// * garbage collection is removing the certificates from lower rounds according to gc depth only
 /// * no certificate will ever get committed past the gc round
 /// * existing uncommitted certificates in DAG (ex from slow nodes where no-one references them) they
 /// get cleaned up.
@@ -927,41 +926,18 @@ async fn garbage_collection_basic() {
                 );
             }
 
-            // When we do commit for authorities, we always keep the certificates up to their latest
-            // commit round + 1. Since we always commit for authorities 1 to 3 we expect to see no
-            // certificates for them, but only for the slow authority 4 for which we never commit.
-            // In this case the highest commit round for the authorities should be the leader.round() - 1,
-            // except for the latest leader which should be leader.round().
-            for (round, certificates) in state
+            // When we do commit for authorities, we keep all the certificates and only the
+            // <= gc_round ones are discarded.
+            for (_, certificates) in state
                 .dag
                 .iter()
                 .filter(|(round, _)| **round <= sub_dag.leader.round())
             {
-                if *round == sub_dag.leader.round() {
-                    assert_eq!(
-                        certificates.len(),
-                        3,
-                        "We expect to have three certificates, everyone's except the leader's"
-                    );
-
-                    assert!(
-                        !certificates
-                            .clone()
-                            .iter()
-                            .any(|(key, _)| *key == sub_dag.leader.origin()),
-                        "Leader's certificate shouldn't be present"
-                    );
-                } else {
-                    assert_eq!(
-                        certificates.len(),
-                        1,
-                        "We expect to have only one certificate, that of slow node's"
-                    );
-                    assert!(
-                        certificates.iter().any(|(key, _)| *key == slow_node),
-                        "Slow node's certificate should be present"
-                    );
-                }
+                assert_eq!(
+                    certificates.len(),
+                    4,
+                    "We expect to have all the certificates"
+                );
             }
         })
     }
@@ -1027,25 +1003,25 @@ async fn slow_node() {
     );
 
     // Now start feeding the certificates per round up to 8. We expect to have
-    // triggered a commit up to round 6 and gc round 1.
+    // triggered a commit up to round 6 and gc round 1 & 2.
     for c in certificates {
         let _ = bullshark
             .process_certificate(&mut state, c.clone())
             .unwrap();
     }
 
-    // We expect everything to have been cleaned up by standard gc until round 3 (included)
+    // We expect everything to have been cleaned up by standard gc until round 2 (included)
     assert_eq!(
         state
             .dag
             .iter()
-            .filter(|(round, _)| **round <= 1_u64)
+            .filter(|(round, _)| **round <= 2_u64)
             .count(),
         0,
         "Didn't expect to still have certificates from round 1 and 2"
     );
 
-    // Now send the certificates of slow node. Now leader election can happen for round 8
+    // Now send the certificates of slow node. Now leader election can't happen for round 8
     // as we haven't sent yet certificates of round 9
     for c in slow_node_certificates {
         let _ = bullshark.process_certificate(&mut state, c).unwrap();
@@ -1094,7 +1070,7 @@ async fn slow_node() {
                     .filter(|c| c.origin() == slow_node)
                     .count();
 
-                assert_eq!(slow_node_total, 7);
+                assert_eq!(slow_node_total, 4);
 
                 committed = true;
             }
