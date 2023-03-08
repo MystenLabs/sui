@@ -57,7 +57,7 @@ function StakingCard() {
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const stakeIdParams = searchParams.get('staked');
+    const stakeSuiIdParams = searchParams.get('staked');
     const unstake = searchParams.get('unstake') === 'true';
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
@@ -68,14 +68,14 @@ function StakingCard() {
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
         // return only the total amount of tokens staked for a specific stakeId
-        return getStakeSuiBySuiId(allDelegation, stakeIdParams);
-    }, [allDelegation, stakeIdParams]);
+        return getStakeSuiBySuiId(allDelegation, stakeSuiIdParams);
+    }, [allDelegation, stakeSuiIdParams]);
 
     const delegationData = useMemo(() => {
-        if (!allDelegation || !stakeIdParams) return null;
+        if (!allDelegation || !stakeSuiIdParams) return null;
         // return delegation data for a specific stakeId
-        return getDelegationDataByStakeId(allDelegation, stakeIdParams);
-    }, [allDelegation, stakeIdParams]);
+        return getDelegationDataByStakeId(allDelegation, stakeSuiIdParams);
+    }, [allDelegation, stakeSuiIdParams]);
 
     const coinSymbol = useMemo(
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
@@ -132,12 +132,13 @@ function StakingCard() {
     });
     const unStakeToken = useMutation({
         mutationFn: async ({
+            delegationId,
             stakeSuId,
         }: {
             delegationId: string;
             stakeSuId: string;
         }) => {
-            if (!stakeSuId || !signer) {
+            if (!delegationId || !stakeSuId || !signer) {
                 throw new Error(
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
                 );
@@ -145,7 +146,11 @@ function StakingCard() {
 
             trackEvent('Unstake');
 
-            const response = await Coin.unStakeCoin(signer, stakeSuId);
+            const response = await Coin.unStakeCoin(
+                signer,
+                delegationId,
+                stakeSuId
+            );
             return response;
         },
     });
@@ -166,14 +171,14 @@ function StakingCard() {
                     // check for delegation data
                     if (
                         !delegationData ||
-                        !stakeIdParams ||
+                        !stakeSuiIdParams ||
                         delegationData.status === 'Pending'
                     ) {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
                         delegationId: delegationData.stakedSuiId,
-                        stakeSuId: stakeIdParams,
+                        stakeSuId: stakeSuiIdParams,
                     });
 
                     txDigest = getTransactionDigest(response);
@@ -225,7 +230,7 @@ function StakingCard() {
             queryClient,
             navigate,
             delegationData,
-            stakeIdParams,
+            stakeSuiIdParams,
             unStakeToken,
             stakeToken,
         ]
