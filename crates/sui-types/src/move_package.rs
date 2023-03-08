@@ -202,8 +202,8 @@ impl UpgradeCap {
         }
     }
 
-    /// Create an UpgradeCap for the newly published package at `package_id`, and associate it with
-    /// the fresh `uid.
+    /// Create an `UpgradeCap` for the newly published package at `package_id`, and associate it with
+    /// the fresh `uid`.
     pub fn new(uid: ObjectID, package_id: ObjectID) -> Self {
         UpgradeCap {
             id: UID::new(uid),
