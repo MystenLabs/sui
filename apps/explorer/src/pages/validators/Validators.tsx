@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Validator, type SuiEventEnvelope, getMoveEvent, isEventType } from '@mysten/sui.js';
+import {
+    type Validator,
+    type SuiEventEnvelope,
+    getMoveEvent,
+    isEventType,
+} from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
