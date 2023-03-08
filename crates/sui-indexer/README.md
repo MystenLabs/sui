@@ -30,3 +30,11 @@ cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https
 ```sh
 diesel database reset --database-url="<DATABASE_URL>"
 ```
+
+## Integration test
+Integration tests in the `integration_tests.rs` will be run by GitHub action as part of the CI checks
+to run the test locally, start a Postgresql DB and run the test using following command:
+```sh
+POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration
+```
+Note: all existing data will be wiped during the test.

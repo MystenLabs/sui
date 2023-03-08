@@ -79,7 +79,7 @@ impl IndexerStore for InMemoryIndexerStore {
         todo!()
     }
 
-    fn get_transaction_by_digest(&self, _txn_digest: String) -> Result<Transaction, IndexerError> {
+    fn get_transaction_by_digest(&self, _txn_digest: &str) -> Result<Transaction, IndexerError> {
         todo!()
     }
 

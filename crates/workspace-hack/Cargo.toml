@@ -165,6 +165,7 @@ derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["chrono", "postgres", "r2d2", "serde_json"] }
+diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -318,6 +319,7 @@ matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 memchr = { version = "2", features = ["use_std"] }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
+migrations_internals = { version = "2", default-features = false }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
@@ -823,6 +825,7 @@ deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["chrono", "postgres", "r2d2", "serde_json"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["32-column-tables", "postgres", "with-deprecated"] }
+diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -992,6 +995,8 @@ matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 memchr = { version = "2", features = ["use_std"] }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
+migrations_internals = { version = "2", default-features = false }
+migrations_macros = { version = "2" }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
