@@ -307,12 +307,10 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .next()
         .unwrap()
     {
-        SingleTransactionKind::ProgrammableTransaction(pt) => {
-            match pt.commands.iter().next().unwrap() {
-                Command::Publish(modules) => modules,
-                _ => unreachable!(),
-            }
-        }
+        SingleTransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
+            Command::Publish(modules) => modules,
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     };
 
