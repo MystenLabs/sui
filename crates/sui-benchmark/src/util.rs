@@ -75,7 +75,7 @@ pub fn make_pay_tx(
     gas: ObjectRef,
     keypair: &AccountKeyPair,
     gas_price: Option<u64>,
-) -> VerifiedTransaction {
+) -> Result<VerifiedTransaction> {
     let pay = TransactionData::new_pay(
         sender,
         input_coins,
@@ -84,8 +84,8 @@ pub fn make_pay_tx(
         gas,
         1000000,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
-    );
-    to_sender_signed_transaction(pay, keypair)
+    )?;
+    Ok(to_sender_signed_transaction(pay, keypair))
 }
 
 pub async fn split_coin_and_pay(
@@ -135,7 +135,7 @@ pub async fn split_coin_and_pay(
         updated_gas.0,
         &gas.2,
         Some(gas_price),
-    );
+    )?;
     let effects = proxy.execute_transaction(verified_tx.into()).await?;
     let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
         .iter()

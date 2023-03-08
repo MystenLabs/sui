@@ -4,6 +4,7 @@
 use fastcrypto::traits::KeyPair as KeypairTraits;
 
 use crate::crypto::Signer;
+use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
@@ -55,11 +56,15 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
-        recipient,
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(recipient, None);
+        builder.finish()
+    };
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
         sender,
-        None,
-        object.compute_object_reference(),
+        vec![object.compute_object_reference()],
+        pt,
         10000,
     );
     to_sender_signed_transaction(data, &sender_key)
