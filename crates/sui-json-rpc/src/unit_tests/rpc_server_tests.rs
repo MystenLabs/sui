@@ -28,7 +28,6 @@ use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
@@ -1002,7 +1001,11 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert!(staked_sui.is_empty());
 
-    let validators: Vec<ValidatorMetadataV1> = http_client.get_validators().await?;
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
 
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
@@ -1010,7 +1013,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
             *address,
             vec![objects[0].object_id],
             Some(1000000),
-            validators[0].sui_address,
+            validator,
             None,
             10000,
         )
@@ -1057,8 +1060,11 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert!(staked_sui.is_empty());
 
-    let validators: Vec<ValidatorMetadataV1> = http_client.get_validators().await?;
-
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
         .request_add_delegation(
@@ -1069,7 +1075,7 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
                 coins.data[2].coin_object_id,
             ],
             Some(1000000),
-            validators[0].sui_address,
+            validator,
             None,
             10000,
         )
@@ -1155,8 +1161,11 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let validators: Vec<ValidatorMetadataV1> = http_client.get_validators().await?;
-
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
     // Delegate some locked SUI
     let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
     let locked_sui = coins
@@ -1170,7 +1179,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
             *address,
             vec![locked_sui],
             Some(1000000),
-            validators[0].sui_address,
+            validator,
             None,
             10000,
         )

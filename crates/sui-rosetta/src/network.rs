@@ -9,7 +9,6 @@ use strum::IntoEnumIterator;
 
 use fastcrypto::encoding::Hex;
 use sui_types::base_types::ObjectID;
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::errors::{Error, ErrorType};
 use crate::types::{
@@ -42,21 +41,20 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state: SuiSystemState = context
+    let system_state = context
         .client
-        .read_api()
-        .get_sui_system_state()
-        .await?
-        .into();
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?;
 
     let peers = system_state
-        .get_staking_pool_info()
-        .into_iter()
-        .map(|(sui_address, (pubkey_bytes, balance))| Peer {
-            peer_id: ObjectID::from(sui_address).into(),
+        .active_validators
+        .iter()
+        .map(|validator| Peer {
+            peer_id: ObjectID::from(validator.sui_address).into(),
             metadata: Some(json!({
-                "public_key": Hex::from_bytes(&pubkey_bytes),
-                "stake_amount": balance,
+                "public_key": Hex::from_bytes(&validator.protocol_pubkey_bytes),
+                "stake_amount": validator.staking_pool_sui_balance,
             })),
         })
         .collect();

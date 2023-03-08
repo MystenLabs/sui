@@ -1,13 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::ToFromBytes;
+use multiaddr::Multiaddr;
+use narwhal_crypto::NetworkPublicKey;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
-use crate::base_types::{ObjectID, SuiAddress};
+use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 
 /// This is the JSON-RPC type for the SUI system state object.
-/// It flatterns all fields to make them top-level fields such that it as minimum
+/// It flattens all fields to make them top-level fields such that it as minimum
 /// dependencies to the internal data structures of the SUI system state type.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct SuiSystemStateSummary {
@@ -71,6 +76,30 @@ pub struct SuiSystemStateSummary {
     pub validator_candidates_size: u64,
     /// A map storing the records of validator reporting each other.
     pub validator_report_records: Vec<(SuiAddress, Vec<SuiAddress>)>,
+}
+
+impl SuiSystemStateSummary {
+    pub fn get_sui_committee_for_benchmarking(&self) -> CommitteeWithNetworkMetadata {
+        let mut voting_rights = BTreeMap::new();
+        let mut network_metadata = BTreeMap::new();
+        for validator in &self.active_validators {
+            let name = AuthorityName::from_bytes(&validator.protocol_pubkey_bytes).unwrap();
+            voting_rights.insert(name, validator.voting_power);
+            network_metadata.insert(
+                name,
+                NetworkMetadata {
+                    network_pubkey: NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)
+                        .unwrap(),
+                    network_address: Multiaddr::try_from(validator.net_address.clone()).unwrap(),
+                    p2p_address: Multiaddr::try_from(validator.p2p_address.clone()).unwrap(),
+                },
+            );
+        }
+        CommitteeWithNetworkMetadata {
+            committee: Committee::new(self.epoch, voting_rights).unwrap(),
+            network_metadata,
+        }
+    }
 }
 
 /// This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures

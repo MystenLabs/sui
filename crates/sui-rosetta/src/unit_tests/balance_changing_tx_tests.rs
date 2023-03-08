@@ -393,8 +393,13 @@ async fn test_delegate_sui() {
     let sender = get_random_address(&network.accounts, vec![]);
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
-    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
-
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let tx = client
         .transaction_builder()
         .request_add_delegation(
@@ -422,8 +427,13 @@ async fn test_delegate_sui_with_none_amount() {
     let sender = get_random_address(&network.accounts, vec![]);
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
-    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
-
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let tx = client
         .transaction_builder()
         .request_add_delegation(
@@ -479,8 +489,13 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
     let gas = get_random_sui(&client, sender, vec![coin1.0, coin2.0]).await;
-    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
-
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let data = client
         .transaction_builder()
         .request_add_delegation(
