@@ -3,7 +3,6 @@
 
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use narwhal_crypto::NetworkPublicKey;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -88,10 +87,7 @@ impl SuiSystemStateSummary {
             network_metadata.insert(
                 name,
                 NetworkMetadata {
-                    network_pubkey: NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)
-                        .unwrap(),
                     network_address: Multiaddr::try_from(validator.net_address.clone()).unwrap(),
-                    p2p_address: Multiaddr::try_from(validator.p2p_address.clone()).unwrap(),
                 },
             );
         }
