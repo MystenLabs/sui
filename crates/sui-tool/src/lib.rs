@@ -8,8 +8,9 @@ use itertools::Itertools;
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::fmt::Write;
-use std::path::PathBuf;
-use sui_config::{genesis::Genesis, ValidatorInfo};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
+use sui_config::{genesis::Genesis, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
 use sui_types::object::ObjectFormatOptions;
@@ -525,4 +526,37 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
                     ),
                 ),
         )
+}
+
+fn copy_dir_all(
+    src: impl AsRef<Path>,
+    dst: impl AsRef<Path>,
+    skip: Vec<PathBuf>,
+) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if skip.contains(&entry.path()) {
+            continue;
+        }
+        if ty.is_dir() {
+            copy_dir_all(
+                entry.path(),
+                dst.as_ref().join(entry.file_name()),
+                skip.clone(),
+            )?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn restore_from_db_checkpoint(
+    config: &NodeConfig,
+    db_checkpoint_path: &Path,
+) -> Result<(), anyhow::Error> {
+    copy_dir_all(db_checkpoint_path, config.db_path(), vec![])?;
+    Ok(())
 }

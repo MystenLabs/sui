@@ -100,7 +100,7 @@ pub struct NodeConfig {
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
 
     #[serde(default)]
-    pub state_snapshot_config: StateSnapshotConfig,
+    pub db_checkpoint_config: DBCheckpointConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -198,8 +198,12 @@ impl NodeConfig {
         (&self.account_key_pair().public()).into()
     }
 
-    pub fn db_path(&self) -> &Path {
-        &self.db_path
+    pub fn db_path(&self) -> PathBuf {
+        self.db_path.join("live")
+    }
+
+    pub fn db_checkpoint_path(&self) -> PathBuf {
+        self.db_path.join("db_checkpoints")
     }
 
     pub fn network_address(&self) -> &Multiaddr {
@@ -339,17 +343,11 @@ pub struct MetricsConfig {
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct StateSnapshotConfig {
-    pub enabled: bool,
-}
-
-impl StateSnapshotConfig {
-    pub fn validator_config() -> Self {
-        Self { enabled: false }
-    }
-    pub fn fullnode_config() -> Self {
-        Self { enabled: true }
-    }
+pub struct DBCheckpointConfig {
+    #[serde(default)]
+    pub perform_db_checkpoints_at_epoch_end: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_path: Option<PathBuf>,
 }
 
 /// Publicly known information about a validator

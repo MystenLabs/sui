@@ -20,6 +20,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
+use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::BalanceChangeType;
@@ -347,7 +348,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         vec![
             gas_event.clone(),
             sender_event.clone(),
-            recipient_event.clone()
+            recipient_event.clone(),
         ]
     );
 
@@ -367,7 +368,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         vec![
             gas_event.clone(),
             sender_event.clone(),
-            recipient_event.clone()
+            recipient_event.clone(),
         ]
     );
 
@@ -387,7 +388,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         vec![
             gas_event.clone(),
             sender_event.clone(),
-            recipient_event.clone()
+            recipient_event.clone(),
         ]
     );
 
@@ -768,7 +769,7 @@ async fn test_full_node_event_read_api_ok() {
         vec![
             gas_event.clone(),
             sender_event.clone(),
-            recipient_event.clone()
+            recipient_event.clone(),
         ]
     );
 
@@ -790,7 +791,7 @@ async fn test_full_node_event_read_api_ok() {
         vec![
             gas_event.clone(),
             sender_event.clone(),
-            recipient_event.clone()
+            recipient_event.clone(),
         ]
     );
 
@@ -1233,5 +1234,56 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         ),
     };
 
+    Ok(())
+}
+
+// Test for restoring a full node from a db snapshot
+#[sim_test]
+async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_enable_db_checkpoints_fullnodes()
+        .build()
+        .await?;
+    let checkpoint_path = test_cluster.fullnode_handle.sui_node.db_checkpoint_path();
+    let config = test_cluster.fullnode_config_builder().build()?;
+    let epoch_0_db_path = config.db_path().join("store").join("epoch_0");
+    let context = &mut test_cluster.wallet;
+    let _fullnode = test_cluster.fullnode_handle.sui_node.clone();
+    let _ = transfer_coin(context).await?;
+    let _ = transfer_coin(context).await?;
+    let (_transferred_object, _, _, digest, ..) = transfer_coin(context).await?;
+
+    // Skip the first epoch change from epoch 0 to epoch 1, but wait for the second
+    // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will take
+    // the db snapshot for epoch 1
+    loop {
+        if checkpoint_path.join("epoch_1").exists() {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    // Spin up a new full node restored from the snapshot taken at the end of epoch 1
+    restore_from_db_checkpoint(&config, &checkpoint_path.join("epoch_1")).await?;
+    let node = start_fullnode_from_config(config).await?.sui_node;
+
+    wait_for_tx(digest, node.state().clone()).await;
+
+    loop {
+        // Ensure this full node is able to transition to the next epoch
+        if node.current_epoch_for_testing() >= 2 {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    // Ensure this fullnode never processed older epoch (before snapshot) i.e. epoch_0 store was
+    // doesn't exist
+    assert!(!epoch_0_db_path.exists());
+
+    let (_transferred_object, _, _, digest_after_restore, ..) = transfer_coin(context).await?;
+    wait_for_tx(digest_after_restore, node.state().clone()).await;
     Ok(())
 }
