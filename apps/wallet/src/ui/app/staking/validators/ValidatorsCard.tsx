@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { getAllStakeSui } from '../getAllStakeSui';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -25,48 +26,54 @@ import { FEATURES } from '_src/shared/experimentation/features';
 export function ValidatorsCard() {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const {
-        data: delegations,
+        data: delegatedStake,
         isLoading,
         isError,
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
     const { data: system } = useSystemState();
-
-    const activeValidators = system?.active_validators;
-    // Total earn token for all delegations
-    const totalEarnToken = useMemo(() => {
-        if (!delegations || !system) return 0;
-
-        const activeValidators = system.active_validators;
-
-        return delegations.reduce(
-            (acc, delegation) =>
-                acc + getStakingRewards(activeValidators, delegation),
-            0
-        );
-    }, [delegations, system]);
+    const activeValidators = system?.activeValidators;
 
     // Total active stake for all delegations
+    const totalStake = useMemo(() => {
+        if (!delegatedStake) return 0n;
+        return getAllStakeSui(delegatedStake);
+    }, [delegatedStake]);
 
-    const totalActivePendingStake = useMemo(() => {
-        if (!delegations) return 0n;
-        return delegations.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
-            0n
+    const delegations = useMemo(() => {
+        return delegatedStake?.flatMap((delegation) => {
+            return delegation.stakes.map((d) => ({
+                ...d,
+                validatorAddress: delegation.validatorAddress,
+            }));
+        });
+    }, [delegatedStake]);
+
+    // Get total rewards for all delegations
+    const totalEarnTokenReward = useMemo(() => {
+        if (!delegatedStake || !activeValidators) return 0n;
+        return (
+            delegatedStake.flatMap((delegation) => {
+                return delegation.stakes.reduce((acc, d) => {
+                    const validator = activeValidators.find(
+                        ({ suiAddress }) =>
+                        suiAddress === delegation.validatorAddress
+                    );
+                    return (
+                        acc +
+                        BigInt(
+                            validator
+                                ? getStakingRewards(validator, d.principal)
+                                : 0
+                        )
+                    );
+                }, 0n);
+            })[0] || 0n
         );
-    }, [delegations]);
+    }, [delegatedStake, activeValidators]);
 
-    const numberOfValidators = useMemo(() => {
-        if (!delegations) return 0;
-        return [
-            ...new Set(
-                delegations.map(
-                    ({ staked_sui }) => staked_sui.validator_address
-                )
-            ),
-        ].length;
-    }, [delegations]);
+    const numberOfValidators = delegatedStake?.length || 0;
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -113,13 +120,13 @@ export function ValidatorsCard() {
                             <div className="flex divide-x divide-solid divide-gray-45 divide-y-0">
                                 <CardItem title="Your Stake">
                                     <StakeAmount
-                                        balance={totalActivePendingStake}
+                                        balance={totalStake}
                                         variant="heading5"
                                     />
                                 </CardItem>
                                 <CardItem title="Earned">
                                     <StakeAmount
-                                        balance={totalEarnToken}
+                                        balance={totalEarnTokenReward}
                                         variant="heading5"
                                         isEarnedRewards
                                     />
@@ -129,13 +136,11 @@ export function ValidatorsCard() {
 
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {system &&
-                                activeValidators &&
-                                delegations.map((delegationObject) => (
+                                delegations?.map((delegation) => (
                                     <DelegationCard
-                                        delegationObject={delegationObject}
-                                        activeValidators={activeValidators}
+                                        delegationObject={delegation}
                                         currentEpoch={+system.epoch}
-                                        key={delegationObject.staked_sui.id.id}
+                                        key={delegation.stakedSuiId}
                                     />
                                 ))}
                         </div>

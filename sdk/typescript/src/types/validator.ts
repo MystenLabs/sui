@@ -21,6 +21,7 @@ import { AuthorityName, EpochId } from './transactions';
 
 export type DelegatedStake = Infer<typeof DelegatedStake>;
 export type CommitteeInfo = Infer<typeof CommitteeInfo>;
+export type StakeObject = Infer<typeof StakeObject>;
 
 // Staking
 

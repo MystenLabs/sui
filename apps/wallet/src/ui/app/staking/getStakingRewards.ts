@@ -30,10 +30,12 @@ export function getStakingRewards(
     const pricipalAmout = new BigNumber(
         delegation.delegation_status.Active.principal_sui_amount
     );
+    const suiBalance = new BigNumber(validator.stakingPool.suiBalance);
+    const principalAmount = new BigNumber(delegationPrincipalAmount);
     const currentSuiWorth = poolTokens
         .multipliedBy(suiBalance)
         .dividedBy(delegationTokenSupply);
 
-    const earnToken = currentSuiWorth.minus(pricipalAmout);
+    const earnToken = currentSuiWorth.minus(principalAmount);
     return earnToken.decimalPlaces(0, BigNumber.ROUND_DOWN).toNumber();
 }

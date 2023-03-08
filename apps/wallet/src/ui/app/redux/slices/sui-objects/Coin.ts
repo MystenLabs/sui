@@ -124,7 +124,6 @@ export class Coin {
 
     public static async unStakeCoin(
         signer: SignerWithProvider,
-        delegation: ObjectId,
         stakedSuiId: ObjectId
     ): Promise<SuiTransactionResponse> {
         const transaction = Sentry.startTransaction({ name: 'unstake' });
