@@ -699,9 +699,10 @@ module sui::sui_system_tests {
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
+        let new_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
         // Seed [1; 32]
         let new_pubkey = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
-        let new_pop = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
+        let new_pop = x"932336c35a8c393019c63eb0f7d385dd4e0bd131f04b54cf45aa9544f14dca4dab53bd70ffcb8e0b34656e4388309720";
 
         let scenario_val = test_scenario::begin(validator_addr);
         let scenario = &mut scenario_val;
@@ -731,7 +732,7 @@ module sui::sui_system_tests {
         );
         create_sui_system_state_for_testing(vector[validator], 1000, 0, ctx);
 
-        test_scenario::next_tx(scenario, @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357);
+        test_scenario::next_tx(scenario, new_addr);
 
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
