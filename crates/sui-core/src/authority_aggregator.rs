@@ -1077,7 +1077,7 @@ where
             Ok(result) => Ok(result),
             Err(state) => {
                 self.record_process_transaction_metrics(tx_digest, &state);
-                let state = Self::record_non_quorum_effects_maybe(tx_digest, state);
+                let state = self.record_non_quorum_effects_maybe(tx_digest, state);
                 Err(self.handle_process_transaction_error(tx_digest, state))
             }
         }
@@ -1098,11 +1098,7 @@ where
             state.conflicting_tx_digest_with_most_stake()
         {
             let good_stake = state.good_stake();
-            let total_conflicting_tx_stake = state.conflicting_tx_digests_total_stake();
-            let retryable_stake = self.committee.total_votes
-                - total_conflicting_tx_stake
-                - state.non_retryable_stake
-                - good_stake;
+            let retryable_stake = self.get_retryable_stake(&state);
             let quorum_threshold = self.committee.quorum_threshold();
 
             if good_stake + retryable_stake >= quorum_threshold {
@@ -1122,10 +1118,11 @@ where
             }
 
             warn!(
+                ?state.conflicting_tx_digests,
                 ?most_staked_conflicting_tx,
                 ?original_tx_digest,
                 original_tx_stake = good_stake,
-                conflicting_tx_stake = most_staked_conflicting_tx_stake,
+                most_staked_conflicting_tx_stake = most_staked_conflicting_tx_stake,
                 "Client double spend attempt detected: {:?}",
                 validators
             );
@@ -1275,6 +1272,7 @@ where
 
     /// Check if we have some signed TransactionEffects but not a quorum
     fn record_non_quorum_effects_maybe(
+        &self,
         tx_digest: &TransactionDigest,
         mut state: ProcessTransactionState,
     ) -> ProcessTransactionState {
@@ -1285,6 +1283,18 @@ where
                 "Received signed Effects but not with a quorum {:?}", non_quorum_effects
             );
 
+            // Safe to unwrap because we know that there is at least one entry in the map
+            // from the check above.
+            let (_most_staked_effects_digest, (_, most_staked_effects_digest_stake)) =
+                non_quorum_effects
+                    .iter()
+                    .max_by_key(|&(_, (_, stake))| stake)
+                    .unwrap();
+            // We check if we have enough retryable stake to get quorum for the most staked
+            // effects digest.
+            state.retryable = most_staked_effects_digest_stake + self.get_retryable_stake(&state)
+                >= self.committee.quorum_threshold();
+
             let mut involved_validators = Vec::new();
             let mut total_stake = 0;
             for (validators, stake) in non_quorum_effects.values() {
@@ -1292,7 +1302,7 @@ where
                 total_stake += stake;
             }
             // TODO: Instead of pushing a new error, we should add more information about the non-quorum effects
-            // in the final error.
+            // in the final error if state is no longer retryable
             state.errors.push((
                 SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
                     effects_map: non_quorum_effects,
@@ -1300,9 +1310,15 @@ where
                 involved_validators,
                 total_stake,
             ));
-            state.retryable = false;
         }
         state
+    }
+
+    fn get_retryable_stake(&self, state: &ProcessTransactionState) -> StakeUnit {
+        self.committee.total_votes
+            - state.conflicting_tx_digests_total_stake()
+            - state.non_retryable_stake
+            - state.good_stake()
     }
 
     pub async fn process_certificate(
@@ -1395,8 +1411,8 @@ where
                 "Received effects responses from validators"
             );
 
-            // record non-retryable errors
-            for (sui_err, _, _) in state.retryable_errors.iter() {
+            // record errors and tx retryable state
+            for (sui_err, _, _) in state.retryable_errors.iter().chain(state.non_retryable_errors.iter()) {
                 self
                     .metrics
                     .total_aggregated_err

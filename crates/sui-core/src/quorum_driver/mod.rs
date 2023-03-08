@@ -7,12 +7,12 @@ pub use metrics::*;
 pub mod reconfig_observer;
 
 use arc_swap::ArcSwap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::base_types::{AuthorityName, TransactionDigest};
-use sui_types::committee::{Committee, EpochId};
+use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
 };
@@ -281,69 +281,21 @@ where
                 );
 
                 if let Some(conflicting_tx_digest) = conflicting_tx_digest_to_retry {
-                    // Safe to unwrap because tx_digest_to_retry is generated from conflicting_tx_digests
-                    // in ProcessTransactionState::conflicting_tx_digest_with_most_stake()
-                    let (validators, _) =
-                        conflicting_tx_digests.get(&conflicting_tx_digest).unwrap();
-                    let attempt_result = self
-                        .attempt_conflicting_transaction(
-                            &conflicting_tx_digest,
-                            &tx_digest,
-                            validators.iter().map(|(pub_key, _)| *pub_key).collect(),
-                        )
-                        .await;
-                    self.metrics
-                        .total_attempts_retrying_conflicting_transaction
-                        .inc();
-
-                    match attempt_result {
-                        Err(err) => {
-                            debug!(
-                                ?tx_digest,
-                                "Encountered error in attempt_one_conflicting_transaction: {:?}",
-                                err
-                            );
-                        }
-                        Ok(success) => {
-                            debug!(
-                                ?tx_digest,
-                                ?conflicting_tx_digest_to_retry,
-                                "Retried conflicting transaction success: {}",
-                                success
-                            );
-                            if success {
-                                self.metrics
-                                    .total_successful_attempts_retrying_conflicting_transaction
-                                    .inc();
-                            }
-                            let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
-                                conflicting_txes: conflicting_tx_digests,
-                                retried_tx: Some(conflicting_tx_digest),
-                                retried_tx_success: Some(success),
-                            }));
-                            return err;
-                        }
-                    }
+                    self.process_conflicting_tx(
+                        tx_digest,
+                        conflicting_tx_digest,
+                        conflicting_tx_digests,
+                    )
+                    .await
                 } else {
                     // If no retryable conflicting transaction was returned that means we have >= 2f+1 good stake for
                     // the original transaction + retryable stake. Will continue to retry the original transaction.
                     debug!(
                         ?errors,
-                        "When getting tx cert, observed {} conflicting transactions. Tx {tx_digest:} is in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
-                        conflicting_tx_digests.len()
+                        "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
                     );
                     return Err(None);
                 }
-                let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
-                    conflicting_txes: conflicting_tx_digests,
-                    retried_tx: None,
-                    retried_tx_success: None,
-                }));
-                debug!(
-                    ?tx_digest,
-                    "Non retryable error when getting tx cert: {err:?}"
-                );
-                err
             }
 
             Err(AggregatorProcessTransactionError::FatalConflictingTransaction {
@@ -352,8 +304,7 @@ where
             }) => {
                 debug!(
                     ?errors,
-                    "When getting tx cert, observed {} conflicting transactions. Tx {tx_digest:} is in nonretryable state. Conflicting Txes: {conflicting_tx_digests:?}",
-                    conflicting_tx_digests.len(),
+                    "Observed Tx {tx_digest:} double spend attempted. Conflicting Txes: {conflicting_tx_digests:?}",
                 );
                 Err(Some(QuorumDriverError::ObjectsDoubleUsed {
                     conflicting_txes: conflicting_tx_digests,
@@ -372,6 +323,67 @@ where
             Err(AggregatorProcessTransactionError::RetryableTransaction { errors }) => {
                 debug!(?tx_digest, ?errors, "Retryable transaction error");
                 Err(None)
+            }
+        }
+    }
+
+    async fn process_conflicting_tx(
+        &self,
+        tx_digest: TransactionDigest,
+        conflicting_tx_digest: TransactionDigest,
+        conflicting_tx_digests: BTreeMap<
+            TransactionDigest,
+            (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
+        >,
+    ) -> Result<ProcessTransactionResult, Option<QuorumDriverError>> {
+        // Safe to unwrap because tx_digest_to_retry is generated from conflicting_tx_digests
+        // in ProcessTransactionState::conflicting_tx_digest_with_most_stake()
+        let (validators, _) = conflicting_tx_digests.get(&conflicting_tx_digest).unwrap();
+        let attempt_result = self
+            .attempt_conflicting_transaction(
+                &conflicting_tx_digest,
+                &tx_digest,
+                validators.iter().map(|(pub_key, _)| *pub_key).collect(),
+            )
+            .await;
+        self.metrics
+            .total_attempts_retrying_conflicting_transaction
+            .inc();
+
+        match attempt_result {
+            Err(err) => {
+                debug!(
+                    ?tx_digest,
+                    "Encountered error while attemptting conflicting transaction: {:?}", err
+                );
+                let err = Err(Some(QuorumDriverError::ObjectsDoubleUsed {
+                    conflicting_txes: conflicting_tx_digests,
+                    retried_tx: None,
+                    retried_tx_success: None,
+                }));
+                debug!(
+                    ?tx_digest,
+                    "Non retryable error when getting original tx cert: {err:?}"
+                );
+                err
+            }
+            Ok(success) => {
+                debug!(
+                    ?tx_digest,
+                    ?conflicting_tx_digest,
+                    "Retried conflicting transaction success: {}",
+                    success
+                );
+                if success {
+                    self.metrics
+                        .total_successful_attempts_retrying_conflicting_transaction
+                        .inc();
+                }
+                Err(Some(QuorumDriverError::ObjectsDoubleUsed {
+                    conflicting_txes: conflicting_tx_digests,
+                    retried_tx: Some(conflicting_tx_digest),
+                    retried_tx_success: Some(success),
+                }))
             }
         }
     }

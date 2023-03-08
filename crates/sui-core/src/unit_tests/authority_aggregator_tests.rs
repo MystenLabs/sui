@@ -698,6 +698,14 @@ async fn test_handle_transaction_response() {
         &sender_kp,
         None,
     );
+    let tx2 = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        Some(1),
+        sender,
+        &sender_kp,
+        None,
+    );
     let package_not_found_error = SuiError::UserInputError {
         error: UserInputError::DependentPackageNotFound {
             package_id: gas_object.0,
@@ -838,7 +846,7 @@ async fn test_handle_transaction_response() {
     // We have 2f+1 signed effects on epoch 1, so we are good.
     agg.process_transaction(tx.clone()).await.unwrap();
 
-    println!("Case 6 - Nonretryable Transaction (QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
+    println!("Case 6 - Nonretryable Transaction (most staked effects stake + retryable stake < 2f+1 with QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
     // Validators 2 and 3 returns tx-cert with epoch 1, but different signed effects from 0 and 1
     let mut effects = effects_with_tx(*cert_epoch_0.digest());
     *effects.status_mut_for_testing() = ExecutionStatus::Failure {
@@ -868,6 +876,217 @@ async fn test_handle_transaction_response() {
             matches!(
                 e,
                 SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+            )
+        },
+    )
+    .await;
+
+    println!("Case 6.1 - Retryable Transaction (most staked effects stake + retryable stake >= 2f+1 with QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
+    // Val 0, 1 & 2 returns retryable error
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    // Validators 3 returns tx-cert with epoch 1
+    let effects = TransactionEffectsV1 {
+        transaction_digest: *cert_epoch_0.digest(),
+        status: ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
+        },
+        ..Default::default()
+    };
+    set_tx_info_response_with_cert_and_effects(
+        &mut clients,
+        authority_keys.iter().skip(3),
+        Some(cert_epoch_0.inner()),
+        TransactionEffects::V1(effects),
+        1,
+    );
+
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                    | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    println!("Case 6.2 - Retryable Transaction (same as 6.1 but with different tx1 effects)");
+    // Val 0 & 1 returns retryable error
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+
+    // Validators 2 returns tx-cert and tx-effects with epoch 1
+    let effects = TransactionEffectsV1 {
+        transaction_digest: *cert_epoch_0.digest(),
+        status: ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
+        },
+        ..Default::default()
+    };
+
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            None,
+            SignedTransactionEffects::new(
+                1,
+                TransactionEffects::V1(effects.clone()),
+                &authority_keys[1].1,
+                authority_keys[1].0,
+            ),
+            TransactionEvents { data: vec![] },
+        ),
+    };
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response(resp);
+
+    // Validators 3 returns different tx-effects without cert for epoch 1 (simulating byzantine behavior)
+    let effects = TransactionEffectsV1 {
+        transaction_digest: *cert_epoch_0.digest(),
+        status: ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InvalidGasObject,
+            command: None,
+        },
+        ..Default::default()
+    };
+
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            None,
+            SignedTransactionEffects::new(
+                1,
+                TransactionEffects::V1(effects.clone()),
+                &authority_keys[2].1,
+                authority_keys[2].0,
+            ),
+            TransactionEvents { data: vec![] },
+        ),
+    };
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response(resp);
+
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                    | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    println!("Case 6.3 - Retryable Transaction (same as 6.1 but with byzantine tx2 effects)");
+    // All Validators gives signed-tx2
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx2, 0);
+
+    // Validators now gives valid signed tx2 and we get TxCert2
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let cert_epoch_0_2 = agg
+        .process_transaction(tx2.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    // Val 0 & 1 returns retryable error
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+
+    // Validators 2 returns tx-cert and tx-effects with epoch 1
+    let effects = TransactionEffectsV1 {
+        transaction_digest: *cert_epoch_0.digest(),
+        status: ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
+        },
+        ..Default::default()
+    };
+
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            None,
+            SignedTransactionEffects::new(
+                1,
+                TransactionEffects::V1(effects.clone()),
+                &authority_keys[1].1,
+                authority_keys[1].0,
+            ),
+            TransactionEvents { data: vec![] },
+        ),
+    };
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response(resp);
+
+    // Validators 3 returns tx2-effects without cert for epoch 1 (simulating byzantine behavior)
+    let effects = TransactionEffectsV1 {
+        transaction_digest: *cert_epoch_0_2.digest(),
+        status: ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
+        },
+        ..Default::default()
+    };
+
+    let resp = HandleTransactionResponse {
+        status: TransactionStatus::Executed(
+            None,
+            SignedTransactionEffects::new(
+                1,
+                TransactionEffects::V1(effects.clone()),
+                &authority_keys[2].1,
+                authority_keys[2].0,
+            ),
+            TransactionEvents { data: vec![] },
+        ),
+    };
+    clients
+        .get_mut(&authority_keys[2].0)
+        .unwrap()
+        .set_tx_info_response(resp);
+
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+
+    assert_resp_err(
+        &agg,
+        tx.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
+                    | SuiError::RpcError(..)
+                    | SuiError::ByzantineAuthoritySuspicion { .. }
             )
         },
     )
@@ -1396,14 +1615,14 @@ async fn test_handle_conflicting_transaction_response() {
 
     // Val-0 returns cert
     let (name_0, key_0) = &authority_keys[0];
-    let effects = TransactionEffects {
+    let effects = TransactionEffectsV1 {
         transaction_digest: *cert_epoch_0.digest(),
         ..Default::default()
     };
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
             Some(cert_epoch_0.auth_sig().clone()),
-            sign_tx_effects(effects.clone(), 0, *name_0, key_0),
+            sign_tx_effects(TransactionEffects::V1(effects.clone()), 0, *name_0, key_0),
             TransactionEvents { data: vec![] },
         ),
     };
@@ -1432,7 +1651,7 @@ async fn test_handle_conflicting_transaction_response() {
         .into_cert_for_testing();
 
     // Validators have moved to epoch 2 and return tx-effects with epoch 2, client expects 1
-    let effects = TransactionEffects {
+    let effects = TransactionEffectsV1 {
         transaction_digest: *cert_epoch_1.digest(),
         ..Default::default()
     };
@@ -1440,7 +1659,7 @@ async fn test_handle_conflicting_transaction_response() {
         &mut clients,
         authority_keys.iter(),
         None,
-        effects,
+        TransactionEffects::V1(effects),
         2,
     );
 
