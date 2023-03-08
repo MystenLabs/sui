@@ -22,7 +22,7 @@ use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
     VerifiedTransaction,
 };
-use sui_types::object::Object;
+use sui_types::object::{generate_test_gas_objects_with_owner, Object};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -354,17 +354,16 @@ async fn test_reconfig_with_committee_change_basic() {
     );
 
     let new_validator_address = new_node_config.sui_address();
-    let genesis_gas = Object::with_owner_for_testing(new_validator_address);
+    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
     let stake = Object::new_gas_with_balance_and_owner_for_testing(
         25_000_000_000_000_000,
         new_validator_address,
     );
+    let mut genesis_objects = gas_objects.clone();
+    genesis_objects.push(stake.clone());
 
-    let mut authorities = spawn_test_authorities(
-        [genesis_gas.clone(), stake.clone()].into_iter(),
-        &init_configs,
-    )
-    .await;
+    let mut authorities =
+        spawn_test_authorities(genesis_objects.clone().into_iter(), &init_configs).await;
 
     let proof_of_possession =
         generate_proof_of_possession(new_node_config.protocol_key_pair(), new_validator_address);
@@ -376,7 +375,7 @@ async fn test_reconfig_with_committee_change_basic() {
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
-        genesis_gas.compute_object_reference(),
+        gas_objects[0].compute_object_reference(),
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -412,20 +411,13 @@ async fn test_reconfig_with_committee_change_basic() {
     assert!(effects.status().is_ok());
 
     // Step 2: Give the candidate enough stake.
-    let gas = authorities[0].with(|node| {
-        node.state()
-            .db()
-            .get_object(&genesis_gas.id())
-            .unwrap()
-            .unwrap()
-    });
     let delegation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         new_validator_address,
         SUI_FRAMEWORK_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_delegation").to_owned(),
         vec![],
-        gas.compute_object_reference(),
+        gas_objects[1].compute_object_reference(),
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -447,14 +439,13 @@ async fn test_reconfig_with_committee_change_basic() {
     assert!(effects.status().is_ok());
 
     // Step 3: Convert the candidate to an active valdiator.
-    let gas = authorities[0].with(|node| node.state().db().get_object(&gas.id()).unwrap().unwrap());
     let activation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         new_validator_address,
         SUI_FRAMEWORK_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator").to_owned(),
         vec![],
-        gas.compute_object_reference(),
+        gas_objects[2].compute_object_reference(),
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: SUI_SYSTEM_STATE_OBJECT_ID,
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -492,10 +483,7 @@ async fn test_reconfig_with_committee_change_basic() {
     // We have to manually insert the genesis objects since the test utility doesn't.
     handle
         .with_async(|node| async {
-            node.state().insert_genesis_object(stake.clone()).await;
-            node.state()
-                .insert_genesis_object(genesis_gas.clone())
-                .await;
+            node.state().insert_genesis_objects(&genesis_objects).await;
             // When the node started, it's not part of the committee, and hence a fullnode.
             assert!(node
                 .state()
@@ -516,14 +504,13 @@ async fn test_reconfig_with_committee_change_basic() {
             .is_validator(&node.state().epoch_store_for_testing()));
     });
 
-    let gas = authorities[0].with(|node| node.state().db().get_object(&gas.id()).unwrap().unwrap());
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         new_validator_address,
         SUI_FRAMEWORK_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],
-        gas.compute_object_reference(),
+        gas_objects[3].compute_object_reference(),
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: SUI_SYSTEM_STATE_OBJECT_ID,
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,

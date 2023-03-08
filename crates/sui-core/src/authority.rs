@@ -2382,6 +2382,15 @@ impl AuthorityState {
             .expect("Cannot insert genesis object")
     }
 
+    pub async fn insert_genesis_objects(&self, objects: &[Object]) {
+        futures::future::join_all(
+            objects
+                .iter()
+                .map(|o| self.insert_genesis_object(o.clone())),
+        )
+        .await;
+    }
+
     pub fn get_certified_transaction(
         &self,
         tx_digest: &TransactionDigest,
