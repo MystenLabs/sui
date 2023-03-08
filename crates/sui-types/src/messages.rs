@@ -1295,6 +1295,10 @@ impl TransactionKind {
         )
     }
 
+    pub fn to_bytes(&self) -> Base64 {
+        Base64::from_bytes(bcs::to_bytes(self).unwrap().as_slice())
+    }
+
     pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
         match self {
             TransactionKind::Batch(b) => {
