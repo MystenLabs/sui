@@ -364,32 +364,6 @@ impl Synchronizer {
             .await
     }
 
-    /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
-    /// and has all parents in the certificate store.
-    /// If the certificate has missing parents, wait until all parents are available to accept the
-    /// certificate.
-    /// Otherwise returns an error.
-    pub async fn wait_to_accept_certificate(
-        &self,
-        certificate: Certificate,
-        network: &Network,
-    ) -> DagResult<()> {
-        match self
-            .process_certificate_internal(certificate, network, true, true)
-            .await
-        {
-            Err(DagError::Suspended(notify)) => {
-                let notify = notify.lock().unwrap().take();
-                notify
-                    .unwrap()
-                    .recv()
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
-            }
-            result => result,
-        }
-    }
-
     /// Accepts a certificate produced by this primary. This is not expected to fail unless
     /// the primary is shutting down.
     pub async fn accept_own_certificate(
