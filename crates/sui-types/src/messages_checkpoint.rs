@@ -13,7 +13,7 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::intent::IntentScope;
-use crate::message_envelope::{Envelope, Message, VerifiedEnvelope};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages::TransactionEffectsAPI;
 use crate::signature::GenericSignature;
 use crate::storage::ReadStore;
@@ -213,6 +213,7 @@ pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityStrongQ
 pub type SignedCheckpointSummary = CheckpointSummaryEnvelope<AuthoritySignInfo>;
 
 pub type VerifiedCheckpoint = VerifiedEnvelope<CheckpointSummary, AuthorityStrongQuorumSignInfo>;
+pub type TrustedCheckpoint = TrustedEnvelope<CheckpointSummary, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
     pub fn verify_with_contents(

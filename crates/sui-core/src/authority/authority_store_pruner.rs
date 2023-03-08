@@ -120,7 +120,8 @@ impl AuthorityStorePruner {
         let iter = checkpoint_store
             .certified_checkpoints
             .iter()
-            .skip_to(&(checkpoint_number + 1))?;
+            .skip_to(&(checkpoint_number + 1))?
+            .map(|(k, ckpt)| (k, ckpt.into_inner()));
 
         #[allow(clippy::explicit_counter_loop)]
         for (_, checkpoint) in iter {

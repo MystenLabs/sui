@@ -41,7 +41,7 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
-    VerifiedCheckpoint,
+    TrustedCheckpoint, VerifiedCheckpoint,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
@@ -82,9 +82,9 @@ pub struct CheckpointStore {
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Stores certified checkpoints
-    pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
+    pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
     /// Map from checkpoint digest to certified checkpoint
-    checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
+    checkpoint_by_digest: DBMap<CheckpointDigest, TrustedCheckpoint>,
 
     /// A map from epoch ID to the sequence number of the last checkpoint in that epoch.
     epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
@@ -154,7 +154,7 @@ impl CheckpointStore {
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
         self.checkpoint_by_digest
             .get(digest)
-            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
+            .map(|maybe_checkpoint| maybe_checkpoint.map(|c| c.into()))
     }
 
     pub fn get_checkpoint_by_sequence_number(
@@ -163,7 +163,7 @@ impl CheckpointStore {
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
         self.certified_checkpoints
             .get(&sequence_number)
-            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
+            .map(|maybe_checkpoint| maybe_checkpoint.map(|c| c.into()))
     }
 
     pub fn get_latest_certified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
@@ -171,7 +171,7 @@ impl CheckpointStore {
             .iter()
             .skip_to_last()
             .next()
-            .map(|(_, v)| VerifiedCheckpoint::new_unchecked(v))
+            .map(|(_, v)| v.into())
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
@@ -182,7 +182,7 @@ impl CheckpointStore {
             .certified_checkpoints
             .multi_get(sequence_numbers)?
             .into_iter()
-            .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
+            .map(|maybe_checkpoint| maybe_checkpoint.map(|c| c.into()))
             .collect();
 
         Ok(checkpoints)
@@ -267,18 +267,18 @@ impl CheckpointStore {
 
     pub fn insert_certified_checkpoint(
         &self,
-        checkpoint: &CertifiedCheckpointSummary,
+        checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
         let mut batch = self
             .certified_checkpoints
             .batch()
             .insert_batch(
                 &self.certified_checkpoints,
-                [(checkpoint.sequence_number(), checkpoint)],
+                [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
             )?
             .insert_batch(
                 &self.checkpoint_by_digest,
-                [(checkpoint.digest(), checkpoint)],
+                [(checkpoint.digest(), checkpoint.serializable_ref())],
             )?;
         if checkpoint.next_epoch_committee().is_some() {
             batch = batch.insert_batch(
@@ -293,7 +293,7 @@ impl CheckpointStore {
         &self,
         checkpoint: VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        self.insert_certified_checkpoint(checkpoint.inner())?;
+        self.insert_certified_checkpoint(&checkpoint)?;
 
         // Update latest
         if Some(*checkpoint.sequence_number())
@@ -1015,10 +1015,13 @@ impl CheckpointAggregator {
                     )])
                     .inc();
                 if let Ok(auth_signature) = current.try_aggregate(data) {
-                    let summary = CertifiedCheckpointSummary::new_from_data_and_sig(
-                        current.summary.clone(),
-                        auth_signature,
+                    let summary = VerifiedCheckpoint::new_unchecked(
+                        CertifiedCheckpointSummary::new_from_data_and_sig(
+                            current.summary.clone(),
+                            auth_signature,
+                        ),
                     );
+
                     self.tables.insert_certified_checkpoint(&summary)?;
                     self.metrics
                         .last_certified_checkpoint

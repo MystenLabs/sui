@@ -167,7 +167,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         .certified_checkpoints
         .insert(
             end_of_epoch_0_checkpoint.sequence_number(),
-            &end_of_epoch_0_checkpoint,
+            end_of_epoch_0_checkpoint.serializable_ref(),
         )
         .unwrap();
     // sync end of epoch checkpoint
