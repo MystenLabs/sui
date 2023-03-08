@@ -3404,8 +3404,8 @@ dependencies = [
 name = "narwhal-examples"
 version = "0.1.0"
 dependencies = [
- "base64 0.13.1",
- "clap 2.34.0",
+ "base64",
+ "clap 3.2.23",
  "prost",
  "protobuf-src",
  "tokio",
@@ -3493,7 +3493,7 @@ dependencies = [
  "axum",
  "bytes",
  "cfg-if",
- "clap 2.34.0",
+ "clap 3.2.23",
  "derive_more",
  "eyre",
  "fail",

@@ -59,11 +59,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut dsts = Vec::new();
     let mut base64_keys = Vec::new();
     match matches.subcommand() {
-        ("docker_demo", Some(_sub_matches)) => {
+        Some(("docker_demo", _sub_matches)) => {
             dsts.push("http://127.0.0.1:8000".to_owned());
             base64_keys.push(PRIMARY_0_PUBLIC_KEY.to_owned());
         }
-        ("run", Some(sub_matches)) => {
+        Some(("run", sub_matches)) => {
             let ports = sub_matches
                 .values_of("ports")
                 .expect("Invalid ports specified");

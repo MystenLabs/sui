@@ -12,7 +12,7 @@ path = "src/demo_client.rs"
 
 [dependencies]
 base64 = "0.13.0"
-clap = "2.34"
+clap = { version = "3.2.23", features = ["cargo"] }
 prost = "0.11.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tonic = "0.8.2"

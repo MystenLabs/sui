@@ -94,19 +94,19 @@ async fn main() -> Result<(), eyre::Report> {
     };
 
     match matches.subcommand() {
-        ("generate_keys", Some(sub_matches)) => {
+        Some(("generate_keys", sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level);
             let key_file = sub_matches.value_of("filename").unwrap();
             let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng);
             write_authority_keypair_to_file(&keypair, key_file).unwrap();
         }
-        ("generate_network_keys", Some(sub_matches)) => {
+        Some(("generate_network_keys", sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level);
             let network_key_file = sub_matches.value_of("filename").unwrap();
             let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng);
             write_keypair_to_file(&network_keypair, network_key_file).unwrap();
         }
-        ("get_pub_key", Some(sub_matches)) => {
+        Some(("get_pub_key", sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level);
             let file = sub_matches.value_of("filename").unwrap();
             match read_network_keypair_from_file(file) {
@@ -125,7 +125,7 @@ async fn main() -> Result<(), eyre::Report> {
                 }
             }
         }
-        ("run", Some(sub_matches)) => {
+        Some(("run", sub_matches)) => {
             let primary_key_file = sub_matches.value_of("primary-keys").unwrap();
             let primary_keypair = read_authority_keypair_from_file(primary_key_file)
                 .expect("Failed to load the node's primary keypair");
@@ -167,8 +167,7 @@ fn setup_telemetry(tracing_level: &str, network_tracing_level: &str) -> Telemetr
 
 // Runs either a worker or a primary.
 async fn run(
-    matches: &ArgMatches<'_>,
-    committee: Committee,
+    matches: &ArgMatches,
     primary_keypair: KeyPair,
     primary_network_keypair: NetworkKeyPair,
     worker_keypair: NetworkKeyPair,
@@ -213,7 +212,7 @@ async fn run(
     // Check whether to run a primary, a worker, or an entire authority.
     let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
-        ("primary", Some(sub_matches)) => {
+        Some(("primary", sub_matches)) => {
             let primary = PrimaryNode::new(
                 parameters.clone(),
                 !sub_matches.is_present("consensus-disabled"),
@@ -235,7 +234,7 @@ async fn run(
         }
 
         // Spawn a single worker.
-        ("worker", Some(sub_matches)) => {
+        Some(("worker", sub_matches)) => {
             let id = sub_matches
                 .value_of("id")
                 .unwrap()
