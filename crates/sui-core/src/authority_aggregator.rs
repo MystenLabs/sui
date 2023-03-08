@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
+    make_network_authority_client_sets_from_committee, AuthorityAPI,
     NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
@@ -11,12 +11,8 @@ use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
 use std::convert::AsRef;
-use sui_config::genesis::Genesis;
-use sui_config::{NetworkConfig, ValidatorInfo};
-use sui_network::{
-    default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
-};
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
+use sui_network::{default_mysten_network_config};
+use sui_types::crypto::{AuthoritySignInfo};
 use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
@@ -24,7 +20,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::{SuiSystemStateInnerBenchmark, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
-    committee::{Committee, ProtocolVersion},
+    committee::{self, Committee},
     error::{SuiError, SuiResult},
     messages::*,
 };
@@ -39,7 +35,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
+use sui_types::committee::{CommitteeWithNetworkMetadata, VoteUnit};
 use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
@@ -174,8 +170,7 @@ impl AuthAggMetrics {
     errors
 )]
 pub struct QuorumExecuteCertificateError {
-    pub total_stake: StakeUnit,
-    pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    pub errors: Vec<(SuiError, Vec<AuthorityName>, VoteUnit)>,
 }
 
 #[derive(Error, Debug)]
@@ -185,11 +180,10 @@ pub struct QuorumExecuteCertificateError {
     errors,
 )]
 pub struct QuorumSignTransactionError {
-    pub total_stake: StakeUnit,
-    pub good_stake: StakeUnit,
-    pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    pub good_stake: VoteUnit,
+    pub errors: Vec<(SuiError, Vec<AuthorityName>, VoteUnit)>,
     pub conflicting_tx_digests:
-        BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, VoteUnit)>,
 }
 
 struct ProcessTransactionState {
@@ -197,15 +191,15 @@ struct ProcessTransactionState {
     tx_signatures: StakeAggregator<AuthoritySignInfo, true>,
     effects_map: MultiStakeAggregator<TransactionEffectsDigest, TransactionEffects, true>,
     // The list of errors gathered at any point
-    errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    bad_stake: StakeUnit,
+    errors: Vec<(SuiError, Vec<AuthorityName>, VoteUnit)>,
+    bad_stake: VoteUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
-        BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, VoteUnit)>,
 }
 
 impl ProcessTransactionState {
-    pub fn good_stake(&self) -> StakeUnit {
+    pub fn good_stake(&self) -> VoteUnit {
         self.tx_signatures.total_votes() + self.effects_map.total_votes()
     }
 }
@@ -216,8 +210,8 @@ struct ProcessCertificateState {
     // The map here allows us to count the stake for each unique effect.
     effects_map:
         MultiStakeAggregator<(EpochId, TransactionEffectsDigest), TransactionEffects, true>,
-    bad_stake: StakeUnit,
-    errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    bad_stake: VoteUnit,
+    errors: Vec<(SuiError, Vec<AuthorityName>, VoteUnit)>,
 }
 
 #[derive(Debug)]
@@ -507,7 +501,7 @@ where
         FReduce: Fn(
             S,
             AuthorityName,
-            StakeUnit,
+            VoteUnit,
             Result<V, SuiError>,
         ) -> BoxFuture<'a, ReduceOutput<R, S>>,
     {
@@ -534,11 +528,13 @@ where
         FReduce: Fn(
             S,
             AuthorityName,
-            StakeUnit,
+            VoteUnit,
             Result<V, SuiError>,
         ) -> BoxFuture<'a, ReduceOutput<R, S>>,
     {
-        let authorities_shuffled = self.committee.shuffle_by_stake(authority_preferences, None);
+        let authorities_shuffled = self
+            .committee
+            .shuffle_by_weight(authority_preferences, None);
 
         // First, execute in parallel for each authority FMap.
         let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
@@ -614,7 +610,7 @@ where
         let start = tokio::time::Instant::now();
         let mut delay = Duration::from_secs(1);
         loop {
-            let authorities_shuffled = self.committee.shuffle_by_stake(preferences, restrict_to);
+            let authorities_shuffled = self.committee.shuffle_by_weight(preferences, restrict_to);
             let mut authorities_shuffled = authorities_shuffled.iter();
 
             type RequestResult<S> = Result<Result<S, SuiError>, tokio::time::error::Elapsed>;
@@ -789,7 +785,7 @@ where
         #[derive(Debug, Default)]
         struct State {
             latest_object_version: Option<Object>,
-            total_weight: StakeUnit,
+            total_weight: VoteUnit,
         }
         let initial_state = State::default();
         self
@@ -818,7 +814,7 @@ where
                                 debug!("Received error from validator {:?}: {:?}", name.concise(), err);
                             }
                         };
-                        if state.total_weight >= self.committee.quorum_threshold() {
+                        if state.total_weight >= committee::QUORUM_THRESHOLD {
                             if let Some(object) = state.latest_object_version {
                                 return ReduceOutput::Success(object);
                             } else {
@@ -846,7 +842,7 @@ where
         #[derive(Debug, Default)]
         struct State {
             latest_system_state: Option<SuiSystemStateInnerBenchmark>,
-            total_weight: StakeUnit,
+            total_weight: VoteUnit,
         }
         let initial_state = State::default();
         self.quorum_map_then_reduce_with_timeout(
@@ -878,7 +874,7 @@ where
                             );
                         }
                     };
-                    if state.total_weight >= self.committee.quorum_threshold() {
+                    if state.total_weight >= committee::QUORUM_THRESHOLD {
                         if let Some(system_state) = state.latest_system_state {
                             return ReduceOutput::Success(system_state);
                         } else {
@@ -921,7 +917,7 @@ where
         };
 
         let transaction_ref = &transaction;
-        let validity_threshold = committee.validity_threshold();
+        let validity_threshold = committee::VALIDITY_THRESHOLD;
         let result = self
             .quorum_map_then_reduce_with_timeout(
                 state,
@@ -969,7 +965,6 @@ where
                 self.record_process_transaction_metrics(tx_digest, &state);
                 let state = Self::record_non_quorum_effects_maybe(tx_digest, state);
                 Err(QuorumSignTransactionError {
-                    total_stake: self.committee.total_votes,
                     good_stake: state.good_stake(),
                     errors: state.errors,
                     conflicting_tx_digests: state.conflicting_tx_digests,
@@ -1009,7 +1004,7 @@ where
         state: &mut ProcessTransactionState,
         response: SuiResult<VerifiedTransactionInfoResponse>,
         name: AuthorityName,
-        weight: StakeUnit,
+        weight: VoteUnit,
     ) -> SuiResult<Option<ProcessTransactionResult>> {
         match response {
             Ok(VerifiedTransactionInfoResponse::Signed(signed)) => {
@@ -1036,7 +1031,7 @@ where
         &self,
         state: &mut ProcessTransactionState,
         name: AuthorityName,
-        weight: StakeUnit,
+        weight: VoteUnit,
         err: &SuiError,
     ) {
         if let SuiError::ObjectLockConflict {
@@ -1155,8 +1150,8 @@ where
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
         let cert_ref = &certificate;
-        let threshold = self.committee.quorum_threshold();
-        let validity = self.committee.validity_threshold();
+        let threshold = committee::QUORUM_THRESHOLD;
+        let validity = committee::VALIDITY_THRESHOLD;
         debug!(
             ?tx_digest,
             quorum_threshold = threshold,
@@ -1215,7 +1210,6 @@ where
                 "Received effects responses from validators"
             );
             QuorumExecuteCertificateError {
-                total_stake: self.committee.total_votes,
                 errors: state.errors,
             }
         })
@@ -1312,84 +1306,5 @@ where
             "handle_transaction_info_request_from_some_validators".to_string(),
         )
         .await
-    }
-}
-pub struct AuthorityAggregatorBuilder<'a> {
-    network_config: Option<&'a NetworkConfig>,
-    genesis: Option<&'a Genesis>,
-    committee_store: Option<Arc<CommitteeStore>>,
-    registry: Option<&'a Registry>,
-    protocol_version: ProtocolVersion,
-}
-
-impl<'a> AuthorityAggregatorBuilder<'a> {
-    pub fn from_network_config(config: &'a NetworkConfig) -> Self {
-        Self {
-            network_config: Some(config),
-            genesis: None,
-            committee_store: None,
-            registry: None,
-            protocol_version: ProtocolVersion::MIN,
-        }
-    }
-
-    pub fn from_genesis(genesis: &'a Genesis) -> Self {
-        Self {
-            network_config: None,
-            genesis: Some(genesis),
-            committee_store: None,
-            registry: None,
-            protocol_version: ProtocolVersion::MIN,
-        }
-    }
-
-    pub fn with_protocol_version(mut self, new_version: ProtocolVersion) -> Self {
-        self.protocol_version = new_version;
-        self
-    }
-
-    pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
-        self.committee_store = Some(committee_store);
-        self
-    }
-
-    pub fn with_registry(mut self, registry: &'a Registry) -> Self {
-        self.registry = Some(registry);
-        self
-    }
-
-    pub fn build<S: SignatureVerifier + Default>(
-        self,
-    ) -> anyhow::Result<(
-        AuthorityAggregator<NetworkAuthorityClient, S>,
-        BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
-    )> {
-        let validator_info = if let Some(network_config) = self.network_config {
-            network_config.validator_set()
-        } else if let Some(genesis) = self.genesis {
-            genesis.validator_set()
-        } else {
-            anyhow::bail!("need either NetworkConfig or Genesis.");
-        };
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info))?;
-        let mut registry = &prometheus::Registry::new();
-        if self.registry.is_some() {
-            registry = self.registry.unwrap();
-        }
-
-        let auth_clients = make_authority_clients(
-            &validator_info,
-            DEFAULT_CONNECT_TIMEOUT_SEC,
-            DEFAULT_REQUEST_TIMEOUT_SEC,
-        );
-        let committee_store = if let Some(committee_store) = self.committee_store {
-            committee_store
-        } else {
-            Arc::new(CommitteeStore::new_for_testing(&committee))
-        };
-        Ok((
-            AuthorityAggregator::new(committee, committee_store, auth_clients.clone(), registry),
-            auth_clients,
-        ))
     }
 }

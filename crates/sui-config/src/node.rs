@@ -11,7 +11,6 @@ use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -421,14 +420,6 @@ impl ValidatorInfo {
 
     pub fn p2p_address(&self) -> &Multiaddr {
         &self.p2p_address
-    }
-
-    //TODO remove this
-    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {
-        validator_set
-            .iter()
-            .map(|validator| (validator.protocol_key(), 1))
-            .collect()
     }
 }
 

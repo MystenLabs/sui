@@ -4,7 +4,7 @@
 
 use crate::{
     base_types::*,
-    committee::{Committee, EpochId, StakeUnit},
+    committee::{Committee, EpochId, VoteUnit},
     messages::{CommandIndex, ExecutionFailureStatus, MoveLocation},
     object::Owner,
 };
@@ -240,7 +240,7 @@ pub enum SuiError {
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
-        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
+        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, VoteUnit)>,
     },
     #[error("System Transaction not accepted")]
     InvalidSystemTransaction,

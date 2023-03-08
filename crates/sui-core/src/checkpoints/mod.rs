@@ -744,7 +744,7 @@ impl CheckpointBuilder {
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
                 Some(EndOfEpochData {
-                    next_epoch_committee: committee.voting_rights,
+                    next_epoch_committee: committee.voting_weights,
                     next_epoch_protocol_version: ProtocolVersion::new(
                         system_state_obj.protocol_version(),
                     ),

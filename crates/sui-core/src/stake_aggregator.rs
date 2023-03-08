@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::{Committee, StakeUnit};
+use sui_types::committee::{Committee, VoteUnit};
 use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo};
 use sui_types::error::SuiError;
 
@@ -15,7 +15,7 @@ use sui_types::error::SuiError;
 #[derive(Debug)]
 pub struct StakeAggregator<S, const STRENGTH: bool> {
     data: HashMap<AuthorityName, S>,
-    total_votes: StakeUnit,
+    total_votes: VoteUnit,
     committee: Arc<Committee>,
 }
 
@@ -84,7 +84,7 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         &self.committee
     }
 
-    pub fn total_votes(&self) -> StakeUnit {
+    pub fn total_votes(&self) -> VoteUnit {
         self.total_votes
     }
 
@@ -160,7 +160,7 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
         self.stake_maps.len()
     }
 
-    pub fn total_votes(&self) -> StakeUnit {
+    pub fn total_votes(&self) -> VoteUnit {
         self.stake_maps
             .values()
             .map(|(_, stake_aggregator)| stake_aggregator.total_votes())
@@ -198,7 +198,7 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH>
 where
     K: Clone + Ord,
 {
-    pub fn get_all_unique_values(&self) -> BTreeMap<K, (Vec<AuthorityName>, StakeUnit)> {
+    pub fn get_all_unique_values(&self) -> BTreeMap<K, (Vec<AuthorityName>, VoteUnit)> {
         self.stake_maps
             .iter()
             .map(|(k, (_, s))| (k.clone(), (s.data.keys().copied().collect(), s.total_votes)))

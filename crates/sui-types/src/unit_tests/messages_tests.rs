@@ -43,7 +43,7 @@ fn test_signed_values() {
         /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 0,
     );
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer_with_dummy_gas_price(
@@ -120,7 +120,7 @@ fn test_certificates() {
         /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer_with_dummy_gas_price(
@@ -193,7 +193,7 @@ fn test_new_with_signatures() {
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     let quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures.clone(), &committee)
             .unwrap();
@@ -240,7 +240,7 @@ fn test_handle_reject_malicious_signature() {
         };
     }
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
@@ -321,7 +321,7 @@ fn test_bitmap_out_of_range() {
         ));
     }
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
 
@@ -362,7 +362,7 @@ fn test_reject_extra_public_key() {
         signatures[3].clone(),
     ];
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
             .unwrap();
@@ -400,7 +400,7 @@ fn test_reject_reuse_signatures() {
         signatures[2].clone(),
     ];
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     let quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
             .unwrap();
@@ -429,7 +429,7 @@ fn test_empty_bitmap() {
         ));
     }
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     quorum.signers_map = RoaringBitmap::new();
@@ -453,7 +453,7 @@ fn test_digest_caching() {
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer_with_dummy_gas_price(
@@ -620,7 +620,7 @@ fn test_user_signature_committed_in_signed_transactions() {
     // Ensure that signed tx verifies against the transaction with a correct user signature.
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities.clone()).unwrap();
     assert!(signed_tx_a
         .auth_sig()
         .verify_secure(
@@ -898,7 +898,7 @@ fn verify_sender_signature_correctly_with_flag() {
     let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities).unwrap();
 
     // create a receiver keypair with Secp256k1
     let receiver_kp = SuiKeyPair::Secp256k1(get_key_pair().1);

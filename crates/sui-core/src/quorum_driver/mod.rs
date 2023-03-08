@@ -12,7 +12,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
-use sui_types::committee::{validity_threshold, Committee, EpochId, StakeUnit};
+use sui_types::committee::{self, Committee, EpochId, VoteUnit};
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
 };
@@ -62,7 +62,7 @@ pub(crate) enum QuorumDriverInternalError {
         retried_tx_success
     )]
     TransactionErrorWithConflictingTransactions {
-        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, VoteUnit)>,
         retried_tx_digest: Option<TransactionDigest>,
         retried_tx_success: Option<bool>,
     },
@@ -282,7 +282,6 @@ where
 
         match result {
             Err(QuorumSignTransactionError {
-                total_stake,
                 good_stake,
                 errors: _errors,
                 conflicting_tx_digests,
@@ -292,7 +291,6 @@ where
                     .inc();
                 debug!(
                     ?tx_digest,
-                    ?total_stake,
                     ?good_stake,
                     "Observed {} conflicting transactions: {:?}",
                     conflicting_tx_digests.len(),
@@ -392,14 +390,14 @@ where
     #[allow(clippy::type_complexity)]
     async fn attempt_conflicting_transactions_maybe(
         &self,
-        good_stake: StakeUnit,
+        good_stake: VoteUnit,
         conflicting_tx_digests: &BTreeMap<
             TransactionDigest,
-            (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
+            (Vec<(AuthorityName, ObjectRef)>, VoteUnit),
         >,
         original_tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<(TransactionDigest, bool)>> {
-        let validity = self.validators.load().committee.validity_threshold();
+        let validity = committee::VALIDITY_THRESHOLD;
 
         let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
         conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
@@ -821,17 +819,13 @@ fn convert_to_quorum_driver_error_if_non_retryable<A, S: SignatureVerifier + Def
             Some(err)
         }
         QuorumDriverInternalError::TransactionError(QuorumSignTransactionError {
-            total_stake,
             good_stake: _,
             errors,
             conflicting_tx_digests: _,
         })
-        | QuorumDriverInternalError::CertificateError(QuorumExecuteCertificateError {
-            total_stake,
-            errors,
-        }) => {
+        | QuorumDriverInternalError::CertificateError(QuorumExecuteCertificateError { errors }) => {
             let mut non_recoverable_bad_stake = 0;
-            let threshold = validity_threshold(total_stake);
+            let threshold = committee::VALIDITY_THRESHOLD;
             let mut non_recoverable_errors = HashMap::new();
             for (error, mut validators, stake) in errors {
                 let (retryable, categorized) = error.is_retryable();

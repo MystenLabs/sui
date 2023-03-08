@@ -7,7 +7,7 @@ use anemo::Result;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use futures::stream::FuturesUnordered;
 use std::collections::{BTreeMap, HashSet};
-use sui_types::committee::{Committee, NetworkMetadata};
+use sui_types::committee::{self, Committee, NetworkMetadata};
 use sui_types::crypto::get_authority_key_pair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
@@ -253,7 +253,11 @@ async fn peers_are_added_from_reocnfig_channel() -> Result<()> {
     let (mut subscriber_2, _) = network_2.subscribe()?;
 
     // We send peer 1 a new committee info (peer 2) from the reconfig channel.
-    let committee = Committee::new(1, BTreeMap::from([(authority_name_2, 1)])).unwrap();
+    let committee = Committee::new(
+        1,
+        BTreeMap::from([(authority_name_2, committee::TOTAL_VOTING_POWER)]),
+    )
+    .unwrap();
     let peer_2_network_pubkey =
         Ed25519PublicKey(ed25519_consensus::VerificationKey::try_from(peer_id_2.0).unwrap());
     end_of_epoch_channel_1

@@ -13,6 +13,7 @@ use crate::{
 use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
 use sui_types::base_types::SuiAddress;
+use sui_types::committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use sui_types::messages::{TransactionEffectsAPI, VerifiedTransaction};
@@ -408,11 +409,7 @@ async fn test_quorum_driver_not_retry_on_object_locked() -> Result<(), anyhow::E
     .start();
 
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
-    let validity = quorum_driver
-        .authority_aggregator()
-        .load()
-        .committee
-        .validity_threshold();
+    let validity = committee::VALIDITY_THRESHOLD;
 
     assert_eq!(auth_agg.clone_inner_clients().keys().cloned().count(), 4);
 

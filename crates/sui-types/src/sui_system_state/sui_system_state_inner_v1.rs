@@ -5,7 +5,7 @@ use crate::balance::Balance;
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{MoveOption, Table, TableVec, VecMap, VecSet};
 use crate::committee::{
-    Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
+    Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, VoteUnit,
 };
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::sui_system_state::epoch_start_sui_system_state::{
@@ -219,7 +219,7 @@ pub struct ValidatorV1 {
 }
 
 impl ValidatorV1 {
-    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, StakeUnit, NetworkMetadata) {
+    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, VoteUnit, NetworkMetadata) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())

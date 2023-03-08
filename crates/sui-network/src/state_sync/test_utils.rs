@@ -7,7 +7,7 @@ use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
 use sui_types::{
     base_types::AuthorityName,
-    committee::{Committee, EpochId, StakeUnit},
+    committee::{self, Committee, EpochId, VoteUnit},
     crypto::{
         AuthorityKeyPair, AuthoritySignInfo, AuthoritySignature, KeypairTraits,
         SuiAuthoritySignature,
@@ -20,7 +20,7 @@ use sui_types::{
 
 pub struct CommitteeFixture {
     epoch: EpochId,
-    validators: HashMap<AuthorityName, (AuthorityKeyPair, StakeUnit)>,
+    validators: HashMap<AuthorityName, (AuthorityKeyPair, VoteUnit)>,
     committee: Committee,
 }
 
@@ -30,10 +30,20 @@ impl CommitteeFixture {
         epoch: EpochId,
         committee_size: usize,
     ) -> Self {
-        let validators = (0..committee_size)
-            .map(|_| sui_types::crypto::get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng).1)
-            .map(|keypair| (keypair.public().into(), (keypair, 1)))
-            .collect::<HashMap<_, _>>();
+        let voting_weight = committee::TOTAL_VOTING_POWER / committee_size as u64;
+        let mut validators = HashMap::new();
+        let mut sum_weights = 0;
+        for i in 0..committee_size {
+            let keypair =
+                sui_types::crypto::get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng).1;
+            let weight = if i < committee_size - 1 {
+                voting_weight
+            } else {
+                committee::TOTAL_VOTING_POWER - sum_weights
+            };
+            sum_weights += weight;
+            validators.insert(keypair.public().into(), (keypair, weight));
+        }
 
         let committee = Committee::new(
             epoch,

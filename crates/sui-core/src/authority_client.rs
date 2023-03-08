@@ -167,7 +167,7 @@ pub fn make_network_authority_client_sets_from_committee(
     network_config: &Config,
 ) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
-    for (name, _stakes) in &committee.committee.voting_rights {
+    for (name, _stakes) in &committee.committee.voting_weights {
         let address = &committee
             .network_metadata
             .get(name)

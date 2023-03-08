@@ -14,6 +14,7 @@ use sui_core::signature_verifier::DefaultSignatureVerifier;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
+use sui_types::committee;
 use sui_types::crypto::ToFromBytes;
 use sui_types::crypto::{generate_proof_of_possession, get_account_key_pair};
 use sui_types::gas::GasCostSummary;
@@ -505,7 +506,7 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
                 cur_stake += cur_committee.weight(&node.state().name);
             })
             .await;
-        if cur_stake >= cur_committee.quorum_threshold() {
+        if cur_stake >= committee::QUORUM_THRESHOLD {
             break;
         }
     }

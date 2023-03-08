@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::accumulator::Accumulator;
 use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
-use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
+use crate::committee::{EpochId, ProtocolVersion, VoteUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
@@ -95,7 +95,7 @@ pub struct EndOfEpochData {
     /// or the total number of transactions from genesis to the end of an epoch.
     /// The committee is stored as a vector of validator pub key and stake pairs. The vector
     /// should be sorted based on the Committee data structure.
-    pub next_epoch_committee: Vec<(AuthorityName, StakeUnit)>,
+    pub next_epoch_committee: Vec<(AuthorityName, VoteUnit)>,
 
     /// The protocol version that is in effect during the epoch that starts immediately after this
     /// checkpoint.
@@ -222,7 +222,7 @@ impl<S> CheckpointSummaryEnvelope<S> {
         self.summary.previous_digest
     }
 
-    pub fn next_epoch_committee(&self) -> Option<&[(AuthorityName, StakeUnit)]> {
+    pub fn next_epoch_committee(&self) -> Option<&[(AuthorityName, VoteUnit)]> {
         self.summary
             .end_of_epoch_data
             .as_ref()

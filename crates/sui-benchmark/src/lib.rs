@@ -13,10 +13,10 @@ use std::{
     time::Duration,
 };
 use sui_config::NetworkConfig;
-use sui_config::{genesis::Genesis, ValidatorInfo};
+use sui_config::{genesis::Genesis};
 use sui_core::signature_verifier::IgnoreSignatureVerifier;
 use sui_core::{
-    authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
+    authority_aggregator::{AuthorityAggregator},
     authority_client::{make_authority_clients, AuthorityAPI, NetworkAuthorityClient},
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
@@ -30,7 +30,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::messages::TransactionEvents;
 use sui_types::{
     base_types::ObjectID,
-    committee::{Committee, EpochId},
+    committee::{self, Committee, EpochId},
     crypto::{
         AggregateAuthenticator, AggregateAuthoritySignature, AuthorityQuorumSignInfo,
         AuthoritySignature,
@@ -54,6 +54,7 @@ use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
+pub mod authority_aggregator_builder;
 pub mod benchmark_setup;
 pub mod drivers;
 pub mod embedded_reconfig_observer;
@@ -62,6 +63,8 @@ pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
+
+use crate::authority_aggregator_builder::AuthorityAggregatorBuilder;
 
 /// A wrapper on execution results to accommodate different types of
 /// responses from LocalValidatorAggregatorProxy and FullNodeProxy
@@ -163,7 +166,9 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
+        let committee = Committee::normalize_from_weights_for_testing(
+            0,
+            validator_info.iter().map(|validator| (validator.protocol_key(), 1)).collect()).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -191,7 +196,9 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
+        let committee = Committee::normalize_from_weights_for_testing(
+            0,
+            validator_info.iter().map(|validator| (validator.protocol_key(), 1)).collect()).unwrap();
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -353,7 +360,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 Err(e) => tracing::warn!("Failed to submit transaction: {e}"),
             }
 
-            if total_stake >= self.committee.quorum_threshold() {
+            if total_stake >= committee::QUORUM_THRESHOLD {
                 break;
             }
 
@@ -431,14 +438,14 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
             }
 
-            if total_stake >= self.committee.quorum_threshold() {
+            if total_stake >= committee::QUORUM_THRESHOLD {
                 break;
             }
         }
 
         // Abort if we failed to submit the certificate to enough validators. This typically
         // happens when the validators are overloaded and the requests timed out.
-        if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
+        if transaction_effects.is_none() || total_stake < committee::QUORUM_THRESHOLD {
             bail!("Failed to submit certificate to quorum of validators");
         }
 

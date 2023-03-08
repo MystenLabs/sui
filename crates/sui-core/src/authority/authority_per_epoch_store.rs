@@ -19,7 +19,7 @@ use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
-use sui_types::committee::Committee;
+use sui_types::committee::{self, Committee};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
@@ -415,7 +415,9 @@ impl AuthorityPerEpochStore {
         metrics
             .current_voting_right
             .set(committee.weight(&name) as i64);
-        metrics.epoch_total_votes.set(committee.total_votes as i64);
+        metrics
+            .epoch_total_votes
+            .set(committee::TOTAL_VOTING_POWER as i64);
         let protocol_version = epoch_start_configuration.protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);

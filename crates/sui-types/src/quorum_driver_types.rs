@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
-use crate::committee::StakeUnit;
+use crate::committee::VoteUnit;
 use crate::error::SuiError;
 use crate::messages::{QuorumDriverResponse, VerifiedTransaction};
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ pub enum QuorumDriverError {
         retried_tx_success
     )]
     ObjectsDoubleUsed {
-        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, VoteUnit)>,
         retried_tx: Option<TransactionDigest>,
         retried_tx_success: Option<bool>,
     },
@@ -42,6 +42,6 @@ pub enum QuorumDriverError {
     FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u8 },
     #[error("Transaction has non recoverable errors from at least 1/3 of validators: {errors:?}.")]
     NonRecoverableTransactionError {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: Vec<(SuiError, Vec<AuthorityName>, VoteUnit)>,
     },
 }

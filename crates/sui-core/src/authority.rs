@@ -66,7 +66,7 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
-use sui_types::committee::{EpochId, ProtocolVersion};
+use sui_types::committee::{self, EpochId, ProtocolVersion};
 use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
 use sui_types::event::{Event, EventID};
@@ -2906,8 +2906,8 @@ impl AuthorityState {
                 }
 
                 let total_votes = stake_aggregator.total_votes();
-                let quorum_threshold = committee.quorum_threshold();
-                let f = committee.total_votes - committee.quorum_threshold();
+                let quorum_threshold = committee::QUORUM_THRESHOLD;
+                let f = committee::VALIDITY_THRESHOLD - 1;
                 let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
                 // multiple by buffer_bps / 10000, rounded up.
                 let buffer_stake = (f * buffer_bps + 9999) / 10000;

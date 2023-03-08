@@ -6,7 +6,7 @@ use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use std::num::NonZeroU32;
 use std::ops::Range;
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::StakeUnit;
+use sui_types::committee::VoteUnit;
 use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
 
 fn get_key(id: u16) -> AuthorityName {
@@ -24,7 +24,7 @@ fn get_range(begin: u16, end: u16) -> Range<NonZeroU32> {
 
 #[test]
 fn test_1000_validators_with_1000_stake() {
-    let stakes: Vec<(AuthorityName, StakeUnit)> =
+    let stakes: Vec<(AuthorityName, VoteUnit)> =
         (1..=1000).into_iter().map(|i| (get_key(i), 1)).collect();
 
     let tbls_ids = TBlsIds::new(&stakes);
@@ -37,7 +37,7 @@ fn test_1000_validators_with_1000_stake() {
 
 #[test]
 fn test_1000_validators_with_100000_stake() {
-    let stakes: Vec<(AuthorityName, StakeUnit)> =
+    let stakes: Vec<(AuthorityName, VoteUnit)> =
         (1..=1000).into_iter().map(|i| (get_key(i), 100)).collect();
 
     let tbls_ids = TBlsIds::new(&stakes);
@@ -48,7 +48,7 @@ fn test_1000_validators_with_100000_stake() {
 
 #[test]
 fn test_100_validators_one_with_large_stake() {
-    let mut stakes: Vec<(AuthorityName, StakeUnit)> =
+    let mut stakes: Vec<(AuthorityName, VoteUnit)> =
         (1..=100).into_iter().map(|i| (get_key(i), 1)).collect();
     stakes.get_mut(0).unwrap().1 = 900;
 
@@ -59,7 +59,7 @@ fn test_100_validators_one_with_large_stake() {
 
 #[test]
 fn test_unsorted_100_validators_with_1000_stake() {
-    let mut stakes: Vec<(AuthorityName, StakeUnit)> = (1..=100)
+    let mut stakes: Vec<(AuthorityName, VoteUnit)> = (1..=100)
         .into_iter()
         .map(|i| (get_key(101 - i), 1))
         .collect();
@@ -75,7 +75,7 @@ fn test_unsorted_100_validators_with_1000_stake() {
 
 #[test]
 fn test_validator_without_shares() {
-    let mut stakes: Vec<(AuthorityName, StakeUnit)> =
+    let mut stakes: Vec<(AuthorityName, VoteUnit)> =
         (1..=10).into_iter().map(|i| (get_key(i), 100)).collect();
     // The next validator should not receive any id.
     stakes.push((get_key(11), 1));

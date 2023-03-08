@@ -44,7 +44,7 @@ where
         keys.push(inner_authority_key);
     }
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::normalize_from_weights_for_testing(0, authorities).unwrap();
     (keys, committee)
 }
 

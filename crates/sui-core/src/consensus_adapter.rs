@@ -587,7 +587,7 @@ pub fn order_validators_for_submission(
 
     // permute the validators deterministically, based on the digest
     let mut rng = StdRng::from_seed(digest_bytes);
-    committee.shuffle_by_stake_with_rng(None, None, &mut rng)
+    committee.shuffle_by_weight_with_rng(None, None, &mut rng)
 }
 
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
@@ -737,7 +737,9 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(0, authorities.iter().cloned().collect()).unwrap();
+        let committee =
+            Committee::normalize_from_weights_for_testing(0, authorities.iter().cloned().collect())
+                .unwrap();
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;

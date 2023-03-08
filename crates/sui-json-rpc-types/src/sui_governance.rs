@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use sui_types::base_types::{AuthorityName, EpochId};
-use sui_types::committee::{Committee, StakeUnit};
+use sui_types::committee::{Committee, VoteUnit};
 use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
 use sui_types::sui_system_state::SuiSystemState;
 
@@ -36,14 +36,14 @@ impl From<SuiSystemStateRpc> for SuiSystemState {
 #[serde(rename = "CommitteeInfo")]
 pub struct SuiCommittee {
     pub epoch: EpochId,
-    pub validators: Vec<(AuthorityName, StakeUnit)>,
+    pub validators: Vec<(AuthorityName, VoteUnit)>,
 }
 
 impl From<Committee> for SuiCommittee {
     fn from(committee: Committee) -> Self {
         Self {
             epoch: committee.epoch,
-            validators: committee.voting_rights,
+            validators: committee.voting_weights,
         }
     }
 }

@@ -7,7 +7,7 @@ use std::num::NonZeroU32;
 use std::ops::Range;
 use std::unreachable;
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::StakeUnit;
+use sui_types::committee::VoteUnit;
 
 /// Threshold BLS (tBLS) requires unique integer "share IDs". (tBLS will be used soon by the
 /// randomness beacon.)
@@ -30,7 +30,7 @@ type TBlsId = NonZeroU32;
 const MAX_NUM_OF_SHARES: u16 = 1000;
 
 impl TBlsIds {
-    pub fn new(stakes: &[(AuthorityName, StakeUnit)]) -> Self {
+    pub fn new(stakes: &[(AuthorityName, VoteUnit)]) -> Self {
         let total_stake: u64 = stakes.iter().map(|(_name, stake)| stake).sum();
         let deltas = stakes
             .iter()

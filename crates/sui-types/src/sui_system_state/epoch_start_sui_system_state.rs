@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
-use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, VoteUnit};
 use anemo::PeerId;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
@@ -132,11 +132,11 @@ pub struct EpochStartValidatorInfo {
     pub p2p_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
-    pub voting_power: StakeUnit,
+    pub voting_power: VoteUnit,
 }
 
 impl EpochStartValidatorInfo {
-    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, StakeUnit, NetworkMetadata) {
+    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, VoteUnit, NetworkMetadata) {
         (
             (&self.protocol_pubkey).into(),
             self.voting_power,

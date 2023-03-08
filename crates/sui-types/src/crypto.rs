@@ -35,7 +35,7 @@ use std::str::FromStr;
 use strum::EnumString;
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::committee::{Committee, EpochId, StakeUnit};
+use crate::committee::{Committee, EpochId, VoteUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
 use crate::sui_serde::{Readable, SuiBitmap};
@@ -1343,7 +1343,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 error: "All signatures must be from the same epoch as the committee".to_string()
             }
         );
-        let total_stake: StakeUnit = auth_sign_infos
+        let total_stake: VoteUnit = auth_sign_infos
             .iter()
             .map(|a| committee.weight(&a.authority))
             .sum();
@@ -1394,7 +1394,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         })
     }
 
-    pub fn quorum_threshold(committee: &Committee) -> StakeUnit {
+    pub fn quorum_threshold(committee: &Committee) -> VoteUnit {
         committee.threshold::<STRONG_THRESHOLD>()
     }
 

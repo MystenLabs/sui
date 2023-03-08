@@ -3901,7 +3901,6 @@ pub async fn init_state() -> Arc<AuthorityState> {
     let keypair = network_config.validator_configs[0]
         .protocol_key_pair()
         .copy();
-
     init_state_with_committee(&genesis, &keypair).await
 }
 
@@ -4837,7 +4836,7 @@ fn test_choose_next_system_packages() {
     }
 
     let committee = Committee::new_simple_test_committee().0;
-    let v = &committee.voting_rights;
+    let v = &committee.voting_weights;
     let mut protocol_config = ProtocolConfig::get_for_max_version();
 
     // all validators agree on new system packages, but without a new protocol version, so no
