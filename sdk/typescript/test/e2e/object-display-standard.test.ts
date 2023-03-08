@@ -42,9 +42,7 @@ describe('Test Object Display Standard', () => {
   });
 
   it('Test getting Display fields for object that has no display object', async () => {
-    const coinId = (
-      await toolbox.provider.getGasObjectsOwnedByAddress(toolbox.address())
-    )[0].objectId;
+    const coinId = (await toolbox.getGasObjectsOwnedByAddress())[0].objectId;
     const display = getObjectDisplay(
       await toolbox.provider.getObject(coinId, { showDisplay: true }),
     );

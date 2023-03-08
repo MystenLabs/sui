@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, RawSigner } from '../../src';
+import {
+  Commands,
+  getExecutionStatusType,
+  ObjectId,
+  RawSigner,
+  Transaction,
+} from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -16,18 +22,17 @@ describe('Test Move call with strings', () => {
   let packageId: ObjectId;
 
   async function callWithString(str: string | string[], funcName: string) {
-    const txn = await signer.signAndExecuteTransaction({
-      kind: 'moveCall',
-      data: {
-        packageObjectId: packageId,
-        module: 'entry_point_string',
-        function: funcName,
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::entry_point_string::${funcName}`,
         typeArguments: [],
-        arguments: [str],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
-    expect(getExecutionStatusType(txn)).toEqual('success');
+        arguments: [tx.input(str)],
+      }),
+    );
+    const result = await signer.signAndExecuteTransaction(tx);
+    expect(getExecutionStatusType(result)).toEqual('success');
   }
 
   beforeAll(async () => {

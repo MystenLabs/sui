@@ -20,9 +20,7 @@ describe('Object Reading API', () => {
   });
 
   it('Get Object', async () => {
-    const gasObjects = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
       gasObjects.map((gasObject) =>

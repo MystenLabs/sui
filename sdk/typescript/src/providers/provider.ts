@@ -150,13 +150,6 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
-   * Convenience method for getting all gas objects(SUI Tokens) owned by an address
-   */
-  abstract getGasObjectsOwnedByAddress(
-    _address: string,
-  ): Promise<SuiObjectInfo[]>;
-
-  /**
    * Convenience method for select coin objects that has a balance greater than or equal to `amount`
    *
    * @param amount coin balance

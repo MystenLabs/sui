@@ -3,20 +3,18 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  Commands,
   getExecutionStatusType,
-  getNewlyCreatedCoinRefsAfterSplit,
-  getObjectId,
   getTransactionDigest,
   RawSigner,
-  SignableTransaction,
   SUI_SYSTEM_STATE_OBJECT_ID,
+  Transaction,
 } from '../../src';
 import {
   DEFAULT_RECIPIENT,
   DEFAULT_GAS_BUDGET,
   setup,
   TestToolbox,
-  DEFAULT_RECIPIENT_2,
 } from './utils/setup';
 
 describe('Transaction Builders', () => {
@@ -28,215 +26,100 @@ describe('Transaction Builders', () => {
     signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
-  it('Split coin', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
+  it('SplitCoin + TransferObjects', async () => {
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
+    const tx = new Transaction();
+    const coin = tx.add(
+      Commands.SplitCoin(
+        tx.input(coins[0].objectId),
+        tx.input(DEFAULT_GAS_BUDGET * 2),
+      ),
     );
-    await validateTransaction(signer, {
-      kind: 'splitCoin',
-      data: {
-        coinObjectId: coins[0].objectId,
-        splitAmounts: [DEFAULT_GAS_BUDGET * 2],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
+    tx.add(Commands.TransferObjects([coin], tx.input(toolbox.address())));
+    await validateTransaction(signer, tx);
   });
 
-  it('Merge coin', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
+  it('MergeCoins', async () => {
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
+    const tx = new Transaction();
+    tx.add(
+      Commands.MergeCoins(tx.input(coins[0].objectId), [
+        tx.input(coins[1].objectId),
+      ]),
     );
-    await validateTransaction(signer, {
-      kind: 'mergeCoin',
-      data: {
-        primaryCoin: coins[0].objectId,
-        coinToMerge: coins[1].objectId,
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
+    await validateTransaction(signer, tx);
   });
 
-  it('Move Call', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
-    await validateTransaction(signer, {
-      kind: 'moveCall',
-      data: {
-        packageObjectId: '0x2',
-        module: 'devnet_nft',
-        function: 'mint',
+  it('MoveCall', async () => {
+    const tx = new Transaction();
+    tx.add(
+      Commands.MoveCall({
+        target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          'Example NFT',
-          'An NFT created by the wallet Command Line Tool',
-          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+          tx.input('Example NFT'),
+          tx.input('An NFT created by the wallet Command Line Tool'),
+          tx.input(
+            'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+          ),
         ],
-        gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: coins[0].objectId,
-      },
-    });
+      }),
+    );
+    await validateTransaction(signer, tx);
   });
 
-  it('Move Shared Object Call', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+  it('MoveCall Shared Object', async () => {
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const [{ sui_address: validator_address }] =
       await toolbox.getActiveValidators();
 
-    await validateTransaction(signer, {
-      kind: 'moveCall',
-      data: {
-        packageObjectId: '0x2',
-        module: 'sui_system',
-        function: 'request_add_delegation',
+    const tx = new Transaction();
+    tx.add(
+      Commands.MoveCall({
+        target: '0x2::sui_system::request_add_delegation',
         typeArguments: [],
         arguments: [
-          SUI_SYSTEM_STATE_OBJECT_ID,
-          coins[2].objectId,
-          validator_address,
+          tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+          tx.input(coins[2].objectId),
+          tx.input(validator_address),
         ],
-        gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: coins[3].objectId,
-      },
-    });
-  });
-
-  it('Transfer Sui', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
-    await validateTransaction(signer, {
-      kind: 'transferSui',
-      data: {
-        suiObjectId: coins[0].objectId,
-        gasBudget: DEFAULT_GAS_BUDGET,
-        recipient: DEFAULT_RECIPIENT,
-        amount: 100,
-      },
-    });
-  });
-
-  it('Transfer Object', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
-    await validateTransaction(signer, {
-      kind: 'transferObject',
-      data: {
-        objectId: coins[0].objectId,
-        gasBudget: DEFAULT_GAS_BUDGET,
-        recipient: DEFAULT_RECIPIENT,
-        gasPayment: coins[1].objectId,
-      },
-    });
-  });
-
-  it('Pay', async () => {
-    const coins =
-      await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
-        toolbox.address(),
-        BigInt(DEFAULT_GAS_BUDGET),
-      );
-
-    // get some new coins with small amount
-    const splitTxn = await signer.signAndExecuteTransaction({
-      kind: 'splitCoin',
-      data: {
-        coinObjectId: coins[0].coinObjectId,
-        splitAmounts: [1, 2, 3],
-        gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: coins[1].coinObjectId,
-      },
-    });
-    const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-      getObjectId(c),
+      }),
     );
 
-    // use the newly created coins as the input coins for the pay transaction
-    await validateTransaction(signer, {
-      kind: 'pay',
-      data: {
-        inputCoins: splitCoins,
-        gasBudget: DEFAULT_GAS_BUDGET,
-        recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-        amounts: [4, 2],
-        gasPayment: coins[2].coinObjectId,
-      },
-    });
+    await validateTransaction(signer, tx);
   });
 
-  it('PaySui', async () => {
-    const gasBudget = 1000;
-    const coins =
-      await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
-        toolbox.address(),
-        BigInt(DEFAULT_GAS_BUDGET),
-      );
-
-    const splitTxn = await signer.signAndExecuteTransaction({
-      kind: 'splitCoin',
-      data: {
-        coinObjectId: coins[0].coinObjectId,
-        splitAmounts: [2000, 2000, 2000],
-        gasBudget: gasBudget,
-        gasPayment: coins[1].coinObjectId,
-      },
-    });
-    const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-      getObjectId(c),
-    );
-
-    await validateTransaction(signer, {
-      kind: 'paySui',
-      data: {
-        inputCoins: splitCoins,
-        recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-        amounts: [1000, 1000],
-        gasBudget: gasBudget,
-      },
-    });
+  it('SplitCoin from gas object + TransferObjects', async () => {
+    const tx = new Transaction();
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(1)));
+    tx.add(Commands.TransferObjects([coin], tx.input(DEFAULT_RECIPIENT)));
+    await validateTransaction(signer, tx);
   });
 
-  it('PayAllSui', async () => {
-    const gasBudget = 1000;
-    const coins =
-      await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
-        toolbox.address(),
-        BigInt(DEFAULT_GAS_BUDGET),
-      );
+  it('TransferObjects gas object', async () => {
+    const tx = new Transaction();
+    tx.add(Commands.TransferObjects([tx.gas], tx.input(DEFAULT_RECIPIENT)));
+    await validateTransaction(signer, tx);
+  });
 
-    const splitTxn = await signer.signAndExecuteTransaction({
-      kind: 'splitCoin',
-      data: {
-        coinObjectId: coins[0].coinObjectId,
-        splitAmounts: [2000, 2000, 2000],
-        gasBudget: gasBudget,
-        gasPayment: coins[1].coinObjectId,
-      },
-    });
-    const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-      getObjectId(c),
+  it('TransferObject', async () => {
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
+    const tx = new Transaction();
+    tx.add(
+      Commands.TransferObjects(
+        [tx.input(coins[0].objectId)],
+        tx.input(DEFAULT_RECIPIENT),
+      ),
     );
-    await validateTransaction(signer, {
-      kind: 'payAllSui',
-      data: {
-        inputCoins: splitCoins,
-        recipient: DEFAULT_RECIPIENT,
-        gasBudget: gasBudget,
-      },
-    });
+    await validateTransaction(signer, tx);
   });
 });
 
-async function validateTransaction(
-  signer: RawSigner,
-  txn: SignableTransaction,
-) {
-  const localDigest = await signer.getTransactionDigest(txn);
-  const result = await signer.signAndExecuteTransaction(txn);
+async function validateTransaction(signer: RawSigner, tx: Transaction) {
+  tx.setGasBudget(DEFAULT_GAS_BUDGET);
+  const localDigest = await signer.getTransactionDigest(tx);
+  const result = await signer.signAndExecuteTransaction(tx);
   expect(localDigest).toEqual(getTransactionDigest(result));
   expect(getExecutionStatusType(result)).toEqual('success');
 }

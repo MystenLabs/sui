@@ -66,9 +66,7 @@ describe('Test dev inspect', () => {
   });
 
   it('Move Call that returns struct', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const moveCall = {
       packageObjectId: packageId,
       module: 'serializer_tests',
