@@ -100,17 +100,21 @@ async fn commit_one() {
     assert!(committed_sub_dag.reputation_score.all_zero());
 }
 
-// Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
-// rounds 2, 4, and 6.
+// Run for 11 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
+// rounds 2, 4, 6 and 10. The leader of round 8 will be missing, but eventually the leader 10 will get committed.
 #[tokio::test]
 async fn dead_node() {
     const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Make the certificates.
     let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
-    let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-    keys.sort(); // Ensure we don't remove one of the leaders.
+    let committee: Committee = fixture.committee();
+    let mut keys: Vec<_> = committee
+        .authorities()
+        .map(|(key, _)| key.clone())
+        .collect();
+
+    // remove the last authority - 4
     let dead_node = keys.pop().unwrap();
 
     let genesis = Certificate::genesis(&committee)
@@ -119,7 +123,7 @@ async fn dead_node() {
         .collect::<BTreeSet<_>>();
 
     let (mut certificates, _) =
-        test_utils::make_optimal_certificates(&committee, 1..=9, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=11, &genesis, &keys);
 
     // Spawn the consensus engine and sink the primary channel.
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
@@ -163,7 +167,7 @@ async fn dead_node() {
         }
     });
 
-    // We should commit 4 leaders (rounds 2, 4, 6, and 8).
+    // We should commit 3 leaders (rounds 2, 4 and 6).
     let mut committed = Vec::new();
     let mut committed_sub_dags: Vec<CommittedSubDag> = Vec::new();
     for _commit_rounds in 1..=4 {
@@ -173,13 +177,13 @@ async fn dead_node() {
     }
 
     let mut sequence = committed.into_iter();
-    for i in 1..=21 {
+    for i in 1..=27 {
         let output = sequence.next().unwrap();
         let expected = ((i - 1) / keys.len() as u64) + 1;
         assert_eq!(output.round(), expected);
     }
     let output = sequence.next().unwrap();
-    assert_eq!(output.round(), 8);
+    assert_eq!(output.round(), 10);
 
     // AND check that the consensus scores are the expected ones
     for (index, sub_dag) in committed_sub_dags.iter().enumerate() {
@@ -843,4 +847,236 @@ async fn restart_with_new_committee() {
         // Ensure consensus stopped.
         handle.await.unwrap();
     }
+}
+
+/// The test ensures the following things:
+/// * garbage collection is removing the certificates from lower rounds according to gc depth only
+/// * no certificate will ever get committed past the gc round
+/// * existing uncommitted certificates in DAG (ex from slow nodes where no-one references them) they
+/// get cleaned up.
+#[tokio::test]
+async fn garbage_collection_basic() {
+    const GC_DEPTH: Round = 4;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
+    let fixture = CommitteeFixture::builder().build();
+    let committee: Committee = fixture.committee();
+
+    // We create certificates for rounds 1 to 7. For the authorities 1 to 3 the references
+    // to previous rounds between them are fully connected - meaning that we always add all the parents
+    // from previous round, except for the authority 4 which we consider it to be slow, so no one
+    // refers to their certificates. Authority 4 still produces certificates, and uses as parents
+    // all the certificates of the other authorities but never anyone else is referring to its
+    // certificates. That will create a lone chain for authority 4. We should not see any certificate
+    // committed for authority 4.
+    let keys: Vec<PublicKey> = committee
+        .authorities()
+        .map(|(key, _)| key.clone())
+        .collect();
+    let slow_node = keys[3].clone();
+    let genesis = Certificate::genesis(&committee);
+
+    let slow_nodes = vec![(slow_node.clone(), 0.0_f64)];
+    let (certificates, _round_5_certificates) = test_utils::make_certificates_with_slow_nodes(
+        &committee,
+        1..=7,
+        genesis,
+        &keys,
+        slow_nodes.as_slice(),
+    );
+
+    // Create Bullshark consensus engine
+    let store = make_consensus_store(&test_utils::temp_dir());
+
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut bullshark = Bullshark::new(
+        committee,
+        store,
+        GC_DEPTH,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
+
+    // Now start feeding the certificates per round
+    for c in certificates {
+        let (_, sub_dags) = bullshark.process_certificate(&mut state, c).unwrap();
+
+        sub_dags.iter().for_each(|sub_dag| {
+            // ensure nothing has been committed for authority 4
+            assert!(
+                !sub_dag
+                    .certificates
+                    .iter()
+                    .any(|c| c.header.author == slow_node),
+                "Slow authority shouldn't be amongst the committed ones"
+            );
+
+            // Once leader of round 6 is committed then we know that garbage
+            // collection has run. In this case no certificate of round 1 should exist.
+            if sub_dag.leader.round() == 6 {
+                assert_eq!(
+                    state
+                        .dag
+                        .iter()
+                        .filter(|(round, _)| **round <= 1_u64)
+                        .count(),
+                    0,
+                    "Didn't expect to still have certificates from round 1"
+                );
+            }
+
+            // When we do commit for authorities, we keep all the certificates and only the
+            // <= gc_round ones are discarded.
+            for (_, certificates) in state
+                .dag
+                .iter()
+                .filter(|(round, _)| **round <= sub_dag.leader.round())
+            {
+                assert_eq!(
+                    certificates.len(),
+                    4,
+                    "We expect to have all the certificates"
+                );
+            }
+        })
+    }
+}
+
+// This test ensures that:
+// * a slow node will never commit anything until its certificates get linked by others
+// * certificates arriving bellow the gc round will never get committed
+#[tokio::test]
+async fn slow_node() {
+    const GC_DEPTH: Round = 4;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
+
+    let fixture = CommitteeFixture::builder().build();
+    let committee: Committee = fixture.committee();
+
+    // We create certificates for rounds 1 to 8. For the authorities 1 to 3 the references
+    // to previous rounds between them are fully connected - meaning that we always add all the parents
+    // from previous round, except for the authority 4 which we consider it to be slow, so no one
+    // refers to their certificates. Authority 4 still produces certificates, and uses as parents
+    // all the certificates of the other authorities but never anyone else is referring to its
+    // certificates. That will create a lone chain for authority 4. We should not see any certificate
+    // committed for authority 4.
+    let keys: Vec<PublicKey> = committee
+        .authorities()
+        .map(|(key, _)| key.clone())
+        .collect();
+    let slow_node = keys[3].clone();
+    let genesis = Certificate::genesis(&committee);
+
+    let slow_nodes = vec![(slow_node.clone(), 0.0_f64)];
+    let (certificates, round_8_certificates) = test_utils::make_certificates_with_slow_nodes(
+        &committee,
+        1..=8,
+        genesis,
+        &keys,
+        slow_nodes.as_slice(),
+    );
+
+    let mut certificates: VecDeque<Certificate> = certificates;
+    let mut slow_node_certificates = VecDeque::new();
+
+    // Now we keep only the certificates from authorities 1-3
+    certificates.retain(|c| {
+        if c.origin() == slow_node {
+            // if it is slow node's add it to the dedicated vec
+            slow_node_certificates.push_back(c.clone());
+            return false;
+        }
+        true
+    });
+
+    // Create Bullshark consensus engine
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut bullshark = Bullshark::new(
+        committee.clone(),
+        store,
+        GC_DEPTH,
+        metrics,
+        NUM_SUB_DAGS_PER_SCHEDULE,
+    );
+
+    // Now start feeding the certificates per round up to 8. We expect to have
+    // triggered a commit up to round 6 and gc round 1 & 2.
+    for c in certificates {
+        let _ = bullshark
+            .process_certificate(&mut state, c.clone())
+            .unwrap();
+    }
+
+    // We expect everything to have been cleaned up by standard gc until round 2 (included)
+    assert_eq!(
+        state
+            .dag
+            .iter()
+            .filter(|(round, _)| **round <= 2_u64)
+            .count(),
+        0,
+        "Didn't expect to still have certificates from round 1 and 2"
+    );
+
+    // Now send the certificates of slow node. Now leader election can't happen for round 8
+    // as we haven't sent yet certificates of round 9
+    for c in slow_node_certificates {
+        let _ = bullshark.process_certificate(&mut state, c).unwrap();
+    }
+
+    // Now create the certificates of round 9, and ensure everyone gives support to
+    // leader of round 8 (the slow node - 4) so we can trigger a commit. Also since slow node
+    // refers to always all the parents of previous rounds, there will be a link to the previous
+    // leader, so commit should be triggered immediately.
+    // It is reminded that the leader election for testing is round robin, thus we can deterministically
+    // know the leader of each round.
+    let (certificates, _) = test_utils::make_certificates_with_slow_nodes(
+        &committee,
+        9..=9,
+        round_8_certificates,
+        &keys,
+        &[],
+    );
+
+    // send the certificates - they should trigger a commit.
+    // We should see certificates for authorities 1-3 only for round 7
+    // We should see certificates for authority 4 only for round > 1 , as round 1 should have been
+    // garbage collected.
+    let mut committed = false;
+    for c in certificates {
+        let (outcome, sub_dags) = bullshark.process_certificate(&mut state, c).unwrap();
+
+        match outcome {
+            Outcome::NotEnoughSupportForLeader => {}
+            Outcome::LeaderBelowCommitRound => {}
+            Outcome::Commit => {
+                assert_eq!(sub_dags.len(), 1);
+
+                let sub_dag = sub_dags.get(0).unwrap();
+
+                for committed in &sub_dag.certificates {
+                    assert!(
+                        committed.round() >= 2,
+                        "We don't expect to see any certificate below round 2 because of gc"
+                    );
+                }
+
+                let slow_node_total = sub_dag
+                    .certificates
+                    .iter()
+                    .filter(|c| c.origin() == slow_node)
+                    .count();
+
+                assert_eq!(slow_node_total, 4);
+
+                committed = true;
+            }
+            _ => panic!("Unexpected outcome {:?}", outcome),
+        }
+    }
+
+    assert!(committed, "We expect to have commit for round 8");
 }
