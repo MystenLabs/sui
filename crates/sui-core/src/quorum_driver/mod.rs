@@ -294,7 +294,7 @@ where
                         ?errors,
                         "Observed Tx {tx_digest:} is still in retryable state. Conflicting Txes: {conflicting_tx_digests:?}", 
                     );
-                    return Err(None);
+                    Err(None)
                 }
             }
 

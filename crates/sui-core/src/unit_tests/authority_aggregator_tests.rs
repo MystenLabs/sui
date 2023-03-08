@@ -676,6 +676,77 @@ fn sign_tx_effects(
 }
 
 #[tokio::test]
+#[should_panic]
+async fn test_handle_transaction_panic() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let tx = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        None,
+    );
+
+    // Non-quorum of effects without a retryable majority indicating a safety violation
+    // or a fork
+
+    // All Validators gives signed-tx
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+
+    // Validators now gives valid signed tx and we get TxCert
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let cert_epoch_0 = agg
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    // Validators 2 and 3 return successful effects
+    let effects = effects_with_tx(*cert_epoch_0.digest());
+    set_tx_info_response_with_cert_and_effects(
+        &mut clients,
+        authority_keys.iter(),
+        Some(cert_epoch_0.inner()),
+        effects,
+        1,
+    );
+
+    // Validator 0 and 1 return failed effects
+    let effects = TransactionEffectsV1 {
+        transaction_digest: *cert_epoch_0.digest(),
+        status: ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientGas,
+            command: None,
+        },
+        ..Default::default()
+    };
+    set_tx_info_response_with_cert_and_effects(
+        &mut clients,
+        authority_keys.iter().skip(2),
+        Some(cert_epoch_0.inner()),
+        TransactionEffects::V1(effects),
+        1,
+    );
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
+
+    // We have forked, should panic
+    let _ = agg.process_transaction(tx.clone()).await;
+}
+
+#[tokio::test]
 async fn test_handle_transaction_response() {
     let mut authorities = BTreeMap::new();
     let mut clients = BTreeMap::new();
@@ -846,42 +917,7 @@ async fn test_handle_transaction_response() {
     // We have 2f+1 signed effects on epoch 1, so we are good.
     agg.process_transaction(tx.clone()).await.unwrap();
 
-    println!("Case 6 - Nonretryable Transaction (most staked effects stake + retryable stake < 2f+1 with QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
-    // Validators 2 and 3 returns tx-cert with epoch 1, but different signed effects from 0 and 1
-    let mut effects = effects_with_tx(*cert_epoch_0.digest());
-    *effects.status_mut_for_testing() = ExecutionStatus::Failure {
-        error: ExecutionFailureStatus::InsufficientGas,
-        command: None,
-    };
-    set_tx_info_response_with_cert_and_effects(
-        &mut clients,
-        authority_keys.iter().skip(2),
-        Some(cert_epoch_0.inner()),
-        effects,
-        1,
-    );
-
-    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
-
-    assert_resp_err(
-        &agg,
-        tx.clone(),
-        |e| {
-            matches!(
-                e,
-                AggregatorProcessTransactionError::FatalTransaction { .. }
-            )
-        },
-        |e| {
-            matches!(
-                e,
-                SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. }
-            )
-        },
-    )
-    .await;
-
-    println!("Case 6.1 - Retryable Transaction (most staked effects stake + retryable stake >= 2f+1 with QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
+    println!("Case 6 - Retryable Transaction (most staked effects stake + retryable stake >= 2f+1 with QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
     // Val 0, 1 & 2 returns retryable error
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
     // Validators 3 returns tx-cert with epoch 1
@@ -922,7 +958,7 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    println!("Case 6.2 - Retryable Transaction (same as 6.1 but with different tx1 effects)");
+    println!("Case 6.1 - Retryable Transaction (same as 6.1 but with different tx1 effects)");
     // Val 0 & 1 returns retryable error
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
 
@@ -1001,7 +1037,7 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    println!("Case 6.3 - Retryable Transaction (same as 6.1 but with byzantine tx2 effects)");
+    println!("Case 6.2 - Retryable Transaction (same as 6.1 but with byzantine tx2 effects)");
     // All Validators gives signed-tx2
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx2, 0);
 

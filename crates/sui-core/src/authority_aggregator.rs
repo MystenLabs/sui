@@ -267,10 +267,6 @@ struct ProcessTransactionState {
 }
 
 impl ProcessTransactionState {
-    pub fn good_stake(&self) -> StakeUnit {
-        self.tx_signatures.total_votes() + self.effects_map.total_votes()
-    }
-
     #[allow(clippy::type_complexity)]
     pub fn conflicting_tx_digest_with_most_stake(
         &self,
@@ -1097,7 +1093,7 @@ where
         if let Some((most_staked_conflicting_tx, validators, most_staked_conflicting_tx_stake)) =
             state.conflicting_tx_digest_with_most_stake()
         {
-            let good_stake = state.good_stake();
+            let good_stake = state.tx_signatures.total_votes();
             let retryable_stake = self.get_retryable_stake(&state);
             let quorum_threshold = self.committee.quorum_threshold();
 
@@ -1150,7 +1146,7 @@ where
         // TODO: Revisit whether we need these metrics.
         let num_signatures = state.tx_signatures.validator_sig_count();
         self.metrics.num_signatures.observe(num_signatures as f64);
-        let good_stake = state.good_stake();
+        let good_stake = state.tx_signatures.total_votes();
         self.metrics.num_good_stake.observe(good_stake as f64);
         self.metrics
             .non_retryable_stake
@@ -1291,9 +1287,15 @@ where
                     .max_by_key(|&(_, (_, stake))| stake)
                     .unwrap();
             // We check if we have enough retryable stake to get quorum for the most staked
-            // effects digest.
-            state.retryable = most_staked_effects_digest_stake + self.get_retryable_stake(&state)
-                >= self.committee.quorum_threshold();
+            // effects digest, otherwise it indicates we have violated safety assumptions
+            // or we have forked.
+            if most_staked_effects_digest_stake + self.get_retryable_stake(&state)
+                < self.committee.quorum_threshold()
+            {
+                panic!(
+                    "We have violated our safety assumption or there is a fork. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
+                );
+            }
 
             let mut involved_validators = Vec::new();
             let mut total_stake = 0;
@@ -1318,7 +1320,8 @@ where
         self.committee.total_votes
             - state.conflicting_tx_digests_total_stake()
             - state.non_retryable_stake
-            - state.good_stake()
+            - state.effects_map.total_votes()
+            - state.tx_signatures.total_votes()
     }
 
     pub async fn process_certificate(
