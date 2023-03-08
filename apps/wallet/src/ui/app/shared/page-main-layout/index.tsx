@@ -5,6 +5,7 @@ import cl from 'classnames';
 import { type ReactNode } from 'react';
 
 import { useAppSelector } from '../../hooks';
+import { AppType } from '../../redux/slices/app/AppType';
 import DappStatus from '../dapp-status';
 import { Header } from '../header/Header';
 import { Toaster } from '../toaster';
@@ -30,15 +31,25 @@ export default function PageMainLayout({
     className,
 }: PageMainLayoutProps) {
     const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
+    const appType = useAppSelector((state) => state.app.appType);
+    const isFullScreen = appType === AppType.fullscreen;
 
     return (
-        <div className={st.container}>
+        <div
+            className={cl(st.container, {
+                [st.fullScreenContainer]: isFullScreen,
+            })}
+        >
             <Header
                 networkName={networkName}
                 middleContent={dappStatusEnabled ? <DappStatus /> : undefined}
                 rightContent={topNavMenuEnabled ? <MenuButton /> : undefined}
             />
-            <div className={st.content}>
+            <div
+                className={cl(st.content, {
+                    [st.fullScreenContent]: isFullScreen,
+                })}
+            >
                 <main
                     className={cl(
                         st.main,

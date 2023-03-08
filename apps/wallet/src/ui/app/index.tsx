@@ -78,12 +78,7 @@ const App = () => {
                 />
             </Route>
 
-            <Route
-                path="/dapp/*"
-                element={
-                    <HomePage disableNavigation limitToPopUpSize={false} />
-                }
-            >
+            <Route path="/dapp/*" element={<HomePage disableNavigation />}>
                 <Route
                     path="connect/:requestID"
                     element={<SiteConnectPage />}
