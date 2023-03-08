@@ -35,11 +35,8 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
-    #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
-    #[serde(skip)]
     loaded: bool,
 }
 
@@ -134,12 +131,15 @@ impl Committee {
     }
 
     pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
+        debug_assert_eq!(self.expanded_keys.len(), self.voting_rights.len());
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            None => Err(SuiError::InvalidCommittee(format!(
+                "Authority #{} not found, committee size {}",
+                authority,
+                self.expanded_keys.len()
+            ))),
         }
     }
 
