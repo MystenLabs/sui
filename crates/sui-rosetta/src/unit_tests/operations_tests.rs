@@ -21,11 +21,7 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .pay(
-                vec![gas],
-                vec![SuiAddress::random_for_testing_only()],
-                vec![10000],
-            )
+            .pay_sui(vec![SuiAddress::random_for_testing_only()], vec![10000])
             .unwrap();
         builder.finish()
     };
@@ -33,9 +29,9 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
 
     let ops: Operations = data.clone().try_into()?;
     let metadata = ConstructionMetadata {
-        tx_metadata: TransactionMetadata::PaySui(vec![gas]),
+        tx_metadata: TransactionMetadata::PaySui,
         sender,
-        gas,
+        gas: vec![gas],
         gas_price: 1,
         budget: 1000,
     };

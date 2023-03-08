@@ -556,7 +556,7 @@ pub enum PreprocessMetadata {
 impl From<TransactionMetadata> for PreprocessMetadata {
     fn from(tx_metadata: TransactionMetadata) -> Self {
         match tx_metadata {
-            TransactionMetadata::PaySui(_) => Self::PaySui,
+            TransactionMetadata::PaySui => Self::PaySui,
             TransactionMetadata::Delegation {
                 locked_until_epoch, ..
             } => Self::Delegation { locked_until_epoch },
@@ -608,7 +608,7 @@ pub struct ConstructionMetadataResponse {
 pub struct ConstructionMetadata {
     pub tx_metadata: TransactionMetadata,
     pub sender: SuiAddress,
-    pub gas: ObjectRef,
+    pub gas: Vec<ObjectRef>,
     pub gas_price: u64,
     pub budget: u64,
 }
@@ -620,7 +620,7 @@ impl IntoResponse for ConstructionMetadataResponse {
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TransactionMetadata {
-    PaySui(Vec<ObjectRef>),
+    PaySui,
     Delegation {
         coins: Vec<ObjectRef>,
         locked_until_epoch: Option<EpochId>,
@@ -893,10 +893,10 @@ impl InternalOperation {
                     amounts,
                     ..
                 },
-                TransactionMetadata::PaySui(coins),
+                TransactionMetadata::PaySui,
             ) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                builder.pay(coins, recipients, amounts)?;
+                builder.pay_sui(recipients, amounts)?;
                 builder.finish()
             }
             (
@@ -945,7 +945,7 @@ impl InternalOperation {
 
         Ok(TransactionData::new_programmable(
             metadata.sender,
-            vec![metadata.gas],
+            metadata.gas,
             pt,
             metadata.budget,
             metadata.gas_price,
