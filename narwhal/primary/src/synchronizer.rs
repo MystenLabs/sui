@@ -125,6 +125,15 @@ impl Inner {
     ) -> DagResult<()> {
         let digest = certificate.digest();
 
+        // TODO: remove this validation later to reduce rocksdb access.
+        if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
+            for digest in &certificate.header.parents {
+                if !self.certificate_store.contains(digest).unwrap() {
+                    panic!("Parent {digest:?} not found for {certificate:?}!");
+                }
+            }
+        }
+
         // Store the certificate. After this, the certificate must be sent to consensus
         // or Narwhal needs to shutdown, to avoid inconsistencies in certificate store and
         // consensus dag.
