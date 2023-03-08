@@ -367,9 +367,15 @@ impl RpcExampleProvider {
 
     fn get_transactions(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
-        let next_cursor = data.pop();
+        let has_next_page = data.len() > (9 - 5);
+        data.truncate(9 - 5);
+        let next_cursor = data.last().cloned();
 
-        let result = TransactionsPage { data, next_cursor };
+        let result = TransactionsPage {
+            data,
+            next_cursor,
+            has_next_page,
+        };
         Examples::new(
             "sui_getTransactions",
             vec![ExamplePairing::new(
@@ -502,6 +508,7 @@ impl RpcExampleProvider {
         let page = EventPage {
             data: events.clone(),
             next_cursor: Some((tx_dig, 5).into()),
+            has_next_page: false,
         };
         Examples::new(
             "sui_getEvents",

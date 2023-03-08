@@ -123,6 +123,7 @@ impl ReadApiServer for ReadApi {
     async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
@@ -131,9 +132,14 @@ impl ReadApiServer for ReadApi {
             .state
             .get_dynamic_fields(parent_object_id, cursor, limit + 1)
             .map_err(|e| anyhow!("{e}"))?;
-        let next_cursor = data.get(limit).map(|info| info.object_id);
+        let has_next_page = data.len() > limit;
         data.truncate(limit);
-        Ok(DynamicFieldPage { data, next_cursor })
+        let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
+        Ok(DynamicFieldPage {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn get_object_with_options(
@@ -573,6 +579,7 @@ impl ReadApiServer for ReadApi {
     async fn get_transactions(
         &self,
         query: TransactionQuery,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -586,9 +593,14 @@ impl ReadApiServer for ReadApi {
             .get_transactions(query, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
-        let next_cursor = data.get(limit).cloned();
+        let has_next_page = data.len() > limit;
         data.truncate(limit);
-        Ok(Page { data, next_cursor })
+        let next_cursor = data.last().cloned().map_or(cursor, Some);
+        Ok(Page {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {

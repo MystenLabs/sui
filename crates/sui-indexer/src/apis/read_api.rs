@@ -147,12 +147,14 @@ impl<S: IndexerStore> ReadApi<S> {
             })
             .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
 
-        let next_cursor = txn_digests.get(limit).cloned();
+        let has_next_page = txn_digests.len() > limit;
         txn_digests.truncate(limit);
+        let next_cursor = txn_digests.last().cloned().map_or(cursor, Some);
 
         Ok(Page {
             data: txn_digests,
             next_cursor,
+            has_next_page,
         })
     }
 
