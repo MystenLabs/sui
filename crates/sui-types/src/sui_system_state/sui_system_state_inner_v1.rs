@@ -229,18 +229,10 @@ impl ValidatorV1 {
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
             NetworkMetadata {
-                network_pubkey: narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &self.metadata.network_pubkey_bytes,
-                )
-                .expect("Validity of network public key should be verified on-chain"),
                 network_address: self
                     .metadata
                     .network_address()
                     .expect("Validity of network address should be verified on-chain"),
-                p2p_address: self
-                    .metadata
-                    .p2p_address()
-                    .expect("Validity of p2p address should be verified on-chain"),
             },
         )
     }
