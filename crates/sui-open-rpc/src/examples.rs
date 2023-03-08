@@ -297,6 +297,7 @@ impl RpcExampleProvider {
             timestamp_ms: 1676911928,
             end_of_epoch_data: None,
             transactions: vec![TransactionDigest::new(self.rng.gen())],
+            checkpoint_commitments: vec![],
         };
 
         Examples::new(
