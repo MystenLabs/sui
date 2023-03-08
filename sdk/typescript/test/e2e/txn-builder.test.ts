@@ -162,7 +162,7 @@ describe('Transaction Builders', () => {
         inputCoins: splitCoins,
         gasBudget: DEFAULT_GAS_BUDGET,
         recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
-        amounts: [4, 2],
+        amounts: ['4', '2'],
         gasPayment: coins[2].coinObjectId,
       },
     });
