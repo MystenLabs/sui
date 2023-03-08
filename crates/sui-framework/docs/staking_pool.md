@@ -1200,9 +1200,17 @@ Returns true if all the staking parameters of the staked sui except the principa
     };
     <b>let</b> clamped_epoch = <a href="_get_with_default">option::get_with_default</a>(&pool.deactivation_epoch, epoch);
     <b>let</b> epoch = <a href="math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
-    // TODO: there might be epochs <b>where</b> we skip updating the exchange rate <a href="table.md#0x2_table">table</a>, in which case
-    // we need <b>to</b> find the latest entry in the <a href="table.md#0x2_table">table</a> earlier than this epoch.
-    *<a href="table.md#0x2_table_borrow">table::borrow</a>(&pool.exchange_rates, epoch)
+    <b>let</b> activation_epoch = *<a href="_borrow">option::borrow</a>(&pool.activation_epoch);
+
+    // Find the latest epoch that's earlier than the given epoch <b>with</b> an entry in the <a href="table.md#0x2_table">table</a>
+    <b>while</b> (epoch &gt;= activation_epoch) {
+        <b>if</b> (<a href="table.md#0x2_table_contains">table::contains</a>(&pool.exchange_rates, epoch)) {
+            <b>return</b> *<a href="table.md#0x2_table_borrow">table::borrow</a>(&pool.exchange_rates, epoch)
+        };
+        epoch = epoch - 1;
+    };
+    // This line really should be unreachable. Do we want an <b>assert</b> <b>false</b> here?
+    <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
 }
 </code></pre>
 
