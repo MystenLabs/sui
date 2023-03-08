@@ -7294,8 +7294,7 @@
       "TransactionResponse": {
         "type": "object",
         "required": [
-          "digest",
-          "errors"
+          "digest"
         ],
         "properties": {
           "checkpoint": {

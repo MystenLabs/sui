@@ -289,56 +289,81 @@ export const SuiTransaction = object({
 export type SuiTransaction = Infer<typeof SuiTransaction>;
 
 export const SuiTransactionResponse = object({
-  transaction: SuiTransaction,
-  effects: TransactionEffects,
-  events: TransactionEvents,
+  digest: TransactionDigest,
+  transaction: optional(SuiTransaction),
+  effects: optional(TransactionEffects),
+  events: optional(TransactionEvents),
   timestampMs: optional(number()),
   checkpoint: optional(number()),
   confirmedLocalExecution: optional(boolean()),
+  /* Errors that occurred in fetching/serializing the transaction. */
+  errors: optional(array(string())),
 });
 export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
+
+export const SuiTransactionResponseOptions = object({
+  /* Whether to show transaction input data. Default to be false. */
+  showInput: optional(boolean()),
+  /* Whether to show transaction effects. Default to be false. */
+  showEffects: optional(boolean()),
+  /* Whether to show transaction events. Default to be false. */
+  showEvents: optional(boolean()),
+  /* Whether to show checkpoint sequence number. Default to be false. */
+  showCheckpoint: optional(boolean()),
+  /* Whether to show timestamp. Default to be false. */
+  showTimestamp: optional(boolean()),
+});
+
+export type SuiTransactionResponseOptions = Infer<
+  typeof SuiTransactionResponseOptions
+>;
 
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */
 /* -------------------------------------------------------------------------- */
 
-export function getTransaction(tx: SuiTransactionResponse): SuiTransaction {
+export function getTransaction(
+  tx: SuiTransactionResponse,
+): SuiTransaction | undefined {
   return tx.transaction;
 }
 
 export function getTransactionDigest(
   tx: SuiTransactionResponse,
 ): TransactionDigest {
-  const effects = getTransactionEffects(tx)!;
-  return effects.transactionDigest;
+  return tx.digest;
 }
 
-export function getTransactionSignature(tx: SuiTransactionResponse): string[] {
-  return tx.transaction.txSignatures;
+export function getTransactionSignature(
+  tx: SuiTransactionResponse,
+): string[] | undefined {
+  return tx.transaction?.txSignatures;
 }
 
 /* ----------------------------- TransactionData ---------------------------- */
 
-export function getTransactionSender(tx: SuiTransactionResponse): SuiAddress {
-  return tx.transaction.data.sender;
+export function getTransactionSender(
+  tx: SuiTransactionResponse,
+): SuiAddress | undefined {
+  return tx.transaction?.data.sender;
 }
 
-export function getGasData(tx: SuiTransactionResponse): SuiGasData {
-  return tx.transaction.data.gasData;
+export function getGasData(tx: SuiTransactionResponse): SuiGasData | undefined {
+  return tx.transaction?.data.gasData;
 }
 
 export function getTransactionGasObject(
   tx: SuiTransactionResponse,
-): SuiObjectRef[] {
-  return getGasData(tx).payment;
+): SuiObjectRef[] | undefined {
+  return getGasData(tx)?.payment;
 }
 
 export function getTransactionGasPrice(tx: SuiTransactionResponse) {
-  return getGasData(tx).price;
+  return getGasData(tx)?.price;
 }
 
-export function getTransactionGasBudget(tx: SuiTransactionResponse): number {
-  return getGasData(tx).budget;
+export function getTransactionGasBudget(tx: SuiTransactionResponse) {
+  return getGasData(tx)?.budget;
 }
 
 export function getTransferObjectTransaction(
@@ -395,10 +420,10 @@ export function getConsensusCommitPrologueTransaction(
     : undefined;
 }
 
-export function getTransactions(
+export function getTransactionKinds(
   data: SuiTransactionResponse,
-): SuiTransactionKind[] {
-  return data.transaction.data.transactions;
+): SuiTransactionKind[] | undefined {
+  return data.transaction?.data.transactions;
 }
 
 export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {

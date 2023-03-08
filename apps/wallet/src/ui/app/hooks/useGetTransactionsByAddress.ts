@@ -22,8 +22,14 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
                     FromAddress: address!,
                 }),
             ]);
-            const resp = await rpc.getTransactionWithEffectsBatch(
-                dedupe([...txnIds.data, ...fromTxnIds.data])
+            const resp = await rpc.getTransactionResponseBatch(
+                dedupe([...txnIds.data, ...fromTxnIds.data]),
+                {
+                    showInput: true,
+                    showTimestamp: true,
+                    showEffects: true,
+                    showEvents: true,
+                }
             );
 
             return resp.sort(
