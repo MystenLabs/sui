@@ -228,12 +228,11 @@ pub async fn metadata(
             sender,
             validator,
             amount,
-            locked_until_epoch,
         } => {
             let coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, *amount, *locked_until_epoch, vec![])
+                .select_coins(*sender, None, *amount, None, vec![])
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
@@ -253,10 +252,7 @@ pub async fn metadata(
                 .await?;
 
             (
-                TransactionMetadata::Delegation {
-                    coins,
-                    locked_until_epoch: *locked_until_epoch,
-                },
+                TransactionMetadata::Delegation { coins },
                 data.gas().to_vec(),
                 13000,
             )

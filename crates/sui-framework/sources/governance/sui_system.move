@@ -7,7 +7,6 @@ module sui::sui_system {
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
     use sui::staking_pool::{stake_activation_epoch, StakedSui};
-    use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -19,8 +18,6 @@ module sui::sui_system {
     use sui::vec_set::{Self, VecSet};
     use std::option;
     use std::vector;
-    use sui::epoch_time_lock::EpochTimeLock;
-    use sui::epoch_time_lock;
     use sui::pay;
     use sui::event;
     use sui::table::Table;
@@ -212,7 +209,6 @@ module sui::sui_system {
             primary_address,
             worker_address,
             option::none(),
-            option::none(),
             gas_price,
             commission_rate,
             false, // not an initial validator active at genesis
@@ -307,7 +303,6 @@ module sui::sui_system {
             &mut self.validators,
             validator_address,
             coin::into_balance(stake),
-            option::none(),
             ctx,
         );
     }
@@ -322,38 +317,7 @@ module sui::sui_system {
     ) {
         let self = load_system_state_mut(wrapper);
         let balance = extract_coin_balance(stakes, stake_amount, ctx);
-        validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
-    }
-
-    /// Add stake to a validator's staking pool using a locked SUI coin.
-    public entry fun request_add_stake_with_locked_coin(
-        wrapper: &mut SuiSystemState,
-        stake: LockedCoin<SUI>,
-        validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        let (balance, lock) = locked_coin::into_balance(stake);
-        validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
-    }
-
-    /// Add stake to a validator's staking pool using multiple locked SUI coins.
-    public entry fun request_add_stake_mul_locked_coin(
-        wrapper: &mut SuiSystemState,
-        stakes: vector<LockedCoin<SUI>>,
-        stake_amount: option::Option<u64>,
-        validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        let (balance, lock) = extract_locked_coin_balance(stakes, stake_amount, ctx);
-        validator_set::request_add_stake(
-            &mut self.validators,
-            validator_address,
-            balance,
-            option::some(lock),
-            ctx
-        );
+        validator_set::request_add_stake(&mut self.validators, validator_address, balance, ctx);
     }
 
     /// Withdraw some portion of a stake from a validator's staking pool.
@@ -823,39 +787,6 @@ module sui::sui_system {
             balance
         } else {
             total_balance
-        }
-    }
-
-    /// Extract required Balance from vector of LockedCoin<SUI>, transfer the remainder back to sender.
-    fun extract_locked_coin_balance(
-        coins: vector<LockedCoin<SUI>>,
-        amount: option::Option<u64>,
-        ctx: &mut TxContext
-    ): (Balance<SUI>, EpochTimeLock) {
-        let (total_balance, first_lock) = locked_coin::into_balance(vector::pop_back(&mut coins));
-        let (i, len) = (0, vector::length(&coins));
-        while (i < len) {
-            let (balance, lock) = locked_coin::into_balance(vector::pop_back(&mut coins));
-            // Make sure all time locks are the same
-            assert!(epoch_time_lock::epoch(&lock) == epoch_time_lock::epoch(&first_lock), 0);
-            epoch_time_lock::destroy_unchecked(lock);
-            balance::join(&mut total_balance, balance);
-            i = i + 1
-        };
-        vector::destroy_empty(coins);
-
-        // return the full amount if amount is not specified
-        if (option::is_some(&amount)){
-            let amount = option::destroy_some(amount);
-            let balance = balance::split(&mut total_balance, amount);
-            if (balance::value(&total_balance) > 0) {
-                locked_coin::new_from_balance(total_balance, first_lock, tx_context::sender(ctx), ctx);
-            } else {
-                balance::destroy_zero(total_balance);
-            };
-            (balance, first_lock)
-        } else{
-            (total_balance, first_lock)
         }
     }
 

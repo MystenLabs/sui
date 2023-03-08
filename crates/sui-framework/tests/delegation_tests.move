@@ -104,30 +104,6 @@ module sui::stake_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = staking_pool::EIncompatibleStakedSui)]
-    fun test_join_different_locked_coins() {
-        let scenario_val = test_scenario::begin(STAKER_ADDR_1);
-        let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
-        // Create staked sui w/ locked coin and regular staked sui
-        governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
-        governance_test_utils::stake_locked_to(STAKER_ADDR_1, VALIDATOR_ADDR_1, 60, 2, scenario);
-
-        // Verify that these cannot be merged
-        test_scenario::next_tx(scenario, STAKER_ADDR_1);
-        {
-            let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
-            let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
-            let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
-
-            staking_pool::join_staked_sui(&mut part1, part2);
-
-            test_scenario::return_to_sender(scenario, part1);
-        };
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
     fun test_add_remove_stake_flow() {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;

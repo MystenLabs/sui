@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::{anyhow, ensure};
+use move_binary_format::file_format::SignatureToken;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
@@ -24,14 +25,9 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
+use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::messages::{
     Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
-};
-
-use move_binary_format::file_format::SignatureToken;
-
-use sui_types::governance::{
-    ADD_STAKE_LOCKED_COIN_FUN_NAME, ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -663,8 +659,8 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             return Err(anyhow!("Provided object [{coin}] is not a move object."))
         };
         ensure!(
-            type_.is_coin() || type_.is_locked_coin(),
-            "Expecting either Coin<T> or LockedCoin<T> as input coin objects. Received [{type_}]"
+            type_.is_coin(),
+            "Expecting either Coin<T> input coin objects. Received [{type_}]"
         );
 
         for coin in coins {
@@ -676,12 +672,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             obj_vec.push(ObjectArg::ImmOrOwnedObject(oref))
         }
         obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
-        let function = if type_.is_coin() {
-            ADD_STAKE_MUL_COIN_FUN_NAME
-        } else {
-            ADD_STAKE_LOCKED_COIN_FUN_NAME
-        }
-        .to_owned();
 
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -704,7 +694,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             builder.command(Command::move_call(
                 SUI_FRAMEWORK_OBJECT_ID,
                 SUI_SYSTEM_MODULE_NAME.to_owned(),
-                function,
+                ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
                 vec![],
                 arguments,
             ));

@@ -7,9 +7,7 @@ module sui::staking_pool {
     use std::option::{Self, Option};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use sui::epoch_time_lock::{Self, EpochTimeLock};
     use sui::object::{Self, ID, UID};
-    use sui::locked_coin;
     use sui::coin;
     use sui::math;
     use sui::table::{Self, Table};
@@ -82,9 +80,6 @@ module sui::staking_pool {
         stake_activation_epoch: u64,
         /// The staked SUI tokens.
         principal: Balance<SUI>,
-        /// If the stake comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>, this
-        /// field will record the original lock expiration epoch, to be used when unstaking.
-        sui_token_lock: Option<EpochTimeLock>,
     }
 
     // ==== initializer ====
@@ -112,7 +107,6 @@ module sui::staking_pool {
     public(friend) fun request_add_stake(
         pool: &mut StakingPool,
         stake: Balance<SUI>,
-        sui_token_lock: Option<EpochTimeLock>,
         validator_address: address,
         staker: address,
         stake_activation_epoch: u64,
@@ -127,7 +121,6 @@ module sui::staking_pool {
             validator_address,
             stake_activation_epoch,
             principal: stake,
-            sui_token_lock,
         };
         pool.pending_stake = pool.pending_stake + sui_amount;
         transfer::transfer(staked_sui, staker);
@@ -141,7 +134,7 @@ module sui::staking_pool {
         staked_sui: StakedSui,
         ctx: &mut TxContext
     ) : u64 {
-        let (pool_token_withdraw_amount, principal_withdraw, time_lock) =
+        let (pool_token_withdraw_amount, principal_withdraw) =
             withdraw_from_principal(pool, staked_sui);
         let staker = tx_context::sender(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
@@ -158,57 +151,42 @@ module sui::staking_pool {
         if (is_inactive(pool)) process_pending_stake_withdraw(pool);
 
         // TODO: implement withdraw bonding period here.
-        if (option::is_some(&time_lock)) {
-            locked_coin::new_from_balance(principal_withdraw, option::destroy_some(time_lock), staker, ctx);
-            if (balance::value(&rewards_withdraw) > 0) {
-                transfer::transfer(coin::from_balance(rewards_withdraw, ctx), staker);
-            } else {
-                balance::destroy_zero(rewards_withdraw);
-            }
-        } else {
-            balance::join(&mut principal_withdraw, rewards_withdraw);
-            transfer::transfer(coin::from_balance(principal_withdraw, ctx), staker);
-            option::destroy_none(time_lock);
-        };
+        balance::join(&mut principal_withdraw, rewards_withdraw);
+        transfer::transfer(coin::from_balance(principal_withdraw, ctx), staker);
         total_sui_withdraw_amount
-
-        // payment_amount
     }
 
     /// Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
-    /// tokens using exchange rate at stake epoch.
-    /// Returns values are amount of pool tokens withdrawn, withdrawn principal portion of SUI, and its
-    /// time lock if applicable.
+    /// tokens using exchange rate at staking epoch.
+    /// Returns values are amount of pool tokens withdrawn and withdrawn principal portion of SUI.
     public(friend) fun withdraw_from_principal(
         pool: &mut StakingPool,
         staked_sui: StakedSui,
-    ) : (u64, Balance<SUI>, Option<EpochTimeLock>) {
+    ) : (u64, Balance<SUI>) {
 
         // Check that the stake information matches the pool.
         assert!(staked_sui.pool_id == object::id(pool), EWrongPool);
 
         let exchange_rate_at_staking_epoch = pool_token_exchange_rate_at_epoch(pool, staked_sui.stake_activation_epoch);
-        let (principal_withdraw, time_lock) = unwrap_staked_sui(staked_sui);
+        let principal_withdraw = unwrap_staked_sui(staked_sui);
         let pool_token_withdraw_amount = get_token_amount(&exchange_rate_at_staking_epoch, balance::value(&principal_withdraw));
 
         (
             pool_token_withdraw_amount,
             principal_withdraw,
-            time_lock
         )
     }
 
-    fun unwrap_staked_sui(staked_sui: StakedSui): (Balance<SUI>, Option<EpochTimeLock>) {
+    fun unwrap_staked_sui(staked_sui: StakedSui): Balance<SUI> {
         let StakedSui {
             id,
             pool_id: _,
             validator_address: _,
             stake_activation_epoch: _,
             principal,
-            sui_token_lock
         } = staked_sui;
         object::delete(id);
-        (principal, sui_token_lock)
+        principal
     }
 
     // ==== functions called at epoch boundaries ===
@@ -306,18 +284,12 @@ module sui::staking_pool {
 
         let staker = tx_context::sender(ctx);
 
-        let (principal, time_lock) = unwrap_staked_sui(staked_sui);
+        let principal = unwrap_staked_sui(staked_sui);
         let withdraw_amount = balance::value(&principal);
         pool.sui_balance = pool.sui_balance - withdraw_amount;
         pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
-        // TODO: consider sharing code with `request_withdraw_stake`
-        if (option::is_some(&time_lock)) {
-            locked_coin::new_from_balance(principal, option::destroy_some(time_lock), staker, ctx);
-        } else {
-            transfer::transfer(coin::from_balance(principal, ctx), staker);
-            option::destroy_none(time_lock);
-        };
+        transfer::transfer(coin::from_balance(principal, ctx), staker);
         withdraw_amount
     }
 
@@ -364,7 +336,6 @@ module sui::staking_pool {
             validator_address: self.validator_address,
             stake_activation_epoch: self.stake_activation_epoch,
             principal: balance::split(&mut self.principal, split_amount),
-            sui_token_lock: self.sui_token_lock,
         }
     }
 
@@ -384,33 +355,17 @@ module sui::staking_pool {
             validator_address: _,
             stake_activation_epoch: _,
             principal,
-            sui_token_lock
         } = other;
 
         object::delete(id);
-        if (option::is_some(&sui_token_lock)) {
-            epoch_time_lock::destroy_unchecked(option::destroy_some(sui_token_lock));
-        } else {
-            option::destroy_none(sui_token_lock);
-        };
         balance::join(&mut self.principal, principal);
     }
 
     /// Returns true if all the staking parameters of the staked sui except the principal are identical
     public fun is_equal_staking_metadata(self: &StakedSui, other: &StakedSui): bool {
-        if ((self.pool_id != other.pool_id) ||
-            (self.validator_address != other.validator_address) ||
-            (self.stake_activation_epoch != other.stake_activation_epoch)) {
-            return false
-        };
-        if (option::is_none(&self.sui_token_lock) && option::is_none(&other.sui_token_lock)) {
-            return true
-        };
-        if (option::is_some(&self.sui_token_lock) && option::is_some(&other.sui_token_lock)) {
-            epoch_time_lock::epoch(option::borrow(&self.sui_token_lock)) ==
-                epoch_time_lock::epoch(option::borrow(&other.sui_token_lock))
-        } else
-            false // locked coin in one and unlocked in another
+        (self.pool_id == other.pool_id) &&
+        (self.validator_address == other.validator_address) &&
+        (self.stake_activation_epoch == other.stake_activation_epoch)
     }
 
 

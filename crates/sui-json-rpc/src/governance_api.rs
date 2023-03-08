@@ -86,7 +86,6 @@ impl GovernanceReadApi {
                     // TODO: this might change when we implement warm up period.
                     stake_active_epoch: stake.request_epoch() + 1,
                     principal: stake.principal(),
-                    token_lock: stake.sui_token_lock(),
                     status,
                 })
             }

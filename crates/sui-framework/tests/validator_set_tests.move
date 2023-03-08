@@ -52,7 +52,6 @@ module sui::validator_set_tests {
                 &mut validator_set,
                 @0x1,
                 coin::into_balance(coin::mint_for_testing(500, ctx1)),
-                option::none(),
                 ctx1,
             );
             // Adding stake to existing active validator during the epoch
@@ -167,7 +166,6 @@ module sui::validator_set_tests {
                 &mut validator_set,
                 @0x2,
                 balance::create_for_testing(500),
-                option::none(),
                 ctx,
             );
             // Adding stake to a preactive validator should not change total stake.
@@ -205,7 +203,6 @@ module sui::validator_set_tests {
                 &mut validator_set,
                 @0x2,
                 balance::create_for_testing(500),
-                option::none(),
                 ctx,
             );
             // Adding stake to a preactive validator should not change total stake.
@@ -268,7 +265,6 @@ module sui::validator_set_tests {
             vector[hint],
             vector[hint],
             option::some(balance::create_for_testing(stake_value)),
-            option::none(),
             gas_price,
             0,
             is_initial_validator,

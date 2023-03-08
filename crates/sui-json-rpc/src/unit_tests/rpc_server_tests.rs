@@ -888,7 +888,6 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
     assert_eq!(1000000, staked_sui[0].stakes[0].principal);
-    assert!(staked_sui[0].stakes[0].token_lock.is_none());
     assert!(matches!(
         staked_sui[0].stakes[0].status,
         StakeStatus::Pending
@@ -950,7 +949,6 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
     assert_eq!(1000000, staked_sui[0].stakes[0].principal);
-    assert!(staked_sui[0].stakes[0].token_lock.is_none());
     assert!(matches!(
         staked_sui[0].stakes[0].status,
         StakeStatus::Pending
@@ -967,96 +965,6 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .find(|coin| coin.balance > genesis_coin_amount)
         .unwrap();
     assert_eq!((genesis_coin_amount * 3) - 1000000, new_coin.balance);
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
-
-    let http_client = cluster.rpc_client();
-    let address = cluster.accounts.first().unwrap();
-
-    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
-    assert_eq!(5, objects.len());
-
-    // lock some SUI
-    let transaction_bytes: TransactionBytes = http_client
-        .move_call(
-            *address,
-            SUI_FRAMEWORK_ADDRESS.into(),
-            LOCKED_COIN_MODULE_NAME.to_string(),
-            "lock_coin".to_string(),
-            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
-            vec![
-                SuiJsonValue::from_str(&objects[0].object_id.to_string())?,
-                SuiJsonValue::from_str(&format!("{address}"))?,
-                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
-            ],
-            None,
-            1000,
-            None,
-        )
-        .await?;
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    http_client
-        .execute_transaction(
-            tx_bytes,
-            signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
-        )
-        .await?;
-
-    let validator = http_client
-        .get_latest_sui_system_state()
-        .await?
-        .active_validators[0]
-        .sui_address;
-    // Delegate some locked SUI
-    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
-    let locked_sui = coins
-        .data
-        .iter()
-        .find_map(|coin| coin.locked_until_epoch.map(|_| coin.coin_object_id))
-        .unwrap();
-
-    let transaction_bytes: TransactionBytes = http_client
-        .request_add_stake(
-            *address,
-            vec![locked_sui],
-            Some(1000000),
-            validator,
-            None,
-            10000,
-        )
-        .await?;
-    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    http_client
-        .execute_transaction(
-            tx_bytes,
-            signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
-        )
-        .await?;
-
-    // Check StakedSui object
-    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
-    assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
-    assert_eq!(Some(20), staked_sui[0].stakes[0].token_lock);
-
-    assert!(matches!(
-        staked_sui[0].stakes[0].status,
-        StakeStatus::Pending
-    ));
 
     Ok(())
 }
