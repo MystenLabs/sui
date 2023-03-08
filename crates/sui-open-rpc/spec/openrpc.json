@@ -5424,6 +5424,35 @@
             "additionalProperties": false
           },
           {
+            "description": "Upgrades a Move package",
+            "type": "object",
+            "required": [
+              "Upgrade"
+            ],
+            "properties": {
+              "Upgrade": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  }
+                ],
+                "maxItems": 3,
+                "minItems": 3
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
             "type": "object",
             "required": [
