@@ -103,17 +103,19 @@ export class Transaction {
    * - A byte array (or base64-encoded bytes) containing BCS transaction data.
    */
   static from(serialized: string | Uint8Array) {
+    const tx = new Transaction();
+
     // Check for bytes:
     if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
-      const bytes = TransactionDataBuilder.fromBytes(
+      tx.#transactionData = TransactionDataBuilder.fromBytes(
         typeof serialized === 'string' ? fromB64(serialized) : serialized,
       );
-      return bytes;
+    } else {
+      tx.#transactionData = TransactionDataBuilder.restore(
+        JSON.parse(serialized),
+      );
     }
 
-    const parsed = JSON.parse(serialized);
-    const tx = new Transaction();
-    tx.#transactionData = TransactionDataBuilder.restore(parsed);
     return tx;
   }
 

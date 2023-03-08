@@ -9,7 +9,6 @@ import {
   object,
   string,
   union,
-  unknown,
 } from 'superstruct';
 import { CallArg, TransactionData, TransactionDataBCS } from './sui-bcs';
 import { sha256Hash } from '../cryptography/hash';

@@ -88,7 +88,7 @@ describe('offline build', () => {
     await tx.build();
   });
 
-  it.only('builds a more complex interaction', async () => {
+  it('builds a more complex interaction', async () => {
     const tx = setup();
     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
     tx.add(
@@ -105,8 +105,12 @@ describe('offline build', () => {
         ],
       }),
     );
+
     const bytes = await tx.build();
     const tx2 = Transaction.from(bytes);
+    const bytes2 = await tx2.build();
+
+    expect(bytes).toEqual(bytes2);
   });
 });
 
@@ -125,8 +129,8 @@ function ref(): { objectId: string; version: bigint; digest: string } {
 function setup() {
   const tx = new Transaction();
   tx.setSender('0x2');
-  tx.setGasPrice(1);
-  tx.setGasBudget(1);
+  tx.setGasPrice(5);
+  tx.setGasBudget(100);
   tx.setGasPayment([ref()]);
   return tx;
 }
