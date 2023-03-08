@@ -68,6 +68,7 @@ pub trait GasStationClient {
     async fn sponsor_transaction(
         &self,
         gasless_txn_bytes: GaslessTransactionBytes,
+        sender: SuiAddress,
         gas_budget: u64,
     ) -> SponsoredTransactionResponse;
 
@@ -82,6 +83,7 @@ impl GasStationClient for RemoteGasStationClient {
     async fn sponsor_transaction(
         &self,
         gasless_txn_bytes: GaslessTransactionBytes,
+        sender: SuiAddress,
         gas_budget: u64,
     ) -> SponsoredTransactionResponse {
         let url = format!("{}", self.gas_station_endpoint);
@@ -89,7 +91,7 @@ impl GasStationClient for RemoteGasStationClient {
         debug!("Sending gasless tx bytes to {}", url);
 
         let gasless_bytes = gasless_txn_bytes.tx_bytes.encoded();
-        let text_params = vec![gasless_bytes, gas_budget.to_string()];
+        let text_params = vec![gasless_bytes, sender.to_string(), gas_budget.to_string()];
         let text_str = serde_json::to_value(text_params).unwrap();
 
         let response = reqwest::Client::new()
@@ -841,12 +843,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         &self,
         gas_station_url: String,
         gasless_txn_bytes: GaslessTransactionBytes,
+        sender: SuiAddress,
         gas_budget: u64,
     ) -> anyhow::Result<SponsoredTransactionResponse> {
         let gas_station_client = RemoteGasStationClient::new(gas_station_url);
 
         Ok(gas_station_client
-            .sponsor_transaction(gasless_txn_bytes, gas_budget)
+            .sponsor_transaction(gasless_txn_bytes, sender, gas_budget)
             .await)
     }
 

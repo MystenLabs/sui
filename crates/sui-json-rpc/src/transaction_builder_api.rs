@@ -345,11 +345,12 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         &self,
         gas_station_url: String,
         gasless_txn_bytes: GaslessTransactionBytes,
+        sender: SuiAddress,
         gas_budget: u64,
     ) -> RpcResult<SponsoredTransactionResponse> {
         Ok(self
             .builder
-            .send_bytes_to_sponsor(gas_station_url, gasless_txn_bytes, gas_budget)
+            .send_bytes_to_sponsor(gas_station_url, gasless_txn_bytes, sender, gas_budget)
             .await?)
     }
 

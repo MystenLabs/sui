@@ -341,6 +341,7 @@ pub trait RpcTransactionBuilder {
         &self,
         gas_station_url: String,
         gasless_txn: GaslessTransactionBytes,
+        sender: SuiAddress,
         gas_budget: u64,
     ) -> RpcResult<SponsoredTransactionResponse>;
 

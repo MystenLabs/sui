@@ -34,12 +34,16 @@ async fn main() -> Result<()> {
         String::from("https://gas.shinami.com/api/v1/94E27290A4FF478F9688235370C5C398");
 
     println!("converting data to bytes");
-    let gasless_data = GaslessTransactionData::from_transaction_data(transaction);
-    let gasless_txn_bytes = GaslessTransactionBytes::from_data(gasless_data)?;
+    let gasless_txn_bytes = GaslessTransactionBytes::from_data(transaction.kind)?;
 
     let sponsored_bytes = fn_rpc_client
         .transaction_builder()
-        .send_bytes_to_sponsor(gas_station_url.clone(), gasless_txn_bytes, 5000)
+        .send_bytes_to_sponsor(
+            gas_station_url.clone(),
+            gasless_txn_bytes,
+            transaction.sender,
+            5000,
+        )
         .await?;
 
     println!("bytes_response {:?}", sponsored_bytes);

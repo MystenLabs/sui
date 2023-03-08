@@ -217,10 +217,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         gas_station_url: String,
         transaction_bytes: TransactionBytes,
+        sender: SuiAddress,
         gas_budget: u64,
     ) -> RpcResult<SponsoredTransactionResponse> {
         self.fullnode
-            .send_bytes_to_sponsor(gas_station_url, transaction_bytes, gas_budget)
+            .send_bytes_to_sponsor(gas_station_url, transaction_bytes, sender, gas_budget)
             .await
     }
 

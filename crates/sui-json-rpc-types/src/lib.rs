@@ -3077,12 +3077,12 @@ impl TransactionBytes {
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GaslessTransactionBytes {
-    /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+    /// BCS serialized transaction kind bytes without its type tag, as base-64 encoded string.
     pub tx_bytes: Base64,
 }
 
 impl GaslessTransactionBytes {
-    pub fn from_data(data: GaslessTransactionData) -> Result<Self, anyhow::Error> {
+    pub fn from_data(data: TransactionKind) -> Result<Self, anyhow::Error> {
         Ok(Self {
             tx_bytes: Base64::from_bytes(bcs::to_bytes(&data)?.as_slice()),
         })
