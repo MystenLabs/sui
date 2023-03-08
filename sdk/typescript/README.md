@@ -278,16 +278,13 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
+const packageObjectId = '0x...';
 const moveCallTxn = await signer.executeMoveCall({
-  packageObjectId: '0x2',
-  module: 'devnet_nft',
+  packageObjectId,
+  module: 'nft',
   function: 'mint',
   typeArguments: [],
-  arguments: [
-    'Example NFT',
-    'An NFT created by the wallet Command Line Tool',
-    'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-  ],
+  arguments: ['Example NFT'],
   gasBudget: 10000,
 });
 console.log('moveCallTxn', moveCallTxn);
@@ -313,17 +310,18 @@ const subscriptionId = await provider.subscribeEvent(
 const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
 ```
 
-Subscribe to all events created by the `devnet_nft` module
+Subscribe to all events created by a package's `nft` module
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 
+const packageObjectId = '0x...';
 const devnetNftFilter = {
   All: [
     { EventType: 'MoveEvent' },
-    { Package: '0x2' },
-    { Module: 'devnet_nft' },
+    { Package: packageObjectId },
+    { Module: 'nft' },
   ],
 };
 const devNftSub = await provider.subscribeEvent(
