@@ -5,7 +5,7 @@ import {
     getCoinBalanceChangeEvent,
     getTransferObjectEvent,
     isEventType,
-    TransactionEvents,
+    type TransactionEvents,
 } from '@mysten/sui.js';
 
 export type CoinsMetaProps = {

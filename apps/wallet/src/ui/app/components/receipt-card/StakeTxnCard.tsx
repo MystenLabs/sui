@@ -11,11 +11,7 @@ import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import { useSystemState } from '_src/ui/app/staking/useSystemState';
 
-import type {
-    TransactionEffects,
-    MoveEvent,
-    TransactionEvents,
-} from '@mysten/sui.js';
+import type { TransactionEffects, TransactionEvents } from '@mysten/sui.js';
 
 type StakeTxnCardProps = {
     txnEffects: TransactionEffects;
