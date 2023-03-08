@@ -37,6 +37,7 @@ pub use generated::{
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponse;
+use sui_types::sui_system_state::multiaddr_to_anemo_address;
 
 /// The internal discovery state shared between the main event loop and the request handler
 struct State {
@@ -449,27 +450,6 @@ fn update_known_peers(state: Arc<RwLock<State>>, found_peers: Vec<NodeInfo>) {
             Entry::Vacant(v) => {
                 v.insert(peer);
             }
-        }
-    }
-}
-
-pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
-            Some((hostname.as_ref(), port).into())
-        }
-        _ => {
-            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
-            None
         }
     }
 }
