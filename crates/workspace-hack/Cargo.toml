@@ -69,7 +69,8 @@ backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
-base64 = { version = "0.13", features = ["alloc"] }
+base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
+base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -94,8 +95,7 @@ blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
 bs58 = { version = "0.4", features = ["check"] }
-bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", features = ["serde1"] }
-bstr-dff4ba8e3ae991db = { package = "bstr", version = "1" }
+bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
 bytemuck = { version = "1", default-features = false }
@@ -165,6 +165,7 @@ derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["chrono", "postgres", "r2d2", "serde_json"] }
+diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -222,7 +223,6 @@ futures-core = { version = "0.3", features = ["unstable"] }
 futures-executor = { version = "0.3" }
 futures-intrusive = { version = "0.4" }
 futures-io = { version = "0.3", features = ["unstable"] }
-futures-lite = { version = "1" }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
 futures-timer = { version = "3", default-features = false, features = ["wasm-bindgen"] }
@@ -284,8 +284,7 @@ io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
-itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4" }
-itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
+itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 jsonrpsee = { version = "0.16", default-features = false, features = ["full"] }
 jsonrpsee-client-transport = { version = "0.16", default-features = false, features = ["tls", "web", "ws"] }
@@ -316,8 +315,9 @@ matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 memchr = { version = "2", features = ["use_std"] }
-memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
+memoffset-c38e5c1d305a1b54 = { package = "memoffset", version = "0.8" }
 merlin = { version = "3" }
+migrations_internals = { version = "2", default-features = false }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
@@ -389,7 +389,6 @@ overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
 p256 = { version = "0.12" }
 parity-scale-codec = { version = "2", default-features = false, features = ["max-encoded-len", "std"] }
-parking = { version = "2", default-features = false }
 parking_lot-5ef9efb8ec2df382 = { package = "parking_lot", version = "0.12" }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
@@ -594,6 +593,7 @@ typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
+unarray = { version = "0.1", default-features = false }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
 unic-char-property = { version = "0.9", default-features = false }
@@ -620,7 +620,6 @@ vec_map = { version = "0.8", default-features = false }
 versions = { version = "4", default-features = false }
 vte = { version = "0.10" }
 wait-timeout = { version = "0.2", default-features = false }
-waker-fn = { version = "1", default-features = false }
 walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
 wasm-bindgen = { version = "0.2" }
@@ -705,7 +704,8 @@ backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
-base64 = { version = "0.13", features = ["alloc"] }
+base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
+base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -732,8 +732,7 @@ blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
 bs58 = { version = "0.4", features = ["check"] }
-bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", features = ["serde1"] }
-bstr-dff4ba8e3ae991db = { package = "bstr", version = "1" }
+bstr = { version = "1" }
 bulletproofs = { version = "4" }
 bumpalo = { version = "3" }
 byte-slice-cast = { version = "1" }
@@ -823,6 +822,7 @@ deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["chrono", "postgres", "r2d2", "serde_json"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["32-column-tables", "postgres", "with-deprecated"] }
+diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -883,7 +883,6 @@ futures-core = { version = "0.3", features = ["unstable"] }
 futures-executor = { version = "0.3" }
 futures-intrusive = { version = "0.4" }
 futures-io = { version = "0.3", features = ["unstable"] }
-futures-lite = { version = "1" }
 futures-macro = { version = "0.3", default-features = false }
 futures-sink = { version = "0.3" }
 futures-task = { version = "0.3", default-features = false, features = ["std", "unstable"] }
@@ -954,8 +953,7 @@ io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
-itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4" }
-itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
+itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 jsonrpsee = { version = "0.16", default-features = false, features = ["full"] }
@@ -990,8 +988,10 @@ matchers = { version = "0.1", default-features = false }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 memchr = { version = "2", features = ["use_std"] }
-memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
+memoffset-c38e5c1d305a1b54 = { package = "memoffset", version = "0.8" }
 merlin = { version = "3" }
+migrations_internals = { version = "2", default-features = false }
+migrations_macros = { version = "2" }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
@@ -1069,7 +1069,6 @@ owo-colors = { version = "3", default-features = false }
 p256 = { version = "0.12" }
 parity-scale-codec = { version = "2", default-features = false, features = ["max-encoded-len", "std"] }
 parity-scale-codec-derive = { version = "2", default-features = false, features = ["max-encoded-len"] }
-parking = { version = "2", default-features = false }
 parking_lot-5ef9efb8ec2df382 = { package = "parking_lot", version = "0.12" }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
@@ -1322,6 +1321,7 @@ typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
+unarray = { version = "0.1", default-features = false }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
 unic-char-property = { version = "0.9", default-features = false }
@@ -1355,7 +1355,6 @@ versions = { version = "4", default-features = false }
 vte = { version = "0.10" }
 vte_generate_state_changes = { version = "0.1", default-features = false }
 wait-timeout = { version = "0.2", default-features = false }
-waker-fn = { version = "1", default-features = false }
 walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
 wasm-bindgen = { version = "0.2" }
@@ -1397,7 +1396,7 @@ mach = { version = "0.3" }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
+nix-2f80eeee3b1b6c7e = { package = "nix", version = "0.26", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 pprof = { version = "0.11", features = ["criterion", "flamegraph", "frame-pointer"] }
@@ -1435,7 +1434,7 @@ mach = { version = "0.3" }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
+nix-2f80eeee3b1b6c7e = { package = "nix", version = "0.26", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 pprof = { version = "0.11", features = ["criterion", "flamegraph", "frame-pointer"] }
@@ -1470,7 +1469,7 @@ linux-raw-sys = { version = "0.1", default-features = false, features = ["errno"
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
+nix-2f80eeee3b1b6c7e = { package = "nix", version = "0.26", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 openssl-probe = { version = "0.1", default-features = false }
@@ -1506,7 +1505,7 @@ linux-raw-sys = { version = "0.1", default-features = false, features = ["errno"
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
+nix-2f80eeee3b1b6c7e = { package = "nix", version = "0.26", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 openssl-probe = { version = "0.1", default-features = false }
@@ -1546,7 +1545,9 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Memory", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-targets = { version = "0.42", default-features = false }
 windows_x86_64_msvc = { version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
@@ -1571,7 +1572,9 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys-53888c27b7ba5cf4 = { package = "windows-sys", version = "0.45", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Memory", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-targets = { version = "0.42", default-features = false }
 windows_x86_64_msvc = { version = "0.42", default-features = false }
 winreg = { version = "0.10", default-features = false }
 

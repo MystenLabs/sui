@@ -113,14 +113,14 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
-    fn get_transaction_by_digest(&self, txn_digest: String) -> Result<Transaction, IndexerError> {
+    fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
                 dsl::transactions
-                    .filter(transaction_digest.eq(txn_digest.clone()))
+                    .filter(transaction_digest.eq(txn_digest))
                     .first::<Transaction>(conn)
             })
             .map_err(|e| {
@@ -209,7 +209,7 @@ impl IndexerStore for PgIndexerStore {
                     .read_only()
                     .run(|conn| {
                         let mut boxed_query = recipients_dsl::recipients
-                            .filter(recipients_dsl::transaction_digest.eq(txn_digest.clone()))
+                            .filter(recipients_dsl::transaction_digest.eq(&txn_digest))
                             .into_boxed();
                         if is_descending {
                             boxed_query = boxed_query.order(recipients_dsl::id.desc());

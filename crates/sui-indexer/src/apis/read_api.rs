@@ -46,11 +46,11 @@ impl<S: IndexerStore> ReadApi<S> {
 
     async fn get_transaction(
         &self,
-        digest: TransactionDigest,
+        digest: &TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
         let txn_resp: SuiTransactionResponse = self
             .state
-            .get_transaction_by_digest(digest.to_string())?
+            .get_transaction_by_digest(&digest.base58_encode())?
             .try_into()?;
         Ok(txn_resp)
     }
@@ -255,7 +255,7 @@ where
         {
             return self.fullnode.get_transaction(digest).await;
         }
-        self.get_transaction(digest).await
+        self.get_transaction(&digest).await
     }
 
     async fn multi_get_transactions(

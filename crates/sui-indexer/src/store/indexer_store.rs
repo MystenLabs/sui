@@ -24,7 +24,7 @@ pub trait IndexerStore {
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError>;
 
     // TODO: combine all get_transaction* methods
-    fn get_transaction_by_digest(&self, txn_digest: String) -> Result<Transaction, IndexerError>;
+    fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError>;
 
     fn get_all_transaction_digest_page(
         &self,
