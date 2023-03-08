@@ -2684,7 +2684,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d3d83bd3430be17b9311bcca45f120d7b1c279be#d3d83bd3430be17b9311bcca45f120d7b1c279be"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2732,7 +2732,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d3d83bd3430be17b9311bcca45f120d7b1c279be#d3d83bd3430be17b9311bcca45f120d7b1c279be"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.51",
@@ -2743,7 +2743,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d3d83bd3430be17b9311bcca45f120d7b1c279be#d3d83bd3430be17b9311bcca45f120d7b1c279be"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
 dependencies = [
  "bincode",
  "digest 0.10.6",
@@ -2759,7 +2759,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d3d83bd3430be17b9311bcca45f120d7b1c279be#d3d83bd3430be17b9311bcca45f120d7b1c279be"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
 dependencies = [
  "ark-bls12-381",
  "ark-crypto-primitives",
