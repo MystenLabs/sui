@@ -79,7 +79,7 @@ use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{MoveObject, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
-use sui_types::sui_system_state::{SuiSystemState, Table};
+use sui_types::sui_system_state::{SuiSystemState};
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
