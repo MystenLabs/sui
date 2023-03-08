@@ -1575,7 +1575,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -1837,7 +1837,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Returns an ordered list of transaction responses The method will throw an error if the input contains any duplicate or the input size exceeds [QUERY_MAX_RESULT_LIMIT]",
+      "description": "Returns an ordered list of transaction responses The method will throw an error if the input contains any duplicate or the input size exceeds QUERY_MAX_RESULT_LIMIT",
       "params": [
         {
           "name": "digests",

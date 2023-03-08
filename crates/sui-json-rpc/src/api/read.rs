@@ -136,7 +136,7 @@ pub trait ReadApi {
         query: TransactionQuery,
         /// Optional paging cursor
         cursor: Option<TransactionDigest>,
-        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
+        /// Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
@@ -144,7 +144,7 @@ pub trait ReadApi {
 
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
-    /// the input size exceeds [QUERY_MAX_RESULT_LIMIT]
+    /// the input size exceeds QUERY_MAX_RESULT_LIMIT
     #[method(name = "multiGetTransactions")]
     async fn multi_get_transactions_with_options(
         &self,

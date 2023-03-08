@@ -61,8 +61,11 @@ pub struct ReadApi {
     pub state: Arc<AuthorityState>,
 }
 
+// Internal data structure to make it easy to work with data returned from
+// authority store and also enable code sharing between get_transaction_with_options,
+// multi_get_transaction_with_options, etc.
 #[derive(Default)]
-struct TempTransactionCache {
+struct IntermediateTransactionResponse {
     digest: TransactionDigest,
     transaction: Option<VerifiedTransaction>,
     effects: Option<TransactionEffects>,
@@ -72,7 +75,7 @@ struct TempTransactionCache {
     errors: Vec<String>,
 }
 
-impl TempTransactionCache {
+impl IntermediateTransactionResponse {
     pub fn new(digest: TransactionDigest) -> Self {
         Self {
             digest,
@@ -242,10 +245,10 @@ impl ReadApiServer for ReadApi {
         opts: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
         let opts = opts.unwrap_or_default();
-        let mut response_cache = TempTransactionCache::new(digest);
+        let mut temp_response = IntermediateTransactionResponse::new(digest);
 
         if opts.show_input {
-            response_cache.transaction =
+            temp_response.transaction =
                 Some(self.state.get_executed_transaction(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
                 )?);
@@ -253,7 +256,7 @@ impl ReadApiServer for ReadApi {
 
         // Fetch effects when `show_events` is true because events relies on effects
         if opts.show_effects || opts.show_events {
-            response_cache.effects =
+            temp_response.effects =
                 Some(self.state.get_executed_effects(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
                 )?);
@@ -265,40 +268,40 @@ impl ReadApiServer for ReadApi {
                 .get_transaction_checkpoint_sequence(&digest)
                 .map_err(|e| anyhow!("{e}"))?
             {
-                response_cache.checkpoint_seq = Some(seq);
+                temp_response.checkpoint_seq = Some(seq);
             }
         }
 
-        if opts.show_timestamp && response_cache.checkpoint_seq.is_some() {
+        if opts.show_timestamp && temp_response.checkpoint_seq.is_some() {
             let checkpoint = self
                 .state
                 // safe to unwrap because we have checked `is_some` above
-                .get_checkpoint_by_sequence_number(response_cache.checkpoint_seq.unwrap())
+                .get_checkpoint_by_sequence_number(temp_response.checkpoint_seq.unwrap())
                 .map_err(|e| anyhow!("{e}"))?;
             // TODO(chris): we don't need to fetch the whole checkpoint summary
-            response_cache.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
+            temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
         }
 
-        if opts.show_events && response_cache.effects.is_some() {
+        if opts.show_events && temp_response.effects.is_some() {
             // safe to unwrap because we have checked is_some
-            if let Some(digest) = response_cache.effects.as_ref().unwrap().events_digest() {
+            if let Some(digest) = temp_response.effects.as_ref().unwrap().events_digest() {
                 let events = self
                     .state
                     .get_transaction_events(*digest)
                     .await
                     .map_err(Error::from)?;
                 match to_sui_transaction_events(self, events) {
-                    Ok(e) => response_cache.events = Some(e),
-                    Err(e) => response_cache.errors.push(e.to_string()),
+                    Ok(e) => temp_response.events = Some(e),
+                    Err(e) => temp_response.errors.push(e.to_string()),
                 };
             } else {
                 // events field will be Some if and only if `show_events` is true and
                 // there is no error in converting fetching events
-                response_cache.events = Some(SuiTransactionEvents::default());
+                temp_response.events = Some(SuiTransactionEvents::default());
             }
         }
 
-        Ok(convert_to_response(response_cache, &opts))
+        Ok(convert_to_response(temp_response, &opts))
     }
 
     async fn multi_get_transactions_with_options(
@@ -315,9 +318,13 @@ impl ReadApiServer for ReadApi {
             .into());
         }
         // use LinkedHashMap to dedup and can iterate in insertion order.
-        let mut response_cache: LinkedHashMap<&TransactionDigest, TempTransactionCache> =
-            LinkedHashMap::from_iter(digests.iter().map(|k| (k, TempTransactionCache::new(*k))));
-        if response_cache.len() < num_digests {
+        let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
+            LinkedHashMap::from_iter(
+                digests
+                    .iter()
+                    .map(|k| (k, IntermediateTransactionResponse::new(*k))),
+            );
+        if temp_response.len() < num_digests {
             return Err(anyhow!("The list of digests in the input contain duplicates").into());
         }
 
@@ -333,7 +340,7 @@ impl ReadApiServer for ReadApi {
                 )?;
 
             for ((_digest, cache_entry), txn) in
-                response_cache.iter_mut().zip(transactions.into_iter())
+                temp_response.iter_mut().zip(transactions.into_iter())
             {
                 cache_entry.transaction = txn;
             }
@@ -349,7 +356,7 @@ impl ReadApiServer for ReadApi {
                     |err| debug!(digests=?digests, "Failed to multi get effects: {:?}", err),
                 )?;
             for ((_digest, cache_entry), e) in
-                response_cache.iter_mut().zip(effects_list.into_iter())
+                temp_response.iter_mut().zip(effects_list.into_iter())
             {
                 cache_entry.effects = e;
             }
@@ -362,7 +369,7 @@ impl ReadApiServer for ReadApi {
                 .await
                 .tap_err(
                     |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
-            for ((_digest, cache_entry), seq) in response_cache
+            for ((_digest, cache_entry), seq) in temp_response
                 .iter_mut()
                 .zip(checkpoint_seq_list.into_iter())
             {
@@ -371,7 +378,7 @@ impl ReadApiServer for ReadApi {
         }
 
         if opts.show_timestamp {
-            let unique_checkpoint_numbers = response_cache
+            let unique_checkpoint_numbers = temp_response
                 .values()
                 .filter_map(|cache_entry| cache_entry.checkpoint_seq)
                 // It's likely that many transactions has the same checkpoint, so we don't
@@ -394,7 +401,7 @@ impl ReadApiServer for ReadApi {
                 .collect::<HashMap<_, _>>();
 
             // fill cache with the timestamp
-            for (_, cache_entry) in response_cache.iter_mut() {
+            for (_, cache_entry) in temp_response.iter_mut() {
                 if cache_entry.checkpoint_seq.is_some() {
                     // safe to unwrap because is_some is checked
                     cache_entry.timestamp = *checkpoint_to_timestamp
@@ -406,7 +413,7 @@ impl ReadApiServer for ReadApi {
         }
 
         if opts.show_events {
-            let event_digests_list = response_cache
+            let event_digests_list = temp_response
                 .values()
                 .filter_map(|cache_entry| match &cache_entry.effects {
                     Some(eff) => eff.events_digest().cloned(),
@@ -428,7 +435,7 @@ impl ReadApiServer for ReadApi {
                 .collect::<HashMap<_, _>>();
 
             // fill cache with the events
-            for (_, cache_entry) in response_cache.iter_mut() {
+            for (_, cache_entry) in temp_response.iter_mut() {
                 let event_digest: Option<Option<TransactionEventsDigest>> = cache_entry
                     .effects
                     .as_ref()
@@ -456,7 +463,7 @@ impl ReadApiServer for ReadApi {
             }
         }
 
-        Ok(response_cache
+        Ok(temp_response
             .into_iter()
             .map(|c| convert_to_response(c.1, &opts))
             .collect::<Vec<_>>())
@@ -896,7 +903,7 @@ fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> Rp
 }
 
 fn convert_to_response(
-    cache: TempTransactionCache,
+    cache: IntermediateTransactionResponse,
     opts: &SuiTransactionResponseOptions,
 ) -> SuiTransactionResponse {
     let mut response = SuiTransactionResponse::new(cache.digest);
