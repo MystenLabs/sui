@@ -402,7 +402,8 @@ async fn test_reconfig_with_committee_change_basic() {
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
         10000,
-    );
+    )
+    .unwrap();
     let transaction =
         to_sender_signed_transaction(candidate_tx_data, new_node_config.account_key_pair());
     let effects = execute_transaction(&authorities, transaction)
@@ -453,7 +454,8 @@ async fn test_reconfig_with_committee_change_basic() {
             mutable: true,
         })],
         10000,
-    );
+    )
+    .unwrap();
     let transaction =
         to_sender_signed_transaction(activation_tx_data, new_node_config.account_key_pair());
     let effects = execute_transaction(&authorities, transaction)
