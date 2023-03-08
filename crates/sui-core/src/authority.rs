@@ -2266,6 +2266,54 @@ impl AuthorityState {
             .get_transactions(query, cursor, limit, reverse)
     }
 
+    pub fn get_checkpoints(
+        &self,
+        cursor: Option<usize>,
+        limit: usize,
+        reverse: bool,
+    ) -> Result<(Vec<VerifiedCheckpoint>, Option<usize>), anyhow::Error> {
+        let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
+
+        let values = (0..=max_checkpoint).collect::<Vec<_>>();
+        let mut checkpoint_numbers = values;
+
+        if reverse {
+            checkpoint_numbers.reverse();
+        }
+
+        let checkpoints = self.get_checkpoint_store()
+            .multi_get_checkpoint_by_sequence_number(checkpoint_numbers.as_slice())?;
+
+        let checks: Vec<VerifiedCheckpoint> = checkpoints.into_iter().flatten().collect();
+
+        let start_index = match cursor {
+            Some(cursor) => cursor,
+            None => 0,
+        };
+
+        let remaining_data = &checks[start_index..];
+
+        let current_page: Option<Vec<VerifiedCheckpoint>>;
+
+        if remaining_data.is_empty() {
+            current_page = None;
+        }
+
+        let end_index = std::cmp::min(start_index + limit, checks.len());
+        let current_page = &checks[start_index..end_index].to_vec();
+
+        let next_cursor = if end_index < checks.len() {
+            Some(end_index)
+        } else {
+            None
+        };
+
+        match current_page {
+            current_page => Ok((current_page.to_vec(), next_cursor)),
+            _ => Err(anyhow!("No checkpoints"))
+        }
+    }
+
     fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {
         self.checkpoint_store.clone()
     }

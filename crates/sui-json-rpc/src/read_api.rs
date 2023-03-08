@@ -24,7 +24,7 @@ use sui_json_rpc_types::{
     SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
     SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage,
+    SuiTransactionResponseOptions, TransactionsPage, CheckpointPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -586,6 +586,29 @@ impl ReadApiServer for ReadApi {
             .get_transactions(query, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
+        let next_cursor = data.get(limit).cloned();
+        data.truncate(limit);
+        Ok(Page { data, next_cursor })
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: Option<usize>,
+        order: Option<String>,
+    ) -> RpcResult<CheckpointPage> {
+        let limit = cap_page_limit(limit);
+        let reverse: bool;
+        if order == "asc" {
+            reverse = false;
+        } else if order == "desc" {
+            reverse = true;
+        }
+
+        let mut data = self
+            .state
+            .get_checkpoints(cursor, Some(limit + 1), reverse)?;
+
         let next_cursor = data.get(limit).cloned();
         data.truncate(limit);
         Ok(Page { data, next_cursor })

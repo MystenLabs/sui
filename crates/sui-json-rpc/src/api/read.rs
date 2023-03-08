@@ -8,7 +8,7 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo,
     SuiObjectResponse, SuiPastObjectResponse, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage,
+    SuiTransactionResponseOptions, TransactionsPage, CheckpointPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -141,6 +141,14 @@ pub trait ReadApi {
         /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
+
+    #[method(name = "getCheckpoints")]
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: Option<usize>,
+        order: Option<String>,
+    ) -> RpcResult<CheckpointPage>;
 
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
