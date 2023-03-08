@@ -413,7 +413,7 @@ pub enum SingleTransactionKind {
 }
 
 impl VersionedProtocolMessage for SingleTransactionKind {
-    fn check_version_supported(&self, _current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, _protocol_config: &ProtocolConfig) -> SuiResult {
         // This code does nothing right now - it exists to cause a compiler error when new
         // enumerants are added to SingleTransactionKind.
         //
@@ -1203,14 +1203,14 @@ pub enum TransactionKind {
 }
 
 impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         // If we add new cases here, check that current_protocol_version does not pre-date the
         // addition of that enumerant.
         match &self {
-            TransactionKind::Single(s) => s.check_version_supported(current_protocol_version),
+            TransactionKind::Single(s) => s.check_version_supported(protocol_config),
             TransactionKind::Batch(v) => {
                 for s in v {
-                    s.check_version_supported(current_protocol_version)?
+                    s.check_version_supported(protocol_config)?
                 }
                 Ok(())
             }
@@ -1392,7 +1392,8 @@ impl VersionedProtocolMessage for TransactionData {
         })
     }
 
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        // First check the gross version
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
@@ -1403,15 +1404,19 @@ impl VersionedProtocolMessage for TransactionData {
             // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 12)),
         };
 
-        if supported.is_version_supported(current_protocol_version) {
-            Ok(())
-        } else {
-            Err(SuiError::WrongMessageVersion {
-                message_version,
-                supported,
-                current_protocol_version,
-            })
+        if !supported.is_version_supported(protocol_config.version) {
+            return Err(SuiError::WrongMessageVersion {
+                error: format!(
+                    "TransactionDataV{} is not supported at {:?}. (Supported range is {:?}",
+                    message_version, protocol_config.version, supported
+                ),
+            });
         }
+
+        // Now check interior versioned data
+        self.kind().check_version_supported(protocol_config)?;
+
+        Ok(())
     }
 }
 
@@ -2033,9 +2038,9 @@ impl VersionedProtocolMessage for SenderSignedData {
         self.transaction_data().message_version()
     }
 
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         self.transaction_data()
-            .check_version_supported(current_protocol_version)?;
+            .check_version_supported(protocol_config)?;
 
         // This code does nothing right now. Its purpose is to cause a compiler error when a
         // new signature type is added.
@@ -3155,7 +3160,7 @@ pub trait VersionedProtocolMessage {
     }
 
     /// Check that the version of the message is the correct one to use at this protocol version.
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult;
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -3172,7 +3177,7 @@ impl VersionedProtocolMessage for TransactionEffects {
         })
     }
 
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
@@ -3180,13 +3185,14 @@ impl VersionedProtocolMessage for TransactionEffects {
             // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
         };
 
-        if supported.is_version_supported(current_protocol_version) {
+        if supported.is_version_supported(protocol_config.version) {
             Ok(())
         } else {
             Err(SuiError::WrongMessageVersion {
-                message_version,
-                supported,
-                current_protocol_version,
+                error: format!(
+                    "TransactionEffectsV{} is not supported at {:?}. (Supported range is {:?}",
+                    message_version, protocol_config.version, supported
+                ),
             })
         }
     }

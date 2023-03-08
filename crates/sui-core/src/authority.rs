@@ -1048,7 +1048,7 @@ impl AuthorityState {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
-        transaction_kind.check_version_supported(epoch_store.protocol_version())?;
+        transaction_kind.check_version_supported(epoch_store.protocol_config())?;
 
         let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
 

@@ -75,18 +75,23 @@ mod sim_only_tests {
     use tokio::time::{sleep, timeout, Duration};
     use tracing::info;
 
+    const START: u64 = ProtocolVersion::MAX.as_u64();
+    const FINISH: u64 = ProtocolVersion::MAX_ALLOWED.as_u64();
+
     #[sim_test]
     async fn test_protocol_version_upgrade() {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
             .build()
             .await
             .unwrap();
 
-        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+        expect_upgrade_succeeded(&test_cluster).await;
     }
 
     #[sim_test]
@@ -102,17 +107,17 @@ mod sim_only_tests {
             .with_epoch_duration_ms(10000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
-                    // first validator only does not support version 2.
-                    SupportedProtocolVersions::new_for_testing(1, 1)
+                    // first validator only does not support version FINISH.
+                    SupportedProtocolVersions::new_for_testing(START, START)
                 } else {
-                    SupportedProtocolVersions::new_for_testing(1, 2)
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
                 }
             }))
             .build()
             .await
             .unwrap();
 
-        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+        expect_upgrade_succeeded(&test_cluster).await;
 
         // verify that the node that didn't support the new version shut itself down.
         for v in test_cluster.swarm.validators() {
@@ -120,7 +125,7 @@ mod sim_only_tests {
                 .config
                 .supported_protocol_versions
                 .unwrap()
-                .is_version_supported(ProtocolVersion::new(2))
+                .is_version_supported(ProtocolVersion::new(FINISH))
             {
                 assert!(!v.is_running(), "{:?}", v.name().concise());
             } else {
@@ -137,17 +142,17 @@ mod sim_only_tests {
             .with_epoch_duration_ms(10000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx <= 1 {
-                    // two validators don't support version 2, so we never advance to 2.
-                    SupportedProtocolVersions::new_for_testing(1, 1)
+                    // two validators don't support version FINISH, so we never advance to FINISH.
+                    SupportedProtocolVersions::new_for_testing(START, START)
                 } else {
-                    SupportedProtocolVersions::new_for_testing(1, 2)
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
                 }
             }))
             .build()
             .await
             .unwrap();
 
-        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+        expect_upgrade_failed(&test_cluster).await;
     }
 
     #[sim_test]
@@ -219,7 +224,9 @@ mod sim_only_tests {
         TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
             .with_objects([sui_framework_object(from)])
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
             .build()
             .await
             .unwrap()
@@ -254,11 +261,11 @@ mod sim_only_tests {
     }
 
     async fn expect_upgrade_failed(cluster: &TestCluster) {
-        monitor_version_change(&cluster, 1 /* expected proto version */).await;
+        monitor_version_change(&cluster, START /* expected proto version */).await;
     }
 
     async fn expect_upgrade_succeeded(cluster: &TestCluster) {
-        monitor_version_change(&cluster, 2 /* expected proto version */).await;
+        monitor_version_change(&cluster, FINISH /* expected proto version */).await;
     }
 
     #[sim_test]
@@ -270,12 +277,14 @@ mod sim_only_tests {
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
             .with_objects([sui_framework_object("base")])
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 1))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, START,
+            ))
             .build()
             .await
             .unwrap();
 
-        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+        expect_upgrade_failed(&test_cluster).await;
     }
 
     #[sim_test]
@@ -289,7 +298,9 @@ mod sim_only_tests {
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
             .build()
             .await
             .unwrap();
@@ -305,9 +316,9 @@ mod sim_only_tests {
             }
         }));
 
-        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+        expect_upgrade_succeeded(&test_cluster).await;
 
-        // monitor_version_change only waits for fullnode to reconfigure - validator can actually be
+        // expect_upgrade_succeeded only waits for fullnode to reconfigure - validator can actually be
         // slower than fullnode if it wasn't one of the signers of the final checkpoint.
         sleep(Duration::from_secs(3)).await;
 
@@ -317,7 +328,7 @@ mod sim_only_tests {
             let committee = node.state().epoch_store_for_testing().committee().clone();
             assert_eq!(
                 node.state().epoch_store_for_testing().protocol_version(),
-                ProtocolVersion::new(2)
+                ProtocolVersion::new(FINISH)
             );
             assert_eq!(committee.epoch, 2);
         });
@@ -335,7 +346,9 @@ mod sim_only_tests {
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(10000)
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 2))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
             .build()
             .await
             .unwrap();
@@ -351,7 +364,7 @@ mod sim_only_tests {
             }
         }));
 
-        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+        expect_upgrade_failed(&test_cluster).await;
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
@@ -368,7 +381,7 @@ mod sim_only_tests {
                     protocol_version
                 );
                 match committee.epoch() {
-                    0 => assert_eq!(protocol_version, ProtocolVersion::new(1)),
+                    0 => assert_eq!(protocol_version, ProtocolVersion::new(START)),
                     1 => assert_eq!(protocol_version, ProtocolVersion::new(final_version)),
                     2 => break,
                     _ => unreachable!(),
