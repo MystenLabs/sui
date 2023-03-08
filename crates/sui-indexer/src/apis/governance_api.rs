@@ -11,7 +11,7 @@ use sui_json_rpc_types::{SuiCommittee, SuiSystemStateRpc};
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::governance::DelegatedStake;
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 pub(crate) struct GovernanceReadApi {
@@ -32,7 +32,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         self.fullnode.get_delegated_stakes(owner).await
     }
 
-    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>> {
+    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadataV1>> {
         self.fullnode.get_validators().await
     }
 

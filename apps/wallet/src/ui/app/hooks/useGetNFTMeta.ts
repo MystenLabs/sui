@@ -12,15 +12,15 @@ export type NFTMetadata = {
     url: string;
 };
 
-export function useGetNFTMeta(objectID: string): NFTMetadata | null {
-    const { data, isError } = useGetObject(objectID);
+export function useGetNFTMeta(objectID: string) {
+    const data = useGetObject(objectID);
 
     const nftMeta = useMemo(() => {
-        if (isError) return null;
+        if (!data.data) return null;
 
-        const { details } = data || {};
+        const { details } = data.data || {};
         if (!is(details, SuiObjectData) || !data) return null;
-        const fields = getObjectFields(data);
+        const fields = getObjectFields(data.data);
         if (!fields?.url) return null;
         return {
             description:
@@ -30,7 +30,10 @@ export function useGetNFTMeta(objectID: string): NFTMetadata | null {
             name: typeof fields.name === 'string' ? fields.name : null,
             url: fields.url,
         };
-    }, [data, isError]);
+    }, [data]);
 
-    return nftMeta;
+    return {
+        ...data,
+        data: nftMeta,
+    };
 }

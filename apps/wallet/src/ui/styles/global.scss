@@ -13,6 +13,16 @@
     }
 }
 
+@layer components {
+    .custom-scrollbar::-webkit-scrollbar {
+        @apply w-1.5;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-50 rounded-full;
+    }
+}
+
 html,
 body {
     min-width: 0;

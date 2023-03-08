@@ -26,10 +26,12 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+use move_package::source_package::parsed_manifest::CustomDepInfo;
 use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
+    package_hooks::PackageHooks,
     resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
 };
@@ -448,5 +450,27 @@ impl GetModule for CompiledPackage {
 
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         Ok(self.package.all_modules_map().get_module(id).ok().cloned())
+    }
+}
+
+pub const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
+
+pub struct SuiPackageHooks {}
+
+impl PackageHooks for SuiPackageHooks {
+    fn custom_package_info_fields(&self) -> Vec<String> {
+        vec![PUBLISHED_AT_MANIFEST_FIELD.to_string()]
+    }
+
+    fn custom_dependency_key(&self) -> Option<String> {
+        None
+    }
+
+    fn resolve_custom_dependency(
+        &self,
+        _dep_name: move_symbol_pool::Symbol,
+        _info: &CustomDepInfo,
+    ) -> anyhow::Result<()> {
+        Ok(())
     }
 }

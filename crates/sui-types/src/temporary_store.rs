@@ -542,18 +542,20 @@ impl<S> TemporaryStore<S> {
         gas_object: &mut Object,
     ) -> Result<(), ExecutionError> {
         let mut objects_to_update = vec![];
-        // Also charge gas for mutating the gas object in advance.
-        let gas_object_size = gas_object.object_size_for_gas_metering();
-        gas_object.storage_rebate = gas_status.charge_storage_mutation(
-            gas_object_size,
-            gas_object_size,
-            gas_object.storage_rebate.into(),
-        )?;
-        objects_to_update.push((
-            SingleTxContext::gas(sender),
-            gas_object.clone(),
-            WriteKind::Mutate,
-        ));
+        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
+        if !self.written.contains_key(&gas_object.id()) {
+            let gas_object_size = gas_object.object_size_for_gas_metering();
+            gas_object.storage_rebate = gas_status.charge_storage_mutation(
+                gas_object_size,
+                gas_object_size,
+                gas_object.storage_rebate.into(),
+            )?;
+            objects_to_update.push((
+                SingleTxContext::gas(sender),
+                gas_object.clone(),
+                WriteKind::Mutate,
+            ));
+        }
 
         for (object_id, (ctx, object, write_kind)) in &mut self.written {
             let (old_object_size, storage_rebate) = self

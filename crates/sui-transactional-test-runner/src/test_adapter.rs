@@ -313,7 +313,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder.command(Command::Publish(vec![module_bytes]));
             let pt = builder.finish();
-            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
+            TransactionData::new_programmable_with_dummy_gas_price(
+                sender,
+                vec![gas],
+                pt,
+                gas_budget,
+            )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -395,7 +400,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .unwrap();
             let pt = builder.finish();
-            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
+            TransactionData::new_programmable_with_dummy_gas_price(
+                sender,
+                vec![gas],
+                pt,
+                gas_budget,
+            )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -516,7 +526,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     ));
                     let pt = builder.finish();
                     TransactionData::new_programmable_with_dummy_gas_price(
-                        sender, gas, pt, gas_budget,
+                        sender,
+                        vec![gas],
+                        pt,
+                        gas_budget,
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;

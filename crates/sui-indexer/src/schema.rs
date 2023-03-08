@@ -4,8 +4,12 @@
 
 pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "owner_change_type"))]
-    pub struct OwnerChangeType;
+    #[diesel(postgres_type(name = "bcs_bytes"))]
+    pub struct BcsBytes;
+
+    #[derive(diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "object_status"))]
+    pub struct ObjectStatus;
 
     #[derive(diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "owner_type"))]
@@ -77,77 +81,104 @@ diesel::table! {
 }
 
 diesel::table! {
-    object_logs (last_processed_id) {
-        last_processed_id -> Int8,
-    }
-}
-
-diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
+    use super::sql_types::ObjectStatus;
+    use super::sql_types::BcsBytes;
 
-    objects (id) {
-        id -> Int8,
+    objects (object_id) {
+        epoch -> Int8,
+        checkpoint -> Int8,
         object_id -> Varchar,
         version -> Int8,
+        object_digest -> Varchar,
         owner_type -> OwnerType,
         owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
-        package_id -> Text,
-        transaction_module -> Text,
-        object_type -> Nullable<Text>,
-        object_status -> Varchar,
+        previous_transaction -> Varchar,
+        object_type -> Varchar,
+        object_status -> ObjectStatus,
+        bcs -> Array<Nullable<BcsBytes>>,
     }
 }
 
 diesel::table! {
     use diesel::sql_types::*;
-    use super::sql_types::OwnerChangeType;
     use super::sql_types::OwnerType;
+    use super::sql_types::ObjectStatus;
+    use super::sql_types::BcsBytes;
 
-    owner_changes (epoch, object_id, version) {
-        object_id -> Varchar,
-        version -> Int8,
+    objects_history (epoch, object_id, version) {
         epoch -> Int8,
         checkpoint -> Int8,
-        change_type -> OwnerChangeType,
-        owner_type -> OwnerType,
-        owner -> Nullable<Varchar>,
-        initial_shared_version -> Nullable<Int8>,
+        object_id -> Varchar,
+        version -> Int8,
         object_digest -> Varchar,
-        object_type -> Nullable<Varchar>,
+        owner_type -> OwnerType,
+        owner_address -> Nullable<Varchar>,
+        initial_shared_version -> Nullable<Int8>,
+        previous_transaction -> Varchar,
+        object_type -> Varchar,
+        object_status -> ObjectStatus,
+        bcs -> Array<Nullable<BcsBytes>>,
     }
 }
 
 diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
+    use super::sql_types::ObjectStatus;
 
-    owner_index (object_id) {
+    owner (object_id) {
+        epoch -> Int8,
+        checkpoint -> Int8,
         object_id -> Varchar,
         version -> Int8,
-        epoch -> Int8,
-        owner_type -> OwnerType,
-        owner -> Nullable<Varchar>,
-        initial_shared_version -> Nullable<Int8>,
         object_digest -> Varchar,
-        object_type -> Nullable<Varchar>,
+        owner_type -> OwnerType,
+        owner_address -> Nullable<Varchar>,
+        object_status -> ObjectStatus,
     }
 }
 
 diesel::table! {
-    package_logs (last_processed_id) {
-        last_processed_id -> Int8,
+    use diesel::sql_types::*;
+    use super::sql_types::OwnerType;
+    use super::sql_types::ObjectStatus;
+
+    owner_history (epoch, object_id, version) {
+        epoch -> Int8,
+        checkpoint -> Int8,
+        object_id -> Varchar,
+        version -> Int8,
+        object_digest -> Varchar,
+        owner_type -> Nullable<OwnerType>,
+        owner_address -> Nullable<Varchar>,
+        old_owner_type -> Nullable<OwnerType>,
+        old_owner_address -> Nullable<Varchar>,
+        object_status -> ObjectStatus,
     }
 }
 
 diesel::table! {
-    packages (id) {
+    use diesel::sql_types::*;
+    use super::sql_types::BcsBytes;
+
+    packages (package_id, version) {
+        package_id -> Varchar,
+        version -> Int8,
+        author -> Varchar,
+        data -> Array<Nullable<BcsBytes>>,
+    }
+}
+
+diesel::table! {
+    recipients (id) {
         id -> Int8,
-        package_id -> Text,
-        author -> Text,
-        module_names -> Array<Nullable<Text>>,
-        package_content -> Text,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        recipient -> Varchar,
     }
 }
 
@@ -187,11 +218,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     error_logs,
     events,
     move_calls,
-    object_logs,
     objects,
-    owner_changes,
-    owner_index,
-    package_logs,
+    objects_history,
+    owner,
+    owner_history,
     packages,
+    recipients,
     transactions,
 );

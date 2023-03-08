@@ -199,7 +199,8 @@ mod tests {
                 vec![1000],
                 coin,
                 1000,
-            ),
+            )
+            .unwrap(),
         )
     }
 }

@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Validator, type SuiEventEnvelope } from '@mysten/sui.js';
+import {
+    type SuiValidatorSummary,
+    type SuiEventEnvelope,
+} from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -27,33 +30,35 @@ const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(
-    validators: Validator[],
+export function validatorsTableData(
+    validators: SuiValidatorSummary[],
     epoch: number,
-    validatorsEvents: SuiEventEnvelope[]
+    validatorsEvents: SuiEventEnvelope[],
+    minimumStake: number
 ) {
     return {
         data: validators.map((validator) => {
-            const validatorName = validator.metadata.name;
-            const totalStake = validator.staking_pool.sui_balance;
-            const img = validator.metadata.image_url;
+            const validatorName = validator.name;
+            const totalStake = validator.staking_pool_sui_balance;
+            const img = validator.image_url;
 
             const event = getValidatorMoveEvent(
                 validatorsEvents,
-                validator.metadata.sui_address
+                validator.sui_address
             );
 
             return {
                 name: {
                     name: validatorName,
-                    logo: validator.metadata.image_url,
+                    logo: validator.image_url,
                 },
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.commission_rate / 100,
                 img: img,
-                address: validator.metadata.sui_address,
+                address: validator.sui_address,
                 lastReward: event?.fields.stake_rewards || 0,
+                atRisk: totalStake < minimumStake,
             };
         }),
         columns: [
@@ -150,6 +155,22 @@ function validatorsTableData(
                     );
                 },
             },
+            {
+                header: 'Status',
+                accessorKey: 'atRisk',
+                cell: (props: any) => {
+                    const atRisk = props.getValue();
+                    return atRisk ? (
+                        <Text color="issue" variant="bodySmall/medium">
+                            At Risk
+                        </Text>
+                    ) : (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            Active
+                        </Text>
+                    );
+                },
+            },
         ],
     };
 }
@@ -158,7 +179,7 @@ function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const numberOfValidators = useMemo(
-        () => data?.validators.active_validators.length || null,
+        () => data?.active_validators.length || null,
         [data]
     );
 
@@ -173,17 +194,17 @@ function ValidatorPageResult() {
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.active_validators;
 
         return validators.reduce(
-            (acc, cur) => acc + +cur.staking_pool.sui_balance,
+            (acc, cur) => acc + +cur.staking_pool_sui_balance,
             0
         );
     }, [data]);
 
     const averageAPY = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.active_validators;
 
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +data.epoch)
@@ -212,12 +233,13 @@ function ValidatorPageResult() {
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
 
-        const validators = data.validators.active_validators;
+        const validators = data.active_validators;
 
         return validatorsTableData(
             validators,
             +data.epoch,
-            validatorEvents.data
+            validatorEvents.data,
+            data.min_validator_stake
         );
     }, [validatorEvents, data]);
 

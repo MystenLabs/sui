@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use tempfile::tempdir;
 
@@ -10,17 +9,16 @@ use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use sui_types::{accumulator::Accumulator, committee::ProtocolVersion};
+use sui_types::committee::ProtocolVersion;
+use sui_types::messages_checkpoint::{ECMHLiveObjectSetDigest, VerifiedCheckpoint};
 use tokio::{sync::broadcast, time::timeout};
 
+use crate::authority::authority_per_epoch_store::EpochStartConfiguration;
 use crate::{
     authority::AuthorityState, checkpoints::CheckpointStore, state_accumulator::StateAccumulator,
 };
-
-use crate::authority::authority_per_epoch_store::EpochStartConfiguration;
 use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 
 /// Test checkpoint executor happy path, test that checkpoint executor correctly
 /// picks up where it left off in the event of a mid-epoch node crash.
@@ -215,17 +213,14 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         .contains_key(&first_epoch)
         .unwrap());
 
-    let system_state = SuiSystemState::new_for_testing(1);
+    let system_state = EpochStartSystemState::new_for_testing_with_epoch(1);
 
     let new_epoch_store = authority_state
         .reconfigure(
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
-            EpochStartConfiguration {
-                system_state,
-                ..Default::default()
-            },
+            EpochStartConfiguration::new(system_state, Default::default()),
         )
         .await
         .unwrap();
@@ -430,7 +425,7 @@ fn sync_end_of_epoch_checkpoint(
         Some(EndOfEpochData {
             next_epoch_committee: new_committee.committee().voting_rights.clone(),
             next_epoch_protocol_version: ProtocolVersion::MIN,
-            root_state_digest: Accumulator::default().digest(),
+            epoch_commitments: vec![ECMHLiveObjectSetDigest::default().into()],
         }),
     );
     sync_checkpoint(&checkpoint, checkpoint_store, sender);
@@ -447,7 +442,7 @@ fn sync_checkpoint(
         .insert_verified_checkpoint(checkpoint.clone())
         .unwrap();
     checkpoint_store
-        .insert_checkpoint_contents(empty_contents())
+        .insert_checkpoint_contents(empty_contents().into_inner().into_checkpoint_contents())
         .unwrap();
     checkpoint_store
         .update_highest_synced_checkpoint(checkpoint)

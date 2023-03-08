@@ -14,8 +14,8 @@ use std::path::Path;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiPaySui, SuiTransactionDataAPI,
-    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -162,7 +162,7 @@ impl SimpleFaucet {
             return GasCoinResponse::NoGasCoinAvailable;
         };
 
-        match self.get_gas_coin(coin_id).await {
+        match self.get_gas_coin_and_check_faucet_owner(coin_id).await {
             Ok(Some(gas_coin)) if gas_coin.value() >= total_amount + PAY_SUI_GAS => {
                 info!(?uuid, ?coin_id, "balance: {}", gas_coin.value());
                 GasCoinResponse::ValidGasCoin(coin_id)
@@ -181,12 +181,14 @@ impl SimpleFaucet {
 
     /// Check if the gas coin is still valid. A valid gas coin
     /// 1. Exists presently
-    /// 2. Belongs to the faucet account
-    /// 3. is a GasCoin
+    /// 2. is a gas coin
     /// If the coin is valid, return Ok(Some(GasCoin))
     /// If the coin invalid, return Ok(None)
     /// If the fullnode returns an unexpected error, returns Err(e)
-    async fn get_gas_coin(&self, coin_id: ObjectID) -> anyhow::Result<Option<GasCoin>> {
+    async fn get_coin(
+        &self,
+        coin_id: ObjectID,
+    ) -> anyhow::Result<Option<(Option<Owner>, GasCoin)>> {
         let client = self.wallet.get_client().await?;
         let gas_obj = client
             .read_api()
@@ -200,13 +202,26 @@ impl SimpleFaucet {
             .await?;
         Ok(match gas_obj {
             SuiObjectResponse::NotExists(_) | SuiObjectResponse::Deleted(_) => None,
-            SuiObjectResponse::Exists(obj) => match &obj.owner {
-                Some(Owner::AddressOwner(owner_addr)) if owner_addr == &self.active_address => {
-                    GasCoin::try_from(&obj).ok()
-                }
-                _ => None,
-            },
+            SuiObjectResponse::Exists(obj) => {
+                GasCoin::try_from(&obj).ok().map(|coin| (obj.owner, coin))
+            }
         })
+    }
+
+    /// Similar to get_coin but checks that the owner is the active
+    /// faucet address. If the coin exists, but does not have the correct owner,
+    /// returns None
+    async fn get_gas_coin_and_check_faucet_owner(
+        &self,
+        coin_id: ObjectID,
+    ) -> anyhow::Result<Option<GasCoin>> {
+        let gas_obj = self.get_coin(coin_id).await?;
+        Ok(gas_obj.and_then(|(owner_opt, coin)| match owner_opt {
+            Some(Owner::AddressOwner(owner_addr)) if owner_addr == self.active_address => {
+                Some(coin)
+            }
+            _ => None,
+        }))
     }
 
     /// Sign an already created transaction (in `tx_data`) and keep trying to execute it until
@@ -281,12 +296,11 @@ impl SimpleFaucet {
         amounts: &[u64],
         recipient: SuiAddress,
         uuid: Uuid,
-    ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
+    ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
         let number_of_coins = amounts.len();
         let total_amount: u64 = amounts.iter().sum();
 
         let gas_coin_response = self.prepare_gas_coin(total_amount, uuid).await;
-
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
                 let tx_data = self
@@ -308,12 +322,11 @@ impl SimpleFaucet {
                     wal.reserve(uuid, coin_id, recipient, tx_data.clone())
                         .map_err(FaucetError::internal)?;
                 }
-
                 let response = self
                     .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
                     .await?;
 
-                self.check_and_map_transfer_gas_result(response, number_of_coins, &recipient)
+                self.check_and_map_transfer_gas_result(response, number_of_coins, recipient)
                     .await
             }
 
@@ -445,8 +458,8 @@ impl SimpleFaucet {
         &self,
         res: SuiTransactionResponse,
         number_of_coins: usize,
-        recipient: &SuiAddress,
-    ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
+        recipient: SuiAddress,
+    ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
         let txns = res.transaction.data.transactions();
         if txns.len() != 1 {
             panic!(
@@ -461,25 +474,14 @@ impl SimpleFaucet {
                 number_of_coins, created
             );
         }
-        let txn = &txns[0];
-        if let SuiTransactionKind::PaySui(SuiPaySui {
-            // coins here are input coins, rather than the created coins under recipients.
-            coins: _,
-            recipients,
-            amounts,
-        }) = txn
-        {
-            assert!(recipients
-                .iter()
-                .all(|sent_recipient| sent_recipient == recipient));
-            let coin_ids: Vec<ObjectID> = created
-                .iter()
-                .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
-                .collect();
-            Ok((*res.effects.transaction_digest(), coin_ids, amounts.clone()))
-        } else {
-            panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
-        }
+        assert!(created
+            .iter()
+            .all(|created_coin_owner_ref| created_coin_owner_ref.owner == recipient));
+        let coin_ids: Vec<ObjectID> = created
+            .iter()
+            .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
+            .collect();
+        Ok((*res.effects.transaction_digest(), coin_ids))
     }
 
     #[cfg(test)]
@@ -518,28 +520,32 @@ impl Faucet for SimpleFaucet {
     ) -> Result<FaucetReceipt, FaucetError> {
         info!(?recipient, uuid = ?id, "Getting faucet requests");
 
-        let (digest, coin_ids, sent_amounts) = self.transfer_gases(amounts, recipient, id).await?;
-        if coin_ids.len() != amounts.len() {
-            error!(
-                uuid = ?id, ?recipient,
-                "Requested {} coins but got {}",
-                amounts.len(),
-                coin_ids.len()
-            );
-        }
+        let (digest, coin_ids) = self.transfer_gases(amounts, recipient, id).await?;
 
         info!(uuid = ?id, ?recipient, ?digest, "PaySui txn succeeded");
-        Ok(FaucetReceipt {
-            sent: coin_ids
-                .iter()
-                .zip(sent_amounts)
-                .map(|(coin_id, sent_amount)| CoinInfo {
-                    transfer_tx_digest: digest,
-                    amount: sent_amount,
-                    id: *coin_id,
-                })
-                .collect(),
-        })
+        let mut sent = Vec::with_capacity(coin_ids.len());
+        let coin_results =
+            futures::future::join_all(coin_ids.iter().map(|coin_id| self.get_coin(*coin_id))).await;
+        for (coin_id, res) in coin_ids.into_iter().zip(coin_results) {
+            let amount = if let Ok(Some((_, coin))) = res {
+                coin.value()
+            } else {
+                info!(
+                    ?recipient,
+                    ?coin_id,
+                    uuid = ?id,
+                    "Could not find coin after successful transaction, error: {:?}",
+                    &res,
+                );
+                0
+            };
+            sent.push(CoinInfo {
+                transfer_tx_digest: digest,
+                amount,
+                id: coin_id,
+            });
+        }
+        Ok(FaucetReceipt { sent })
     }
 }
 
@@ -628,7 +634,6 @@ mod tests {
         .into_iter()
         .map(|res| res.unwrap())
         .collect::<Vec<_>>();
-
         // After all transfer requests settle, we still have the original candidates gas in queue.
         let available = faucet.metrics.total_available_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len()).await;

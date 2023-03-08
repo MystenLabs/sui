@@ -27,7 +27,7 @@ export type TabGroupProps = ExtractProps<typeof HeadlessTab.Group> & {
 export function TabGroup({ size, ...props }: TabGroupProps) {
     return (
         <TabSizeContext.Provider value={size}>
-            <HeadlessTab.Group {...props} />
+            <HeadlessTab.Group as="div" {...props} />
         </TabSizeContext.Provider>
     );
 }

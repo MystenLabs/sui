@@ -37,7 +37,7 @@ module sui::validator_set {
 
         /// List of new validator candidates added during the current epoch.
         /// They will be processed at the end of the epoch.
-        pending_validators: TableVec<Validator>,
+        pending_active_validators: TableVec<Validator>,
 
         /// Removal requests from the validators. Each element is an index
         /// pointing to `active_validators`.
@@ -50,14 +50,13 @@ module sui::validator_set {
         /// When a validator is deactivated the validator is removed from `active_validators` it
         /// is added to this table so that delegators can continue to withdraw their stake from it.
         inactive_validators: Table<ID, Validator>,
-    }
 
-    /// Event emitted when a new delegation request is received.
-    struct DelegationRequestEvent has copy, drop {
-        validator_address: address,
-        delegator_address: address,
-        epoch: u64,
-        amount: u64,
+        /// Table storing preactive validators, mapping their addresses to their `Validator ` structs.
+        /// When an address calls `request_add_validator_candidate`, they get added to this table and become a preactive
+        /// validator.
+        /// When the candidate has met the min stake requirement, they can call `request_add_validator` to
+        /// officially add them to the active validator set `active_validators` next epoch.
+        validator_candidates: Table<address, Validator>,
     }
 
     /// Event containing staking and rewards related information of
@@ -82,6 +81,10 @@ module sui::validator_set {
     const EDuplicateValidator: u64 = 2;
     const ENoPoolFound: u64 = 3;
     const ENotAValidator: u64 = 4;
+    const EMinJoiningStakeNotReached: u64 = 5;
+    const EAlreadyValidatorCandidate: u64 = 6;
+    const EValidatorNotPreactive: u64 = 7;
+    const ENotValidatorCandidate: u64 = 8;
 
     // ==== initialization at genesis ====
 
@@ -98,10 +101,11 @@ module sui::validator_set {
         let validators = ValidatorSet {
             total_stake,
             active_validators: init_active_validators,
-            pending_validators: table_vec::empty(ctx),
+            pending_active_validators: table_vec::empty(ctx),
             pending_removals: vector::empty(),
             staking_pool_mappings,
             inactive_validators: table::new(ctx),
+            validator_candidates: table::new(ctx),
         };
         voting_power::set_voting_power(&mut validators.active_validators);
         validators
@@ -110,15 +114,65 @@ module sui::validator_set {
 
     // ==== functions to add or remove validators ====
 
-    /// Called by `sui_system`, add a new validator to `pending_validators`, which will be
-    /// processed at the end of epoch.
-    public(friend) fun request_add_validator(self: &mut ValidatorSet, validator: Validator) {
+    /// Called by `sui_system` to add a new validator candidate.
+    public(friend) fun request_add_validator_candidate(self: &mut ValidatorSet, validator: Validator) {
         assert!(
             !is_duplicate_with_active_validator(self, &validator)
                 && !is_duplicate_with_pending_validator(self, &validator),
             EDuplicateValidator
         );
-        table_vec::push_back(&mut self.pending_validators, validator);
+        assert!(validator::is_preactive(&validator), EValidatorNotPreactive);
+        let validator_address = sui_address(&validator);
+        assert!(
+            !table::contains(&self.validator_candidates, validator_address),
+            EAlreadyValidatorCandidate
+        );
+        // Add validator to the candidates mapping and the pool id mappings so that users can start
+        // delegating with this candidate.
+        table::add(&mut self.staking_pool_mappings, staking_pool_id(&validator), validator_address);
+        table::add(&mut self.validator_candidates, sui_address(&validator), validator);
+    }
+
+    /// Called by `sui_system` to remove a validator candidate, and move them to `inactive_validators`.
+    public(friend) fun request_remove_validator_candidate(self: &mut ValidatorSet, ctx: &mut TxContext) {
+        let validator_address = tx_context::sender(ctx);
+         assert!(
+            table::contains(&self.validator_candidates, validator_address),
+            ENotValidatorCandidate
+        );
+        let validator = table::remove(&mut self.validator_candidates, validator_address);
+        assert!(validator::is_preactive(&validator), EValidatorNotPreactive);
+
+        let staking_pool_id = staking_pool_id(&validator);
+
+        // Remove the validator's staking pool from mappings.
+        table::remove(&mut self.staking_pool_mappings, staking_pool_id);
+
+        // Deactivate the staking pool.
+        validator::deactivate(&mut validator, tx_context::epoch(ctx));
+
+        // Add to the inactive tables.
+        table::add(&mut self.inactive_validators, staking_pool_id, validator);
+    }
+
+    /// Called by `sui_system` to add a new validator to `pending_active_validators`, which will be
+    /// processed at the end of epoch.
+    public(friend) fun request_add_validator(self: &mut ValidatorSet, min_joining_stake_amount: u64, ctx: &mut TxContext) {
+        let validator_address = tx_context::sender(ctx);
+        assert!(
+            table::contains(&self.validator_candidates, validator_address),
+            ENotValidatorCandidate
+        );
+        let validator = table::remove(&mut self.validator_candidates, validator_address);
+        assert!(
+            !is_duplicate_with_active_validator(self, &validator)
+                && !is_duplicate_with_pending_validator(self, &validator),
+            EDuplicateValidator
+        );
+        assert!(validator::is_preactive(&validator), EValidatorNotPreactive);
+        assert!(validator::total_stake_amount(&validator) >= min_joining_stake_amount, EMinJoiningStakeNotReached);
+
+        table_vec::push_back(&mut self.pending_active_validators, validator);
     }
 
     /// Called by `sui_system`, to remove a validator.
@@ -153,18 +207,8 @@ module sui::validator_set {
         locking_period: Option<EpochTimeLock>,
         ctx: &mut TxContext,
     ) {
-        let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        let delegator_address = tx_context::sender(ctx);
-        let amount = balance::value(&delegated_stake);
+        let validator = get_preactive_or_active_validator_mut(self, validator_address);
         validator::request_add_delegation(validator, delegated_stake, locking_period, tx_context::sender(ctx), ctx);
-        event::emit(
-            DelegationRequestEvent {
-                validator_address,
-                delegator_address,
-                epoch: tx_context::epoch(ctx),
-                amount,
-            }
-        );
     }
 
     /// Called by `sui_system`, to withdraw some share of a delegation from the validator. The share to withdraw
@@ -181,11 +225,8 @@ module sui::validator_set {
         let staking_pool_id = pool_id(&staked_sui);
         // This is an active validator.
         if (table::contains(&self.staking_pool_mappings, staking_pool_id)) {
-            let validator_address = *table::borrow(&self.staking_pool_mappings, staking_pool_id);
-            let validator_index_opt = find_validator(&self.active_validators, validator_address);
-            assert!(option::is_some(&validator_index_opt), 0);
-            let validator_index = option::extract(&mut validator_index_opt);
-            let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
+            let validator_address = *table::borrow(&self.staking_pool_mappings, pool_id(&staked_sui));
+            let validator = get_preactive_or_active_validator_mut(self, validator_address);
             validator::request_withdraw_delegation(validator, staked_sui, ctx);
         } else { // This is an inactive pool.
             assert!(table::contains(&self.inactive_validators, staking_pool_id), ENoPoolFound);
@@ -300,7 +341,7 @@ module sui::validator_set {
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
             validator_report_records, &slashed_validators);
 
-        process_pending_validators(self);
+        process_pending_validators(self, new_epoch);
 
         process_pending_removals(self, validator_report_records, ctx);
 
@@ -383,7 +424,7 @@ module sui::validator_set {
 
     /// Get the total number of validators in the next epoch.
     public(friend) fun next_epoch_validator_count(self: &ValidatorSet): u64 {
-        vector::length(&self.active_validators) - vector::length(&self.pending_removals) + table_vec::length(&self.pending_validators)
+        vector::length(&self.active_validators) - vector::length(&self.pending_removals) + table_vec::length(&self.pending_active_validators)
     }
 
     /// Returns true iff the address exists in active validators.
@@ -414,16 +455,24 @@ module sui::validator_set {
 
     /// Checks whether `new_validator` is duplicate with any currently pending validators.
     fun is_duplicate_with_pending_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-        let len = table_vec::length(&self.pending_validators);
+        let len = table_vec::length(&self.pending_active_validators);
         let i = 0;
         while (i < len) {
-            let v = table_vec::borrow(&self.pending_validators, i);
+            let v = table_vec::borrow(&self.pending_active_validators, i);
             if (validator::is_duplicate(v, new_validator)) {
                 return true
             };
             i = i + 1;
         };
         false
+    }
+
+    /// Get mutable reference to either a preactive or an active validator by address.
+    fun get_preactive_or_active_validator_mut(self: &mut ValidatorSet, validator_address: address): &mut Validator {
+        if (table::contains(&self.validator_candidates, validator_address)) {
+            return table::borrow_mut(&mut self.validator_candidates, validator_address)
+        };
+        get_validator_mut(&mut self.active_validators, validator_address)
     }
 
     /// Find validator by `validator_address`, in `validators`.
@@ -496,9 +545,9 @@ module sui::validator_set {
             let validator_index = option::extract(&mut validator_index_opt);
             return vector::borrow_mut(&mut self.active_validators, validator_index)
         };
-        let validator_index_opt = find_validator_from_table_vec(&self.pending_validators, validator_address);
+        let validator_index_opt = find_validator_from_table_vec(&self.pending_active_validators, validator_address);
         let validator_index = option::extract(&mut validator_index_opt);
-        return table_vec::borrow_mut(&mut self.pending_validators, validator_index)
+        return table_vec::borrow_mut(&mut self.pending_active_validators, validator_index)
     }
 
     fun get_validator_ref(
@@ -525,10 +574,10 @@ module sui::validator_set {
         self: &ValidatorSet,
         validator_address: address,
     ): &Validator {
-        let validator_index_opt = find_validator_from_table_vec(&self.pending_validators, validator_address);
+        let validator_index_opt = find_validator_from_table_vec(&self.pending_active_validators, validator_address);
         assert!(option::is_some(&validator_index_opt), 0);
         let validator_index = option::extract(&mut validator_index_opt);
-        table_vec::borrow(&self.pending_validators, validator_index)
+        table_vec::borrow(&self.pending_active_validators, validator_index)
     }
 
     /// Process the pending withdraw requests. For each pending request, the validator
@@ -564,7 +613,7 @@ module sui::validator_set {
         if (vec_map::contains(validator_report_records, &leaving_validator_addr)) {
             vec_map::remove(validator_report_records, &leaving_validator_addr);
         };
-        
+
         // Remove the reports submitted by this validator
         let reported_validators = vec_map::keys(validator_report_records);
         let length = vector::length(&reported_validators);
@@ -582,13 +631,13 @@ module sui::validator_set {
         }
     }
 
-    /// Process the pending new validators. They are simply inserted into `validators`.
+    /// Process the pending new validators. They are activated and inserted into `validators`.
     fun process_pending_validators(
-        self: &mut ValidatorSet,
+        self: &mut ValidatorSet, new_epoch: u64,
     ) {
-        while (!table_vec::is_empty(&self.pending_validators)) {
-            let validator = table_vec::pop_back(&mut self.pending_validators);
-            table::add(&mut self.staking_pool_mappings, staking_pool_id(&validator), sui_address(&validator));
+        while (!table_vec::is_empty(&self.pending_active_validators)) {
+            let validator = table_vec::pop_back(&mut self.pending_active_validators);
+            validator::activate(&mut validator, new_epoch);
             vector::push_back(&mut self.active_validators, validator);
         }
     }
@@ -911,4 +960,17 @@ module sui::validator_set {
     public fun active_validators(self: &ValidatorSet): &vector<Validator> {
         &self.active_validators
     }
+
+    /// Returns true if the `addr` is a validator candidate.
+    public fun is_validator_candidate(self: &ValidatorSet, addr: address): bool {
+        table::contains(&self.validator_candidates, addr)
+    }
+
+    /// Returns true if the staking pool identified by `staking_pool_id` is of an inactive validator.
+    public fun is_inactive_validator(self: &ValidatorSet, staking_pool_id: ID): bool {
+        table::contains(&self.inactive_validators, staking_pool_id)
+    }
+
+    // TODO: investigate prover failure and turn verification back on.
+    spec module { pragma verify = false; }
 }

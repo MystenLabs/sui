@@ -22,7 +22,7 @@ use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
     VerifiedTransaction,
 };
-use sui_types::object::Object;
+use sui_types::object::{generate_test_gas_objects_with_owner, Object};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -353,23 +353,29 @@ async fn test_reconfig_with_committee_change_basic() {
         new_validator.protocol_key.concise()
     );
 
-    let sender = new_node_config.sui_address();
-    let gas = Object::with_owner_for_testing(sender);
-    let stake = Object::with_owner_for_testing(sender);
+    let new_validator_address = new_node_config.sui_address();
+    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
+    let stake = Object::new_gas_with_balance_and_owner_for_testing(
+        25_000_000_000_000_000,
+        new_validator_address,
+    );
+    let mut genesis_objects = gas_objects.clone();
+    genesis_objects.push(stake.clone());
 
     let mut authorities =
-        spawn_test_authorities([gas.clone(), stake.clone()].into_iter(), &init_configs).await;
+        spawn_test_authorities(genesis_objects.clone().into_iter(), &init_configs).await;
 
     let proof_of_possession =
-        generate_proof_of_possession(new_node_config.protocol_key_pair(), sender);
+        generate_proof_of_possession(new_node_config.protocol_key_pair(), new_validator_address);
 
-    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
-        sender,
+    // Step 1: Add the new node as a validator candidate.
+    let candidate_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        new_validator_address,
         SUI_FRAMEWORK_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
-        ident_str!("request_add_validator").to_owned(),
+        ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
-        gas.compute_object_reference(),
+        gas_objects[0].compute_object_reference(),
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -392,15 +398,63 @@ async fn test_reconfig_with_committee_change_basic() {
                 bcs::to_bytes(&new_validator.narwhal_primary_address().to_vec()).unwrap(),
             ),
             CallArg::Pure(bcs::to_bytes(&new_validator.narwhal_worker_address().to_vec()).unwrap()),
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(
-                stake.compute_object_reference(),
-            )),
             CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
         10000,
     );
-    let transaction = to_sender_signed_transaction(tx_data, new_node_config.account_key_pair());
+    let transaction =
+        to_sender_signed_transaction(candidate_tx_data, new_node_config.account_key_pair());
+    let effects = execute_transaction(&authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    // Step 2: Give the candidate enough stake.
+    let delegation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        new_validator_address,
+        SUI_FRAMEWORK_OBJECT_ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_add_delegation").to_owned(),
+        vec![],
+        gas_objects[1].compute_object_reference(),
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            }),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                stake.compute_object_reference(),
+            )),
+            CallArg::Pure(bcs::to_bytes(&new_validator_address).unwrap()),
+        ],
+        10000,
+    );
+    let transaction =
+        to_sender_signed_transaction(delegation_tx_data, new_node_config.account_key_pair());
+    let effects = execute_transaction(&authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    // Step 3: Convert the candidate to an active valdiator.
+    let activation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        new_validator_address,
+        SUI_FRAMEWORK_OBJECT_ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_add_validator").to_owned(),
+        vec![],
+        gas_objects[2].compute_object_reference(),
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_SYSTEM_STATE_OBJECT_ID,
+            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            mutable: true,
+        })],
+        10000,
+    );
+    let transaction =
+        to_sender_signed_transaction(activation_tx_data, new_node_config.account_key_pair());
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
@@ -429,8 +483,7 @@ async fn test_reconfig_with_committee_change_basic() {
     // We have to manually insert the genesis objects since the test utility doesn't.
     handle
         .with_async(|node| async {
-            node.state().insert_genesis_object(stake.clone()).await;
-            node.state().insert_genesis_object(gas.clone()).await;
+            node.state().insert_genesis_objects(&genesis_objects).await;
             // When the node started, it's not part of the committee, and hence a fullnode.
             assert!(node
                 .state()
@@ -451,14 +504,13 @@ async fn test_reconfig_with_committee_change_basic() {
             .is_validator(&node.state().epoch_store_for_testing()));
     });
 
-    let gas = authorities[0].with(|node| node.state().db().get_object(&gas.id()).unwrap().unwrap());
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
-        sender,
+        new_validator_address,
         SUI_FRAMEWORK_OBJECT_ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],
-        gas.compute_object_reference(),
+        gas_objects[3].compute_object_reference(),
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: SUI_SYSTEM_STATE_OBJECT_ID,
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,

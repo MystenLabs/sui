@@ -10,7 +10,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadata;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
 
 pub fn validate_metadata_bcs(
     _context: &mut NativeContext,
@@ -21,7 +21,7 @@ pub fn validate_metadata_bcs(
     debug_assert!(args.len() == 1);
     let metadata_bytes = pop_arg!(args, Vec<u8>);
     let validator_metadata =
-        bcs::from_bytes::<ValidatorMetadata>(&metadata_bytes).map_err(|_| {
+        bcs::from_bytes::<ValidatorMetadataV1>(&metadata_bytes).map_err(|_| {
             PartialVMError::new(StatusCode::MALFORMED).with_message(
                 "ValidateMetadata Move struct does not much internal ValidateMetadata struct"
                     .to_string(),

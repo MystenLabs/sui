@@ -45,18 +45,15 @@ import {
   SuiObjectResponse,
   GetOwnedObjectsResponse,
   DelegatedStake,
-  ValidatorMetaData,
-  SuiSystemState,
   CoinBalance,
   CoinSupply,
-  CheckpointSummary,
-  CheckpointContents,
   CheckpointDigest,
   Checkpoint,
-  CheckPointContentsDigest,
   CommitteeInfo,
   DryRunTransactionResponse,
   SuiObjectDataOptions,
+  SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -187,108 +184,133 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Coins
-  async getCoins(
-    owner: SuiAddress,
-    coinType: string | null = null,
-    cursor: ObjectId | null = null,
-    limit: number | null = null,
-  ): Promise<PaginatedCoins> {
+  async getCoins(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
+
       return await this.client.requestWithType(
         'sui_getCoins',
-        [owner, coinType, cursor, limit],
+        {
+          owner: input.owner,
+          coin_type: input.coinType,
+          cursor: input.cursor,
+          limit: input.limit,
+        },
         PaginatedCoins,
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error getting coins for owner ${owner}: ${err}`);
+      throw new Error(`Error getting coins for owner ${input.owner}: ${err}`);
     }
   }
 
-  async getAllCoins(
-    owner: SuiAddress,
-    cursor: ObjectId | null = null,
-    limit: number | null = null,
-  ): Promise<PaginatedCoins> {
+  async getAllCoins(input: {
+    owner: SuiAddress;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
+
       return await this.client.requestWithType(
         'sui_getAllCoins',
-        [owner, cursor, limit],
+        { owner: input.owner, cursor: input.cursor, limit: input.limit },
         PaginatedCoins,
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error getting all coins for owner ${owner}: ${err}`);
+      throw new Error(
+        `Error getting all coins for owner ${input.owner}: ${err}`,
+      );
     }
   }
 
-  async getBalance(
-    owner: SuiAddress,
-    coinType: string | null = null,
-  ): Promise<CoinBalance> {
+  async getBalance(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+  }): Promise<CoinBalance> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
       return await this.client.requestWithType(
         'sui_getBalance',
-        [owner, coinType],
+        { owner: input.owner, coin_type: input.coinType },
         CoinBalance,
         this.options.skipDataValidation,
       );
     } catch (err) {
       throw new Error(
-        `Error getting balance for coin type ${coinType} for owner ${owner}: ${err}`,
+        `Error getting balance for coin type ${input.coinType} for owner ${input.owner}: ${err}`,
       );
     }
   }
 
-  async getAllBalances(owner: SuiAddress): Promise<CoinBalance[]> {
+  async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
       return await this.client.requestWithType(
         'sui_getAllBalances',
-        [owner],
+        { owner: input.owner },
         array(CoinBalance),
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error getting all balances for owner ${owner}: ${err}`);
+      throw new Error(
+        `Error getting all balances for owner ${input.owner}: ${err}`,
+      );
     }
   }
 
-  async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
+  async getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata> {
     try {
       return await this.client.requestWithType(
         'sui_getCoinMetadata',
-        [coinType],
+        { coin_type: input.coinType },
         CoinMetadataStruct,
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error fetching CoinMetadata for ${coinType}: ${err}`);
+      throw new Error(
+        `Error fetching CoinMetadata for ${input.coinType}: ${err}`,
+      );
     }
   }
 
-  async getTotalSupply(coinType: string): Promise<CoinSupply> {
+  async getTotalSupply(input: { coinType: string }): Promise<CoinSupply> {
     try {
       return await this.client.requestWithType(
         'sui_getTotalSupply',
-        [coinType],
+        { coin_type: input.coinType },
         CoinSupply,
         this.options.skipDataValidation,
       );
     } catch (err) {
       throw new Error(
-        `Error fetching total supply for Coin type ${coinType}: ${err}`,
+        `Error fetching total supply for Coin type ${input.coinType}: ${err}`,
       );
     }
   }
@@ -429,27 +451,21 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getGasObjectsOwnedByAddress(
-    address: SuiAddress,
-  ): Promise<SuiObjectInfo[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     address: SuiAddress,
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
-    const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coins,
+  ): Promise<CoinStruct[]> {
+    const coinsStruct = await this.getCoins({
+      owner: address,
+      coinType: typeArg,
+    });
+    return Coin.selectCoinsWithBalanceGreaterThanOrEqual(
+      coinsStruct.data,
       amount,
       exclude,
-    )) as SuiObjectResponse[];
+    );
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -457,15 +473,18 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
-    const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+  ): Promise<CoinStruct[]> {
+    const coinsStruct = await this.getCoins({
+      owner: address,
+      coinType: typeArg,
+    });
+    const coins = coinsStruct.data;
+
+    return Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,
       exclude,
-    )) as SuiObjectResponse[];
+    );
   }
 
   async getObject(
@@ -732,31 +751,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getValidators(): Promise<ValidatorMetaData[]> {
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
     try {
       const resp = await this.client.requestWithType(
-        'sui_getValidators',
+        'sui_getLatestSuiSystemState',
         [],
-        array(ValidatorMetaData),
+        SuiSystemStateSummary,
         this.options.skipDataValidation,
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error in getValidators: ${err}`);
-    }
-  }
-
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getSuiSystemState',
-        [],
-        SuiSystemState,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getSuiSystemState: ${err}`);
+      throw new Error(`Error in getLatestSuiSystemState: ${err}`);
     }
   }
 
@@ -906,78 +911,6 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error fetching latest checkpoint sequence number: ${err}`,
-      );
-    }
-  }
-
-  async getCheckpointSummary(
-    sequence_number: number,
-  ): Promise<CheckpointSummary> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointSummary',
-        [sequence_number],
-        CheckpointSummary,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint summary with request type: ${err} for sequence number: ${sequence_number}.`,
-      );
-    }
-  }
-
-  async getCheckpointSummaryByDigest(
-    digest: CheckpointDigest,
-  ): Promise<CheckpointSummary> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointSummaryByDigest',
-        [digest],
-        CheckpointSummary,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`,
-      );
-    }
-  }
-
-  async getCheckpointContents(
-    sequence_number: number | CheckPointContentsDigest,
-  ): Promise<CheckpointContents> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointContents',
-        [sequence_number],
-        CheckpointContents,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint contents with request type: ${err} for sequence number: ${sequence_number}.`,
-      );
-    }
-  }
-
-  async getCheckpointContentsByDigest(
-    digest: CheckPointContentsDigest,
-  ): Promise<CheckpointContents> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointContentsByDigest',
-        [digest],
-        CheckpointContents,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`,
       );
     }
   }

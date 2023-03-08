@@ -812,6 +812,16 @@ pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> 
     (0..count)
         .map(|_i| {
             let gas_object_id = ObjectID::random();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, GAS_VALUE_FOR_TESTING)
+        })
+        .collect()
+}
+
+/// Make a few test gas objects (all with the same owner) with max u64 balance.
+pub fn generate_max_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
             Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
         })
         .collect()

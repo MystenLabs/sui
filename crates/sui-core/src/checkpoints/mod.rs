@@ -15,13 +15,11 @@ pub use crate::checkpoints::checkpoint_output::{
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
 use crate::state_accumulator::StateAccumulator;
-use fastcrypto::hash::MultisetHash;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use sui_types::accumulator::Accumulator;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
@@ -573,6 +571,9 @@ impl CheckpointBuilder {
             .zip(signatures.into_iter())
         {
             // Roll over to a new chunk after either max count or max size is reached.
+            // The size calculation here is intended to estimate the size of the
+            // FullCheckpointContents struct. If this code is modified, that struct
+            // should also be updated accordingly.
             let size = transaction_size
                 + bcs::serialized_size(&effects)?
                 + bcs::serialized_size(&signatures)?;
@@ -731,15 +732,15 @@ impl CheckpointBuilder {
                     .await?;
 
                 let committee = system_state_obj.get_current_epoch_committee().committee;
-                let root_state_digest = Some(
-                    self.accumulator
-                        .digest_epoch(&epoch, sequence_number, self.epoch_store.clone())
-                        .in_monitored_scope("CheckpointBuilder::digest_epoch")
-                        .await?,
-                );
+                let root_state_digest = self
+                    .accumulator
+                    .digest_epoch(&epoch, sequence_number, self.epoch_store.clone())
+                    .in_monitored_scope("CheckpointBuilder::digest_epoch")
+                    .await?;
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
 
-                // for now, just log this value, and insert default val into checkpoint summary
+                // for now, just log this value. Later it must be included in
+                // EndOfEpochData::epoch_commitments
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
                 Some(EndOfEpochData {
@@ -747,7 +748,12 @@ impl CheckpointBuilder {
                     next_epoch_protocol_version: ProtocolVersion::new(
                         system_state_obj.protocol_version(),
                     ),
-                    root_state_digest: Accumulator::default().digest(),
+                    // TODO: This should become
+                    //
+                    //   epoch_commitments: vec![root_state_digest.into()]
+                    //
+                    // When the accumulator is deemed stable.
+                    epoch_commitments: vec![],
                 })
             } else {
                 None

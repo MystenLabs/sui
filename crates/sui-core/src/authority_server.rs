@@ -495,10 +495,10 @@ impl Validator for ValidatorService {
         &self,
         _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemStateInnerBenchmark>, tonic::Status> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let response = epoch_store
-            .system_state_object()
-            .clone()
+        let response = self
+            .state
+            .database
+            .get_sui_system_state_object()?
             .into_benchmark_version();
 
         return Ok(tonic::Response::new(response));

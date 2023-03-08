@@ -40,6 +40,13 @@ export const ChangeEpoch: StoryObj<PageHeaderProps> = {
     },
 };
 
+export const Checkpoint: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Checkpoint',
+    },
+};
+
 export const Object: StoryObj<PageHeaderProps> = {
     args: {
         title,

@@ -6,6 +6,7 @@ import {
     toB64,
     type SignedTransaction,
     type ExportedKeypair,
+    type SignedMessage,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -96,8 +97,8 @@ export class BackgroundClient {
     public sendTransactionRequestResponse(
         txID: string,
         approved: boolean,
-        txResult?: SuiTransactionResponse,
-        tsResultError?: string,
+        txResult?: SuiTransactionResponse | SignedMessage,
+        txResultError?: string,
         txSigned?: SignedTransaction
     ) {
         this.sendMessage(
@@ -106,7 +107,7 @@ export class BackgroundClient {
                 approved,
                 txID,
                 txResult,
-                tsResultError,
+                txResultError,
                 txSigned,
             })
         );

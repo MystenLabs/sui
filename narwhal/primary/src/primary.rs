@@ -459,7 +459,7 @@ impl Primary {
             header_store.clone(),
             certificate_store.clone(),
             synchronizer.clone(),
-            signature_service.clone(),
+            signature_service,
             rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_shutdown.subscribe(),
@@ -488,7 +488,6 @@ impl Primary {
         let proposer_handle = Proposer::spawn(
             name.clone(),
             committee.clone(),
-            signature_service,
             proposer_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
@@ -692,7 +691,7 @@ impl PrimaryReceiverHandler {
 
         let header = &request.body().header;
         let committee = self.committee.clone();
-        header.verify(&committee, self.worker_cache.clone())?;
+        header.validate(&committee, &self.worker_cache)?;
 
         // Vote request must come from the Header's author.
         let peer_id = request

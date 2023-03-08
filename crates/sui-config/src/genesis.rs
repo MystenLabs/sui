@@ -773,6 +773,7 @@ fn create_genesis_checkpoint(
         end_of_epoch_data: None,
         timestamp_ms: parameters.timestamp_ms,
         version_specific_data: Vec::new(),
+        checkpoint_commitments: Default::default(),
     };
 
     (checkpoint, contents)

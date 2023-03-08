@@ -44,7 +44,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let store = make_consensus_store(&store_path);
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics.clone());
+        let mut state = ConsensusState::new(metrics.clone(), &committee);
 
         let data_size: usize = certificates
             .iter()

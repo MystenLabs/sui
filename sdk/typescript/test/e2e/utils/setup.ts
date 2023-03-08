@@ -12,6 +12,7 @@ import {
   fromB64,
   localnetConnection,
   Connection,
+  Coin,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -39,8 +40,16 @@ export class TestToolbox {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
+  async getGasObjectsOwnedByAddress() {
+    const objects = await this.provider.getObjectsOwnedByAddress(
+      this.address(),
+    );
+
+    return objects.filter((obj) => Coin.isSUI(obj));
+  }
+
   public async getActiveValidators() {
-    return this.provider.getValidators();
+    return (await this.provider.getLatestSuiSystemState()).active_validators;
   }
 }
 
@@ -74,7 +83,6 @@ export async function setup() {
 
 export async function publishPackage(
   signer: RawSigner,
-  useLocalTxnBuilder: boolean,
   packagePath: string,
 ): Promise<ObjectId> {
   const { execSync } = require('child_process');
@@ -90,11 +98,12 @@ export async function publishPackage(
       { encoding: 'utf-8' },
     ),
   );
-  const publishTxn = await signer.publish({
-    compiledModules: useLocalTxnBuilder
-      ? compiledModules.map((m: any) => Array.from(fromB64(m)))
-      : compiledModules,
-    gasBudget: DEFAULT_GAS_BUDGET,
+  const publishTxn = await signer.signAndExecuteTransaction({
+    kind: 'publish',
+    data: {
+      compiledModules: compiledModules.map((m: any) => Array.from(fromB64(m))),
+      gasBudget: DEFAULT_GAS_BUDGET,
+    },
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 

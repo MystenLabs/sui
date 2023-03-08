@@ -43,8 +43,8 @@ export function SelectValidatorCard() {
 
     const totalStake = useMemo(() => {
         if (!data) return 0;
-        return data.validators.active_validators.reduce(
-            (acc, curr) => (acc += BigInt(curr.staking_pool.sui_balance)),
+        return data.active_validators.reduce(
+            (acc, curr) => (acc += BigInt(curr.staking_pool_sui_balance)),
             0n
         );
     }, [data]);
@@ -52,16 +52,16 @@ export function SelectValidatorCard() {
     const validatorList = useMemo(() => {
         if (!data) return [];
 
-        const sortedAsc = data.validators.active_validators
+        const sortedAsc = data.active_validators
             .map((validator) => ({
-                name: validator.metadata.name,
-                address: validator.metadata.sui_address,
+                name: validator.name,
+                address: validator.sui_address,
                 apy: calculateAPY(validator, +data.epoch),
                 stakeShare: calculateStakeShare(
-                    BigInt(validator.staking_pool.sui_balance),
+                    BigInt(validator.staking_pool_sui_balance),
                     BigInt(totalStake)
                 ),
-                logo: validator.metadata.image_url,
+                logo: validator.image_url,
             }))
             .sort((a, b) => {
                 if (sortKey === 'name') {
