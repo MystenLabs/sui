@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { getMoveEvent, SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '_app/staking/calculateAPY';
@@ -36,9 +36,7 @@ export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
                 event.content.type === REQUEST_DELEGATION_EVENT
         );
         if (!event) return null;
-        const { moveEvent } = event.content as unknown as {
-            moveEvent: MoveEvent;
-        };
+        const moveEvent = getMoveEvent(event);
         return moveEvent;
     }, [events]);
 

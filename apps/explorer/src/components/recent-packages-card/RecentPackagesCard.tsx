@@ -6,10 +6,14 @@ import { useMemo } from 'react';
 
 import { TxTimeType } from '../tx-time/TxTimeType';
 
-import type {
+import {
     SuiEventEnvelope,
     PaginatedEvents,
     SuiEvents,
+    getPublishEvent,
+    getEventSender,
+    getEventPackage,
+    isEventType,
 } from '@mysten/sui.js';
 
 import { Banner } from '~/ui/Banner';
@@ -52,11 +56,11 @@ const transformTable = (events: SuiEvents) => ({
             timestamp,
             txDigest,
         }: SuiEventEnvelope): PackageTableData => {
-            if (!(event.type === 'publish')) return {};
+            if (!isEventType(event, 'publish')) return {};
             return {
                 time: <TxTimeType timestamp={timestamp} />,
-                sender: <AddressLink address={event.content.sender} />,
-                packageId: <ObjectLink objectId={event.content.packageId} />,
+                sender: <AddressLink address={getEventSender(event)!} />,
+                packageId: <ObjectLink objectId={getEventPackage(event)!} />,
                 txnDigest: <TransactionLink digest={txDigest} />,
             };
         }

@@ -361,55 +361,53 @@ export function getTransactionGasBudget(tx: SuiTransactionResponse): number {
 export function getTransferObjectTransaction(
   data: SuiTransactionKind,
 ): TransferObject | undefined {
-  return data.type === 'TransferObject' ? (data as TransferObject) : undefined;
+  return data.type === 'TransferObject' ? data : undefined;
 }
 
 export function getPublishTransaction(
   data: SuiTransactionKind,
 ): SuiMovePackage | undefined {
-  return data.type === 'Publish' ? (data as SuiMovePackage) : undefined;
+  return data.type === 'Publish' ? data : undefined;
 }
 
 export function getMoveCallTransaction(
   data: SuiTransactionKind,
 ): MoveCall | undefined {
-  return data.type === 'Call' ? (data as MoveCall) : undefined;
+  return data.type === 'Call' ? data : undefined;
 }
 
 export function getTransferSuiTransaction(
   data: SuiTransactionKind,
 ): SuiTransferSui | undefined {
-  return data.type === 'TransferSui' ? (data as SuiTransferSui) : undefined;
+  return data.type === 'TransferSui' ? data : undefined;
 }
 
 export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
-  return data.type === 'Pay' ? (data as Pay) : undefined;
+  return data.type === 'Pay' ? data : undefined;
 }
 
 export function getPaySuiTransaction(
   data: SuiTransactionKind,
 ): PaySui | undefined {
-  return data.type === 'PaySui' ? (data as PaySui) : undefined;
+  return data.type === 'PaySui' ? data : undefined;
 }
 
 export function getPayAllSuiTransaction(
   data: SuiTransactionKind,
 ): PayAllSui | undefined {
-  return data.type === 'PayAllSui' ? (data as PayAllSui) : undefined;
+  return data.type === 'PayAllSui' ? data : undefined;
 }
 
 export function getChangeEpochTransaction(
   data: SuiTransactionKind,
 ): SuiChangeEpoch | undefined {
-  return data.type === 'ChangeEpoch' ? (data as SuiChangeEpoch) : undefined;
+  return data.type === 'ChangeEpoch' ? data : undefined;
 }
 
 export function getConsensusCommitPrologueTransaction(
   data: SuiTransactionKind,
 ): SuiConsensusCommitPrologue | undefined {
-  return data.type === 'ConsensusCommitPrologue'
-    ? (data as SuiConsensusCommitPrologue)
-    : undefined;
+  return data.type === 'ConsensusCommitPrologue' ? data : undefined;
 }
 
 export function getTransactions(
@@ -433,9 +431,7 @@ export function getTransactionKindName(
 export function getProgrammableTransaction(
   data: SuiTransactionKind,
 ): ProgrammableTransaction | undefined {
-  return data.type === 'ProgrammableTransaction'
-    ? (data as ProgrammableTransaction)
-    : undefined;
+  return data.type === 'ProgrammableTransaction' ? data : undefined;
 }
 
 /* ----------------------------- ExecutionStatus ---------------------------- */

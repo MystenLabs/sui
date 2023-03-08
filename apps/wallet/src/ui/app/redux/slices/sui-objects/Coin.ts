@@ -7,6 +7,8 @@ import {
     getTransactionEffects,
     SUI_SYSTEM_STATE_OBJECT_ID,
     getObjectType,
+    getCoinBalanceChangeEvent,
+    isEventType,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 
@@ -202,18 +204,24 @@ export class Coin {
             }
 
             const changeEvent = events.find((event) => {
-                if (event.type === 'coinBalanceChange') {
-                    return event.content.amount === Number(amount);
+                if (isEventType(event, 'coinBalanceChange')) {
+                    return (
+                        getCoinBalanceChangeEvent(event)!.amount ===
+                        Number(amount)
+                    );
                 }
 
                 return false;
             });
 
-            if (!changeEvent || !(changeEvent.type === 'coinBalanceChange')) {
+            if (
+                !changeEvent ||
+                !isEventType(changeEvent, 'coinBalanceChange')
+            ) {
                 throw new Error('Missing coin balance event');
             }
 
-            return changeEvent.content.coinObjectId;
+            return getCoinBalanceChangeEvent(changeEvent)!.coinObjectId;
         } finally {
             span.finish();
         }

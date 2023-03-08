@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionEvents } from '@mysten/sui.js';
+import {
+    getCoinBalanceChangeEvent,
+    getTransferObjectEvent,
+    isEventType,
+    TransactionEvents,
+} from '@mysten/sui.js';
 
 export type CoinsMetaProps = {
     amount: number;
@@ -31,8 +36,8 @@ export function getEventsSummary(
             ['Receive', 'Pay'].includes(event?.content?.changeType) &&
             event?.content?.transactionModule !== 'gas'
         ) {
-            const { content } = event;
-            const { coinType, amount, owner, sender } = content;
+            const coinBalanceChange = getCoinBalanceChangeEvent(event)!;
+            const { coinType, amount, owner, sender } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
 
             // ChangeEpoch txn includes coinBalanceChange event for other addresses
@@ -48,13 +53,13 @@ export function getEventsSummary(
         }
 
         // return objectIDs of the transfer objects
-        if (event.type === 'transferObject') {
-            const { content } = event;
-            const { AddressOwner } = content.recipient as {
+        if (isEventType(event, 'transferObject')) {
+            const transferObject = getTransferObjectEvent(event)!;
+            const { AddressOwner } = transferObject.recipient as {
                 AddressOwner: string;
             };
             if (AddressOwner === address) {
-                objectIDs.push(content?.objectId);
+                objectIDs.push(transferObject?.objectId);
             }
         }
     });

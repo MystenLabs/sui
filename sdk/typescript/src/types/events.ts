@@ -211,50 +211,78 @@ export type SubscriptionEvent = Infer<typeof SubscriptionEvent>;
 
 /* ------------------------------- EventData ------------------------------ */
 
-export function getMoveEvent(data: SuiEvent): MoveEvent | undefined {
-  return data.type === 'moveEvent' ? data.content : undefined;
+export function getMoveEvent(event: SuiEvent): MoveEvent | undefined {
+  return event.type === 'moveEvent' ? event.content : undefined;
 }
 
-export function getPublishEvent(data: SuiEvent): PublishEvent | undefined {
-  return data.type === 'publish' ? data.content : undefined;
+export function getPublishEvent(event: SuiEvent): PublishEvent | undefined {
+  return event.type === 'publish' ? event.content : undefined;
 }
 
 export function getCoinBalanceChangeEvent(
-  data: SuiEvent,
+  event: SuiEvent,
 ): CoinBalanceChangeEvent | undefined {
-  return data.type === 'coinBalanceChange' ? data.content : undefined;
+  return event.type === 'coinBalanceChange' ? event.content : undefined;
 }
 
 export function getTransferObjectEvent(
-  data: SuiEvent,
+  event: SuiEvent,
 ): TransferObjectEvent | undefined {
-  return data.type === 'transferObject' ? data.content : undefined;
+  return event.type === 'transferObject' ? event.content : undefined;
 }
 
 export function getMutateObjectEvent(
-  data: SuiEvent,
+  event: SuiEvent,
 ): MutateObjectEvent | undefined {
-  return data.type === 'mutateObject' ? data.content : undefined;
+  return event.type === 'mutateObject' ? event.content : undefined;
 }
 
 export function getDeletObjectEvent(
-  data: SuiEvent,
+  event: SuiEvent,
 ): DeleteObjectEvent | undefined {
-  return data.type === 'deleteObject' ? data.content : undefined;
+  return event.type === 'deleteObject' ? event.content : undefined;
 }
 
-export function getNewObjectEvent(data: SuiEvent): NewObjectEvent | undefined {
-  return data.type === 'newObject' ? data.content : undefined;
+export function getNewObjectEvent(event: SuiEvent): NewObjectEvent | undefined {
+  return event.type === 'newObject' ? event.content : undefined;
 }
 
 export function getEpochChangeEvent(
-  data: SuiEvent,
+  event: SuiEvent,
 ): EpochChangeEvent | undefined {
-  return data.type === 'epochChange' ? data.content : undefined;
+  return event.type === 'epochChange' ? event.content : undefined;
 }
 
 export function getCheckpointEvent(
-  data: SuiEvent,
+  event: SuiEvent,
 ): CheckpointEvent | undefined {
-  return data.type === 'checkpoint' ? data.content : undefined;
+  return event.type === 'checkpoint' ? event.content : undefined;
+}
+
+export function getEventSender(event: SuiEvent): SuiAddress | undefined {
+  return event.type !== 'epochChange' && event.type !== 'checkpoint'
+    ? event.content.sender
+    : undefined;
+}
+
+export function getEventPackage(event: SuiEvent): ObjectId | undefined {
+  return event.type !== 'epochChange' && event.type !== 'checkpoint'
+    ? event.content.packageId
+    : undefined;
+}
+
+export function isEventType(
+  e: SuiEvent,
+  type:
+    | 'moveEvent'
+    | 'publish'
+    | 'transferObject'
+    | 'mutateObject'
+    | 'coinBalanceChange'
+    | 'deleteObject'
+    | 'newObject'
+    | 'epochChange'
+    | 'checkpoint',
+): boolean {
+  return e.type === type ? true : false;
 }

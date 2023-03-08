@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Validator, type SuiEventEnvelope } from '@mysten/sui.js';
+import { type Validator, type SuiEventEnvelope, getMoveEvent, isEventType } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -200,9 +200,9 @@ function ValidatorPageResult() {
         let totalRewards = 0;
 
         validatorEvents.data.forEach(({ event }) => {
-            if (event.type === 'moveEvent') {
-                const { content } = event;
-                totalRewards += +content.fields.stake_rewards;
+            if (isEventType(event, 'moveEvent')) {
+                const moveEvent = getMoveEvent(event)!;
+                totalRewards += +moveEvent.fields.stake_rewards;
             }
         });
 
