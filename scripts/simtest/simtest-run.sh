@@ -2,8 +2,9 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
+# NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=$(sysctl -n hw.ncpu) # mac
+NUM_CPUS=64 # We can increase this later if needed
 
 # filter out some tests that give spurious failures.
 TEST_FILTER="(not test(test_move_call_args_linter_command)) & (not test(test_package_publish_command))"
