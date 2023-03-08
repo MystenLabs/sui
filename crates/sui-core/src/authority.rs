@@ -28,6 +28,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_json_rpc_types::Checkpoint;
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
 use sui_types::intent::Intent;
@@ -2268,10 +2269,8 @@ impl AuthorityState {
 
     pub fn get_checkpoints(
         &self,
-        cursor: Option<usize>,
-        limit: usize,
         reverse: bool,
-    ) -> Result<(Vec<VerifiedCheckpoint>, Option<usize>), anyhow::Error> {
+    ) -> Result<Vec<Checkpoint>, anyhow::Error> {
         let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
 
         let values = (0..=max_checkpoint).collect::<Vec<_>>();
@@ -2281,37 +2280,31 @@ impl AuthorityState {
             checkpoint_numbers.reverse();
         }
 
-        let checkpoints = self.get_checkpoint_store()
+        let verified_checkpoints = self
+            .get_checkpoint_store()
             .multi_get_checkpoint_by_sequence_number(checkpoint_numbers.as_slice())?;
 
-        let checks: Vec<VerifiedCheckpoint> = checkpoints.into_iter().flatten().collect();
+        let checks: Vec<VerifiedCheckpoint> = verified_checkpoints.into_iter().flatten().collect();
+        let checkpoint_summaries: Vec<CheckpointSummary> = checks
+            .clone()
+            .into_iter()
+            .map(|check| check.into_summary_and_sequence().1)
+            .collect();
 
-        let start_index = match cursor {
-            Some(cursor) => cursor,
-            None => 0,
-        };
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries.iter().map(|chsummary| chsummary.content_digest).collect();
 
-        let remaining_data = &checks[start_index..];
+        let checkpoint_contents = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
+        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
 
-        let current_page: Option<Vec<VerifiedCheckpoint>>;
+        let mut checkpoints: Vec<Checkpoint> = vec![];
 
-        if remaining_data.is_empty() {
-            current_page = None;
+        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
+            checkpoints.push(Checkpoint::from((summary, content)));
         }
 
-        let end_index = std::cmp::min(start_index + limit, checks.len());
-        let current_page = &checks[start_index..end_index].to_vec();
-
-        let next_cursor = if end_index < checks.len() {
-            Some(end_index)
-        } else {
-            None
-        };
-
-        match current_page {
-            current_page => Ok((current_page.to_vec(), next_cursor)),
-            _ => Err(anyhow!("No checkpoints"))
-        }
+        Ok(checkpoints)
     }
 
     fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {

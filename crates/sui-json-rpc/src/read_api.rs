@@ -20,11 +20,12 @@ use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage, CheckpointPage,
+    Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
+    ObjectValueKind, Page, SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
+   
+    SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -593,12 +594,12 @@ impl ReadApiServer for ReadApi {
 
     async fn get_checkpoints(
         &self,
-        cursor: Option<CheckpointSequenceNumber>,
+        cursor: Option<usize>,
         limit: Option<usize>,
-        order: Option<String>,
+        order: String,
     ) -> RpcResult<CheckpointPage> {
         let limit = cap_page_limit(limit);
-        let reverse: bool;
+        let mut reverse: bool = false;
         if order == "asc" {
             reverse = false;
         } else if order == "desc" {
@@ -607,11 +608,35 @@ impl ReadApiServer for ReadApi {
 
         let mut data = self
             .state
-            .get_checkpoints(cursor, Some(limit + 1), reverse)?;
+            .get_checkpoints(reverse)?;
+
+        let start_index = match cursor {
+            Some(cursor) => cursor,
+            None => 0,
+        };
+
+        let remaining_data = &data[start_index..];
+
+        let current_page: Option<Vec<Checkpoint>>;
+
+        if remaining_data.is_empty() {
+            current_page = None;
+        }
+
+        let end_index = std::cmp::min(start_index + limit, data.len());
+        let current_page = data[start_index..end_index].to_vec();
+
+        let next_cursor = if end_index < data.len() {
+            Some(end_index)
+        } else {
+            None
+        };
 
         let next_cursor = data.get(limit).cloned();
         data.truncate(limit);
         Ok(Page { data, next_cursor })
+
+        
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {

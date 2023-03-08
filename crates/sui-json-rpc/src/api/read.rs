@@ -5,10 +5,11 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage, CheckpointPage,
+    Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -145,9 +146,9 @@ pub trait ReadApi {
     #[method(name = "getCheckpoints")]
     async fn get_checkpoints(
         &self,
-        cursor: Option<CheckpointSequenceNumber>,
+        cursor: Option<usize>,
         limit: Option<usize>,
-        order: Option<String>,
+        order: String,
     ) -> RpcResult<CheckpointPage>;
 
     /// Returns an ordered list of transaction responses
