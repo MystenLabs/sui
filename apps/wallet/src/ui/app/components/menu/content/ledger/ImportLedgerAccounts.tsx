@@ -43,7 +43,7 @@ export function ImportLedgerAccounts() {
                     minimalPadding
                     header="Connect Ledger Accounts"
                     body={
-                        <ul className="list-none h-[261px] m-0 p-0 -mr-2 mt-1 py-0 pr-2 overflow-auto custom-scrollbar">
+                        <ul className="list-none h-[272px] m-0 p-0 -mr-2 mt-1 py-0 pr-2 overflow-auto custom-scrollbar">
                             {mockAccounts.map((account) => {
                                 return (
                                     <li
@@ -70,12 +70,7 @@ export function ImportLedgerAccounts() {
                         </div>
                     }
                 />
-                <div className="flex gap-2.5 mt-5">
-                    <Button
-                        variant="secondary"
-                        text="Cancel"
-                        to={accountsUrl}
-                    />
+                <div className="mt-5">
                     <Button
                         variant="primary"
                         before={<UnlockedLockIcon />}

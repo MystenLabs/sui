@@ -32,11 +32,16 @@ export function LedgerAccount({
                     'text-success': isSelected,
                 })}
             />
-            <Text mono variant="bodySmall" weight="bold" color="steel-dark">
+            <Text
+                mono
+                variant="bodySmall"
+                weight="bold"
+                color={isSelected ? 'steel-darker' : 'steel-dark'}
+            >
                 {formatAddress(address)}
             </Text>
             <div className="ml-auto">
-                <Text variant="bodySmall" color="steel" weight="bold">
+                <Text variant="bodySmall" color="steel" weight="bold" mono>
                     {totalAmount} {totalAmountSymbol}
                 </Text>
             </div>

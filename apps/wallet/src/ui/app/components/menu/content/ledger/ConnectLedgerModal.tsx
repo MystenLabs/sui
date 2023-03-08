@@ -53,21 +53,13 @@ export function ConnectLedgerModal({
                 </div>
             }
             footer={
-                <div className="flex flex-row self-center gap-3">
-                    <div>
-                        <Button
-                            variant="outline"
-                            text="Cancel"
-                            onClick={onClose}
-                        />
-                    </div>
-                    <div>
-                        <Button
-                            variant="outline"
-                            text="Continue"
-                            onClick={onConfirm}
-                        />
-                    </div>
+                <div className="w-full flex flex-row self-center gap-3">
+                    <Button variant="outline" text="Cancel" onClick={onClose} />
+                    <Button
+                        variant="outline"
+                        text="Continue"
+                        onClick={onConfirm}
+                    />
                 </div>
             }
         />
