@@ -40,10 +40,9 @@ Initial value of the upper-bound on the number of validators.
 <a name="0x2_genesis_INIT_MIN_VALIDATOR_STAKE"></a>
 
 Initial value of the lower-bound on the amount of stake required to become a validator.
-TODO: testnet only. Needs to be changed.
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>: u64 = 1;
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>: u64 = 25000000000000000;
 </code></pre>
 
 
@@ -161,11 +160,11 @@ all the information we need in the system.
             primary_address,
             worker_address,
             // Initialize all validators <b>with</b> uniform stake taken from the subsidy fund.
-            <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> subsidy_fund, initial_validator_stake_mist),
+            <a href="_some">option::some</a>(<a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> subsidy_fund, initial_validator_stake_mist)),
             <a href="_none">option::none</a>(),
             gas_price,
             commission_rate,
-            0, // start operating right away at epoch 0
+            <b>true</b>, // <a href="validator.md#0x2_validator">validator</a> is active right away
             ctx
         ));
         i = i + 1;

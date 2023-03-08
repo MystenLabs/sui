@@ -51,11 +51,11 @@ module sui::validator_tests {
             VALID_P2P_ADDR,
             VALID_CONSENSUS_ADDR,
             VALID_WORKER_ADDR,
-            init_stake,
+            option::some(init_stake),
             option::none(),
             1,
             0,
-            0,
+            true,
             ctx
         )
     }
@@ -160,7 +160,7 @@ module sui::validator_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = validator::EMetadataInvalidPubKey)]
+    #[expected_failure(abort_code = validator::EMetadataInvalidPubkey)]
     fun test_metadata_invalid_pubkey() {
         let metadata = validator::new_metadata(
             @0x42,
@@ -204,7 +204,7 @@ module sui::validator_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubKey)]
+    #[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
     fun test_metadata_invalid_worker_pubkey() {
         let metadata = validator::new_metadata(
             @0x42,
@@ -445,7 +445,7 @@ module sui::validator_tests {
     }
 
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerPubKey)]
+    #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerPubkey)]
     #[test]
     fun test_validator_update_metadata_invalid_worker_key() {
         let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;

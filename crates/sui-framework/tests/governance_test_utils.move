@@ -35,11 +35,11 @@ module sui::governance_test_utils {
             x"FFFF",
             x"FFFF",
             x"FFFF",
-            balance::create_for_testing<SUI>(init_stake_amount),
+            option::some(balance::create_for_testing<SUI>(init_stake_amount)),
             option::none(),
             1,
             0,
-            0,
+            true,
             ctx
         );
         validator
@@ -140,14 +140,14 @@ module sui::governance_test_utils {
 
     public fun delegate_locked_to(
         delegator: address, validator: address, amount: u64, locked_until_epoch: u64, scenario: &mut Scenario
-    ) {        
+    ) {
         // First lock the coin
         test_scenario::next_tx(scenario, delegator);
         {
             let ctx = test_scenario::ctx(scenario);
             locked_coin::lock_coin<SUI>(coin::mint_for_testing(amount, ctx), delegator, locked_until_epoch, ctx);
         };
-        
+
         // Next delegate the locked coin
         test_scenario::next_tx(scenario, delegator);
         {
@@ -177,7 +177,7 @@ module sui::governance_test_utils {
         test_scenario::return_shared(system_state);
     }
 
-    public fun add_validator(validator: address, init_stake_amount: u64, pop: vector<u8>, scenario: &mut Scenario) {
+    public fun add_validator_full_flow(validator: address, init_stake_amount: u64, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
@@ -185,7 +185,7 @@ module sui::governance_test_utils {
         let addr = vector[4, 127, 0, 0, 1];
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::request_add_validator(
+        sui_system::request_add_validator_candidate(
             &mut system_state,
             pubkey,
             vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
@@ -199,9 +199,62 @@ module sui::governance_test_utils {
             addr,
             addr,
             addr,
-            coin::mint_for_testing<SUI>(init_stake_amount, ctx),
             1,
             0,
+            ctx
+        );
+        sui_system::request_add_delegation(&mut system_state, coin::mint_for_testing<SUI>(init_stake_amount, ctx), validator, ctx);
+        sui_system::request_add_validator(&mut system_state, ctx);
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun add_validator_candidate(validator: address, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
+        test_scenario::next_tx(scenario, validator);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        // This is  equivalent to /ip4/127.0.0.1
+        let addr = vector[4, 127, 0, 0, 1];
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::request_add_validator_candidate(
+            &mut system_state,
+            pubkey,
+            vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
+            vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
+            pop,
+            b"name",
+            b"description",
+            b"image_url",
+            b"project_url",
+            addr,
+            addr,
+            addr,
+            addr,
+            1,
+            0,
+            ctx
+        );
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun remove_validator_candidate(validator: address, scenario: &mut Scenario) {
+        test_scenario::next_tx(scenario, validator);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::request_remove_validator_candidate(
+            &mut system_state,
+            ctx
+        );
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun add_validator(validator: address, scenario: &mut Scenario) {
+        test_scenario::next_tx(scenario, validator);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::request_add_validator(
+            &mut system_state,
             ctx
         );
         test_scenario::return_shared(system_state);

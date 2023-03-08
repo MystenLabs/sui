@@ -30,12 +30,18 @@ module sui::staking_pool {
     const EDelegationToInactivePool: u64 = 10;
     const EDeactivationOfInactivePool: u64 = 11;
     const EIncompatibleStakedSui: u64 = 12;
+    const EWithdrawalInSameEpoch: u64 = 13;
+    const EPoolAlreadyActive: u64 = 14;
+    const EPoolNotPreactive: u64 = 15;
+    const EActivationOfInactivePool: u64 = 16;
+    const EDelegationOfZeroSui: u64 = 17;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has key, store {
         id: UID,
-        /// The epoch at which this pool started operating. Should be the epoch at which the validator became active.
-        starting_epoch: u64,
+        /// The epoch at which this pool became active.
+        /// The value is `None` if the pool is pre-active and `Some(<epoch_number>)` if active or inactive.
+        activation_epoch: Option<u64>,
         /// The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},
         /// `Some(<epoch_number>)` if in-active, and it was de-activated at epoch `<epoch_number>`.
         deactivation_epoch: Option<u64>,
@@ -84,16 +90,11 @@ module sui::staking_pool {
     // ==== initializer ====
 
     /// Create a new, empty staking pool.
-    public(friend) fun new(starting_epoch: u64, ctx: &mut TxContext) : StakingPool {
+    public(friend) fun new(ctx: &mut TxContext) : StakingPool {
         let exchange_rates = table::new(ctx);
-        table::add(
-            &mut exchange_rates,
-            starting_epoch,
-            PoolTokenExchangeRate { sui_amount: 0, pool_token_amount: 0 }
-        );
         StakingPool {
             id: object::new(ctx),
-            starting_epoch,
+            activation_epoch: option::none(),
             deactivation_epoch: option::none(),
             sui_balance: 0,
             rewards_pool: balance::zero(),
@@ -118,8 +119,8 @@ module sui::staking_pool {
         ctx: &mut TxContext
     ) {
         let sui_amount = balance::value(&stake);
-        assert!(pool_active(pool), EDelegationToInactivePool);
-        assert!(sui_amount > 0, 0);
+        assert!(!is_inactive(pool), EDelegationToInactivePool);
+        assert!(sui_amount > 0, EDelegationOfZeroSui);
         let staked_sui = StakedSui {
             id: object::new(ctx),
             pool_id: object::id(pool),
@@ -154,7 +155,7 @@ module sui::staking_pool {
         pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
 
         // If the pool is inactive, we immediately process the withdrawal.
-        if (!pool_active(pool)) process_pending_delegation_withdraw(pool);
+        if (is_inactive(pool)) process_pending_delegation_withdraw(pool);
 
         // TODO: implement withdraw bonding period here.
         if (option::is_some(&time_lock)) {
@@ -276,6 +277,50 @@ module sui::staking_pool {
         balance::split(&mut pool.rewards_pool, reward_withdraw_amount)
     }
 
+    // ==== preactive pool related ====
+
+    // Called by `validator` module to activate a staking pool.
+    public(friend) fun activate_staking_pool(pool: &mut StakingPool, activation_epoch: u64) {
+        // Add the initial exchange rate to the table.
+        table::add(
+            &mut pool.exchange_rates,
+            activation_epoch,
+            initial_exchange_rate()
+        );
+        // Check that the pool is preactive and not inactive.
+        assert!(is_preactive(pool), EPoolAlreadyActive);
+        assert!(!is_inactive(pool), EActivationOfInactivePool);
+        // Fill in the active epoch.
+        option::fill(&mut pool.activation_epoch, activation_epoch);
+    }
+
+    public(friend) fun request_withdraw_delegation_preactive(
+        pool: &mut StakingPool,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext
+    ) : u64 {
+        // Check that the delegation information matches the pool.
+        assert!(staked_sui.pool_id == object::id(pool), EWrongPool);
+
+        assert!(is_preactive(pool), EPoolNotPreactive);
+
+        let delegator = tx_context::sender(ctx);
+
+        let (principal, time_lock) = unwrap_staked_sui(staked_sui);
+        let withdraw_amount = balance::value(&principal);
+        pool.sui_balance = pool.sui_balance - withdraw_amount;
+        pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
+
+        // TODO: consider sharing code with `request_withdraw_delegation`
+        if (option::is_some(&time_lock)) {
+            locked_coin::new_from_balance(principal, option::destroy_some(time_lock), delegator, ctx);
+        } else {
+            transfer::transfer(coin::from_balance(principal, ctx), delegator);
+            option::destroy_none(time_lock);
+        };
+        withdraw_amount
+    }
+
     // ==== inactive pool related ====
 
     /// Deactivate a staking pool by setting the `deactivation_epoch`. After
@@ -283,7 +328,7 @@ module sui::staking_pool {
     /// withdraws can be made to the pool.
     public(friend) fun deactivate_staking_pool(pool: &mut StakingPool, deactivation_epoch: u64) {
         // We can't deactivate an already deactivated pool.
-        assert!(pool_active(pool), EDeactivationOfInactivePool);
+        assert!(!is_inactive(pool), EDeactivationOfInactivePool);
         pool.deactivation_epoch = option::some(deactivation_epoch);
     }
 
@@ -299,8 +344,14 @@ module sui::staking_pool {
         staked_sui.delegation_activation_epoch
     }
 
-    public fun pool_active(pool: &StakingPool): bool {
-        option::is_none(&pool.deactivation_epoch)
+    /// Returns true if the input staking pool is preactive.
+    public fun is_preactive(pool: &StakingPool): bool{
+        option::is_none(&pool.activation_epoch)
+    }
+
+    /// Returns true if the input staking pool is inactive.
+    public fun is_inactive(pool: &StakingPool): bool {
+        option::is_some(&pool.deactivation_epoch)
     }
 
     /// Split StakedSui `self` to two parts, one with principal `split_amount`,
@@ -326,7 +377,7 @@ module sui::staking_pool {
     /// Consume the staked sui `other` and add its value to `self`.
     /// Aborts if some of the staking parameters are incompatible (pool id, delegation activation epoch, etc.)
     public entry fun join_staked_sui(self: &mut StakedSui, other: StakedSui) {
-        assert!(is_equal_staking_metadata(self, &other), EIncompatibleStakedSui);        
+        assert!(is_equal_staking_metadata(self, &other), EIncompatibleStakedSui);
         let StakedSui {
             id,
             pool_id: _,
@@ -335,7 +386,7 @@ module sui::staking_pool {
             principal,
             sui_token_lock
         } = other;
-        
+
         object::delete(id);
         if (option::is_some(&sui_token_lock)) {
             epoch_time_lock::destroy_unchecked(option::destroy_some(sui_token_lock));
@@ -364,8 +415,14 @@ module sui::staking_pool {
 
 
     public fun pool_token_exchange_rate_at_epoch(pool: &StakingPool, epoch: u64): PoolTokenExchangeRate {
+        // If the pool is preactive then the exchange rate is always 1:1.
+        if (is_preactive_at_epoch(pool, epoch)) {
+            return initial_exchange_rate()
+        };
         let clamped_epoch = option::get_with_default(&pool.deactivation_epoch, epoch);
         let epoch = math::min(clamped_epoch, epoch);
+        // TODO: there might be epochs where we skip updating the exchange rate table, in which case
+        // we need to find the latest entry in the table earlier than this epoch.
         *table::borrow(&pool.exchange_rates, epoch)
     }
 
@@ -377,6 +434,12 @@ module sui::staking_pool {
     /// Calculate the current the total withdrawal from the staking pool this epoch.
     public fun pending_stake_withdraw_amount(staking_pool: &StakingPool): u64 {
         staking_pool.pending_total_sui_withdraw
+    }
+
+    /// Returns true if the provided staking pool is preactive at the provided epoch.
+    fun is_preactive_at_epoch(pool: &StakingPool, epoch: u64): bool{
+        // Either the pool is currently preactive or the pool's starting epoch is later than the provided epoch.
+        is_preactive(pool) || (*option::borrow(&pool.activation_epoch) > epoch)
     }
 
     fun get_sui_amount(exchange_rate: &PoolTokenExchangeRate, token_amount: u64): u64 {
@@ -401,6 +464,10 @@ module sui::staking_pool {
                 * (sui_amount as u128)
                 / (exchange_rate.sui_amount as u128);
         (res as u64)
+    }
+
+    fun initial_exchange_rate(): PoolTokenExchangeRate {
+        PoolTokenExchangeRate { sui_amount: 0, pool_token_amount: 0 }
     }
 
     fun check_balance_invariants(pool: &StakingPool, epoch: u64) {
