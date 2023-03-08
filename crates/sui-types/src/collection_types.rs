@@ -22,24 +22,7 @@ pub struct Entry<K, V> {
 /// Rust version of the Move sui::vec_set::VecSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct VecSet<T> {
-    contents: Vec<T>,
-}
-
-/// Rust version of the Move std::option::Option type.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
-pub struct MoveOption<T> {
-    pub vec: Vec<T>,
-}
-
-impl<T> MoveOption<T> {
-    pub fn empty() -> Self {
-        Self { vec: vec![] }
-    }
-
-    pub fn into_option(self) -> Option<T> {
-        let Self { mut vec } = self;
-        vec.pop()
-    }
+    pub contents: Vec<T>,
 }
 
 /// Rust version of the Move sui::table::Table type.
@@ -80,8 +63,8 @@ impl Default for Table {
 pub struct LinkedTable<K> {
     pub id: ObjectID,
     pub size: u64,
-    pub head: MoveOption<K>,
-    pub tail: MoveOption<K>,
+    pub head: Option<K>,
+    pub tail: Option<K>,
 }
 
 impl<K> Default for LinkedTable<K> {
@@ -89,8 +72,8 @@ impl<K> Default for LinkedTable<K> {
         LinkedTable {
             id: ObjectID::from(SuiAddress::ZERO),
             size: 0,
-            head: MoveOption { vec: vec![] },
-            tail: MoveOption { vec: vec![] },
+            head: None,
+            tail: None,
         }
     }
 }
