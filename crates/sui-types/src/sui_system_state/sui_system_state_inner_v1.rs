@@ -458,6 +458,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     next_epoch_stake: v.next_epoch_stake,
                     next_epoch_gas_price: v.next_epoch_gas_price,
                     next_epoch_commission_rate: v.next_epoch_commission_rate,
+                    staking_pool_id: v.staking_pool.id,
                     staking_pool_starting_epoch: v.staking_pool.starting_epoch,
                     staking_pool_deactivation_epoch: v
                         .staking_pool
