@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     marker::PhantomData,
 };
@@ -266,13 +266,7 @@ where
         if val_opt.is_none() {
             return Err(CommandArgumentError::InvalidUsageOfTakenValue);
         }
-        if matches!(
-            input_metadata_opt,
-            Some(InputObjectMetadata {
-                owner: Owner::Immutable,
-                ..
-            })
-        ) {
+        if input_metadata_opt.is_some() && !input_metadata_opt.unwrap().is_mutable_input {
             return Err(CommandArgumentError::InvalidObjectByMutRef);
         }
         V::try_from_value(val_opt.take().unwrap())
@@ -386,6 +380,7 @@ where
         // Any object value that has not been taken (still has `Some` for it's value) needs to
         // written as it's value might have changed (and eventually it's sequence number will need
         // to increase)
+        let mut by_value_inputs = BTreeSet::new();
         let mut add_input_object_write = |input| {
             let InputValue {
                 object_metadata: object_metadata_opt,
@@ -394,8 +389,12 @@ where
             let Some(object_metadata) = object_metadata_opt else { return };
             let is_mutable_input = object_metadata.is_mutable_input;
             let owner = object_metadata.owner;
+            let id = object_metadata.id;
             input_object_metadata.insert(object_metadata.id, object_metadata);
-            let Some(Value::Object(object_value)) = value else { return };
+            let Some(Value::Object(object_value)) = value else {
+                by_value_inputs.insert(id);
+                return
+            };
             if is_mutable_input {
                 add_additional_write(&mut additional_writes, owner, object_value);
             }
@@ -467,11 +466,6 @@ where
         let object_runtime: ObjectRuntime = native_context_extensions.remove();
         let new_ids = object_runtime.new_ids().clone();
         // tell the object runtime what input objects were taken and which were transferred
-        let by_value_inputs = input_object_metadata
-            .keys()
-            .copied()
-            .filter(|id| !additional_writes.contains_key(id))
-            .collect();
         let external_transfers = additional_writes.keys().copied().collect();
         let RuntimeResults {
             writes,

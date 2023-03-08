@@ -307,7 +307,10 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .next()
         .unwrap()
     {
-        SingleTransactionKind::Publish(p) => &p.modules,
+        SingleTransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
+            Command::Publish(modules) => modules,
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     };
 
@@ -420,7 +423,8 @@ async fn test_move_call_gas() -> SuiResult {
         gas_object.compute_object_reference(),
         args.clone(),
         GAS_VALUE_FOR_TESTING,
-    );
+    )
+    .unwrap();
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
@@ -488,7 +492,8 @@ async fn test_move_call_gas() -> SuiResult {
             created_object_ref,
         ))],
         expected_gas_balance,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
@@ -514,7 +519,8 @@ async fn test_move_call_gas() -> SuiResult {
         gas_object.compute_object_reference(),
         args,
         budget,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;

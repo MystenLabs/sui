@@ -1160,9 +1160,11 @@ impl AuthorityState {
             cert.data()
                 .intent_message
                 .value
-                .legacy_move_calls()
-                .iter()
-                .map(|mc| (mc.package, mc.module.clone(), mc.function.clone())),
+                .move_calls()
+                .into_iter()
+                .map(|(package, module, function)| {
+                    (*package, module.to_owned(), function.to_owned())
+                }),
             changes,
             digest,
             timestamp_ms,

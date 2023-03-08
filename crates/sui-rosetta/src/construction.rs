@@ -221,9 +221,7 @@ pub async fn metadata(
                 .into_iter()
                 .map(|coin| coin.object_ref())
                 .collect::<Vec<_>>();
-            // gas is always the first coin for pay_sui
-            let gas = sender_coins[0];
-            (TransactionMetadata::PaySui(sender_coins), gas, 1000)
+            (TransactionMetadata::PaySui, sender_coins, 1000)
         }
         InternalOperation::Delegation {
             sender,
@@ -258,7 +256,7 @@ pub async fn metadata(
                     coins,
                     locked_until_epoch: *locked_until_epoch,
                 },
-                data.gas()[0],
+                data.gas().to_vec(),
                 13000,
             )
         }
@@ -270,7 +268,7 @@ pub async fn metadata(
         .try_into_data(ConstructionMetadata {
             tx_metadata: tx_metadata.clone(),
             sender,
-            gas,
+            gas: gas.clone(),
             gas_price: 1,
             budget,
         })?;

@@ -126,6 +126,10 @@ impl SuiJsonValue {
         self.0.clone()
     }
 
+    pub fn to_sui_address(&self) -> anyhow::Result<SuiAddress> {
+        json_value_to_sui_address(&self.0)
+    }
+
     fn handle_inner_struct_layout(
         inner_vec: &[MoveTypeLayout],
         val: &JsonValue,
@@ -244,13 +248,9 @@ impl SuiJsonValue {
                 )
             }
 
-            (JsonValue::String(s), MoveTypeLayout::Address) => {
-                let s = s.trim().to_lowercase();
-                if !s.starts_with(HEX_PREFIX) {
-                    bail!("Address hex string must start with 0x.",);
-                }
-                let r = SuiAddress::from_str(&s)?;
-                MoveValue::Address(r.into())
+            (v, MoveTypeLayout::Address) => {
+                let addr = json_value_to_sui_address(v)?;
+                MoveValue::Address(addr.into())
             }
             _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })
@@ -260,6 +260,19 @@ impl SuiJsonValue {
 impl Debug for SuiJsonValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
+    match value {
+        JsonValue::String(s) => {
+            let s = s.trim().to_lowercase();
+            if !s.starts_with(HEX_PREFIX) {
+                bail!("Address hex string must start with 0x.",);
+            }
+            Ok(SuiAddress::from_str(&s)?)
+        }
+        v => bail!("Unexpected arg {v} for expected type address"),
     }
 }
 
