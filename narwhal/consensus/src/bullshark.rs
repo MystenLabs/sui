@@ -10,9 +10,9 @@ use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use fastcrypto::traits::EncodeDecodeBase64;
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 use tokio::time::Instant;
-use tracing::{debug, error_span, trace};
+use tracing::{debug, error_span};
 use types::{
     Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
 };
@@ -64,9 +64,6 @@ impl ConsensusProtocol for Bullshark {
     ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
-
-        // We must have stored already the parents of this certificate!
-        self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
         if !state.try_insert(&certificate)? {
@@ -273,42 +270,6 @@ impl Bullshark {
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
                 committee.leader(_round)
-            }
-        }
-    }
-
-    // Checks that the provided certificate's parents exist and prints the necessary
-    // log statements. This method does not take more actions other than printing
-    // log statements.
-    fn log_error_if_missing_parents(&self, certificate: &Certificate, state: &ConsensusState) {
-        let round = certificate.round();
-        if round > 0 {
-            let parents = certificate.header.parents.clone();
-            if let Some(round_table) = state.dag.get(&(round - 1)) {
-                let store_parents: BTreeSet<&CertificateDigest> =
-                    round_table.iter().map(|(_, (digest, _))| digest).collect();
-
-                for parent_digest in parents {
-                    if !store_parents.contains(&parent_digest) {
-                        if round - 1 + self.gc_depth > state.last_committed_round {
-                            trace!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
-                                certificate, parent_digest
-                            );
-                        } else {
-                            trace!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
-                                certificate, parent_digest
-                            );
-                        }
-                    }
-                }
-            } else {
-                trace!(
-                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
-                    round - 1,
-                    certificate
-                );
             }
         }
     }
