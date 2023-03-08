@@ -10,7 +10,6 @@ import {
     getTransactionSender,
     getTransactions,
     SUI_TYPE_ARG,
-    isEventType,
     getCoinBalanceChangeEvent,
 } from '@mysten/sui.js';
 

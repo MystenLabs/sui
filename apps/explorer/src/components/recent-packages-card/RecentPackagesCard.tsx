@@ -7,13 +7,12 @@ import { useMemo } from 'react';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import {
-    SuiEventEnvelope,
-    PaginatedEvents,
-    SuiEvents,
-    getPublishEvent,
     getEventSender,
     getEventPackage,
     isEventType,
+    type SuiEventEnvelope,
+    type PaginatedEvents,
+    type SuiEvents,
 } from '@mysten/sui.js';
 
 import { Banner } from '~/ui/Banner';
