@@ -44,7 +44,7 @@ async fn commit_one() {
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
@@ -69,7 +69,7 @@ async fn commit_one() {
         store,
         cert_store,
         tx_shutdown.subscribe(),
-        rx_waiter,
+        rx_new_certificates,
         tx_primary,
         tx_consensus_round_updates,
         tx_output,
@@ -81,7 +81,7 @@ async fn commit_one() {
     // Feed all certificates to the consensus. Only the last certificate should trigger
     // commits, so the task should not block.
     while let Some(certificate) = certificates.pop_front() {
-        tx_waiter.send(certificate).await.unwrap();
+        tx_new_certificates.send(certificate).await.unwrap();
     }
 
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
@@ -122,7 +122,7 @@ async fn dead_node() {
         test_utils::make_optimal_certificates(&committee, 1..=9, &genesis, &keys);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
@@ -147,7 +147,7 @@ async fn dead_node() {
         store,
         cert_store,
         tx_shutdown.subscribe(),
-        rx_waiter,
+        rx_new_certificates,
         tx_primary,
         tx_consensus_round_updates,
         tx_output,
@@ -159,7 +159,7 @@ async fn dead_node() {
     // Feed all certificates to the consensus.
     tokio::spawn(async move {
         while let Some(certificate) = certificates.pop_front() {
-            tx_waiter.send(certificate).await.unwrap();
+            tx_new_certificates.send(certificate).await.unwrap();
         }
     });
 
@@ -278,7 +278,7 @@ async fn not_enough_support() {
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
@@ -303,7 +303,7 @@ async fn not_enough_support() {
         store,
         cert_store,
         tx_shutdown.subscribe(),
-        rx_waiter,
+        rx_new_certificates,
         tx_primary,
         tx_consensus_round_updates,
         tx_output,
@@ -315,7 +315,7 @@ async fn not_enough_support() {
     // Feed all certificates to the consensus. Only the last certificate should trigger
     // commits, so the task should not block.
     while let Some(certificate) = certificates.pop_front() {
-        tx_waiter.send(certificate).await.unwrap();
+        tx_new_certificates.send(certificate).await.unwrap();
     }
 
     // We should commit 2 leaders (rounds 2 and 4).
@@ -398,7 +398,7 @@ async fn missing_leader() {
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
@@ -423,7 +423,7 @@ async fn missing_leader() {
         store,
         cert_store,
         tx_shutdown.subscribe(),
-        rx_waiter,
+        rx_new_certificates,
         tx_primary,
         tx_consensus_round_updates,
         tx_output,
@@ -435,7 +435,7 @@ async fn missing_leader() {
     // Feed all certificates to the consensus. We should only commit upon receiving the last
     // certificate, so calls below should not block the task.
     while let Some(certificate) = certificates.pop_front() {
-        tx_waiter.send(certificate).await.unwrap();
+        tx_new_certificates.send(certificate).await.unwrap();
     }
 
     // Ensure the commit sequence is as expected.
@@ -483,9 +483,9 @@ async fn committed_round_after_restart() {
 
     for input_round in (1..=11usize).step_by(2) {
         // Spawn consensus and create related channels.
-        let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
-        let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
-        let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+        let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(100);
+        let (tx_primary, mut rx_primary) = test_utils::test_channel!(100);
+        let (tx_output, mut rx_output) = test_utils::test_channel!(100);
         let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -505,7 +505,7 @@ async fn committed_round_after_restart() {
             store.clone(),
             cert_store.clone(),
             tx_shutdown.subscribe(),
-            rx_waiter,
+            rx_new_certificates,
             tx_primary,
             tx_consensus_round_updates,
             tx_output,
@@ -525,7 +525,8 @@ async fn committed_round_after_restart() {
         let start_index = input_round.saturating_sub(2) * committee.size();
         let end_index = input_round * committee.size();
         for cert in certificates.iter().take(end_index).skip(start_index) {
-            tx_waiter.send(cert.clone()).await.unwrap();
+            cert_store.write(cert.clone()).unwrap();
+            tx_new_certificates.send(cert.clone()).await.unwrap();
         }
         info!("Sent certificates {start_index} ~ {end_index} to consensus");
 
@@ -540,7 +541,7 @@ async fn committed_round_after_restart() {
             info!("Received committed certificates from consensus, committed_round={round}",);
         }
 
-        // After sending inputs upt to round 2 * r + 1 to consensus, round 2 * r should have been
+        // After sending inputs up to round 2 * r + 1 to consensus, round 2 * r should have been
         // committed.
         assert_eq!(
             rx_consensus_round_updates.borrow().to_owned() as usize,
@@ -757,7 +758,7 @@ async fn restart_with_new_committee() {
     // Run for a few epochs.
     for epoch in 0..5 {
         // Spawn the consensus engine and sink the primary channel.
-        let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+        let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = test_utils::test_channel!(1);
         let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
@@ -781,7 +782,7 @@ async fn restart_with_new_committee() {
             store,
             cert_store,
             tx_shutdown.subscribe(),
-            rx_waiter,
+            rx_new_certificates,
             tx_primary,
             tx_consensus_round_updates,
             tx_output,
@@ -819,7 +820,7 @@ async fn restart_with_new_committee() {
         // Feed all certificates to the consensus. Only the last certificate should trigger
         // commits, so the task should not block.
         while let Some(certificate) = certificates.pop_front() {
-            tx_waiter.send(certificate).await.unwrap();
+            tx_new_certificates.send(certificate).await.unwrap();
         }
 
         // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
