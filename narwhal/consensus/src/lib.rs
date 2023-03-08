@@ -43,8 +43,7 @@ pub enum ConsensusError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
-    // Certificate has not been inserted to DAG since it's bellow the latest commit round
-    // for this authority.
+    // Certificate is not processed, since it's below the latest committed round for its origin.
     CertificateBelowCommitRound,
 
     // Certificate processed is of an even round, so the previous one is an odd round and

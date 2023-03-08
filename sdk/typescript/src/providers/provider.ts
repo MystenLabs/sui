@@ -39,16 +39,14 @@ import {
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
-  CheckpointSummary,
-  CheckpointContents,
   CheckpointDigest,
-  CheckPointContentsDigest,
   Checkpoint,
   CommitteeInfo,
   DryRunTransactionResponse,
   SuiTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -171,7 +169,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
@@ -188,7 +186,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * Get details about an object
@@ -400,41 +398,6 @@ export abstract class Provider {
    * Get the sequence number of the latest checkpoint that has been executed
    */
   abstract getLatestCheckpointSequenceNumber(): Promise<number>;
-
-  /**
-   * Returns checkpoint summary based on a checkpoint sequence number
-   * @param sequence_number - The sequence number of the desired checkpoint summary
-   * @deprecated - Prefer `getCheckpoint` instead
-   */
-  abstract getCheckpointSummary(
-    sequenceNumber: number,
-  ): Promise<CheckpointSummary>;
-
-  /**
-   * Returns checkpoint summary based on a checkpoint digest
-   * @param digest - The checkpoint digest
-   * @deprecated - Prefer `getCheckpoint` instead
-   */
-  abstract getCheckpointSummaryByDigest(
-    digest: CheckpointDigest,
-  ): Promise<CheckpointSummary>;
-
-  /**
-   * Return contents of a checkpoint, namely a list of execution digests
-   * @param sequence_number - The sequence number of the desired checkpoint contents
-   * @deprecated - Prefer `getCheckpoint` instead
-   */
-  abstract getCheckpointContents(
-    sequenceNumber: number,
-  ): Promise<CheckpointContents>;
-
-  /**
-   * Returns checkpoint summary based on a checkpoint content digest
-   * @param digest - The checkpoint summary digest
-   */
-  abstract getCheckpointContentsByDigest(
-    digest: CheckPointContentsDigest,
-  ): Promise<CheckpointContents>;
 
   /**
    * Returns information about a given checkpoint

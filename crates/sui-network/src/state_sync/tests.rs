@@ -26,8 +26,6 @@ async fn server_push_checkpoint() {
     store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -101,8 +99,6 @@ async fn server_get_checkpoint() {
     builder.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -193,15 +189,11 @@ async fn isolated_sync_job() {
     event_loop_1.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
     event_loop_2.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -282,15 +274,11 @@ async fn sync_with_checkpoints_being_inserted() {
     event_loop_1.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
     event_loop_2.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 

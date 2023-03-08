@@ -3,7 +3,7 @@
 
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
-import st from './DappTxApprovalPage.module.scss';
+import st from './TransactionRequest.module.scss';
 
 type TransactionTypeCardProps = {
     label: string;

@@ -37,16 +37,14 @@ import {
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
-  CheckpointSummary,
-  CheckpointContents,
   CheckpointDigest,
-  CheckPointContentsDigest,
   CommitteeInfo,
   Checkpoint,
   DryRunTransactionResponse,
   SuiTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 import { Provider } from './provider';
 
@@ -150,7 +148,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -159,7 +157,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
@@ -311,32 +309,8 @@ export class VoidProvider extends Provider {
     throw this.newError('getLatestCheckpointSequenceNumber');
   }
 
-  async getCheckpointSummary(
-    _sequenceNumber: number,
-  ): Promise<CheckpointSummary> {
-    throw this.newError('getCheckpointSummary');
-  }
-
-  async getCheckpointSummaryByDigest(
-    _digest: CheckpointDigest,
-  ): Promise<CheckpointSummary> {
-    throw this.newError('getCheckpointSummaryByDigest');
-  }
-
   async getCheckpoint(_id: CheckpointDigest | number): Promise<Checkpoint> {
     throw this.newError('getCheckpoint');
-  }
-
-  async getCheckpointContents(
-    _sequenceNumber: number,
-  ): Promise<CheckpointContents> {
-    throw this.newError('getCheckpointContents');
-  }
-
-  async getCheckpointContentsByDigest(
-    _digest: CheckPointContentsDigest,
-  ): Promise<CheckpointContents> {
-    throw this.newError('getCheckpointContentsByDigest');
   }
 
   async getCommitteeInfo(_epoch?: number): Promise<CommitteeInfo> {

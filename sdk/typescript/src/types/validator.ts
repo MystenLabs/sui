@@ -83,7 +83,7 @@ export const DelegatedStake = object({
 });
 
 export const ParametersFields = object({
-  max_validator_candidate_count: string(),
+  max_validator_count: string(),
   min_validator_stake: string(),
   storage_gas_price: optional(string()),
 });
@@ -136,7 +136,7 @@ export const DelegationStakingPoolFields = object({
   pending_total_sui_withdraw: number(),
   pool_token_balance: number(),
   rewards_pool: object({ value: number() }),
-  starting_epoch: number(),
+  activation_epoch: object({ vec: array(number()) }),
   deactivation_epoch: object({ vec: array() }),
   sui_balance: number(),
 });
@@ -154,7 +154,7 @@ export const CommitteeInfo = object({
 
 export const SystemParameters = object({
   min_validator_stake: number(),
-  max_validator_candidate_count: number(),
+  max_validator_count: number(),
   governance_start_epoch: number(),
   storage_gas_price: optional(number()),
 });
@@ -179,7 +179,7 @@ export const ValidatorPair = object({
 export const ValidatorSet = object({
   total_stake: number(),
   active_validators: array(Validator),
-  pending_validators: object({
+  pending_active_validators: object({
     contents: object({
       id: string(),
       size: number(),
@@ -191,6 +191,10 @@ export const ValidatorSet = object({
     size: number(),
   }),
   inactive_pools: object({
+    id: string(),
+    size: number(),
+  }),
+  validator_candidates: object({
     id: string(),
     size: number(),
   }),
@@ -239,7 +243,8 @@ export const SuiValidatorSummary = object({
   next_epoch_stake: number(),
   next_epoch_gas_price: number(),
   next_epoch_commission_rate: number(),
-  staking_pool_starting_epoch: number(),
+  staking_pool_id: string(),
+  staking_pool_activation_epoch: nullable(number()),
   staking_pool_deactivation_epoch: nullable(number()),
   staking_pool_sui_balance: number(),
   rewards_pool: number(),

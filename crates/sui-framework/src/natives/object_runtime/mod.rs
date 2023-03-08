@@ -127,7 +127,7 @@ impl<'a> ObjectRuntime<'a> {
         protocol_config: &ProtocolConfig,
     ) -> Self {
         Self {
-            object_store: ObjectStore::new(object_resolver),
+            object_store: ObjectStore::new(object_resolver, protocol_config, is_metered),
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects,

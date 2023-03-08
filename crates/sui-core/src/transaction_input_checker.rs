@@ -70,7 +70,7 @@ pub async fn check_transaction_input(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction.check_version_supported(epoch_store.protocol_version())?;
+    transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
@@ -137,7 +137,7 @@ pub async fn check_certificate_input(
     assert!(
         cert.data()
             .transaction_data()
-            .check_version_supported(protocol_version)
+            .check_version_supported(epoch_store.protocol_config())
             .is_ok(),
         "Certificate formed with unsupported message version {:?} for protocol version {:?}",
         cert.message_version(),

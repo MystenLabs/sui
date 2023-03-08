@@ -285,7 +285,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       exclude.concat(await this.extractObjectIds(txn)),
     );
 
-    return coins.length > 0 ? Coin.getID(coins[0]) : undefined;
+    return coins.length > 0 ? coins[0].coinObjectId : undefined;
   }
 
   /**

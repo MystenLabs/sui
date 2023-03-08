@@ -40,10 +40,10 @@ describe('Test dev inspect', () => {
     const splitTxn = await signer.signAndExecuteTransaction({
       kind: 'splitCoin',
       data: {
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       },
     });
     const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>

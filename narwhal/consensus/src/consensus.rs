@@ -11,7 +11,7 @@ use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     cmp::{max, Ordering},
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 use storage::CertificateStore;
@@ -31,8 +31,10 @@ pub type Dag = BTreeMap<Round, HashMap<PublicKey, (CertificateDigest, Certificat
 
 /// The state that needs to be persisted for crash-recovery.
 pub struct ConsensusState {
-    /// The last committed round.
+    /// The last / highest committed round.
     pub last_committed_round: Round,
+    /// The current GC round.
+    pub gc_round: Round,
     /// Keeps the last committed round for each authority. This map is used to clean up the dag and
     /// ensure we don't commit twice the same certificate.
     pub last_committed: HashMap<PublicKey, Round>,
@@ -51,13 +53,14 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(metrics: Arc<ConsensusMetrics>) -> Self {
+    pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee) -> Self {
         Self {
             last_committed_round: 0,
+            gc_round: 0,
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
             dag: Default::default(),
-            last_consensus_reputation_score: ReputationScores::default(),
+            last_consensus_reputation_score: ReputationScores::new(committee),
             last_committed_leader: None,
             metrics,
         }
@@ -70,20 +73,22 @@ impl ConsensusState {
         recovered_last_committed: HashMap<PublicKey, Round>,
         latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
+        committee: &Committee,
     ) -> Self {
         let gc_round = last_committed_round.saturating_sub(gc_depth);
         let dag =
-            Self::construct_dag_from_cert_store(cert_store, gc_round, &recovered_last_committed)
+            Self::construct_dag_from_cert_store(cert_store, &recovered_last_committed, gc_round)
                 .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
 
         let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
             latest_sub_dag
                 .map(|s| (s.sub_dag_index, s.reputation_score, Some(s.leader)))
-                .unwrap_or_default();
+                .unwrap_or((0, ReputationScores::new(committee), None));
 
         Self {
             last_committed_round,
+            gc_round,
             last_committed: recovered_last_committed,
             last_consensus_reputation_score,
             latest_sub_dag_index,
@@ -96,19 +101,19 @@ impl ConsensusState {
     #[instrument(level = "info", skip_all)]
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
-        gc_round: Round,
         last_committed: &HashMap<PublicKey, Round>,
+        gc_round: Round,
     ) -> Result<Dag, ConsensusError> {
         let mut dag: Dag = BTreeMap::new();
 
-        info!("Recreating dag from last GC round: {}", gc_round,);
+        info!("Recreating dag from last GC round: {}", gc_round);
 
         // get all certificates at rounds > gc_round
         let certificates = cert_store.after_round(gc_round + 1).unwrap();
 
         let mut num_certs = 0;
         for cert in &certificates {
-            if Self::try_insert_in_dag(&mut dag, last_committed, cert)? {
+            if Self::try_insert_in_dag(&mut dag, last_committed, gc_round, cert)? {
                 info!("Inserted certificate: {:?}", cert);
                 num_certs += 1;
             }
@@ -124,27 +129,32 @@ impl ConsensusState {
 
     /// Returns true if certificate is inserted in the dag.
     pub fn try_insert(&mut self, certificate: &Certificate) -> Result<bool, ConsensusError> {
-        Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
+        Self::try_insert_in_dag(
+            &mut self.dag,
+            &self.last_committed,
+            self.gc_round,
+            certificate,
+        )
     }
 
     /// Returns true if certificate is inserted in the dag.
     fn try_insert_in_dag(
         dag: &mut Dag,
         last_committed: &HashMap<PublicKey, Round>,
+        gc_round: Round,
         certificate: &Certificate,
     ) -> Result<bool, ConsensusError> {
-        let origin_last_committed_round = last_committed
-            .get(&certificate.origin())
-            .cloned()
-            .unwrap_or_default();
-        if certificate.round() <= origin_last_committed_round {
+        if certificate.round() <= gc_round {
             debug!(
-                "Ignoring certificate {:?} as it is at or before last committed round {} for this origin",
-                certificate, origin_last_committed_round
+                "Ignoring certificate {:?} as it is at or before gc round {}",
+                certificate, gc_round
             );
             return Ok(false);
         }
+        Self::check_parents(certificate, dag, gc_round);
 
+        // Always insert the certificate even if it is below last committed round of its origin,
+        // to allow verifying parent existence.
         if let Some((_, existing_certificate)) = dag.entry(certificate.round()).or_default().insert(
             certificate.origin(),
             (certificate.digest(), certificate.clone()),
@@ -157,7 +167,12 @@ impl ConsensusState {
                 ));
             }
         }
-        Ok(true)
+
+        Ok(certificate.round()
+            > last_committed
+                .get(&certificate.origin())
+                .cloned()
+                .unwrap_or_default())
     }
 
     /// Update and clean up internal state after committing a certificate.
@@ -167,6 +182,7 @@ impl ConsensusState {
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
         self.last_committed_round = max(self.last_committed_round, certificate.round());
+        self.gc_round = self.last_committed_round.saturating_sub(gc_depth);
 
         self.metrics
             .last_committed_round
@@ -186,17 +202,28 @@ impl ConsensusState {
         );
 
         // Purge all certificates past the gc depth.
-        self.dag
-            .retain(|r, _| r + gc_depth >= self.last_committed_round);
-        // Also purge this certificate, and other certificates at the same origin below its round.
-        self.dag.retain(|r, authorities| {
-            if r <= &certificate.round() {
-                authorities.remove(&certificate.origin());
-                !authorities.is_empty()
-            } else {
-                true
+        self.dag.retain(|r, _| *r > self.gc_round);
+    }
+
+    // Checks that the provided certificate's parents exist and crashes if not.
+    fn check_parents(certificate: &Certificate, dag: &Dag, gc_round: Round) {
+        let round = certificate.round();
+        // Skip checking parents if they are GC'ed.
+        // Also not checking genesis parents for simplicity.
+        if round <= gc_round + 1 {
+            return;
+        }
+        if let Some(round_table) = dag.get(&(round - 1)) {
+            let store_parents: BTreeSet<&CertificateDigest> =
+                round_table.iter().map(|(_, (digest, _))| digest).collect();
+            for parent_digest in &certificate.header.parents {
+                if !store_parents.contains(parent_digest) {
+                    panic!("Parent digest {parent_digest:?} not found in DAG for {certificate:?}!");
+                }
             }
-        });
+        } else {
+            panic!("Parent round not found in DAG for {certificate:?}!");
+        }
     }
 }
 
@@ -278,6 +305,7 @@ where
             recovered_last_committed,
             latest_sub_dag,
             cert_store,
+            &committee,
         );
 
         tx_consensus_round_updates

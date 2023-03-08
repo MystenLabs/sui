@@ -30,10 +30,6 @@ use std::{
 };
 use tracing::warn;
 
-#[cfg(test)]
-#[path = "./tests/primary_type_tests.rs"]
-mod primary_type_tests;
-
 /// The round number.
 pub type Round = u64;
 
@@ -154,6 +150,8 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
 #[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
+    // Primary that created the header. Must be the same primary that broadcasted the header.
+    // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
@@ -163,14 +161,10 @@ pub struct Header {
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
-    pub signature: Signature,
 }
 
 impl HeaderBuilder {
-    pub fn build<F>(self, signer: &F) -> Result<Header, fastcrypto::error::FastCryptoError>
-    where
-        F: Signer<Signature>,
-    {
+    pub fn build(self) -> Result<Header, fastcrypto::error::FastCryptoError> {
         let h = Header {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
@@ -179,14 +173,10 @@ impl HeaderBuilder {
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
-            signature: Signature::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
 
-        Ok(Header {
-            signature: signer.sign(Digest::from(Hash::digest(&h)).as_ref()),
-            ..h
-        })
+        Ok(h)
     }
 
     // helper method to set directly values to the payload
@@ -214,7 +204,6 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let header = Self {
             author,
@@ -224,22 +213,17 @@ impl Header {
             payload,
             parents,
             digest: OnceCell::default(),
-            signature: Signature::default(),
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
-        let signature = signature_service.request_signature(digest.into()).await;
-        Self {
-            signature,
-            ..header
-        }
+        header
     }
 
     pub fn digest(&self) -> HeaderDigest {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
-    pub fn verify(&self, committee: &Committee, worker_cache: WorkerCache) -> DagResult<()> {
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -269,11 +253,7 @@ impl Header {
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
-        // Check the signature.
-        let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        self.author
-            .verify(digest.as_ref(), &self.signature)
-            .map_err(|_| DagError::InvalidSignature)
+        Ok(())
     }
 }
 
@@ -287,7 +267,6 @@ impl Default for Header {
             payload: IndexMap::default(),
             parents: BTreeSet::default(),
             digest: OnceCell::default(),
-            signature: Signature::default(),
         }
     }
 }
@@ -657,9 +636,9 @@ impl Certificate {
         (weight, pks)
     }
 
-    /// Verifies the validaity of the certificate.
+    /// Verifies the validity of the certificate.
     /// TODO: Output a different type, similar to Sui VerifiedCertificate.
-    pub fn verify(&self, committee: &Committee, worker_cache: WorkerCache) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -674,8 +653,8 @@ impl Certificate {
             return Ok(());
         }
 
-        // Check the embedded header.
-        self.header.verify(committee, worker_cache)?;
+        // Save signature verifications when the header is invalid.
+        self.header.validate(committee, worker_cache)?;
 
         let (weight, pks) = self.signed_by(committee);
 

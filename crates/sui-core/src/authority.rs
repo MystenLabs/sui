@@ -1048,7 +1048,7 @@ impl AuthorityState {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
-        transaction_kind.check_version_supported(epoch_store.protocol_version())?;
+        transaction_kind.check_version_supported(epoch_store.protocol_config())?;
 
         let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
 
@@ -1633,7 +1633,7 @@ impl AuthorityState {
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
-            Default::default(),
+            EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
         );
@@ -2382,6 +2382,15 @@ impl AuthorityState {
             .expect("Cannot insert genesis object")
     }
 
+    pub async fn insert_genesis_objects(&self, objects: &[Object]) {
+        futures::future::join_all(
+            objects
+                .iter()
+                .map(|o| self.insert_genesis_object(o.clone())),
+        )
+        .await;
+    }
+
     pub fn get_certified_transaction(
         &self,
         tx_digest: &TransactionDigest,
@@ -3085,10 +3094,7 @@ impl AuthorityState {
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
-        assert_eq!(
-            epoch_start_configuration.system_state.epoch(),
-            new_committee.epoch
-        );
+        assert_eq!(epoch_start_configuration.epoch(), new_committee.epoch);
         self.db()
             .set_epoch_start_configuration(&epoch_start_configuration)
             .await?;

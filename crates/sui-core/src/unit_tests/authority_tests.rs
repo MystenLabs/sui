@@ -53,6 +53,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::object::Data;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::{SuiSystemStateWrapper, SUI_SYSTEM_STATE_TESTING_VERSION1};
 use sui_types::{
     base_types::dbg_addr,
@@ -61,7 +62,6 @@ use sui_types::{
     messages::TransactionExpiration,
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-    sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::info;
@@ -1786,17 +1786,14 @@ async fn test_transaction_expiration() {
         .committee()
         .to_owned();
     committee.epoch = 1;
-    let system_state = SuiSystemState::new_for_testing(1);
+    let system_state = EpochStartSystemState::new_for_testing_with_epoch(1);
 
     authority_state
         .reconfigure(
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             committee,
-            EpochStartConfiguration {
-                system_state,
-                ..Default::default()
-            },
+            EpochStartConfiguration::new(system_state, Default::default()),
         )
         .await
         .unwrap();
@@ -2716,7 +2713,7 @@ async fn test_authority_persist() {
             &epoch_store_path,
             None,
             EpochMetrics::new(&registry),
-            Default::default(),
+            EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
         );
@@ -4716,7 +4713,7 @@ async fn test_tallying_rule_score_updates() {
         &path,
         None,
         metrics.clone(),
-        Default::default(),
+        EpochStartConfiguration::new_for_testing(),
         store,
         cache_metrics,
     );

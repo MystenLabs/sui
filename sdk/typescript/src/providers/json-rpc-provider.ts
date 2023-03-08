@@ -49,15 +49,13 @@ import {
   SuiSystemState,
   CoinBalance,
   CoinSupply,
-  CheckpointSummary,
-  CheckpointContents,
   CheckpointDigest,
   Checkpoint,
-  CheckPointContentsDigest,
   CommitteeInfo,
   DryRunTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -442,15 +440,13 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coins,
+    return Coin.selectCoinsWithBalanceGreaterThanOrEqual(
+      coinsStruct.data,
       amount,
       exclude,
-    )) as SuiObjectResponse[];
+    );
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -458,15 +454,15 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds, { showContent: true });
-    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    const coins = coinsStruct.data;
+
+    return Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,
       exclude,
-    )) as SuiObjectResponse[];
+    );
   }
 
   async getObject(
@@ -921,78 +917,6 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error fetching latest checkpoint sequence number: ${err}`,
-      );
-    }
-  }
-
-  async getCheckpointSummary(
-    sequence_number: number,
-  ): Promise<CheckpointSummary> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointSummary',
-        [sequence_number],
-        CheckpointSummary,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint summary with request type: ${err} for sequence number: ${sequence_number}.`,
-      );
-    }
-  }
-
-  async getCheckpointSummaryByDigest(
-    digest: CheckpointDigest,
-  ): Promise<CheckpointSummary> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointSummaryByDigest',
-        [digest],
-        CheckpointSummary,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`,
-      );
-    }
-  }
-
-  async getCheckpointContents(
-    sequence_number: number | CheckPointContentsDigest,
-  ): Promise<CheckpointContents> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointContents',
-        [sequence_number],
-        CheckpointContents,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint contents with request type: ${err} for sequence number: ${sequence_number}.`,
-      );
-    }
-  }
-
-  async getCheckpointContentsByDigest(
-    digest: CheckPointContentsDigest,
-  ): Promise<CheckpointContents> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCheckpointContentsByDigest',
-        [digest],
-        CheckpointContents,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`,
       );
     }
   }

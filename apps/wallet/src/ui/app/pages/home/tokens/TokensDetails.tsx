@@ -13,7 +13,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
-import { useAppSelector, useGetAllBalances, useGetCoinBalance } from '_hooks';
+import { useGetAllBalances, useGetCoinBalance } from '_hooks';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
@@ -24,15 +24,21 @@ type TokenDetailsProps = {
 
 function MyTokens() {
     const accountAddress = useActiveAddress();
-    const { data: balance, isLoading: loadingBalances } =
-        useGetAllBalances(accountAddress);
+    const {
+        data: balance,
+        isLoading,
+        isFetched,
+    } = useGetAllBalances(accountAddress);
 
     const noSuiToken = !balance?.find(
         ({ coinType }) => coinType === SUI_TYPE_ARG
     );
 
+    // Avoid perpetual loading state when fetching and retry keeps failing; add isFetched check.
+    const isFirstTimeLoading = isLoading && !isFetched;
+
     return (
-        <Loading loading={loadingBalances}>
+        <Loading loading={isFirstTimeLoading}>
             {balance?.length ? (
                 <div className="flex flex-1 justify-start flex-col w-full mt-6">
                     <Text variant="caption" color="steel" weight="semibold">
@@ -64,11 +70,12 @@ function MyTokens() {
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const activeCoinType = coinType || SUI_TYPE_ARG;
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const {
         data: coinBalance,
-        isLoading: loadingBalances,
         isError,
+        isLoading,
+        isFetched,
     } = useGetCoinBalance(activeCoinType, accountAddress);
 
     const tokenBalance = coinBalance?.totalBalance || BigInt(0);
@@ -77,33 +84,33 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         () => Coin.getCoinSymbol(activeCoinType),
         [activeCoinType]
     );
+    // Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
+    const isFirstTimeLoading = isLoading && !isFetched;
 
     return (
-        <>
+        <Loading loading={isFirstTimeLoading}>
             {coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
             <div
                 className="flex flex-col h-full flex-1 flex-grow items-center"
                 data-testid="coin-page"
             >
+                {!coinType && <AccountSelector />}
+                <div className="mt-1.5">
+                    <CoinBalance
+                        balance={tokenBalance}
+                        type={activeCoinType}
+                        mode="standalone"
+                    />
+                </div>
                 {isError ? (
                     <Alert>
                         <div>
-                            <small>Something went wrong</small>
+                            <strong>Error updating balance</strong>
                         </div>
                     </Alert>
                 ) : null}
-                {!coinType && <AccountSelector />}
-                <div className="mt-1.5">
-                    <Loading loading={loadingBalances}>
-                        <CoinBalance
-                            balance={tokenBalance}
-                            type={activeCoinType}
-                            mode="standalone"
-                        />
-                    </Loading>
-                </div>
-                <div className="flex flex-nowrap gap-2  justify-center w-full  mt-5">
+                <div className="flex flex-nowrap gap-2 justify-center w-full mt-5">
                     <IconLink
                         icon={SuiIcons.Buy}
                         to="/"
@@ -156,7 +163,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     </div>
                 )}
             </div>
-        </>
+        </Loading>
     );
 }
 
