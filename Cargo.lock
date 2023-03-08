@@ -9537,6 +9537,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "anyhow",
+ "backtrace",
  "bcs",
  "bincode",
  "byteorder",

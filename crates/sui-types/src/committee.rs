@@ -13,13 +13,14 @@ use multiaddr::Multiaddr;
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 pub use sui_protocol_config::ProtocolVersion;
+use tracing::warn;
 
 pub type EpochId = u64;
 
@@ -30,7 +31,9 @@ pub type StakeUnit = u64;
 
 pub type CommitteeDigest = [u8; 32];
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq)]
+#[derive(Clone, Debug, Serialize, Eq)]
+// Note that Committee has a custom deserialization
+// that needs to be updated if fields changes on this struct
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
@@ -137,9 +140,12 @@ impl Committee {
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            None => {
+                warn!("Manually parsing authority {}", authority);
+                (*authority).try_into().map_err(|_| {
+                    SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
+                })
+            }
         }
     }
 
@@ -310,6 +316,26 @@ impl Committee {
         )
         .unwrap();
         (committee, key_pairs)
+    }
+}
+
+impl<'de> Deserialize<'de> for Committee {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        warn!("Deserializing committee, {:?}", backtrace::Backtrace::new());
+        #[derive(Serialize, Deserialize)]
+        struct RawCommitteeData {
+            epoch: EpochId,
+            voting_rights: Vec<(AuthorityName, StakeUnit)>,
+            total_votes: StakeUnit,
+        }
+        let raw = RawCommitteeData::deserialize(deserializer)?;
+        let committee = Committee::new(raw.epoch, raw.voting_rights.into_iter().collect())
+            .expect("Committee::new should not fail on deserialized committee");
+        assert_eq!(committee.total_votes, raw.total_votes);
+        Ok(committee)
     }
 }
 
