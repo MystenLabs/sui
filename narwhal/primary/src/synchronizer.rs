@@ -130,11 +130,19 @@ impl Inner {
         let digest = certificate.digest();
 
         // TODO: remove this validation later to reduce rocksdb access.
+        let gc_round = self.gc_round.load(Ordering::Acquire);
         if certificate.round() > 1 {
-            for digest in &certificate.header.parents {
-                if !self.certificate_store.contains(digest).unwrap() {
-                    panic!("Parent {digest:?} not found for {certificate:?}!");
+            if certificate.round() > gc_round + 1 {
+                for digest in &certificate.header.parents {
+                    if !self.certificate_store.contains(digest).unwrap() {
+                        panic!("Parent {digest:?} not found for {certificate:?}!");
+                    }
                 }
+            } else {
+                debug!(
+                    "Skipping validation for {:?} as parents are <= of gc_round {}",
+                    certificate, gc_round
+                );
             }
         }
 
