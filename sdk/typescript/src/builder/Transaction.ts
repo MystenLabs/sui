@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
@@ -104,8 +105,10 @@ export class Transaction {
   static from(serialized: string | Uint8Array) {
     // Check for bytes:
     if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
-      // TODO: Support fromBytes.
-      throw new Error('from() does not yet support bytes');
+      const bytes = TransactionDataBuilder.fromBytes(
+        typeof serialized === 'string' ? fromB64(serialized) : serialized,
+      );
+      return bytes;
     }
 
     const parsed = JSON.parse(serialized);

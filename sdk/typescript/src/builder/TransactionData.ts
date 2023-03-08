@@ -58,11 +58,16 @@ export type SerializedTransactionDataBuilder = Infer<
 >;
 
 export class TransactionDataBuilder {
+  static fromBytes(bytes: Uint8Array) {
+    const data = builder.de('TransactionData', bytes);
+    const transactionData = new TransactionDataBuilder();
+  }
+
   static restore(data: SerializedTransactionDataBuilder) {
     assert(data, SerializedTransactionDataBuilder);
-    const builder = new TransactionDataBuilder();
-    Object.assign(builder, data);
-    return builder;
+    const transactionData = new TransactionDataBuilder();
+    Object.assign(transactionData, data);
+    return transactionData;
   }
 
   version = 1 as const;

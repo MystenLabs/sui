@@ -87,26 +87,28 @@ describe('offline build', () => {
     );
     await tx.build();
   });
-});
 
-// describe('online building (TODO: move to e2e)', () => {
-//   it('builds', async () => {
-//     const tx = setup();
-//     const provider = new JsonRpcProvider(localnetConnection);
-//     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
-//     tx.add(
-//       Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
-//     );
-//     tx.add(
-//       Commands.MoveCall({
-//         target: '0x2::devnet_nft::mint',
-//         typeArguments: [],
-//         arguments: [tx.input('foo'), tx.input('bar'), tx.input('baz')],
-//       }),
-//     );
-//     await tx.build({ provider });
-//   });
-// });
+  it.only('builds a more complex interaction', async () => {
+    const tx = setup();
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+    tx.add(
+      Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
+    );
+    tx.add(
+      Commands.MoveCall({
+        target: '0x2::devnet_nft::mint',
+        typeArguments: [],
+        arguments: [
+          tx.input(Inputs.Pure('string', 'foo')),
+          tx.input(Inputs.Pure('string', 'bar')),
+          tx.input(Inputs.Pure('string', 'baz')),
+        ],
+      }),
+    );
+    const bytes = await tx.build();
+    const tx2 = Transaction.from(bytes);
+  });
+});
 
 function ref(): { objectId: string; version: bigint; digest: string } {
   return {

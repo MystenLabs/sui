@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  define,
   Infer,
   literal,
   number,
@@ -48,13 +49,13 @@ export const ObjectOwner = union([
 ]);
 export type ObjectOwner = Infer<typeof ObjectOwner>;
 
-export const SuiJsonValue = unknown();
 export type SuiJsonValue =
   | boolean
   | number
   | string
   | CallArg
   | Array<SuiJsonValue>;
+export const SuiJsonValue = define<SuiJsonValue>('SuiJsonValue', () => true);
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
