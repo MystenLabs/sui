@@ -197,8 +197,12 @@ impl ProgrammableTransactionBuilder {
         })))
     }
 
+    pub fn publish_upgradeable(&mut self, modules: Vec<Vec<u8>>) -> Argument {
+        self.command(Command::Publish(modules))
+    }
+
     pub fn publish(&mut self, modules: Vec<Vec<u8>>) {
-        let cap = self.command(Command::Publish(modules));
+        let cap = self.publish_upgradeable(modules);
         self.commands
             .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package: SUI_FRAMEWORK_OBJECT_ID,
@@ -207,6 +211,15 @@ impl ProgrammableTransactionBuilder {
                 type_arguments: vec![],
                 arguments: vec![cap],
             })));
+    }
+
+    pub fn transfer_arg(&mut self, recipient: SuiAddress, arg: Argument) {
+        self.transfer_args(recipient, vec![arg])
+    }
+
+    pub fn transfer_args(&mut self, recipient: SuiAddress, args: Vec<Argument>) {
+        let rec_arg = self.pure(recipient).unwrap();
+        self.commands.push(Command::TransferObjects(args, rec_arg));
     }
 
     pub fn transfer_object(&mut self, recipient: SuiAddress, object_ref: ObjectRef) {
