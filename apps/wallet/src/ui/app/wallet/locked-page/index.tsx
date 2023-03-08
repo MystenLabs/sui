@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Field, Form, Formik } from 'formik';
+import { Form, Formik } from 'formik';
 import { Link } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 import * as Yup from 'yup';
@@ -11,7 +11,7 @@ import Icon, { SuiIcons } from '_app/components/icon';
 import Button from '_app/shared/button';
 import CardLayout from '_app/shared/card-layout';
 import FieldLabel from '_app/shared/field-label';
-import PasswordInput from '_app/shared/input/password';
+import { PasswordInputField } from '_app/shared/input/password';
 import PageMainLayout from '_app/shared/page-main-layout';
 import { unlockWallet } from '_app/wallet/actions';
 import { devQuickUnlockEnabled } from '_app/wallet/constants';
@@ -80,9 +80,8 @@ export default function LockedPage() {
                             {({ touched, errors, isSubmitting, isValid }) => (
                                 <Form className={st.form}>
                                     <FieldLabel txt="Enter Password">
-                                        <Field
+                                        <PasswordInputField
                                             name="password"
-                                            component={PasswordInput}
                                             disabled={isSubmitting}
                                         />
                                         {touched.password && errors.password ? (

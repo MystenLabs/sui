@@ -5,12 +5,13 @@ import * as Yup from 'yup';
 
 import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
 
-export const mnemonicValidation = Yup.string()
-    .ensure()
-    .required()
-    .trim()
-    .transform((mnemonic) => normalizeMnemonics(mnemonic))
-    .test('mnemonic-valid', 'Recovery Passphrase is invalid', (mnemonic) =>
-        validateMnemonics(mnemonic)
-    )
+export const mnemonicValidation = Yup.array()
+    .of(Yup.string().ensure().trim())
+    .transform((mnemonic: string[]) => {
+        console.log(mnemonic.join(' '));
+        return normalizeMnemonics(mnemonic.join(' ')).split(' ');
+    })
+    .test('mnemonic-valid', 'Recovery Passphrase is invalid', (mnemonic) => {
+        return validateMnemonics(mnemonic?.join(' ') || '');
+    })
     .label('Recovery Passphrase');
