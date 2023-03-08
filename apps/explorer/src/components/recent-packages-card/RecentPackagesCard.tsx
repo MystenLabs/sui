@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useRpcClient } from '@mysten/core';
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
-
-import { TxTimeType } from '../tx-time/TxTimeType';
-
 import {
     getEventSender,
     getEventPackage,
@@ -14,6 +9,10 @@ import {
     type PaginatedEvents,
     type SuiEvents,
 } from '@mysten/sui.js';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+
+import { TxTimeType } from '../tx-time/TxTimeType';
 
 import { Banner } from '~/ui/Banner';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
