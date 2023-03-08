@@ -95,10 +95,7 @@ function StakingCard() {
 
     const suiEarned = useMemo(() => {
         if (!system || !delegationData) return 0;
-        return getStakingRewards(
-            system.validators.active_validators,
-            delegationData
-        );
+        return getStakingRewards(system.active_validators, delegationData);
     }, [delegationData, system]);
 
     const [coinDecimals] = useCoinDecimals(coinType);

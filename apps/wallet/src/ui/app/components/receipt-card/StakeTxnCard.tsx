@@ -45,9 +45,8 @@ export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
     const validatorData = useMemo(() => {
         if (!system || !stakingData || !stakingData.fields.validator_address)
             return null;
-        return system.validators.active_validators.find(
-            (av) =>
-                av.metadata.sui_address === stakingData.fields.validator_address
+        return system.active_validators.find(
+            (av) => av.sui_address === stakingData.fields.validator_address
         );
     }, [stakingData, system]);
 
