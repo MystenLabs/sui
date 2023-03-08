@@ -49,11 +49,6 @@ notice = "warn"
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # ansi-term is unmaintained, but it's only used by `clap`
-    "RUSTSEC-2021-0139",
-    # potentially unaligned pointer deref in `atty` crate,
-    # but only when custom global allocator is used.
-    "RUSTSEC-2021-0145",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
