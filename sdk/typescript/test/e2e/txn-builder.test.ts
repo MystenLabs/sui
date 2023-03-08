@@ -19,11 +19,9 @@ import {
 
 describe('Transaction Builders', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
 
   beforeEach(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
   it('SplitCoin + TransferObjects', async () => {
@@ -36,7 +34,7 @@ describe('Transaction Builders', () => {
       ),
     );
     tx.add(Commands.TransferObjects([coin], tx.input(toolbox.address())));
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('MergeCoins', async () => {
@@ -47,7 +45,7 @@ describe('Transaction Builders', () => {
         tx.input(coins[1].objectId),
       ]),
     );
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('MoveCall', async () => {
@@ -65,7 +63,7 @@ describe('Transaction Builders', () => {
         ],
       }),
     );
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('MoveCall Shared Object', async () => {
@@ -87,20 +85,20 @@ describe('Transaction Builders', () => {
       }),
     );
 
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('SplitCoin from gas object + TransferObjects', async () => {
     const tx = new Transaction();
     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(1)));
     tx.add(Commands.TransferObjects([coin], tx.input(DEFAULT_RECIPIENT)));
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObjects gas object', async () => {
     const tx = new Transaction();
     tx.add(Commands.TransferObjects([tx.gas], tx.input(DEFAULT_RECIPIENT)));
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObject', async () => {
@@ -112,7 +110,7 @@ describe('Transaction Builders', () => {
         tx.input(DEFAULT_RECIPIENT),
       ),
     );
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 });
 

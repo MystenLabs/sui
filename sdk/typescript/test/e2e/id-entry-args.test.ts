@@ -6,21 +6,18 @@ import {
   Commands,
   getExecutionStatusType,
   ObjectId,
-  RawSigner,
   Transaction,
 } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: ObjectId;
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/id_entry_args';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   it('Test ID as arg to entry functions', async () => {
@@ -37,7 +34,7 @@ describe('Test ID as args to entry functions', () => {
         ],
       }),
     );
-    const result = await signer.signAndExecuteTransaction(tx);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx);
     expect(getExecutionStatusType(result)).toEqual('success');
   });
 });

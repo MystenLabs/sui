@@ -9,7 +9,6 @@ import {
   MoveCallTransaction,
   PaySuiTx,
   PureArg,
-  RawSigner,
   SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
   TransactionData,
@@ -36,9 +35,8 @@ describe('Transaction Serialization and deserialization', () => {
   beforeAll(async () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
-    const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   async function serializeAndDeserialize(

@@ -505,6 +505,7 @@ importers:
       '@scure/bip39': ^1.1.1
       '@size-limit/preset-small-lib': ^8.2.4
       '@suchipi/femver': ^1.0.0
+      '@types/tmp': ^0.2.3
       cross-env: ^7.0.3
       cross-fetch: ^3.1.5
       eslint: ^8.35.0
@@ -545,6 +546,7 @@ importers:
       tweetnacl: 1.0.3
     devDependencies:
       '@size-limit/preset-small-lib': 8.2.4_size-limit@8.2.4
+      '@types/tmp': 0.2.3
       cross-env: 7.0.3
       eslint: 8.35.0
       eslint-config-prettier: 8.6.0_eslint@8.35.0
@@ -7299,6 +7301,10 @@ packages:
 
   /@types/throttle-debounce/5.0.0:
     resolution: {integrity: sha512-Pb7k35iCGFcGPECoNE4DYp3Oyf2xcTd3FbFQxXUI9hEYKUl6YX+KLf7HrBmgVcD05nl50LIH6i+80js4iYmWbw==}
+    dev: true
+
+  /@types/tmp/0.2.3:
+    resolution: {integrity: sha512-dDZH/tXzwjutnuk4UacGgFRwV+JSLaXL1ikvidfJprkb7L9Nx1njcRHHmi3Dsvt7pgqqTEeucQuOrWHPFgzVHA==}
     dev: true
 
   /@types/topojson-client/3.1.1:
