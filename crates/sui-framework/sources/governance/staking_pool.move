@@ -421,9 +421,17 @@ module sui::staking_pool {
         };
         let clamped_epoch = option::get_with_default(&pool.deactivation_epoch, epoch);
         let epoch = math::min(clamped_epoch, epoch);
-        // TODO: there might be epochs where we skip updating the exchange rate table, in which case
-        // we need to find the latest entry in the table earlier than this epoch.
-        *table::borrow(&pool.exchange_rates, epoch)
+        let activation_epoch = *option::borrow(&pool.activation_epoch);
+
+        // Find the latest epoch that's earlier than the given epoch with an entry in the table
+        while (epoch >= activation_epoch) {
+            if (table::contains(&pool.exchange_rates, epoch)) {
+                return *table::borrow(&pool.exchange_rates, epoch)
+            };
+            epoch = epoch - 1;
+        };
+        // This line really should be unreachable. Do we want an assert false here?
+        initial_exchange_rate()
     }
 
     /// Calculate the total value of the pending staking requests for this staking pool.

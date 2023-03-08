@@ -16,6 +16,7 @@ module sui::delegation_tests {
         add_validator,
         add_validator_candidate,
         advance_epoch,
+        advance_epoch_safe_mode,
         advance_epoch_with_reward_amounts,
         create_validator_for_testing,
         create_sui_system_state_for_testing,
@@ -475,6 +476,37 @@ module sui::delegation_tests {
         // Undelegate now and the delegator should get no rewards.
         undelegate(DELEGATOR_ADDR_1, 0, scenario);
         assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_delegation_during_safe_mode() {
+        // test that delegation and undelegation can work during safe mode too.
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
+        advance_epoch(scenario);
+        // The first delegation gets 10 MIST here.
+        advance_epoch_with_reward_amounts(0, 40, scenario);
+        advance_epoch_safe_mode(scenario);
+
+        delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 100, scenario);
+
+        advance_epoch_safe_mode(scenario);
+        advance_epoch(scenario);
+        // The first delegation gets 10 MIST and the second one gets 8 here.
+        advance_epoch_with_reward_amounts(0, 50, scenario);
+        advance_epoch_safe_mode(scenario);
+
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        // 100 principal + 20 rewards
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 120);
+
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
+        // 100 principal + 8 rewards
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_2, scenario), 108);
 
         test_scenario::end(scenario_val);
     }
