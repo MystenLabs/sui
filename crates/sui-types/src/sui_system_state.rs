@@ -93,7 +93,7 @@ pub struct VerifiedValidatorMetadata {
     pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
-    pub proof_of_possession_bytes: Vec<u8>,
+    pub proof_of_possession_bytes: debug_ignore::DebugIgnore<Vec<u8>>,
     pub name: String,
     pub description: String,
     pub image_url: String,
@@ -193,7 +193,9 @@ impl ValidatorMetadata {
             protocol_pubkey,
             network_pubkey,
             worker_pubkey,
-            proof_of_possession_bytes: self.proof_of_possession_bytes.clone(),
+            proof_of_possession_bytes: debug_ignore::DebugIgnore(
+                self.proof_of_possession_bytes.clone(),
+            ),
             name: self.name.clone(),
             description: self.description.clone(),
             image_url: self.image_url.clone(),
@@ -248,7 +250,7 @@ impl ValidatorMetadata {
 }
 
 /// Rust version of the Move sui::validator::Validator type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
     pub voting_power: u64,
@@ -258,6 +260,31 @@ pub struct Validator {
     pub next_epoch_stake: u64,
     pub next_epoch_gas_price: u64,
     pub next_epoch_commission_rate: u64,
+}
+
+impl std::fmt::Debug for Validator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("Validator");
+
+        if let Ok(verified) = self.metadata.verify() {
+            debug.field("metadata", &verified);
+        } else {
+            debug.field("metadata", &self.metadata);
+        }
+
+        debug
+            .field("voting_power", &self.voting_power)
+            .field("gas_price", &self.gas_price)
+            .field("staking_pool", &self.staking_pool)
+            .field("commission_rate", &self.commission_rate)
+            .field("next_epoch_stake", &self.next_epoch_stake)
+            .field("next_epoch_gas_price", &self.next_epoch_gas_price)
+            .field(
+                "next_epoch_commission_rate",
+                &self.next_epoch_commission_rate,
+            )
+            .finish()
+    }
 }
 
 impl Validator {

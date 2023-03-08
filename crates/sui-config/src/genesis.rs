@@ -1082,9 +1082,14 @@ mod test {
     use super::*;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
-    use sui_types::crypto::{
-        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        NetworkKeyPair,
+    use sui_types::{
+        coin::CoinMetadata,
+        crypto::{
+            generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+            NetworkKeyPair,
+        },
+        gas_coin::TOTAL_SUPPLY_MIST,
+        governance::StakedSui,
     };
 
     #[test]
@@ -1203,8 +1208,6 @@ mod test {
                 worker_key: worker_key.public().clone(),
                 account_key: account_key.public().clone().into(),
                 network_key: network_key.public().clone(),
-                stake: 1,
-                delegation: 0,
                 gas_price: 1,
                 commission_rate: 0,
                 network_address: utils::new_tcp_network_address(),
@@ -1228,17 +1231,60 @@ mod test {
 
         println!("object count {}", genesis.objects().len());
         println!("validators {}", genesis.validator_set().len());
+
+        let store =
+            sui_types::in_memory_storage::InMemoryStorage::new(genesis.objects().to_owned());
+        let module_cache = move_bytecode_utils::module_cache::ModuleCache::new(&store);
+
+        let mut total_sui = 0;
+
         for object in genesis.objects() {
-            println!("{}", object.id());
-            if let Ok(gas) = GasCoin::try_from(object) {
-                println!("{:#?}", gas);
+            println!("ObjectId: {}", object.id());
+            println!("Owner: {}", object.owner);
+            println!("Storage Rebate: {}", object.storage_rebate);
+
+            match &object.data {
+                sui_types::object::Data::Move(move_object) => {
+                    println!("Object Type: {}", move_object.type_);
+
+                    if let Ok(gas) = GasCoin::try_from(object) {
+                        println!("Sui Balance: {}", gas.value());
+
+                        total_sui += gas.value();
+                    } else if let Ok(coin_metadata) = CoinMetadata::try_from(object) {
+                        println!("{:#?}", coin_metadata);
+                    } else if let Ok(staked_sui) = StakedSui::try_from(object) {
+                        println!("StakedSui Principal: {}", staked_sui.principal());
+                        total_sui += staked_sui.principal();
+                    }
+
+                    // let move_struct = move_object
+                    //     .to_move_struct_with_resolver(
+                    //         sui_types::object::ObjectFormatOptions::with_types(),
+                    //         &module_cache,
+                    //     )
+                    //     .unwrap();
+                    // println!("{}", move_struct);
+                }
+                sui_types::object::Data::Package(_) => {
+                    println!("Object Type: Package");
+                }
             }
 
-            if !object.is_package() {
-                println!("{:#?}", object);
-            }
+            println!();
         }
 
-        println!("{:#?}", genesis.sui_system_object());
+        let system_object = genesis.sui_system_object();
+        println!("{:#?}", system_object);
+        total_sui +=
+            system_object.storage_fund.value() + system_object.stake_subsidy.balance.value();
+
+        println!();
+        println!("Total Supply of Sui in Mist: {total_sui}");
+        if TOTAL_SUPPLY_MIST != total_sui {
+            println!("Total supply does not match expected supply of {TOTAL_SUPPLY_MIST}");
+        } else {
+            println!("Total supply is 10 Billion Sui");
+        }
     }
 }

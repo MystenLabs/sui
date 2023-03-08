@@ -323,6 +323,13 @@ impl CoinMetadata {
 impl TryFrom<Object> for CoinMetadata {
     type Error = SuiError;
     fn try_from(object: Object) -> Result<Self, Self::Error> {
+        TryFrom::try_from(&object)
+    }
+}
+
+impl TryFrom<&Object> for CoinMetadata {
+    type Error = SuiError;
+    fn try_from(object: &Object) -> Result<Self, Self::Error> {
         match &object.data {
             Data::Move(o) => {
                 if CoinMetadata::is_coin_metadata(&o.type_) {
@@ -337,6 +344,7 @@ impl TryFrom<Object> for CoinMetadata {
         })
     }
 }
+
 // Rust version of the Move sui::locked_coin::LockedCoin type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct LockedCoin {

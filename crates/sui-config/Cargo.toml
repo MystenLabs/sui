@@ -23,6 +23,7 @@ tracing = "0.1.36"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
 move-package.workspace = true
 move-core-types.workspace = true
 move-vm-runtime.workspace = true
