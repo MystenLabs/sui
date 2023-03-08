@@ -46,13 +46,42 @@ Any transaction that requires access to a `Clock` must go through [consensus](/l
 
 **Transactions that use the clock must accept it as an immutable reference** (not a mutable reference or value).  This prevents contention, as transactions that access the `Clock` can only read it, so do not need to be sequenced relative to each other.  Validators refuse to sign transactions that do not meet this requirement and packages that include entry functions that accept a `Clock` or `&mut Clock` fail to publish.
 
-The following function is used to test 'Clock'-dependent code by manually incrementing its timestamp, which is possible only in test code: 
+The following functions are used to test 'Clock'-dependent code by manually creating (and sharing) one and incrementing its timestamp. This is possible only in test code: 
 
 ```
 module sui::clock {
     #[test_only]
+    public fun create_for_testing(ctx: &mut TxContext);
+
+    #[test_only]
     public fun increment_for_testing(clock: &mut Clock, tick: u64);
 }
+```
+
+These following example presents a simple test that creates a `Clock`, increments it, and then checks its value:
+
+```
+module example::clock_tests {
+    use sui::clock::{Self, Clock};
+    use sui::test_scenario as ts;
+
+    #[test]
+    fun creating_a_clock_and_incrementing_it() {
+        let ts = ts::begin(@0x1);
+        let ctx = ts::ctx(&mut ts);
+
+        clock::create_for_testing(ctx);
+
+        let clock = ts::take_shared<Clock>(&ts);
+        clock::increment_for_testing(&mut clock, 20);
+        clock::increment_for_testing(&mut clock, 22);
+        assert!(clock::timestamp_ms(&clock) == 42, 0);
+
+        ts::return_shared(clock);
+        ts::end(ts);
+    }
+}
+
 ```
 
 ## Epoch timestamps
