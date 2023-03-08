@@ -26,7 +26,6 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
                 dedupe([...txnIds.data, ...fromTxnIds.data]),
                 {
                     showInput: true,
-                    showTimestamp: true,
                     showEffects: true,
                     showEvents: true,
                 }

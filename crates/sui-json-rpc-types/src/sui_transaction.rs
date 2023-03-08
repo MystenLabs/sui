@@ -48,10 +48,6 @@ pub struct SuiTransactionResponseOptions {
     pub show_effects: bool,
     /// Whether to show transaction events. Default to be False
     pub show_events: bool,
-    /// Whether to show checkpoint sequence number. Default to be False
-    pub show_checkpoint: bool,
-    /// Whether to show timestamp. Default to be False
-    pub show_timestamp: bool,
 }
 
 impl SuiTransactionResponseOptions {
@@ -61,9 +57,7 @@ impl SuiTransactionResponseOptions {
 
     pub fn full_content() -> Self {
         Self {
-            show_checkpoint: true,
             show_effects: true,
-            show_timestamp: true,
             show_input: true,
             show_events: true,
         }
@@ -81,16 +75,6 @@ impl SuiTransactionResponseOptions {
 
     pub fn with_events(mut self) -> Self {
         self.show_events = true;
-        self
-    }
-
-    pub fn with_checkpoint(mut self) -> Self {
-        self.show_checkpoint = true;
-        self
-    }
-
-    pub fn with_timestamp(mut self) -> Self {
-        self.show_timestamp = true;
         self
     }
 }

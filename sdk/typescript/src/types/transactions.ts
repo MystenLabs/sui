@@ -308,10 +308,6 @@ export const SuiTransactionResponseOptions = object({
   showEffects: optional(boolean()),
   /* Whether to show transaction events. Default to be false. */
   showEvents: optional(boolean()),
-  /* Whether to show checkpoint sequence number. Default to be false. */
-  showCheckpoint: optional(boolean()),
-  /* Whether to show timestamp. Default to be false. */
-  showTimestamp: optional(boolean()),
 });
 
 export type SuiTransactionResponseOptions = Infer<

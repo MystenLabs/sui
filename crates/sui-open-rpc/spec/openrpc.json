@@ -292,7 +292,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "6DKMYWZWQNa98ZDxmJrzpbRHHMAngYDFgyr1cgBv6WVG",
+              "digest": "RimyyhH99Bs6p7DJP6UwEbWYzb19NSczqARBzqi4GGC",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -870,13 +870,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "BHKcGAzXzbwa61Y1DPdnXhx1HYhBkC5biwPeTBNRUvNJ"
+                "Transaction": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "BHKcGAzXzbwa61Y1DPdnXhx1HYhBkC5biwPeTBNRUvNJ",
+                "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
                 "eventSeq": 10
               }
             },
@@ -1421,23 +1421,21 @@
           "params": [
             {
               "name": "digest",
-              "value": "3GybgrdUbuy1jdXMuQih2YitXHwsN6prvPeHD7H6cWAx"
+              "value": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y"
             },
             {
               "name": "options",
               "value": {
                 "showInput": true,
                 "showEffects": true,
-                "showEvents": true,
-                "showCheckpoint": false,
-                "showTimestamp": false
+                "showEvents": true
               }
             }
           ],
           "result": {
             "name": "Result",
             "value": {
-              "digest": "3GybgrdUbuy1jdXMuQih2YitXHwsN6prvPeHD7H6cWAx",
+              "digest": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -2447,7 +2445,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "8wqKqQPZ2fMik7E37BeE6FqQXgRnbktsbCPAHpj2wVdE",
+              "digest": "7DLsgW7cpwga58b8jHPFSR2j7eXx4y7eBdvSd36y3YoQ",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -7364,11 +7362,6 @@
       "TransactionResponseOptions": {
         "type": "object",
         "properties": {
-          "showCheckpoint": {
-            "description": "Whether to show checkpoint sequence number. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
           "showEffects": {
             "description": "Whether to show transaction effects. Default to be False",
             "default": false,
@@ -7381,11 +7374,6 @@
           },
           "showInput": {
             "description": "Whether to show transaction input data. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showTimestamp": {
-            "description": "Whether to show timestamp. Default to be False",
             "default": false,
             "type": "boolean"
           }

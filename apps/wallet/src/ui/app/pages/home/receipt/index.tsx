@@ -36,7 +36,6 @@ function ReceiptPage() {
             return rpc.getTransactionResponse(transactionId!, {
                 showInput: true,
                 showEffects: true,
-                showTimestamp: true,
                 showEvents: true,
             });
         },

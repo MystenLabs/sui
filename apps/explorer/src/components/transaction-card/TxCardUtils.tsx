@@ -176,7 +176,6 @@ export const getDataOnTxDigests = (
         .getTransactionResponseBatch(dedupe(transactions), {
             showInput: true,
             showEffects: true,
-            showTimestamp: true,
             showEvents: true,
         })
         .then((txEffs) =>

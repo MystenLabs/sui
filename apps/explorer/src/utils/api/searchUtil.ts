@@ -18,8 +18,6 @@ export const navigateWithUnknown = async (
                     showInput: true,
                     showEffects: true,
                     showEvents: true,
-                    showCheckpoint: true,
-                    showTimestamp: true,
                 })
                 .then((data) => ({
                     category: 'transaction',

@@ -262,17 +262,15 @@ impl ReadApiServer for ReadApi {
                 )?);
         }
 
-        if should_fetch_checkpoint(&opts) {
-            if let Some((_, seq)) = self
-                .state
-                .get_transaction_checkpoint_sequence(&digest)
-                .map_err(|e| anyhow!("{e}"))?
-            {
-                temp_response.checkpoint_seq = Some(seq);
-            }
+        if let Some((_, seq)) = self
+            .state
+            .get_transaction_checkpoint_sequence(&digest)
+            .map_err(|e| anyhow!("{e}"))?
+        {
+            temp_response.checkpoint_seq = Some(seq);
         }
 
-        if opts.show_timestamp && temp_response.checkpoint_seq.is_some() {
+        if temp_response.checkpoint_seq.is_some() {
             let checkpoint = self
                 .state
                 // safe to unwrap because we have checked `is_some` above
@@ -362,53 +360,49 @@ impl ReadApiServer for ReadApi {
             }
         }
 
-        if should_fetch_checkpoint(&opts) {
-            let checkpoint_seq_list = self
+        let checkpoint_seq_list = self
                 .state
                 .multi_get_transaction_checkpoint(&digests)
                 .await
                 .tap_err(
                     |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
-            for ((_digest, cache_entry), seq) in temp_response
-                .iter_mut()
-                .zip(checkpoint_seq_list.into_iter())
-            {
-                cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
-            }
+        for ((_digest, cache_entry), seq) in temp_response
+            .iter_mut()
+            .zip(checkpoint_seq_list.into_iter())
+        {
+            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
         }
 
-        if opts.show_timestamp {
-            let unique_checkpoint_numbers = temp_response
-                .values()
-                .filter_map(|cache_entry| cache_entry.checkpoint_seq)
-                // It's likely that many transactions has the same checkpoint, so we don't
-                // need to over-fetch
-                .unique()
-                .collect::<Vec<CheckpointSequenceNumber>>();
+        let unique_checkpoint_numbers = temp_response
+            .values()
+            .filter_map(|cache_entry| cache_entry.checkpoint_seq)
+            // It's likely that many transactions have the same checkpoint, so we don't
+            // need to over-fetch
+            .unique()
+            .collect::<Vec<CheckpointSequenceNumber>>();
 
-            // fetch timestamp from the DB
-            let timestamps = self
-                .state
-                .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
-                .map_err(|e| anyhow!("{e}"))?
-                .into_iter()
-                .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
+        // fetch timestamp from the DB
+        let timestamps = self
+            .state
+            .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
+            .map_err(|e| anyhow!("{e}"))?
+            .into_iter()
+            .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
 
-            // construct a hashmap of checkpoint -> timestamp for fast lookup
-            let checkpoint_to_timestamp = unique_checkpoint_numbers
-                .into_iter()
-                .zip(timestamps)
-                .collect::<HashMap<_, _>>();
+        // construct a hashmap of checkpoint -> timestamp for fast lookup
+        let checkpoint_to_timestamp = unique_checkpoint_numbers
+            .into_iter()
+            .zip(timestamps)
+            .collect::<HashMap<_, _>>();
 
-            // fill cache with the timestamp
-            for (_, cache_entry) in temp_response.iter_mut() {
-                if cache_entry.checkpoint_seq.is_some() {
-                    // safe to unwrap because is_some is checked
-                    cache_entry.timestamp = *checkpoint_to_timestamp
-                        .get(cache_entry.checkpoint_seq.as_ref().unwrap())
-                        // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
-                        .unwrap();
-                }
+        // fill cache with the timestamp
+        for (_, cache_entry) in temp_response.iter_mut() {
+            if cache_entry.checkpoint_seq.is_some() {
+                // safe to unwrap because is_some is checked
+                cache_entry.timestamp = *checkpoint_to_timestamp
+                    .get(cache_entry.checkpoint_seq.as_ref().unwrap())
+                    // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
+                    .unwrap();
             }
         }
 
@@ -619,22 +613,6 @@ impl SuiRpcModule for ReadApi {
     fn rpc_doc_module() -> Module {
         crate::api::ReadApiOpenRpc::module_doc()
     }
-}
-
-fn should_fetch_checkpoint(options: &SuiTransactionResponseOptions) -> bool {
-    // We have to fetch checkpoint if any of the following condition is true:
-    // 1. `show_checkpoint` is true
-    // 2. `show_timestamp` is true as timestamp depends on the checkpoint sequence number
-    // 3. when all flags are false, we have to fetch at least something here to prove
-    // that the transaction exists. And the checkpoint query should be the cheapest
-    let SuiTransactionResponseOptions {
-        show_input,
-        show_effects,
-        show_events,
-        show_checkpoint,
-        show_timestamp,
-    } = *options;
-    show_checkpoint || show_timestamp || (!show_input && !show_effects && !show_events)
 }
 
 fn to_sui_transaction_events(
@@ -931,13 +909,8 @@ fn convert_to_response(
         }
     }
 
-    if opts.show_checkpoint {
-        response.checkpoint = cache.checkpoint_seq;
-    }
-
-    if opts.show_timestamp {
-        response.timestamp_ms = cache.timestamp;
-    }
+    response.checkpoint = cache.checkpoint_seq;
+    response.timestamp_ms = cache.timestamp;
 
     if opts.show_events {
         response.events = cache.events;

@@ -13,8 +13,6 @@ export function useGetTransaction(transactionId: string) {
                 showInput: true,
                 showEffects: true,
                 showEvents: true,
-                showCheckpoint: true,
-                showTimestamp: true,
             }),
         { enabled: !!transactionId }
     );
