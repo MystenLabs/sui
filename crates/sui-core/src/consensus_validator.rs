@@ -15,8 +15,9 @@ use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     messages::{ConsensusTransaction, ConsensusTransactionKind},
 };
+use tap::TapFallible;
 
-use tracing::info;
+use tracing::{info, warn};
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
@@ -110,6 +111,7 @@ impl TransactionValidator for SuiTxValidator {
         // verify the user transaction signatures as a batch
         obligation
             .verify_all()
+            .tap_err(|e| warn!("batch verification error: {}", e))
             .wrap_err("Malformed batch (failed to verify)")
 
         // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
