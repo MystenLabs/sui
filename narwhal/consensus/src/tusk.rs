@@ -219,8 +219,9 @@ mod tests {
         // -- support level 1 (for L4)
         // -- support level 2 (for L4)
         //
-        let n = state.dag.len();
-        assert!(n <= 6, "DAG size: {}", n);
+        let n = state.last_committed.values().max().unwrap()
+            - state.last_committed.values().min().unwrap();
+        assert!(n <= 6, "Uncommitted depth: {}", n);
     }
 
     #[tokio::test]
@@ -255,7 +256,8 @@ mod tests {
         }
 
         // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind
-        let n = state.dag.len();
-        assert!(n <= gc_depth as usize, "DAG size: {}", n);
+        let n = state.last_committed.values().max().unwrap()
+            - state.last_committed.values().min().unwrap();
+        assert!(n <= gc_depth, "DAG size: {}", n);
     }
 }
