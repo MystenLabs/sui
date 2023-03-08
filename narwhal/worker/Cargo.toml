@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 arc-swap = "1.5.1"
 async-trait = "0.1.61"
-byteorder = "1.4.3"
+bincode = "1.3.3"
 bytes = "1.3.0"
 futures = "0.3.24"
 governor = "0.5.1"
@@ -47,6 +47,3 @@ consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 storage = { path = "../storage", package = "narwhal-storage" }
-
-[features]
-trace_transaction = []

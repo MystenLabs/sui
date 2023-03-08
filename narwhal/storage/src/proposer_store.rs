@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use store::rocks::{open_cf, MetricConf};
+use store::rocks::open_cf;
 use store::{reopen, rocks::DBMap, rocks::ReadWriteOptions, Map};
 use types::{Header, StoreResult};
 
@@ -23,13 +23,8 @@ impl ProposerStore {
 
     pub fn new_for_tests() -> ProposerStore {
         const LAST_PROPOSED_CF: &str = "last_proposed";
-        let rocksdb = open_cf(
-            tempfile::tempdir().unwrap(),
-            None,
-            MetricConf::default(),
-            &[LAST_PROPOSED_CF],
-        )
-        .expect("Cannot open database");
+        let rocksdb = open_cf(tempfile::tempdir().unwrap(), None, &[LAST_PROPOSED_CF])
+            .expect("Cannot open database");
         let last_proposed_map = reopen!(&rocksdb, LAST_PROPOSED_CF;<ProposerKey, Header>);
         ProposerStore::new(last_proposed_map)
     }

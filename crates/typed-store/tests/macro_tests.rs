@@ -9,12 +9,10 @@ use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Mutex;
-use std::time::Duration;
-use typed_store::metrics::SamplingInterval;
+use typed_store::rocks::be_fix_int_ser;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::rocks::RocksDBAccessType;
-use typed_store::rocks::{be_fix_int_ser, MetricConf};
 use typed_store::sally::SallyColumn;
 use typed_store::sally::SallyDBOptions;
 use typed_store::sally::SallyReadOnlyDBOptions;
@@ -64,8 +62,7 @@ struct TablesSingle {
 #[tokio::test]
 async fn macro_test() {
     let primary_path = temp_dir();
-    let tbls_primary =
-        Tables::open_tables_read_write(primary_path.clone(), MetricConf::default(), None, None);
+    let tbls_primary = Tables::open_tables_read_write(primary_path.clone(), None, None);
 
     // Write to both tables
     let mut raw_key_bytes1 = 0;
@@ -103,8 +100,7 @@ async fn macro_test() {
         .expect("Failed to multi-insert");
 
     // Open in secondary mode
-    let tbls_secondary =
-        Tables::get_read_only_handle(primary_path.clone(), None, None, MetricConf::default());
+    let tbls_secondary = Tables::get_read_only_handle(primary_path.clone(), None, None);
 
     // Check all the tables can be listed
     let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
@@ -175,7 +171,6 @@ async fn test_sallydb() {
     let primary_path = temp_dir();
     let example_db = SallyDBExample::init(SallyDBOptions::RocksDB((
         primary_path.clone(),
-        MetricConf::default(),
         RocksDBAccessType::Primary,
         None,
         None,
@@ -194,13 +189,9 @@ async fn test_sallydb() {
     wb.write().await.expect("Failed to commit write batch");
 
     // Open in secondary mode
-    let example_db_secondary =
-        SallyDBExample::get_read_only_handle(SallyReadOnlyDBOptions::RocksDB(Box::new((
-            primary_path.clone(),
-            MetricConf::default(),
-            None,
-            None,
-        ))));
+    let example_db_secondary = SallyDBExample::get_read_only_handle(
+        SallyReadOnlyDBOptions::RocksDB(Box::new((primary_path.clone(), None, None))),
+    );
 
     // Check all the tables can be listed
     let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
@@ -255,7 +246,7 @@ async fn test_sallydb() {
 async fn macro_transactional_test() {
     let key = "key".to_string();
     let primary_path = temp_dir();
-    let tables = Tables::open_tables_transactional(primary_path, MetricConf::default(), None, None);
+    let tables = Tables::open_tables_transactional(primary_path, None, None);
     let mut transaction = tables
         .table1
         .transaction()
@@ -313,24 +304,14 @@ async fn macro_test_configure() {
     config.table2.options.create_if_missing(false);
 
     // Build and open with new config
-    let _ = Tables::open_tables_read_write(
-        primary_path,
-        MetricConf::default(),
-        None,
-        Some(config.build()),
-    );
+    let _ = Tables::open_tables_read_write(primary_path, None, Some(config.build()));
 
     // Test the static config options
     let primary_path = temp_dir();
 
     assert_eq!(TABLE1_OPTIONS_SET_FLAG.lock().unwrap().len(), 0);
 
-    let _ = TablesCustomOptions::open_tables_read_write(
-        primary_path,
-        MetricConf::default(),
-        None,
-        None,
-    );
+    let _ = TablesCustomOptions::open_tables_read_write(primary_path, None, None);
 
     // Ensures that the function to set options was called
     assert_eq!(TABLE1_OPTIONS_SET_FLAG.lock().unwrap().len(), 1);
@@ -348,34 +329,56 @@ struct TablesMemUsage {
     table4: DBMap<i32, String>,
 }
 
-#[tokio::test]
-async fn test_sampling() {
-    let sampling_interval = SamplingInterval::new(Duration::ZERO, 10);
-    for _i in 0..10 {
-        assert!(!sampling_interval.sample());
-    }
-    assert!(sampling_interval.sample());
-    for _i in 0..10 {
-        assert!(!sampling_interval.sample());
-    }
-    assert!(sampling_interval.sample());
+#[derive(DBMapUtils)]
+struct StoreTables {
+    table1: Store<Vec<u8>, Vec<u8>>,
+    table2: Store<i32, String>,
 }
+#[tokio::test]
+async fn store_iter_and_filter_successfully() {
+    // Use constom configurator
+    let mut config = StoreTables::configurator();
+    // Config table 1
+    config.table1 = typed_store::rocks::DBOptions::default();
+    config.table1.options.create_if_missing(true);
+    config.table1.options.set_write_buffer_size(123456);
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_sampling_time() {
-    let sampling_interval = SamplingInterval::new(Duration::from_secs(1), 10);
-    for _i in 0..10 {
-        assert!(!sampling_interval.sample());
+    // Config table 2
+    config.table2 = config.table1.clone();
+
+    config.table2.options.create_if_missing(false);
+    let path = temp_dir();
+    let str = StoreTables::open_tables_read_write(path.clone(), None, Some(config.build()));
+
+    // AND key-values to store.
+    let key_values = vec![
+        (vec![0u8, 1u8], vec![4u8, 4u8]),
+        (vec![0u8, 2u8], vec![4u8, 5u8]),
+        (vec![0u8, 3u8], vec![4u8, 6u8]),
+        (vec![0u8, 4u8], vec![4u8, 7u8]),
+        (vec![0u8, 5u8], vec![4u8, 0u8]),
+        (vec![0u8, 6u8], vec![4u8, 1u8]),
+    ];
+
+    let result = str.table1.sync_write_all(key_values.clone()).await;
+    assert!(result.is_ok());
+
+    // Iter through the keys
+    let output = str
+        .table1
+        .iter(Some(Box::new(|(k, _v)| {
+            u16::from_le_bytes(k[..2].try_into().unwrap()) % 2 == 0
+        })))
+        .await;
+    for (k, v) in &key_values {
+        let int = u16::from_le_bytes(k[..2].try_into().unwrap());
+        if int % 2 == 0 {
+            let v1 = output.get(k).unwrap();
+            assert_eq!(v1.first(), v.first());
+            assert_eq!(v1.last(), v.last());
+        } else {
+            assert!(output.get(k).is_none());
+        }
     }
-    assert!(!sampling_interval.sample());
-    tokio::time::advance(Duration::from_secs(1)).await;
-    tokio::task::yield_now().await;
-    assert!(sampling_interval.sample());
-    for _i in 0..10 {
-        assert!(!sampling_interval.sample());
-    }
-    assert!(!sampling_interval.sample());
-    tokio::time::advance(Duration::from_secs(1)).await;
-    tokio::task::yield_now().await;
-    assert!(sampling_interval.sample());
+    assert_eq!(output.len(), key_values.len());
 }

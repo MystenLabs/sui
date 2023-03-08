@@ -43,7 +43,7 @@
 //!     insert_key_vals(&table).await;
 //!     // switch to rocksdb backend
 //!     let primary_path = tempfile::tempdir().expect("Failed to open db path").into_path();
-//!     table = ExampleTable::init(SallyDBOptions::RocksDB((primary_path, MetricConf::default(), RocksDBAccessType::Primary, None, None)));
+//!     table = ExampleTable::init(SallyDBOptions::RocksDB((primary_path, RocksDBAccessType::Primary, None, None)));
 //!     insert_key_vals(&table).await;
 //!     Ok(())
 //! }
@@ -57,9 +57,8 @@ use crate::{
     traits::{AsyncMap, Map},
 };
 
-use crate::rocks::safe_iter::{SafeIter as RocksDBIter, SafeRevIter};
-use crate::rocks::{DBMapTableConfigMap, MetricConf};
-use crate::test_db::{TestDBIter, TestDBRevIter};
+use crate::rocks::iter::Iter as RocksDBIter;
+use crate::rocks::DBMapTableConfigMap;
 use async_trait::async_trait;
 use collectable::TryExtend;
 use rocksdb::Options;
@@ -520,7 +519,6 @@ pub enum SallyDBOptions {
     RocksDB(
         (
             PathBuf,
-            MetricConf,
             RocksDBAccessType,
             Option<Options>,
             Option<DBMapTableConfigMap>,
@@ -532,7 +530,7 @@ pub enum SallyDBOptions {
 /// Options to configure a sally db instance for performing read only operations at the global level
 pub enum SallyReadOnlyDBOptions {
     // Options when sally db instance is backed by a single rocksdb instance
-    RocksDB(Box<(PathBuf, MetricConf, Option<PathBuf>, Option<Options>)>),
+    RocksDB(Box<(PathBuf, Option<PathBuf>, Option<Options>)>),
     TestDB,
 }
 

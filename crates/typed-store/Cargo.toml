@@ -17,7 +17,6 @@ fdlimit = "0.2.1"
 once_cell = "1.15.0"
 tap = "1.0.1"
 num_cpus = "1.14.0"
-prometheus = "0.13.3"
 hdrhistogram = "7.5.1"
 # deactivation of bzip2 due to https://github.com/rust-rocksdb/rust-rocksdb/issues/609
 rocksdb = { version = "0.20.1", features = ["lz4", "multi-threaded-cf"], default-features = false }

@@ -57,9 +57,6 @@ structopt = "0.3.26"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 reqwest = { version = "0.11.13", features = ["json"] }
 
-[features]
-trace_transaction = ["worker/trace_transaction"]
-
 [[bin]]
 name = "narwhal-node"
 path = "src/main.rs"

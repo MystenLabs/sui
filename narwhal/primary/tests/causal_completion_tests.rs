@@ -95,8 +95,6 @@ fn string_transaction() -> StringTransaction {
 #[ignore]
 #[tokio::test]
 async fn test_read_causal_signed_certificates() {
-    const CURRENT_ROUND_METRIC: &str = "current_round";
-
     // Enabled debug tracing so we can easily observe the
     // nodes logs.
     let _guard = setup_tracing();

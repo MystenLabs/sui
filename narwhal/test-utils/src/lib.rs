@@ -30,7 +30,6 @@ use std::{
     ops::RangeInclusive,
     sync::Arc,
 };
-use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
 use store::{reopen, rocks, rocks::DBMap};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -117,13 +116,8 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
 
-    let rocksdb = rocks::open_cf(
-        store_path,
-        None,
-        MetricConf::default(),
-        &[LAST_COMMITTED_CF, SEQUENCE_CF],
-    )
-    .expect("Failed creating database");
+    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
+        .expect("Failed creating database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
@@ -400,7 +394,6 @@ const BATCHES_CF: &str = "batches";
 pub fn create_batch_store() -> DBMap<BatchDigest, Batch> {
     DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
-        MetricConf::default(),
         None,
         Some(BATCHES_CF),
         &ReadWriteOptions::default(),

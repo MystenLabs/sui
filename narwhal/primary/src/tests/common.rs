@@ -16,7 +16,6 @@ use types::{
 };
 
 use storage::PayloadToken;
-use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
 
 pub fn create_db_stores() -> (HeaderStore, CertificateStore, PayloadStore) {
@@ -24,7 +23,6 @@ pub fn create_db_stores() -> (HeaderStore, CertificateStore, PayloadStore) {
     let rocksdb = rocks::open_cf(
         temp_dir(),
         None,
-        MetricConf::default(),
         &[
             HEADERS_CF,
             CERTIFICATES_CF,
@@ -58,6 +56,13 @@ pub fn create_db_stores() -> (HeaderStore, CertificateStore, PayloadStore) {
         ),
         PayloadStore::new(payload_map),
     )
+}
+
+pub fn create_test_vote_store() -> Store<PublicKey, VoteInfo> {
+    // Create a new test store.
+    let rocksdb = rocks::open_cf(temp_dir(), None, &[VOTES_CF]).expect("Failed creating database");
+    let votes_map = reopen!(&rocksdb, VOTES_CF;<PublicKey, VoteInfo>);
+    Store::new(votes_map)
 }
 
 #[must_use]

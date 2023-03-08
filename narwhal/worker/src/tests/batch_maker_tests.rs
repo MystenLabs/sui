@@ -5,13 +5,19 @@ use super::*;
 
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use store::rocks;
-use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
 use test_utils::{temp_dir, transaction};
 use types::PreSubscribedBroadcastSender;
 
-fn create_network_client() -> NetworkClient {
-    NetworkClient::new_with_empty_id()
+fn create_batches_store() -> Store<BatchDigest, Batch> {
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        None,
+        Some("batches"),
+        &ReadWriteOptions::default(),
+    )
+    .unwrap();
+    Store::new(db)
 }
 
 #[tokio::test]

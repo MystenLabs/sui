@@ -21,10 +21,10 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::{CertificateStore, VoteDigestStore};
-use storage::{CertificateStoreCache, PayloadToken};
-use storage::{NodeStorage, PayloadStore};
-use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
+use storage::CertificateStore;
+use storage::NodeStorage;
+use storage::PayloadToken;
+use store::rocks::{DBMap, ReadWriteOptions};
 use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::{mpsc, watch};
@@ -1119,7 +1119,6 @@ async fn test_process_payload_availability_when_failures() {
     let rocksdb = store::rocks::open_cf(
         temp_dir(),
         None,
-        MetricConf::default(),
         &[
             test_utils::CERTIFICATES_CF,
             test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF,
