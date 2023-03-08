@@ -76,6 +76,7 @@ num_cpus = "1.14.0"
 
 sui-simulator = { path = "../sui-simulator" }
 sui-macros = { path = "../sui-macros" }
+shared-crypto = { path = "../shared-crypto" }
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }

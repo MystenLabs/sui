@@ -15,6 +15,7 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
 use mysten_metrics::RegistryService;
+use shared_crypto::intent::Intent;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
@@ -32,7 +33,6 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use sui_types::object::Object;
 

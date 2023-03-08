@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use shared_crypto::intent::Intent;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     types::{
@@ -9,7 +10,6 @@ use sui_sdk::{
     },
     SuiClientBuilder,
 };
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]

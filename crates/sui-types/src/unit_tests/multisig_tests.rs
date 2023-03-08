@@ -8,18 +8,17 @@ use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
 
+use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use crate::{
     base_types::SuiAddress,
     crypto::{
         get_key_pair, get_key_pair_from_rng, Ed25519SuiSignature, Signature, SuiKeyPair,
         SuiSignatureInner,
     },
-    intent::{Intent, IntentMessage, PersonalMessage},
     multisig::{MultiSig, MAX_SIGNER_IN_MULTISIG},
     signature::{AuthenticatorTrait, GenericSignature},
 };
-
-use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
 pub fn keys() -> Vec<SuiKeyPair> {
     let mut seed = StdRng::from_seed([0; 32]);

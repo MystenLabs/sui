@@ -12,6 +12,7 @@ use signature::rand_core::OsRng;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
+use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -22,7 +23,6 @@ use sui_sdk::rpc_types::{
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::intent::Intent;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, InputObjectKind, ObjectArg, ProgrammableTransaction,
     Transaction, TransactionData, TransactionDataAPI, TransactionKind, DUMMY_GAS_PRICE,

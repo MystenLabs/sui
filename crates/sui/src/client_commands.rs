@@ -33,6 +33,7 @@ use sui_types::error::SuiError;
 use sui_framework_build::compiled_package::{
     build_from_resolution_graph, ensure_published_dependencies, BuildConfig,
 };
+use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,
@@ -43,7 +44,6 @@ use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::intent::Intent;
 use sui_types::signature::GenericSignature;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},

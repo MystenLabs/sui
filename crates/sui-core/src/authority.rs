@@ -25,14 +25,13 @@ use prometheus::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use shared_crypto::intent::{Intent,IntentScope};
 use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
-use sui_types::intent::Intent;
-use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SuiSystemStateTrait;

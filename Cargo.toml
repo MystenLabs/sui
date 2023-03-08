@@ -7,6 +7,7 @@ members = [
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
+    "crates/shared-crypto",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",

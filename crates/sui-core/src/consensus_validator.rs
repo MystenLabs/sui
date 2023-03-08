@@ -4,8 +4,8 @@
 use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use shared_crypto::intent::{Intent, IntentScope};
 use std::sync::Arc;
-use sui_types::intent::{Intent, IntentScope};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::transaction_manager::TransactionManager;
