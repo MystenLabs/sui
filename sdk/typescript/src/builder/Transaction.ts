@@ -411,12 +411,10 @@ export class Transaction {
     }
 
     if (!this.#transactionData.gasConfig.payment) {
-      const coins = await expectProvider(provider).getCoins(
-        this.#transactionData.sender,
-        SUI_TYPE_ARG,
-        null,
-        null,
-      );
+      const coins = await expectProvider(provider).getCoins({
+        owner: this.#transactionData.sender,
+        coinType: SUI_TYPE_ARG,
+      });
 
       // TODO: Allow consumers to define coin selection logic, and refine the default behavior.
       // The current default is just picking _all_ coins which may not be ideal.

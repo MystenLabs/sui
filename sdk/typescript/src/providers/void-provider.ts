@@ -83,39 +83,27 @@ export class VoidProvider extends Provider {
   }
 
   // Coins
-  async getCoins(
-    _owner: SuiAddress,
-    _coinType: string | null,
-    _cursor: ObjectId | null,
-    _limit: number | null,
-  ): Promise<PaginatedCoins> {
+  async getCoins(): Promise<PaginatedCoins> {
     throw this.newError('getCoins');
   }
 
-  async getAllCoins(
-    _owner: SuiAddress,
-    _cursor: ObjectId | null,
-    _limit: number | null,
-  ): Promise<PaginatedCoins> {
+  async getAllCoins(): Promise<PaginatedCoins> {
     throw this.newError('getAllCoins');
   }
 
-  async getBalance(
-    _owner: string,
-    _coinType: string | null,
-  ): Promise<CoinBalance> {
+  async getBalance(): Promise<CoinBalance> {
     throw this.newError('getBalance');
   }
 
-  async getAllBalances(_owner: string): Promise<CoinBalance[]> {
+  async getAllBalances(): Promise<CoinBalance[]> {
     throw this.newError('getAllBalances');
   }
 
-  async getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
+  async getCoinMetadata(): Promise<CoinMetadata> {
     throw new Error('getCoinMetadata');
   }
 
-  async getTotalSupply(_coinType: string): Promise<CoinSupply> {
+  async getTotalSupply(): Promise<CoinSupply> {
     throw new Error('getTotalSupply');
   }
 

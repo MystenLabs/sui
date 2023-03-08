@@ -50,12 +50,10 @@ describe('Governance API', () => {
 });
 
 async function addDelegation(signer: RawSigner) {
-  const coins = await signer.provider.getCoins(
-    await signer.getAddress(),
-    SUI_TYPE_ARG,
-    null,
-    null,
-  );
+  const coins = await signer.provider.getCoins({
+    owner: await signer.getAddress(),
+    coinType: SUI_TYPE_ARG,
+  });
 
   const system = await signer.provider.getLatestSuiSystemState();
   const validators = system.active_validators;

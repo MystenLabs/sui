@@ -30,7 +30,11 @@ export async function convertToTransactionBuilder(
 
       if (getObjectType(coinToMerge) === '0x2::coin::Coin<0x2::sui::SUI>') {
         // Merging Sui, need to avoid gas overlap:
-        const coins = await provider.getCoins(sender, SUI_TYPE_ARG, null, null);
+        const coins = await provider.getCoins({
+          owner: sender,
+          coinType: SUI_TYPE_ARG,
+        });
+
         tx.add(
           Commands.MergeCoins(tx.input(data.primaryCoin), [
             tx.input(data.coinToMerge),

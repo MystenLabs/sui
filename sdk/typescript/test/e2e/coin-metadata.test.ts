@@ -18,9 +18,9 @@ describe('Test Coin Metadata', () => {
   });
 
   it('Test accessing coin metadata', async () => {
-    const coinMetadata = await signer.provider.getCoinMetadata(
-      `${packageId}::test::TEST`,
-    );
+    const coinMetadata = await signer.provider.getCoinMetadata({
+      coinType: `${packageId}::test::TEST`,
+    });
     expect(coinMetadata.decimals).to.equal(2);
     expect(coinMetadata.name).to.equal('Test Coin');
     expect(coinMetadata.description).to.equal('Test coin metadata');

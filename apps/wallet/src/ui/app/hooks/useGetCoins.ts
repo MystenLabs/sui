@@ -18,10 +18,12 @@ export function useGetCoins(coinType: string, address?: SuiAddress | null) {
             // keep fetching until cursor is null or undefined
             do {
                 const { data, nextCursor }: PaginatedCoins = await rpc.getCoins(
-                    address!,
-                    coinType,
-                    cursor,
-                    MAX_COINS_PER_REQUEST
+                    {
+                        owner: address!,
+                        coinType,
+                        cursor,
+                        limit: MAX_COINS_PER_REQUEST,
+                    }
                 );
                 if (!data || !data.length) {
                     break;
