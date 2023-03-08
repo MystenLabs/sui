@@ -14,7 +14,6 @@ use crate::sui_system_state::epoch_start_sui_system_state::{
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -30,7 +29,7 @@ const E_METADATA_INVALID_PRIMARY_ADDR: u64 = 6;
 const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
@@ -39,7 +38,7 @@ pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
@@ -208,7 +207,7 @@ impl ValidatorMetadataV1 {
 }
 
 /// Rust version of the Move sui::validator::Validator type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "Validator")]
 pub struct ValidatorV1 {
@@ -345,7 +344,7 @@ impl ValidatorV1 {
 }
 
 /// Rust version of the Move sui::staking_pool::StakingPool type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "StakingPool")]
 pub struct StakingPoolV1 {
@@ -362,7 +361,7 @@ pub struct StakingPoolV1 {
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
@@ -377,7 +376,7 @@ pub struct ValidatorSetV1 {
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
@@ -392,7 +391,7 @@ pub struct SuiSystemStateInnerV1 {
     // TODO: Use getters instead of all pub.
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
@@ -444,24 +443,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             .active_validators
             .iter()
             .map(|v| v.metadata.clone())
-            .collect()
-    }
-
-    /// Maps from validator Sui address to (public key bytes, staking pool sui balance).
-    /// TODO: Might be useful to return a more organized data structure.
-    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
-        self.validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                (
-                    validator.metadata.sui_address,
-                    (
-                        validator.metadata.protocol_pubkey_bytes.clone(),
-                        validator.staking_pool.sui_balance,
-                    ),
-                )
-            })
             .collect()
     }
 

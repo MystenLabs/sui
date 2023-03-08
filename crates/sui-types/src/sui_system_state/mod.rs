@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::SuiAddress;
 use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
@@ -16,7 +15,6 @@ use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructT
 use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use tracing::error;
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorMetadataV1};
@@ -70,7 +68,6 @@ pub trait SuiSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
     fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadataV1>;
-    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }

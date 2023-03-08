@@ -10,7 +10,6 @@ use sui_types::messages::{
     ExecuteTransactionRequestType, Transaction, TransactionData, TransactionDataAPI,
 };
 use sui_types::signature::GenericSignature;
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::errors::Error;
 use crate::types::{
@@ -194,13 +193,11 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
-    let system_state: SuiSystemState = context
+    let gas_price = context
         .client
         .governance_api()
-        .get_sui_system_state()
-        .await?
-        .into();
-    let gas_price = system_state.reference_gas_price();
+        .get_reference_gas_price()
+        .await?;
 
     let (tx_metadata, gas, budget) = match &option.internal_operation {
         InternalOperation::PaySui {
