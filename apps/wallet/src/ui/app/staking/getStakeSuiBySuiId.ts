@@ -1,5 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifie
+// SPDX-License-Identifier: Apache-2.0
 
 import { type DelegatedStake } from '@mysten/sui.js';
 
