@@ -304,9 +304,21 @@ module sui::validator {
         self.next_epoch_gas_price = new_price;
     }
 
+    /// Set new gas price.
+    public(friend) fun set_gas_price(self: &mut Validator, new_price: u64) {
+        self.gas_price = new_price;
+    }
+
+    /// Request to set new commission rate for the next epoch.
     public(friend) fun request_set_commission_rate(self: &mut Validator, new_commission_rate: u64) {
         assert!(new_commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
         self.next_epoch_commission_rate = new_commission_rate;
+    }
+
+    /// Set new commission rate.
+    public(friend) fun set_commission_rate(self: &mut Validator, new_commission_rate: u64) {
+        assert!(new_commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
+        self.commission_rate = new_commission_rate;
     }
 
     /// Deposit stakes rewards into the validator's staking pool, called at the end of the epoch.
@@ -524,9 +536,21 @@ module sui::validator {
         validate_metadata(&self.metadata);
     }
 
+    /// Update network address of this validator
+    public(friend) fun update_network_address(self: &mut Validator, net_address: vector<u8>) {
+        self.metadata.net_address = net_address;
+        validate_metadata(&self.metadata);
+    }
+
     /// Update p2p address of this validator, taking effects from next epoch
     public(friend) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
         self.metadata.next_epoch_p2p_address = option::some(p2p_address);
+        validate_metadata(&self.metadata);
+    }
+
+    /// Update p2p address of this validator
+    public(friend) fun update_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
+        self.metadata.p2p_address = p2p_address;
         validate_metadata(&self.metadata);
     }
 
@@ -536,9 +560,21 @@ module sui::validator {
         validate_metadata(&self.metadata);
     }
 
+    /// Update consensus address of this validator
+    public(friend) fun update_primary_address(self: &mut Validator, primary_address: vector<u8>) {
+        self.metadata.primary_address = primary_address;
+        validate_metadata(&self.metadata);
+    }
+
     /// Update worker address of this validator, taking effects from next epoch
     public(friend) fun update_next_epoch_worker_address(self: &mut Validator, worker_address: vector<u8>) {
         self.metadata.next_epoch_worker_address = option::some(worker_address);
+        validate_metadata(&self.metadata);
+    }
+
+    /// Update worker address of this validator
+    public(friend) fun update_worker_address(self: &mut Validator, worker_address: vector<u8>) {
+        self.metadata.worker_address = worker_address;
         validate_metadata(&self.metadata);
     }
 
@@ -549,15 +585,35 @@ module sui::validator {
         validate_metadata(&self.metadata);
     }
 
+    /// Update protocol public key of this validator
+    public(friend) fun update_protocol_pubkey(self: &mut Validator, protocol_pubkey: vector<u8>, proof_of_possession: vector<u8>) {
+        // TODO move proof of possession verification to the native function
+        self.metadata.protocol_pubkey_bytes = protocol_pubkey;
+        self.metadata.proof_of_possession = proof_of_possession;
+        validate_metadata(&self.metadata);
+    }
+
     /// Update network public key of this validator, taking effects from next epoch
     public(friend) fun update_next_epoch_network_pubkey(self: &mut Validator, network_pubkey: vector<u8>) {
         self.metadata.next_epoch_network_pubkey_bytes = option::some(network_pubkey);
         validate_metadata(&self.metadata);
     }
 
+    /// Update network public key of this validator
+    public(friend) fun update_network_pubkey(self: &mut Validator, network_pubkey: vector<u8>) {
+        self.metadata.network_pubkey_bytes = network_pubkey;
+        validate_metadata(&self.metadata);
+    }
+
     /// Update Narwhal worker public key of this validator, taking effects from next epoch
     public(friend) fun update_next_epoch_worker_pubkey(self: &mut Validator, worker_pubkey: vector<u8>) {
         self.metadata.next_epoch_worker_pubkey_bytes = option::some(worker_pubkey);
+        validate_metadata(&self.metadata);
+    }
+
+    /// Update Narwhal worker public key of this validator
+    public(friend) fun update_worker_pubkey(self: &mut Validator, worker_pubkey: vector<u8>) {
+        self.metadata.worker_pubkey_bytes = worker_pubkey;
         validate_metadata(&self.metadata);
     }
 
@@ -677,10 +733,10 @@ module sui::validator {
     }
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
-    // Creates a validator - bypassing the proof of possession check and other metadata 
+    // Creates a validator - bypassing the proof of possession check and other metadata
     // validation in the process.
-    // Note: `proof_of_possession` MUST be a valid signature using sui_address and 
-    // protocol_pubkey_bytes. To produce a valid PoP, run [fn test_proof_of_possession]. 
+    // Note: `proof_of_possession` MUST be a valid signature using sui_address and
+    // protocol_pubkey_bytes. To produce a valid PoP, run [fn test_proof_of_possession].
     #[test_only]
     public(friend) fun new_for_testing(
         sui_address: address,

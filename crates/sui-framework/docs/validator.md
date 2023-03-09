@@ -17,7 +17,9 @@
 -  [Function `request_add_stake`](#0x2_validator_request_add_stake)
 -  [Function `request_withdraw_stake`](#0x2_validator_request_withdraw_stake)
 -  [Function `request_set_gas_price`](#0x2_validator_request_set_gas_price)
+-  [Function `set_gas_price`](#0x2_validator_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_validator_request_set_commission_rate)
+-  [Function `set_commission_rate`](#0x2_validator_set_commission_rate)
 -  [Function `deposit_stake_rewards`](#0x2_validator_deposit_stake_rewards)
 -  [Function `process_pending_stakes_and_withdraws`](#0x2_validator_process_pending_stakes_and_withdraws)
 -  [Function `is_preactive`](#0x2_validator_is_preactive)
@@ -63,12 +65,19 @@
 -  [Function `update_image_url`](#0x2_validator_update_image_url)
 -  [Function `update_project_url`](#0x2_validator_update_project_url)
 -  [Function `update_next_epoch_network_address`](#0x2_validator_update_next_epoch_network_address)
+-  [Function `update_network_address`](#0x2_validator_update_network_address)
 -  [Function `update_next_epoch_p2p_address`](#0x2_validator_update_next_epoch_p2p_address)
+-  [Function `update_p2p_address`](#0x2_validator_update_p2p_address)
 -  [Function `update_next_epoch_primary_address`](#0x2_validator_update_next_epoch_primary_address)
+-  [Function `update_primary_address`](#0x2_validator_update_primary_address)
 -  [Function `update_next_epoch_worker_address`](#0x2_validator_update_next_epoch_worker_address)
+-  [Function `update_worker_address`](#0x2_validator_update_worker_address)
 -  [Function `update_next_epoch_protocol_pubkey`](#0x2_validator_update_next_epoch_protocol_pubkey)
+-  [Function `update_protocol_pubkey`](#0x2_validator_update_protocol_pubkey)
 -  [Function `update_next_epoch_network_pubkey`](#0x2_validator_update_next_epoch_network_pubkey)
+-  [Function `update_network_pubkey`](#0x2_validator_update_network_pubkey)
 -  [Function `update_next_epoch_worker_pubkey`](#0x2_validator_update_next_epoch_worker_pubkey)
+-  [Function `update_worker_pubkey`](#0x2_validator_update_worker_pubkey)
 -  [Function `effectuate_staged_metadata`](#0x2_validator_effectuate_staged_metadata)
 -  [Function `validate_metadata`](#0x2_validator_validate_metadata)
 -  [Function `validate_metadata_bcs`](#0x2_validator_validate_metadata_bcs)
@@ -821,10 +830,36 @@ Need to present a <code>ValidatorOperationCap</code>.
 
 </details>
 
+<a name="0x2_validator_set_gas_price"></a>
+
+## Function `set_gas_price`
+
+Set new gas price.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_set_gas_price">set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, new_price: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_set_gas_price">set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_price: u64) {
+    self.gas_price = new_price;
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_request_set_commission_rate"></a>
 
 ## Function `request_set_commission_rate`
 
+Request to set new commission rate for the next epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, new_commission_rate: u64)
@@ -839,6 +874,32 @@ Need to present a <code>ValidatorOperationCap</code>.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_commission_rate: u64) {
     <b>assert</b>!(new_commission_rate &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.next_epoch_commission_rate = new_commission_rate;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_commission_rate"></a>
+
+## Function `set_commission_rate`
+
+Set new commission rate.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_set_commission_rate">set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, new_commission_rate: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_set_commission_rate">set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_commission_rate: u64) {
+    <b>assert</b>!(new_commission_rate &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
+    self.commission_rate = new_commission_rate;
 }
 </code></pre>
 
@@ -1965,6 +2026,32 @@ Update network address of this validator, taking effects from next epoch
 
 </details>
 
+<a name="0x2_validator_update_network_address"></a>
+
+## Function `update_network_address`
+
+Update network address of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_network_address">update_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_network_address">update_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.net_address = net_address;
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_update_next_epoch_p2p_address"></a>
 
 ## Function `update_next_epoch_p2p_address`
@@ -1983,6 +2070,32 @@ Update p2p address of this validator, taking effects from next epoch
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_p2p_address = <a href="_some">option::some</a>(p2p_address);
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_update_p2p_address"></a>
+
+## Function `update_p2p_address`
+
+Update p2p address of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_p2p_address">update_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_p2p_address">update_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.p2p_address = p2p_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
 </code></pre>
@@ -2017,6 +2130,32 @@ Update consensus address of this validator, taking effects from next epoch
 
 </details>
 
+<a name="0x2_validator_update_primary_address"></a>
+
+## Function `update_primary_address`
+
+Update consensus address of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_primary_address">update_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_primary_address">update_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.primary_address = primary_address;
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_update_next_epoch_worker_address"></a>
 
 ## Function `update_next_epoch_worker_address`
@@ -2035,6 +2174,32 @@ Update worker address of this validator, taking effects from next epoch
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_worker_address = <a href="_some">option::some</a>(worker_address);
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_update_worker_address"></a>
+
+## Function `update_worker_address`
+
+Update worker address of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_worker_address">update_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_worker_address">update_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.worker_address = worker_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
 </code></pre>
@@ -2070,6 +2235,34 @@ Update protocol public key of this validator, taking effects from next epoch
 
 </details>
 
+<a name="0x2_validator_update_protocol_pubkey"></a>
+
+## Function `update_protocol_pubkey`
+
+Update protocol public key of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_protocol_pubkey">update_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, protocol_pubkey: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_protocol_pubkey">update_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, protocol_pubkey: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;) {
+    // TODO <b>move</b> proof of possession verification <b>to</b> the <b>native</b> function
+    self.metadata.protocol_pubkey_bytes = protocol_pubkey;
+    self.metadata.proof_of_possession = proof_of_possession;
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_update_next_epoch_network_pubkey"></a>
 
 ## Function `update_next_epoch_network_pubkey`
@@ -2096,6 +2289,32 @@ Update network public key of this validator, taking effects from next epoch
 
 </details>
 
+<a name="0x2_validator_update_network_pubkey"></a>
+
+## Function `update_network_pubkey`
+
+Update network public key of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_network_pubkey">update_network_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, network_pubkey: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_network_pubkey">update_network_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, network_pubkey: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.network_pubkey_bytes = network_pubkey;
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_update_next_epoch_worker_pubkey"></a>
 
 ## Function `update_next_epoch_worker_pubkey`
@@ -2114,6 +2333,32 @@ Update Narwhal worker public key of this validator, taking effects from next epo
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_worker_pubkey">update_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_pubkey: <a href="">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_worker_pubkey_bytes = <a href="_some">option::some</a>(worker_pubkey);
+    <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_update_worker_pubkey"></a>
+
+## Function `update_worker_pubkey`
+
+Update Narwhal worker public key of this validator
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_worker_pubkey">update_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, worker_pubkey: <a href="">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_worker_pubkey">update_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_pubkey: <a href="">vector</a>&lt;u8&gt;) {
+    self.metadata.worker_pubkey_bytes = worker_pubkey;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
 </code></pre>

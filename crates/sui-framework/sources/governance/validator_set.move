@@ -602,11 +602,14 @@ module sui::validator_set {
         vector::borrow_mut(validators, validator_index)
     }
 
+    /// Get mutable reference to an active or (if active does not exist) pending or (if pending and
+    /// active do not exist) or preactive validator by address.
     /// Note: this function should be called carefully, only after verifying the transaction
     /// sender has the ability to modify the `Validator`.
-    fun get_active_or_pending_validator_mut(
+    fun get_active_or_pending_or_preactive_validator_mut(
         self: &mut ValidatorSet,
         validator_address: address,
+        include_preactive: bool,
     ): &mut Validator {
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
         if (option::is_some(&validator_index_opt)) {
@@ -614,23 +617,39 @@ module sui::validator_set {
             return vector::borrow_mut(&mut self.active_validators, validator_index)
         };
         let validator_index_opt = find_validator_from_table_vec(&self.pending_active_validators, validator_address);
-        let validator_index = option::extract(&mut validator_index_opt);
-        return table_vec::borrow_mut(&mut self.pending_active_validators, validator_index)
+        if (!include_preactive) {
+            // consider only pending validators
+            let validator_index = option::extract(&mut validator_index_opt);
+            table_vec::borrow_mut(&mut self.pending_active_validators, validator_index)
+        } else {
+            // consider both pending validators and the candidate ones
+            if (option::is_some(&validator_index_opt)) {
+                let validator_index = option::extract(&mut validator_index_opt);
+                return table_vec::borrow_mut(&mut self.pending_active_validators, validator_index)
+            };
+            get_preactive_validator_mut(self, validator_address)
+        }
     }
 
     public(friend) fun get_validator_mut_with_verified_cap(
         self: &mut ValidatorSet,
         verified_cap: &ValidatorOperationCap,
     ): &mut Validator {
-        get_active_or_pending_validator_mut(self, *validator_cap::verified_operation_cap_address(verified_cap))
+        get_active_or_pending_or_preactive_validator_mut(self, *validator_cap::verified_operation_cap_address(verified_cap), false /* include_preactive */)
     }
 
     public(friend) fun get_validator_mut_with_ctx(
         self: &mut ValidatorSet,
         ctx: &TxContext,
+        include_preactive: bool,
     ): &mut Validator {
         let validator_address = tx_context::sender(ctx);
-        get_active_or_pending_validator_mut(self, validator_address)
+        get_active_or_pending_or_preactive_validator_mut(self, validator_address, include_preactive)
+    }
+
+    /// Get mutable reference to a preactive validator by address
+    public(friend) fun get_preactive_validator_mut(self: &mut ValidatorSet, validator_address: address): &mut Validator {
+        table::borrow_mut(&mut self.validator_candidates, validator_address)
     }
 
     fun get_validator_ref(
@@ -693,6 +712,13 @@ module sui::validator_set {
                 get_active_or_pending_validator_ref(self, cap_address);
         assert!(validator::operation_cap_id(validator) == &object::id(cap), EInvalidCap);
         validator_cap::new_from_unverified(cap)
+    }
+
+    public fun get_preactive_validator_ref(
+        self: &ValidatorSet,
+        validator_address: address,
+    ): &Validator {
+        table::borrow(&self.validator_candidates, validator_address)
     }
 
     /// Process the pending withdraw requests. For each pending request, the validator
