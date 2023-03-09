@@ -376,6 +376,7 @@ impl ValidatorService {
                     VerifiedCertificate::new_unchecked(certificate)
                 } else {
                     let _timer = metrics.cert_verification_latency.start_timer();
+                    // Note: verify verifies user sigs as well before caching cert.
                     certificate.verify(epoch_store.committee()).tap_ok(|_| {
                         epoch_store
                             .verified_cert_cache()
