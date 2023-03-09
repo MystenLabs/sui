@@ -820,7 +820,6 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
                 )
                 .await
                 .unwrap();
-            println!("{:?}", response);
             tx_responses.push(response);
         }
     }

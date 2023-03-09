@@ -284,5 +284,5 @@ export function isEventType(
     | 'epochChange'
     | 'checkpoint',
 ): boolean {
-  return e.type === type ? true : false;
+  return e.type === type;
 }

@@ -16,6 +16,16 @@ import {
     type SuiAddress,
     type ObjectId,
     formatAddress,
+    isEventType,
+    getMoveEvent,
+    getNewObjectEvent,
+    getTransferObjectEvent,
+    getMutateObjectEvent,
+    getDeletObjectEvent,
+    getCoinBalanceChangeEvent,
+    getPublishEvent,
+    getEpochChangeEvent,
+    getCheckpointEvent,
 } from '@mysten/sui.js';
 
 import { getOwnerStr } from '../../utils/objectUtils';
@@ -241,39 +251,39 @@ export function bigintDisplay(
 }
 
 export function eventToDisplay(event: SuiEvent) {
-    if ('moveEvent' in event && is(event.moveEvent, MoveEvent))
-        return moveEventDisplay(event.moveEvent);
+    if (isEventType(event, 'moveEvent') && is(event.content, MoveEvent))
+        return moveEventDisplay(getMoveEvent(event)!);
 
-    if ('newObject' in event && is(event.newObject, NewObjectEvent))
-        return newObjectEventDisplay(event.newObject);
-
-    if (
-        'transferObject' in event &&
-        is(event.transferObject, TransferObjectEvent)
-    )
-        return transferObjectEventDisplay(event.transferObject);
-
-    if ('mutateObject' in event && is(event.mutateObject, MutateObjectEvent))
-        return mutateObjectEventDisplay(event.mutateObject);
-
-    if ('deleteObject' in event && is(event.deleteObject, DeleteObjectEvent))
-        return deleteObjectEventDisplay(event.deleteObject);
+    if (isEventType(event, 'newObject') && is(event.content, NewObjectEvent))
+        return newObjectEventDisplay(getNewObjectEvent(event)!);
 
     if (
-        'coinBalanceChange' in event &&
-        is(event.coinBalanceChange, CoinBalanceChangeEvent)
+        isEventType(event, 'transferObject') &&
+        is(event.content, TransferObjectEvent)
     )
-        return coinBalanceChangeEventDisplay(event.coinBalanceChange);
+        return transferObjectEventDisplay(getTransferObjectEvent(event)!);
 
-    if ('publish' in event && is(event.publish, PublishEvent))
-        return publishEventDisplay(event.publish);
+    if (isEventType(event, 'mutateObject') && is(event.content, MutateObjectEvent))
+        return mutateObjectEventDisplay(getMutateObjectEvent(event)!);
+
+    if (isEventType(event, 'deleteObject') && is(event.content, DeleteObjectEvent))
+        return deleteObjectEventDisplay(getDeletObjectEvent(event)!);
+
+    if (
+        isEventType(event, 'coinBalanceChange') &&
+        is(event.content, CoinBalanceChangeEvent)
+    )
+        return coinBalanceChangeEventDisplay(getCoinBalanceChangeEvent(event)!);
+
+    if (isEventType(event, 'publish') && is(event.content, PublishEvent))
+        return publishEventDisplay(getPublishEvent(event)!);
 
     // TODO - once epoch and checkpoint pages exist, make these links
-    if ('epochChange' in event && is(event.epochChange, EpochChangeEvent))
-        return bigintDisplay('Epoch Change', 'Epoch ID', event.epochChange);
+    if (isEventType(event, 'epochChange') && is(event.content, EpochChangeEvent))
+        return bigintDisplay('Epoch Change', 'Epoch ID', getEpochChangeEvent(event)!);
 
-    if ('checkpoint' in event && is(event.checkpoint, CheckpointEvent))
-        return bigintDisplay('Checkpoint', 'Sequence #', event.checkpoint);
+    if (isEventType(event, 'checkpoint') && is(event.content, CheckpointEvent))
+        return bigintDisplay('Checkpoint', 'Sequence #', getCheckpointEvent(event)!);
 
     return null;
 }
