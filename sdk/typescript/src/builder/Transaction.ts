@@ -233,11 +233,8 @@ export class Transaction {
   /** Build the transaction to BCS bytes. */
   async build({
     provider,
-    // TODO: derive the buffer size automatically
-    size = 8192,
   }: {
     provider?: Provider;
-    size?: number;
   } = {}): Promise<Uint8Array> {
     if (!this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
@@ -465,6 +462,6 @@ export class Transaction {
       }
     }
 
-    return this.#transactionData.build({ size });
+    return this.#transactionData.build();
   }
 }
