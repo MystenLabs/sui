@@ -2267,10 +2267,7 @@ impl AuthorityState {
             .get_transactions(query, cursor, limit, reverse)
     }
 
-    pub fn get_checkpoints(
-        &self,
-        reverse: bool,
-    ) -> Result<Vec<Checkpoint>, anyhow::Error> {
+    pub fn get_checkpoints(&self, reverse: bool) -> Result<Vec<Checkpoint>, anyhow::Error> {
         let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
 
         let values = (0..=max_checkpoint).collect::<Vec<_>>();
@@ -2284,14 +2281,17 @@ impl AuthorityState {
             .get_checkpoint_store()
             .multi_get_checkpoint_by_sequence_number(checkpoint_numbers.as_slice())?;
 
-        let checks: Vec<VerifiedCheckpoint> = verified_checkpoints.into_iter().flatten().collect();
-        let checkpoint_summaries: Vec<CheckpointSummary> = checks
-            .clone()
+        // let checks: Vec<VerifiedCheckpoint> = verified_checkpoints.into_iter().flatten().collect();
+        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
             .into_iter()
+            .flatten()
             .map(|check| check.into_summary_and_sequence().1)
             .collect();
 
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries.iter().map(|chsummary| chsummary.content_digest).collect();
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
+            .iter()
+            .map(|chsummary| chsummary.content_digest)
+            .collect();
 
         let checkpoint_contents = self
             .get_checkpoint_store()

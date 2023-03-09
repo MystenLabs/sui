@@ -16,6 +16,7 @@ pub use sui_checkpoint::*;
 pub use sui_coin::*;
 pub use sui_governance::*;
 pub use sui_move::*;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -32,7 +33,7 @@ mod sui_transaction;
 
 pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
 
-pub type CheckpointPage = Page<Checkpoint, Checkpoint>;
+pub type CheckpointPage = Page<Checkpoint, CheckpointSequenceNumber>;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

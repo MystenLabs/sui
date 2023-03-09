@@ -606,37 +606,20 @@ impl ReadApiServer for ReadApi {
             reverse = true;
         }
 
-        let mut data = self
-            .state
-            .get_checkpoints(reverse)?;
+        let checkpoints = self.state.get_checkpoints(reverse)?;
 
-        let start_index = match cursor {
-            Some(cursor) => cursor,
-            None => 0,
-        };
+        let start_index = cursor.unwrap_or(0);
 
-        let remaining_data = &data[start_index..];
+        let end_index = std::cmp::min(start_index + limit, checkpoints.len());
+        let mut data = checkpoints[start_index..end_index].to_vec();
 
-        let current_page: Option<Vec<Checkpoint>>;
+        let next_cursor = data
+            .get(limit)
+            .cloned()
+            .map(|checkpoint| checkpoint.sequence_number);
 
-        if remaining_data.is_empty() {
-            current_page = None;
-        }
-
-        let end_index = std::cmp::min(start_index + limit, data.len());
-        let current_page = data[start_index..end_index].to_vec();
-
-        let next_cursor = if end_index < data.len() {
-            Some(end_index)
-        } else {
-            None
-        };
-
-        let next_cursor = data.get(limit).cloned();
         data.truncate(limit);
         Ok(Page { data, next_cursor })
-
-        
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {

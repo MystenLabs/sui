@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, SuiTransactionResponseOptions, TransactionsPage,
@@ -237,6 +237,21 @@ where
         }
         self.get_transactions(query, cursor, limit, descending_order)
             .await
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<usize>,
+        limit: Option<usize>,
+        order: String,
+    ) -> RpcResult<CheckpointPage> {
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_checkpoints".to_string())
+        {
+            return self.fullnode.get_checkpoints(cursor, limit, order).await;
+        }
+        self.get_checkpoints(cursor, limit, order).await
     }
 
     async fn get_transactions_in_range(
