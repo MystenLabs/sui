@@ -12,9 +12,10 @@ import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import type { StakeObject } from '@mysten/sui.js';
 
 export enum DelegationState {
-    WARM_UP = 'WARM_UP',
     EARNING = 'EARNING',
     COOL_DOWN = 'COOL_DOWN',
+    WITH_DRAW = 'WITH_DRAW',
+    IN_ACTIVE = 'IN_ACTIVE',
 }
 
 interface DelegationObjectWithValidator extends StakeObject {
@@ -25,13 +26,7 @@ interface DelegationCardProps {
     currentEpoch: number;
 }
 
-export const STATE_TO_COPY = {
-    [DelegationState.WARM_UP]: 'Starts Earning',
-    [DelegationState.EARNING]: 'Staking Reward',
-    [DelegationState.COOL_DOWN]: 'In Cool-down',
-};
 // For delegationsRequestEpoch n  through n + 2, show Start Earning
-// For delegationsRequestEpoch n + 3, show Staking Reward
 // Show epoch number or date/time for n + 3 epochs
 // TODO: Add cool-down state
 export function DelegationCard({
@@ -57,7 +52,7 @@ export function DelegationCard({
                 validator: validatorAddress,
                 staked: stakedSuiId,
             }).toString()}`}
-            className="flex no-underline flex-col p-3 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/30 bg-transparent"
+            className="no-underline"
         >
             <div className="flex justify-between items-start mb-1">
                 <ValidatorLogo
@@ -72,8 +67,6 @@ export function DelegationCard({
                         tip="Object containing the delegated staked SUI tokens, owned by each delegator"
                         placement="top"
                     />
-                </div>
-            </div>
 
             <div className="flex-1 mb-4">
                 <div className="flex items-baseline gap-1">

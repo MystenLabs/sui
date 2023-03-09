@@ -18,7 +18,6 @@ import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
-import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
@@ -283,14 +282,7 @@ function StakingCard() {
                                 {!unstake && (
                                     <div className="flex-1 mt-7.5">
                                         <Collapse
-                                            title={
-                                                STATE_TO_COPY[
-                                                    stakeData?.status ===
-                                                    'Pending'
-                                                        ? DelegationState.WARM_UP
-                                                        : DelegationState.EARNING
-                                                ]
-                                            }
+                                            title="Staking Rewards"
                                             initialIsOpen
                                         >
                                             <Text
