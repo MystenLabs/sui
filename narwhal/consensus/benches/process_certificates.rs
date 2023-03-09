@@ -55,7 +55,6 @@ pub fn process_certificates(c: &mut Criterion) {
         let mut ordering_engine = Bullshark {
             committee: committee.clone(),
             store,
-            gc_depth,
             metrics,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: Default::default(),
