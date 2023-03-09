@@ -19,12 +19,13 @@ use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::GenesisConfig;
+use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -207,7 +208,10 @@ pub struct TestClusterBuilder {
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     epoch_duration_ms: Option<u64>,
+    initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config_validators: DBCheckpointConfig,
+    db_checkpoint_config_fullnodes: DBCheckpointConfig,
 }
 
 impl TestClusterBuilder {
@@ -219,7 +223,10 @@ impl TestClusterBuilder {
             num_validators: None,
             enable_fullnode_events: false,
             epoch_duration_ms: None,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config_validators: DBCheckpointConfig::default(),
+            db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
         }
     }
 
@@ -248,6 +255,22 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_enable_db_checkpoints_validators(mut self) -> Self {
+        self.db_checkpoint_config_validators = DBCheckpointConfig {
+            perform_db_checkpoints_at_epoch_end: true,
+            checkpoint_path: None,
+        };
+        self
+    }
+
+    pub fn with_enable_db_checkpoints_fullnodes(mut self) -> Self {
+        self.db_checkpoint_config_fullnodes = DBCheckpointConfig {
+            perform_db_checkpoints_at_epoch_end: true,
+            checkpoint_path: None,
+        };
+        self
+    }
+
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
         self.epoch_duration_ms = Some(epoch_duration_ms);
         self
@@ -255,6 +278,11 @@ impl TestClusterBuilder {
 
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
         self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
+        self.initial_protocol_version = v;
         self
     }
 
@@ -286,6 +314,7 @@ impl TestClusterBuilder {
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             )
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes)
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
             .build()
@@ -324,6 +353,8 @@ impl TestClusterBuilder {
                 NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDAOTR)).unwrap(),
             )
             .with_objects(self.additional_objects.clone())
+            .with_protocol_version(self.initial_protocol_version)
+            .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             );
@@ -410,7 +441,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
                 let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
                     let (committee, _) = rx.recv().await.unwrap();
-                    assert_eq!(committee.epoch, expected_epoch);
+                    assert_eq!(committee.epoch(), expected_epoch);
                 }
             })
         })

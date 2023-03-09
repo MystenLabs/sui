@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { useMemo } from 'react';
+import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
-import { getStakingRewards } from '../getStakingRewards';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { Validator, DelegatedStake } from '@mysten/sui.js';
+import type { StakeObject } from '@mysten/sui.js';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',
@@ -19,9 +17,11 @@ export enum DelegationState {
     COOL_DOWN = 'COOL_DOWN',
 }
 
+interface DelegationObjectWithValidator extends StakeObject {
+    validatorAddress: SuiAddress;
+}
 interface DelegationCardProps {
-    delegationObject: DelegatedStake;
-    activeValidators: Validator[];
+    delegationObject: DelegationObjectWithValidator;
     currentEpoch: number;
 }
 
@@ -36,34 +36,32 @@ export const STATE_TO_COPY = {
 // TODO: Add cool-down state
 export function DelegationCard({
     delegationObject,
-    activeValidators,
     currentEpoch,
 }: DelegationCardProps) {
-    const { staked_sui } = delegationObject;
-    const address = staked_sui.validator_address;
-    const staked = staked_sui.principal.value;
-    const rewards = useMemo(
-        () => getStakingRewards(activeValidators, delegationObject),
-        [activeValidators, delegationObject]
-    );
+    const {
+        stakedSuiId,
+        principal,
+        stakeRequestEpoch,
+        estimatedReward,
+        validatorAddress,
+    } = delegationObject;
+    const rewards = estimatedReward;
 
-    const stakedId = staked_sui.id.id;
-    const delegationsRequestEpoch = staked_sui.delegation_request_epoch;
-    const numberOfEpochPastRequesting = currentEpoch - delegationsRequestEpoch;
-    const [stakedFormatted] = useFormatCoin(staked, SUI_TYPE_ARG);
+    const numberOfEpochPastRequesting = currentEpoch - stakeRequestEpoch;
+    const [stakedFormatted] = useFormatCoin(principal, SUI_TYPE_ARG);
     const [rewardsFormatted] = useFormatCoin(rewards, SUI_TYPE_ARG);
 
     return (
         <Link
             to={`/stake/delegation-detail?${new URLSearchParams({
-                validator: address,
-                staked: stakedId,
+                validator: validatorAddress,
+                staked: stakedSuiId,
             }).toString()}`}
             className="flex no-underline flex-col p-3 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/30 bg-transparent"
         >
             <div className="flex justify-between items-start mb-1">
                 <ValidatorLogo
-                    validatorAddress={address}
+                    validatorAddress={validatorAddress}
                     size="subtitle"
                     iconSize="md"
                     stacked
@@ -100,15 +98,15 @@ export function DelegationCard({
                         weight="semibold"
                         color="steel-dark"
                     >
-                        Epoch #{delegationsRequestEpoch + 2}
+                        Epoch #{stakeRequestEpoch + 2}
                     </Text>
                 )}
 
-                {rewards > 0 && numberOfEpochPastRequesting > 2 && (
+                {rewards && rewards > 0 && numberOfEpochPastRequesting > 2 ? (
                     <div className="text-success-dark text-bodySmall font-semibold">
                         {rewardsFormatted} SUI
                     </div>
-                )}
+                ) : null}
             </div>
         </Link>
     );

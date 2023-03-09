@@ -30,31 +30,11 @@ impl WriteApiServer for WriteApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
-        signature: Base64,
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse> {
-        self.submit_transaction(tx_bytes, vec![signature], request_type)
-            .await
-    }
-
-    async fn execute_transaction_serialized_sig(
-        &self,
-        tx_bytes: Base64,
-        signature: Base64,
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse> {
-        self.execute_transaction(tx_bytes, signature, request_type)
-            .await
-    }
-
-    async fn submit_transaction(
-        &self,
-        tx_bytes: Base64,
         signatures: Vec<Base64>,
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiTransactionResponse> {
         self.fullnode
-            .submit_transaction(tx_bytes, signatures, request_type)
+            .execute_transaction(tx_bytes, signatures, request_type)
             .await
     }
 

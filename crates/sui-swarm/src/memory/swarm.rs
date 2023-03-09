@@ -16,8 +16,9 @@ use sui_config::builder::{
     CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
+use sui_config::node::DBCheckpointConfig;
 use sui_config::NetworkConfig;
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
 use tempfile::TempDir;
@@ -33,7 +34,9 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
     epoch_duration_ms: Option<u64>,
+    initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl SwarmBuilder {
@@ -49,7 +52,9 @@ impl SwarmBuilder {
             fullnode_rpc_addr: None,
             with_event_store: false,
             epoch_duration_ms: None,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 }
@@ -66,7 +71,9 @@ impl<R> SwarmBuilder<R> {
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
             epoch_duration_ms: None,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 
@@ -118,6 +125,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
+        self.initial_protocol_version = v;
+        self
+    }
+
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
         self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
         self
@@ -133,6 +145,11 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
         self.supported_protocol_versions_config = c;
+        self
+    }
+
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
         self
     }
 }
@@ -161,6 +178,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_swarm()
             .rng(self.rng)
             .with_objects(self.additional_objects)
+            .with_protocol_version(self.initial_protocol_version)
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             )
@@ -181,6 +199,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 let mut config = network_config
                     .fullnode_config_builder()
                     .with_supported_protocol_versions_config(spvc)
+                    .with_db_checkpoint_config(self.db_checkpoint_config.clone())
                     .with_random_dir()
                     .build()
                     .unwrap();

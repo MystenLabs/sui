@@ -100,7 +100,7 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
             match self.reconfig_rx.recv().await {
                 Ok((committee, _protocol_version)) => {
                     info!("Got reconfig message: {}", committee);
-                    if committee.epoch > quorum_driver.current_epoch() {
+                    if committee.epoch() > quorum_driver.current_epoch() {
                         let authority_agg =
                             self.create_authority_aggregator_from_system_state().await;
                         quorum_driver

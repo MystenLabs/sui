@@ -7,7 +7,7 @@ import {
     getMoveCallTransaction,
     getTransactionDigest,
     getTransactionKindName,
-    getTransactions,
+    getTransactionKinds,
     getTransactionSender,
     getTransferObjectTransaction,
     SUI_TYPE_ARG,
@@ -54,7 +54,7 @@ export function TransactionCard({
     txn: SuiTransactionResponse;
     address: SuiAddress;
 }) {
-    const [transaction] = getTransactions(txn);
+    const [transaction] = getTransactionKinds(txn)!;
     const executionStatus = getExecutionStatusType(txn);
     const txnKind = getTransactionKindName(transaction);
 
@@ -63,7 +63,7 @@ export function TransactionCard({
             getTransferObjectTransaction(transaction)?.objectRef?.objectId;
         return transferId
             ? transferId
-            : getTxnEffectsEventID(txn.effects, txn.events, address)[0];
+            : getTxnEffectsEventID(txn.effects!, txn.events!, address)[0];
     }, [address, transaction, txn.effects, txn.events]);
 
     const transfer = useGetTransferAmount({
@@ -207,7 +207,7 @@ export function TransactionCard({
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel
-                                    address={recipientAddress}
+                                    address={recipientAddress!}
                                     moveCallFnName={moveCallTxn?.function}
                                     isSender={isSender}
                                     isTransfer={isTransfer}

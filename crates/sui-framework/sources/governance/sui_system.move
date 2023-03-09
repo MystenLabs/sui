@@ -13,6 +13,7 @@ module sui::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
+    use sui::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
     use sui::stake_subsidy::{Self, StakeSubsidy};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
@@ -33,18 +34,22 @@ module sui::sui_system {
     #[test_only]
     friend sui::governance_test_utils;
 
+    const ACTIVE_VALIDATOR_ONLY: bool = true;
+    const ACTIVE_OR_PENDING_VALIDATOR: bool = false;
+
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:
     // - the change in stake across epochs can be at most +/- x%
     // - the change in the validator set across epochs can be at most x validators
     //
-    // TODO: The stake threshold should be % threshold instead of amount threshold.
     struct SystemParameters has store {
         /// Lower-bound on the amount of stake required to become a validator.
+        // TODO: use a different threshold for new validator joining vs. validator keeping their
+        // spot in the validator set.
         min_validator_stake: u64,
-        /// Maximum number of validator candidates at any moment.
+        /// Maximum number of active validators at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
-        max_validator_candidate_count: u64,
+        max_validator_count: u64,
 
         /// The starting epoch in which various on-chain governance features take effect:
         /// - stake subsidies are paid out
@@ -67,11 +72,14 @@ module sui::sui_system {
         parameters: SystemParameters,
         /// The reference gas price for the current epoch.
         reference_gas_price: u64,
-        /// A map storing the records of validator reporting each other during the current epoch.
+        /// A map storing the records of validator reporting each other.
         /// There is an entry in the map for each validator that has been reported
         /// at least once. The entry VecSet contains all the validators that reported
         /// them. If a validator has never been reported they don't have an entry in this map.
-        /// This map resets every epoch.
+        /// This map persists across epoch: a peer continues being in a reported state until the
+        /// reporter doesn't explicitly remove their report.
+        /// Note that in case we want to support validator address change in future,
+        /// the reports should be based on validator ids
         validator_report_records: VecMap<address, VecSet<address>>,
         /// Schedule of stake subsidies given out each epoch.
         stake_subsidy: StakeSubsidy,
@@ -125,7 +133,7 @@ module sui::sui_system {
         validators: vector<Validator>,
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
-        max_validator_candidate_count: u64,
+        max_validator_count: u64,
         min_validator_stake: u64,
         governance_start_epoch: u64,
         initial_stake_subsidy_amount: u64,
@@ -143,7 +151,7 @@ module sui::sui_system {
             storage_fund,
             parameters: SystemParameters {
                 min_validator_stake,
-                max_validator_candidate_count,
+                max_validator_count,
                 governance_start_epoch,
             },
             reference_gas_price,
@@ -163,12 +171,11 @@ module sui::sui_system {
 
     // ==== entry functions ====
 
-    /// Can be called by anyone who wishes to become a validator in the next epoch.
-    /// The `validator` object needs to be created before calling this.
-    /// The amount of stake in the `validator` object must meet the requirements.
-    // TODO: Does this need to go through a voting process? Any other criteria for
-    // someone to become a validator?
-    public entry fun request_add_validator(
+    /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+    /// stakes in their staking pool. Once they have at least `min_validator_stake` amount of stake they
+    /// can call `request_add_validator` to officially become an active validator at the next epoch.
+    /// Aborts if the caller is already a pending or active validator, or a validator candidate.
+    public entry fun request_add_validator_candidate(
         wrapper: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
         network_pubkey_bytes: vector<u8>,
@@ -182,21 +189,11 @@ module sui::sui_system {
         p2p_address: vector<u8>,
         primary_address: vector<u8>,
         worker_address: vector<u8>,
-        stake: Coin<SUI>,
         gas_price: u64,
         commission_rate: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            ELimitExceeded,
-        );
-        let stake_amount = coin::value(&stake);
-        assert!(
-            stake_amount >= self.parameters.min_validator_stake,
-            ELimitExceeded,
-        );
         let validator = validator::new(
             tx_context::sender(ctx),
             pubkey_bytes,
@@ -211,15 +208,42 @@ module sui::sui_system {
             p2p_address,
             primary_address,
             worker_address,
-            coin::into_balance(stake),
+            option::none(),
             option::none(),
             gas_price,
             commission_rate,
-            tx_context::epoch(ctx) + 1, // starting next epoch
+            false, // not an initial validator active at genesis
             ctx
         );
 
-        validator_set::request_add_validator(&mut self.validators, validator);
+        validator_set::request_add_validator_candidate(&mut self.validators, validator);
+    }
+
+    /// Called by a validator candidate to remove themselves from the candidacy. After this call
+    /// their staking pool becomes deactive.
+    public entry fun request_remove_validator_candidate(
+        wrapper: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        validator_set::request_remove_validator_candidate(&mut self.validators, ctx);
+    }
+
+    /// Called by a validator candidate to add themselves to the active validator set beginning next epoch.
+    /// Aborts if the validator is a duplicate with one of the pending or active validators, or if the amount of
+    /// stake the validator has doesn't meet the min threshold, or if the number of new validators for the next
+    /// epoch has already reached the maximum.
+    public entry fun request_add_validator(
+        wrapper: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        assert!(
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
+            ELimitExceeded,
+        );
+
+        validator_set::request_add_validator(&mut self.validators, self.parameters.min_validator_stake, ctx);
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -242,15 +266,16 @@ module sui::sui_system {
     /// used for the reference gas price calculation at the end of the epoch.
     public entry fun request_set_gas_price(
         wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
         new_gas_price: u64,
-        ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        validator_set::request_set_gas_price(
-            &mut self.validators,
-            new_gas_price,
-            ctx
-        )
+
+        // Verify the represented address is an active or pending validator, and the capability is still valid.
+        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_OR_PENDING_VALIDATOR);
+        let validator = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap);
+
+        validator::request_set_gas_price(validator, verified_cap, new_gas_price);
     }
 
     /// A validator can call this entry function to set a new commission rate, updated at the end of the epoch.
@@ -342,47 +367,86 @@ module sui::sui_system {
     }
 
     /// Report a validator as a bad or non-performant actor in the system.
-    /// Succeeds iff both the sender and the input `validator_addr` are active validators
-    /// and they are not the same address. This function is idempotent within an epoch.
+    /// Succeeds if all the following are satisfied:
+    /// 1. both the reporter in `cap` and the input `reportee_addr` are active validators.
+    /// 2. reporter and reportee not the same address. 
+    /// 3. the cap object is still valid.
+    /// This function is idempotent.
     public entry fun report_validator(
         wrapper: &mut SuiSystemState,
-        validator_addr: address,
-        ctx: &TxContext,
+        cap: &UnverifiedValidatorOperationCap,
+        reportee_addr: address,
     ) {
         let self = load_system_state_mut(wrapper);
-        let sender = tx_context::sender(ctx);
-        // Both the reporter and the reported have to be validators.
-        assert!(validator_set::is_active_validator_by_sui_address(&self.validators, sender), ENotValidator);
-        assert!(validator_set::is_active_validator_by_sui_address(&self.validators, validator_addr), ENotValidator);
-        assert!(sender != validator_addr, ECannotReportOneself);
+        // Reportee needs to be an active validator
+        assert!(validator_set::is_active_validator_by_sui_address(&self.validators, reportee_addr), ENotValidator);
+        // Verify the represented reporter address is an active validator, and the capability is still valid.
+        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_VALIDATOR_ONLY);
+        report_validator_impl(verified_cap, reportee_addr, &mut self.validator_report_records);
+    }
 
-        if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
-            vec_map::insert(&mut self.validator_report_records, validator_addr, vec_set::singleton(sender));
+
+    /// Undo a `report_validator` action. Aborts if
+    /// 1. the reportee is not a currently active validator or
+    /// 2. the sender has not previously reported the `reportee_addr`, or
+    /// 3. the cap is not valid
+    public entry fun undo_report_validator(
+        wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
+        reportee_addr: address,
+    ) {
+        let self = load_system_state_mut(wrapper);
+
+        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_VALIDATOR_ONLY);
+        undo_report_validator_impl(verified_cap, reportee_addr, &mut self.validator_report_records);
+    }
+
+    fun report_validator_impl(
+        verified_cap: ValidatorOperationCap,
+        reportee_addr: address,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
+    ) {
+        let reporter_address = *validator_cap::verified_operation_cap_address(&verified_cap);
+        assert!(reporter_address != reportee_addr, ECannotReportOneself);
+        if (!vec_map::contains(validator_report_records, &reportee_addr)) {
+            vec_map::insert(validator_report_records, reportee_addr, vec_set::singleton(reporter_address));
         } else {
-            let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
-            if (!vec_set::contains(reporters, &sender)) {
-                vec_set::insert(reporters, sender);
+            let reporters = vec_map::get_mut(validator_report_records, &reportee_addr);
+            if (!vec_set::contains(reporters, &reporter_address)) {
+                vec_set::insert(reporters, reporter_address);
             }
         }
     }
 
-    /// Undo a `report_validator` action. Aborts if the sender has not reported the
-    /// `validator_addr` within this epoch.
-    public entry fun undo_report_validator(
-        wrapper: &mut SuiSystemState,
-        validator_addr: address,
-        ctx: &TxContext,
+    fun undo_report_validator_impl(
+        verified_cap: ValidatorOperationCap,
+        reportee_addr: address,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
     ) {
-        let self = load_system_state_mut(wrapper);
-        let sender = tx_context::sender(ctx);
+        assert!(vec_map::contains(validator_report_records, &reportee_addr), EReportRecordNotFound);
+        let reporters = vec_map::get_mut(validator_report_records, &reportee_addr);
 
-        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EReportRecordNotFound);
-        let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
-        assert!(vec_set::contains(reporters, &sender), EReportRecordNotFound);
-        vec_set::remove(reporters, &sender);
+        let reporter_addr = *validator_cap::verified_operation_cap_address(&verified_cap);
+        assert!(vec_set::contains(reporters, &reporter_addr), EReportRecordNotFound);
+
+        vec_set::remove(reporters, &reporter_addr);
+        if (vec_set::is_empty(reporters)) {
+            vec_map::remove(validator_report_records, &reportee_addr);
+        }
     }
 
     // ==== validator metadata management functions ====
+
+    /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
+    /// validator and registers it. The original object is thus revoked.
+    public entry fun rotate_operation_cap(
+        self: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        validator::new_unverified_validator_operation_cap_and_transfer(validator, ctx);
+    }
 
     /// Update a validator's name.
     public entry fun update_validator_name(
@@ -391,7 +455,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_name(validator, string::from_ascii(ascii::string(name)));
     }
 
@@ -402,7 +466,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_description(validator, string::from_ascii(ascii::string(description)));
     }
 
@@ -413,7 +477,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_image_url(validator, url::new_unsafe_from_bytes(image_url));
     }
 
@@ -424,7 +488,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_project_url(validator, url::new_unsafe_from_bytes(project_url));
     }
 
@@ -436,7 +500,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_address(validator, network_address);
     }
 
@@ -448,7 +512,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_p2p_address(validator, p2p_address);
     }
 
@@ -460,7 +524,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_primary_address(validator, primary_address);
     }
 
@@ -472,7 +536,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_worker_address(validator, worker_address);
     }
 
@@ -485,7 +549,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
     }
 
@@ -497,7 +561,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
     }
 
@@ -509,7 +573,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_active_or_pending_validator_mut(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_pubkey(validator, network_pubkey);
     }
 
@@ -592,7 +656,7 @@ module sui::sui_system {
             &mut self.validators,
             &mut computation_reward,
             &mut storage_fund_reward,
-            self.validator_report_records,
+            &mut self.validator_report_records,
             reward_slashing_rate,
             ctx,
         );
@@ -610,10 +674,6 @@ module sui::sui_system {
         // Destroy the storage rebate.
         assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
         balance::destroy_storage_rebates(balance::split(&mut self.storage_fund, storage_rebate));
-
-        // Validator reports are only valid for the epoch.
-        // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
-        self.validator_report_records = vec_map::empty();
 
         let new_total_stake = validator_set::total_stake(&self.validators);
 
@@ -709,7 +769,7 @@ module sui::sui_system {
         validator_set::staking_pool_mappings(&self.validators)
     }
 
-    /// Returns all the validators who have reported `addr` this epoch.
+    /// Returns all the validators who are currently reporting `addr`
     public fun get_reporters_of(wrapper: &SuiSystemState, addr: address): VecSet<address> {
         let self = load_system_state(wrapper);
         if (vec_map::contains(&self.validator_report_records, &addr)) {

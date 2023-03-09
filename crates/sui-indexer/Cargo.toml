@@ -44,9 +44,13 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
+[features]
+pg_integration = []
+
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 sui-framework-build = { path = "../sui-framework-build" }
+diesel_migrations = "2.0.0"
 
 [[bin]]
 name = "sui-indexer"

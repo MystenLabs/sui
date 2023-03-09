@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
+use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},
@@ -12,8 +12,8 @@ use sui_types::{
         SuiAuthoritySignature,
     },
     messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
-        CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
+        CertifiedCheckpointSummary, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
+        EndOfEpochData, VerifiedCheckpoint,
     },
 };
 
@@ -60,12 +60,16 @@ impl CommitteeFixture {
             epoch: 0,
             sequence_number: 0,
             network_total_transactions: 0,
-            content_digest: empty_contents().digest(),
+            content_digest: empty_contents()
+                .into_inner()
+                .into_checkpoint_contents()
+                .digest(),
             previous_digest: None,
             epoch_rolling_gas_cost_summary: Default::default(),
             end_of_epoch_data: None,
             timestamp_ms: 0,
             version_specific_data: Vec::new(),
+            checkpoint_commitments: Default::default(),
         };
 
         self.create_certified_checkpoint(checkpoint)
@@ -89,16 +93,10 @@ impl CommitteeFixture {
             })
             .collect();
 
-        let checkpoint = CertifiedCheckpointSummary {
-            summary: checkpoint,
-            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
-                signatures,
-                self.committee(),
-            )
-            .unwrap(),
-        };
-
-        let checkpoint = VerifiedCheckpoint::new(checkpoint, self.committee()).unwrap();
+        let checkpoint = CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
+            .unwrap()
+            .verify(self.committee())
+            .unwrap();
 
         checkpoint
     }
@@ -119,14 +117,18 @@ impl CommitteeFixture {
         let ordered_checkpoints = std::iter::successors(Some(first), |prev| {
             let summary = CheckpointSummary {
                 epoch: self.epoch,
-                sequence_number: prev.summary.sequence_number + 1,
+                sequence_number: prev.sequence_number + 1,
                 network_total_transactions: 0,
-                content_digest: empty_contents().digest(),
-                previous_digest: Some(prev.summary.digest()),
+                content_digest: empty_contents()
+                    .into_inner()
+                    .into_checkpoint_contents()
+                    .digest(),
+                previous_digest: Some(*prev.digest()),
                 epoch_rolling_gas_cost_summary: Default::default(),
                 end_of_epoch_data: None,
                 timestamp_ms: 0,
                 version_specific_data: Vec::new(),
+                checkpoint_commitments: Default::default(),
             };
 
             let checkpoint = self.create_certified_checkpoint(summary);
@@ -141,11 +143,8 @@ impl CommitteeFixture {
             .iter()
             .cloned()
             .map(|checkpoint| {
-                let digest = checkpoint.summary.digest();
-                (
-                    (checkpoint.summary.sequence_number, digest),
-                    (digest, checkpoint),
-                )
+                let digest = *checkpoint.digest();
+                ((checkpoint.sequence_number, digest), (digest, checkpoint))
             })
             .unzip();
 
@@ -163,26 +162,28 @@ impl CommitteeFixture {
     ) {
         let summary = CheckpointSummary {
             epoch: self.epoch,
-            sequence_number: previous_checkpoint.summary.sequence_number + 1,
+            sequence_number: previous_checkpoint.sequence_number + 1,
             network_total_transactions: 0,
-            content_digest: empty_contents().digest(),
-            previous_digest: Some(previous_checkpoint.summary.digest()),
+            content_digest: empty_contents()
+                .into_inner()
+                .into_checkpoint_contents()
+                .digest(),
+            previous_digest: Some(*previous_checkpoint.digest()),
             epoch_rolling_gas_cost_summary: Default::default(),
             end_of_epoch_data,
             timestamp_ms: 0,
             version_specific_data: Vec::new(),
+            checkpoint_commitments: Default::default(),
         };
 
         let checkpoint = self.create_certified_checkpoint(summary);
 
-        (
-            checkpoint.summary.sequence_number,
-            checkpoint.summary.digest(),
-            checkpoint,
-        )
+        (checkpoint.sequence_number, *checkpoint.digest(), checkpoint)
     }
 }
 
-pub fn empty_contents() -> CheckpointContents {
-    CheckpointContents::new_with_causally_ordered_transactions(std::iter::empty())
+pub fn empty_contents() -> VerifiedCheckpointContents {
+    VerifiedCheckpointContents::new_unchecked(
+        FullCheckpointContents::new_with_causally_ordered_transactions(std::iter::empty()),
+    )
 }

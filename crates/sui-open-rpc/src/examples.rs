@@ -19,8 +19,8 @@ use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
     SuiGasCostSummary, SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef,
     SuiObjectResponse, SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
-    SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEffectsV1, SuiTransactionEvents,
-    SuiTransactionResponse, TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -78,7 +78,6 @@ impl RpcExampleProvider {
             self.get_transactions(),
             self.get_events(),
             self.execute_transaction_example(),
-            self.submit_transaction_example(),
             self.get_checkpoint_example(),
         ]
         .into_iter()
@@ -159,14 +158,14 @@ impl RpcExampleProvider {
         )
     }
 
-    fn submit_transaction_example(&mut self) -> Examples {
+    fn execute_transaction_example(&mut self) -> Examples {
         let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_submitTransaction",
+            "sui_executeTransaction",
             vec![ExamplePairing::new(
-                "Execute an transaction with serialized signature",
+                "Execute an transaction with serialized signatures",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
                     (
@@ -176,27 +175,6 @@ impl RpcExampleProvider {
                             .map(|sig| sig.encode_base64())
                             .collect::<Vec<_>>()),
                     ),
-                    (
-                        "request_type",
-                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
-                    ),
-                ],
-                json!(result),
-            )],
-        )
-    }
-
-    fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data).unwrap();
-
-        Examples::new(
-            "sui_executeTransaction",
-            vec![ExamplePairing::new(
-                "Execute an transaction with serialized signature",
-                vec![
-                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("signature", json!(signatures[0].encode_base64())),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -228,7 +206,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(GasCoin::type_().to_string()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
             bcs: None,
             display: None,
         });
@@ -267,7 +245,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(GasCoin::type_().to_string()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
             bcs: None,
             display: None,
         });
@@ -297,6 +275,7 @@ impl RpcExampleProvider {
             timestamp_ms: 1676911928,
             end_of_epoch_data: None,
             transactions: vec![TransactionDigest::new(self.rng.gen())],
+            checkpoint_commitments: vec![],
         };
 
         Examples::new(
@@ -349,7 +328,16 @@ impl RpcExampleProvider {
             "sui_getTransaction",
             vec![ExamplePairing::new(
                 "Return the transaction response object for specified transaction digest",
-                vec![("digest", json!(result.effects.transaction_digest()))],
+                vec![
+                    ("digest", json!(result.digest)),
+                    (
+                        "options",
+                        json!(SuiTransactionResponseOptions::new()
+                            .with_input()
+                            .with_effects()
+                            .with_events()),
+                    ),
+                ],
                 json!(result),
             )],
         )
@@ -357,9 +345,15 @@ impl RpcExampleProvider {
 
     fn get_transactions(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
-        let next_cursor = data.pop();
+        let has_next_page = data.len() > (9 - 5);
+        data.truncate(9 - 5);
+        let next_cursor = data.last().cloned();
 
-        let result = TransactionsPage { data, next_cursor };
+        let result = TransactionsPage {
+            data,
+            next_cursor,
+            has_next_page,
+        };
         Examples::new(
             "sui_getTransactions",
             vec![ExamplePairing::new(
@@ -436,7 +430,8 @@ impl RpcExampleProvider {
             event: sui_event.clone(),
         }];
         let result = SuiTransactionResponse {
-            effects: SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
+            digest: *tx_digest,
+            effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: SuiExecutionStatus::Success,
                 executed_epoch: 0,
                 gas_used: SuiGasCostSummary {
@@ -467,17 +462,18 @@ impl RpcExampleProvider {
                 },
                 events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
                 dependencies: vec![],
-            }),
-            events: SuiTransactionEvents {
+            })),
+            events: Some(SuiTransactionEvents {
                 data: vec![sui_event],
-            },
+            }),
             timestamp_ms: None,
-            transaction: SuiTransaction {
+            transaction: Some(SuiTransaction {
                 data: SuiTransactionData::try_from(data1).unwrap(),
                 tx_signatures: signatures.clone(),
-            },
+            }),
             confirmed_local_execution: None,
             checkpoint: None,
+            errors: vec![],
         };
 
         (data2, signatures, recipient, obj_id, result, events)
@@ -490,23 +486,19 @@ impl RpcExampleProvider {
         let page = EventPage {
             data: events.clone(),
             next_cursor: Some((tx_dig, 5).into()),
+            has_next_page: false,
         };
         Examples::new(
             "sui_getEvents",
             vec![ExamplePairing::new(
                 "Return the Events emitted by a transaction",
                 vec![
-                    (
-                        "query",
-                        json!(EventQuery::Transaction(
-                            *result.effects.transaction_digest()
-                        )),
-                    ),
+                    ("query", json!(EventQuery::Transaction(result.digest))),
                     (
                         "cursor",
                         json!(EventID {
                             event_seq: 10,
-                            tx_digest: *result.effects.transaction_digest()
+                            tx_digest: result.digest
                         }),
                     ),
                     ("limit", json!(events.len())),

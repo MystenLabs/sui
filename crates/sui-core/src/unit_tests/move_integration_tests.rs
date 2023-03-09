@@ -4,15 +4,21 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, call_move_, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
+    call_move, call_move_, execute_programmable_transaction, init_state_with_ids,
+    send_and_confirm_transaction, TestCallArg,
 };
-use sui_types::{object::Data, utils::to_sender_signed_transaction};
+use sui_types::{
+    error::ExecutionErrorKind, object::Data,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    utils::to_sender_signed_transaction,
+};
 
 use move_core_types::{
     language_storage::TypeTag,
     value::{MoveStruct, MoveValue},
 };
-use sui_framework_build::compiled_package::BuildConfig;
+use move_package::source_package::manifest_parser;
+use sui_framework_build::compiled_package::{ensure_published_dependencies, BuildConfig};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -844,19 +850,23 @@ async fn test_entry_point_vector_empty() {
     .await;
 
     // call a function with an empty vector
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package.0,
-        "entry_point_vector",
-        "obj_vec_empty",
-        vec![],
-        vec![TestCallArg::ObjVec(vec![])],
-    )
-    .await
-    .unwrap();
+    let type_tag =
+        TypeTag::from_str(format!("{}::entry_point_vector::Obj", package.0).as_str()).unwrap();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let empty_vec = builder.command(Command::MakeMoveVec(Some(type_tag.clone()), vec![]));
+        builder.programmable_move_call(
+            package.0,
+            Identifier::new("entry_point_vector").unwrap(),
+            Identifier::new("obj_vec_empty").unwrap(),
+            vec![],
+            vec![empty_vec],
+        );
+        builder.finish()
+    };
+    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+        .await
+        .unwrap();
     assert!(
         matches!(effects.status(), ExecutionStatus::Success { .. }),
         "{:?}",
@@ -864,25 +874,72 @@ async fn test_entry_point_vector_empty() {
     );
 
     // call a function with an empty vector whose type is generic
-    let type_tag =
-        TypeTag::from_str(format!("{}::entry_point_vector::Obj", package.0).as_str()).unwrap();
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package.0,
-        "entry_point_vector",
-        "type_param_vec_empty",
-        vec![type_tag],
-        vec![TestCallArg::ObjVec(vec![])],
-    )
-    .await
-    .unwrap();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let empty_vec = builder.command(Command::MakeMoveVec(Some(type_tag.clone()), vec![]));
+        builder.programmable_move_call(
+            package.0,
+            Identifier::new("entry_point_vector").unwrap(),
+            Identifier::new("type_param_vec_empty").unwrap(),
+            vec![type_tag.clone()],
+            vec![empty_vec],
+        );
+        builder.finish()
+    };
+    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+        .await
+        .unwrap();
     assert!(
         matches!(effects.status(), ExecutionStatus::Success { .. }),
         "{:?}",
         effects.status()
+    );
+
+    // same tests again without the type tag
+    // call a function with an empty vector, no type tag
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let empty_vec = builder.command(Command::MakeMoveVec(None, vec![]));
+        builder.programmable_move_call(
+            package.0,
+            Identifier::new("entry_point_vector").unwrap(),
+            Identifier::new("obj_vec_empty").unwrap(),
+            vec![],
+            vec![empty_vec],
+        );
+        builder.finish()
+    };
+    let err = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::EmptyCommandInput
+        }
+    );
+
+    // call a function with an empty vector whose type is generic
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let empty_vec = builder.command(Command::MakeMoveVec(None, vec![]));
+        builder.programmable_move_call(
+            package.0,
+            Identifier::new("entry_point_vector").unwrap(),
+            Identifier::new("type_param_vec_empty").unwrap(),
+            vec![type_tag],
+            vec![empty_vec],
+        );
+        builder.finish()
+    };
+    let err = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::EmptyCommandInput
+        }
     );
 }
 
@@ -1243,10 +1300,16 @@ async fn test_entry_point_vector_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(matches!(
-        UserInputError::try_from(result.unwrap_err()).unwrap(),
-        UserInputError::DuplicateObjectRefInput { .. }
-    ));
+    assert_eq!(
+        result.unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionErrorKind::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+            },
+            command: Some(1)
+        }
+    );
 
     // mint an owned object
     let effects = call_move(
@@ -1286,10 +1349,16 @@ async fn test_entry_point_vector_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-reference argument
-    assert!(matches!(
-        UserInputError::try_from(result.unwrap_err()).unwrap(),
-        UserInputError::DuplicateObjectRefInput { .. }
-    ));
+    assert_eq!(
+        result.unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionErrorKind::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+            },
+            command: Some(1)
+        }
+    );
 }
 
 #[tokio::test]
@@ -1616,10 +1685,16 @@ async fn test_entry_point_vector_any_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(matches!(
-        UserInputError::try_from(result.unwrap_err()).unwrap(),
-        UserInputError::DuplicateObjectRefInput { .. }
-    ));
+    assert_eq!(
+        result.unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionErrorKind::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+            },
+            command: Some(1)
+        }
+    );
 
     // mint an owned object
     let effects = call_move(
@@ -1658,10 +1733,16 @@ async fn test_entry_point_vector_any_error() {
         ],
     )
     .await;
-    assert!(matches!(
-        UserInputError::try_from(result.unwrap_err()).unwrap(),
-        UserInputError::DuplicateObjectRefInput { .. }
-    ));
+    assert_eq!(
+        result.unwrap().status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionErrorKind::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+            },
+            command: Some(1)
+        }
+    );
 }
 
 #[tokio::test]
@@ -2012,6 +2093,68 @@ async fn test_generate_lock_file() {
         ]
     "##]];
     expected.assert_eq(lock_file_contents.as_str());
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_custom_property_parse_published_at() {
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", "custom_properties_in_manifest"]);
+
+    sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
+    let manifest = manifest_parser::parse_move_manifest_from_file(path.as_path())
+        .expect("Could not parse Move.toml");
+    let properties = manifest
+        .package
+        .custom_properties
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect::<Vec<_>>();
+
+    let expected = expect![[r#"
+        [
+            (
+                "published-at",
+                "0x777",
+            ),
+        ]
+    "#]];
+    expected.assert_debug_eq(&properties)
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_custom_property_ensure_published_at() {
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend([
+        "src",
+        "unit_tests",
+        "data",
+        "custom_properties_in_manifest_ensure_published_at",
+    ]);
+
+    let resolution_graph = build_config
+        .config
+        .resolution_graph_for_package(&path, &mut Vec::new())
+        .expect("Could not build resolution graph.");
+
+    let error_message = if let SuiError::ModulePublishFailure { error } =
+        ensure_published_dependencies(&resolution_graph)
+            .err()
+            .unwrap()
+    {
+        error
+    } else {
+        "Expected ModulePublishFailure".into()
+    };
+
+    let expected = expect![[r#"
+        Package dependency "CustomPropertiesInManifestDependencyInvalidPublishedAt" does not specify a valid published address: could not parse value "mystery" for published-at field.
+        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
+        If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
+    expected.assert_eq(&error_message)
 }
 
 pub async fn build_and_try_publish_test_package(

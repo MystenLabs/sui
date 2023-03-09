@@ -17,6 +17,7 @@ use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner};
+use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
@@ -30,6 +31,7 @@ use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
 use move_binary_format::CompiledModule;
+use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
@@ -413,7 +415,7 @@ pub enum SingleTransactionKind {
 }
 
 impl VersionedProtocolMessage for SingleTransactionKind {
-    fn check_version_supported(&self, _current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, _protocol_config: &ProtocolConfig) -> SuiResult {
         // This code does nothing right now - it exists to cause a compiler error when new
         // enumerants are added to SingleTransactionKind.
         //
@@ -731,7 +733,6 @@ impl Command {
                         }
                     );
                 }
-                fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
                     UserInputError::SizeLimitExceeded {
@@ -832,6 +833,20 @@ impl ProgrammableTransaction {
                 }
             })
             .flatten()
+    }
+
+    fn move_calls(&self) -> Vec<(&ObjectID, &IdentStr, &IdentStr)> {
+        self.commands
+            .iter()
+            .filter_map(|command| match command {
+                Command::MoveCall(m) => Some((
+                    &m.package,
+                    m.module.as_ident_str(),
+                    m.function.as_ident_str(),
+                )),
+                _ => None,
+            })
+            .collect()
     }
 }
 
@@ -1003,11 +1018,16 @@ impl SingleTransactionKind {
         }
     }
 
-    /// Actively being replaced by programmable transactions
-    pub fn legacy_move_call(&self) -> Option<&MoveCall> {
+    fn move_calls(&self) -> Vec<(&ObjectID, &IdentStr, &IdentStr)> {
         match &self {
-            Self::Call(call @ MoveCall { .. }) => Some(call),
-            _ => None,
+            Self::Call(MoveCall {
+                package,
+                module,
+                function,
+                ..
+            }) => vec![(package, module, function)],
+            Self::ProgrammableTransaction(pt) => pt.move_calls(),
+            _ => vec![],
         }
     }
 
@@ -1203,14 +1223,14 @@ pub enum TransactionKind {
 }
 
 impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         // If we add new cases here, check that current_protocol_version does not pre-date the
         // addition of that enumerant.
         match &self {
-            TransactionKind::Single(s) => s.check_version_supported(current_protocol_version),
+            TransactionKind::Single(s) => s.check_version_supported(protocol_config),
             TransactionKind::Batch(v) => {
                 for s in v {
-                    s.check_version_supported(current_protocol_version)?
+                    s.check_version_supported(protocol_config)?
                 }
                 Ok(())
             }
@@ -1219,6 +1239,10 @@ impl VersionedProtocolMessage for TransactionKind {
 }
 
 impl TransactionKind {
+    pub fn programmable(pt: ProgrammableTransaction) -> Self {
+        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt))
+    }
+
     pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
         match self {
             TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
@@ -1392,7 +1416,8 @@ impl VersionedProtocolMessage for TransactionData {
         })
     }
 
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        // First check the gross version
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
@@ -1403,15 +1428,19 @@ impl VersionedProtocolMessage for TransactionData {
             // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, 12)),
         };
 
-        if supported.is_version_supported(current_protocol_version) {
-            Ok(())
-        } else {
-            Err(SuiError::WrongMessageVersion {
-                message_version,
-                supported,
-                current_protocol_version,
-            })
+        if !supported.is_version_supported(protocol_config.version) {
+            return Err(SuiError::WrongMessageVersion {
+                error: format!(
+                    "TransactionDataV{} is not supported at {:?}. (Supported range is {:?}",
+                    message_version, protocol_config.version, supported
+                ),
+            });
         }
+
+        // Now check interior versioned data
+        self.kind().check_version_supported(protocol_config)?;
+
+        Ok(())
     }
 }
 
@@ -1518,7 +1547,7 @@ impl TransactionData {
         gas_payment: ObjectRef,
         arguments: Vec<CallArg>,
         gas_budget: u64,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         Self::new_move_call(
             sender,
             package,
@@ -1542,15 +1571,19 @@ impl TransactionData {
         arguments: Vec<CallArg>,
         gas_budget: u64,
         gas_price: u64,
-    ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
-            package,
-            module,
-            function,
-            type_arguments,
-            arguments,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.move_call(package, module, function, type_arguments, arguments)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+        ))
     }
 
     pub fn new_move_call_with_gas_coins(
@@ -1563,15 +1596,19 @@ impl TransactionData {
         arguments: Vec<CallArg>,
         gas_budget: u64,
         gas_price: u64,
-    ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
-            package,
-            module,
-            function,
-            type_arguments,
-            arguments,
-        }));
-        Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.move_call(package, module, function, type_arguments, arguments)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            gas_payment,
+            pt,
+            gas_budget,
+            gas_price,
+        ))
     }
 
     pub fn new_transfer_with_dummy_gas_price(
@@ -1599,11 +1636,12 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-            recipient,
-            object_ref,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_object(recipient, object_ref);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
     pub fn new_transfer_sui_with_dummy_gas_price(
@@ -1631,11 +1669,12 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
-            recipient,
-            amount,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(recipient, amount);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
     pub fn new_pay_with_dummy_gas_price(
@@ -1645,7 +1684,7 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         Self::new_pay(
             sender,
             coins,
@@ -1665,13 +1704,19 @@ impl TransactionData {
         gas_payment: ObjectRef,
         gas_budget: u64,
         gas_price: u64,
-    ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
-            coins,
-            recipients,
-            amounts,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay(coins, recipients, amounts)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+        ))
     }
 
     pub fn new_pay_sui_with_dummy_gas_price(
@@ -1681,7 +1726,7 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         Self::new_pay_sui(
             sender,
             coins,
@@ -1695,34 +1740,39 @@ impl TransactionData {
 
     pub fn new_pay_sui(
         sender: SuiAddress,
-        coins: Vec<ObjectRef>,
+        mut coins: Vec<ObjectRef>,
         recipients: Vec<SuiAddress>,
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
         gas_price: u64,
-    ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins,
-            recipients,
-            amounts,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    ) -> anyhow::Result<Self> {
+        coins.insert(0, gas_payment);
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay_sui(recipients, amounts)?;
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender, coins, pt, gas_budget, gas_price,
+        ))
     }
 
     pub fn new_pay_all_sui(
         sender: SuiAddress,
-        coins: Vec<ObjectRef>,
+        mut coins: Vec<ObjectRef>,
         recipient: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-            coins,
-            recipient,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        coins.insert(0, gas_payment);
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.pay_all_sui(recipient);
+            builder.finish()
+        };
+        Self::new_programmable(sender, coins, pt, gas_budget, gas_price)
     }
 
     pub fn new_module_with_dummy_gas_price(
@@ -1741,15 +1791,17 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
-            modules,
-        }));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.publish(modules);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
     pub fn new_programmable_with_dummy_gas_price(
         sender: SuiAddress,
-        gas_payment: ObjectRef,
+        gas_payment: Vec<ObjectRef>,
         pt: ProgrammableTransaction,
         gas_budget: u64,
     ) -> Self {
@@ -1758,13 +1810,13 @@ impl TransactionData {
 
     pub fn new_programmable(
         sender: SuiAddress,
-        gas_payment: ObjectRef,
+        gas_payment: Vec<ObjectRef>,
         pt: ProgrammableTransaction,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
-        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+        Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
@@ -1809,8 +1861,7 @@ pub trait TransactionDataAPI {
 
     fn shared_input_objects(&self) -> Vec<SharedInputObject>;
 
-    /// Actively being replaced by programmable transactions
-    fn legacy_move_calls(&self) -> Vec<&MoveCall>;
+    fn move_calls(&self) -> Vec<(&ObjectID, &IdentStr, &IdentStr)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
@@ -1892,10 +1943,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.kind.shared_input_objects().collect()
     }
 
-    fn legacy_move_calls(&self) -> Vec<&MoveCall> {
+    fn move_calls(&self) -> Vec<(&ObjectID, &IdentStr, &IdentStr)> {
         self.kind
             .single_transactions()
-            .flat_map(|s| s.legacy_move_call())
+            .flat_map(|s| s.move_calls())
             .collect()
     }
 
@@ -1913,7 +1964,15 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        self.kind().validity_check(config, self.gas())?;
+        let gas = self.gas();
+        fp_ensure!(
+            gas.len() < config.max_gas_payment_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum number of gas payment objects".to_string(),
+                value: config.max_gas_payment_objects().to_string()
+            }
+        );
+        self.kind().validity_check(config, gas)?;
         self.check_sponsorship()
     }
 
@@ -1931,13 +1990,13 @@ impl TransactionDataAPI for TransactionDataV1 {
                 SingleTransactionKind::Call(_)
                 | SingleTransactionKind::TransferObject(_)
                 | SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::Publish(_) => true,
+                | SingleTransactionKind::Publish(_)
+                | SingleTransactionKind::ProgrammableTransaction(_) => true,
                 SingleTransactionKind::TransferSui(_)
                 | SingleTransactionKind::PaySui(_)
                 | SingleTransactionKind::PayAllSui(_)
                 | SingleTransactionKind::ChangeEpoch(_)
                 | SingleTransactionKind::ConsensusCommitPrologue(_)
-                | SingleTransactionKind::ProgrammableTransaction(_)
                 | SingleTransactionKind::Genesis(_) => false,
             },
         };
@@ -2033,9 +2092,9 @@ impl VersionedProtocolMessage for SenderSignedData {
         self.transaction_data().message_version()
     }
 
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         self.transaction_data()
-            .check_version_supported(current_protocol_version)?;
+            .check_version_supported(protocol_config)?;
 
         // This code does nothing right now. Its purpose is to cause a compiler error when a
         // new signature type is added.
@@ -2061,7 +2120,7 @@ impl Message for SenderSignedData {
         TransactionDigest::new(sha3_hash(&self.intent_message.value))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
         if self.intent_message.value.is_system_tx() {
             return Ok(());
         }
@@ -3155,7 +3214,7 @@ pub trait VersionedProtocolMessage {
     }
 
     /// Check that the version of the message is the correct one to use at this protocol version.
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult;
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -3172,7 +3231,7 @@ impl VersionedProtocolMessage for TransactionEffects {
         })
     }
 
-    fn check_version_supported(&self, current_protocol_version: ProtocolVersion) -> SuiResult {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
@@ -3180,13 +3239,14 @@ impl VersionedProtocolMessage for TransactionEffects {
             // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
         };
 
-        if supported.is_version_supported(current_protocol_version) {
+        if supported.is_version_supported(protocol_config.version) {
             Ok(())
         } else {
             Err(SuiError::WrongMessageVersion {
-                message_version,
-                supported,
-                current_protocol_version,
+                error: format!(
+                    "TransactionEffectsV{} is not supported at {:?}. (Supported range is {:?}",
+                    message_version, protocol_config.version, supported
+                ),
             })
         }
     }
@@ -3493,7 +3553,7 @@ impl Message for TransactionEffects {
         TransactionEffectsDigest::new(sha3_hash(self))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
         Ok(())
     }
 }
@@ -3880,7 +3940,7 @@ impl ConsensusTransaction {
 
     pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
-        data.summary.auth_signature.signature.hash(&mut hasher);
+        data.summary.auth_sig().signature.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
@@ -3934,8 +3994,8 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
                 ConsensusTransactionKey::CheckpointSignature(
-                    data.summary.auth_signature.authority,
-                    data.summary.summary.sequence_number,
+                    data.summary.auth_sig().authority,
+                    data.summary.sequence_number,
                 )
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {

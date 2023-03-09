@@ -107,10 +107,10 @@ impl AuthorityAPI for LocalAuthorityClient {
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(epoch_store
-            .system_state_object()
-            .clone()
+        Ok(self
+            .state
+            .database
+            .get_sui_system_state_object()?
             .into_benchmark_version())
     }
 }
@@ -315,6 +315,10 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn set_tx_info_response(&mut self, resp: HandleTransactionResponse) {
         self.tx_info_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_tx_info_response_error(&mut self, error: SuiError) {
+        self.tx_info_resp_to_return = Err(error);
     }
 
     pub fn reset_tx_info_response(&mut self) {

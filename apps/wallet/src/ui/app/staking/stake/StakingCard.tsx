@@ -14,8 +14,8 @@ import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Alert from '../../components/alert';
-import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
-import { getStakingRewards } from '../getStakingRewards';
+import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
+import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
 import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
@@ -23,6 +23,7 @@ import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createValidationSchema } from './validation';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -33,8 +34,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
-import { useSigner, useAppSelector, useGetCoinBalance } from '_hooks';
-import { createCoinsForTypeSelector } from '_redux/slices/account';
+import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
@@ -50,13 +50,13 @@ export type FormValues = typeof initialValues;
 
 function StakingCard() {
     const coinType = SUI_TYPE_ARG;
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
         useGetCoinBalance(coinType, accountAddress);
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const stakeIdParams = searchParams.get('staked');
+    const stakeSuiIdParams = searchParams.get('staked');
     const unstake = searchParams.get('unstake') === 'true';
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
@@ -67,40 +67,21 @@ function StakingCard() {
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
         // return only the total amount of tokens staked for a specific stakeId
-        if (stakeIdParams) {
-            const balance =
-                allDelegation.find(
-                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-                )?.staked_sui.principal.value || 0;
-            return BigInt(balance);
-        }
-        // return aggregate delegation
-        return allDelegation.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
-            0n
-        );
-    }, [allDelegation, stakeIdParams]);
+        return getStakeSuiBySuiId(allDelegation, stakeSuiIdParams);
+    }, [allDelegation, stakeSuiIdParams]);
 
-    const delegationData = useMemo(() => {
-        if (!allDelegation) return null;
-
-        return allDelegation.find(
-            ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-        );
-    }, [allDelegation, stakeIdParams]);
+    const stakeData = useMemo(() => {
+        if (!allDelegation || !stakeSuiIdParams) return null;
+        // return delegation data for a specific stakeId
+        return getDelegationDataByStakeId(allDelegation, stakeSuiIdParams);
+    }, [allDelegation, stakeSuiIdParams]);
 
     const coinSymbol = useMemo(
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
         [coinType]
     );
 
-    const suiEarned = useMemo(() => {
-        if (!system || !delegationData) return 0;
-        return getStakingRewards(
-            system.validators.active_validators,
-            delegationData
-        );
-    }, [delegationData, system]);
+    const suiEarned = stakeData?.estimatedReward || 0;
 
     const [coinDecimals] = useCoinDecimals(coinType);
 
@@ -117,19 +98,13 @@ function StakingCard() {
 
     const queryClient = useQueryClient();
     const delegationId = useMemo(() => {
-        if (!delegationData || delegationData.delegation_status === 'Pending')
-            return null;
-        return delegationData.delegation_status.Active.id.id;
-    }, [delegationData]);
+        if (!stakeData || stakeData.status === 'Pending') return null;
+        return stakeData.stakedSuiId;
+    }, [stakeData]);
 
-    const gasPrice = useReferenceGasPrice();
     const navigate = useNavigate();
     const signer = useSigner();
-    const allSuiCoinsSelector = useMemo(
-        () => createCoinsForTypeSelector(SUI_TYPE_ARG),
-        []
-    );
-    const allSuiCoins = useAppSelector(allSuiCoinsSelector);
+
     const stakeToken = useMutation({
         mutationFn: async ({
             tokenTypeArg,
@@ -146,14 +121,7 @@ function StakingCard() {
             trackEvent('Stake', {
                 props: { validator: validatorAddress },
             });
-            const response = await Coin.stakeCoin(
-                signer,
-                allSuiCoins,
-                amount,
-                validatorAddress,
-                gasPrice.data!
-            );
-            return response;
+            return Coin.stakeCoin(signer, amount, validatorAddress);
         },
     });
     const unStakeToken = useMutation({
@@ -172,12 +140,7 @@ function StakingCard() {
 
             trackEvent('Unstake');
 
-            const response = await Coin.unStakeCoin(
-                signer,
-                delegationId,
-                stakeSuId
-            );
-            return response;
+            return Coin.unStakeCoin(signer, delegationId, stakeSuId);
         },
     });
 
@@ -196,16 +159,15 @@ function StakingCard() {
                 if (unstake) {
                     // check for delegation data
                     if (
-                        !delegationData ||
-                        !stakeIdParams ||
-                        delegationData.delegation_status === 'Pending'
+                        !stakeData ||
+                        !stakeSuiIdParams ||
+                        stakeData.status === 'Pending'
                     ) {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
-                        delegationId:
-                            delegationData.delegation_status.Active.id.id,
-                        stakeSuId: stakeIdParams,
+                        delegationId: stakeData.stakedSuiId,
+                        stakeSuId: stakeSuiIdParams,
                     });
 
                     txDigest = getTransactionDigest(response);
@@ -256,27 +218,20 @@ function StakingCard() {
             unstake,
             queryClient,
             navigate,
-            delegationData,
-            stakeIdParams,
+            stakeData,
+            stakeSuiIdParams,
             unStakeToken,
             stakeToken,
         ]
     );
-    const loadingBalance = useAppSelector(
-        ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
-    );
+
     if (!coinType || !validatorAddress || (!validatorsIsloading && !system)) {
         return <Navigate to="/" replace={true} />;
     }
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
-                loading={
-                    loadingBalance ||
-                    isLoading ||
-                    validatorsIsloading ||
-                    loadingSuiBalances
-                }
+                loading={isLoading || validatorsIsloading || loadingSuiBalances}
             >
                 <Formik
                     initialValues={initialValues}
@@ -330,7 +285,7 @@ function StakingCard() {
                                         <Collapse
                                             title={
                                                 STATE_TO_COPY[
-                                                    delegationData?.delegation_status ===
+                                                    stakeData?.status ===
                                                     'Pending'
                                                         ? DelegationState.WARM_UP
                                                         : DelegationState.EARNING
@@ -380,8 +335,7 @@ function StakingCard() {
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
-                                        (unstake && !delegationId) ||
-                                        gasPrice.isLoading
+                                        (unstake && !delegationId)
                                     }
                                 >
                                     {isSubmitting ? (

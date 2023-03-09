@@ -15,7 +15,6 @@ use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_storage::default_db_options;
-use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
@@ -57,6 +56,7 @@ use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_storage::mutex_table::MutexGuard;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
@@ -64,7 +64,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tokio::time::Instant;
@@ -78,7 +78,7 @@ const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
-pub struct CertLockGuard(LockGuard);
+pub struct CertLockGuard(MutexGuard);
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
@@ -97,8 +97,7 @@ pub struct ExecutionComponents {
 }
 
 pub struct AuthorityPerEpochStore {
-    // TODO: Make this Arc<Committee> for more efficient pass-around.
-    committee: Committee,
+    committee: Arc<Committee>,
     tables: AuthorityEpochTables,
 
     protocol_config: ProtocolConfig,
@@ -148,6 +147,69 @@ pub struct AuthorityPerEpochStore {
 
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
+}
+
+/// Parameters of the epoch fixed at epoch start.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfiguration {
+    system_state: EpochStartSystemState,
+    /// epoch_digest is defined as following
+    /// (1) For the genesis epoch it is set to 0
+    /// (2) For all other epochs it is a digest of the last checkpoint of a previous epoch
+    /// Note that this is in line with how epoch start timestamp is defined
+    epoch_digest: CheckpointDigest,
+}
+
+impl EpochStartConfiguration {
+    pub fn new(system_state: EpochStartSystemState, epoch_digest: CheckpointDigest) -> Self {
+        Self {
+            system_state,
+            epoch_digest,
+        }
+    }
+
+    pub fn new_for_testing() -> Self {
+        Self::new(
+            EpochStartSystemState::new_for_testing(),
+            CheckpointDigest::default(),
+        )
+    }
+
+    pub fn epoch_data(&self) -> EpochData {
+        EpochData::new(
+            self.epoch(),
+            self.epoch_start_timestamp_ms(),
+            self.epoch_digest(),
+        )
+    }
+
+    pub fn epoch_digest(&self) -> CheckpointDigest {
+        self.epoch_digest
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.system_state.epoch
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        ProtocolVersion::new(self.system_state.protocol_version)
+    }
+
+    pub fn reference_gas_price(&self) -> u64 {
+        self.system_state.reference_gas_price
+    }
+
+    pub fn safe_mode(&self) -> bool {
+        self.system_state.safe_mode
+    }
+
+    pub fn epoch_start_timestamp_ms(&self) -> u64 {
+        self.system_state.epoch_start_timestamp_ms
+    }
+
+    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.system_state
+    }
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -265,9 +327,6 @@ pub struct AuthorityEpochTables {
     num_certified_checkpoint_signatures:
         DBMap<AuthorityName, (Option<CheckpointSequenceNumber>, u64)>,
 
-    /// Parameters of the system fixed at the epoch start
-    epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
-
     // Maps checkpoint sequence number to an accumulator with accumulated state
     // only for the checkpoint that the key references. Append-only, i.e.,
     // the accumulator is complete wrt the checkpoint
@@ -275,23 +334,6 @@ pub struct AuthorityEpochTables {
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
-}
-
-/// Parameters of the epoch fixed at epoch start.
-#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct EpochStartConfiguration {
-    pub system_state: SuiSystemState,
-    /// epoch_digest is defined as following
-    /// (1) For the genesis epoch it is set to 0
-    /// (2) For all other epochs it is a digest of the last checkpoint of a previous epoch
-    /// Note that this is in line with how epoch start timestamp is defined
-    pub epoch_digest: CheckpointDigest,
-}
-
-impl EpochStartConfiguration {
-    pub fn protocol_version(&self) -> ProtocolVersion {
-        ProtocolVersion::new(self.system_state.protocol_version())
-    }
 }
 
 impl AuthorityEpochTables {
@@ -336,11 +378,11 @@ impl AuthorityEpochTables {
 impl AuthorityPerEpochStore {
     pub fn new(
         name: AuthorityName,
-        committee: Committee,
+        committee: Arc<Committee>,
         parent_path: &Path,
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
-        epoch_start_configuration: Option<EpochStartConfiguration>,
+        epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
     ) -> Arc<Self> {
@@ -348,7 +390,7 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
-            StakeAggregator::from_iter(Arc::new(committee.clone()), tables.end_of_publish.iter());
+            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
@@ -366,39 +408,7 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
-        // Insert epoch_start_configuration in the DB. This is used by unit tests
-        //
-        // Production code goes different path:
-        // (1) For the first epoch, this is inserted in the DB along with genesis checkpoint
-        // (2) For other epochs, this is updated when AuthorityPerEpochStore
-        // is initialized during epoch change
-        let epoch_start_configuration =
-            if let Some(epoch_start_configuration) = epoch_start_configuration {
-                assert_eq!(epoch_start_configuration.epoch_id(), epoch_id);
-                debug!(
-                    "Epoch start configuration provided for epoch {}",
-                    epoch_start_configuration.epoch_id()
-                );
-                tables
-                    .epoch_start_configuration
-                    .insert(&(), &epoch_start_configuration)
-                    .expect("Failed to store epoch_start_configuration");
-                epoch_start_configuration
-            } else {
-                assert!(
-                    epoch_id > 0,
-                    "epoch_start_configuration should be provided for epoch 0"
-                );
-                debug!(
-                    "Epoch start configuration not provided for epoch {}",
-                    epoch_id
-                );
-                tables
-                    .epoch_start_configuration
-                    .get(&())
-                    .expect("Failed to load epoch_start_configuration")
-                    .expect("epoch_start_configuration not found for non-0 epoch")
-            };
+        assert_eq!(epoch_start_configuration.epoch(), epoch_id);
         let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
@@ -440,6 +450,10 @@ impl AuthorityPerEpochStore {
         &self.epoch_start_configuration
     }
 
+    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
+        self.epoch_start_configuration.epoch_start_state()
+    }
+
     pub fn new_at_next_epoch(
         &self,
         name: AuthorityName,
@@ -452,11 +466,11 @@ impl AuthorityPerEpochStore {
         self.record_epoch_total_duration_metric();
         Self::new(
             name,
-            new_committee,
+            Arc::new(new_committee),
             &self.parent_path,
             self.db_options.clone(),
             self.metrics.clone(),
-            Some(epoch_start_configuration),
+            epoch_start_configuration,
             store,
             self.execution_component.metrics(),
         )
@@ -500,16 +514,16 @@ impl AuthorityPerEpochStore {
             .insert(checkpoint, accumulator)?)
     }
 
-    pub fn system_state_object(&self) -> &SuiSystemState {
-        &self.epoch_start_configuration.system_state
+    pub fn epoch_start_config(&self) -> &EpochStartConfiguration {
+        &self.epoch_start_configuration
     }
 
     pub fn reference_gas_price(&self) -> u64 {
-        self.system_state_object().reference_gas_price()
+        self.epoch_start_config().reference_gas_price()
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {
-        self.epoch_start_configuration.protocol_version()
+        self.epoch_start_config().protocol_version()
     }
 
     pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
@@ -1207,7 +1221,8 @@ impl AuthorityPerEpochStore {
         certified_checkpoint: &CertifiedCheckpointSummary,
     ) -> Result<(), TypedStoreError> {
         let signed_authorities = certified_checkpoint
-            .signatory_authorities(&self.committee)
+            .auth_sig()
+            .authorities(&self.committee)
             .collect::<Result<Vec<&AuthorityName>, _>>()
             // using `expect` here is fine because this error would be caught much earlier
             .expect("Certified checkpoint should be valid");
@@ -1217,7 +1232,7 @@ impl AuthorityPerEpochStore {
             signed_authorities
         );
 
-        let seq_num = certified_checkpoint.sequence_number();
+        let seq_num = *certified_checkpoint.sequence_number();
 
         let old_values = self
             .tables
@@ -1538,8 +1553,8 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CheckpointSignature(data),
                 ..
             }) => {
-                if transaction.sender_authority() != data.summary.auth_signature.authority {
-                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, transaction.certificate.origin() );
+                if transaction.sender_authority() != data.summary.auth_sig().authority {
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_sig().authority, transaction.certificate.origin() );
                     return Err(());
                 }
             }
@@ -1989,28 +2004,6 @@ impl AuthorityPerEpochStore {
 
 fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
-}
-
-impl EpochStartConfiguration {
-    pub fn epoch_data(&self) -> EpochData {
-        EpochData::new(
-            self.epoch_id(),
-            self.epoch_start_timestamp_ms(),
-            self.epoch_digest(),
-        )
-    }
-
-    pub fn epoch_id(&self) -> EpochId {
-        self.system_state.epoch()
-    }
-
-    pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
-        self.system_state.epoch_start_timestamp_ms()
-    }
-
-    pub fn epoch_digest(&self) -> CheckpointDigest {
-        self.epoch_digest
-    }
 }
 
 impl ExecutionComponents {

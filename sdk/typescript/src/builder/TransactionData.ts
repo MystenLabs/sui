@@ -12,25 +12,31 @@ import {
   object,
   optional,
   string,
+  union,
 } from 'superstruct';
-import { SuiObjectRef } from '../types';
+import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
 import { BuilderCallArg } from './Inputs';
 import { create } from './utils';
 
 export const TransactionExpiration = optional(
-  nullable(object({ Epoch: integer() })),
+  nullable(
+    union([
+      object({ Epoch: integer() }),
+      object({ None: union([literal(true), literal(null)]) }),
+    ]),
+  ),
 );
 export type TransactionExpiration = Infer<typeof TransactionExpiration>;
 
 const SuiAddress = string();
 
 const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
-  if (typeof val !== 'string') return false;
+  if (!['string', 'number', 'bigint'].includes(typeof val)) return false;
 
   try {
-    BigInt(val);
+    BigInt(val as string);
     return true;
   } catch {
     return false;
@@ -57,12 +63,44 @@ export type SerializedTransactionDataBuilder = Infer<
   typeof SerializedTransactionDataBuilder
 >;
 
+function prepareSuiAddress(address: string) {
+  return normalizeSuiAddress(address).replace('0x', '');
+}
+
+const TRANSACTION_DATA_MAX_SIZE = 64 * 1024;
+
 export class TransactionDataBuilder {
+  static fromBytes(bytes: Uint8Array) {
+    const data = builder.de('TransactionData', bytes);
+    const programmableTx = data?.V1?.kind?.Single?.ProgrammableTransaction;
+    if (!programmableTx) {
+      throw new Error('Unable to deserialize from bytes.');
+    }
+
+    const serialized = create(
+      {
+        version: 1,
+        sender: data.V1.sender,
+        expiration: data.V1.expiration,
+        gasConfig: data.V1.gasData,
+        inputs: programmableTx.inputs.map((value: unknown, index: number) =>
+          create({ kind: 'Input', value, index }, TransactionInput),
+        ),
+        commands: programmableTx.commands,
+      },
+      SerializedTransactionDataBuilder,
+    );
+
+    const transactionData = new TransactionDataBuilder();
+    Object.assign(transactionData, serialized);
+    return transactionData;
+  }
+
   static restore(data: SerializedTransactionDataBuilder) {
     assert(data, SerializedTransactionDataBuilder);
-    const builder = new TransactionDataBuilder();
-    Object.assign(builder, data);
-    return builder;
+    const transactionData = new TransactionDataBuilder();
+    Object.assign(transactionData, data);
+    return transactionData;
   }
 
   version = 1 as const;
@@ -104,13 +142,13 @@ export class TransactionDataBuilder {
     });
 
     const transactionData = {
-      sender: this.sender,
+      sender: prepareSuiAddress(this.sender),
       expiration: this.expiration ? this.expiration : { None: true },
       gasData: {
         payment: this.gasConfig.payment,
-        owner: this.gasConfig.owner ?? this.sender,
-        price: this.gasConfig.price,
-        budget: this.gasConfig.budget,
+        owner: prepareSuiAddress(this.gasConfig.owner ?? this.sender),
+        price: BigInt(this.gasConfig.price),
+        budget: BigInt(this.gasConfig.budget),
       },
       kind: {
         Single: {
@@ -122,7 +160,13 @@ export class TransactionDataBuilder {
       },
     };
 
-    return builder.ser('TransactionData', { V1: transactionData }).toBytes();
+    return builder
+      .ser(
+        'TransactionData',
+        { V1: transactionData },
+        { maxSize: TRANSACTION_DATA_MAX_SIZE },
+      )
+      .toBytes();
   }
 
   snapshot(): SerializedTransactionDataBuilder {

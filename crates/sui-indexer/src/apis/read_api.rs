@@ -14,15 +14,13 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, TransactionsPage,
+    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
-use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionDigest};
+use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::TransactionQuery;
 
 pub(crate) struct ReadApi<S> {
@@ -46,13 +44,15 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok(total_tx_number as u64)
     }
 
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
-        digest: TransactionDigest,
+        digest: &TransactionDigest,
+        _options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
+        // TODO(chris): support options in indexer
         let txn_resp: SuiTransactionResponse = self
             .state
-            .get_transaction_by_digest(digest.to_string())?
+            .get_transaction_by_digest(&digest.base58_encode())?
             .try_into()?;
         Ok(txn_resp)
     }
@@ -65,59 +65,70 @@ impl<S: IndexerStore> ReadApi<S> {
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
-        let reverse = descending_order.unwrap_or_default();
-        let indexer_seq_number = self
-            .state
-            .get_transaction_sequence_by_digest(cursor.map(|digest| digest.to_string()), reverse)?;
-        let move_call_seq_number = self
-            .state
-            .get_move_call_sequence_by_digest(cursor.map(|digest| digest.to_string()), reverse)?;
+        let is_descending = descending_order.unwrap_or_default();
+        let cursor_str = cursor.map(|digest| digest.to_string());
 
         let digests_from_db = match query {
             TransactionQuery::All => {
+                let indexer_seq_number = self
+                    .state
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
                 self.state
-                    .get_all_transaction_digest_page(indexer_seq_number, limit, reverse)
+                    .get_all_transaction_digest_page(indexer_seq_number, limit, is_descending)
             }
-            // TODO(gegaowp): implement Move call query handling.
             TransactionQuery::MoveFunction {
                 package,
                 module,
                 function,
-            } => self.state.get_transaction_digest_page_by_move_call(
-                package.to_string(),
-                module,
-                function,
-                move_call_seq_number,
-                limit,
-                reverse,
-            ),
+            } => {
+                let move_call_seq_number = self
+                    .state
+                    .get_move_call_sequence_by_digest(cursor_str, is_descending)?;
+                self.state.get_transaction_digest_page_by_move_call(
+                    package.to_string(),
+                    module,
+                    function,
+                    move_call_seq_number,
+                    limit,
+                    is_descending,
+                )
+            }
             // TODO(gegaowp): input objects are tricky to retrive from
             // SuiTransactionResponse, instead we should store the BCS
             // serialized transaction and retrive from there.
             // This is now blocked by the endpoint on FN side.
             TransactionQuery::InputObject(_input_obj_id) => Ok(vec![]),
             TransactionQuery::MutatedObject(mutated_obj_id) => {
+                let indexer_seq_number = self
+                    .state
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
                 self.state.get_transaction_digest_page_by_mutated_object(
                     mutated_obj_id.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    reverse,
+                    is_descending,
                 )
             }
             TransactionQuery::FromAddress(sender_address) => {
+                let indexer_seq_number = self
+                    .state
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
                 self.state.get_transaction_digest_page_by_sender_address(
                     sender_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
-                    reverse,
+                    is_descending,
                 )
             }
             TransactionQuery::ToAddress(recipient_address) => {
+                let recipient_seq_number = self
+                    .state
+                    .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
                 self.state.get_transaction_digest_page_by_recipient_address(
                     recipient_address.to_string(),
-                    indexer_seq_number,
+                    recipient_seq_number,
                     limit + 1,
-                    reverse,
+                    is_descending,
                 )
             }
         }?;
@@ -136,12 +147,14 @@ impl<S: IndexerStore> ReadApi<S> {
             })
             .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
 
-        let next_cursor = txn_digests.get(limit).cloned();
+        let has_next_page = txn_digests.len() > limit;
         txn_digests.truncate(limit);
+        let next_cursor = txn_digests.last().cloned().map_or(cursor, Some);
 
         Ok(Page {
             data: txn_digests,
             next_cursor,
+            has_next_page,
         })
     }
 
@@ -186,6 +199,17 @@ where
         self.fullnode
             .get_object_with_options(object_id, options)
             .await
+    }
+
+    async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiObjectResponse>> {
+        return self
+            .fullnode
+            .multi_get_object_with_options(object_ids, options)
+            .await;
     }
 
     async fn get_dynamic_field_object(
@@ -236,30 +260,39 @@ where
         self.fullnode.get_transactions_in_range(start, end).await
     }
 
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
         if self
             .method_to_be_forwarded
             .contains(&"get_transaction".to_string())
         {
-            return self.fullnode.get_transaction(digest).await;
+            return self
+                .fullnode
+                .get_transaction_with_options(digest, options)
+                .await;
         }
-        self.get_transaction(digest).await
+        self.get_transaction_with_options(&digest, options).await
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
         if self
             .method_to_be_forwarded
-            .contains(&"muti_get_transactions".to_string())
+            .contains(&"multi_get_transactions".to_string())
         {
-            return self.fullnode.multi_get_transactions(digests).await;
+            return self
+                .fullnode
+                .multi_get_transactions_with_options(digests, options)
+                .await;
         }
-        self.multi_get_transactions(digests).await
+        self.multi_get_transactions_with_options(digests, options)
+            .await
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -343,38 +376,6 @@ where
             return self.fullnode.get_checkpoint(id).await;
         }
         Ok(self.get_checkpoint(id).await?)
-    }
-
-    // NOTE: checkpoint APIs below will be deprecated,
-    // thus skipping them regarding indexer native implementations.
-    async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> RpcResult<CheckpointSummary> {
-        self.fullnode.get_checkpoint_summary_by_digest(digest).await
-    }
-
-    async fn get_checkpoint_summary(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointSummary> {
-        self.fullnode.get_checkpoint_summary(sequence_number).await
-    }
-
-    async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> RpcResult<CheckpointContents> {
-        self.fullnode
-            .get_checkpoint_contents_by_digest(digest)
-            .await
-    }
-
-    async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointContents> {
-        self.fullnode.get_checkpoint_contents(sequence_number).await
     }
 }
 

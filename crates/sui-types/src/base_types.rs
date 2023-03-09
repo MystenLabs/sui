@@ -13,6 +13,10 @@ use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
+use crate::messages::Transaction;
+use crate::messages::TransactionEffects;
+use crate::messages::TransactionEffectsAPI;
+use crate::messages::VerifiedTransaction;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
@@ -112,7 +116,7 @@ impl FromStr for ObjectType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "Package" {
+        if s.to_lowercase() == PACKAGE {
             Ok(ObjectType::Package)
         } else {
             let tag = parse_sui_struct_tag(s)?;
@@ -144,7 +148,7 @@ impl ObjectInfo {
         }
     }
 }
-
+const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
         match self {
@@ -359,6 +363,60 @@ impl ExecutionDigests {
             transaction: TransactionDigest::random(),
             effects: TransactionEffectsDigest::random(),
         }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
+pub struct ExecutionData {
+    pub transaction: Transaction,
+    pub effects: TransactionEffects,
+}
+
+impl ExecutionData {
+    pub fn new(transaction: Transaction, effects: TransactionEffects) -> ExecutionData {
+        debug_assert_eq!(transaction.digest(), effects.transaction_digest());
+        Self {
+            transaction,
+            effects,
+        }
+    }
+
+    pub fn digests(&self) -> ExecutionDigests {
+        self.effects.execution_digests()
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct VerifiedExecutionData {
+    pub transaction: VerifiedTransaction,
+    pub effects: TransactionEffects,
+}
+
+impl VerifiedExecutionData {
+    pub fn new(transaction: VerifiedTransaction, effects: TransactionEffects) -> Self {
+        debug_assert_eq!(transaction.digest(), effects.transaction_digest());
+        Self {
+            transaction,
+            effects,
+        }
+    }
+
+    pub fn new_unchecked(data: ExecutionData) -> Self {
+        Self {
+            transaction: VerifiedTransaction::new_unchecked(data.transaction),
+            effects: data.effects,
+        }
+    }
+
+    pub fn into_inner(self) -> ExecutionData {
+        ExecutionData {
+            transaction: self.transaction.into_inner(),
+            effects: self.effects,
+        }
+    }
+
+    pub fn digests(&self) -> ExecutionDigests {
+        self.effects.execution_digests()
     }
 }
 
@@ -785,7 +843,7 @@ impl fmt::Display for ObjectID {
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ObjectType::Package => write!(f, "package"),
+            ObjectType::Package => write!(f, "{}", PACKAGE),
             ObjectType::Struct(t) => write!(f, "{}", t),
         }
     }

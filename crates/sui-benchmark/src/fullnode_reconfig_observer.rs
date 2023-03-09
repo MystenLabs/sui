@@ -13,8 +13,7 @@ use sui_core::{
     safe_client::SafeClientMetricsBase,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{committee::Committee, sui_system_state::SuiSystemStateTrait};
+use sui_types::committee::Committee;
 use tracing::{debug, error, trace};
 
 /// A ReconfigObserver that polls FullNode periodically
@@ -65,10 +64,14 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient, S>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-            match self.fullnode_client.read_api().get_sui_system_state().await {
+            match self
+                .fullnode_client
+                .governance_api()
+                .get_latest_sui_system_state()
+                .await
+            {
                 Ok(sui_system_state) => {
-                    let sui_system_state: SuiSystemState = sui_system_state.into();
-                    let epoch_id = sui_system_state.epoch();
+                    let epoch_id = sui_system_state.epoch;
                     if epoch_id > quorum_driver.current_epoch() {
                         debug!(epoch_id, "Got SuiSystemState in newer epoch");
                         let new_committee = match self
@@ -95,7 +98,7 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
                         };
                         let _ = self.committee_store.insert_new_committee(&new_committee);
                         match AuthorityAggregator::new_from_committee(
-                            sui_system_state.get_current_epoch_committee(),
+                            sui_system_state.get_sui_committee_for_benchmarking(),
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),

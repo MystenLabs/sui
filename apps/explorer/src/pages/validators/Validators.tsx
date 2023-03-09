@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Validator, type SuiEventEnvelope } from '@mysten/sui.js';
+import {
+    getMoveEvent,
+    isEventType,
+    type SuiValidatorSummary,
+    type SuiEventEnvelope,
+} from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -27,33 +32,35 @@ const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(
-    validators: Validator[],
+export function validatorsTableData(
+    validators: SuiValidatorSummary[],
     epoch: number,
-    validatorsEvents: SuiEventEnvelope[]
+    validatorsEvents: SuiEventEnvelope[],
+    minimumStake: number
 ) {
     return {
         data: validators.map((validator) => {
-            const validatorName = validator.metadata.name;
-            const totalStake = validator.staking_pool.sui_balance;
-            const img = validator.metadata.image_url;
+            const validatorName = validator.name;
+            const totalStake = validator.stakingPoolSuiBalance;
+            const img = validator.imageUrl;
 
             const event = getValidatorMoveEvent(
                 validatorsEvents,
-                validator.metadata.sui_address
+                validator.suiAddress
             );
 
             return {
                 name: {
                     name: validatorName,
-                    logo: validator.metadata.image_url,
+                    logo: validator.imageUrl,
                 },
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.commission_rate / 100,
+                commission: +validator.commissionRate / 100,
                 img: img,
-                address: validator.metadata.sui_address,
+                address: validator.suiAddress,
                 lastReward: event?.fields.stake_rewards || 0,
+                atRisk: totalStake < minimumStake,
             };
         }),
         columns: [
@@ -150,6 +157,22 @@ function validatorsTableData(
                     );
                 },
             },
+            {
+                header: 'Status',
+                accessorKey: 'atRisk',
+                cell: (props: any) => {
+                    const atRisk = props.getValue();
+                    return atRisk ? (
+                        <Text color="issue" variant="bodySmall/medium">
+                            At Risk
+                        </Text>
+                    ) : (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            Active
+                        </Text>
+                    );
+                },
+            },
         ],
     };
 }
@@ -158,7 +181,7 @@ function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const numberOfValidators = useMemo(
-        () => data?.validators.active_validators.length || null,
+        () => data?.activeValidators.length || null,
         [data]
     );
 
@@ -173,17 +196,17 @@ function ValidatorPageResult() {
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.activeValidators;
 
         return validators.reduce(
-            (acc, cur) => acc + +cur.staking_pool.sui_balance,
+            (acc, cur) => acc + +cur.stakingPoolSuiBalance,
             0
         );
     }, [data]);
 
     const averageAPY = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.activeValidators;
 
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +data.epoch)
@@ -200,8 +223,8 @@ function ValidatorPageResult() {
         let totalRewards = 0;
 
         validatorEvents.data.forEach(({ event }) => {
-            if ('moveEvent' in event) {
-                const { moveEvent } = event;
+            if (isEventType(event, 'moveEvent')) {
+                const moveEvent = getMoveEvent(event)!;
                 totalRewards += +moveEvent.fields.stake_rewards;
             }
         });
@@ -212,12 +235,13 @@ function ValidatorPageResult() {
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
 
-        const validators = data.validators.active_validators;
+        const validators = data.activeValidators;
 
         return validatorsTableData(
             validators,
             +data.epoch,
-            validatorEvents.data
+            validatorEvents.data,
+            data.minValidatorStake
         );
     }, [validatorEvents, data]);
 

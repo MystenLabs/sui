@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ComponentProps, ReactNode, useState } from "react";
-
 import { ConnectModal } from "./ConnectModal";
 import { Button } from "./utils/ui";
 import { AccountModal } from "./AccountModal";
@@ -11,10 +10,12 @@ import { formatAddress } from "@mysten/sui.js";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
+  connectedText?: ReactNode;
 }
 
 export function ConnectButton({
   connectText = "Connect Wallet",
+  connectedText,
   ...props
 }: ConnectButtonProps) {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
@@ -32,7 +33,7 @@ export function ConnectButton({
           type="button"
           {...props}
         >
-          {formatAddress(currentAccount.address)}
+          {connectedText ?? formatAddress(currentAccount.address)}
         </Button>
       ) : (
         <Button

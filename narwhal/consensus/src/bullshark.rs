@@ -10,9 +10,9 @@ use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use fastcrypto::traits::EncodeDecodeBase64;
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 use tokio::time::Instant;
-use tracing::{debug, trace};
+use tracing::{debug, error_span};
 use types::{
     Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
 };
@@ -64,9 +64,6 @@ impl ConsensusProtocol for Bullshark {
     ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
-
-        // We must have stored already the parents of this certificate!
-        self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
         if !state.try_insert(&certificate)? {
@@ -150,13 +147,19 @@ impl ConsensusProtocol for Bullshark {
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut committed_sub_dags = Vec::new();
+        let mut total_committed_certificates = 0;
 
         // TODO: duplicated in tusk.rs
         for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
             .iter()
             .rev()
         {
-            debug!("Previous Leader {:?} has enough support", leader);
+            let sub_dag_index = state.latest_sub_dag_index + 1;
+            let _span = error_span!("bullshark_process_sub_dag", sub_dag_index);
+
+            debug!("Leader {:?} has enough support", leader);
+
+            let mut min_round = leader.round();
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
@@ -164,30 +167,32 @@ impl ConsensusProtocol for Bullshark {
                 // Update and clean up internal state.
                 state.update(&x, self.gc_depth);
 
+                // For logging.
+                min_round = min_round.min(x.round());
+
                 // Add the certificate to the sequence.
                 sequence.push(x);
             }
+            debug!(min_round, "Subdag has {} certificates", sequence.len());
 
-            let next_sub_dag_index = state.latest_sub_dag_index + 1;
+            total_committed_certificates += sequence.len();
 
             // We update the reputation score stored in state
-            let reputation_score =
-                self.update_reputation_score(state, &sequence, next_sub_dag_index);
+            let reputation_score = self.update_reputation_score(state, &sequence, sub_dag_index);
 
             let sub_dag = CommittedSubDag {
                 certificates: sequence,
                 leader: leader.clone(),
-                sub_dag_index: next_sub_dag_index,
+                sub_dag_index,
                 reputation_score,
             };
 
             // Persist the update.
             self.store
                 .write_consensus_state(&state.last_committed, &sub_dag)?;
-            debug!("Store commit index:{},", &next_sub_dag_index,);
 
             // Increase the global consensus index.
-            state.latest_sub_dag_index = next_sub_dag_index;
+            state.latest_sub_dag_index = sub_dag_index;
             state.last_committed_leader = Some(sub_dag.leader.digest());
 
             committed_sub_dags.push(sub_dag);
@@ -225,15 +230,6 @@ impl ConsensusProtocol for Bullshark {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        let total_committed_certificates: usize = committed_sub_dags
-            .iter()
-            .map(|x| x.certificates.len())
-            .sum();
-        debug!(
-            "Total committed certificates: {}",
-            total_committed_certificates
-        );
-
         self.metrics
             .committed_certificates
             .observe(total_committed_certificates as f64);
@@ -266,50 +262,27 @@ impl Bullshark {
     // Returns the PublicKey of the authority which is the leader for the provided `round`.
     // Pay attention that this method will return always the first authority as the leader
     // when used under a test environment.
-    pub fn leader_authority(committee: &Committee, _round: Round) -> PublicKey {
+    pub fn leader_authority(committee: &Committee, round: Round) -> PublicKey {
+        assert_eq!(
+            round % 2,
+            0,
+            "We should never attempt to do a leader election for odd rounds"
+        );
+
         cfg_if::cfg_if! {
             if #[cfg(test)] {
-                // consensus tests rely on returning the same leader.
-                committee.authorities.iter().next().expect("Empty authorities table!").0.clone()
+                // We apply round robin in leader election. Since we expect round to be an even number,
+                // 2, 4, 6, 8... it can't work well for leader election as we'll omit leaders. Thus
+                // we can always divide by 2 to get a monotonically incremented sequence,
+                // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
+                // start with base zero 0.
+                let next_leader = (round/2 - 1) as usize % committee.authorities.len();
+                let authorities = committee.authorities.iter().collect::<Vec<_>>();
+
+                authorities.get(next_leader).unwrap().0.clone()
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
-                committee.leader(_round)
-            }
-        }
-    }
-
-    // Checks that the provided certificate's parents exist and prints the necessary
-    // log statements. This method does not take more actions other than printing
-    // log statements.
-    fn log_error_if_missing_parents(&self, certificate: &Certificate, state: &ConsensusState) {
-        let round = certificate.round();
-        if round > 0 {
-            let parents = certificate.header.parents.clone();
-            if let Some(round_table) = state.dag.get(&(round - 1)) {
-                let store_parents: BTreeSet<&CertificateDigest> =
-                    round_table.iter().map(|(_, (digest, _))| digest).collect();
-
-                for parent_digest in parents {
-                    if !store_parents.contains(&parent_digest) {
-                        if round - 1 + self.gc_depth > state.last_committed_round {
-                            trace!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
-                                certificate, parent_digest
-                            );
-                        } else {
-                            trace!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
-                                certificate, parent_digest
-                            );
-                        }
-                    }
-                }
-            } else {
-                trace!(
-                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
-                    round - 1,
-                    certificate
-                );
+                committee.leader(round)
             }
         }
     }
@@ -342,7 +315,7 @@ impl Bullshark {
         // TODO: when schedule change is implemented we should probably change a little bit
         // this logic here.
         if sub_dag_index % self.num_sub_dags_per_schedule == 0 {
-            state.last_consensus_reputation_score = ReputationScores::default()
+            state.last_consensus_reputation_score = ReputationScores::new(&self.committee)
         }
 
         // update the score for the previous leader. If no previous leader exists,
@@ -368,6 +341,13 @@ impl Bullshark {
         // ones calculated for the current schedule.
         state.last_consensus_reputation_score.final_of_schedule =
             (sub_dag_index + 1) % self.num_sub_dags_per_schedule == 0;
+
+        // Always ensure that all the authorities are present in the reputation scores - even
+        // when score is zero.
+        assert_eq!(
+            state.last_consensus_reputation_score.total_authorities() as usize,
+            self.committee.authorities.len()
+        );
 
         state.last_consensus_reputation_score.clone()
     }

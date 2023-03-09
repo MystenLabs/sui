@@ -6,6 +6,7 @@ mod rosetta_client;
 use crate::rosetta_client::RosettaEndpoint;
 use rosetta_client::{get_random_sui, start_rosetta_test_server};
 use serde_json::json;
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
@@ -163,7 +164,13 @@ async fn test_get_delegated_sui() {
     assert_eq!(response.balances[0].value, 0);
 
     // Delegate some sui
-    let validators = client.governance_api().get_validators().await.unwrap();
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let coins = client
         .coin_read_api()
         .get_coins(address, None, None, None)
@@ -176,7 +183,7 @@ async fn test_get_delegated_sui() {
             address,
             vec![coins[0].coin_object_id],
             Some(100000),
-            validators[0].sui_address,
+            validator,
             None,
             10000,
         )
@@ -222,11 +229,10 @@ async fn test_delegation() {
 
     let validator = client
         .governance_api()
-        .get_validators()
+        .get_latest_sui_system_state()
         .await
         .unwrap()
-        .first()
-        .unwrap()
+        .active_validators[0]
         .sui_address;
     let ops = client
         .transaction_builder()
@@ -240,11 +246,53 @@ async fn test_delegation() {
 
     let tx = client
         .read_api()
-        .get_transaction(response.transaction_identifier.hash)
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionResponseOptions::new().with_effects(),
+        )
         .await
         .unwrap();
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(SuiExecutionStatus::Success, *tx.effects.status())
+    assert_eq!(
+        SuiExecutionStatus::Success,
+        *tx.effects.as_ref().unwrap().status()
+    )
+}
+
+#[tokio::test]
+async fn test_pay_sui() {
+    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let sender = test_cluster.accounts[0];
+    let recipient = test_cluster.accounts[1];
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+
+    let ops = client
+        .transaction_builder()
+        .pay_sui(sender, vec![coin1.0], vec![recipient], vec![10000], 1000)
+        .await
+        .unwrap();
+
+    let ops = Operations::try_from(ops).unwrap();
+
+    let response = rosetta_client.rosetta_flow(ops, keystore).await;
+
+    let tx = client
+        .read_api()
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionResponseOptions::new().with_effects(),
+        )
+        .await
+        .unwrap();
+
+    println!("Sui TX: {tx:?}");
+
+    assert_eq!(SuiExecutionStatus::Success, *tx.effects.unwrap().status())
 }

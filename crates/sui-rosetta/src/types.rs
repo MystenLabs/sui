@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use axum::Json;
 use std::fmt::Debug;
 use std::str::FromStr;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
@@ -26,9 +27,7 @@ use sui_types::crypto::SignatureScheme;
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
 };
-use sui_types::messages::{
-    CallArg, MoveCall, ObjectArg, PaySui, SingleTransactionKind, TransactionData, TransactionKind,
-};
+use sui_types::messages::{CallArg, ObjectArg, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
@@ -557,7 +556,7 @@ pub enum PreprocessMetadata {
 impl From<TransactionMetadata> for PreprocessMetadata {
     fn from(tx_metadata: TransactionMetadata) -> Self {
         match tx_metadata {
-            TransactionMetadata::PaySui(_) => Self::PaySui,
+            TransactionMetadata::PaySui => Self::PaySui,
             TransactionMetadata::Delegation {
                 locked_until_epoch, ..
             } => Self::Delegation { locked_until_epoch },
@@ -609,7 +608,7 @@ pub struct ConstructionMetadataResponse {
 pub struct ConstructionMetadata {
     pub tx_metadata: TransactionMetadata,
     pub sender: SuiAddress,
-    pub gas: ObjectRef,
+    pub gas: Vec<ObjectRef>,
     pub gas_price: u64,
     pub budget: u64,
 }
@@ -621,7 +620,7 @@ impl IntoResponse for ConstructionMetadataResponse {
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TransactionMetadata {
-    PaySui(Vec<ObjectRef>),
+    PaySui,
     Delegation {
         coins: Vec<ObjectRef>,
         locked_until_epoch: Option<EpochId>,
@@ -887,19 +886,19 @@ impl InternalOperation {
     }
     /// Combine with ConstructionMetadata to form the TransactionData
     pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
-        let single_tx = match (self, metadata.tx_metadata) {
+        let pt = match (self, metadata.tx_metadata) {
             (
                 Self::PaySui {
                     recipients,
                     amounts,
                     ..
                 },
-                TransactionMetadata::PaySui(coins),
-            ) => SingleTransactionKind::PaySui(PaySui {
-                coins,
-                recipients,
-                amounts,
-            }),
+                TransactionMetadata::PaySui,
+            ) => {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.pay_sui(recipients, amounts)?;
+                builder.finish()
+            }
             (
                 InternalOperation::Delegation {
                     validator,
@@ -914,12 +913,13 @@ impl InternalOperation {
                 } else {
                     ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
                 };
-                SingleTransactionKind::Call(MoveCall {
-                    package: SUI_FRAMEWORK_OBJECT_ID,
-                    module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.move_call(
+                    SUI_FRAMEWORK_OBJECT_ID,
+                    SUI_SYSTEM_MODULE_NAME.to_owned(),
                     function,
-                    type_arguments: vec![],
-                    arguments: vec![
+                    vec![],
+                    vec![
                         CallArg::Object(ObjectArg::SharedObject {
                             id: SUI_SYSTEM_STATE_OBJECT_ID,
                             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -931,7 +931,8 @@ impl InternalOperation {
                         CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
                         CallArg::Pure(bcs::to_bytes(&validator)?),
                     ],
-                })
+                )?;
+                builder.finish()
             }
             (op, metadata) => {
                 return Err(Error::InternalError(anyhow!(
@@ -942,10 +943,10 @@ impl InternalOperation {
             }
         };
 
-        Ok(TransactionData::new(
-            TransactionKind::Single(single_tx),
+        Ok(TransactionData::new_programmable(
             metadata.sender,
             metadata.gas,
+            pt,
             metadata.budget,
             metadata.gas_price,
         ))

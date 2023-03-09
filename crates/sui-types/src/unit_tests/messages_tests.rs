@@ -789,21 +789,25 @@ fn test_sponsored_transaction_validity_check() {
     .validity_check(&ProtocolConfig::get_for_max_version())
     .unwrap();
 
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
-            package: ObjectID::random(),
-            module: Identifier::new("random_module").unwrap(),
-            function: Identifier::new("random_function").unwrap(),
-            type_arguments: vec![],
-            arguments: vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
-                random_object_ref(),
-            ))],
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                ObjectID::random(),
+                Identifier::new("random_module").unwrap(),
+                Identifier::new("random_function").unwrap(),
+                vec![],
+                vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                    random_object_ref(),
+                ))],
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
+        .validity_check(&ProtocolConfig::get_for_max_version())
+        .unwrap();
 
     TransactionData::new_with_gas_data(
         TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
@@ -1157,6 +1161,7 @@ fn dummy_move_call(
         args,
         MAX_GAS,
     )
+    .unwrap()
 }
 
 #[test]
@@ -1208,26 +1213,30 @@ fn test_unique_input_objects() {
         budget: 10000,
     };
 
-    let transaction_data = TransactionData::new_with_gas_data(
-        TransactionKind::Batch(vec![
-            SingleTransactionKind::Call(MoveCall {
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
                 package,
-                module: Identifier::new("test_module").unwrap(),
-                function: Identifier::new("test_function").unwrap(),
-                type_arguments: type_args.clone(),
-                arguments: args_1,
-            }),
-            SingleTransactionKind::Call(MoveCall {
+                Identifier::new("test_module").unwrap(),
+                Identifier::new("test_function").unwrap(),
+                type_args.clone(),
+                args_1,
+            )
+            .unwrap();
+        builder
+            .move_call(
                 package,
-                module: Identifier::new("test_module").unwrap(),
-                function: Identifier::new("test_function").unwrap(),
-                type_arguments: type_args,
-                arguments: args_2,
-            }),
-        ]),
-        sender,
-        gas_data,
-    );
+                Identifier::new("test_module").unwrap(),
+                Identifier::new("test_function").unwrap(),
+                type_args,
+                args_2,
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    let transaction_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
 
     let input_objects = transaction_data.input_objects().unwrap();
     let input_objects_map: BTreeSet<_> = input_objects.iter().cloned().collect();

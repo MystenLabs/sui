@@ -25,7 +25,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectType, SuiAddress};
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
@@ -56,6 +56,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         write_config: None,
         force: false,
         from_config: None,
+        epoch_duration_ms: None,
     }
     .execute()
     .await?;
@@ -92,6 +93,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         write_config: None,
         force: false,
         from_config: None,
+        epoch_duration_ms: None,
     }
     .execute()
     .await;
@@ -184,6 +186,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_create_example_nft_command() {
+    use std::str::FromStr;
     let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -204,7 +207,10 @@ async fn test_create_example_nft_command() {
             assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
             assert_eq!(
                 obj.type_.clone().unwrap(),
-                sui_framework_address_concat_string("::devnet_nft::DevNetNFT")
+                ObjectType::from_str(&sui_framework_address_concat_string(
+                    "::devnet_nft::DevNetNFT"
+                ))
+                .unwrap()
             );
             Ok(obj)
         }
@@ -361,7 +367,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
 
     let package = if let SuiClientCommandResult::Publish(response) = resp {
-        response.effects.created()[0].reference.object_id
+        response.effects.unwrap().created()[0].reference.object_id
     } else {
         unreachable!("Invalid response");
     };
@@ -409,7 +415,13 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Get the created object
     let created_obj: ObjectID = if let SuiClientCommandResult::Call(resp) = resp {
-        resp.effects.created().first().unwrap().reference.object_id
+        resp.effects
+            .unwrap()
+            .created()
+            .first()
+            .unwrap()
+            .reference
+            .object_id
     } else {
         panic!();
     };
@@ -525,6 +537,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
         response
             .effects
+            .as_ref()
+            .unwrap()
             .created()
             .iter()
             .map(|refe| refe.reference.object_id)
@@ -575,6 +589,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         (
             response
                 .effects
+                .as_ref()
+                .unwrap()
                 .mutated()
                 .get(0)
                 .unwrap()
@@ -582,6 +598,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .object_id,
             response
                 .effects
+                .as_ref()
+                .unwrap()
                 .mutated()
                 .get(1)
                 .unwrap()
@@ -651,6 +669,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         (
             response
                 .effects
+                .as_ref()
+                .unwrap()
                 .mutated()
                 .get(0)
                 .unwrap()
@@ -658,6 +678,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .object_id,
             response
                 .effects
+                .as_ref()
+                .unwrap()
                 .mutated()
                 .get(1)
                 .unwrap()
@@ -905,6 +927,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
         let object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
@@ -946,6 +970,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
         let object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
@@ -997,6 +1023,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         let updated_object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
@@ -1004,7 +1032,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             .reference
             .object_id;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.created().to_vec();
+        let new_object_refs = r.effects.unwrap().created().to_vec();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
             new_objects.push(
@@ -1048,6 +1076,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         let updated_object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
@@ -1055,7 +1085,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             .reference
             .object_id;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.created().to_vec();
+        let new_object_refs = r.effects.unwrap().created().to_vec();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
             new_objects.push(
@@ -1102,6 +1132,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         let updated_object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
             .into_iter()
             .next()
@@ -1109,7 +1141,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             .reference
             .object_id;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.created().to_vec();
+        let new_object_refs = r.effects.unwrap().created().to_vec();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
             new_objects.push(
@@ -1202,8 +1234,12 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
         .data;
 
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-    let validator_addrs = client.governance_api().get_validators().await?;
-    let validator_addr = validator_addrs.first().unwrap().sui_address;
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
 
     test_with_sui_binary(&[
         "client",
@@ -1234,7 +1270,7 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
     assert_eq!(1, stake.len());
     assert_eq!(
         coins.first().unwrap().balance,
-        stake.first().unwrap().staked_sui.principal()
+        stake.first().unwrap().stakes.first().unwrap().principal
     );
     Ok(())
 }
@@ -1253,8 +1289,12 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
         .data;
 
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-    let validator_addrs = client.governance_api().get_validators().await?;
-    let validator_addr = validator_addrs.first().unwrap().sui_address;
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
 
     test_with_sui_binary(&[
         "client",
@@ -1283,7 +1323,10 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
         .await?;
 
     assert_eq!(1, stake.len());
-    assert_eq!(10000, stake.first().unwrap().staked_sui.principal());
+    assert_eq!(
+        10000,
+        stake.first().unwrap().stakes.first().unwrap().principal
+    );
     Ok(())
 }
 

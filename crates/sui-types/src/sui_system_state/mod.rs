@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::{CommitteeWithNetAddresses, EpochId, ProtocolVersion};
+use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
+use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use crate::{id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-use anemo::PeerId;
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::language_storage::TypeTag;
@@ -15,14 +14,13 @@ use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
 use tracing::error;
 
-use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorMetadata};
+use self::sui_system_state_inner_v1::SuiSystemStateInnerV1;
 use self::sui_system_state_summary::SuiSystemStateSummary;
 
+pub mod epoch_start_sui_system_state;
 pub mod sui_system_state_inner_v1;
 pub mod sui_system_state_summary;
 
@@ -68,15 +66,8 @@ pub trait SuiSystemStateTrait {
     fn protocol_version(&self) -> u64;
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
-    fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses;
-    fn get_current_epoch_narwhal_committee(&self) -> NarwhalCommittee;
-    fn get_current_epoch_narwhal_worker_cache(
-        &self,
-        transactions_address: &Multiaddr,
-    ) -> WorkerCache;
-    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadata>;
-    fn get_current_epoch_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
-    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
+    fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
+    fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }
 
@@ -195,4 +186,25 @@ where
 
 pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
     INIT_SYSTEM_STATE_VERSION
+}
+
+pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
+    use multiaddr::Protocol;
+    let mut iter = multiaddr.iter();
+
+    match (iter.next(), iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
+            Some((ipaddr, port).into())
+        }
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
+            Some((ipaddr, port).into())
+        }
+        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
+            Some((hostname.as_ref(), port).into())
+        }
+        _ => {
+            tracing::debug!("unsupported p2p multiaddr: '{multiaddr}'");
+            None
+        }
+    }
 }

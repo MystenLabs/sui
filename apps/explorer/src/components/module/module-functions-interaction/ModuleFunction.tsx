@@ -4,6 +4,8 @@
 import {
     getExecutionStatusType,
     getExecutionStatusError,
+    Transaction,
+    Commands,
 } from '@mysten/sui.js';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
@@ -68,19 +70,16 @@ export function ModuleFunction({
     );
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
-            const result = await signAndExecuteTransaction({
-                transaction: {
-                    kind: 'moveCall',
-                    data: {
-                        packageObjectId: packageId,
-                        module: moduleName,
-                        function: functionName,
-                        arguments: params || [],
-                        typeArguments: types || [],
-                        gasBudget: 2000,
-                    },
-                },
-            });
+            const tx = new Transaction();
+            tx.setGasBudget(2000);
+            tx.add(
+                Commands.MoveCall({
+                    target: `${packageId}::${moduleName}::${functionName}`,
+                    typeArguments: types ?? [],
+                    arguments: params?.map((param) => tx.input(param)) ?? [],
+                })
+            );
+            const result = await signAndExecuteTransaction({ transaction: tx });
             if (getExecutionStatusType(result) === 'failure') {
                 throw new Error(
                     getExecutionStatusError(result) || 'Transaction failed'

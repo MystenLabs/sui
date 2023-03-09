@@ -459,7 +459,7 @@ impl Primary {
             header_store.clone(),
             certificate_store.clone(),
             synchronizer.clone(),
-            signature_service.clone(),
+            signature_service,
             rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_shutdown.subscribe(),
@@ -488,7 +488,6 @@ impl Primary {
         let proposer_handle = Proposer::spawn(
             name.clone(),
             committee.clone(),
-            signature_service,
             proposer_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
@@ -692,7 +691,7 @@ impl PrimaryReceiverHandler {
 
         let header = &request.body().header;
         let committee = self.committee.clone();
-        header.verify(&committee, self.worker_cache.clone())?;
+        header.validate(&committee, &self.worker_cache)?;
 
         // Vote request must come from the Header's author.
         let peer_id = request
@@ -737,15 +736,35 @@ impl PrimaryReceiverHandler {
         self.metrics
             .certificates_in_votes
             .inc_by(request.body().parents.len() as u64);
-        let wait_network = network.clone();
         let mut wait_notifications: FuturesUnordered<_> = request
             .body()
             .parents
             .clone()
             .into_iter()
             .map(|cert| {
-                self.synchronizer
-                    .wait_to_accept_certificate(cert, &wait_network)
+                let synchronizer = self.synchronizer.clone();
+                let wait_network = network.clone();
+                async move {
+                    // Finish accepting certificate regardless of client cancellation by spawning
+                    // another task.
+                    // TODO: add simtest for cancellations.
+                    let result = spawn_monitored_task!(
+                        synchronizer.try_accept_certificate(cert, &wait_network)
+                    )
+                    .await
+                    .map_err(|_| DagError::Canceled)?;
+                    match result {
+                        Err(DagError::Suspended(notify)) => {
+                            let notify = notify.lock().unwrap().take();
+                            notify
+                                .unwrap()
+                                .recv()
+                                .await
+                                .map_err(|_| DagError::ShuttingDown)
+                        }
+                        r => r,
+                    }
+                }
             })
             .collect();
         loop {
@@ -925,11 +944,18 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                     "Unable to access network to send child RPCs".to_owned(),
                 )
             })?;
+        let synchronizer = self.synchronizer.clone();
         let certificate = request.into_body().certificate;
-        self.synchronizer
-            .try_accept_certificate(certificate, &network)
-            .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        // Finish accepting certificate regardless of client cancellation by spawning another task.
+        // TODO: add simtest for cancellations.
+        let _ = spawn_monitored_task!(async move {
+            synchronizer
+                .try_accept_certificate(certificate, &network)
+                .await
+        })
+        .await
+        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
+        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(SendCertificateResponse {}))
     }
 

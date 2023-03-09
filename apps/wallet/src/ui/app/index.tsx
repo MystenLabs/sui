@@ -9,7 +9,7 @@ import { Staking } from './staking/home';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
-import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
+import { ApprovalRequestPage } from '_pages/approval-request';
 import HomePage, {
     NftsPage,
     TokensPage,
@@ -45,7 +45,6 @@ const App = () => {
         (state) => state.app.appType === AppType.popup
     );
     useEffect(() => {
-        document.body.classList[isPopup ? 'add' : 'remove']('is-popup');
         document.body.classList.remove('app-initializing');
     }, [isPopup]);
     const location = useLocation();
@@ -78,19 +77,14 @@ const App = () => {
                 />
             </Route>
 
-            <Route
-                path="/dapp/*"
-                element={
-                    <HomePage disableNavigation limitToPopUpSize={false} />
-                }
-            >
+            <Route path="/dapp/*" element={<HomePage disableNavigation />}>
                 <Route
                     path="connect/:requestID"
                     element={<SiteConnectPage />}
                 />
                 <Route
-                    path="tx-approval/:txID"
-                    element={<DappTxApprovalPage />}
+                    path="approve/:requestID"
+                    element={<ApprovalRequestPage />}
                 />
             </Route>
 

@@ -64,6 +64,8 @@ impl TestCaseImpl for CallContractTest {
         // Retrieve created nft
         let nft_id = response
             .effects
+            .as_ref()
+            .unwrap()
             .created()
             .first()
             .expect("Failed to create NFT")
@@ -71,7 +73,7 @@ impl TestCaseImpl for CallContractTest {
             .object_id;
 
         // Examine effects
-        let events = &response.events.data;
+        let events = &response.events.as_ref().unwrap().data;
         assert_eq!(
             events.len(),
             3,
@@ -84,14 +86,13 @@ impl TestCaseImpl for CallContractTest {
             .find_map(|e| match e {
                 SuiEvent::NewObject {
                     package_id,
-                    transaction_module,
+                    transaction_module: _,
                     sender,
                     recipient,
                     object_type,
                     object_id,
                     version,
                 } if package_id == &SUI_FRAMEWORK_OBJECT_ID
-                    && transaction_module == &String::from("devnet_nft")
                     && sender == &signer
                     && recipient == &Owner::AddressOwner(signer)
                     && object_type == "0x2::devnet_nft::DevNetNFT"
@@ -106,22 +107,20 @@ impl TestCaseImpl for CallContractTest {
 
         events.iter().find(|e| matches!(e, SuiEvent::MoveEvent{
             package_id,
-            transaction_module,
+            transaction_module: _,
             sender,
             type_,
             fields: _,
             bcs
         } if
             package_id == &SUI_FRAMEWORK_OBJECT_ID
-            && transaction_module == &String::from("devnet_nft")
             && sender == &signer
             && type_ == &String::from("0x2::devnet_nft::MintNFTEvent")
             && bcs::from_bytes::<MintNFTEvent>(bcs).unwrap() == MintNFTEvent {object_id: ID {bytes: nft_id}, creator: signer, name: EXAMPLE_NFT_NAME.into()}
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![*response.effects.transaction_digest()], 5)
-            .await;
+        ctx.let_fullnode_sync(vec![response.digest], 5).await;
 
         let object = ObjectChecker::new(nft_id)
             .owner(Owner::AddressOwner(signer))

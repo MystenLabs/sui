@@ -43,7 +43,6 @@ use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::messages::Command;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -301,7 +300,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> anyhow::Result<(Option<String>, CompiledModule)> {
-        let SuiPublishArgs { sender } = extra;
+        let SuiPublishArgs {
+            sender,
+            upgradeable,
+        } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
             let mut buf = vec![];
@@ -311,9 +313,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.command(Command::Publish(vec![module_bytes]));
+            if upgradeable {
+                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                builder.transfer_arg(sender, cap);
+            } else {
+                builder.publish(vec![module_bytes]);
+            };
             let pt = builder.finish();
-            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
+            TransactionData::new_programmable_with_dummy_gas_price(
+                sender,
+                vec![gas],
+                pt,
+                gas_budget,
+            )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -395,7 +407,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .unwrap();
             let pt = builder.finish();
-            TransactionData::new_programmable_with_dummy_gas_price(sender, gas, pt, gas_budget)
+            TransactionData::new_programmable_with_dummy_gas_price(
+                sender,
+                vec![gas],
+                pt,
+                gas_budget,
+            )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -516,7 +533,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     ));
                     let pt = builder.finish();
                     TransactionData::new_programmable_with_dummy_gas_price(
-                        sender, gas, pt, gas_budget,
+                        sender,
+                        vec![gas],
+                        pt,
+                        gas_budget,
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;

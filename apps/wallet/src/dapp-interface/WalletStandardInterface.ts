@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { type SuiAddress, toB64, Transaction } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -17,6 +17,7 @@ import {
     type EventsOnMethod,
     type EventsListeners,
     type SuiSignTransactionMethod,
+    type SuiSignMessageMethod,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -32,6 +33,7 @@ import {
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 import { API_ENV } from '_src/shared/api-env';
+import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
 import type { BasePayload, Payload } from '_payloads';
@@ -98,8 +100,7 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        // TODO: Support SignMessage:
-        Omit<SuiFeatures, 'sui:signMessage'> &
+        SuiFeatures &
         SuiWalletStakeFeature {
         return {
             'standard:connect': {
@@ -121,6 +122,10 @@ export class SuiWallet implements Wallet {
             'suiWallet:stake': {
                 version: '0.0.1',
                 stake: this.#stake,
+            },
+            'sui:signMessage': {
+                version: '1.0.0',
+                signMessage: this.#signMessage,
             },
         };
     }
@@ -218,9 +223,11 @@ export class SuiWallet implements Wallet {
     };
 
     #signTransaction: SuiSignTransactionMethod = async (input) => {
-        // const transaction = Transaction.is(input.transaction)
-        //     ? input.transaction.serialize()
-        //     : input.transaction;
+        if (!Transaction.is(input.transaction)) {
+            throw new Error(
+                'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+            );
+        }
 
         return mapToPromise(
             this.#send<SignTransactionRequest, SignTransactionResponse>({
@@ -233,7 +240,7 @@ export class SuiWallet implements Wallet {
                         input.account?.address ||
                         this.#accounts[0]?.address ||
                         '',
-                    transaction: input.transaction,
+                    transaction: input.transaction.serialize(),
                 },
             }),
             (response) => response.result
@@ -243,16 +250,18 @@ export class SuiWallet implements Wallet {
     #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
         input
     ) => {
-        // const transaction = Transaction.is(input.transaction)
-        //     ? input.transaction.serialize()
-        //     : input.transaction;
+        if (!Transaction.is(input.transaction)) {
+            throw new Error(
+                'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+            );
+        }
 
         return mapToPromise(
             this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
                 transaction: {
-                    type: 'v2',
-                    data: input.transaction,
+                    type: 'transaction',
+                    data: input.transaction.serialize(),
                     options: input.options,
                     // account might be undefined if previous version of adapters is used
                     // in that case use the first account address
@@ -271,6 +280,29 @@ export class SuiWallet implements Wallet {
             type: 'stake-request',
             validatorAddress: input.validatorAddress,
         });
+    };
+
+    #signMessage: SuiSignMessageMethod = async ({
+        message,
+        account,
+        options,
+    }) => {
+        return mapToPromise(
+            this.#send<SignMessageRequest, SignMessageRequest>({
+                type: 'sign-message-request',
+                args: {
+                    message: toB64(message),
+                    accountAddress: account.address,
+                    options,
+                },
+            }),
+            (response) => {
+                if (!response.return) {
+                    throw new Error('Invalid sign message response');
+                }
+                return response.return;
+            }
+        );
     };
 
     #hasPermissions(permissions: HasPermissionsRequest['permissions']) {

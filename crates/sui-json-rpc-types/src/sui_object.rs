@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -17,7 +12,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-
+use serde_with::DisplayFromStr;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, TransactionDigest,
@@ -39,6 +38,7 @@ pub enum SuiObjectResponse {
     Deleted(SuiObjectRef),
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectData")]
 pub struct SuiObjectData {
@@ -48,8 +48,10 @@ pub struct SuiObjectData {
     /// Base64 string representing the object digest
     pub digest: ObjectDigest,
     /// The type of the object. Default to be None unless SuiObjectDataOptions.showType is set to true
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<DisplayFromStr>")]
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub type_: Option<String>,
+    pub type_: Option<ObjectType>,
     // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
     /// The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,14 +86,18 @@ impl SuiObjectData {
     pub fn object_type(&self) -> anyhow::Result<ObjectType> {
         self.type_
             .as_ref()
-            .ok_or_else(|| anyhow!("type is missing for object {:?}", self.object_id))?
-            .parse()
+            .ok_or_else(|| anyhow!("type is missing for object {:?}", self.object_id))
+            .cloned()
     }
 }
 
 impl Display for SuiObjectData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let type_ = self.type_.clone().unwrap_or_default();
+        let type_ = if let Some(type_) = &self.type_ {
+            type_.to_string()
+        } else {
+            "Unknown Type".into()
+        };
         let mut writer = String::new();
         writeln!(
             writer,
@@ -177,7 +183,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase", rename = "ObjectContentOptions", default)]
+#[serde(rename_all = "camelCase", rename = "ObjectDataOptions", default)]
 pub struct SuiObjectDataOptions {
     /// Whether to show the type of the object. Default to be False
     pub show_type: bool,
@@ -299,7 +305,7 @@ impl
 
         let (object_id, version, digest) = object_ref;
         let type_ = if show_type {
-            Some(Into::<ObjectType>::into(&o).to_string())
+            Some(Into::<ObjectType>::into(&o))
         } else {
             None
         };
@@ -734,6 +740,7 @@ impl SuiRawMoveObject {
 #[serde(rename = "RawMovePackage", rename_all = "camelCase")]
 pub struct SuiRawMovePackage {
     pub id: ObjectID,
+    pub version: SequenceNumber,
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
     pub module_map: BTreeMap<String, Vec<u8>>,
@@ -743,6 +750,7 @@ impl From<MovePackage> for SuiRawMovePackage {
     fn from(p: MovePackage) -> Self {
         Self {
             id: p.id(),
+            version: p.version(),
             module_map: p.serialized_module_map().clone(),
         }
     }

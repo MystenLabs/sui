@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
@@ -85,6 +86,8 @@ function expectProvider(provider: Provider | undefined): Provider {
   return provider;
 }
 
+const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
+
 /**
  * Transaction Builder
  * @experimental
@@ -92,7 +95,11 @@ function expectProvider(provider: Provider | undefined): Provider {
 export class Transaction {
   /** Returns `true` if the object is an instance of the Transaction builder class. */
   static is(obj: unknown): obj is Transaction {
-    return obj instanceof Transaction;
+    return (
+      !!obj &&
+      typeof obj === 'object' &&
+      (obj as any)[TRANSACTION_BRAND] === true
+    );
   }
 
   /**
@@ -102,15 +109,19 @@ export class Transaction {
    * - A byte array (or base64-encoded bytes) containing BCS transaction data.
    */
   static from(serialized: string | Uint8Array) {
+    const tx = new Transaction();
+
     // Check for bytes:
     if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
-      // TODO: Support fromBytes.
-      throw new Error('from() does not yet support bytes');
+      tx.#transactionData = TransactionDataBuilder.fromBytes(
+        typeof serialized === 'string' ? fromB64(serialized) : serialized,
+      );
+    } else {
+      tx.#transactionData = TransactionDataBuilder.restore(
+        JSON.parse(serialized),
+      );
     }
 
-    const parsed = JSON.parse(serialized);
-    const tx = new Transaction();
-    tx.#transactionData = TransactionDataBuilder.restore(parsed);
     return tx;
   }
 
@@ -144,6 +155,12 @@ export class Transaction {
   /** Get a snapshot of the transaction data, in JSON form: */
   get transactionData() {
     return this.#transactionData.snapshot();
+  }
+
+  // Used to brand transaction classes so that they can be identified, even between multiple copies
+  // of the builder.
+  get [TRANSACTION_BRAND]() {
+    return true;
   }
 
   constructor(transaction?: Transaction) {
@@ -197,30 +214,34 @@ export class Transaction {
     return createTransactionResult(index - 1);
   }
 
+  /**
+   * Serialize the transaction to a string so that it can be sent to a separate context.
+   * This is different from `build` in that it does not serialize to BCS bytes, and instead
+   * uses a separate format that is unique to the transaction builder. This allows
+   * us to serialize partially-complete transactions, that can then be completed and
+   * built in a separate context.
+   *
+   * For example, a dapp can construct a transaction, but not provide gas objects
+   * or a gas budget. The transaction then can be sent to the wallet, where this
+   * information is automatically filled in (e.g. by querying for coin objects
+   * and performing a dry run).
+   */
+  serialize() {
+    return JSON.stringify(this.#transactionData.snapshot());
+  }
+
   /** Build the transaction to BCS bytes. */
-  async build({ provider }: { provider?: Provider } = {}): Promise<Uint8Array> {
+  async build({
+    provider,
+  }: {
+    provider?: Provider;
+  } = {}): Promise<Uint8Array> {
     if (!this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
     }
 
     if (!this.#transactionData.gasConfig.budget) {
       throw new Error('Missing gas budget');
-    }
-
-    if (!this.#transactionData.gasConfig.payment) {
-      const coins = await expectProvider(provider).getCoins(
-        this.#transactionData.sender,
-        SUI_TYPE_ARG,
-        null,
-        null,
-      );
-
-      // TODO: Pick coins better, this is just a temporary hack.
-      this.#transactionData.gasConfig.payment = coins.data.map((coin) => ({
-        objectId: coin.coinObjectId,
-        digest: coin.digest,
-        version: coin.version,
-      }));
     }
 
     if (!this.#transactionData.gasConfig.price) {
@@ -403,22 +424,44 @@ export class Transaction {
       });
     }
 
-    return this.#transactionData.build();
-  }
+    if (!this.#transactionData.gasConfig.payment) {
+      const coins = await expectProvider(provider).getCoins({
+        owner: this.#transactionData.sender,
+        coinType: SUI_TYPE_ARG,
+      });
 
-  /**
-   * Serialize the transaction to a string so that it can be sent to a separate context.
-   * This is different from `build` in that it does not serialize to BCS bytes, and instead
-   * uses a separate format that is unique to the transaction builder. This allows
-   * us to serialize partially-complete transactions, that can then be completed and
-   * built in a separate context.
-   *
-   * For example, a dapp can construct a transaction, but not provide gas objects
-   * or a gas budget. The transaction then can be sent to the wallet, where this
-   * information is automatically filled in (e.g. by querying for coin objects
-   * and performing a dry run).
-   */
-  serialize() {
-    return JSON.stringify(this.#transactionData.snapshot());
+      // TODO: Allow consumers to define coin selection logic, and refine the default behavior.
+      // The current default is just picking _all_ coins which may not be ideal.
+      this.#transactionData.gasConfig.payment = coins.data
+        // Filter out coins that are also used as input:
+        .filter((coin) => {
+          const matchingInput = this.#transactionData.inputs.find((input) => {
+            if (
+              is(input.value, BuilderCallArg) &&
+              'Object' in input.value &&
+              'ImmOrOwned' in input.value.Object
+            ) {
+              return (
+                coin.coinObjectId === input.value.Object.ImmOrOwned.objectId
+              );
+            }
+
+            return false;
+          });
+
+          return !matchingInput;
+        })
+        .map((coin) => ({
+          objectId: coin.coinObjectId,
+          digest: coin.digest,
+          version: coin.version,
+        }));
+
+      if (!this.#transactionData.gasConfig.payment.length) {
+        throw new Error('No valid gas coins found for the transaction.');
+      }
+    }
+
+    return this.#transactionData.build();
   }
 }

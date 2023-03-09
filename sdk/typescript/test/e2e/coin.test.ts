@@ -4,13 +4,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Coin,
-  getObjectId,
-  LocalTxnDataSerializer,
+  Commands,
   normalizeSuiObjectId,
   ObjectId,
-  RawSigner,
   SuiObjectInfo,
   SUI_TYPE_ARG,
+  Transaction,
 } from '../../src';
 
 import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
@@ -19,38 +18,28 @@ const SPLIT_AMOUNTS = [BigInt(1), BigInt(2), BigInt(3)];
 
 describe('Coin related API', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let coinToSplit: ObjectId;
   let coinsAfterSplit: SuiObjectInfo[];
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(
-      toolbox.keypair,
-      toolbox.provider,
-      new LocalTxnDataSerializer(toolbox.provider),
-    );
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     coinToSplit = coins[0].objectId;
-    // split coins into desired amount
-    await signer.splitCoin({
-      coinObjectId: coinToSplit,
-      splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
-      gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[1].objectId,
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    const recieverInput = tx.input(toolbox.address());
+    SPLIT_AMOUNTS.forEach((amount) => {
+      const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(amount)));
+      tx.add(Commands.TransferObjects([coin], recieverInput));
     });
-    coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
-    expect(coinsAfterSplit.length).toEqual(coins.length + SPLIT_AMOUNTS.length);
+
+    // split coins into desired amount
+    await toolbox.signer.signAndExecuteTransaction(tx);
+    coinsAfterSplit = await toolbox.getGasObjectsOwnedByAddress();
   });
 
   it('test Coin utility functions', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     coins.forEach((c) => {
       expect(Coin.isCoin(c)).toBeTruthy();
       expect(Coin.isSUI(c)).toBeTruthy();
@@ -64,9 +53,7 @@ describe('Coin related API', () => {
       name: 'SUI',
       typeParams: [],
     };
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coinTypeArg: string = Coin.getCoinTypeArg(coins[0])!;
     expect(Coin.getCoinStructTag(coinTypeArg)).toStrictEqual(exampleStructTag);
   });
@@ -80,7 +67,7 @@ describe('Coin related API', () => {
             BigInt(a),
           );
         expect(coins.length).toEqual(coinsAfterSplit.length - i);
-        const balances = coins.map((c) => Coin.getBalance(c)!);
+        const balances = coins.map((c) => Coin.getBalanceFromCoinStruct(c));
         // verify that the balances are in ascending order
         expect(balances).toStrictEqual(balances.sort());
         // verify that balances are all greater than or equal to the provided amount
@@ -95,7 +82,9 @@ describe('Coin related API', () => {
         toolbox.address(),
         BigInt(1),
       );
-    expect(coins.find((c) => getObjectId(c) === coinToSplit)).toBeDefined();
+    expect(
+      coins.find(({ coinObjectId }) => coinObjectId === coinToSplit),
+    ).toBeDefined();
 
     const coinsWithExclude =
       await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
@@ -105,7 +94,7 @@ describe('Coin related API', () => {
         [coinToSplit],
       );
     expect(
-      coinsWithExclude.find((c) => getObjectId(c) === coinToSplit),
+      coinsWithExclude.find(({ coinObjectId }) => coinObjectId === coinToSplit),
     ).toBeUndefined();
   });
 
@@ -117,7 +106,7 @@ describe('Coin related API', () => {
             toolbox.address(),
             BigInt(a),
           );
-        const balances = coins.map((c) => Coin.getBalance(c)!);
+        const balances = coins.map((c) => Coin.getBalanceFromCoinStruct(c));
         expect(balances).toStrictEqual([SPLIT_AMOUNTS[i]]);
       }),
     );
@@ -127,14 +116,16 @@ describe('Coin related API', () => {
         toolbox.address(),
         BigInt(1),
       );
-    const largestBalance = Coin.getBalance(allCoins[allCoins.length - 1])!;
+    const largestBalance = Coin.getBalanceFromCoinStruct(
+      allCoins[allCoins.length - 1],
+    );
 
     const coins =
       await toolbox.provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
         toolbox.address(),
         largestBalance + SPLIT_AMOUNTS[0],
       );
-    const balances = coins.map((c) => Coin.getBalance(c)!);
+    const balances = coins.map((c) => Coin.getBalanceFromCoinStruct(c));
     expect(balances).toStrictEqual([SPLIT_AMOUNTS[0], largestBalance]);
   });
 });

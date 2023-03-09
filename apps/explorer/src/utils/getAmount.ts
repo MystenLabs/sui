@@ -8,8 +8,9 @@ import {
     getTransferObjectTransaction,
     getTransactionKindName,
     getTransactionSender,
-    getTransactions,
+    getTransactionKinds,
     SUI_TYPE_ARG,
+    getCoinBalanceChangeEvent,
 } from '@mysten/sui.js';
 
 import type {
@@ -81,7 +82,7 @@ export function getTransfersAmount(
             ...acc,
             [recipient]: {
                 amount:
-                    payData.amounts[index] +
+                    Number(payData.amounts[index]) +
                     (recipient in acc ? acc[recipient].amount : 0),
 
                 // for PaySuiTransaction the coinType is SUI
@@ -113,12 +114,12 @@ function getTxnAmountFromCoinBalanceEvent(
 
     events.forEach((event) => {
         if (
-            'coinBalanceChange' in event &&
-            event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
-            event?.coinBalanceChange?.transactionModule !== 'gas'
+            event.type === 'coinBalanceChange' &&
+            event?.content?.changeType &&
+            ['Receive', 'Pay'].includes(event?.content?.changeType) &&
+            event?.content?.transactionModule !== 'gas'
         ) {
-            const { coinBalanceChange } = event;
+            const coinBalanceChange = getCoinBalanceChangeEvent(event)!;
             const { coinType, amount, owner, sender } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
             if (AddressOwner === address || address === sender) {
@@ -145,10 +146,13 @@ export function getAmount({
     suiCoinOnly?: boolean;
 }) {
     const { effects, events } = txnData;
-    const txnDetails = getTransactions(txnData)[0];
+    const txnDetails = getTransactionKinds(txnData)![0];
     const sender = getTransactionSender(txnData);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
-    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(events, sender);
+    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(
+        events!,
+        sender!
+    );
     const transfers = suiTransfer || coinBalanceChange;
     if (suiCoinOnly) {
         return transfers?.filter(({ coinType }) => coinType === SUI_TYPE_ARG);

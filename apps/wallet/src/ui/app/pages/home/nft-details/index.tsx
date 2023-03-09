@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, hasPublicTransfer } from '@mysten/sui.js';
+import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useMemo } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Button from '_app/shared/button';
 import { Collapse } from '_app/shared/collapse';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import NFTDisplayCard from '_components/nft-display';
-import { useAppSelector, useNFTBasicData, useObjectsState } from '_hooks';
-import { createAccountNftByIdSelector } from '_redux/slices/account';
+import { NFTDisplayCard } from '_components/nft-display';
+import { useNFTBasicData, useOwnedNFT } from '_hooks';
 import ExternalLink from '_src/ui/app/components/external-link';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -59,15 +58,14 @@ function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const nftId = searchParams.get('objectId');
-    const nftSelector = useMemo(
-        () => createAccountNftByIdSelector(nftId || ''),
-        [nftId]
-    );
-    const selectedNft = useAppSelector(nftSelector);
-    const isTransferable = !!selectedNft && hasPublicTransfer(selectedNft);
+    const accountAddress = useActiveAddress();
+
+    const { data: objectData, isLoading } = useOwnedNFT(nftId!, accountAddress);
+
+    const isTransferable = !!objectData && hasPublicTransfer(objectData);
+
     const { nftFields, fileExtensionType, filePath } =
-        useNFTBasicData(selectedNft);
-    const { loading } = useObjectsState();
+        useNFTBasicData(objectData);
 
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
@@ -88,19 +86,16 @@ function NFTDetailsPage() {
     return (
         <div
             className={cl('flex flex-col flex-nowrap flex-1 gap-5', {
-                'items-center': loading,
+                'items-center': isLoading,
             })}
         >
-            <Loading loading={loading}>
-                {selectedNft ? (
+            <Loading loading={isLoading}>
+                {objectData ? (
                     <>
                         <PageTitle back="/nfts" />
                         <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
                             <div className="self-center gap-3 flex flex-col flex-nowrap items-center">
-                                <NFTDisplayCard
-                                    nftobj={selectedNft}
-                                    size="lg"
-                                />
+                                <NFTDisplayCard objectId={nftId!} size="lg" />
                                 {nftId ? (
                                     <ExplorerLink
                                         type={ExplorerLinkType.object}

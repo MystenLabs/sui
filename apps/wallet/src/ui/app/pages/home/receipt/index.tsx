@@ -5,7 +5,7 @@ import { useRpcClient } from '@mysten/core';
 import {
     getExecutionStatusType,
     getTransactionKindName,
-    getTransactions,
+    getTransactionKinds,
     getTransactionSender,
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
@@ -33,7 +33,11 @@ function ReceiptPage() {
     const { data, isLoading, isError } = useQuery(
         ['transactions-by-id', transactionId],
         async () => {
-            return rpc.getTransactionWithEffects(transactionId!);
+            return rpc.getTransactionResponse(transactionId!, {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            });
         },
         { enabled: !!transactionId, retry: 8 }
     );
@@ -47,7 +51,7 @@ function ReceiptPage() {
     const pageTitle = useMemo(() => {
         if (data) {
             const executionStatus = getExecutionStatusType(data);
-            const [transaction] = getTransactions(data);
+            const [transaction] = getTransactionKinds(data)!;
 
             const txnKind = getTransactionKindName(transaction);
             const stakingTxn = checkStakingTxn(data);

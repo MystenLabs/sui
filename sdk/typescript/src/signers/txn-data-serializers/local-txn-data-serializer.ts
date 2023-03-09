@@ -285,7 +285,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       exclude.concat(await this.extractObjectIds(txn)),
     );
 
-    return coins.length > 0 ? Coin.getID(coins[0]) : undefined;
+    return coins.length > 0 ? coins[0].coinObjectId : undefined;
   }
 
   /**
@@ -378,7 +378,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     let txBcs = prepareTxDataForBcs(tx);
-    const dataBytes = bcs.ser('TransactionData', txBcs, size).toBytes();
+    const dataBytes = bcs.ser('TransactionData', txBcs, { size }).toBytes();
     return dataBytes;
   }
 
@@ -391,7 +391,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     size: number = 8192,
   ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
-    const dataBytes = bcs.ser('TransactionKind', tx, size).toBytes();
+    const dataBytes = bcs.ser('TransactionKind', tx, { size }).toBytes();
     return dataBytes;
   }
 

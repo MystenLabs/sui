@@ -72,6 +72,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -166,6 +167,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -234,6 +236,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let _consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -259,6 +262,8 @@ async fn test_consensus_recovery_with_bullshark() {
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
         score_with_crash = sub_dag.reputation_score.clone();
+        assert_eq!(score_with_crash.total_authorities(), 4);
+
         for output in sub_dag.certificates {
             assert!(output.round() >= 2);
 

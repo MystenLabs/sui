@@ -11,6 +11,7 @@ module sui::validator {
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::EpochTimeLock;
+    use sui::validator_cap::{Self, ValidatorOperationCap};
     use sui::object::{Self, ID};
     use std::option::{Option, Self};
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
@@ -18,6 +19,7 @@ module sui::validator {
     use std::string::{Self, String};
     use sui::url::Url;
     use sui::url;
+    use sui::event;
     friend sui::genesis;
     friend sui::sui_system;
     friend sui::validator_set;
@@ -32,14 +34,17 @@ module sui::validator {
     #[test_only]
     friend sui::governance_test_utils;
 
+    /// Invalid proof_of_possesion field in ValidatorMetadata
+    const EInvalidProofOfPossession: u64 = 0;
+
     /// Invalid pubkey_bytes field in ValidatorMetadata
-    const EMetadataInvalidPubKey: u64 = 1;
+    const EMetadataInvalidPubkey: u64 = 1;
 
     /// Invalid network_pubkey_bytes field in ValidatorMetadata
     const EMetadataInvalidNetPubkey: u64 = 2;
 
     /// Invalid worker_pubkey_bytes field in ValidatorMetadata
-    const EMetadataInvalidWorkerPubKey: u64 = 3;
+    const EMetadataInvalidWorkerPubkey: u64 = 3;
 
     /// Invalid net_address field in ValidatorMetadata
     const EMetadataInvalidNetAddr: u64 = 4;
@@ -56,7 +61,14 @@ module sui::validator {
     /// Commission rate set by the validator is higher than the threshold
     const ECommissionRateTooHigh: u64 = 8;
 
-    const EInvalidProofOfPossession: u64 = 0;
+    /// No stake balance is provided but an epoch time lock for the stake is provided.
+    const EEmptyStakeWithNonEmptyTimeLock: u64 = 9;
+
+    /// New Capability is not created by the validator itself
+    const ENewCapNotCreatedByValidatorItself: u64 = 100;
+
+    /// Capability code is not valid
+    const EInvalidCap: u64 = 101;
 
     const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
 
@@ -106,6 +118,8 @@ module sui::validator {
         /// The voting power of this validator, which might be different from its
         /// stake amount.
         voting_power: u64,
+        /// The ID of this validator's current valid `UnverifiedValidatorOperationCap`
+        operation_cap_id: ID,
         /// Gas price quote, updated only at end of epoch.
         gas_price: u64,
         /// Staking pool for the stakes delegated to this validator.
@@ -118,6 +132,15 @@ module sui::validator {
         next_epoch_gas_price: u64,
         /// The commission rate of the validator starting the next epoch, in basis point.
         next_epoch_commission_rate: u64,
+    }
+
+    /// Event emitted when a new delegation request is received.
+    struct DelegationRequestEvent has copy, drop {
+        pool_id: ID,
+        validator_address: address,
+        delegator_address: address,
+        epoch: u64,
+        amount: u64,
     }
 
     const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[107, 111, 115, 107];
@@ -194,11 +217,11 @@ module sui::validator {
         p2p_address: vector<u8>,
         primary_address: vector<u8>,
         worker_address: vector<u8>,
-        stake: Balance<SUI>,
+        initial_stake_option: Option<Balance<SUI>>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
-        starting_epoch: u64,
+        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -237,11 +260,11 @@ module sui::validator {
 
         new_from_metadata(
             metadata,
-            stake,
+            initial_stake_option,
             coin_locked_until_epoch,
             gas_price,
             commission_rate,
-            starting_epoch,
+            is_active_at_genesis,
             ctx
         )
     }
@@ -249,6 +272,10 @@ module sui::validator {
     /// Deactivate this validator's staking pool
     public(friend) fun deactivate(self: &mut Validator, deactivation_epoch: u64) {
         staking_pool::deactivate_staking_pool(&mut self.staking_pool, deactivation_epoch)
+    }
+
+    public(friend) fun activate(self: &mut Validator, activation_epoch: u64) {
+        staking_pool::activate_staking_pool(&mut self.staking_pool, activation_epoch);
     }
 
     /// Process pending stake and pending withdraws, and update the gas price.
@@ -262,16 +289,29 @@ module sui::validator {
         self: &mut Validator,
         delegated_stake: Balance<SUI>,
         locking_period: Option<EpochTimeLock>,
-        delegator: address,
+        delegator_address: address,
         ctx: &mut TxContext,
     ) {
         let delegate_amount = balance::value(&delegated_stake);
         assert!(delegate_amount > 0, 0);
         let delegation_epoch = tx_context::epoch(ctx) + 1;
         staking_pool::request_add_delegation(
-            &mut self.staking_pool, delegated_stake, locking_period, self.metadata.sui_address, delegator, delegation_epoch, ctx
+            &mut self.staking_pool, delegated_stake, locking_period, self.metadata.sui_address, delegator_address, delegation_epoch, ctx
         );
+        // Process delegation right away if staking pool is preactive.
+        if (staking_pool::is_preactive(&self.staking_pool)) {
+            staking_pool::process_pending_delegation(&mut self.staking_pool);
+        };
         self.next_epoch_stake = self.next_epoch_stake + delegate_amount;
+        event::emit(
+            DelegationRequestEvent {
+                pool_id: staking_pool_id(self),
+                validator_address: self.metadata.sui_address,
+                delegator_address,
+                epoch: tx_context::epoch(ctx),
+                amount: delegate_amount,
+            }
+        );
     }
 
     /// Request to withdraw delegation from the validator's staking pool, processed at the end of the epoch.
@@ -286,7 +326,14 @@ module sui::validator {
     }
 
     /// Request to set new gas price for the next epoch.
-    public(friend) fun request_set_gas_price(self: &mut Validator, new_price: u64) {
+    /// Need to present a `ValidatorOperationCap`.
+    public(friend) fun request_set_gas_price(
+        self: &mut Validator, 
+        verified_cap: ValidatorOperationCap,
+        new_price: u64,
+    ) {
+        let validator_address = *validator_cap::verified_operation_cap_address(&verified_cap);
+        assert!(validator_address == self.metadata.sui_address, EInvalidCap);
         self.next_epoch_gas_price = new_price;
     }
 
@@ -307,9 +354,9 @@ module sui::validator {
         assert!(delegate_amount(self) == self.next_epoch_stake, 0);
     }
 
-    /// Called by `validator_set` for handling delegation switches.
-    public(friend) fun get_staking_pool_mut_ref(self: &mut Validator) : &mut StakingPool {
-        &mut self.staking_pool
+    /// Returns true if the validator is preactive.
+    public fun is_preactive(self: &Validator): bool {
+        staking_pool::is_preactive(&self.staking_pool)
     }
 
     public fun metadata(self: &Validator): &ValidatorMetadata {
@@ -400,6 +447,16 @@ module sui::validator {
         &self.metadata.next_epoch_worker_pubkey_bytes
     }
 
+    public fun operation_cap_id(self: &Validator): &ID {
+        &self.operation_cap_id
+    }
+
+    public fun next_epoch_gas_price(self: &Validator): u64 {
+        self.next_epoch_gas_price
+    }
+
+    // TODO: this and `delegate_amount` and `total_stake` all seem to return the same value?
+    // two of the functions can probably be removed.
     public fun total_stake_amount(self: &Validator): u64 {
         spec {
             // TODO: this should be provable rather than assumed
@@ -464,6 +521,15 @@ module sui::validator {
     }
 
     // ==== Validator Metadata Management Functions ====
+
+    /// Create a new `UnverifiedValidatorOperationCap`, transfer to the validator,
+    /// and registers it, thus revoking the previous cap's permission.
+    public(friend) fun new_unverified_validator_operation_cap_and_transfer(self: &mut Validator, ctx: &mut TxContext) {
+        let address = tx_context::sender(ctx);
+        assert!(address == self.metadata.sui_address, ENewCapNotCreatedByValidatorItself);
+        let new_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(address, ctx);
+        self.operation_cap_id = new_id;
+    }
 
     /// Update name of the validator.
     public(friend) fun update_name(self: &mut Validator, name: String) {
@@ -591,30 +657,56 @@ module sui::validator {
         &self.staking_pool
     }
 
+
     /// Create a new validator from the given `ValidatorMetadata`, called by both `new` and `new_for_testing`.
     fun new_from_metadata(
         metadata: ValidatorMetadata,
-        stake: Balance<SUI>,
+        initial_stake_option: Option<Balance<SUI>>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
-        starting_epoch: u64,
+        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         let sui_address = metadata.sui_address;
-        let stake_amount = balance::value(&stake);
 
-        let staking_pool = staking_pool::new(starting_epoch, ctx);
-        // Add the validator's starting stake to the staking pool.
-        staking_pool::request_add_delegation(&mut staking_pool, stake, coin_locked_until_epoch, sui_address, sui_address, starting_epoch, ctx);
-        // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
-        staking_pool::process_pending_delegation(&mut staking_pool);
+        let stake_amount =
+            if (option::is_some(&initial_stake_option)) balance::value(option::borrow(&initial_stake_option))
+            else 0;
+
+        let staking_pool = staking_pool::new(ctx);
+
+        if (is_active_at_genesis) {
+            staking_pool::activate_staking_pool(&mut staking_pool, 0);
+        };
+
+        // Add the validator's starting stake to the staking pool if there exists one.
+        if (option::is_some(&initial_stake_option)) {
+            staking_pool::request_add_delegation(
+                &mut staking_pool,
+                option::destroy_some(initial_stake_option),
+                coin_locked_until_epoch,
+                sui_address,
+                sui_address,
+                tx_context::epoch(ctx),
+                ctx
+            );
+            // We immediately process this delegation as they are at validator setup time and this is the validator staking with itself.
+            staking_pool::process_pending_delegation(&mut staking_pool);
+        } else {
+            assert!(option::is_none(&coin_locked_until_epoch), EEmptyStakeWithNonEmptyTimeLock);
+            option::destroy_none(coin_locked_until_epoch);
+            option::destroy_none(initial_stake_option);
+        };
+
+        let operation_cap_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(sui_address, ctx);
         Validator {
             metadata,
             // Initialize the voting power to be the same as the stake amount.
             // At the epoch change where this validator is actually added to the
             // active validator set, the voting power will be updated accordingly.
             voting_power: stake_amount,
+            operation_cap_id,
             gas_price,
             staking_pool,
             commission_rate,
@@ -641,11 +733,11 @@ module sui::validator {
         p2p_address: vector<u8>,
         primary_address: vector<u8>,
         worker_address: vector<u8>,
-        stake: Balance<SUI>,
+        initial_stake_option: Option<Balance<SUI>>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
-        starting_epoch: u64,
+        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         new_from_metadata(
@@ -664,11 +756,11 @@ module sui::validator {
                 primary_address,
                 worker_address,
             ),
-            stake,
+            initial_stake_option,
             coin_locked_until_epoch,
             gas_price,
             commission_rate,
-            starting_epoch,
+            is_active_at_genesis,
             ctx
         )
     }
