@@ -40,7 +40,11 @@ impl<C: ServerProviderClient> Testbed<C> {
 
     /// Return the list of instances of the testbed.
     pub fn instances(&self) -> Vec<Instance> {
-        self.instances.clone()
+        self.instances
+            .iter()
+            .filter(|x| self.settings.filter_instances(x))
+            .cloned()
+            .collect()
     }
 
     /// Return the username to connect to the instances through ssh.
@@ -64,11 +68,6 @@ impl<C: ServerProviderClient> Testbed<C> {
                 )
             })
             .collect();
-
-        display::newline();
-        display::config("Client", &self.client);
-        let repo = &self.settings.repository;
-        display::config("Repo", format!("{} ({})", repo.url, repo.commit));
 
         let mut table = Table::new();
         table.set_format(display::default_table_format());
@@ -100,6 +99,9 @@ impl<C: ServerProviderClient> Testbed<C> {
         }
 
         display::newline();
+        display::config("Client", &self.client);
+        let repo = &self.settings.repository;
+        display::config("Repo", format!("{} ({})", repo.url, repo.commit));
         table.printstd();
         display::newline();
     }
@@ -158,10 +160,7 @@ impl<C: ServerProviderClient> Testbed<C> {
                 self.instances
                     .iter()
                     .filter(|x| {
-                        x.is_inactive()
-                            && &x.region == region
-                            && x.specs.to_lowercase().replace('.', "")
-                                == self.settings.specs.to_lowercase().replace('.', "")
+                        x.is_inactive() && &x.region == region && self.settings.filter_instances(x)
                     })
                     .take(quantity)
                     .cloned()

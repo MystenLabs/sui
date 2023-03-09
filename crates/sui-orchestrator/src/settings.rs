@@ -10,7 +10,10 @@ use std::{
 use reqwest::Url;
 use serde::{de::Error, Deserialize, Deserializer};
 
-use crate::error::{SettingsError, SettingsResult};
+use crate::{
+    client::Instance,
+    error::{SettingsError, SettingsResult},
+};
 
 /// The git repository holding the codebase.
 #[derive(Deserialize, Clone)]
@@ -129,6 +132,13 @@ impl Settings {
                 message: e.to_string(),
             }),
         }
+    }
+
+    /// Check whether the input instance matches the criteria described in the settings.
+    pub fn filter_instances(&self, instance: &Instance) -> bool {
+        self.regions.contains(&instance.region)
+            && instance.specs.to_lowercase().replace('.', "")
+                == self.specs.to_lowercase().replace('.', "")
     }
 
     /// The number of regions specified in the settings.

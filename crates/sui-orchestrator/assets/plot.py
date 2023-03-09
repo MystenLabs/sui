@@ -16,29 +16,29 @@ from itertools import cycle
 # matplotlib as dependency: `pip install matplotlib`.
 
 
-def aggregate_tps(measurement):
+def aggregate_tps(measurement, i=-1):
     tps = []
     for data in measurement['scrapers'].values():
-        count = float(data[-1]['count'])
-        duration = float(data[-1]['timestamp']['secs'])
+        count = float(data[i]['count'])
+        duration = float(data[i]['timestamp']['secs'])
         tps += [(count / duration) if duration != 0 else 0]
     return sum(tps)
 
 
-def aggregate_average_latency(measurement):
+def aggregate_average_latency(measurement, i=-1):
     latency = []
     for data in measurement['scrapers'].values():
-        last = data[-1]
+        last = data[i]
         count = float(last['count'])
         total = float(last['sum']['secs'])
         latency += [total / count if count != 0 else 0]
     return sum(latency) / len(latency) if latency else 0
 
 
-def aggregate_stdev_latency(measurement):
+def aggregate_stdev_latency(measurement, i=-1):
     stdev = []
     for data in measurement['scrapers'].values():
-        last = data[-1]
+        last = data[i]
         count = float(last['count'])
         if count == 0:
             stdev += [0]
@@ -53,6 +53,8 @@ class PlotType(Enum):
     L_GRAPH = 1
     HEALTH = 2
     SCALABILITY = 3
+    INSPECT_TPS = 4
+    INSPECT_LATENCY = 5
 
 
 class PlotError(Exception):
@@ -108,13 +110,16 @@ class Plotter:
         return plot_directory
 
     def _legend_entry(self, plot_type, id):
-        f = '' if id.faults == 0 else f' ({id.faults} faulty)'
-        if plot_type == PlotType.L_GRAPH or plot_type == PlotType.HEALTH:
+        if plot_type in [PlotType.L_GRAPH, PlotType.HEALTH]:
+            f = '' if id.faults == 0 else f' ({id.faults} faulty)'
             l = f'{id.nodes} nodes{f}'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
         elif plot_type == PlotType.SCALABILITY:
+            f = '' if id.faults == 0 else f' ({id.faults} faulty)'
             l = f'{id.max_latency}s latency cap{f}'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
+        elif plot_type in [PlotType.INSPECT_TPS, PlotType.INSPECT_LATENCY]:
+            return None
         else:
             assert False
 
@@ -125,6 +130,10 @@ class Plotter:
             return ('Input Load (tx/s)', 'Throughput (tx/s)')
         elif plot_type == PlotType.SCALABILITY:
             return ('Committee size', 'Throughput (tx/s)')
+        elif plot_type == PlotType.INSPECT_TPS:
+            return ('Duration (s)', 'Throughput (tx/s)')
+        elif plot_type == PlotType.INSPECT_LATENCY:
+            return ('Duration (s)', 'Latency (s)')
         else:
             assert False
 
@@ -140,24 +149,24 @@ class Plotter:
             )
 
         if plot_type == PlotType.L_GRAPH:
-            legend_anchor = (0, 1)
-            legend_location = 'upper left'
-            x_label, y_label = self._axes_labels(plot_type)
+            legend_anchor, legend_location = (0, 1), 'upper left'
             plot_name = f'latency-{self.parameters.shared_objects_ratio}'
         elif plot_type == PlotType.HEALTH:
-            legend_anchor = (0, 1)
-            legend_location = 'upper left'
-            x_label, y_label = self._axes_labels(plot_type)
+            legend_anchor, legend_location = (0, 1), 'upper left'
             plot_name = f'health-{self.parameters.shared_objects_ratio}'
         elif plot_type == PlotType.SCALABILITY:
-            legend_anchor = (0, 0)
-            legend_location = 'lower left'
-            x_label, y_label = self._axes_labels(plot_type)
+            legend_anchor, legend_location = (0, 0), 'lower left'
             plot_name = f'scalability-{self.parameters.shared_objects_ratio}'
+        elif plot_type == PlotType.INSPECT_TPS:
+            plot_name = f'inspect-tps-{id}'
+        elif plot_type == PlotType.INSPECT_LATENCY:
+            plot_name = f'inspect-latency-{id}'
         else:
             assert False
 
-        if data:
+        x_label, y_label = self._axes_labels(plot_type)
+
+        if data and (not plot_type in [PlotType.INSPECT_TPS, PlotType.INSPECT_LATENCY]):
             plt.legend(
                 loc=legend_location,
                 bbox_to_anchor=legend_anchor,
@@ -173,7 +182,7 @@ class Plotter:
         ax = plt.gca()
         ax.xaxis.set_major_formatter(default_major_formatter)
         ax.yaxis.set_major_formatter(default_major_formatter)
-        if plot_type == PlotType.L_GRAPH:
+        if plot_type in [PlotType.L_GRAPH, PlotType.INSPECT_LATENCY]:
             ax.yaxis.set_major_formatter(sec_major_formatter)
 
         for x in ['pdf', 'png']:
@@ -190,7 +199,7 @@ class Plotter:
                 try:
                     measurements += [json.loads(f.read())]
                 except json.JSONDecodeError as e:
-                    raise PlotError(f'Failed to load file {files}: {e}')
+                    raise PlotError(f'Failed to load file {file}: {e}')
 
         return measurements
 
@@ -277,6 +286,38 @@ class Plotter:
 
         self._plot(plot_data, PlotType.SCALABILITY)
 
+    def plot_inspect(self, file):
+        with open(file, 'r') as f:
+            try:
+                measurement = json.loads(f.read())
+            except json.JSONDecodeError as e:
+                raise PlotError(f'Failed to load file {file}: {e}')
+
+        plot_tps_data, plot_lat_data = [], []
+        for data in measurement['scrapers'].values():
+            x_values, y_tps_values, y_lat_values, e_values = [], [], [], []
+            for d in data:
+                count = float(d['count'])
+                duration = float(d['timestamp']['secs'])
+                total = float(d['sum']['secs'])
+
+                tps = (count / duration) if duration != 0 else 0
+                avg_latency = total / count if count != 0 else 0
+
+                x_values += [duration]
+                y_tps_values += [tps]
+                y_lat_values += [avg_latency]
+                e_values += [0]
+
+            if x_values:
+                basename = os.path.basename(file)
+                id = '-'.join(basename.split('-')[1:]).split('.')[0]
+                plot_tps_data += [(id, x_values, y_tps_values, e_values)]
+                plot_lat_data += [(id, x_values, y_lat_values, e_values)]
+
+        self._plot(plot_tps_data, PlotType.INSPECT_TPS)
+        self._plot(plot_lat_data, PlotType.INSPECT_LATENCY)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -287,11 +328,11 @@ if __name__ == "__main__":
         '--dir', default='../../../results', help='Data directory'
     )
     parser.add_argument(
-        '--shared-objects-ratio', nargs='+', type=int, required=True,
+        '--shared-objects-ratio', nargs='+', type=int, default=[0],
         help='The ratio of shared objects to plot (in separate graphs)'
     )
     parser.add_argument(
-        '--nodes', nargs='+', type=int, required=True,
+        '--nodes', nargs='+', type=int, default=[4],
         help='The committee sizes to plot on the same graph'
     )
     parser.add_argument(
@@ -310,6 +351,7 @@ if __name__ == "__main__":
         '--legend-columns', type=int, default=1,
         help='The number of columns of the legend'
     )
+    parser.add_argument('--inspect', help='The measurement file to inspect')
     args = parser.parse_args()
 
     for r in args.shared_objects_ratio:
@@ -320,3 +362,6 @@ if __name__ == "__main__":
         plotter.plot_latency_throughput()
         plotter.plot_health()
         plotter.plot_scalability(args.max_latencies)
+
+        if args.inspect is not None:
+            plotter.plot_inspect(args.inspect)

@@ -38,7 +38,7 @@ pub fn config<N: Display, V: Display>(name: N, value: V) {
     crossterm::execute!(
         stdout(),
         PrintStyledContent(format!("{name}: ").bold()),
-        Print(format!("{value}\n"))
+        Print(format!("{value}\n\n"))
     )
     .unwrap();
 }
@@ -102,7 +102,6 @@ mod test {
     async fn display() {
         header("This is a header");
         config("This is a config", 2);
-        newline();
         action("Running a long function");
         for i in 0..5 {
             sleep(Duration::from_secs(1)).await;

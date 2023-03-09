@@ -156,18 +156,14 @@ impl Orchestrator {
 
     /// Update all instances to use the version of the codebase specified in the setting file.
     pub async fn update(&self) -> TestbedResult<()> {
-        let commit = self.settings.repository.commit.clone();
-        display::action(format!(
-            "Updating {} instances (commit '{commit}')",
-            self.instances.len()
-        ));
+        display::action(format!("Updating all instances"));
 
         // Update all active instances. This requires compiling the codebase in release (which
         // may take a long time) so we run the command in the background to avoid keeping alive
         // many ssh connections for too long.
         let command = [
             "git fetch -f",
-            &format!("git checkout -f {commit}"),
+            &format!("git checkout -f {}", &self.settings.repository.commit),
             "git pull -f",
             "source $HOME/.cargo/env",
             "cargo build --release",
@@ -323,6 +319,31 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
+            let run = if i % 2 == 0 {
+                [
+                    "cargo run --release --bin stress --",
+                    "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
+                    &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
+                    &format!("--primary-gas-id {gas_id}"),
+                    "bench",
+                    &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
+                    &format!("--shared-counter 0 --transfer-object 100"),
+                    &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
+                ]
+                .join(" ")
+            } else {
+                [
+                    "cargo run --release --bin stress --",
+                    "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
+                    &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
+                    &format!("--primary-gas-id {gas_id}"),
+                    "bench",
+                    &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
+                    &format!("--shared-counter 100 --transfer-object 0"),
+                    &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
+                ]
+                .join(" ")
+            };
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
@@ -345,7 +366,7 @@ impl Orchestrator {
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<MeasurementsCollection> {
         display::action(format!(
-            "Scraping metrics (at least {}s)\n",
+            "Scraping metrics (at least {}s)",
             parameters.duration.as_secs()
         ));
 
@@ -445,6 +466,7 @@ impl Orchestrator {
         mut generator: BenchmarkParametersGenerator,
     ) -> TestbedResult<()> {
         display::header("Preparing testbed");
+        display::config("Commit", format!("'{}'", &self.settings.repository.commit));
 
         // Cleanup the testbed (in case the previous run was not completed).
         self.cleanup(true).await?;
