@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LockedDeviceError } from '@ledgerhq/errors';
 import { useState } from 'react';
 
-import {
-    LedgerConnectionFailedError,
-    LedgerNoTransportMechanismError,
-} from './LedgerExceptions';
 import ExternalLink from '_components/external-link';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
@@ -18,7 +13,7 @@ type ConnectLedgerModalProps = {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
-    onError: (errorMessage: string) => void;
+    onError: (error: unknown) => void;
 };
 
 export function ConnectLedgerModal({
@@ -46,8 +41,7 @@ export function ConnectLedgerModal({
 
             onConfirm();
         } catch (error) {
-            const errorMessage = getErrorMessageForFailedConnection(error);
-            onError(errorMessage);
+            onError(error);
         } finally {
             setConnectingToLedger(false);
         }
@@ -101,17 +95,6 @@ export function ConnectLedgerModal({
             }
         />
     );
-}
-
-function getErrorMessageForFailedConnection(error: unknown) {
-    if (error instanceof LockedDeviceError) {
-        return 'Your device is locked. Un-lock it and try again.';
-    } else if (error instanceof LedgerConnectionFailedError) {
-        return 'Ledger connection failed.';
-    } else if (error instanceof LedgerNoTransportMechanismError) {
-        return "Your machine doesn't support USB or HID.";
-    }
-    return 'Something went wrong. Try again.';
 }
 
 // TODO: We should probably use a loader like @svgr/webpack so that we can provide SVG files

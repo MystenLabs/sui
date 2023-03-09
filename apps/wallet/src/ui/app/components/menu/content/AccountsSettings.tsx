@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { LockedDeviceError } from '@ledgerhq/errors';
 import { LockLocked16 as LockedLockIcon } from '@mysten/icons';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { ConnectLedgerModal } from '../../ledger/ConnectLedgerModal';
+import {
+    LedgerConnectionFailedError,
+    LedgerNoTransportMechanismError,
+} from '../../ledger/LedgerExceptions';
 import { Account } from './Account';
 import { MenuLayout } from './MenuLayout';
 import { useNextMenuUrl } from '_components/menu/hooks';
@@ -73,9 +78,9 @@ export function AccountsSettings() {
                         <ConnectLedgerModal
                             isOpen={isConnectLedgerModalOpen}
                             onClose={() => setConnectLedgerModalOpen(false)}
-                            onError={(errorMessage) => {
+                            onError={(error) => {
                                 setConnectLedgerModalOpen(false);
-                                toast.error(errorMessage);
+                                toast.error(getLedgerErrorMessage(error));
                             }}
                             onConfirm={() => {
                                 setConnectLedgerModalOpen(false);
@@ -87,4 +92,15 @@ export function AccountsSettings() {
             </div>
         </MenuLayout>
     );
+}
+
+function getLedgerErrorMessage(error: unknown) {
+    if (error instanceof LockedDeviceError) {
+        return 'Your device is locked. Un-lock it and try again.';
+    } else if (error instanceof LedgerConnectionFailedError) {
+        return 'Ledger connection failed.';
+    } else if (error instanceof LedgerNoTransportMechanismError) {
+        return "Your machine doesn't support USB or HID.";
+    }
+    return 'Something went wrong. Try again.';
 }

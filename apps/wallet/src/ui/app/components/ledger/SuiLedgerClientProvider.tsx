@@ -4,7 +4,13 @@
 import TransportWebHID from '@ledgerhq/hw-transport-webhid';
 import TransportWebUSB from '@ledgerhq/hw-transport-webusb';
 import SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
-import { createContext, useContext, useState } from 'react';
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useMemo,
+    useState,
+} from 'react';
 
 import {
     LedgerConnectionFailedError,
@@ -26,17 +32,23 @@ export function SuiLedgerClientProvider({
 }: SuiLedgerClientProviderProps) {
     const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
 
-    const connectToLedger = async () => {
+    const connectToLedger = useCallback(async () => {
         const ledgerTransport = await getLedgerTransport();
         const ledgerClient = new SuiLedgerClient(ledgerTransport);
         setSuiLedgerClient(ledgerClient);
         return ledgerClient;
-    };
+    }, []);
+
+    const contextValue: [
+        SuiLedgerClient | undefined,
+        () => Promise<SuiLedgerClient>
+    ] = useMemo(
+        () => [suiLedgerClient, connectToLedger],
+        [connectToLedger, suiLedgerClient]
+    );
 
     return (
-        <SuiLedgerClientContext.Provider
-            value={[suiLedgerClient, connectToLedger]}
-        >
+        <SuiLedgerClientContext.Provider value={contextValue}>
             {children}
         </SuiLedgerClientContext.Provider>
     );
