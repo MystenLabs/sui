@@ -13,6 +13,7 @@ import {
   record,
   any,
   optional,
+  boolean,
 } from 'superstruct';
 import {
   ObjectId,
@@ -195,6 +196,7 @@ export type SuiEvents = SuiEventEnvelope[];
 export const PaginatedEvents = object({
   data: array(SuiEventEnvelope),
   nextCursor: union([EventId, literal(null)]),
+  hasNextPage: boolean(),
 });
 export type PaginatedEvents = Infer<typeof PaginatedEvents>;
 

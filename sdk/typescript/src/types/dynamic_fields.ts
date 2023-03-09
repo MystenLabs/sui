@@ -4,6 +4,7 @@
 import {
   any,
   array,
+  boolean,
   Infer,
   literal,
   number,
@@ -38,5 +39,6 @@ export type DynamicFieldInfo = Infer<typeof DynamicFieldInfo>;
 export const DynamicFieldPage = object({
   data: array(DynamicFieldInfo),
   nextCursor: union([ObjectId, literal(null)]),
+  hasNextPage: boolean(),
 });
 export type DynamicFieldPage = Infer<typeof DynamicFieldPage>;

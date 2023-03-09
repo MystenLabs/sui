@@ -286,6 +286,7 @@ export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 export const PaginatedTransactionDigests = object({
   data: array(TransactionDigest),
   nextCursor: union([TransactionDigest, literal(null)]),
+  hasNextPage: boolean(),
 });
 export type PaginatedTransactionDigests = Infer<
   typeof PaginatedTransactionDigests

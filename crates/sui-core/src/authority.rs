@@ -2133,6 +2133,7 @@ impl AuthorityState {
     pub fn get_dynamic_fields(
         &self,
         owner: ObjectID,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> SuiResult<Vec<DynamicFieldInfo>> {
@@ -2258,6 +2259,7 @@ impl AuthorityState {
     pub fn get_transactions(
         &self,
         query: TransactionQuery,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
@@ -2355,6 +2357,7 @@ impl AuthorityState {
     pub async fn query_events(
         &self,
         query: EventQuery,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
@@ -2362,7 +2365,7 @@ impl AuthorityState {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
 
         //Get the tx_num from tx_digest
-        let (tx_num, event_num) = if let Some(cursor) = cursor {
+        let (tx_num, event_num) = if let Some(cursor) = cursor.as_ref() {
             let tx_seq = self
                 .get_indexes()?
                 .get_transaction_seq(&cursor.tx_digest)?
@@ -2374,7 +2377,8 @@ impl AuthorityState {
             (0, 0)
         };
 
-        let stored_events = match query {
+        let limit = limit + 1;
+        let mut stored_events = match query {
             EventQuery::All => es.all_events(tx_num, event_num, limit, descending).await?,
             EventQuery::Transaction(digest) => {
                 es.events_by_transaction(digest, tx_num, event_num, limit, descending)
@@ -2423,6 +2427,15 @@ impl AuthorityState {
                     .await?
             }
         };
+        // skip one event if exclusive cursor is provided,
+        // otherwise truncate to the original limit.
+        if cursor.is_some() {
+            if !stored_events.is_empty() {
+                stored_events.remove(0);
+            }
+        } else {
+            stored_events.truncate(limit - 1);
+        }
         let mut events = StoredEvent::into_event_envelopes(stored_events)?;
         // populate parsed json event
         for event in &mut events {

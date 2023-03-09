@@ -919,7 +919,8 @@
               "nextCursor": {
                 "txDigest": "11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX",
                 "eventSeq": 5
-              }
+              },
+              "hasNextPage": false
             }
           }
         }
@@ -1625,9 +1626,11 @@
               "data": [
                 "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
                 "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd",
-                "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD",
+                "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
               ],
-              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2",
+              "hasNextPage": false
             }
           }
         }
@@ -5061,9 +5064,11 @@
         ]
       },
       "Page_for_Coin_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5071,6 +5076,9 @@
             "items": {
               "$ref": "#/components/schemas/Coin"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5085,9 +5093,11 @@
         }
       },
       "Page_for_DynamicFieldInfo_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5095,6 +5105,9 @@
             "items": {
               "$ref": "#/components/schemas/DynamicFieldInfo"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5109,9 +5122,11 @@
         }
       },
       "Page_for_EventEnvelope_and_EventID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5119,6 +5134,9 @@
             "items": {
               "$ref": "#/components/schemas/EventEnvelope"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5133,9 +5151,11 @@
         }
       },
       "Page_for_TransactionDigest_and_TransactionDigest": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5143,6 +5163,9 @@
             "items": {
               "$ref": "#/components/schemas/TransactionDigest"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
