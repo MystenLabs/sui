@@ -131,7 +131,7 @@ describe('Transaction Serialization and deserialization', () => {
       toolbox.address(),
     );
 
-    const [{ sui_address: validator_address }] =
+    const [{ suiAddress: validator_address }] =
       await toolbox.getActiveValidators();
 
     const moveCall = {

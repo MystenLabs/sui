@@ -3147,14 +3147,14 @@
       "DelegatedStake": {
         "type": "object",
         "required": [
-          "delegation_status",
-          "staked_sui"
+          "delegationStatus",
+          "stakedSui"
         ],
         "properties": {
-          "delegation_status": {
+          "delegationStatus": {
             "$ref": "#/components/schemas/DelegationStatus"
           },
-          "staked_sui": {
+          "stakedSui": {
             "$ref": "#/components/schemas/StakedSui"
           }
         }
@@ -3163,23 +3163,23 @@
         "type": "object",
         "required": [
           "id",
-          "pool_tokens",
-          "principal_sui_amount",
-          "staked_sui_id"
+          "poolTokens",
+          "principalSuiAmount",
+          "stakedSuiId"
         ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UID"
           },
-          "pool_tokens": {
+          "poolTokens": {
             "$ref": "#/components/schemas/Balance"
           },
-          "principal_sui_amount": {
+          "principalSuiAmount": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staked_sui_id": {
+          "stakedSuiId": {
             "$ref": "#/components/schemas/ObjectID"
           }
         }
@@ -5468,19 +5468,19 @@
         "type": "object",
         "required": [
           "balance",
-          "current_epoch_amount",
-          "epoch_counter"
+          "currentEpochAmount",
+          "epochCounter"
         ],
         "properties": {
           "balance": {
             "$ref": "#/components/schemas/Balance"
           },
-          "current_epoch_amount": {
+          "currentEpochAmount": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "epoch_counter": {
+          "epochCounter": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -5490,14 +5490,14 @@
       "StakedSui": {
         "type": "object",
         "required": [
-          "delegation_request_epoch",
+          "delegationRequestEpoch",
           "id",
-          "pool_id",
+          "poolId",
           "principal",
-          "validator_address"
+          "validatorAddress"
         ],
         "properties": {
-          "delegation_request_epoch": {
+          "delegationRequestEpoch": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -5505,13 +5505,13 @@
           "id": {
             "$ref": "#/components/schemas/UID"
           },
-          "pool_id": {
+          "poolId": {
             "$ref": "#/components/schemas/ObjectID"
           },
           "principal": {
             "$ref": "#/components/schemas/Balance"
           },
-          "sui_token_lock": {
+          "suiTokenLock": {
             "type": [
               "integer",
               "null"
@@ -5519,7 +5519,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "validator_address": {
+          "validatorAddress": {
             "$ref": "#/components/schemas/SuiAddress"
           }
         }
@@ -5528,54 +5528,54 @@
         "description": "Rust version of the Move sui::staking_pool::StakingPool type",
         "type": "object",
         "required": [
-          "activation_epoch",
-          "deactivation_epoch",
-          "exchange_rates",
+          "activationEpoch",
+          "deactivationEpoch",
+          "exchangeRates",
           "id",
-          "pending_delegation",
-          "pending_pool_token_withdraw",
-          "pending_total_sui_withdraw",
-          "pool_token_balance",
-          "rewards_pool",
-          "sui_balance"
+          "pendingDelegation",
+          "pendingPoolTokenWithdraw",
+          "pendingTotalSuiWithdraw",
+          "poolTokenBalance",
+          "rewardsPool",
+          "suiBalance"
         ],
         "properties": {
-          "activation_epoch": {
+          "activationEpoch": {
             "$ref": "#/components/schemas/MoveOption_for_uint64"
           },
-          "deactivation_epoch": {
+          "deactivationEpoch": {
             "$ref": "#/components/schemas/MoveOption_for_uint64"
           },
-          "exchange_rates": {
+          "exchangeRates": {
             "$ref": "#/components/schemas/Table"
           },
           "id": {
             "$ref": "#/components/schemas/ObjectID"
           },
-          "pending_delegation": {
+          "pendingDelegation": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_pool_token_withdraw": {
+          "pendingPoolTokenWithdraw": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_total_sui_withdraw": {
+          "pendingTotalSuiWithdraw": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pool_token_balance": {
+          "poolTokenBalance": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "rewards_pool": {
+          "rewardsPool": {
             "$ref": "#/components/schemas/Balance"
           },
-          "sui_balance": {
+          "suiBalance": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6347,14 +6347,14 @@
         "type": "object",
         "required": [
           "epoch",
-          "epoch_start_timestamp_ms",
+          "epochStartTimestampMs",
           "parameters",
-          "protocol_version",
-          "reference_gas_price",
-          "safe_mode",
-          "stake_subsidy",
-          "storage_fund",
-          "validator_report_records",
+          "protocolVersion",
+          "referenceGasPrice",
+          "safeMode",
+          "stakeSubsidy",
+          "storageFund",
+          "validatorReportRecords",
           "validators"
         ],
         "properties": {
@@ -6363,7 +6363,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "epoch_start_timestamp_ms": {
+          "epochStartTimestampMs": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6371,26 +6371,26 @@
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
           },
-          "protocol_version": {
+          "protocolVersion": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "reference_gas_price": {
+          "referenceGasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "safe_mode": {
+          "safeMode": {
             "type": "boolean"
           },
-          "stake_subsidy": {
+          "stakeSubsidy": {
             "$ref": "#/components/schemas/StakeSubsidy"
           },
-          "storage_fund": {
+          "storageFund": {
             "$ref": "#/components/schemas/Balance"
           },
-          "validator_report_records": {
+          "validatorReportRecords": {
             "$ref": "#/components/schemas/VecMap_for_SuiAddress_and_VecSet_for_SuiAddress"
           },
           "validators": {
@@ -6402,23 +6402,23 @@
         "description": "This is the JSON-RPC type for the SUI system state object. It flatterns all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
         "type": "object",
         "required": [
-          "active_validators",
+          "activeValidators",
           "epoch",
-          "epoch_start_timestamp_ms",
-          "governance_start_epoch",
-          "max_validator_candidate_count",
-          "min_validator_stake",
-          "protocol_version",
-          "reference_gas_price",
-          "safe_mode",
-          "stake_subsidy_balance",
-          "stake_subsidy_current_epoch_amount",
-          "stake_subsidy_epoch_counter",
-          "storage_fund",
-          "total_stake"
+          "epochStartTimestampMs",
+          "governanceStartEpoch",
+          "maxValidatorCandidateCount",
+          "minValidatorStake",
+          "protocolVersion",
+          "referenceGasPrice",
+          "safeMode",
+          "stakeSubsidyBalance",
+          "stakeSubsidyCurrentEpochAmount",
+          "stakeSubsidyEpochCounter",
+          "storageFund",
+          "totalStake"
         ],
         "properties": {
-          "active_validators": {
+          "activeValidators": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiValidatorSummary"
@@ -6429,60 +6429,60 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "epoch_start_timestamp_ms": {
+          "epochStartTimestampMs": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "governance_start_epoch": {
+          "governanceStartEpoch": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "max_validator_candidate_count": {
+          "maxValidatorCandidateCount": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "min_validator_stake": {
+          "minValidatorStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "protocol_version": {
+          "protocolVersion": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "reference_gas_price": {
+          "referenceGasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "safe_mode": {
+          "safeMode": {
             "type": "boolean"
           },
-          "stake_subsidy_balance": {
+          "stakeSubsidyBalance": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_subsidy_current_epoch_amount": {
+          "stakeSubsidyCurrentEpochAmount": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_subsidy_epoch_counter": {
+          "stakeSubsidyEpochCounter": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_fund": {
+          "storageFund": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "total_stake": {
+          "totalStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6591,35 +6591,35 @@
         "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures to top-level fields so that they are decoupled from the internal definitions.",
         "type": "object",
         "required": [
-          "commission_rate",
+          "commissionRate",
           "description",
-          "gas_price",
-          "image_url",
+          "gasPrice",
+          "imageUrl",
           "name",
-          "net_address",
-          "network_pubkey_bytes",
-          "next_epoch_commission_rate",
-          "next_epoch_gas_price",
-          "next_epoch_stake",
-          "p2p_address",
-          "pending_delegation",
-          "pending_pool_token_withdraw",
-          "pending_total_sui_withdraw",
-          "pool_token_balance",
-          "primary_address",
-          "project_url",
-          "proof_of_possession_bytes",
-          "protocol_pubkey_bytes",
-          "rewards_pool",
-          "staking_pool_id",
-          "staking_pool_sui_balance",
-          "sui_address",
-          "voting_power",
-          "worker_address",
-          "worker_pubkey_bytes"
+          "netAddress",
+          "networkPubkeyBytes",
+          "nextEpochCommissionRate",
+          "nextEpochGasPrice",
+          "nextEpochStake",
+          "p2pAddress",
+          "pendingDelegation",
+          "pendingPoolTokenWithdraw",
+          "pendingTotalSuiWithdraw",
+          "poolTokenBalance",
+          "primaryAddress",
+          "projectUrl",
+          "proofOfPossessionBytes",
+          "protocolPubkeyBytes",
+          "rewardsPool",
+          "stakingPoolId",
+          "stakingPoolSuiBalance",
+          "suiAddress",
+          "votingPower",
+          "workerAddress",
+          "workerPubkeyBytes"
         ],
         "properties": {
-          "commission_rate": {
+          "commissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6627,18 +6627,18 @@
           "description": {
             "type": "string"
           },
-          "gas_price": {
+          "gasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "image_url": {
+          "imageUrl": {
             "type": "string"
           },
           "name": {
             "type": "string"
           },
-          "net_address": {
+          "netAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6646,7 +6646,7 @@
               "minimum": 0.0
             }
           },
-          "network_pubkey_bytes": {
+          "networkPubkeyBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6654,17 +6654,17 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_commission_rate": {
+          "nextEpochCommissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_gas_price": {
+          "nextEpochGasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_net_address": {
+          "nextEpochNetAddress": {
             "type": [
               "array",
               "null"
@@ -6675,7 +6675,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_network_pubkey_bytes": {
+          "nextEpochNetworkPubkeyBytes": {
             "type": [
               "array",
               "null"
@@ -6686,7 +6686,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_p2p_address": {
+          "nextEpochP2pAddress": {
             "type": [
               "array",
               "null"
@@ -6697,7 +6697,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_primary_address": {
+          "nextEpochPrimaryAddress": {
             "type": [
               "array",
               "null"
@@ -6708,7 +6708,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_proof_of_possession": {
+          "nextEpochProofOfPossession": {
             "type": [
               "array",
               "null"
@@ -6719,7 +6719,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_protocol_pubkey_bytes": {
+          "nextEpochProtocolPubkeyBytes": {
             "type": [
               "array",
               "null"
@@ -6730,12 +6730,12 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_stake": {
+          "nextEpochStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_worker_address": {
+          "nextEpochWorkerAddress": {
             "type": [
               "array",
               "null"
@@ -6746,7 +6746,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_worker_pubkey_bytes": {
+          "nextEpochWorkerPubkeyBytes": {
             "type": [
               "array",
               "null"
@@ -6757,7 +6757,7 @@
               "minimum": 0.0
             }
           },
-          "p2p_address": {
+          "p2pAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6765,27 +6765,27 @@
               "minimum": 0.0
             }
           },
-          "pending_delegation": {
+          "pendingDelegation": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_pool_token_withdraw": {
+          "pendingPoolTokenWithdraw": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_total_sui_withdraw": {
+          "pendingTotalSuiWithdraw": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pool_token_balance": {
+          "poolTokenBalance": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "primary_address": {
+          "primaryAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6793,10 +6793,10 @@
               "minimum": 0.0
             }
           },
-          "project_url": {
+          "projectUrl": {
             "type": "string"
           },
-          "proof_of_possession_bytes": {
+          "proofOfPossessionBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6804,7 +6804,7 @@
               "minimum": 0.0
             }
           },
-          "protocol_pubkey_bytes": {
+          "protocolPubkeyBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6812,12 +6812,12 @@
               "minimum": 0.0
             }
           },
-          "rewards_pool": {
+          "rewardsPool": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_activation_epoch": {
+          "stakingPoolActivationEpoch": {
             "type": [
               "integer",
               "null"
@@ -6825,7 +6825,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_deactivation_epoch": {
+          "stakingPoolDeactivationEpoch": {
             "type": [
               "integer",
               "null"
@@ -6833,23 +6833,23 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_id": {
+          "stakingPoolId": {
             "$ref": "#/components/schemas/ObjectID"
           },
-          "staking_pool_sui_balance": {
+          "stakingPoolSuiBalance": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "sui_address": {
+          "suiAddress": {
             "$ref": "#/components/schemas/SuiAddress"
           },
-          "voting_power": {
+          "votingPower": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "worker_address": {
+          "workerAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6857,7 +6857,7 @@
               "minimum": 0.0
             }
           },
-          "worker_pubkey_bytes": {
+          "workerPubkeyBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6884,22 +6884,22 @@
         "description": "Rust version of the Move sui::sui_system::SystemParameters type",
         "type": "object",
         "required": [
-          "governance_start_epoch",
-          "max_validator_count",
-          "min_validator_stake"
+          "governanceStartEpoch",
+          "maxValidatorCount",
+          "minValidatorStake"
         ],
         "properties": {
-          "governance_start_epoch": {
+          "governanceStartEpoch": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "max_validator_count": {
+          "maxValidatorCount": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "min_validator_stake": {
+          "minValidatorStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7468,22 +7468,22 @@
         "description": "Rust version of the Move sui::validator::Validator type",
         "type": "object",
         "required": [
-          "commission_rate",
-          "gas_price",
+          "commissionRate",
+          "gasPrice",
           "metadata",
-          "next_epoch_commission_rate",
-          "next_epoch_gas_price",
-          "next_epoch_stake",
-          "staking_pool",
-          "voting_power"
+          "nextEpochCommissionRate",
+          "nextEpochGasPrice",
+          "nextEpochStake",
+          "stakingPool",
+          "votingPower"
         ],
         "properties": {
-          "commission_rate": {
+          "commissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "gas_price": {
+          "gasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7491,25 +7491,25 @@
           "metadata": {
             "$ref": "#/components/schemas/ValidatorMetadata"
           },
-          "next_epoch_commission_rate": {
+          "nextEpochCommissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_gas_price": {
+          "nextEpochGasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_stake": {
+          "nextEpochStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool": {
+          "stakingPool": {
             "$ref": "#/components/schemas/StakingPool"
           },
-          "voting_power": {
+          "votingPower": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7520,30 +7520,30 @@
         "type": "object",
         "required": [
           "description",
-          "image_url",
+          "imageUrl",
           "name",
-          "net_address",
-          "network_pubkey_bytes",
-          "p2p_address",
-          "primary_address",
-          "project_url",
-          "proof_of_possession_bytes",
-          "protocol_pubkey_bytes",
-          "sui_address",
-          "worker_address",
-          "worker_pubkey_bytes"
+          "netAddress",
+          "networkPubkeyBytes",
+          "p2pAddress",
+          "primaryAddress",
+          "projectUrl",
+          "proofOfPossessionBytes",
+          "protocolPubkeyBytes",
+          "suiAddress",
+          "workerAddress",
+          "workerPubkeyBytes"
         ],
         "properties": {
           "description": {
             "type": "string"
           },
-          "image_url": {
+          "imageUrl": {
             "type": "string"
           },
           "name": {
             "type": "string"
           },
-          "net_address": {
+          "netAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7551,7 +7551,7 @@
               "minimum": 0.0
             }
           },
-          "network_pubkey_bytes": {
+          "networkPubkeyBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7559,7 +7559,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_net_address": {
+          "nextEpochNetAddress": {
             "type": [
               "array",
               "null"
@@ -7570,7 +7570,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_network_pubkey_bytes": {
+          "nextEpochNetworkPubkeyBytes": {
             "type": [
               "array",
               "null"
@@ -7581,7 +7581,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_p2p_address": {
+          "nextEpochP2pAddress": {
             "type": [
               "array",
               "null"
@@ -7592,7 +7592,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_primary_address": {
+          "nextEpochPrimaryAddress": {
             "type": [
               "array",
               "null"
@@ -7603,7 +7603,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_proof_of_possession": {
+          "nextEpochProofOfPossession": {
             "type": [
               "array",
               "null"
@@ -7614,7 +7614,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_protocol_pubkey_bytes": {
+          "nextEpochProtocolPubkeyBytes": {
             "type": [
               "array",
               "null"
@@ -7625,7 +7625,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_worker_address": {
+          "nextEpochWorkerAddress": {
             "type": [
               "array",
               "null"
@@ -7636,7 +7636,7 @@
               "minimum": 0.0
             }
           },
-          "next_epoch_worker_pubkey_bytes": {
+          "nextEpochWorkerPubkeyBytes": {
             "type": [
               "array",
               "null"
@@ -7647,7 +7647,7 @@
               "minimum": 0.0
             }
           },
-          "p2p_address": {
+          "p2pAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7655,7 +7655,7 @@
               "minimum": 0.0
             }
           },
-          "primary_address": {
+          "primaryAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7663,10 +7663,10 @@
               "minimum": 0.0
             }
           },
-          "project_url": {
+          "projectUrl": {
             "type": "string"
           },
-          "proof_of_possession_bytes": {
+          "proofOfPossessionBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7674,7 +7674,7 @@
               "minimum": 0.0
             }
           },
-          "protocol_pubkey_bytes": {
+          "protocolPubkeyBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7682,10 +7682,10 @@
               "minimum": 0.0
             }
           },
-          "sui_address": {
+          "suiAddress": {
             "$ref": "#/components/schemas/SuiAddress"
           },
-          "worker_address": {
+          "workerAddress": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7693,7 +7693,7 @@
               "minimum": 0.0
             }
           },
-          "worker_pubkey_bytes": {
+          "workerPubkeyBytes": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7707,28 +7707,28 @@
         "description": "Rust version of the Move sui::validator_set::ValidatorSet type",
         "type": "object",
         "required": [
-          "active_validators",
-          "inactive_pools",
-          "pending_active_validators",
-          "pending_removals",
-          "staking_pool_mappings",
-          "total_stake",
-          "validator_candidates"
+          "activeValidators",
+          "inactivePools",
+          "pendingActiveValidators",
+          "pendingRemovals",
+          "stakingPoolMappings",
+          "totalStake",
+          "validatorCandidates"
         ],
         "properties": {
-          "active_validators": {
+          "activeValidators": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
           },
-          "inactive_pools": {
+          "inactivePools": {
             "$ref": "#/components/schemas/Table"
           },
-          "pending_active_validators": {
+          "pendingActiveValidators": {
             "$ref": "#/components/schemas/TableVec"
           },
-          "pending_removals": {
+          "pendingRemovals": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -7736,15 +7736,15 @@
               "minimum": 0.0
             }
           },
-          "staking_pool_mappings": {
+          "stakingPoolMappings": {
             "$ref": "#/components/schemas/Table"
           },
-          "total_stake": {
+          "totalStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "validator_candidates": {
+          "validatorCandidates": {
             "$ref": "#/components/schemas/Table"
           }
         }

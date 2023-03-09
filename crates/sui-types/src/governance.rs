@@ -30,6 +30,7 @@ pub const WITHDRAW_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_withdraw
 
 // TODO: this no longer exists at Move level, we need to remove this and update the governance API.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Delegation {
     pub id: UID,
     pub staked_sui_id: ID,
@@ -49,6 +50,7 @@ impl Delegation {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct StakedSui {
     id: UID,
     pool_id: ID,
@@ -82,6 +84,7 @@ impl StakedSui {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DelegatedStake {
     pub staked_sui: StakedSui,
     pub delegation_status: DelegationStatus,

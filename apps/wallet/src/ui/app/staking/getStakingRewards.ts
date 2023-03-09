@@ -12,25 +12,25 @@ export function getStakingRewards(
     if (
         !activeValidators ||
         !delegation ||
-        delegation.delegation_status === 'Pending'
+        delegation.delegationStatus === 'Pending'
     )
         return 0;
-    const pool_id = delegation.staked_sui.pool_id;
+    const pool_id = delegation.stakedSui.poolId;
     const validator = activeValidators.find(
-        (validator) => validator.staking_pool.id === pool_id
+        (validator) => validator.stakingPool.id === pool_id
     );
 
     if (!validator) return 0;
 
     const poolTokens = new BigNumber(
-        delegation.delegation_status.Active.pool_tokens.value
+        delegation.delegationStatus.Active.poolTokens.value
     );
     const delegationTokenSupply = new BigNumber(
-        validator.staking_pool.pool_token_balance
+        validator.stakingPool.poolTokenBalance
     );
-    const suiBalance = new BigNumber(validator.staking_pool.sui_balance);
+    const suiBalance = new BigNumber(validator.stakingPool.suiBalance);
     const pricipalAmout = new BigNumber(
-        delegation.delegation_status.Active.principal_sui_amount
+        delegation.delegationStatus.Active.principalSuiAmount
     );
     const currentSuiWorth = poolTokens
         .multipliedBy(suiBalance)

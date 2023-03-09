@@ -29,16 +29,14 @@ export function TokenIconLink({
     const totalActivePendingStake = useMemo(() => {
         if (!delegations) return 0n;
         return delegations.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
+            (acc, { stakedSui }) => acc + BigInt(stakedSui.principal.value),
             0n
         );
     }, [delegations]);
 
     const stakedValidators = useMemo(() => {
         if (!delegations) return [];
-        return delegations.map(
-            ({ staked_sui }) => staked_sui.validator_address
-        );
+        return delegations.map(({ stakedSui }) => stakedSui.validatorAddress);
     }, [delegations]);
 
     const [formatted, symbol, queryResult] = useFormatCoin(

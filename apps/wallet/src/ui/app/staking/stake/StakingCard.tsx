@@ -69,13 +69,13 @@ function StakingCard() {
         if (stakeIdParams) {
             const balance =
                 allDelegation.find(
-                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-                )?.staked_sui.principal.value || 0;
+                    ({ stakedSui }) => stakedSui.id.id === stakeIdParams
+                )?.stakedSui.principal.value || 0;
             return BigInt(balance);
         }
         // return aggregate delegation
         return allDelegation.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
+            (acc, { stakedSui }) => acc + BigInt(stakedSui.principal.value),
             0n
         );
     }, [allDelegation, stakeIdParams]);
@@ -84,7 +84,7 @@ function StakingCard() {
         if (!allDelegation) return null;
 
         return allDelegation.find(
-            ({ staked_sui }) => staked_sui.id.id === stakeIdParams
+            ({ stakedSui }) => stakedSui.id.id === stakeIdParams
         );
     }, [allDelegation, stakeIdParams]);
 
@@ -96,7 +96,7 @@ function StakingCard() {
     const suiEarned = useMemo(() => {
         if (!system || !delegationData) return 0;
         return getStakingRewards(
-            system.validators.active_validators,
+            system.validators.activeValidators,
             delegationData
         );
     }, [delegationData, system]);
@@ -116,9 +116,9 @@ function StakingCard() {
 
     const queryClient = useQueryClient();
     const delegationId = useMemo(() => {
-        if (!delegationData || delegationData.delegation_status === 'Pending')
+        if (!delegationData || delegationData.delegationStatus === 'Pending')
             return null;
-        return delegationData.delegation_status.Active.id.id;
+        return delegationData.delegationStatus.Active.id.id;
     }, [delegationData]);
 
     const navigate = useNavigate();
@@ -190,13 +190,13 @@ function StakingCard() {
                     if (
                         !delegationData ||
                         !stakeIdParams ||
-                        delegationData.delegation_status === 'Pending'
+                        delegationData.delegationStatus === 'Pending'
                     ) {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
                         delegationId:
-                            delegationData.delegation_status.Active.id.id,
+                            delegationData.delegationStatus.Active.id.id,
                         stakeSuId: stakeIdParams,
                     });
 
@@ -315,7 +315,7 @@ function StakingCard() {
                                         <Collapse
                                             title={
                                                 STATE_TO_COPY[
-                                                    delegationData?.delegation_status ===
+                                                    delegationData?.delegationStatus ===
                                                     'Pending'
                                                         ? DelegationState.WARM_UP
                                                         : DelegationState.EARNING

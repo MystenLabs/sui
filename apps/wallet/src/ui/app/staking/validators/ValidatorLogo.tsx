@@ -35,11 +35,11 @@ export function ValidatorLogo({
         if (!validatorsData) return null;
 
         const validator = validatorsData.find(
-            ({ sui_address }) => sui_address === validatorAddress
+            ({ suiAddress }) => suiAddress === validatorAddress
         );
         if (!validator) return null;
 
-        const logo = validator.image_url;
+        const logo = validator.imageUrl;
 
         return {
             name: validator.name,

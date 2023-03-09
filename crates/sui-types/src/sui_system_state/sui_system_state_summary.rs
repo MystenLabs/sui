@@ -10,6 +10,7 @@ use crate::base_types::{ObjectID, SuiAddress};
 /// It flatterns all fields to make them top-level fields such that it as minimum
 /// dependencies to the internal data structures of the SUI system state type.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiSystemStateSummary {
     pub epoch: u64,
     pub protocol_version: u64,
@@ -36,6 +37,7 @@ pub struct SuiSystemStateSummary {
 /// This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures
 /// to top-level fields so that they are decoupled from the internal definitions.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiValidatorSummary {
     // Metadata
     pub sui_address: SuiAddress,

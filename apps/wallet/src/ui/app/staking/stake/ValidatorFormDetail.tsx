@@ -44,12 +44,12 @@ export function ValidatorFormDetail({
 
     const validatorData = useMemo(() => {
         if (!system) return null;
-        return system.validators.active_validators.find(
-            (av) => av.metadata.sui_address === validatorAddress
+        return system.validators.activeValidators.find(
+            (av) => av.metadata.suiAddress === validatorAddress
         );
     }, [validatorAddress, system]);
 
-    const totalValidatorStake = validatorData?.staking_pool.sui_balance || 0;
+    const totalValidatorStake = validatorData?.stakingPool.suiBalance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -58,14 +58,14 @@ export function ValidatorFormDetail({
         if (stakeIdParams) {
             const balance =
                 allDelegation.find(
-                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-                )?.staked_sui.principal.value || 0;
+                    ({ stakedSui }) => stakedSui.id.id === stakeIdParams
+                )?.stakedSui.principal.value || 0;
             return BigInt(balance);
         }
 
         allDelegation.forEach((event) => {
-            if (event.staked_sui.validator_address === validatorAddress) {
-                totalActiveStake += BigInt(event.staked_sui.principal.value);
+            if (event.stakedSui.validatorAddress === validatorAddress) {
+                totalActiveStake += BigInt(event.stakedSui.principal.value);
             }
         });
         return totalActiveStake;

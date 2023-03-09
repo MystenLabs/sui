@@ -35,24 +35,24 @@ function validatorsTableData(
     return {
         data: validators.map((validator) => {
             const validatorName = validator.metadata.name;
-            const totalStake = validator.staking_pool.sui_balance;
-            const img = validator.metadata.image_url;
+            const totalStake = validator.stakingPool.suiBalance;
+            const img = validator.metadata.imageUrl;
 
             const event = getValidatorMoveEvent(
                 validatorsEvents,
-                validator.metadata.sui_address
+                validator.metadata.suiAddress
             );
 
             return {
                 name: {
                     name: validatorName,
-                    logo: validator.metadata.image_url,
+                    logo: validator.metadata.imageUrl,
                 },
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.commission_rate / 100,
+                commission: +validator.commissionRate / 100,
                 img: img,
-                address: validator.metadata.sui_address,
+                address: validator.metadata.suiAddress,
                 lastReward: event?.fields.stake_rewards || 0,
             };
         }),
@@ -158,7 +158,7 @@ function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const numberOfValidators = useMemo(
-        () => data?.validators.active_validators.length || null,
+        () => data?.validators.activeValidators.length || null,
         [data]
     );
 
@@ -173,17 +173,17 @@ function ValidatorPageResult() {
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.validators.activeValidators;
 
         return validators.reduce(
-            (acc, cur) => acc + +cur.staking_pool.sui_balance,
+            (acc, cur) => acc + +cur.stakingPool.suiBalance,
             0
         );
     }, [data]);
 
     const averageAPY = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.validators.activeValidators;
 
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +data.epoch)
@@ -212,7 +212,7 @@ function ValidatorPageResult() {
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
 
-        const validators = data.validators.active_validators;
+        const validators = data.validators.activeValidators;
 
         return validatorsTableData(
             validators,

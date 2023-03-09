@@ -32,7 +32,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "SystemParameters")]
+#[serde(rename = "SystemParameters", rename_all = "camelCase")]
 pub struct SystemParametersV1 {
     pub min_validator_stake: u64,
     pub max_validator_count: u64,
@@ -41,7 +41,7 @@ pub struct SystemParametersV1 {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorMetadata")]
+#[serde(rename = "ValidatorMetadata", rename_all = "camelCase")]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey_bytes: Vec<u8>,
@@ -206,7 +206,7 @@ impl ValidatorMetadataV1 {
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "Validator")]
+#[serde(rename = "Validator", rename_all = "camelCase")]
 pub struct ValidatorV1 {
     pub metadata: ValidatorMetadataV1,
     pub voting_power: u64,
@@ -251,7 +251,7 @@ impl ValidatorV1 {
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakingPool")]
+#[serde(rename = "StakingPool", rename_all = "camelCase")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
     pub activation_epoch: MoveOption<u64>,
@@ -268,7 +268,7 @@ pub struct StakingPoolV1 {
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorSet")]
+#[serde(rename = "ValidatorSet", rename_all = "camelCase")]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
@@ -282,6 +282,7 @@ pub struct ValidatorSetV1 {
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
@@ -298,7 +299,7 @@ pub struct SuiSystemStateInnerV1 {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakeSubsidy")]
+#[serde(rename = "StakeSubsidy", rename_all = "camelCase")]
 pub struct StakeSubsidyV1 {
     pub epoch_counter: u64,
     pub balance: Balance,

@@ -39,16 +39,16 @@ export function DelegationCard({
     activeValidators,
     currentEpoch,
 }: DelegationCardProps) {
-    const { staked_sui } = delegationObject;
-    const address = staked_sui.validator_address;
-    const staked = staked_sui.principal.value;
+    const { stakedSui } = delegationObject;
+    const address = stakedSui.validatorAddress;
+    const staked = stakedSui.principal.value;
     const rewards = useMemo(
         () => getStakingRewards(activeValidators, delegationObject),
         [activeValidators, delegationObject]
     );
 
-    const stakedId = staked_sui.id.id;
-    const delegationsRequestEpoch = staked_sui.delegation_request_epoch;
+    const stakedId = stakedSui.id.id;
+    const delegationsRequestEpoch = stakedSui.delegationRequestEpoch;
     const numberOfEpochPastRequesting = currentEpoch - delegationsRequestEpoch;
     const [stakedFormatted] = useFormatCoin(staked, SUI_TYPE_ARG);
     const [rewardsFormatted] = useFormatCoin(rewards, SUI_TYPE_ARG);

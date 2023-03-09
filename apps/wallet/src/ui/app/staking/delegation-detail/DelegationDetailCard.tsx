@@ -47,8 +47,8 @@ export function DelegationDetailCard({
 
     const validatorData = useMemo(() => {
         if (!system) return null;
-        return system.validators.active_validators.find(
-            (av) => av.metadata.sui_address === validatorAddress
+        return system.validators.activeValidators.find(
+            (av) => av.metadata.suiAddress === validatorAddress
         );
     }, [validatorAddress, system]);
 
@@ -56,16 +56,16 @@ export function DelegationDetailCard({
         if (!allDelegation) return null;
 
         return allDelegation.find(
-            ({ staked_sui }) => staked_sui.id.id === stakedId
+            ({ stakedSui }) => stakedSui.id.id === stakedId
         );
     }, [allDelegation, stakedId]);
 
-    const totalStake = delegationData?.staked_sui.principal.value || 0n;
+    const totalStake = delegationData?.stakedSui.principal.value || 0n;
 
     const suiEarned = useMemo(() => {
         if (!system || !delegationData) return 0n;
         return getStakingRewards(
-            system.validators.active_validators,
+            system.validators.activeValidators,
             delegationData
         );
     }, [delegationData, system]);
@@ -76,9 +76,9 @@ export function DelegationDetailCard({
     }, [validatorData, system]);
 
     const delegationId = useMemo(() => {
-        if (!delegationData || delegationData.delegation_status === 'Pending')
+        if (!delegationData || delegationData.delegationStatus === 'Pending')
             return null;
-        return delegationData.delegation_status.Active.id.id;
+        return delegationData.delegationStatus.Active.id.id;
     }, [delegationData]);
 
     const stakeByValidatorAddress = `/stake/new?${new URLSearchParams({
@@ -88,7 +88,7 @@ export function DelegationDetailCard({
 
     const commission = useMemo(() => {
         if (!validatorData) return 0;
-        return +validatorData.commission_rate / 100;
+        return +validatorData.commissionRate / 100;
     }, [validatorData]);
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;

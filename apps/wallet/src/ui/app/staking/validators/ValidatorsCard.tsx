@@ -33,12 +33,12 @@ export function ValidatorsCard() {
 
     const { data: system } = useSystemState();
 
-    const activeValidators = system?.validators.active_validators;
+    const activeValidators = system?.validators.activeValidators;
     // Total earn token for all delegations
     const totalEarnToken = useMemo(() => {
         if (!delegations || !system) return 0;
 
-        const activeValidators = system.validators.active_validators;
+        const activeValidators = system.validators.activeValidators;
 
         return delegations.reduce(
             (acc, delegation) =>
@@ -52,7 +52,7 @@ export function ValidatorsCard() {
     const totalActivePendingStake = useMemo(() => {
         if (!delegations) return 0n;
         return delegations.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
+            (acc, { stakedSui }) => acc + BigInt(stakedSui.principal.value),
             0n
         );
     }, [delegations]);
@@ -61,9 +61,7 @@ export function ValidatorsCard() {
         if (!delegations) return 0;
         return [
             ...new Set(
-                delegations.map(
-                    ({ staked_sui }) => staked_sui.validator_address
-                )
+                delegations.map(({ stakedSui }) => stakedSui.validatorAddress)
             ),
         ].length;
     }, [delegations]);
@@ -135,7 +133,7 @@ export function ValidatorsCard() {
                                         delegationObject={delegationObject}
                                         activeValidators={activeValidators}
                                         currentEpoch={+system.epoch}
-                                        key={delegationObject.staked_sui.id.id}
+                                        key={delegationObject.stakedSui.id.id}
                                     />
                                 ))}
                         </div>
