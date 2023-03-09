@@ -287,3 +287,4 @@ stake_subsidy:
   current_epoch_amount: 1000000
 safe_mode: false
 epoch_start_timestamp_ms: 10
+
