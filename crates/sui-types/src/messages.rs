@@ -2088,7 +2088,7 @@ impl Message for SenderSignedData {
         TransactionDigest::new(sha3_hash(&self.intent_message.value))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
         if self.intent_message.value.is_system_tx() {
             return Ok(());
         }
@@ -3521,7 +3521,7 @@ impl Message for TransactionEffects {
         TransactionEffectsDigest::new(sha3_hash(self))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
         Ok(())
     }
 }

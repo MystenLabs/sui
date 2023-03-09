@@ -27,7 +27,7 @@ pub trait Message {
     /// Verify the internal data consistency of this message.
     /// In some cases, such as user signed transaction, we also need
     /// to verify the user signature here.
-    fn verify(&self) -> SuiResult;
+    fn verify(&self, signature_epoch: Option<EpochId>) -> SuiResult;
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
@@ -109,7 +109,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     }
 
     pub fn verify_signature(&self) -> SuiResult {
-        self.data.verify()
+        self.data.verify(None)
     }
 
     pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
@@ -158,7 +158,7 @@ where
     }
 
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify()?;
+        self.data.verify(Some(self.auth_sig().epoch))?;
         self.auth_signature.verify_secure(
             self.data(),
             Intent::default().with_scope(T::SCOPE),
@@ -204,7 +204,7 @@ where
     // TODO: Eventually we should remove all calls to verify_signature
     // and make sure they all call verify to avoid repeated verifications.
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify()?;
+        self.data.verify(Some(self.auth_sig().epoch))?;
         self.auth_signature.verify_secure(
             self.data(),
             Intent::default().with_scope(T::SCOPE),

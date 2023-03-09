@@ -139,7 +139,14 @@ impl Message for CheckpointSummary {
         CheckpointDigest::new(sha3_hash(self))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, sig_epoch: Option<EpochId>) -> SuiResult {
+        // Signatures over CheckpointSummaries from other epochs are not valid.
+        if let Some(sig_epoch) = sig_epoch {
+            fp_ensure!(
+                self.epoch == sig_epoch,
+                SuiError::from("Epoch in the summary doesn't match with the signature")
+            );
+        }
         Ok(())
     }
 }

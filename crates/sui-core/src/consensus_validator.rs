@@ -72,7 +72,7 @@ impl TransactionValidator for SuiTxValidator {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     self.metrics.certificate_signatures_verified.inc();
-                    certificate.data().verify()?;
+                    certificate.data().verify(None)?;
                     let idx = obligation.add_message(
                         certificate.data(),
                         certificate.epoch(),
