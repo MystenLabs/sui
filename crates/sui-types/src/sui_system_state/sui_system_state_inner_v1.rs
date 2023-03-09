@@ -372,7 +372,7 @@ pub struct ValidatorSetV1 {
     pub pending_active_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
-    pub inactive_validators: Table,
+    pub inactive_pools: Table,
     pub validator_candidates: Table,
 }
 
@@ -503,7 +503,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                             id: staking_pool_mappings_id,
                             size: staking_pool_mappings_size,
                         },
-                    inactive_validators:
+                    inactive_pools:
                         Table {
                             id: inactive_pools_id,
                             size: inactive_pools_size,
@@ -579,7 +579,7 @@ impl Default for SuiSystemStateInnerV1 {
             pending_active_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
-            inactive_validators: Table::default(),
+            inactive_pools: Table::default(),
             validator_candidates: Table::default(),
         };
         Self {
