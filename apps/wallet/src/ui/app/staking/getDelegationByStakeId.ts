@@ -8,13 +8,13 @@ export const getDelegationDataByStakeId = (
     delegationsStake: DelegatedStake[],
     stakeSuiId: string
 ) => {
-    let delegation = null;
-    for (const { delegations } of delegationsStake) {
-        delegation =
-            delegations.find(({ stakedSuiId }) => stakedSuiId === stakeSuiId) ||
+    let stake = null;
+    for (const { stakes } of delegationsStake) {
+        stake =
+            stakes.find(({ stakedSuiId }) => stakedSuiId === stakeSuiId) ||
             null;
-        if (delegation) return delegation;
+        if (stake) return stake;
     }
 
-    return delegation;
+    return stake;
 };

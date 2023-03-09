@@ -9,8 +9,7 @@ import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { SuiValidatorSummary, DelegatedStake,  StakeObject} from '@mysten/sui.js';
-
+import type { StakeObject } from '@mysten/sui.js';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',

@@ -62,9 +62,9 @@ export function DelegationDetailCard({
     const totalStake = BigInt(delegationData?.principal || 0n);
 
     const suiEarned = useMemo(() => {
-        if (!system || !delegationData) return 0n;
-        return getStakingRewards(system.activeValidators, delegationData);
-    }, [delegationData, system]);
+        if (!validatorData || !delegationData) return 0n;
+        return getStakingRewards(validatorData, delegationData);
+    }, [delegationData, validatorData]);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;

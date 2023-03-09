@@ -58,15 +58,11 @@ export function ValidatorsCard() {
                 return delegation.stakes.reduce((acc, d) => {
                     const validator = activeValidators.find(
                         ({ suiAddress }) =>
-                        suiAddress === delegation.validatorAddress
+                            suiAddress === delegation.validatorAddress
                     );
                     return (
                         acc +
-                        BigInt(
-                            validator
-                                ? getStakingRewards(validator, d.principal)
-                                : 0
-                        )
+                        BigInt(validator ? getStakingRewards(validator, d) : 0)
                     );
                 }, 0n);
             })[0] || 0n

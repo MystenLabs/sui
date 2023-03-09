@@ -11,7 +11,7 @@ export const getStakeSuiBySuiId = (
     return (
         allDelegation.reduce((acc, curr) => {
             const total = BigInt(
-                curr.delegations.find(
+                curr.stakes.find(
                     ({ stakedSuiId }) => stakedSuiId === stakeSuiId
                 )?.principal || 0
             );

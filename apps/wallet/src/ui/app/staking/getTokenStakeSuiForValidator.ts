@@ -11,7 +11,7 @@ export const getTokenStakeSuiForValidator = (
     return (
         allDelegation.reduce((acc, curr) => {
             if (validatorAddress === curr.validatorAddress) {
-                return curr.delegations.reduce(
+                return curr.stakes.reduce(
                     (total, { principal }) => total + BigInt(principal),
                     acc
                 );

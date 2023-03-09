@@ -8,7 +8,7 @@ export const getAllStakeSui = (allDelegation: DelegatedStake[]) => {
     return (
         allDelegation.reduce(
             (acc, curr) =>
-                curr.delegations.reduce(
+                curr.stakes.reduce(
                     (total, { principal }) => total + BigInt(principal),
                     acc
                 ),

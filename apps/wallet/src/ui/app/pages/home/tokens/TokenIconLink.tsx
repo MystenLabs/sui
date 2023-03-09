@@ -32,7 +32,7 @@ export function TokenIconLink({
 
         return delegatedStake.reduce(
             (acc, curr) =>
-                curr.delegations.reduce(
+                curr.stakes.reduce(
                     (total, { principal }) => total + BigInt(principal),
                     acc
                 ),

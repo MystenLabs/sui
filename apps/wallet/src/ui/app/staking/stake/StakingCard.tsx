@@ -14,7 +14,6 @@ import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Alert from '../../components/alert';
-import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -71,7 +70,7 @@ function StakingCard() {
         return getStakeSuiBySuiId(allDelegation, stakeSuiIdParams);
     }, [allDelegation, stakeSuiIdParams]);
 
-    const delegationData = useMemo(() => {
+    const stakeData = useMemo(() => {
         if (!allDelegation || !stakeSuiIdParams) return null;
         // return delegation data for a specific stakeId
         return getDelegationDataByStakeId(allDelegation, stakeSuiIdParams);
@@ -82,7 +81,7 @@ function StakingCard() {
         [coinType]
     );
 
-    const suiEarned = delegationData?.estimatedReward || 0;
+    const suiEarned = stakeData?.estimatedReward || 0;
 
     const [coinDecimals] = useCoinDecimals(coinType);
 
@@ -99,9 +98,9 @@ function StakingCard() {
 
     const queryClient = useQueryClient();
     const delegationId = useMemo(() => {
-        if (!delegationData || delegationData.status === 'Pending') return null;
-        return delegationData.stakedSuiId;
-    }, [delegationData]);
+        if (!stakeData || stakeData.status === 'Pending') return null;
+        return stakeData.stakedSuiId;
+    }, [stakeData]);
 
     const navigate = useNavigate();
     const signer = useSigner();
@@ -122,12 +121,7 @@ function StakingCard() {
             trackEvent('Stake', {
                 props: { validator: validatorAddress },
             });
-            const response = await Coin.stakeCoin(
-                signer,
-                amount,
-                validatorAddress
-            );
-            return response;
+            return Coin.stakeCoin(signer, amount, validatorAddress);
         },
     });
     const unStakeToken = useMutation({
@@ -146,12 +140,7 @@ function StakingCard() {
 
             trackEvent('Unstake');
 
-            const response = await Coin.unStakeCoin(
-                signer,
-                delegationId,
-                stakeSuId
-            );
-            return response;
+            return Coin.unStakeCoin(signer, delegationId, stakeSuId);
         },
     });
 
@@ -170,14 +159,14 @@ function StakingCard() {
                 if (unstake) {
                     // check for delegation data
                     if (
-                        !delegationData ||
+                        !stakeData ||
                         !stakeSuiIdParams ||
-                        delegationData.status === 'Pending'
+                        stakeData.status === 'Pending'
                     ) {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
-                        delegationId: delegationData.stakedSuiId,
+                        delegationId: stakeData.stakedSuiId,
                         stakeSuId: stakeSuiIdParams,
                     });
 
@@ -229,7 +218,7 @@ function StakingCard() {
             unstake,
             queryClient,
             navigate,
-            delegationData,
+            stakeData,
             stakeSuiIdParams,
             unStakeToken,
             stakeToken,
@@ -296,7 +285,7 @@ function StakingCard() {
                                         <Collapse
                                             title={
                                                 STATE_TO_COPY[
-                                                    delegationData?.status ===
+                                                    stakeData?.status ===
                                                     'Pending'
                                                         ? DelegationState.WARM_UP
                                                         : DelegationState.EARNING
