@@ -186,7 +186,7 @@ impl<S> TemporaryStore<S> {
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    /// TODO (Ade): make more efficient by minimizing clones
+    /// TODO: can we make this more efficient e.g by minimizing clones
     pub fn inner(&self) -> InnerTemporaryStore {
         #[cfg(debug_assertions)]
         {
@@ -580,7 +580,7 @@ impl<S> TemporaryStore<S> {
         Ok(())
     }
 
-    /// TODO (Ade): make more efficient by minimizing clones
+    /// TODO: can we make this more efficient e.g by minimizing clones
     pub fn to_effects(
         &mut self,
         shared_object_refs: Vec<ObjectRef>,
@@ -912,10 +912,10 @@ impl<S> TemporaryStore<S> {
         self.deleted.insert(*id, (ctx.clone(), version, kind));
     }
 
-    /// Resets any mutations and deletions recorded in the store. Ignore object IDs in `exclude`
-    pub fn reset(&mut self, exclude: BTreeSet<ObjectID>) {
-        self.written.retain(|q, _| exclude.contains(q));
-        self.deleted.retain(|q, _| exclude.contains(q));
+    /// Resets any mutations and deletions recorded in the store. Ignore object IDs in `retain_ids`
+    pub fn reset(&mut self, retain_ids: BTreeSet<ObjectID>) {
+        self.written.retain(|q, _| retain_ids.contains(q));
+        self.deleted.retain(|q, _| retain_ids.contains(q));
         self.events.clear();
     }
 
