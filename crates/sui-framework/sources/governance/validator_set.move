@@ -73,6 +73,22 @@ module sui::validator_set {
         tallying_rule_global_score: u64,
     }
 
+    /// Event emitted every time a new validator joins the committee.
+    /// The epoch value corresponds to the first epoch this change takes place.
+    struct ValidatorJoinEvent has copy, drop {
+        epoch: u64,
+        validator_address: address,
+        staking_pool_id: ID,
+    }
+
+    /// Event emitted every time a validator leaves the committee.
+    /// The epoch value corresponds to the first epoch this change takes place.
+    struct ValidatorLeaveEvent has copy, drop {
+        epoch: u64,
+        validator_address: address,
+        staking_pool_id: ID,
+    }
+
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
     // Errors
@@ -599,6 +615,14 @@ module sui::validator_set {
             clean_report_records_leaving_validator(
                 validator_report_records, validator::sui_address(&validator));
 
+            event::emit(
+                ValidatorLeaveEvent {
+                    epoch: new_epoch,
+                    validator_address: validator::sui_address(&validator),
+                    staking_pool_id: staking_pool_id(&validator),
+                }
+            );
+
             // Deactivate the validator and its staking pool
             validator::deactivate(&mut validator, new_epoch);
             table::add(&mut self.inactive_validators, validator_pool_id, validator);
@@ -638,6 +662,13 @@ module sui::validator_set {
         while (!table_vec::is_empty(&self.pending_active_validators)) {
             let validator = table_vec::pop_back(&mut self.pending_active_validators);
             validator::activate(&mut validator, new_epoch);
+            event::emit(
+                ValidatorJoinEvent {
+                    epoch: new_epoch,
+                    validator_address: validator::sui_address(&validator),
+                    staking_pool_id: staking_pool_id(&validator),
+                }
+            );
             vector::push_back(&mut self.active_validators, validator);
         }
     }
