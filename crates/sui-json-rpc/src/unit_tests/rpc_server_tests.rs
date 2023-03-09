@@ -360,7 +360,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 
     let result: CoinPage = http_client.get_coins(*address, None, None, None).await?;
     assert_eq!(5, result.data.len());
-    assert_eq!(None, result.next_cursor);
+    assert!(!result.has_next_page);
 
     let result: CoinPage = http_client
         .get_coins(*address, Some("0x2::sui::TestCoin".into()), None, None)
@@ -371,14 +371,14 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
         .get_coins(*address, Some("0x2::sui::SUI".into()), None, None)
         .await?;
     assert_eq!(5, result.data.len());
-    assert_eq!(None, result.next_cursor);
+    assert!(!result.has_next_page);
 
     // Test paging
     let result: CoinPage = http_client
         .get_coins(*address, Some("0x2::sui::SUI".into()), None, Some(3))
         .await?;
     assert_eq!(3, result.data.len());
-    assert!(result.next_cursor.is_some());
+    assert!(result.has_next_page);
 
     let result: CoinPage = http_client
         .get_coins(
@@ -389,7 +389,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
         )
         .await?;
     assert_eq!(2, result.data.len());
-    assert!(result.next_cursor.is_none());
+    assert!(!result.has_next_page);
 
     Ok(())
 }
@@ -696,6 +696,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
+    assert!(tx.has_next_page);
 
     // test get all transactions paged
     let first_page = client
@@ -704,16 +705,15 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
-    assert!(first_page.next_cursor.is_some());
+    assert!(first_page.has_next_page);
 
-    // test get all transactions in ascending order
     let second_page = client
         .read_api()
         .get_transactions(TransactionQuery::All, first_page.next_cursor, None, false)
         .await
         .unwrap();
     assert_eq!(16, second_page.data.len());
-    assert!(second_page.next_cursor.is_none());
+    assert!(!second_page.has_next_page);
 
     let mut all_txs_rev = first_page.data.clone();
     all_txs_rev.extend(second_page.data);
@@ -726,9 +726,9 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
-
-    assert_eq!(Some(all_txs_rev[10]), latest.next_cursor);
+    assert_eq!(Some(all_txs_rev[9]), latest.next_cursor);
     assert_eq!(all_txs_rev[0..10], latest.data);
+    assert!(latest.has_next_page);
 
     // test get from address txs in ascending order
     let address_txs_asc = client
@@ -850,8 +850,8 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    assert_eq!(15, page2.data.len());
-    assert_eq!(None, page2.next_cursor);
+    assert_eq!(14, page2.data.len());
+    assert!(!page2.has_next_page);
 
     // test get all events descending
     let page1 = client
@@ -860,13 +860,13 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((tx_responses[16].digest, 0).into()), page1.next_cursor);
+    assert_eq!(Some((tx_responses[17].digest, 0).into()), page1.next_cursor);
 
     let page2 = client
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[16].digest, 0).into()),
+            Some((tx_responses[17].digest, 0).into()),
             None,
             true,
         )
@@ -874,7 +874,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .unwrap();
     // 17 events created by this test + 44 Genesis event
     assert_eq!(61, page2.data.len());
-    assert_eq!(None, page2.next_cursor);
+    assert!(!page2.has_next_page);
 
     // test get sender events
     let page = client

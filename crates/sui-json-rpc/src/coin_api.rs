@@ -85,6 +85,7 @@ impl CoinReadApi {
         &self,
         owner: SuiAddress,
         coin_type: Option<StructTag>,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> Result<CoinPage, Error> {
@@ -93,17 +94,24 @@ impl CoinReadApi {
         let mut coins = self
             .get_owner_coin_iterator(owner, &coin_type)?
             .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != o))
+            // skip an extra b/c the cursor is exclusive
+            .skip(usize::from(cursor.is_some()))
             .take(limit + 1)
             .collect::<Vec<_>>();
 
-        let next_cursor = coins.get(limit).cloned();
+        let has_next_page = coins.len() > limit;
         coins.truncate(limit);
+        let next_cursor = coins.last().cloned().map_or(cursor, Some);
 
         let mut data = vec![];
         for coin in coins {
             data.push(self.get_coin(&coin).await?)
         }
-        Ok(CoinPage { data, next_cursor })
+        Ok(CoinPage {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     fn get_owner_coin_iterator<'a>(
@@ -173,6 +181,7 @@ impl CoinReadApiServer for CoinReadApi {
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
@@ -188,6 +197,7 @@ impl CoinReadApiServer for CoinReadApi {
     async fn get_all_coins(
         &self,
         owner: SuiAddress,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {

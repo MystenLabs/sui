@@ -65,6 +65,7 @@ impl EventReadApiServer for EventReadApi {
     async fn get_events(
         &self,
         query: EventQuery,
+        // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -81,12 +82,17 @@ impl EventReadApiServer for EventReadApi {
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .query_events(query, cursor, limit + 1, descending)
+            .query_events(query, cursor.clone(), limit + 1, descending)
             .await?;
-        let next_cursor = data.get(limit).map(|(id, _)| id.clone());
+        let has_next_page = data.len() > limit;
         data.truncate(limit);
+        let next_cursor = data.last().cloned().map_or(cursor, |(id, _)| Some(id));
         let data = data.into_iter().map(|(_, event)| event).collect();
-        Ok(EventPage { data, next_cursor })
+        Ok(EventPage {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     fn subscribe_event(
