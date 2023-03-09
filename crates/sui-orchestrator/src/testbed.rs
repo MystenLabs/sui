@@ -207,6 +207,8 @@ impl<C: ServerProviderClient> Testbed<C> {
     where
         I: Iterator<Item = &'a Instance> + Clone,
     {
+        let instances_ids: Vec<_> = instances.map(|x| x.id.clone()).collect();
+
         let mut interval = time::interval(Duration::from_secs(5));
         interval.tick().await; // The first tick returns immediately.
 
@@ -216,10 +218,14 @@ impl<C: ServerProviderClient> Testbed<C> {
             let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
             display::status(format!("{elapsed}s"));
 
-            let futures = instances.clone().map(|instance| {
-                let private_key_file = self.settings.ssh_private_key_file.clone();
-                SshConnection::new(instance.ssh_address(), C::USERNAME, private_key_file)
-            });
+            let instances = self.client.list_instances().await?;
+            let futures = instances
+                .iter()
+                .filter(|x| instances_ids.contains(&x.id))
+                .map(|instance| {
+                    let private_key_file = self.settings.ssh_private_key_file.clone();
+                    SshConnection::new(instance.ssh_address(), C::USERNAME, private_key_file)
+                });
             if try_join_all(futures).await.is_ok() {
                 break;
             }
