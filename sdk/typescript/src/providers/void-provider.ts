@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { HttpHeaders } from '../rpc/client';
-import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   TransactionDigest,
   GetTxnDigestsResponse,
@@ -165,7 +164,7 @@ export class VoidProvider extends Provider {
 
   devInspectTransaction(
     _sender: SuiAddress,
-    _txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
+    _txn: Transaction | string | Uint8Array,
     _gasPrice: number | null = null,
     _epoch: number | null = null,
   ): Promise<DevInspectResults> {
