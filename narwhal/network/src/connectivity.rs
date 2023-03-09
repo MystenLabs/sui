@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::PeerId;
-use metrics::{histogram, gauge};
+use metrics::gauge;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -64,7 +64,7 @@ impl ConnectionMonitor {
 
         // now report the connected peers
         let mut peer_count: usize = connected_peers.len();
-        histogram!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
+        gauge!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
         for peer_id in connected_peers {
             self.handle_peer_connect(peer_id);
         }
@@ -73,12 +73,12 @@ impl ConnectionMonitor {
             match event {
                 anemo::types::PeerEvent::NewPeer(peer_id) => {
                     peer_count += 1;
-                    histogram!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
+                    gauge!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
                     self.handle_peer_connect(peer_id);
                 }
                 anemo::types::PeerEvent::LostPeer(peer_id, _) => {
                     peer_count = peer_count.saturating_sub(1);
-                    histogram!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
+                    gauge!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
                     self.handle_peer_disconnect(peer_id);
                 }
             }
@@ -97,7 +97,7 @@ impl ConnectionMonitor {
 
     fn handle_peer_disconnect(&self, peer_id: PeerId) {
         use snarkos_metrics::network::labels::PEER_ID;
-        
+
         if let Some(ty) = self.peer_id_types.get(&peer_id) {
             gauge!(snarkos_metrics::network::NETWORK_PEER_CONNECTED, 0.0, PEER_ID => ty.to_string());
         }
