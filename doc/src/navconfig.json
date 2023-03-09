@@ -126,6 +126,10 @@
 				"fileName": "build/sui-local-network"
 			},
 			{
+				"label": "Accessing Time in Sui Move",
+				"filename": "build/time"
+			},
+			{
 				"label": "Create Smart Contracts with Move",
 				"fileName": "build/move/index",
 				"title": "Smart Contracts with Move",
