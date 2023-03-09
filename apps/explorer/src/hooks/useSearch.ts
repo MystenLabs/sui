@@ -29,7 +29,7 @@ const getResultsForTransaction = async (
 ) => {
     if (!isValidTransactionDigest(query)) return null;
 
-    const txdata = await rpc.getTransactionWithEffects(query);
+    const txdata = await rpc.getTransactionResponse(query);
     return {
         label: 'transaction',
         results: [

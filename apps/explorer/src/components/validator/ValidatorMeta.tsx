@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { toB64, type Validator } from '@mysten/sui.js';
+import { toB64, type SuiValidatorSummary } from '@mysten/sui.js';
 
 import { StakeButton } from './StakeButton';
 
@@ -13,18 +13,18 @@ import { AddressLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
 type ValidatorMetaProps = {
-    validatorData: Validator;
+    validatorData: SuiValidatorSummary;
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
     const validatorPublicKey = toB64(
-        new Uint8Array(validatorData.metadata.protocol_pubkey_bytes)
+        new Uint8Array(validatorData.protocol_pubkey_bytes)
     );
 
-    const validatorName = validatorData.metadata.name;
-    const logo = validatorData.metadata.image_url;
-    const description = validatorData.metadata.description;
-    const projectUrl = validatorData.metadata.project_url;
+    const validatorName = validatorData.name;
+    const logo = validatorData.image_url;
+    const description = validatorData.description;
+    const projectUrl = validatorData.project_url;
 
     return (
         <>
@@ -69,7 +69,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </DescriptionItem>
                     <DescriptionItem title="Address">
                         <AddressLink
-                            address={validatorData.metadata.sui_address}
+                            address={validatorData.sui_address}
                             noTruncate
                         />
                     </DescriptionItem>

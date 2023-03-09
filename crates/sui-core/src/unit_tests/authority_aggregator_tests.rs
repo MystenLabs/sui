@@ -84,7 +84,8 @@ pub fn transfer_object_move_transaction(
             gas_object_ref,
             args,
             GAS_VALUE_FOR_TESTING / 2,
-        ),
+        )
+        .unwrap(),
         secret,
     )
 }
@@ -113,7 +114,8 @@ pub fn create_object_move_transaction(
             gas_object_ref,
             arguments,
             GAS_VALUE_FOR_TESTING / 2,
-        ),
+        )
+        .unwrap(),
         secret,
     )
 }
@@ -135,7 +137,8 @@ pub fn delete_object_move_transaction(
             gas_object_ref,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
             GAS_VALUE_FOR_TESTING / 2,
-        ),
+        )
+        .unwrap(),
         secret,
     )
 }
@@ -163,7 +166,8 @@ pub fn set_object_move_transaction(
             gas_object_ref,
             args,
             GAS_VALUE_FOR_TESTING / 2,
-        ),
+        )
+        .unwrap(),
         secret,
     )
 }

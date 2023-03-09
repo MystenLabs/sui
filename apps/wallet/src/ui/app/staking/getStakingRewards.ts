@@ -3,10 +3,10 @@
 
 import BigNumber from 'bignumber.js';
 
-import type { Validator, DelegatedStake } from '@mysten/sui.js';
+import type { SuiValidatorSummary, DelegatedStake } from '@mysten/sui.js';
 
 export function getStakingRewards(
-    activeValidators: Validator[],
+    activeValidators: SuiValidatorSummary[],
     delegation: DelegatedStake
 ) {
     if (
@@ -17,7 +17,7 @@ export function getStakingRewards(
         return 0;
     const pool_id = delegation.staked_sui.pool_id;
     const validator = activeValidators.find(
-        (validator) => validator.staking_pool.id === pool_id
+        (validator) => validator.staking_pool_id === pool_id
     );
 
     if (!validator) return 0;
@@ -25,10 +25,8 @@ export function getStakingRewards(
     const poolTokens = new BigNumber(
         delegation.delegation_status.Active.pool_tokens.value
     );
-    const delegationTokenSupply = new BigNumber(
-        validator.staking_pool.pool_token_balance
-    );
-    const suiBalance = new BigNumber(validator.staking_pool.sui_balance);
+    const delegationTokenSupply = new BigNumber(validator.pool_token_balance);
+    const suiBalance = new BigNumber(validator.staking_pool_sui_balance);
     const pricipalAmout = new BigNumber(
         delegation.delegation_status.Active.principal_sui_amount
     );

@@ -1222,7 +1222,8 @@ impl AuthorityPerEpochStore {
         certified_checkpoint: &CertifiedCheckpointSummary,
     ) -> Result<(), TypedStoreError> {
         let signed_authorities = certified_checkpoint
-            .signatory_authorities(&self.committee)
+            .auth_sig()
+            .authorities(&self.committee)
             .collect::<Result<Vec<&AuthorityName>, _>>()
             // using `expect` here is fine because this error would be caught much earlier
             .expect("Certified checkpoint should be valid");
@@ -1232,7 +1233,7 @@ impl AuthorityPerEpochStore {
             signed_authorities
         );
 
-        let seq_num = certified_checkpoint.sequence_number();
+        let seq_num = *certified_checkpoint.sequence_number();
 
         let old_values = self
             .tables
@@ -1553,8 +1554,8 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::CheckpointSignature(data),
                 ..
             }) => {
-                if transaction.sender_authority() != data.summary.auth_signature.authority {
-                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_signature.authority, transaction.certificate.origin() );
+                if transaction.sender_authority() != data.summary.auth_sig().authority {
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_sig().authority, transaction.certificate.origin() );
                     return Err(());
                 }
             }

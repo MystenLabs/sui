@@ -8,7 +8,7 @@ import {
     getTransferObjectTransaction,
     getTransactionKindName,
     getTransactionSender,
-    getTransactions,
+    getTransactionKinds,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 
@@ -145,10 +145,13 @@ export function getAmount({
     suiCoinOnly?: boolean;
 }) {
     const { effects, events } = txnData;
-    const txnDetails = getTransactions(txnData)[0];
+    const txnDetails = getTransactionKinds(txnData)![0];
     const sender = getTransactionSender(txnData);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
-    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(events, sender);
+    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(
+        events!,
+        sender!
+    );
     const transfers = suiTransfer || coinBalanceChange;
     if (suiCoinOnly) {
         return transfers?.filter(({ coinType }) => coinType === SUI_TYPE_ARG);

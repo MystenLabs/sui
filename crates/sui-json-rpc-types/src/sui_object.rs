@@ -183,7 +183,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase", rename = "ObjectContentOptions", default)]
+#[serde(rename_all = "camelCase", rename = "ObjectDataOptions", default)]
 pub struct SuiObjectDataOptions {
     /// Whether to show the type of the object. Default to be False
     pub show_type: bool,
@@ -740,6 +740,7 @@ impl SuiRawMoveObject {
 #[serde(rename = "RawMovePackage", rename_all = "camelCase")]
 pub struct SuiRawMovePackage {
     pub id: ObjectID,
+    pub version: SequenceNumber,
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
     pub module_map: BTreeMap<String, Vec<u8>>,
@@ -749,6 +750,7 @@ impl From<MovePackage> for SuiRawMovePackage {
     fn from(p: MovePackage) -> Self {
         Self {
             id: p.id(),
+            version: p.version(),
             module_map: p.serialized_module_map().clone(),
         }
     }

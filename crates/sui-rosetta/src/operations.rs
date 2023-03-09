@@ -3,14 +3,18 @@
 
 use anyhow::anyhow;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::vec;
+use sui_json_rpc_types::SuiArgument;
+use sui_json_rpc_types::SuiCommand;
+use sui_json_rpc_types::SuiProgrammableMoveCall;
+use sui_json_rpc_types::SuiProgrammableTransaction;
+use sui_sdk::json::SuiJsonValue;
 
 use serde::Deserialize;
 use serde::Serialize;
 use sui_sdk::rpc_types::{
-    SuiEvent, SuiMoveCall, SuiPaySui, SuiTransactionData, SuiTransactionDataAPI,
-    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+    SuiEvent, SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionKind, SuiTransactionResponse,
 };
 
 use sui_types::base_types::{SequenceNumber, SuiAddress};
@@ -129,13 +133,18 @@ impl Operations {
         self,
         locked_until_epoch: Option<EpochId>,
     ) -> Result<InternalOperation, Error> {
-        if self.0.len() != 1 {
+        let mut ops = self
+            .0
+            .into_iter()
+            .filter(|op| op.type_ == OperationType::Delegation)
+            .collect::<Vec<_>>();
+        if ops.len() != 1 {
             return Err(Error::MalformedOperationError(
                 "Delegation should only have one operation.".into(),
             ));
         }
         // Checked above, safe to unwrap.
-        let op = self.into_iter().next().unwrap();
+        let op = ops.pop().unwrap();
         let sender = op
             .account
             .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
@@ -168,64 +177,186 @@ impl Operations {
         status: Option<OperationStatus>,
     ) -> Result<Vec<Operation>, Error> {
         Ok(match tx {
-            SuiTransactionKind::PaySui(tx) => Self::parse_pay_sui_operations(sender, tx, status),
-            SuiTransactionKind::Call(tx) => Self::parse_call_operations(sender, status, tx)?,
+            SuiTransactionKind::ProgrammableTransaction(pt) => {
+                Self::parse_programmable_transaction(sender, status, pt)?
+            }
             _ => vec![Operation::generic_op(status, sender, tx)],
         })
     }
 
-    fn parse_call_operations(
+    fn parse_programmable_transaction(
         sender: SuiAddress,
         status: Option<OperationStatus>,
-        tx: SuiMoveCall,
+        pt: SuiProgrammableTransaction,
     ) -> Result<Vec<Operation>, Error> {
-        if Self::is_delegation_call(&tx) {
-            let (amount, validator) = match &tx.arguments[..] {
+        enum KnownValue {
+            GasCoin(u64),
+        }
+        macro_rules! bcs_json_to_value {
+            ($value:expr) => {
+                $value.to_json_value().as_array().and_then(|v| {
+                    // value is a byte array
+                    let bytes = v
+                        .iter()
+                        .flat_map(|v| v.as_u64().map(|n| n as u8))
+                        .collect::<Vec<_>>();
+                    bcs::from_bytes(&bytes).ok()
+                })
+            };
+        }
+        fn resolve_result(
+            known_results: &[Vec<KnownValue>],
+            i: u16,
+            j: u16,
+        ) -> Option<&KnownValue> {
+            known_results
+                .get(i as usize)
+                .and_then(|inner| inner.get(j as usize))
+        }
+        fn split_coin(
+            inputs: &[SuiJsonValue],
+            _known_results: &[Vec<KnownValue>],
+            _coin: SuiArgument,
+            amount: SuiArgument,
+        ) -> Option<Vec<KnownValue>> {
+            let amount: u64 = match amount {
+                SuiArgument::Input(i) => bcs_json_to_value!(&inputs[i as usize])?,
+                SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
+                    return None
+                }
+            };
+            Some(vec![KnownValue::GasCoin(amount)])
+        }
+        fn transfer_object(
+            aggregated_recipients: &mut HashMap<SuiAddress, u64>,
+            inputs: &[SuiJsonValue],
+            known_results: &[Vec<KnownValue>],
+            objs: &[SuiArgument],
+            recipient: SuiArgument,
+        ) -> Option<Vec<KnownValue>> {
+            let addr = match recipient {
+                SuiArgument::Input(i) => inputs[i as usize].to_sui_address().ok()?,
+                SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
+                    return None
+                }
+            };
+            for obj in objs {
+                let value = match *obj {
+                    SuiArgument::Result(i) => {
+                        let KnownValue::GasCoin(value) = resolve_result(known_results, i, 0)?;
+                        value
+                    }
+                    SuiArgument::NestedResult(i, j) => {
+                        let KnownValue::GasCoin(value) = resolve_result(known_results, i, j)?;
+                        value
+                    }
+                    SuiArgument::GasCoin | SuiArgument::Input(_) => return None,
+                };
+                let aggregate = aggregated_recipients.entry(addr).or_default();
+                *aggregate += value;
+            }
+            Some(vec![])
+        }
+        fn delegation_call(
+            inputs: &[SuiJsonValue],
+            _known_results: &[Vec<KnownValue>],
+            call: &SuiProgrammableMoveCall,
+        ) -> Result<Option<(Option<u64>, SuiAddress)>, Error> {
+            let SuiProgrammableMoveCall { arguments, .. } = call;
+            let (amount, validator) = match &arguments[..] {
                 [_, _, amount, validator] => {
-                    let amount = amount.to_json_value().as_array().and_then(|v| {
-                        // value is a byte array
-                        let bytes = v.iter().flat_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>();
-                        if let Ok(Some(amount)) = bcs::from_bytes::<Option<u64>>(&bytes) {
-                            Some(amount as u128)
-                        } else { None }
-                    });
-                    let validator = validator
-                        .to_json_value()
-                        .as_str()
-                        .map(SuiAddress::from_str)
-                        .transpose()?
-                        .ok_or_else(|| Error::InternalError(anyhow!("Error parsing Validator address from call arg.")))?;
+                    let amount = match amount {
+                        SuiArgument::Input(i) => match bcs_json_to_value!(&inputs[*i as usize]){
+                            Some(amount) => amount,
+                            None => return Ok(None),
+                        },
+                        SuiArgument::GasCoin |
+                        SuiArgument::Result(_) |
+                        SuiArgument::NestedResult(_, _) => return Ok(None),
+                    };
+                    let validator = match validator {
+                        SuiArgument::Input(i) => inputs[*i as usize].to_sui_address(),
+                        SuiArgument::GasCoin |
+                        SuiArgument::Result(_) |
+                        SuiArgument::NestedResult(_, _) => return Ok(None),
+                    };
                     (amount, validator)
                 },
-                _ => return Err(Error::InternalError(anyhow!("Error encountered when extracting arguments from move call, expecting 4 elements, got {}", tx.arguments.len()))),
+                _ => return Err(Error::InternalError(anyhow!("Error encountered when extracting arguments from move call, expecting 4 elements, got {}", arguments.len()))),
             };
-
-            let amount = amount.map(|amount| Amount::new(-(amount as i128)));
-
-            return Ok(vec![Operation {
-                operation_identifier: Default::default(),
-                type_: OperationType::Delegation,
-                status,
-                account: Some(sender.into()),
-                amount,
-                coin_change: None,
-                metadata: Some(OperationMetadata::Delegation { validator }),
-            }]);
+            let validator = validator.map_err(|_| {
+                Error::InternalError(anyhow!("Error parsing Validator address from call arg."))
+            })?;
+            Ok(Some((amount, validator)))
         }
-        Ok(vec![Operation::generic_op(
-            status,
-            sender,
-            SuiTransactionKind::Call(tx),
-        )])
+
+        let SuiProgrammableTransaction { inputs, commands } = &pt;
+        let mut known_results: Vec<Vec<KnownValue>> = vec![];
+        let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
+        let mut needs_generic = false;
+        let mut operations = vec![];
+        for command in commands {
+            let result = match command {
+                SuiCommand::SplitCoin(coin, amount) => {
+                    split_coin(inputs, &known_results, *coin, *amount)
+                }
+                SuiCommand::TransferObjects(objs, addr) => transfer_object(
+                    &mut aggregated_recipients,
+                    inputs,
+                    &known_results,
+                    objs,
+                    *addr,
+                ),
+                SuiCommand::MoveCall(m) if Self::is_delegation_call(m) => {
+                    delegation_call(inputs, &known_results, m)?.map(|(amount, validator)| {
+                        let amount = amount.map(|amount| Amount::new(-(amount as i128)));
+                        operations.push(Operation {
+                            operation_identifier: Default::default(),
+                            type_: OperationType::Delegation,
+                            status,
+                            account: Some(sender.into()),
+                            amount,
+                            coin_change: None,
+                            metadata: Some(OperationMetadata::Delegation { validator }),
+                        });
+                        vec![]
+                    })
+                }
+                _ => None,
+            };
+            if let Some(result) = result {
+                known_results.push(result)
+            } else {
+                needs_generic = true;
+                known_results.push(vec![])
+            }
+        }
+
+        let total_paid: u64 = aggregated_recipients.values().copied().sum();
+        operations.extend(
+            aggregated_recipients
+                .into_iter()
+                .map(|(recipient, amount)| Operation::pay_sui(status, recipient, amount.into())),
+        );
+        operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
+        if needs_generic {
+            operations.push(Operation::generic_op(
+                status,
+                sender,
+                SuiTransactionKind::ProgrammableTransaction(pt),
+            ))
+        }
+        Ok(operations)
     }
 
-    fn is_delegation_call(tx: &SuiMoveCall) -> bool {
+    fn is_delegation_call(tx: &SuiProgrammableMoveCall) -> bool {
         tx.package == SUI_FRAMEWORK_OBJECT_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
             && (tx.function == ADD_DELEGATION_LOCKED_COIN_FUN_NAME.as_str()
                 || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())
     }
 
+<<<<<<< HEAD
     fn parse_pay_sui_operations(
         sender: SuiAddress,
         tx: SuiPaySui,
@@ -247,6 +378,8 @@ impl Operations {
         pay_operations
     }
 
+=======
+>>>>>>> main
     fn get_balance_operation_from_events(
         events: &[SuiEvent],
         status: Option<OperationStatus>,
@@ -312,8 +445,22 @@ impl TryFrom<SuiTransactionData> for Operations {
 impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let status = Some(response.effects.into_status().into());
-        let ops: Operations = response.transaction.data.try_into()?;
+        let status = Some(
+            response
+                .effects
+                .ok_or_else(|| {
+                    Error::InternalError(anyhow!("Response effects should not be empty"))
+                })?
+                .into_status()
+                .into(),
+        );
+        let ops: Operations = response
+            .transaction
+            .ok_or_else(|| {
+                Error::InternalError(anyhow!("Response transaction should not be empty"))
+            })?
+            .data
+            .try_into()?;
         let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -334,7 +481,12 @@ impl TryFrom<SuiTransactionResponse> for Operations {
 
         // Extract coin change operations from events
         let coin_change_operations = Self::get_balance_operation_from_events(
-            &response.events.data,
+            &response
+                .events
+                .ok_or_else(|| {
+                    Error::InternalError(anyhow!("Response events should not be empty"))
+                })?
+                .data,
             status,
             accounted_balances,
         );

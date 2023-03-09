@@ -44,12 +44,12 @@ export function ValidatorFormDetail({
 
     const validatorData = useMemo(() => {
         if (!system) return null;
-        return system.validators.active_validators.find(
-            (av) => av.metadata.sui_address === validatorAddress
+        return system.active_validators.find(
+            (av) => av.sui_address === validatorAddress
         );
     }, [validatorAddress, system]);
 
-    const totalValidatorStake = validatorData?.staking_pool.sui_balance || 0;
+    const totalValidatorStake = validatorData?.staking_pool_sui_balance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;

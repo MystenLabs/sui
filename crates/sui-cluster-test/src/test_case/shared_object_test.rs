@@ -34,14 +34,16 @@ impl TestCaseImpl for SharedCounterTest {
         let response =
             increment_counter(wallet_context, address, None, package_ref.0, counter_id).await;
         assert_eq!(
-            *response.effects.status(),
+            *response.effects.as_ref().unwrap().status(),
             SuiExecutionStatus::Success,
             "Increment counter txn failed: {:?}",
-            response.effects.status()
+            *response.effects.as_ref().unwrap().status()
         );
 
         response
             .effects
+            .as_ref()
+            .unwrap()
             .shared_objects()
             .iter()
             .find(|o| o.object_id == counter_id)
@@ -49,6 +51,8 @@ impl TestCaseImpl for SharedCounterTest {
 
         let counter_version = response
             .effects
+            .as_ref()
+            .unwrap()
             .mutated()
             .iter()
             .find_map(|obj| {
@@ -67,8 +71,7 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in mutated");
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![*response.effects.transaction_digest()], 5)
-            .await;
+        ctx.let_fullnode_sync(vec![response.digest], 5).await;
 
         let counter_object = ObjectChecker::new(counter_id)
             .owner(Owner::Shared {

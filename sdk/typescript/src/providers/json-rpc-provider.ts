@@ -45,8 +45,6 @@ import {
   SuiObjectResponse,
   GetOwnedObjectsResponse,
   DelegatedStake,
-  ValidatorMetaData,
-  SuiSystemState,
   CoinBalance,
   CoinSupply,
   CheckpointDigest,
@@ -56,6 +54,7 @@ import {
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   CoinStruct,
+  SuiTransactionResponseOptions,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -186,108 +185,133 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Coins
-  async getCoins(
-    owner: SuiAddress,
-    coinType: string | null = null,
-    cursor: ObjectId | null = null,
-    limit: number | null = null,
-  ): Promise<PaginatedCoins> {
+  async getCoins(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
+
       return await this.client.requestWithType(
         'sui_getCoins',
-        [owner, coinType, cursor, limit],
+        {
+          owner: input.owner,
+          coin_type: input.coinType,
+          cursor: input.cursor,
+          limit: input.limit,
+        },
         PaginatedCoins,
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error getting coins for owner ${owner}: ${err}`);
+      throw new Error(`Error getting coins for owner ${input.owner}: ${err}`);
     }
   }
 
-  async getAllCoins(
-    owner: SuiAddress,
-    cursor: ObjectId | null = null,
-    limit: number | null = null,
-  ): Promise<PaginatedCoins> {
+  async getAllCoins(input: {
+    owner: SuiAddress;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
+
       return await this.client.requestWithType(
         'sui_getAllCoins',
-        [owner, cursor, limit],
+        { owner: input.owner, cursor: input.cursor, limit: input.limit },
         PaginatedCoins,
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error getting all coins for owner ${owner}: ${err}`);
+      throw new Error(
+        `Error getting all coins for owner ${input.owner}: ${err}`,
+      );
     }
   }
 
-  async getBalance(
-    owner: SuiAddress,
-    coinType: string | null = null,
-  ): Promise<CoinBalance> {
+  async getBalance(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+  }): Promise<CoinBalance> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
       return await this.client.requestWithType(
         'sui_getBalance',
-        [owner, coinType],
+        { owner: input.owner, coin_type: input.coinType },
         CoinBalance,
         this.options.skipDataValidation,
       );
     } catch (err) {
       throw new Error(
-        `Error getting balance for coin type ${coinType} for owner ${owner}: ${err}`,
+        `Error getting balance for coin type ${input.coinType} for owner ${input.owner}: ${err}`,
       );
     }
   }
 
-  async getAllBalances(owner: SuiAddress): Promise<CoinBalance[]> {
+  async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
     try {
-      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+      if (
+        !input.owner ||
+        !isValidSuiAddress(normalizeSuiAddress(input.owner))
+      ) {
         throw new Error('Invalid Sui address');
       }
       return await this.client.requestWithType(
         'sui_getAllBalances',
-        [owner],
+        { owner: input.owner },
         array(CoinBalance),
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error getting all balances for owner ${owner}: ${err}`);
+      throw new Error(
+        `Error getting all balances for owner ${input.owner}: ${err}`,
+      );
     }
   }
 
-  async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
+  async getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata> {
     try {
       return await this.client.requestWithType(
         'sui_getCoinMetadata',
-        [coinType],
+        { coin_type: input.coinType },
         CoinMetadataStruct,
         this.options.skipDataValidation,
       );
     } catch (err) {
-      throw new Error(`Error fetching CoinMetadata for ${coinType}: ${err}`);
+      throw new Error(
+        `Error fetching CoinMetadata for ${input.coinType}: ${err}`,
+      );
     }
   }
 
-  async getTotalSupply(coinType: string): Promise<CoinSupply> {
+  async getTotalSupply(input: { coinType: string }): Promise<CoinSupply> {
     try {
       return await this.client.requestWithType(
         'sui_getTotalSupply',
-        [coinType],
+        { coin_type: input.coinType },
         CoinSupply,
         this.options.skipDataValidation,
       );
     } catch (err) {
       throw new Error(
-        `Error fetching total supply for Coin type ${coinType}: ${err}`,
+        `Error fetching total supply for Coin type ${input.coinType}: ${err}`,
       );
     }
   }
@@ -428,20 +452,16 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getGasObjectsOwnedByAddress(
-    address: SuiAddress,
-  ): Promise<SuiObjectInfo[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     address: SuiAddress,
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
   ): Promise<CoinStruct[]> {
-    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinsStruct = await this.getCoins({
+      owner: address,
+      coinType: typeArg,
+    });
     return Coin.selectCoinsWithBalanceGreaterThanOrEqual(
       coinsStruct.data,
       amount,
@@ -455,7 +475,10 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
   ): Promise<CoinStruct[]> {
-    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinsStruct = await this.getCoins({
+      owner: address,
+      coinType: typeArg,
+    });
     const coins = coinsStruct.data;
 
     return Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -599,8 +622,9 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionWithEffects(
+  async getTransactionResponse(
     digest: TransactionDigest,
+    options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse> {
     try {
       if (!isValidTransactionDigest(digest)) {
@@ -608,7 +632,7 @@ export class JsonRpcProvider extends Provider {
       }
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
-        [digest],
+        [digest, options],
         SuiTransactionResponse,
         this.options.skipDataValidation,
       );
@@ -620,8 +644,9 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionWithEffectsBatch(
+  async getTransactionResponseBatch(
     digests: TransactionDigest[],
+    options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse[]> {
     try {
       const requests = digests.map((d) => {
@@ -630,7 +655,7 @@ export class JsonRpcProvider extends Provider {
         }
         return {
           method: 'sui_getTransaction',
-          args: [d],
+          args: [d, options],
         };
       });
       return await this.client.batchRequestWithType(
@@ -726,34 +751,6 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error in getDelegatedStake: ${err}`);
-    }
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getValidators',
-        [],
-        array(ValidatorMetaData),
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getValidators: ${err}`);
-    }
-  }
-
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getSuiSystemState',
-        [],
-        SuiSystemState,
-        this.options.skipDataValidation,
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getSuiSystemState: ${err}`);
     }
   }
 

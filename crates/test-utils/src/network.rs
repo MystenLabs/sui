@@ -19,6 +19,7 @@ use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
 use sui_config::genesis_config::GenesisConfig;
+use sui_config::node::DBCheckpointConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -209,6 +210,8 @@ pub struct TestClusterBuilder {
     epoch_duration_ms: Option<u64>,
     initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config_validators: DBCheckpointConfig,
+    db_checkpoint_config_fullnodes: DBCheckpointConfig,
 }
 
 impl TestClusterBuilder {
@@ -222,6 +225,8 @@ impl TestClusterBuilder {
             epoch_duration_ms: None,
             initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config_validators: DBCheckpointConfig::default(),
+            db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
         }
     }
 
@@ -247,6 +252,22 @@ impl TestClusterBuilder {
 
     pub fn enable_fullnode_events(mut self) -> Self {
         self.enable_fullnode_events = true;
+        self
+    }
+
+    pub fn with_enable_db_checkpoints_validators(mut self) -> Self {
+        self.db_checkpoint_config_validators = DBCheckpointConfig {
+            perform_db_checkpoints_at_epoch_end: true,
+            checkpoint_path: None,
+        };
+        self
+    }
+
+    pub fn with_enable_db_checkpoints_fullnodes(mut self) -> Self {
+        self.db_checkpoint_config_fullnodes = DBCheckpointConfig {
+            perform_db_checkpoints_at_epoch_end: true,
+            checkpoint_path: None,
+        };
         self
     }
 
@@ -293,6 +314,7 @@ impl TestClusterBuilder {
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             )
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes)
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
             .build()
@@ -332,6 +354,7 @@ impl TestClusterBuilder {
             )
             .with_objects(self.additional_objects.clone())
             .with_protocol_version(self.initial_protocol_version)
+            .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
                 self.supported_protocol_versions_config.clone(),
             );

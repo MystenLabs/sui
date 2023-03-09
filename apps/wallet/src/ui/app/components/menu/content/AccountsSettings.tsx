@@ -4,10 +4,11 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { LockLocked16 as LockedLockIcon } from '@mysten/icons';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { Account } from './Account';
-import { ConnectLedgerModal } from './ConnectLedgerModal';
 import { MenuLayout } from './MenuLayout';
+import { ConnectLedgerModal } from './ledger/ConnectLedgerModal';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
@@ -25,8 +26,15 @@ export function AccountsSettings() {
 
     const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] =
         useState(false);
+
     const { on: isLedgerIntegrationEnabled } = useFeature(
         FEATURES.WALLET_LEDGER_INTEGRATION
+    );
+
+    const navigate = useNavigate();
+    const importLedgerAccountsUrl = useNextMenuUrl(
+        true,
+        '/import-ledger-accounts'
     );
 
     return (
@@ -64,7 +72,10 @@ export function AccountsSettings() {
                         <ConnectLedgerModal
                             isOpen={isConnectLedgerModalOpen}
                             onClose={() => setConnectLedgerModalOpen(false)}
-                            onConfirm={() => setConnectLedgerModalOpen(false)}
+                            onConfirm={() => {
+                                setConnectLedgerModalOpen(false);
+                                navigate(importLedgerAccountsUrl);
+                            }}
                         />
                     </>
                 ) : null}

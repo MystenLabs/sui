@@ -12,7 +12,7 @@ export function useGetCoinBalance(
     const rpc = useRpcClient();
     return useQuery(
         ['coin-balance', address, coinType],
-        () => rpc.getBalance(address!, coinType),
+        () => rpc.getBalance({ owner: address!, coinType }),
         {
             enabled: !!address && !!coinType,
             refetchInterval: 4000,

@@ -21,8 +21,9 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiParsedData, SuiTransactionDataAPI,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiRawData, SuiTransactionDataAPI,
     SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
@@ -137,7 +138,10 @@ where
             |digests| {
                 self.rpc_client
                     .read_api()
-                    .multi_get_transactions(digests.to_vec())
+                    .multi_get_transactions_with_options(
+                        digests.to_vec(),
+                        SuiTransactionResponseOptions::full_content(),
+                    )
             },
         ))
         .await
@@ -150,11 +154,12 @@ where
         let all_mutated = transactions
             .iter()
             .flat_map(|tx| {
-                let created = tx.effects.created().iter();
+                let effects = tx.effects.as_ref().expect("effects should not be empty");
+                let created = effects.created().iter();
                 let created = created.map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
-                let mutated = tx.effects.mutated().iter();
+                let mutated = effects.mutated().iter();
                 let mutated = mutated.map(|o: &OwnedObjectRef| (o, ObjectStatus::Mutated));
-                let unwrapped = tx.effects.unwrapped().iter();
+                let unwrapped = effects.unwrapped().iter();
                 let unwrapped = unwrapped.map(|o: &OwnedObjectRef| (o, ObjectStatus::Unwrapped));
                 created.chain(mutated).chain(unwrapped)
             })
@@ -170,7 +175,7 @@ where
         let rpc = self.rpc_client.clone();
         let all_mutated_objects = join_all(all_mutated.into_iter().map(|(id, version, status)| {
             rpc.read_api()
-                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::full_content())
+                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::bcs_lossless())
                 .map(move |resp| (resp, status))
         }))
         .await
@@ -215,27 +220,32 @@ where
             .iter()
             .flat_map(|tx| {
                 let mut event_sequence = 0;
-                tx.events.data.iter().map(move |event| {
-                    // TODO: we should rethink how we store the raw event in DB
-                    let event_content = serde_json::to_string(event).map_err(|err| {
-                        IndexerError::InsertableParsingError(format!(
-                            "Failed converting event to JSON with error: {:?}",
-                            err
-                        ))
-                    })?;
-                    let event = Event {
-                        id: None,
-                        transaction_digest: tx.effects.transaction_digest().to_string(),
-                        event_sequence,
-                        event_time: tx
-                            .timestamp_ms
-                            .and_then(|t| NaiveDateTime::from_timestamp_millis(t as i64)),
-                        event_type: event.get_event_type(),
-                        event_content,
-                    };
-                    event_sequence += 1;
-                    Ok::<_, IndexerError>(event)
-                })
+                tx.events
+                    .as_ref()
+                    .expect("Events can only be None if there's an error in fetching or converting events")
+                    .data
+                    .iter()
+                    .map(move |event| {
+                        // TODO: we should rethink how we store the raw event in DB
+                        let event_content = serde_json::to_string(event).map_err(|err| {
+                            IndexerError::InsertableParsingError(format!(
+                                "Failed converting event to JSON with error: {:?}",
+                                err
+                            ))
+                        })?;
+                        let event = Event {
+                            id: None,
+                            transaction_digest: tx.digest.to_string(),
+                            event_sequence,
+                            event_time: tx
+                                .timestamp_ms
+                                .and_then(|t| NaiveDateTime::from_timestamp_millis(t as i64)),
+                            event_type: event.get_event_type(),
+                            event_content,
+                        };
+                        event_sequence += 1;
+                        Ok::<_, IndexerError>(event)
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -254,19 +264,19 @@ where
             .iter()
             .map(|tx| {
                 let all_mutated_objects = tx_objects
-                    .get(tx.effects.transaction_digest())
+                    .get(&tx.digest)
                     .unwrap_or(&vec![])
                     .iter()
                     .map(|(status, o)| {
                         Object::from(&checkpoint.epoch, &checkpoint.sequence_number, status, o)
                     })
                     .collect::<Vec<_>>();
-
-                let deleted = tx.effects.deleted().iter();
+                let effects = tx.effects.as_ref().expect("effects should not be empty");
+                let deleted = effects.deleted().iter();
                 let deleted = deleted.map(|o| (ObjectStatus::Deleted, o));
-                let wrapped = tx.effects.wrapped().iter();
+                let wrapped = effects.wrapped().iter();
                 let wrapped = wrapped.map(|o| (ObjectStatus::Wrapped, o));
-                let unwrapped_then_deleted = tx.effects.unwrapped_then_deleted().iter();
+                let unwrapped_then_deleted = effects.unwrapped_then_deleted().iter();
                 let unwrapped_then_deleted =
                     unwrapped_then_deleted.map(|o| (ObjectStatus::UnwrappedThenDeleted, o));
                 let all_deleted_objects = deleted
@@ -277,7 +287,7 @@ where
                             &checkpoint.epoch,
                             &checkpoint.sequence_number,
                             oref,
-                            tx.effects.transaction_digest(),
+                            &tx.digest,
                             status,
                         )
                     })
@@ -301,15 +311,25 @@ where
         let move_calls: Vec<MoveCall> = transactions
             .iter()
             .flat_map(|t| {
-                t.transaction.data.transactions().iter().map(move |tx| {
-                    (
-                        tx.clone(),
-                        t.effects.transaction_digest(),
-                        checkpoint.sequence_number,
-                        checkpoint.epoch,
-                        t.transaction.data.sender(),
-                    )
-                })
+                t.transaction
+                    .as_ref()
+                    .expect("transaction should not be empty")
+                    .data
+                    .transactions()
+                    .iter()
+                    .map(move |tx| {
+                        (
+                            tx.clone(),
+                            t.digest,
+                            checkpoint.sequence_number,
+                            checkpoint.epoch,
+                            t.transaction
+                                .as_ref()
+                                .expect("transaction should not be empty")
+                                .data
+                                .sender(),
+                        )
+                    })
             })
             .filter_map(
                 |(tx_kind, txn_digest, checkpoint_seq, epoch, sender)| match tx_kind {
@@ -331,16 +351,17 @@ where
         let recipients: Vec<Recipient> = transactions
             .iter()
             .flat_map(|tx| {
-                tx.effects
+                let effects = tx.effects.as_ref().expect("Effects should not be empty");
+                effects
                     .created()
                     .iter()
                     .cloned()
-                    .chain(tx.effects.mutated().iter().cloned())
-                    .chain(tx.effects.unwrapped().iter().cloned())
+                    .chain(effects.mutated().iter().cloned())
+                    .chain(effects.unwrapped().iter().cloned())
                     .filter_map(|obj_ref| match obj_ref.owner {
                         Owner::AddressOwner(address) => Some(Recipient {
                             id: None,
-                            transaction_digest: tx.effects.transaction_digest().to_string(),
+                            transaction_digest: effects.transaction_digest().to_string(),
                             checkpoint_sequence_number: checkpoint.sequence_number as i64,
                             epoch: checkpoint.epoch as i64,
                             recipient: address.to_string(),
@@ -382,8 +403,8 @@ where
         let object_map = all_mutated_objects
             .iter()
             .filter_map(|(_, o)| {
-                if let SuiParsedData::Package(p) = &o
-                    .content
+                if let SuiRawData::Package(p) = &o
+                    .bcs
                     .as_ref()
                     .expect("Expect the content field to be non-empty from data fetching")
                 {
@@ -397,15 +418,23 @@ where
         transactions
             .iter()
             .flat_map(|tx| {
-                tx.effects.created().iter().map(|oref| {
-                    object_map.get(&oref.reference.object_id).map(|o| {
-                        Package::try_from(
-                            oref.reference.object_id,
-                            *tx.transaction.data.sender(),
-                            o,
-                        )
+                tx.effects
+                    .as_ref()
+                    .expect("Effects in SuiTransactionResponse should not be empty")
+                    .created()
+                    .iter()
+                    .map(|oref| {
+                        object_map.get(&oref.reference.object_id).map(|o| {
+                            Package::try_from(
+                                *tx.transaction
+                                    .as_ref()
+                                    .expect("transaction should not be empty")
+                                    .data
+                                    .sender(),
+                                o,
+                            )
+                        })
                     })
-                })
             })
             .flatten()
             .collect()

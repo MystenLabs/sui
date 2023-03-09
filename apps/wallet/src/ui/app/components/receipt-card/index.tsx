@@ -9,7 +9,7 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
     SUI_TYPE_ARG,
-    getTransactions,
+    getTransactionKinds,
     getTransactionSender,
     getTransactionDigest,
     getGasData,
@@ -47,7 +47,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
     const isSuccessful = executionStatus === 'success';
-    const [transaction] = getTransactions(txn);
+    const [transaction] = getTransactionKinds(txn)!;
     const txnKind = getTransactionKindName(transaction);
 
     const recipientAddress = useGetTxnRecipientAddress({
@@ -61,7 +61,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
         return transferId
             ? transferId
-            : getTxnEffectsEventID(effects, events, activeAddress)[0];
+            : getTxnEffectsEventID(effects!, events!, activeAddress)[0];
     }, [transaction, effects, events, activeAddress]);
 
     const moveCallLabel = useMemo(() => {
@@ -85,7 +85,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const isStakeTxn =
         moveCallLabel === 'Staked' || moveCallLabel === 'Unstaked';
 
-    const { owner } = getGasData(txn);
+    const { owner } = getGasData(txn)!;
     const transactionSender = getTransactionSender(txn);
     const isSender = activeAddress === transactionSender;
     const isSponsoredTransaction = transactionSender !== owner;
@@ -147,8 +147,8 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                     {isStakeTxn ? (
                         moveCallLabel === 'Staked' ? (
                             <StakeTxnCard
-                                txnEffects={effects}
-                                events={events}
+                                txnEffects={effects!}
+                                events={events!}
                             />
                         ) : (
                             <UnStakeTxnCard
@@ -193,7 +193,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                                   />
 
                                                   <TxnAddress
-                                                      address={recipientAddress}
+                                                      address={
+                                                          recipientAddress!
+                                                      }
                                                       label={
                                                           isSender
                                                               ? 'To'
@@ -222,7 +224,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             {txnKind === 'ChangeEpoch' &&
                                 !transferAmount.length && (
                                     <TxnAddress
-                                        address={recipientAddress}
+                                        address={recipientAddress!}
                                         label="From"
                                     />
                                 )}

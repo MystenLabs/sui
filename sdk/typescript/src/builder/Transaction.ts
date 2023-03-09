@@ -230,22 +230,6 @@ export class Transaction {
       throw new Error('Missing gas budget');
     }
 
-    if (!this.#transactionData.gasConfig.payment) {
-      const coins = await expectProvider(provider).getCoins(
-        this.#transactionData.sender,
-        SUI_TYPE_ARG,
-        null,
-        null,
-      );
-
-      // TODO: Pick coins better, this is just a temporary hack.
-      this.#transactionData.gasConfig.payment = coins.data.map((coin) => ({
-        objectId: coin.coinObjectId,
-        digest: coin.digest,
-        version: coin.version,
-      }));
-    }
-
     if (!this.#transactionData.gasConfig.price) {
       this.#transactionData.gasConfig.price = String(
         await expectProvider(provider).getReferenceGasPrice(),
@@ -424,6 +408,44 @@ export class Transaction {
           input.value = Inputs.ObjectRef(getObjectReference(object)!);
         }
       });
+    }
+
+    if (!this.#transactionData.gasConfig.payment) {
+      const coins = await expectProvider(provider).getCoins({
+        owner: this.#transactionData.sender,
+        coinType: SUI_TYPE_ARG,
+      });
+
+      // TODO: Allow consumers to define coin selection logic, and refine the default behavior.
+      // The current default is just picking _all_ coins which may not be ideal.
+      this.#transactionData.gasConfig.payment = coins.data
+        // Filter out coins that are also used as input:
+        .filter((coin) => {
+          const matchingInput = this.#transactionData.inputs.find((input) => {
+            if (
+              is(input.value, BuilderCallArg) &&
+              'Object' in input.value &&
+              'ImmOrOwned' in input.value.Object
+            ) {
+              return (
+                coin.coinObjectId === input.value.Object.ImmOrOwned.objectId
+              );
+            }
+
+            return false;
+          });
+
+          return !matchingInput;
+        })
+        .map((coin) => ({
+          objectId: coin.coinObjectId,
+          digest: coin.digest,
+          version: coin.version,
+        }));
+
+      if (!this.#transactionData.gasConfig.payment.length) {
+        throw new Error('No valid gas coins found for the transaction.');
+      }
     }
 
     return this.#transactionData.build({ size });

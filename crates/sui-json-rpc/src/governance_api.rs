@@ -4,8 +4,7 @@
 use jsonrpsee::core::RpcResult;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_json_rpc_types::{SuiCommittee, SuiSystemStateRpc};
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorMetadataV1;
+use sui_json_rpc_types::SuiCommittee;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 use crate::api::GovernanceReadApiServer;
@@ -70,16 +69,6 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .collect())
     }
 
-    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadataV1>> {
-        // TODO: include pending validators as well when the necessary changes are made in move.
-        Ok(self
-            .state
-            .database
-            .get_sui_system_state_object()
-            .map_err(Error::from)?
-            .get_validator_metadata_vec())
-    }
-
     async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<SuiCommittee> {
         Ok(self
             .state
@@ -87,15 +76,6 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .get_or_latest_committee(epoch)
             .map(|committee| committee.into())
             .map_err(Error::from)?)
-    }
-
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemStateRpc> {
-        Ok(self
-            .state
-            .database
-            .get_sui_system_state_object()
-            .map_err(Error::from)?
-            .into())
     }
 
     async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary> {
@@ -108,12 +88,8 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 
     async fn get_reference_gas_price(&self) -> RpcResult<u64> {
-        Ok(self
-            .state
-            .database
-            .get_sui_system_state_object()
-            .map_err(Error::from)?
-            .reference_gas_price())
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        Ok(epoch_store.reference_gas_price())
     }
 }
 
