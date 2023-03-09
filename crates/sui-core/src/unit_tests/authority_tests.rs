@@ -2731,7 +2731,7 @@ async fn test_authority_persist() {
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
-            committee,
+            Arc::new(committee),
             &epoch_store_path,
             None,
             EpochMetrics::new(&registry),
@@ -4804,7 +4804,7 @@ async fn test_tallying_rule_score_updates() {
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
     let epoch_store = AuthorityPerEpochStore::new(
         auth_0_name,
-        committee.clone(),
+        Arc::new(committee.clone()),
         &path,
         None,
         metrics.clone(),

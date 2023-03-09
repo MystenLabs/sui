@@ -92,7 +92,7 @@ impl ReadStore for RocksDbStore {
             .map(|contents| contents.flatten())
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
         Ok(self.committee_store.get_committee(&epoch).unwrap())
     }
 

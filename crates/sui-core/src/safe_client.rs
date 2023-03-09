@@ -168,7 +168,7 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
         &mut self.authority_client
     }
 
-    fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Committee> {
+    fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Arc<Committee>> {
         self.committee_store
             .get_committee(epoch_id)?
             .ok_or(SuiError::MissingCommitteeAtEpoch(*epoch_id))
@@ -446,7 +446,7 @@ where
         match checkpoint {
             Some(c) => {
                 let epoch_id = c.epoch;
-                c.verify_with_contents(&self.get_committee(&epoch_id)?, contents.as_ref())
+                c.verify_with_contents(&*self.get_committee(&epoch_id)?, contents.as_ref())
             }
             None => Ok(()),
         }
