@@ -18,6 +18,7 @@ use crate::id::ID;
 /// It flattens all fields to make them top-level fields such that it as minimum
 /// dependencies to the internal data structures of the SUI system state type.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiSystemStateSummary {
     /// The current epoch ID, starting from 0.
     pub epoch: u64,
@@ -106,6 +107,7 @@ impl SuiSystemStateSummary {
 /// to top-level fields so that they are decoupled from the internal definitions.
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiValidatorSummary {
     // Metadata
     pub sui_address: SuiAddress,
