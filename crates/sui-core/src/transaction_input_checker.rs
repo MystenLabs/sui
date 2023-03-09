@@ -9,16 +9,14 @@ use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas::SuiCostTable;
 use sui_types::messages::{
-    TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
+    SingleTransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
 };
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::SuiResult,
     fp_ensure,
     gas::{self, SuiGasStatus},
-    messages::{
-        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, TransactionDataAPI,
-    },
+    messages::{InputObjectKind, InputObjects, TransactionData, TransactionDataAPI},
     object::{Object, Owner},
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
@@ -69,19 +67,17 @@ pub async fn check_transaction_input(
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
     config: &ProtocolConfig,
-    kind: &TransactionKind,
+    kind: &SingleTransactionKind,
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
     kind.validity_check(config)?;
-    for k in kind.single_transactions() {
-        match k {
-            SingleTransactionKind::ProgrammableTransaction(_) => (),
-            SingleTransactionKind::ChangeEpoch(_)
-            | SingleTransactionKind::Genesis(_)
-            | SingleTransactionKind::ConsensusCommitPrologue(_) => {
-                anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
-            }
+    match kind {
+        SingleTransactionKind::ProgrammableTransaction(_) => (),
+        SingleTransactionKind::ChangeEpoch(_)
+        | SingleTransactionKind::Genesis(_)
+        | SingleTransactionKind::ConsensusCommitPrologue(_) => {
+            anyhow::bail!("Transaction kind {} is not supported in dev-inspect", kind)
         }
     }
     let mut input_objects = kind.input_objects()?;
@@ -147,7 +143,7 @@ async fn check_gas(
     gas_payment: &ObjectRef,
     gas_budget: u64,
     computation_gas_price: u64,
-    tx_kind: &TransactionKind,
+    tx_kind: &SingleTransactionKind,
     more_gas_object_refs: Vec<ObjectRef>,
 ) -> SuiResult<SuiGasStatus<'static>> {
     if tx_kind.is_system_tx() {

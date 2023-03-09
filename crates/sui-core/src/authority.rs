@@ -919,9 +919,14 @@ impl AuthorityState {
         self.metrics
             .num_shared_objects
             .observe(shared_object_count as f64);
-        self.metrics
-            .batch_size
-            .observe(certificate.data().intent_message.value.kind().batch_size() as f64);
+        self.metrics.batch_size.observe(
+            certificate
+                .data()
+                .intent_message
+                .value
+                .kind()
+                .num_commands() as f64,
+        );
 
         Ok(())
     }
@@ -1053,7 +1058,7 @@ impl AuthorityState {
     pub async fn dev_inspect_transaction(
         &self,
         sender: SuiAddress,
-        transaction_kind: TransactionKind,
+        transaction_kind: SingleTransactionKind,
         gas_price: Option<u64>,
     ) -> Result<DevInspectResults, anyhow::Error> {
         let epoch_store = self.load_epoch_store_one_call_per_task();

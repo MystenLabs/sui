@@ -67,7 +67,7 @@ mod sim_only_tests {
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_types::{
         digests::TransactionDigest,
-        messages::TransactionKind,
+        messages::SingleTransactionKind,
         object::{Object, OBJECT_START_VERSION},
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         SUI_FRAMEWORK_OBJECT_ID,
@@ -250,7 +250,7 @@ mod sim_only_tests {
                 .unwrap();
             builder.finish()
         };
-        let txn = TransactionKind::programmable(pt);
+        let txn = SingleTransactionKind::programmable(pt);
 
         let response = client
             .dev_inspect_transaction(

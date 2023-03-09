@@ -310,26 +310,19 @@ where
 
         let move_calls: Vec<MoveCall> = transactions
             .iter()
-            .flat_map(|t| {
-                t.transaction
-                    .as_ref()
-                    .expect("transaction should not be empty")
-                    .data
-                    .transactions()
-                    .iter()
-                    .map(move |tx| {
-                        (
-                            tx.clone(),
-                            t.digest,
-                            checkpoint.sequence_number,
-                            checkpoint.epoch,
-                            t.transaction
-                                .as_ref()
-                                .expect("transaction should not be empty")
-                                .data
-                                .sender(),
-                        )
-                    })
+            .map(|t| {
+                let tx = t.transaction.data.transaction();
+                (
+                    tx.clone(),
+                    t.digest,
+                    checkpoint.sequence_number,
+                    checkpoint.epoch,
+                    t.transaction
+                        .as_ref()
+                        .expect("transaction should not be empty")
+                        .data
+                        .sender(),
+                )
             })
             .filter_map(
                 |(tx_kind, txn_digest, checkpoint_seq, epoch, sender)| match tx_kind {

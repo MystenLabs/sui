@@ -17,7 +17,7 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
+    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, SingleTransactionKind,
 };
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, ParentSync, WriteKind};
@@ -29,7 +29,7 @@ use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
-    messages::{CallArg, ChangeEpoch, ExecutionStatus, SingleTransactionKind, TransactionEffects},
+    messages::{CallArg, ChangeEpoch, ExecutionStatus, TransactionEffects},
     object::Object,
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
@@ -49,7 +49,7 @@ pub fn execute_transaction_to_effects<
 >(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
-    transaction_kind: TransactionKind,
+    transaction_kind: SingleTransactionKind,
     transaction_signer: SuiAddress,
     gas: &[ObjectRef],
     transaction_digest: TransactionDigest,
@@ -128,7 +128,7 @@ fn execute_transaction<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_kind: TransactionKind,
+    transaction_kind: SingleTransactionKind,
     gas: &[ObjectRef],
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -187,73 +187,72 @@ fn execution_loop<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_kind: TransactionKind,
+    transaction_kind: SingleTransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
-    let mut results = Mode::empty_results();
-    // TODO: Since we require all mutable objects to not show up more than
-    // once across single tx, we should be able to run them in parallel.
-    for single_tx in transaction_kind.into_single_transactions() {
-        match single_tx {
-            SingleTransactionKind::ChangeEpoch(change_epoch) => {
-                advance_epoch(
-                    change_epoch,
-                    temporary_store,
-                    tx_ctx,
-                    move_vm,
-                    gas_status,
-                    protocol_config,
-                )?;
+    match transaction_kind {
+        SingleTransactionKind::ChangeEpoch(change_epoch) => {
+            advance_epoch(
+                change_epoch,
+                temporary_store,
+                tx_ctx,
+                move_vm,
+                gas_status,
+                protocol_config,
+            )?;
+            Ok(Mode::empty_results())
+        }
+        SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
+            if tx_ctx.epoch() != 0 {
+                panic!("BUG: Genesis Transactions can only be executed in epoch 0");
             }
-            SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
-                if tx_ctx.epoch() != 0 {
-                    panic!("BUG: Genesis Transactions can only be executed in epoch 0");
-                }
 
-                for genesis_object in objects {
-                    match genesis_object {
-                        sui_types::messages::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
-                                data,
-                                owner,
-                                previous_transaction: tx_ctx.digest(),
-                                storage_rebate: 0,
-                            };
-                            temporary_store.write_object(
-                                &SingleTxContext::genesis(),
-                                object,
-                                WriteKind::Create,
-                            );
-                        }
+            for genesis_object in objects {
+                match genesis_object {
+                    sui_types::messages::GenesisObject::RawObject { data, owner } => {
+                        let object = Object {
+                            data,
+                            owner,
+                            previous_transaction: tx_ctx.digest(),
+                            storage_rebate: 0,
+                        };
+                        temporary_store.write_object(
+                            &SingleTxContext::genesis(),
+                            object,
+                            WriteKind::Create,
+                        );
                     }
                 }
             }
-            SingleTransactionKind::ConsensusCommitPrologue(prologue) => setup_consensus_commit(
+            Ok(Mode::empty_results())
+        }
+        SingleTransactionKind::ConsensusCommitPrologue(prologue) => {
+            setup_consensus_commit(
                 prologue,
                 temporary_store,
                 tx_ctx,
                 move_vm,
                 gas_status,
                 protocol_config,
-            )?,
-            SingleTransactionKind::ProgrammableTransaction(pt) => {
-                results = programmable_transactions::execution::execute::<_, _, Mode>(
-                    protocol_config,
-                    move_vm,
-                    temporary_store,
-                    tx_ctx,
-                    gas_status,
-                    Some(gas_object_id),
-                    pt,
-                )?
-            }
-        };
+            )?;
+            Ok(Mode::empty_results())
+        }
+        SingleTransactionKind::ProgrammableTransaction(pt) => {
+            programmable_transactions::execution::execute::<_, _, Mode>(
+                protocol_config,
+                move_vm,
+                temporary_store,
+                tx_ctx,
+                gas_status,
+                Some(gas_object_id),
+                pt,
+            )
+        }
     }
-    Ok(results)
 }
 
 fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(

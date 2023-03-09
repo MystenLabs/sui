@@ -31,7 +31,7 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, ExecuteTransactionRequestType, TransactionData, TransactionKind,
+    CallArg, ExecuteTransactionRequestType, SingleTransactionKind, TransactionData,
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
@@ -135,7 +135,7 @@ impl RpcExampleProvider {
             builder.finish()
         };
         let data = TransactionData::new_with_dummy_gas_price(
-            TransactionKind::programmable(pt),
+            SingleTransactionKind::programmable(pt),
             signer,
             (
                 gas_id,

@@ -22,7 +22,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::intent::Intent;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionKind,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, SingleTransactionKind,
 };
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::signature::GenericSignature;
@@ -110,7 +110,7 @@ impl WriteApiServer for TransactionExecutionApi {
         gas_price: Option<u64>,
         _epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
-        let tx_kind: TransactionKind =
+        let tx_kind: SingleTransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state

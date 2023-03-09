@@ -25,7 +25,9 @@ use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{CallArg, InputObjectKind, ObjectArg, TransactionData, TransactionKind};
+use sui_types::messages::{
+    CallArg, InputObjectKind, ObjectArg, SingleTransactionKind, TransactionData,
+};
 
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
@@ -125,7 +127,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .await?;
 
         Ok(TransactionData::new(
-            TransactionKind::programmable(builder.finish()),
+            SingleTransactionKind::programmable(builder.finish()),
             signer,
             gas,
             gas_budget,
@@ -296,7 +298,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .await?;
 
         Ok(TransactionData::new(
-            TransactionKind::programmable(pt),
+            SingleTransactionKind::programmable(pt),
             signer,
             gas,
             gas_budget,
@@ -613,7 +615,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .await?;
 
         Ok(TransactionData::new(
-            TransactionKind::programmable(pt),
+            SingleTransactionKind::programmable(pt),
             signer,
             gas,
             gas_budget,

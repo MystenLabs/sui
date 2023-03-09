@@ -925,6 +925,21 @@ impl SharedInputObject {
 }
 
 impl SingleTransactionKind {
+    /// present to make migrations to programmable transactions eaier.
+    /// Will be removed
+    pub fn programmable(pt: ProgrammableTransaction) -> Self {
+        SingleTransactionKind::ProgrammableTransaction(pt)
+    }
+
+    pub fn is_system_tx(&self) -> bool {
+        matches!(
+            self,
+            SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::Genesis(_)
+                | SingleTransactionKind::ConsensusCommitPrologue(_)
+        )
+    }
+
     pub fn contains_shared_object(&self) -> bool {
         self.shared_input_objects().next().is_some()
     }
@@ -1008,6 +1023,16 @@ impl SingleTransactionKind {
         };
         Ok(())
     }
+
+    /// number of commands, or 1 if it is a system transaction
+    pub fn num_commands(&self) -> usize {
+        match self {
+            SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_)
+            | SingleTransactionKind::ConsensusCommitPrologue(_) => 1,
+            SingleTransactionKind::ProgrammableTransaction(pt) => pt.commands.len(),
+        }
+    }
 }
 
 impl Display for SingleTransactionKind {
@@ -1032,166 +1057,6 @@ impl Display for SingleTransactionKind {
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
-            }
-        }
-        write!(f, "{}", writer)
-    }
-}
-
-// TODO: Make SingleTransactionKind a Box
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
-pub enum TransactionKind {
-    /// A single transaction.
-    Single(SingleTransactionKind),
-    /// A batch of single transactions.
-    Batch(Vec<SingleTransactionKind>),
-    // .. more transaction types go here
-}
-
-impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        // If we add new cases here, check that current_protocol_version does not pre-date the
-        // addition of that enumerant.
-        match &self {
-            TransactionKind::Single(s) => s.check_version_supported(protocol_config),
-            TransactionKind::Batch(v) => {
-                for s in v {
-                    s.check_version_supported(protocol_config)?
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-impl TransactionKind {
-    pub fn programmable(pt: ProgrammableTransaction) -> Self {
-        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt))
-    }
-
-    pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
-        match self {
-            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
-            TransactionKind::Batch(b) => Either::Right(b.iter()),
-        }
-    }
-
-    pub fn into_single_transactions(self) -> impl Iterator<Item = SingleTransactionKind> {
-        match self {
-            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
-            TransactionKind::Batch(b) => Either::Right(b.into_iter()),
-        }
-    }
-
-    pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
-        let mut seen = BTreeSet::new();
-        let inputs: Vec<_> = self
-            .single_transactions()
-            .map(|s| s.input_objects())
-            .collect::<UserInputResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .filter(|kind| seen.insert(*kind))
-            .collect();
-        Ok(inputs)
-    }
-
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        match &self {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
-            TransactionKind::Batch(b) => {
-                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
-            }
-        }
-    }
-
-    pub fn batch_size(&self) -> usize {
-        match self {
-            TransactionKind::Single(_) => 1,
-            TransactionKind::Batch(batch) => batch.len(),
-        }
-    }
-
-    pub fn is_system_tx(&self) -> bool {
-        matches!(
-            self,
-            TransactionKind::Single(
-                SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::ConsensusCommitPrologue(_)
-            )
-        )
-    }
-
-    pub fn is_change_epoch_tx(&self) -> bool {
-        matches!(
-            self,
-            TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
-        )
-    }
-
-    pub fn is_genesis_tx(&self) -> bool {
-        matches!(
-            self,
-            TransactionKind::Single(SingleTransactionKind::Genesis(_))
-        )
-    }
-
-    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        match self {
-            TransactionKind::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    UserInputError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                fp_ensure!(
-                    b.len() <= config.max_tx_in_batch() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum transactions in a batch".to_string(),
-                        value: config.max_tx_in_batch().to_string()
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = b.iter().all(|s| match s {
-                    SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::ConsensusCommitPrologue(_)
-                    | SingleTransactionKind::ProgrammableTransaction(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    UserInputError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call,
-                        Pay and TransferObject are allowed"
-                            .to_string()
-                    }
-                );
-                for s in b {
-                    s.validity_check(config)?
-                }
-            }
-            TransactionKind::Single(s) => s.validity_check(config)?,
-        }
-        Ok(())
-    }
-}
-
-impl Display for TransactionKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-        match &self {
-            Self::Single(s) => {
-                write!(writer, "{}", s)?;
-            }
-            Self::Batch(b) => {
-                writeln!(writer, "Transaction Kind : Batch")?;
-                writeln!(writer, "List of transactions in the batch:")?;
-                for kind in b {
-                    writeln!(writer, "{}", kind)?;
-                }
             }
         }
         write!(f, "{}", writer)
@@ -1258,7 +1123,7 @@ impl VersionedProtocolMessage for TransactionData {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransactionDataV1 {
-    pub kind: TransactionKind,
+    pub kind: SingleTransactionKind,
     pub sender: SuiAddress,
     pub gas_data: GasData,
     pub expiration: TransactionExpiration,
@@ -1266,7 +1131,7 @@ pub struct TransactionDataV1 {
 
 impl TransactionData {
     pub fn new_with_dummy_gas_price(
-        kind: TransactionKind,
+        kind: SingleTransactionKind,
         sender: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
@@ -1284,7 +1149,7 @@ impl TransactionData {
         })
     }
 
-    pub fn new_system_transaction(kind: TransactionKind) -> Self {
+    pub fn new_system_transaction(kind: SingleTransactionKind) -> Self {
         // assert transaction kind if a system transaction?
         // assert!(kind.is_system_tx());
         let sender = SuiAddress::default();
@@ -1302,7 +1167,7 @@ impl TransactionData {
     }
 
     pub fn new(
-        kind: TransactionKind,
+        kind: SingleTransactionKind,
         sender: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
@@ -1322,7 +1187,7 @@ impl TransactionData {
     }
 
     pub fn new_with_gas_coins(
-        kind: TransactionKind,
+        kind: SingleTransactionKind,
         sender: SuiAddress,
         gas_payment: Vec<ObjectRef>,
         gas_budget: u64,
@@ -1341,7 +1206,11 @@ impl TransactionData {
         })
     }
 
-    pub fn new_with_gas_data(kind: TransactionKind, sender: SuiAddress, gas_data: GasData) -> Self {
+    pub fn new_with_gas_data(
+        kind: SingleTransactionKind,
+        sender: SuiAddress,
+        gas_data: GasData,
+    ) -> Self {
         TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
@@ -1627,11 +1496,11 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+        let kind = SingleTransactionKind::ProgrammableTransaction(pt);
         Self::new_with_gas_coins(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
-    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
+    pub fn execution_parts(&self) -> (SingleTransactionKind, SuiAddress, Vec<ObjectRef>) {
         (
             self.kind().clone(),
             self.sender(),
@@ -1644,15 +1513,15 @@ impl TransactionData {
 pub trait TransactionDataAPI {
     fn sender(&self) -> SuiAddress;
 
-    // Note: this implies that TransactionKind itself must be versioned, so that it can be
+    // Note: this implies that SingleTransactionKind itself must be versioned, so that it can be
     // shared across versions. This will be easy to do since it is already an enum.
-    fn kind(&self) -> &TransactionKind;
+    fn kind(&self) -> &SingleTransactionKind;
 
     // Used by programmable_transaction_builder
-    fn kind_mut(&mut self) -> &mut TransactionKind;
+    fn kind_mut(&mut self) -> &mut SingleTransactionKind;
 
     // kind is moved out of often enough that this is worth it to special case.
-    fn into_kind(self) -> TransactionKind;
+    fn into_kind(self) -> SingleTransactionKind;
 
     /// Transaction signer and Gas owner
     fn signers(&self) -> Vec<SuiAddress>;
@@ -1702,15 +1571,15 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.sender
     }
 
-    fn kind(&self) -> &TransactionKind {
+    fn kind(&self) -> &SingleTransactionKind {
         &self.kind
     }
 
-    fn kind_mut(&mut self) -> &mut TransactionKind {
+    fn kind_mut(&mut self) -> &mut SingleTransactionKind {
         &mut self.kind
     }
 
-    fn into_kind(self) -> TransactionKind {
+    fn into_kind(self) -> SingleTransactionKind {
         self.kind
     }
 
@@ -1756,10 +1625,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn move_calls(&self) -> Vec<(&ObjectID, &IdentStr, &IdentStr)> {
-        self.kind
-            .single_transactions()
-            .flat_map(|s| s.move_calls())
-            .collect()
+        self.kind.move_calls()
     }
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
@@ -1795,15 +1661,10 @@ impl TransactionDataAPI for TransactionDataV1 {
             return Ok(());
         }
         let allow_sponsored_tx = match &self.kind {
-            // For the sake of simplicity, we do not allow batched transaction
-            // to be sponsored.
-            TransactionKind::Batch(_b) => false,
-            TransactionKind::Single(s) => match s {
-                SingleTransactionKind::ProgrammableTransaction(_) => true,
-                SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::ConsensusCommitPrologue(_)
-                | SingleTransactionKind::Genesis(_) => false,
-            },
+            SingleTransactionKind::ProgrammableTransaction(_) => true,
+            SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::ConsensusCommitPrologue(_)
+            | SingleTransactionKind::Genesis(_) => false,
         };
         if allow_sponsored_tx {
             return Ok(());
@@ -1812,7 +1673,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn is_change_epoch_tx(&self) -> bool {
-        self.kind.is_change_epoch_tx()
+        matches!(self.kind, SingleTransactionKind::ChangeEpoch(_))
     }
 
     fn is_system_tx(&self) -> bool {
@@ -1820,7 +1681,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn is_genesis_tx(&self) -> bool {
-        self.kind.is_genesis_tx()
+        matches!(self.kind, SingleTransactionKind::Genesis(_))
     }
 
     #[cfg(test)]
@@ -2104,7 +1965,6 @@ impl VerifiedTransaction {
 
     fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
         system_transaction
-            .pipe(TransactionKind::Single)
             .pipe(TransactionData::new_system_transaction)
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(

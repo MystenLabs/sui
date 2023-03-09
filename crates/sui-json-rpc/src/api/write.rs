@@ -40,7 +40,7 @@ pub trait WriteApi {
     async fn dev_inspect_transaction(
         &self,
         sender_address: SuiAddress,
-        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
+        /// BCS encoded SingleTransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
         tx_bytes: Base64,
         /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
         gas_price: Option<u64>,

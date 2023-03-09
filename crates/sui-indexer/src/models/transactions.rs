@@ -26,7 +26,7 @@ pub struct Transaction {
     pub recipients: Vec<Option<String>>,
     pub checkpoint_sequence_number: i64,
     pub transaction_time: Option<NaiveDateTime>,
-    pub transaction_kinds: Vec<Option<String>>,
+    pub transaction_kind: Option<String>,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -117,6 +117,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             .transactions()
             .iter()
             .map(|k| k.to_string());
+        let tx_kind = transaction_data.transaction().to_string();
 
         let recipients: Vec<String> = effects
             .mutated()
@@ -149,7 +150,6 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             .map(obj_ref_to_obj_id_string)
             .collect();
         let move_call_strs: Vec<String> = transaction_data
-            .clone()
             .move_calls()
             .into_iter()
             .map(|move_call| {
@@ -192,7 +192,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             sender,
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
-            transaction_kinds: txn_kind_iter.map(Some).collect::<Vec<Option<String>>>(),
+            transaction_kind: Some(tx_kind),
             transaction_time: timestamp,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),

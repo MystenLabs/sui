@@ -23,7 +23,7 @@ use sui_types::messages::{
     Argument, Command, ExecutionStatus, GenesisObject, InputObjectKind, ProgrammableMoveCall,
     ProgrammableTransaction, SenderSignedData, SingleTransactionKind, TransactionData,
     TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    TransactionKind, VersionedProtocolMessage,
+    VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
@@ -150,7 +150,7 @@ impl PartialEq for SuiTransactionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename = "TransactionKind", tag = "kind")]
+#[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
     /// A system transaction that will update epoch information on-chain.
     ChangeEpoch(SuiChangeEpoch),
@@ -656,7 +656,7 @@ pub enum SuiTransactionData {
 
 #[enum_dispatch]
 pub trait SuiTransactionDataAPI {
-    fn transactions(&self) -> &[SuiTransactionKind];
+    fn transaction(&self) -> &SuiTransactionKind;
     fn sender(&self) -> &SuiAddress;
     fn gas_data(&self) -> &SuiGasData;
 }
@@ -664,14 +664,14 @@ pub trait SuiTransactionDataAPI {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "TransactionDataV1", rename_all = "camelCase")]
 pub struct SuiTransactionDataV1 {
-    pub transactions: Vec<SuiTransactionKind>,
+    pub transaction: SuiTransactionKind,
     pub sender: SuiAddress,
     pub gas_data: SuiGasData,
 }
 
 impl SuiTransactionDataAPI for SuiTransactionDataV1 {
-    fn transactions(&self) -> &[SuiTransactionKind] {
-        &self.transactions
+    fn transaction(&self) -> &SuiTransactionKind {
+        &self.transaction
     }
     fn sender(&self) -> &SuiAddress {
         &self.sender
@@ -684,20 +684,17 @@ impl SuiTransactionDataAPI for SuiTransactionDataV1 {
 impl SuiTransactionData {
     pub fn move_calls(&self) -> Vec<&SuiProgrammableMoveCall> {
         match self {
-            Self::V1(data) => data
-                .transactions
-                .iter()
-                .filter_map(|tx| match tx {
-                    SuiTransactionKind::ProgrammableTransaction(pt) => {
-                        Some(pt.commands.iter().filter_map(|command| match command {
-                            SuiCommand::MoveCall(c) => Some(&**c),
-                            _ => None,
-                        }))
-                    }
-                    _ => None,
-                })
-                .flatten()
-                .collect(),
+            Self::V1(data) => match &data.transaction {
+                SuiTransactionKind::ProgrammableTransaction(pt) => pt
+                    .commands
+                    .iter()
+                    .filter_map(|command| match command {
+                        SuiCommand::MoveCall(c) => Some(&**c),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            },
         }
     }
 }
@@ -706,26 +703,16 @@ impl Display for SuiTransactionData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::V1(data) => {
-                let mut writer = String::new();
-                if data.transactions.len() == 1 {
-                    writeln!(writer, "{}", data.transactions.first().unwrap())?;
-                } else {
-                    writeln!(writer, "Transaction Kind : Batch")?;
-                    writeln!(writer, "List of transactions in the batch:")?;
-                    for kind in &data.transactions {
-                        writeln!(writer, "{}", kind)?;
-                    }
-                }
-                writeln!(writer, "Sender: {}", data.sender)?;
-                write!(writer, "Gas Payment: ")?;
+                writeln!(f, "{}", data.transaction)?;
+                writeln!(f, "Sender: {}", data.sender)?;
+                write!(f, "Gas Payment: ")?;
                 for payment in &self.gas_data().payment {
-                    write!(writer, "{} ", payment)?;
+                    write!(f, "{} ", payment)?;
                 }
-                writeln!(writer)?;
-                writeln!(writer, "Gas Owner: {}", data.gas_data.owner)?;
-                writeln!(writer, "Gas Price: {}", data.gas_data.price)?;
-                writeln!(writer, "Gas Budget: {}", data.gas_data.budget)?;
-                write!(f, "{}", writer)
+                writeln!(f)?;
+                writeln!(f, "Gas Owner: {}", data.gas_data.owner)?;
+                writeln!(f, "Gas Price: {}", data.gas_data.price)?;
+                writeln!(f, "Gas Budget: {}", data.gas_data.budget)
             }
         }
     }
@@ -735,33 +722,26 @@ impl TryFrom<TransactionData> for SuiTransactionData {
     type Error = anyhow::Error;
 
     fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
-        let transactions = match data.kind().clone() {
-            TransactionKind::Single(tx) => {
-                vec![tx.try_into()?]
-            }
-            TransactionKind::Batch(txs) => txs
-                .into_iter()
-                .map(SuiTransactionKind::try_from)
-                .collect::<Result<Vec<_>, _>>()?,
-        };
         let message_version = data
             .message_version()
             .expect("TransactionData defines message_version()");
-
+        let sender = data.sender();
+        let gas_data = SuiGasData {
+            payment: data
+                .gas()
+                .iter()
+                .map(|obj_ref| SuiObjectRef::from(*obj_ref))
+                .collect(),
+            owner: data.gas_owner(),
+            price: data.gas_price(),
+            budget: data.gas_budget(),
+        };
+        let transaction = data.into_kind().try_into()?;
         match message_version {
             1 => Ok(SuiTransactionData::V1(SuiTransactionDataV1 {
-                transactions,
-                sender: data.sender(),
-                gas_data: SuiGasData {
-                    payment: data
-                        .gas()
-                        .iter()
-                        .map(|obj_ref| SuiObjectRef::from(*obj_ref))
-                        .collect(),
-                    owner: data.gas_owner(),
-                    price: data.gas_price(),
-                    budget: data.gas_budget(),
-                },
+                transaction,
+                sender,
+                gas_data,
             })),
             _ => Err(anyhow::anyhow!(
                 "Support for TransactionData version {} not implemented",
