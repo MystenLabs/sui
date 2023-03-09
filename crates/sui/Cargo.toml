@@ -61,6 +61,7 @@ move-stackless-bytecode.workspace = true
 move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
+move-symbol-pool.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 multiaddr = "0.17.0"
 
