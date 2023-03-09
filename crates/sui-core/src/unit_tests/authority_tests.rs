@@ -18,6 +18,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::StructTag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
@@ -3119,7 +3120,7 @@ async fn test_genesis_sui_system_state_object() {
     let move_object = wrapper.data.try_as_move().unwrap();
     let _sui_system_state =
         bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
-    assert_eq!(move_object.type_, SuiSystemStateWrapper::type_());
+    assert!(move_object.type_().is(&SuiSystemStateWrapper::type_()));
     let sui_system_state = authority_state
         .database
         .get_sui_system_state_object()

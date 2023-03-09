@@ -11,7 +11,9 @@ use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use sui_types::{
-    base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
+    base_types::{
+        self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
+    },
     crypto::{
         get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
         AuthoritySignature, KeypairTraits, Signature,
@@ -89,6 +91,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TransactionKind>(&samples)?;
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
+    tracer.trace_type::<MoveObjectType>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
     tracer.trace_type::<DeleteKind>(&samples)?;
     tracer.trace_type::<Argument>(&samples)?;

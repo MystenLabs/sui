@@ -12,7 +12,7 @@ use move_core_types::{
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     messages::CommandArgumentError,
@@ -79,7 +79,7 @@ pub enum Value {
 
 #[derive(Debug, Clone)]
 pub struct ObjectValue {
-    pub type_: StructTag,
+    pub type_: MoveObjectType,
     pub has_public_transfer: bool,
     // true if it has been used in a public, non-entry Move call
     // In other words, false if all usages have been with non-Move comamnds or
@@ -179,12 +179,12 @@ impl Value {
 
 impl ObjectValue {
     pub fn new(
-        type_: StructTag,
+        type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
         contents: &[u8],
     ) -> Result<Self, ExecutionError> {
-        let contents = if Coin::is_coin(&type_) {
+        let contents = if type_.is_coin() {
             ObjectContents::Coin(Coin::from_bcs_bytes(contents)?)
         } else {
             ObjectContents::Raw(contents.to_vec())
@@ -207,18 +207,15 @@ impl ObjectValue {
 
     pub fn from_move_object(object: &MoveObject) -> Result<Self, ExecutionError> {
         Self::new(
-            object.type_.clone(),
+            object.type_().clone(),
             object.has_public_transfer(),
             false,
             object.contents(),
         )
     }
 
-    pub fn coin(type_: StructTag, coin: Coin) -> Result<Self, ExecutionError> {
-        assert_invariant!(
-            Coin::is_coin(&type_),
-            "Cannot make a coin without a coin type"
-        );
+    pub fn coin(type_: MoveObjectType, coin: Coin) -> Result<Self, ExecutionError> {
+        assert_invariant!(type_.is_coin(), "Cannot make a coin without a coin type");
         Ok(Self {
             type_,
             has_public_transfer: true,
@@ -239,6 +236,10 @@ impl ObjectValue {
             ObjectContents::Raw(bytes) => buf.extend(bytes),
             ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
         }
+    }
+
+    pub fn into_type(self) -> MoveObjectType {
+        self.type_
     }
 }
 

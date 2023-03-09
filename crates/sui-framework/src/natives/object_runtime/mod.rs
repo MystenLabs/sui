@@ -15,7 +15,7 @@ use move_vm_types::{
 use std::collections::{BTreeMap, BTreeSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
@@ -54,7 +54,7 @@ pub(crate) struct TestInventories {
 }
 
 pub struct RuntimeResults {
-    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, StructTag, Value)>,
+    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, MoveObjectType, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
     pub user_events: Vec<(StructTag, Value)>,
     // loaded child objects and their versions
@@ -70,7 +70,7 @@ pub(crate) struct ObjectRuntimeState {
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    transfers: LinkedHashMap<ObjectID, (Owner, Type, StructTag, Value)>,
+    transfers: LinkedHashMap<ObjectID, (Owner, Type, MoveObjectType, Value)>,
     events: Vec<(StructTag, Value)>,
 }
 
@@ -196,7 +196,7 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         owner: Owner,
         ty: Type,
-        tag: StructTag,
+        tag: MoveObjectType,
         obj: Value,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
@@ -263,10 +263,10 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_tag: StructTag,
+        child_type: &MoveObjectType,
     ) -> PartialVMResult<bool> {
         self.object_store
-            .object_exists_and_has_type(parent, child, child_tag)
+            .object_exists_and_has_type(parent, child, child_type)
     }
 
     pub(crate) fn get_or_fetch_child_object(
@@ -275,14 +275,14 @@ impl<'a> ObjectRuntime<'a> {
         child: ObjectID,
         child_ty: &Type,
         child_layout: MoveTypeLayout,
-        child_tag: StructTag,
+        child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
         let res = self.object_store.get_or_fetch_object(
             parent,
             child,
             child_ty,
             child_layout,
-            child_tag,
+            child_move_type,
         )?;
         Ok(match res {
             ObjectResult::MismatchedType => ObjectResult::MismatchedType,
@@ -295,11 +295,11 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_tag: StructTag,
+        child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
         self.object_store
-            .add_object(parent, child, child_ty, child_tag, child_value)
+            .add_object(parent, child, child_ty, child_move_type, child_value)
     }
 
     // returns None if a child object is still borrowed
@@ -355,7 +355,7 @@ impl ObjectRuntimeState {
                 owner: parent,
                 loaded_version,
                 ty,
-                tag,
+                move_type,
                 effect,
             } = child_object_effect;
             if let Some(v) = loaded_version {
@@ -371,13 +371,13 @@ impl ObjectRuntimeState {
                     debug_assert!(!self.new_ids.contains_key(&child));
                     debug_assert!(loaded_version.is_some());
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
                 }
 
                 Op::New(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
                 }
                 // was transferred so not actually deleted
                 Op::Delete if self.transfers.contains_key(&child) => {

@@ -756,7 +756,8 @@ fn get_object_type_and_struct(
     let object_type = o
         .type_()
         .ok_or_else(|| anyhow!("Failed to extract object type"))?
-        .clone();
+        .clone()
+        .into();
     let move_struct = get_move_struct(o, layout)?;
     Ok((object_type, move_struct))
 }

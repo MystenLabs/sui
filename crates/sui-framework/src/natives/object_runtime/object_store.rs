@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    effects::Op, language_storage::StructTag, value::MoveTypeLayout, vm_status::StatusCode,
-};
+use move_core_types::{effects::Op, value::MoveTypeLayout, vm_status::StatusCode};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
@@ -12,7 +10,7 @@ use move_vm_types::{
 use std::collections::{btree_map, BTreeMap};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
     object::{Data, MoveObject},
     storage::ChildObjectResolver,
@@ -21,7 +19,7 @@ use sui_types::{
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
-    pub(super) tag: StructTag,
+    pub(super) move_type: MoveObjectType,
     pub(super) value: GlobalValue,
 }
 
@@ -30,7 +28,7 @@ pub(crate) struct ChildObjectEffect {
     // none if it was an input object
     pub(super) loaded_version: Option<SequenceNumber>,
     pub(super) ty: Type,
-    pub(super) tag: StructTag,
+    pub(super) move_type: MoveObjectType,
     pub(super) effect: Op<Value>,
 }
 
@@ -121,31 +119,29 @@ impl<'a> Inner<'a> {
         child: ObjectID,
         child_ty: &Type,
         child_ty_layout: MoveTypeLayout,
-        child_tag: StructTag,
-    ) -> PartialVMResult<ObjectResult<(Type, StructTag, GlobalValue)>> {
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, GlobalValue)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
             None => {
                 return Ok(ObjectResult::Loaded((
                     child_ty.clone(),
-                    child_tag,
+                    child_move_type,
                     GlobalValue::none(),
                 )))
             }
             Some(obj) => obj,
         };
         // object exists, but the type does not match
-        if obj.type_ != child_tag {
+        if obj.type_() != &child_move_type {
             return Ok(ObjectResult::MismatchedType);
         }
         let v = match Value::simple_deserialize(obj.contents(), &child_ty_layout) {
             Some(v) => v,
-            None => {
-                return Err(
-                    PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
-                        format!("Failed to deserialize object {child} with type {child_tag}",),
-                    ),
-                )
-            }
+            None => return Err(
+                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
+                    format!("Failed to deserialize object {child} with type {child_move_type}",),
+                ),
+            ),
         };
         let global_value =
             match GlobalValue::cached(v) {
@@ -158,7 +154,7 @@ impl<'a> Inner<'a> {
             };
         Ok(ObjectResult::Loaded((
             child_ty.clone(),
-            child_tag,
+            child_move_type,
             global_value,
         )))
     }
@@ -201,16 +197,16 @@ impl<'a> ObjectStore<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_tag: StructTag,
+        child_move_type: &MoveObjectType,
     ) -> PartialVMResult<bool> {
         if let Some(child_object) = self.store.get(&child) {
             // exists and has same type
-            return Ok(child_object.value.exists()? && child_object.tag == child_tag);
+            return Ok(child_object.value.exists()? && &child_object.move_type == child_move_type);
         }
         Ok(self
             .inner
             .get_or_fetch_object_from_store(parent, child)?
-            .map(|move_obj| move_obj.type_ == child_tag)
+            .map(|move_obj| move_obj.type_() == child_move_type)
             .unwrap_or(false))
     }
 
@@ -220,17 +216,17 @@ impl<'a> ObjectStore<'a> {
         child: ObjectID,
         child_ty: &Type,
         child_layout: MoveTypeLayout,
-        child_tag: StructTag,
+        child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut ChildObject>> {
         let store_entries_count = self.store.len() as u64;
         let child_object = match self.store.entry(child) {
             btree_map::Entry::Vacant(e) => {
-                let (ty, tag, value) = match self.inner.fetch_object_impl(
+                let (ty, move_type, value) = match self.inner.fetch_object_impl(
                     parent,
                     child,
                     child_ty,
                     child_layout,
-                    child_tag,
+                    child_move_type,
                 )? {
                     ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
                     ObjectResult::Loaded(res) => res,
@@ -251,13 +247,13 @@ impl<'a> ObjectStore<'a> {
                 e.insert(ChildObject {
                     owner: parent,
                     ty,
-                    tag,
+                    move_type,
                     value,
                 })
             }
             btree_map::Entry::Occupied(e) => {
                 let child_object = e.into_mut();
-                if child_object.tag != child_tag {
+                if child_object.move_type != child_move_type {
                     return Ok(ObjectResult::MismatchedType);
                 }
                 child_object
@@ -271,13 +267,13 @@ impl<'a> ObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_tag: StructTag,
+        child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
         let mut child_object = ChildObject {
             owner: parent,
             ty: child_ty.clone(),
-            tag: child_tag,
+            move_type: child_move_type,
             value: GlobalValue::none(),
         };
         child_object.value.move_to(child_value).unwrap();
@@ -317,7 +313,7 @@ impl<'a> ObjectStore<'a> {
                 let ChildObject {
                     owner,
                     ty,
-                    tag,
+                    move_type,
                     value,
                 } = child_object;
                 let loaded_version = self
@@ -330,7 +326,7 @@ impl<'a> ObjectStore<'a> {
                     owner,
                     loaded_version,
                     ty,
-                    tag,
+                    move_type,
                     effect,
                 };
                 Some((id, child_effect))

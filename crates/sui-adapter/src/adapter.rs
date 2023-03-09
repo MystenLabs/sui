@@ -537,7 +537,7 @@ fn serialize_object<'a>(
     mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
     object_type_map: &mut BTreeMap<ObjectID, ModuleId>,
-) -> Result<(Vec<u8>, &'a StructTag, &'a SignatureToken), ExecutionError> {
+) -> Result<(Vec<u8>, &'a MoveObjectType, &'a SignatureToken), ExecutionError> {
     let object_id = object_kind.object_id();
     let object = match objects.get(&object_id) {
         Some(object) => object.borrow(),
@@ -639,16 +639,16 @@ fn serialize_object<'a>(
         object_id,
         idx,
         param_type,
-        &move_object.type_,
+        move_object.type_(),
         mutable_ref_objects,
         by_value_objects,
     )?;
 
-    object_type_map.insert(object_id, move_object.type_.module_id());
+    object_type_map.insert(object_id, move_object.type_().module_id());
     object_data.insert(object_id, (object.owner, object.version()));
     Ok((
         move_object.contents().to_vec(),
-        &move_object.type_,
+        move_object.type_(),
         inner_param_type,
     ))
 }
@@ -660,7 +660,7 @@ fn inner_param_type<'a>(
     object_id: ObjectID,
     idx: LocalIndex,
     param_type: &'a SignatureToken,
-    arg_type: &StructTag,
+    arg_type: &MoveObjectType,
     mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
 ) -> Result<&'a SignatureToken, ExecutionError> {
@@ -768,10 +768,10 @@ fn type_check_struct(
     view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
     idx: LocalIndex,
-    arg_type: &StructTag,
+    arg_type: &MoveObjectType,
     param_type: &SignatureToken,
 ) -> Result<(), ExecutionError> {
-    if !struct_tag_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
+    if !move_type_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
         Err(ExecutionError::new_with_source(
             ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
             format!(
@@ -820,6 +820,27 @@ fn type_tag_equals_sig_token(
     }
 }
 
+fn move_type_equals_sig_token(
+    view: &BinaryIndexedView,
+    function_type_arguments: &[TypeTag],
+    arg_type: &MoveObjectType,
+    param_type: &SignatureToken,
+) -> bool {
+    match param_type {
+        SignatureToken::Struct(idx) => {
+            move_type_equals_struct_inst(view, function_type_arguments, arg_type, *idx, &[])
+        }
+        SignatureToken::StructInstantiation(idx, args) => {
+            move_type_equals_struct_inst(view, function_type_arguments, arg_type, *idx, args)
+        }
+        SignatureToken::TypeParameter(idx) => match &function_type_arguments[*idx as usize] {
+            TypeTag::Struct(s) => arg_type.is(s),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 fn struct_tag_equals_sig_token(
     view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
@@ -839,6 +860,34 @@ fn struct_tag_equals_sig_token(
         },
         _ => false,
     }
+}
+
+fn move_type_equals_struct_inst(
+    view: &BinaryIndexedView,
+    function_type_arguments: &[TypeTag],
+    arg_type: &MoveObjectType,
+    param_type: StructHandleIndex,
+    param_type_arguments: &[SignatureToken],
+) -> bool {
+    let (address, module_name, struct_name) = sui_verifier::resolve_struct(view, param_type);
+    let arg_type_params = arg_type.type_params();
+
+    // same address, module, name, and type parameters
+    &arg_type.address() == address
+        && arg_type.module() == module_name
+        && arg_type.name() == struct_name
+        && arg_type_params.len() == param_type_arguments.len()
+        && arg_type_params
+            .iter()
+            .zip(param_type_arguments)
+            .all(|(arg_type_arg, param_type_arg)| {
+                type_tag_equals_sig_token(
+                    view,
+                    function_type_arguments,
+                    arg_type_arg,
+                    param_type_arg,
+                )
+            })
 }
 
 fn struct_tag_equals_struct_inst(

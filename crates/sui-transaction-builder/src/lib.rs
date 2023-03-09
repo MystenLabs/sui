@@ -22,7 +22,6 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
-use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -664,7 +663,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             return Err(anyhow!("Provided object [{coin}] is not a move object."))
         };
         ensure!(
-            Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_),
+            type_.is_coin() || type_.is_locked_coin(),
             "Expecting either Coin<T> or LockedCoin<T> as input coin objects. Received [{type_}]"
         );
 
@@ -677,8 +676,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             obj_vec.push(ObjectArg::ImmOrOwnedObject(oref))
         }
         obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
-
-        let function = if Coin::is_coin(type_) {
+        let function = if type_.is_coin() {
             ADD_STAKE_MUL_COIN_FUN_NAME
         } else {
             ADD_STAKE_LOCKED_COIN_FUN_NAME

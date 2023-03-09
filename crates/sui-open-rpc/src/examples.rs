@@ -24,7 +24,8 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
+    MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
+    TransactionDigest,
 };
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
 use sui_types::digests::TransactionEventsDigest;
@@ -211,7 +212,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(GasCoin::type_())),
+            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
             bcs: None,
             display: None,
         });
@@ -250,7 +251,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(GasCoin::type_())),
+            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
             bcs: None,
             display: None,
         });
@@ -300,7 +301,7 @@ impl RpcExampleProvider {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
+                type_: ObjectType::Struct(MoveObjectType::GasCoin).to_string(),
                 owner: Owner::AddressOwner(owner),
                 previous_transaction: TransactionDigest::new(self.rng.gen()),
             })

@@ -12,7 +12,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{ModuleId, TypeTag},
     value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::{
@@ -23,7 +23,10 @@ use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    base_types::{
+        MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
+    },
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
@@ -140,8 +143,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     let obj: ObjectValue =
                         context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                     obj.write_bcs_bytes(&mut res);
-                    let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
-                    (obj.used_in_non_entry_move_call, tag)
+                    (obj.used_in_non_entry_move_call, obj.into_type().into())
                 }
             };
             let elem_ty = context
@@ -430,7 +432,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         vec![]
     } else {
         vec![Value::Object(ObjectValue::new(
-            UpgradeCap::type_(),
+            UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
             /* used_in_non_entry_move_call */ false,
             &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
@@ -574,7 +576,7 @@ enum FunctionKind {
 /// Used to remember type information about a type when resolving the signature
 enum ValueKind {
     Object {
-        type_: StructTag,
+        type_: MoveObjectType,
         has_public_transfer: bool,
     },
     Raw(Type, AbilitySet),
@@ -762,7 +764,7 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
                         invariant_violation!("Struct type make a non struct type tag")
                     };
                     ValueKind::Object {
-                        type_: *struct_tag,
+                        type_: MoveObjectType::from(*struct_tag),
                         has_public_transfer: abilities.has_store(),
                     }
                 }
@@ -977,7 +979,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         Value::Object(obj) => {
             obj_ty = context
                 .session
-                .load_type(&TypeTag::Struct(Box::new(obj.type_.clone())))
+                .load_type(&obj.type_.clone().into())
                 .map_err(|e| context.convert_vm_error(e))?;
             &obj_ty
         }
