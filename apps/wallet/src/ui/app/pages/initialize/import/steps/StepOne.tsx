@@ -18,6 +18,19 @@ const validationSchema = Yup.object({
     mnemonic: mnemonicValidation,
 });
 
+function findNextWordInput(element: HTMLElement) {
+    if (element.parentElement?.parentElement?.nextElementSibling) {
+        const nextElement =
+            element.parentElement?.parentElement?.nextElementSibling.children
+                .item(1)
+                ?.children.item(0);
+        if (nextElement instanceof HTMLInputElement) {
+            return nextElement;
+        }
+    }
+    return null;
+}
+
 export default function StepOne({ next, data, mode }: StepProps) {
     return (
         <Formik
@@ -58,6 +71,14 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                         <PasswordInputField
                                             name={`mnemonic.${index}`}
                                             disabled={isSubmitting}
+                                            onKeyDown={(e) => {
+                                                if (e.key === ' ') {
+                                                    e.preventDefault();
+                                                    findNextWordInput(
+                                                        e.target as HTMLElement
+                                                    )?.focus();
+                                                }
+                                            }}
                                             onPaste={async (e) => {
                                                 const inputText =
                                                     e.clipboardData.getData(

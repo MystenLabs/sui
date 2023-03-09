@@ -39,7 +39,7 @@ export function ImportPage({ mode = 'import' }: ImportPageProps) {
                 await dispatch(
                     createVault({
                         importedEntropy: entropyToSerialized(
-                            mnemonicToEntropy(mnemonic.join(' '))
+                            mnemonicToEntropy(mnemonic.join(' ').trim())
                         ),
                         password,
                     })
