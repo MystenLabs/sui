@@ -137,12 +137,14 @@ The following example demonstrates using sui_getBalance in Rust:
 ```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-   let sui = SuiClient::new("https://fullnode.devnet.sui.io:443", None, None).await?;
+   let sui = SuiClientBuilder::default().build(
+      "https://fullnode.devnet.sui.io:443",
+   ).await.unwrap();
    let address = SuiAddress::from_str("0xa38bc2aa63c34e37821f7abb34dbbe97b7ab2ea2")?;
    let objects = sui.read_api().get_balance(address).await?;
    println!("{:?}", objects);
