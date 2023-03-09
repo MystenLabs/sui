@@ -35,6 +35,8 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
+#[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub min_validator_stake: u64,
     pub max_validator_count: u64,
@@ -42,6 +44,8 @@ pub struct SystemParametersV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
+#[serde(rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey_bytes: Vec<u8>,
@@ -209,6 +213,8 @@ impl ValidatorMetadataV1 {
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
+#[serde(rename = "Validator")]
 pub struct ValidatorV1 {
     pub metadata: ValidatorMetadataV1,
     pub voting_power: u64,
@@ -339,6 +345,8 @@ impl ValidatorV1 {
 
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
+#[serde(rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
     pub activation_epoch: Option<u64>,
@@ -367,6 +375,8 @@ impl PoolTokenExchangeRate {
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
+#[serde(rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
@@ -395,6 +405,8 @@ pub struct SuiSystemStateInnerV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
+#[serde(rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
     pub epoch_counter: u64,
     pub balance: Balance,
