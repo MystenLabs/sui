@@ -23,9 +23,15 @@ scripts/simtest/cargo-simtest simtest \
   --package sui-core \
   --profile simtestnightly
 
+# create logs directory
+SIMTEST_LOGS_DIR=~/simtest_logs
+[ ! -d ${SIMTEST_LOGS_DIR} ] && mkdir -p ${SIMTEST_LOGS_DIR}
+[ ! -d ${SIMTEST_LOGS_DIR}/${DATE} ] && mkdir -p ${SIMTEST_LOGS_DIR}/${DATE}
+
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
-  echo "Iteration $SUB_SEED using MSIM_TEST_SEED=$SEED"
+  LOG_FILE=${SIMTEST_LOGS_DIR}/${DATE}/"log-$SEED"
+  echo "Iteration $SUB_SEED using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 
   # --test-threads 1 is important: parallelism is achieved via the for loop
   MSIM_TEST_SEED="$SEED" \
@@ -36,7 +42,7 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
     --run-ignored all \
     --test-threads 1 \
     --profile simtestnightly \
-    -E "$TEST_FILTER" &
+    -E "$TEST_FILTER" > "$LOG_FILE" 2>&1 &
 done
 
 # wait for all the jobs to end

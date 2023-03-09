@@ -109,7 +109,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "To debug failures: `ssh simtest.sui.io`"
+                  "text": "To debug failures: `ssh simtest.sui.io` and look in /home/ubuntu/simtest_logs folder"
                 }
               }
             ]
