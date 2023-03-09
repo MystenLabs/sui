@@ -384,6 +384,12 @@ impl TransactionManager {
             .collect()
     }
 
+    // Returns the number of certificates pending execution or being executed by the execution driver right now.
+    pub(crate) fn execution_queue_len(&self) -> usize {
+        let inner = self.inner.read();
+        inner.pending_certificates.len() + inner.executing_certificates.len()
+    }
+
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
