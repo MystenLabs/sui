@@ -2752,22 +2752,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fastcrypto-tbls"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
-dependencies = [
- "bincode",
- "digest 0.10.6",
- "fastcrypto",
- "fastcrypto-derive",
- "rand 0.8.5",
- "serde 1.0.152",
- "sha3 0.10.6",
- "typenum",
- "zeroize",
-]
-
-[[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
@@ -11326,7 +11310,6 @@ dependencies = [
  "fail 0.5.1",
  "fastcrypto",
  "fastcrypto-derive",
- "fastcrypto-tbls",
  "fastcrypto-zkp",
  "fastrand",
  "fd-lock",
