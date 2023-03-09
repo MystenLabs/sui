@@ -1046,7 +1046,7 @@ async fn slow_node() {
                     .filter(|c| c.origin() == slow_node)
                     .count();
 
-                assert_eq!(slow_node_total, 4);
+                assert_eq!(slow_node_total, 6);
 
                 committed = true;
             }
