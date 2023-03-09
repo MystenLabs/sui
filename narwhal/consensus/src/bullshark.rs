@@ -101,7 +101,7 @@ impl ConsensusProtocol for Bullshark {
         // Get the certificate's digest of the leader. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r;
-        if leader_round <= state.last_committed_round {
+        if leader_round <= state.last_round.committed_round {
             return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)

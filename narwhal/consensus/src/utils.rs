@@ -20,7 +20,7 @@ where
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
     assert_eq!(leader.round() % 2, 0);
-    for r in (state.last_committed_round + 2..=leader.round() - 2)
+    for r in (state.last_round.committed_round + 2..=leader.round() - 2)
         .rev()
         .step_by(2)
     {
@@ -67,7 +67,7 @@ pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificat
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
-        if x.round() == state.gc_round + 1 {
+        if x.round() == state.last_round.gc_round + 1 {
             // Do not try to order parents of the certificate, since they have been GC'ed.
             continue;
         }

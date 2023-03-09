@@ -32,10 +32,8 @@ pub type Dag = BTreeMap<Round, HashMap<PublicKey, (CertificateDigest, Certificat
 
 /// The state that needs to be persisted for crash-recovery.
 pub struct ConsensusState {
-    /// The last / highest committed round.
-    pub last_committed_round: Round,
-    /// The current GC round.
-    pub gc_round: Round,
+    /// The information about the last committed round and corresponding GC round.
+    pub last_round: RoundUpdate,
     /// The chosen gc_depth
     pub gc_depth: Round,
     /// Keeps the last committed round for each authority. This map is used to clean up the dag and
@@ -58,8 +56,7 @@ pub struct ConsensusState {
 impl ConsensusState {
     pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee, gc_depth: Round) -> Self {
         Self {
-            last_committed_round: 0,
-            gc_round: 0,
+            last_round: RoundUpdate::default(),
             gc_depth,
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
@@ -79,10 +76,14 @@ impl ConsensusState {
         cert_store: CertificateStore,
         committee: &Committee,
     ) -> Self {
-        let gc_round = gc_round(last_committed_round, gc_depth);
-        let dag =
-            Self::construct_dag_from_cert_store(cert_store, &recovered_last_committed, gc_round)
-                .expect("error when recovering DAG from store");
+        let last_round = RoundUpdate::new_with_gc_depth(last_committed_round, gc_depth);
+
+        let dag = Self::construct_dag_from_cert_store(
+            cert_store,
+            &recovered_last_committed,
+            last_round.gc_round,
+        )
+        .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
 
         let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
@@ -91,9 +92,8 @@ impl ConsensusState {
                 .unwrap_or((0, ReputationScores::new(committee), None));
 
         Self {
-            last_committed_round,
-            gc_round,
             gc_depth,
+            last_round,
             last_committed: recovered_last_committed,
             last_consensus_reputation_score,
             latest_sub_dag_index,
@@ -137,7 +137,7 @@ impl ConsensusState {
         Self::try_insert_in_dag(
             &mut self.dag,
             &self.last_committed,
-            self.gc_round,
+            self.last_round.gc_round,
             certificate,
         )
     }
@@ -186,13 +186,12 @@ impl ConsensusState {
             .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
-        self.last_committed_round = max(self.last_committed_round, certificate.round());
-        self.gc_round = gc_round(self.last_committed_round, self.gc_depth);
+        self.last_round = self.last_round.update(certificate.round(), self.gc_depth);
 
         self.metrics
             .last_committed_round
             .with_label_values(&[])
-            .set(self.last_committed_round as i64);
+            .set(self.last_round.committed_round as i64);
         let elapsed = certificate.metadata.created_at.elapsed().as_secs_f64();
         self.metrics
             .certificate_commit_latency
@@ -207,7 +206,7 @@ impl ConsensusState {
         );
 
         // Purge all certificates past the gc depth.
-        self.dag.retain(|r, _| *r > self.gc_round);
+        self.dag.retain(|r, _| *r > self.last_round.gc_round);
     }
 
     // Checks that the provided certificate's parents exist and crashes if not.
@@ -230,10 +229,6 @@ impl ConsensusState {
             panic!("Parent round not found in DAG for {certificate:?}!");
         }
     }
-
-    pub(crate) fn last_round_update(&self) -> RoundUpdate {
-        RoundUpdate::new(self.last_committed_round, self.gc_round)
-    }
 }
 
 /// Describe how to sequence input certificates.
@@ -247,7 +242,7 @@ pub trait ConsensusProtocol {
     ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct RoundUpdate {
     pub committed_round: Round,
     pub gc_round: Round,
@@ -258,6 +253,28 @@ impl RoundUpdate {
         Self {
             committed_round,
             gc_round,
+        }
+    }
+
+    pub fn new_with_gc_depth(committed_round: Round, gc_depth: Round) -> Self {
+        let gc_round = gc_round(committed_round, gc_depth);
+
+        Self {
+            committed_round,
+            gc_round,
+        }
+    }
+
+    /// Calculates the latest RoundUpdate by providing a new committed round and the gc_depth.
+    /// The method will compare against the existing committed round and return
+    /// the updated instance.
+    fn update(&self, new_committed_round: Round, gc_depth: Round) -> Self {
+        let last_committed_round = max(self.committed_round, new_committed_round);
+        let last_gc_round = gc_round(last_committed_round, gc_depth);
+
+        RoundUpdate {
+            committed_round: last_committed_round,
+            gc_round: last_gc_round,
         }
     }
 }
@@ -333,7 +350,7 @@ where
         );
 
         tx_consensus_round_updates
-            .send(state.last_round_update())
+            .send(state.last_round)
             .expect("Failed to send last_committed_round on initialization!");
 
         let s = Self {
@@ -426,9 +443,9 @@ where
                         .await
                         .map_err(|_|ConsensusError::ShuttingDown)?;
 
-                        assert_eq!(self.state.last_committed_round, leader_commit_round);
+                        assert_eq!(self.state.last_round.committed_round, leader_commit_round);
 
-                        self.tx_consensus_round_updates.send(self.state.last_round_update())
+                        self.tx_consensus_round_updates.send(self.state.last_round)
                         .map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 
