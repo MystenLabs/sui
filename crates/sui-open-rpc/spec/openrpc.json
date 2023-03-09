@@ -610,6 +610,50 @@
       ]
     },
     {
+      "name": "sui_getCheckpoints",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return pagenated list of checkpoints",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "Optional paging cursor",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "CheckpointPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Checkpoint_and_uint64"
+        }
+      }
+    },
+    {
       "name": "sui_getCoinMetadata",
       "tags": [
         {
@@ -5035,6 +5079,28 @@
             ]
           }
         ]
+      },
+      "Page_for_Checkpoint_and_uint64": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Checkpoint"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
       },
       "Page_for_Coin_and_ObjectID": {
         "type": "object",

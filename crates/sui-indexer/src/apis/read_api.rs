@@ -239,21 +239,6 @@ where
             .await
     }
 
-    async fn get_checkpoints(
-        &self,
-        cursor: Option<usize>,
-        limit: Option<usize>,
-        order: String,
-    ) -> RpcResult<CheckpointPage> {
-        if self
-            .method_to_be_forwarded
-            .contains(&"get_checkpoints".to_string())
-        {
-            return self.fullnode.get_checkpoints(cursor, limit, order).await;
-        }
-        self.get_checkpoints(cursor, limit, order).await
-    }
-
     async fn get_transactions_in_range(
         &self,
         start: TxSequenceNumber,
@@ -378,6 +363,24 @@ where
             return self.fullnode.get_checkpoint(id).await;
         }
         Ok(self.get_checkpoint(id).await?)
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<usize>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_checkpoints".to_string())
+        {
+            return self
+                .fullnode
+                .get_checkpoints(cursor, limit, descending_order)
+                .await;
+        }
+        self.get_checkpoints(cursor, limit, descending_order).await
     }
 }
 

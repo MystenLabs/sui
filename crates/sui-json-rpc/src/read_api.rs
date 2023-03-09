@@ -24,7 +24,6 @@ use sui_json_rpc_types::{
     ObjectValueKind, Page, SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo,
     SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
-   
     SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc::Module;
@@ -592,21 +591,28 @@ impl ReadApiServer for ReadApi {
         Ok(Page { data, next_cursor })
     }
 
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
+        Ok(self
+            .state
+            .get_latest_checkpoint_sequence_number()
+            .map_err(|e| {
+                anyhow!("Latest checkpoint sequence number was not found with error :{e}")
+            })?)
+    }
+
+    async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
+        Ok(self.get_checkpoint_internal(id)?)
+    }
+
     async fn get_checkpoints(
         &self,
         cursor: Option<usize>,
         limit: Option<usize>,
-        order: String,
+        descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         let limit = cap_page_limit(limit);
-        let mut reverse: bool = false;
-        if order == "asc" {
-            reverse = false;
-        } else if order == "desc" {
-            reverse = true;
-        }
 
-        let checkpoints = self.state.get_checkpoints(reverse)?;
+        let checkpoints = self.state.get_checkpoints(descending_order)?;
 
         let start_index = cursor.unwrap_or(0);
 
@@ -620,19 +626,6 @@ impl ReadApiServer for ReadApi {
 
         data.truncate(limit);
         Ok(Page { data, next_cursor })
-    }
-
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
-        Ok(self
-            .state
-            .get_latest_checkpoint_sequence_number()
-            .map_err(|e| {
-                anyhow!("Latest checkpoint sequence number was not found with error :{e}")
-            })?)
-    }
-
-    async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        Ok(self.get_checkpoint_internal(id)?)
     }
 }
 
