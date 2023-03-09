@@ -88,7 +88,6 @@ async function getLedgerTransport() {
     try {
         ledgerTransport = await initiateLedgerConnection();
     } catch (error) {
-        console.log(error, error instanceof Error);
         throw new LedgerConnectionFailedError(
             "Unable to connect to the user's Ledger device"
         );
