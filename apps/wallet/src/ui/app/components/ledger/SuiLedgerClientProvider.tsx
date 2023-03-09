@@ -8,13 +8,13 @@ import { createContext, useContext, useState } from 'react';
 
 import type Transport from '@ledgerhq/hw-transport';
 
-export const SuiLedgerClientContext = createContext<
-    [SuiLedgerClient | undefined, () => Promise<SuiLedgerClient>] | undefined
->(undefined);
-
 type SuiLedgerClientProviderProps = {
     children: React.ReactNode;
 };
+
+const SuiLedgerClientContext = createContext<
+    [SuiLedgerClient | undefined, () => Promise<SuiLedgerClient>] | undefined
+>(undefined);
 
 export function SuiLedgerClientProvider({
     children,
