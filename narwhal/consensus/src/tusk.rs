@@ -95,7 +95,7 @@ impl ConsensusProtocol for Tusk {
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-            for x in utils::order_dag(self.gc_depth, leader, state) {
+            for x in utils::order_dag(leader, state) {
                 // Update and clean up internal state.
                 state.update(&x);
 

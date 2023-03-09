@@ -329,7 +329,6 @@ impl PrimaryNodeInner {
         let ordering_engine = Bullshark::new(
             committee.clone(),
             store.consensus_store.clone(),
-            parameters.gc_depth,
             consensus_metrics.clone(),
             Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
         );

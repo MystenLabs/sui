@@ -60,7 +60,6 @@ async fn commit_one() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -143,7 +142,6 @@ async fn dead_node() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -300,7 +298,6 @@ async fn not_enough_support() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -421,7 +418,6 @@ async fn missing_leader() {
     let bullshark = Bullshark::new(
         committee.clone(),
         store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -504,7 +500,6 @@ async fn committed_round_after_restart() {
         let bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
-            gc_depth,
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
         );
@@ -591,13 +586,7 @@ async fn delayed_certificates_are_rejected() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
-    let mut bullshark = Bullshark::new(
-        committee,
-        store,
-        gc_depth,
-        metrics,
-        NUM_SUB_DAGS_PER_SCHEDULE,
-    );
+    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
     let mut all_subdags = Vec::new();
@@ -643,13 +632,8 @@ async fn submitting_equivocating_certificate_should_error() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
-    let mut bullshark = Bullshark::new(
-        committee.clone(),
-        store,
-        gc_depth,
-        metrics,
-        NUM_SUB_DAGS_PER_SCHEDULE,
-    );
+    let mut bullshark =
+        Bullshark::new(committee.clone(), store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Populate DAG with all the certificates
     for certificate in certificates.clone() {
@@ -706,13 +690,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
 
     let store = make_consensus_store(&test_utils::temp_dir());
     let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
-    let mut bullshark = Bullshark::new(
-        committee,
-        store,
-        gc_depth,
-        metrics,
-        NUM_SUB_DAGS_PER_SCHEDULE,
-    );
+    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Populate DAG with the rounds up to round 50 so we trigger commits
     let mut all_subdags = Vec::new();
@@ -782,7 +760,6 @@ async fn restart_with_new_committee() {
         let bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
-            gc_depth,
             metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
         );
@@ -897,13 +874,7 @@ async fn garbage_collection_basic() {
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
-    let mut bullshark = Bullshark::new(
-        committee,
-        store,
-        GC_DEPTH,
-        metrics,
-        NUM_SUB_DAGS_PER_SCHEDULE,
-    );
+    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Now start feeding the certificates per round
     for c in certificates {
@@ -1004,13 +975,8 @@ async fn slow_node() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
-    let mut bullshark = Bullshark::new(
-        committee.clone(),
-        store,
-        GC_DEPTH,
-        metrics,
-        NUM_SUB_DAGS_PER_SCHEDULE,
-    );
+    let mut bullshark =
+        Bullshark::new(committee.clone(), store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Now start feeding the certificates per round up to 8. We expect to have
     // triggered a commit up to round 6 and gc round 1 & 2.
@@ -1185,13 +1151,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
-    let mut bullshark = Bullshark::new(
-        committee,
-        store,
-        GC_DEPTH,
-        metrics,
-        NUM_SUB_DAGS_PER_SCHEDULE,
-    );
+    let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     let mut committed = false;
     for c in &certificates {
@@ -1234,7 +1194,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                     assert_eq!(sub_dags[1].leader.round(), 6);
 
                     assert_eq!(sub_dags[0].certificates.len(), 4);
-                    assert_eq!(sub_dags[1].certificates.len(), 9);
+                    assert_eq!(sub_dags[1].certificates.len(), 11);
 
                     // And GC has collected everything up to round 5.
                     assert_eq!(state.dag.len(), 5);

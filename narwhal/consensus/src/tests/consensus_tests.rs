@@ -67,7 +67,6 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -163,7 +162,6 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
@@ -233,7 +231,6 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );

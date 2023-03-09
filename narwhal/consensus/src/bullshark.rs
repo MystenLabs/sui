@@ -41,8 +41,6 @@ pub struct Bullshark {
     pub committee: Committee,
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore>,
-    /// The depth of the garbage collector.
-    pub gc_depth: Round,
 
     pub metrics: Arc<ConsensusMetrics>,
     /// The last time we had a successful leader election
@@ -163,7 +161,7 @@ impl ConsensusProtocol for Bullshark {
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-            for x in utils::order_dag(self.gc_depth, leader, state) {
+            for x in utils::order_dag(leader, state) {
                 // Update and clean up internal state.
                 state.update(&x);
 
@@ -243,14 +241,12 @@ impl Bullshark {
     pub fn new(
         committee: Committee,
         store: Arc<ConsensusStore>,
-        gc_depth: Round,
         metrics: Arc<ConsensusMetrics>,
         num_sub_dags_per_schedule: u64,
     ) -> Self {
         Self {
             committee,
             store,
-            gc_depth,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
