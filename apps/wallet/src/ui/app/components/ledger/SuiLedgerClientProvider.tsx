@@ -8,6 +8,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
@@ -23,8 +24,13 @@ type SuiLedgerClientProviderProps = {
     children: React.ReactNode;
 };
 
+type SuiLedgerClientContextValue = [
+    SuiLedgerClient | undefined,
+    () => Promise<SuiLedgerClient>
+];
+
 const SuiLedgerClientContext = createContext<
-    [SuiLedgerClient | undefined, () => Promise<SuiLedgerClient>] | undefined
+    SuiLedgerClientContextValue | undefined
 >(undefined);
 
 export function SuiLedgerClientProvider({
@@ -32,17 +38,29 @@ export function SuiLedgerClientProvider({
 }: SuiLedgerClientProviderProps) {
     const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
 
+    useEffect(() => {
+        const onDisconnect = () => {
+            setSuiLedgerClient(undefined);
+        };
+
+        suiLedgerClient?.transport.on('disconnect', onDisconnect);
+        return () => suiLedgerClient?.transport.off('disconnect', onDisconnect);
+    }, [suiLedgerClient?.transport]);
+
     const connectToLedger = useCallback(async () => {
+        if (suiLedgerClient?.transport) {
+            // If we've already connected to a Ledger device, we need
+            // to close the connection before we try to re-connect
+            await suiLedgerClient.transport.close();
+        }
+
         const ledgerTransport = await getLedgerTransport();
         const ledgerClient = new SuiLedgerClient(ledgerTransport);
         setSuiLedgerClient(ledgerClient);
         return ledgerClient;
-    }, []);
+    }, [suiLedgerClient]);
 
-    const contextValue: [
-        SuiLedgerClient | undefined,
-        () => Promise<SuiLedgerClient>
-    ] = useMemo(
+    const contextValue: SuiLedgerClientContextValue = useMemo(
         () => [suiLedgerClient, connectToLedger],
         [connectToLedger, suiLedgerClient]
     );
@@ -70,6 +88,7 @@ async function getLedgerTransport() {
     try {
         ledgerTransport = await initiateLedgerConnection();
     } catch (error) {
+        console.log(error, error instanceof Error);
         throw new LedgerConnectionFailedError(
             "Unable to connect to the user's Ledger device"
         );
