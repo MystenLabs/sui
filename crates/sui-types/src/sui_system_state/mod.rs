@@ -17,7 +17,7 @@ use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorMetadataV1};
+use self::sui_system_state_inner_v1::SuiSystemStateInnerV1;
 use self::sui_system_state_summary::SuiSystemStateSummary;
 
 pub mod epoch_start_sui_system_state;
@@ -67,7 +67,6 @@ pub trait SuiSystemStateTrait {
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
-    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadataV1>;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }
