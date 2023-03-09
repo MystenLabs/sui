@@ -14,15 +14,15 @@ Versions are strictly increasing and (ID, version) pairs are never re-used. This
 
 ## Move Objects
 
-Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm for objects. The use of Lamport timestamps guarantees that versions never get re-used:  The new version for objects touched by a transaction is one greater than the max version among all input objects to the transaction.  For example, a transaction transferring an object `O` at version `5` using a gas object `G` at version `3` updates both `O` and `G` versions to `1 + max(5, 3) = 6`.
+Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm for objects. The use of Lamport timestamps guarantees that versions never get re-used:  The new version for objects touched by a transaction is one greater than the max version among all input objects to the transaction.  For example, a transaction transferring an object `O` at version `5` using a gas object `G` at version `3` updates both `O` and `G` versions to `1 + max(5, 3) = 6`. 
 
-The relevance of versions for accessing an object as a transaction input changes depending on that object's ownership.
+The relevance of Lamport versions for maintaining the "no (ID, version) re-use" invariant or for accessing an object as a transaction input changes depending on that object's ownership, as detailed in the following sections.
 
 ### Address-owned Objects
 
 You must reference address-owned transaction inputs at a specific ID and version. When a validator signs a transaction with an owned object input at a specific version, that version of the object is **locked** to that transaction. Validators reject requests to sign other transactions that require the same input (same ID and version).
 
-If `F + 1` validators sign one transaction that takes an object as input, and a different `F + 1` validators sign a different transaction that takes the same object as input, that object (and all the other inputs to both transactions) are **equivocated** meaning they cannot be used for any further transactions in that epoch.  This is because neither transaction can form a quorum without relying on a signature from a validator that has already committed the object to a different transaction, which it cannot get.  All locks are reset at the end of the epoch, which frees the objects up once more.
+If `F + 1` validators sign one transaction that takes an object as input, and a different `F + 1` validators sign a different transaction that takes the same object as input, that object (and all the other inputs to both transactions) are **equivocated** meaning they cannot be used for any further transactions in that epoch.  This is because neither transaction can form a quorum without relying on a signature from a validator that has already committed the object to a different transaction, which it cannot get.  All locks are reset at the end of the epoch, which frees the objects again.
 
 Only an object's owner can equivocate it, but this is not a desirable thing to do.  You can avoid equivocation by carefully managing the versions of address-owned input objects.
 
@@ -46,7 +46,7 @@ module example::wrapped {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     
-    struct Inner has key {
+    struct Inner has key, store {
         id: UID,
         x: u64,
     }
@@ -57,16 +57,17 @@ module example::wrapped {
     }
     
     entry fun make_wrapped(ctx: &mut TxContext) {
-        transfer::transfer(
-            Outer {
-                id: object::new(ctx),
-                inner: Inner {
-                    id: object::new(ctx),
-                    x: 42,
-                }
-            }
-            tx_context::sender(ctx),
-        )
+        let inner = Inner {
+            id: object::new(ctx),
+            x: 42,
+        };
+
+        let outer = Outer {
+            id: object::new(ctx),
+            inner,
+        };
+
+        transfer::transfer(outer, tx_context::sender(ctx));
     }
 }
 ```
@@ -91,7 +92,7 @@ The `unwrap` function in the previous code takes an instance of `Outer`, destroy
 
 The Lamport timestamp-based versioning scheme ensures that the version that an object is unwrapped at is always greater than the version it was wrapped at, to prevent version re-use.
 
-- After a transaction, `W` wrapping object `I` in object `O`, `O`'s version is greater than or equal to `I`'s. This means one of the following conditions is true:
+- After a transaction, `W`, where object `I` is wrapped by object `O`, `O`'s version is greater than or equal to `I`'s. This means one of the following conditions is true:
   - `I` is an input so has a strictly lower version.
   - `I` is new and has an equal version.
 - After a later transaction unwrapping `I` out of `O`, the following must be true: 
@@ -110,11 +111,20 @@ So `I`'s version before wrapping is less than `I`'s version after unwrapping.
 
 From a versioning perspective, values held in dynamic fields behave like wrapped objects:
 
-- They are only accessible via their field owner, not as direct transaction inputs.
-- Based on the previous point, you do not need to supply their versions with the transaction inputs.
-- Lamport timestamp-based versioning makes sure that when a transaction removes a field and its value becomes accessible by its ID, its version has been incremented.
+- They are only accessible via the field's parent object, not as direct transaction inputs.
+- Based on the previous point, you do not need to supply their IDs or versions with the transaction inputs.
+- Lamport timestamp-based versioning makes sure that when a field contains an object and a transaction removes that field, its value becomes accessible by its ID and the value's version has been incremented to a previously unused version.
 
-One distinction to wrapped objects is that if a transaction modifies a dynamic object field, its version is incremented in that transaction, where a wrapped object's version would not.
+One distinction to wrapped objects is that if a transaction modifies a dynamic object field, its version is incremented in that transaction, where a wrapped object's version would not be.
+
+Adding a new dynamic field to a parent object also creates a `Field` object, responsible for associating the field name and value with that parent. Unlike other newly created objects, the ID for the resulting instance of `Field` is _not_ created using `sui::object::new`. Instead, it is computed as a hash of the parent object ID and the type and value of the field name, so that it can be used to look-up the `Field` via its parent and name.
+
+When a field is removed its associated `Field` is deleted, and if a new field with the same name is added, a new instance will be created, **with the same ID**. Versioning using Lamport timestamps, coupled with the fact that dynamic fields can only be accessed through their parent object ensures that (ID, version) pairs are not reused in the process:
+
+- The transaction that deletes the original field will increment the parent's version to be greater than the deleted field's version.
+- The transaction that creates the new version of the same field will create it with a version that is greater than the parent's version.
+
+So the version of the new `Field` instance will be greater than the version of the deleted `Field`.
 
 ## Packages
 
