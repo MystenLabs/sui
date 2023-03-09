@@ -92,9 +92,11 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-pub use crate::authority::authority_per_epoch_store::VerifiedCertificateCache;
 use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
+};
+pub use crate::authority::authority_per_epoch_store::{
+    VerifiedCertificateCache, VerifiedCertificateCacheMetrics,
 };
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
@@ -1649,6 +1651,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
+        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1658,6 +1661,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
+            verified_cert_cache_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(

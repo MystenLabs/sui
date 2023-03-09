@@ -68,7 +68,6 @@ impl TransactionValidator for SuiTxValidator {
 
         // let mut owned_tx_certs = Vec::new();
         let mut obligation = VerificationObligation::default();
-        let mut cached_cert_digests = Vec::new();
         let mut verified_cert_digests = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
@@ -79,13 +78,7 @@ impl TransactionValidator for SuiTxValidator {
                         .verified_cert_cache()
                         .is_cert_verified(&cert_digest)
                     {
-                        cached_cert_digests.push(cert_digest);
-                        self.metrics.certificate_signatures_cache_hits.inc();
                         continue;
-                    } else {
-                        // obviously, this is not verified until after the batch verification
-                        // completes.
-                        verified_cert_digests.push(cert_digest);
                     }
 
                     self.metrics.certificate_signatures_verified.inc();
@@ -100,6 +93,11 @@ impl TransactionValidator for SuiTxValidator {
                         &mut obligation,
                         idx,
                     )?;
+
+                    // The digest must not be added to the cache until:
+                    // - the user signature is verified (checked above)
+                    // - batch verification completes successfully.
+                    verified_cert_digests.push(cert_digest);
 
                     // if !certificate.contains_shared_object() {
                     //     // new_unchecked safety: we do not use the certs in this list until all
@@ -151,7 +149,6 @@ impl TransactionValidator for SuiTxValidator {
 
 pub struct SuiTxValidatorMetrics {
     certificate_signatures_verified: IntCounter,
-    certificate_signatures_cache_hits: IntCounter,
     checkpoint_signatures_verified: IntCounter,
 }
 
@@ -161,12 +158,6 @@ impl SuiTxValidatorMetrics {
             certificate_signatures_verified: register_int_counter_with_registry!(
                 "certificate_signatures_verified",
                 "Number of certificates verified in narwhal batch verifier",
-                registry
-            )
-            .unwrap(),
-            certificate_signatures_cache_hits: register_int_counter_with_registry!(
-                "certificate_signatures_cache_hits",
-                "Number of certificates which were known to be verified because of signature cache.",
                 registry
             )
             .unwrap(),

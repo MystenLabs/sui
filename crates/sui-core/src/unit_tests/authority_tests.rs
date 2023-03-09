@@ -2729,6 +2729,7 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
+        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(committee),
@@ -2738,6 +2739,7 @@ async fn test_authority_persist() {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
+            verified_cert_cache_metrics,
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -4802,6 +4804,7 @@ async fn test_tallying_rule_score_updates() {
     );
 
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
+    let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
     let epoch_store = AuthorityPerEpochStore::new(
         auth_0_name,
         Arc::new(committee.clone()),
@@ -4811,6 +4814,7 @@ async fn test_tallying_rule_score_updates() {
         EpochStartConfiguration::new_for_testing(),
         store,
         cache_metrics,
+        verified_cert_cache_metrics,
     );
 
     let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {
