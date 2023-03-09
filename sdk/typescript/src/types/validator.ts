@@ -133,6 +133,7 @@ export const SuiValidatorSummary = object({
   network_pubkey_bytes: array(number()),
   worker_pubkey_bytes: array(number()),
   proof_of_possession_bytes: array(number()),
+  operation_cap_id: string(),
   name: string(),
   description: string(),
   image_url: string(),

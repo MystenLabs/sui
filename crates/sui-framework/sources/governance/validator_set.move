@@ -9,9 +9,10 @@ module sui::validator_set {
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, staking_pool_id, sui_address};
+    use sui::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
     use sui::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
     use sui::epoch_time_lock::EpochTimeLock;
-    use sui::object::ID;
+    use sui::object::{Self, ID};
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
@@ -27,6 +28,9 @@ module sui::validator_set {
 
     #[test_only]
     friend sui::delegation_tests;
+
+    // Errors
+    const EInvalidCap: u64 = 1;
 
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators at the beginning of the epoch.
@@ -252,16 +256,6 @@ module sui::validator_set {
     }
 
     // ==== validator config setting functions ====
-
-    public(friend) fun request_set_gas_price(
-        self: &mut ValidatorSet,
-        new_gas_price: u64,
-        ctx: &TxContext,
-    ) {
-        let validator_address = tx_context::sender(ctx);
-        let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        validator::request_set_gas_price(validator, new_gas_price);
-    }
 
     public(friend) fun request_set_commission_rate(
         self: &mut ValidatorSet,
@@ -550,12 +544,12 @@ module sui::validator_set {
         vector::borrow_mut(validators, validator_index)
     }
 
-    public(friend) fun get_active_or_pending_validator_mut(
+    /// Note: this function should be called carefully, only after verifying the transaction
+    /// sender has the ability to modify the `Validator`.
+    fun get_active_or_pending_validator_mut(
         self: &mut ValidatorSet,
-        ctx: &TxContext,
+        validator_address: address,
     ): &mut Validator {
-        let validator_address = tx_context::sender(ctx);
-
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
         if (option::is_some(&validator_index_opt)) {
             let validator_index = option::extract(&mut validator_index_opt);
@@ -566,6 +560,21 @@ module sui::validator_set {
         return table_vec::borrow_mut(&mut self.pending_active_validators, validator_index)
     }
 
+    public(friend) fun get_validator_mut_with_verified_cap(
+        self: &mut ValidatorSet,
+        verified_cap: &ValidatorOperationCap,
+    ): &mut Validator {
+        get_active_or_pending_validator_mut(self, *validator_cap::verified_operation_cap_address(verified_cap))
+    }
+
+    public(friend) fun get_validator_mut_with_ctx(
+        self: &mut ValidatorSet,
+        ctx: &TxContext,
+    ): &mut Validator {
+        let validator_address = tx_context::sender(ctx);
+        get_active_or_pending_validator_mut(self, validator_address)
+    }
+
     fun get_validator_ref(
         validators: &vector<Validator>,
         validator_address: address,
@@ -574,6 +583,20 @@ module sui::validator_set {
         assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         vector::borrow(validators, validator_index)
+    }
+
+    public(friend) fun get_active_or_pending_validator_ref(
+        self: &ValidatorSet,
+        validator_address: address,
+    ): &Validator {
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        if (option::is_some(&validator_index_opt)) {
+            let validator_index = option::extract(&mut validator_index_opt);
+            return vector::borrow(&self.active_validators, validator_index)
+        };
+        let validator_index_opt = find_validator_from_table_vec(&self.pending_active_validators, validator_address);
+        let validator_index = option::extract(&mut validator_index_opt);
+        return table_vec::borrow(&self.pending_active_validators, validator_index)
     }
 
     public fun get_active_validator_ref(
@@ -594,6 +617,24 @@ module sui::validator_set {
         assert!(option::is_some(&validator_index_opt), 0);
         let validator_index = option::extract(&mut validator_index_opt);
         table_vec::borrow(&self.pending_active_validators, validator_index)
+    }
+
+    /// Verify the capability is valid for a Validator.
+    /// If `active_validator_only` is true, only verify the Cap for an active validator.
+    /// Otherwise, verify the Cap for au either active or pending validator.
+    public(friend) fun verify_cap(
+        self: &ValidatorSet,
+        cap: &UnverifiedValidatorOperationCap,
+        active_validator_only: bool,
+    ): ValidatorOperationCap {
+        let cap_address = *validator_cap::unverified_operation_cap_address(cap);
+        let validator =
+            if (active_validator_only)
+                get_active_validator_ref(self, cap_address)
+            else
+                get_active_or_pending_validator_ref(self, cap_address);
+        assert!(validator::operation_cap_id(validator) == &object::id(cap), EInvalidCap);
+        validator_cap::new_from_unverified(cap)
     }
 
     /// Process the pending withdraw requests. For each pending request, the validator

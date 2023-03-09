@@ -8,6 +8,7 @@ use crate::committee::{
     Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
 };
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::id::ID;
 use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfo,
 };
@@ -213,6 +214,7 @@ impl ValidatorMetadataV1 {
 pub struct ValidatorV1 {
     pub metadata: ValidatorMetadataV1,
     pub voting_power: u64,
+    pub operation_cap_id: ID,
     pub gas_price: u64,
     pub staking_pool: StakingPoolV1,
     pub commission_rate: u64,
@@ -269,6 +271,7 @@ impl ValidatorV1 {
                     next_epoch_worker_address,
                 },
             voting_power,
+            operation_cap_id,
             gas_price,
             staking_pool:
                 StakingPoolV1 {
@@ -315,6 +318,7 @@ impl ValidatorV1 {
             next_epoch_primary_address,
             next_epoch_worker_address,
             voting_power,
+            operation_cap_id,
             gas_price,
             staking_pool_id,
             staking_pool_activation_epoch,

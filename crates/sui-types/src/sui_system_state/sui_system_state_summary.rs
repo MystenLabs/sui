@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
+use crate::id::ID;
 
 /// This is the JSON-RPC type for the SUI system state object.
 /// It flattens all fields to make them top-level fields such that it as minimum
@@ -126,6 +127,7 @@ pub struct SuiValidatorSummary {
     pub next_epoch_worker_address: Option<Vec<u8>>,
 
     pub voting_power: u64,
+    pub operation_cap_id: ID,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,
