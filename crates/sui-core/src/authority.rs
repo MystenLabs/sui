@@ -1630,7 +1630,7 @@ impl AuthorityState {
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
-            genesis_committee.clone(),
+            Arc::new(genesis_committee.clone()),
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),

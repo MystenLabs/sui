@@ -94,7 +94,7 @@ impl AuthorityStore {
         Self::open_inner(
             genesis,
             perpetual_tables,
-            committee,
+            &committee,
             indirect_objects_threshold,
         )
         .await
@@ -114,7 +114,7 @@ impl AuthorityStore {
         Self::open_inner(
             genesis,
             perpetual_tables,
-            committee.clone(),
+            committee,
             indirect_objects_threshold,
         )
         .await
@@ -123,7 +123,7 @@ impl AuthorityStore {
     async fn open_inner(
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
-        committee: Committee,
+        committee: &Committee,
         indirect_objects_threshold: usize,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
