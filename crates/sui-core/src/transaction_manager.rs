@@ -214,6 +214,9 @@ impl TransactionManager {
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["ready"])
                     .inc();
+                // Record as an executing certificate.
+                assert!(inner.executing_certificates.insert(digest));
+                // Send to execution driver for execution.
                 self.certificate_ready(pending_cert.certificate);
                 continue;
             }
