@@ -83,11 +83,7 @@ async fn main() -> Result<()> {
     metrics::start_metrics_push_task(&config, registry_service.clone());
 
     if let Some(listen_address) = args.listen_address {
-        let address = sui_config::utils::tcp_multiaddr_to_listen_address(&listen_address).expect(
-            &format!("Multiaddr {listen_address:?} cannot be converted into socket address"),
-        );
         config.network_address = listen_address;
-        config.p2p_config.listen_address.set_ip(address.ip());
     }
 
     let is_validator = config.consensus_config().is_some();

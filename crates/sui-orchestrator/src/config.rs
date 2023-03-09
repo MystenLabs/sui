@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    net::{IpAddr, Ipv4Addr},
+    path::PathBuf,
+};
 
 use move_core_types::account_address::AccountAddress;
 use multiaddr::Multiaddr;
@@ -92,6 +96,7 @@ impl Config {
                         NetworkKeyPair::generate(&mut rng),   // worker_key_pair
                         SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng)), // account_key_pair
                         NetworkKeyPair::generate(&mut rng),   // network_key_pair
+                        Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
                         instance.main_ip.to_string(),
                         500, // port_offset
                     ),
