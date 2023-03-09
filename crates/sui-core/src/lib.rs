@@ -25,7 +25,6 @@ mod stake_aggregator;
 pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
-pub mod tbls;
 pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;

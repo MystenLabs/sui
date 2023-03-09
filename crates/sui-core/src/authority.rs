@@ -126,10 +126,6 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-#[cfg(test)]
-#[path = "unit_tests/tbls_tests.rs"]
-mod tbls_tests;
-
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
