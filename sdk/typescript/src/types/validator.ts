@@ -28,9 +28,10 @@ export const Balance = object({
   value: number(),
 });
 
-export const DelegationObject = object({
+export const StakeObject = object({
   stakedSuiId: ObjectId,
-  delegationRequestEpoch: EpochId,
+  stakeRequestEpoch: EpochId,
+  stakeActiveEpoch: EpochId,
   principal: number(),
   tokenLock: nullable(EpochId),
   status: union([literal('Active'), literal('Pending')]),
@@ -40,7 +41,7 @@ export const DelegationObject = object({
 export const DelegatedStake = object({
   validatorAddress: SuiAddress,
   stakingPool: ObjectId,
-  delegations: array(DelegationObject),
+  stakes: array(StakeObject),
 });
 
 export const ParametersFields = object({
