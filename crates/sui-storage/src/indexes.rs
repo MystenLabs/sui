@@ -552,7 +552,7 @@ impl IndexStore {
         object: ObjectID,
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
-        let cursor = cursor.unwrap_or(ObjectID::ZERO);
+        debug!(?object, "get_dynamic_fields");
         Ok(self
             .tables
             .dynamic_field_index
