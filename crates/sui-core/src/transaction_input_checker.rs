@@ -29,8 +29,6 @@ async fn get_gas_status(
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
-    let tx_kind = transaction.kind();
-
     // Get the first coin (possibly the only one) and make it "the gas coin", then
     // keep track of all others that can contribute to gas (gas smashing and special
     // pay transactions).
@@ -38,18 +36,6 @@ async fn get_gas_status(
     let gas_object_ref = gas.get(0).unwrap();
     // all other gas coins
     let more_gas_object_refs = gas[1..].to_vec();
-    // special transaction coins
-    let extra_gas_object_refs = match tx_kind {
-        TransactionKind::Single(SingleTransactionKind::PaySui(p)) => {
-            // gas length here must be one (validate checks that)
-            p.coins.clone().into_iter().skip(gas.len()).collect()
-        }
-        TransactionKind::Single(SingleTransactionKind::PayAllSui(p)) => {
-            // gas length here must be one (validate checks that)
-            p.coins.clone().into_iter().skip(gas.len()).collect()
-        }
-        _ => vec![],
-    };
 
     check_gas(
         objects,
@@ -59,7 +45,6 @@ async fn get_gas_status(
         transaction.gas_price(),
         transaction.kind(),
         more_gas_object_refs,
-        extra_gas_object_refs,
     )
     .await
 }
@@ -88,18 +73,11 @@ pub(crate) async fn check_dev_inspect_input(
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
-    kind.validity_check(config, &[gas_object_ref])?;
+    kind.validity_check(config)?;
     for k in kind.single_transactions() {
         match k {
-            SingleTransactionKind::TransferObject(_)
-            | SingleTransactionKind::Call(_)
-            | SingleTransactionKind::TransferSui(_)
-            | SingleTransactionKind::Pay(_)
-            | SingleTransactionKind::PaySui(_)
-            | SingleTransactionKind::PayAllSui(_)
-            | SingleTransactionKind::ProgrammableTransaction(_) => (),
-            SingleTransactionKind::Publish(_)
-            | SingleTransactionKind::ChangeEpoch(_)
+            SingleTransactionKind::ProgrammableTransaction(_) => (),
+            SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_) => {
                 anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
@@ -171,7 +149,6 @@ async fn check_gas(
     computation_gas_price: u64,
     tx_kind: &TransactionKind,
     more_gas_object_refs: Vec<ObjectRef>,
-    additional_objects_for_gas_payment: Vec<ObjectRef>,
 ) -> SuiResult<SuiGasStatus<'static>> {
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
@@ -184,14 +161,6 @@ async fn check_gas(
 
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
         // both gas budget and the transfer amount.
-        let extra_amount = match tx_kind {
-            TransactionKind::Single(SingleTransactionKind::TransferSui(t)) => {
-                t.amount.unwrap_or_default()
-            }
-            TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
-            _ => 0,
-        };
-
         let reference_gas_price = epoch_store.reference_gas_price();
         if computation_gas_price < reference_gas_price {
             return Err(UserInputError::GasPriceUnderRGP {
@@ -217,23 +186,11 @@ async fn check_gas(
             more_gas_objects.push(obj.clone());
         }
 
-        let mut additional_objs = vec![];
-        for obj_ref in additional_objects_for_gas_payment.iter() {
-            let obj = objects.iter().find(|o| o.id() == obj_ref.0);
-            let obj = obj.ok_or(UserInputError::ObjectNotFound {
-                object_id: obj_ref.0,
-                version: Some(obj_ref.1),
-            })?;
-            additional_objs.push(obj.clone());
-        }
-
         gas::check_gas_balance(
             gas_object,
             gas_budget,
             gas_price,
-            extra_amount,
             more_gas_objects,
-            additional_objs,
             &cost_table,
         )?;
 
@@ -277,26 +234,8 @@ pub fn check_objects(
 
     // Gather all objects and errors.
     let mut all_objects = Vec::with_capacity(input_objects.len());
-    let transfer_object_ids: HashSet<_> = transaction
-        .kind()
-        .single_transactions()
-        .filter_map(|s| {
-            if let SingleTransactionKind::TransferObject(t) = s {
-                Some(t.object_ref.0)
-            } else {
-                None
-            }
-        })
-        .collect();
 
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
-        if transfer_object_ids.contains(&object.id()) {
-            object.ensure_public_transfer_eligible().map_err(|_e| {
-                UserInputError::TransferObjectWithoutPublicTransferError {
-                    object_id: object.id(),
-                }
-            })?;
-        }
         // For Gas Object, we check the object is owned by gas owner
         // TODO: this is a quadratic check and though limits are low we should do it differently
         let owner_address = if transaction

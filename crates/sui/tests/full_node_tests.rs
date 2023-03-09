@@ -28,9 +28,10 @@ use sui_types::event::Event;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse, GasData,
-    QuorumDriverResponse, SingleTransactionKind, TransactionData, TransactionKind, TransferObject,
+    QuorumDriverResponse, TransactionData, TransactionKind,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{
@@ -124,10 +125,12 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     info!("updated gas ref: {:?}", gas_obj);
 
     // Construct the sponsored transction
-    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-        recipient: another_addr,
-        object_ref,
-    }));
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(another_addr, object_ref);
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
     let tx_data = TransactionData::new_with_gas_data(
         kind,
         sender,

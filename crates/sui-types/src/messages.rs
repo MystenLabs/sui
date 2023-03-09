@@ -385,22 +385,6 @@ impl GenesisObject {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum SingleTransactionKind {
-    /// Initiate an object transfer between addresses
-    TransferObject(TransferObject),
-    /// Publish a new Move module
-    Publish(MoveModulePublish),
-    /// Call a function in a published Move module
-    Call(MoveCall),
-    /// Initiate a SUI coin transfer between addresses
-    TransferSui(TransferSui),
-    /// Pay multiple recipients using multiple input coins
-    Pay(Pay),
-    /// Pay multiple recipients using multiple SUI coins,
-    /// no extra gas payment SUI coin is required.
-    PaySui(PaySui),
-    /// After paying the gas of the transaction itself, pay
-    /// pay all remaining coins to the recipient.
-    PayAllSui(PayAllSui),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -425,14 +409,7 @@ impl VersionedProtocolMessage for SingleTransactionKind {
         // When we add new cases here, check that current_protocol_version does not pre-date the
         // addition of that enumerant.
         match &self {
-            SingleTransactionKind::TransferObject(_)
-            | SingleTransactionKind::Publish(_)
-            | SingleTransactionKind::Call(_)
-            | SingleTransactionKind::TransferSui(_)
-            | SingleTransactionKind::Pay(_)
-            | SingleTransactionKind::PaySui(_)
-            | SingleTransactionKind::PayAllSui(_)
-            | SingleTransactionKind::ChangeEpoch(_)
+            SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_)
             | SingleTransactionKind::ProgrammableTransaction(_) => Ok(()),
@@ -952,10 +929,22 @@ impl SingleTransactionKind {
         self.shared_input_objects().next().is_some()
     }
 
+    /// Returns an iterator of all shared input objects used by this transaction.
+    /// It covers both Call and ChangeEpoch transaction kind, because both makes Move calls.
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
-            Self::Call(_) | Self::ChangeEpoch(_) | Self::ConsensusCommitPrologue(_) => {
-                Either::Left(self.all_move_call_shared_input_objects())
+            Self::ChangeEpoch(_) => Either::Left(Either::Left(iter::once(SharedInputObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            }))),
+
+            Self::ConsensusCommitPrologue(_) => {
+                Either::Left(Either::Right(iter::once(SharedInputObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                })))
             }
             Self::ProgrammableTransaction(pt) => {
                 Either::Right(Either::Left(pt.shared_input_objects()))
@@ -964,71 +953,8 @@ impl SingleTransactionKind {
         }
     }
 
-    /// Returns an iterator of all shared input objects used by this transaction.
-    /// It covers both Call and ChangeEpoch transaction kind, because both makes Move calls.
-    /// This function is split out of shared_input_objects because Either type only supports
-    /// two variants, while we need to be able to return three variants (Flatten, Once, Empty).
-    fn all_move_call_shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        match &self {
-            Self::Call(MoveCall { arguments, .. }) => Either::Left(
-                arguments
-                    .iter()
-                    .filter_map(|arg| match arg {
-                        CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                        CallArg::Object(ObjectArg::SharedObject {
-                            id,
-                            initial_shared_version,
-                            mutable,
-                        }) => Some(vec![SharedInputObject {
-                            id: *id,
-                            initial_shared_version: *initial_shared_version,
-                            mutable: *mutable,
-                        }]),
-                        CallArg::ObjVec(vec) => Some(
-                            vec.iter()
-                                .filter_map(|obj_arg| {
-                                    if let ObjectArg::SharedObject {
-                                        id,
-                                        initial_shared_version,
-                                        mutable,
-                                    } = obj_arg
-                                    {
-                                        Some(SharedInputObject {
-                                            id: *id,
-                                            initial_shared_version: *initial_shared_version,
-                                            mutable: *mutable,
-                                        })
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect(),
-                        ),
-                    })
-                    .flatten(),
-            ),
-            Self::ChangeEpoch(_) => Either::Right(iter::once(SharedInputObject {
-                id: SUI_SYSTEM_STATE_OBJECT_ID,
-                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                mutable: true,
-            })),
-            Self::ConsensusCommitPrologue(_) => Either::Right(iter::once(SharedInputObject {
-                id: SUI_CLOCK_OBJECT_ID,
-                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                mutable: true,
-            })),
-            _ => unreachable!(),
-        }
-    }
-
     fn move_calls(&self) -> Vec<(&ObjectID, &IdentStr, &IdentStr)> {
         match &self {
-            Self::Call(MoveCall {
-                package,
-                module,
-                function,
-                ..
-            }) => vec![(package, module, function)],
             Self::ProgrammableTransaction(pt) => pt.move_calls(),
             _ => vec![],
         }
@@ -1040,28 +966,6 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::TransferObject(TransferObject { object_ref, .. }) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
-            }
-            Self::Call(move_call) => move_call.input_objects(),
-            Self::Publish(MoveModulePublish { modules }) => {
-                Command::publish_command_input_objects(modules)
-            }
-            Self::TransferSui(_) => {
-                vec![]
-            }
-            Self::Pay(Pay { coins, .. }) => coins
-                .iter()
-                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
-                .collect(),
-            Self::PaySui(PaySui { coins, .. }) => coins
-                .iter()
-                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
-                .collect(),
-            Self::PayAllSui(PayAllSui { coins, .. }) => coins
-                .iter()
-                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
-                .collect(),
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -1095,17 +999,10 @@ impl SingleTransactionKind {
         Ok(input_objects)
     }
 
-    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
-            SingleTransactionKind::Publish(publish) => publish.validity_check(config)?,
-            SingleTransactionKind::Call(call) => call.validity_check(config)?,
-            SingleTransactionKind::Pay(p) => p.validity_check(config)?,
-            SingleTransactionKind::PaySui(p) => p.validity_check(config, gas)?,
-            SingleTransactionKind::PayAllSui(pa) => pa.validity_check(config, gas)?,
             SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
-            SingleTransactionKind::TransferObject(_)
-            | SingleTransactionKind::TransferSui(_)
-            | SingleTransactionKind::ChangeEpoch(_)
+            SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
             | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
         };
@@ -1117,79 +1014,6 @@ impl Display for SingleTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::TransferObject(t) => {
-                writeln!(writer, "Transaction Kind : Transfer Object")?;
-                writeln!(writer, "Recipient : {}", t.recipient)?;
-                let (object_id, seq, digest) = t.object_ref;
-                writeln!(writer, "Object ID : {}", &object_id)?;
-                writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", digest)?;
-            }
-            Self::TransferSui(t) => {
-                writeln!(writer, "Transaction Kind : Transfer SUI")?;
-                writeln!(writer, "Recipient : {}", t.recipient)?;
-                if let Some(amount) = t.amount {
-                    writeln!(writer, "Amount: {}", amount)?;
-                } else {
-                    writeln!(writer, "Amount: Full Balance")?;
-                }
-            }
-            Self::Pay(p) => {
-                writeln!(writer, "Transaction Kind : Pay")?;
-                writeln!(writer, "Coins:")?;
-                for (object_id, seq, digest) in &p.coins {
-                    writeln!(writer, "Object ID : {}", &object_id)?;
-                    writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", digest)?;
-                }
-                writeln!(writer, "Recipients:")?;
-                for recipient in &p.recipients {
-                    writeln!(writer, "{}", recipient)?;
-                }
-                writeln!(writer, "Amounts:")?;
-                for amount in &p.amounts {
-                    writeln!(writer, "{}", amount)?
-                }
-            }
-            Self::PaySui(p) => {
-                writeln!(writer, "Transaction Kind : Pay SUI")?;
-                writeln!(writer, "Coins:")?;
-                for (object_id, seq, digest) in &p.coins {
-                    writeln!(writer, "Object ID : {}", &object_id)?;
-                    writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", digest)?;
-                }
-                writeln!(writer, "Recipients:")?;
-                for recipient in &p.recipients {
-                    writeln!(writer, "{}", recipient)?;
-                }
-                writeln!(writer, "Amounts:")?;
-                for amount in &p.amounts {
-                    writeln!(writer, "{}", amount)?
-                }
-            }
-            Self::PayAllSui(p) => {
-                writeln!(writer, "Transaction Kind : Pay all SUI")?;
-                writeln!(writer, "Coins:")?;
-                for (object_id, seq, digest) in &p.coins {
-                    writeln!(writer, "Object ID : {}", &object_id)?;
-                    writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", digest)?;
-                }
-                writeln!(writer, "Recipient:")?;
-                writeln!(writer, "{}", &p.recipient)?;
-            }
-            Self::Publish(_p) => {
-                writeln!(writer, "Transaction Kind : Publish")?;
-            }
-            Self::Call(c) => {
-                writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Package ID : {}", c.package.to_hex_literal())?;
-                writeln!(writer, "Module : {}", c.module)?;
-                writeln!(writer, "Function : {}", c.function)?;
-                writeln!(writer, "Arguments : {:?}", c.arguments)?;
-                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
-            }
             Self::ChangeEpoch(e) => {
                 writeln!(writer, "Transaction Kind : Epoch Change")?;
                 writeln!(writer, "New epoch ID : {}", e.epoch)?;
@@ -1289,14 +1113,6 @@ impl TransactionKind {
         }
     }
 
-    pub fn is_pay_sui_tx(&self) -> bool {
-        matches!(
-            self,
-            TransactionKind::Single(SingleTransactionKind::PaySui(_))
-                | TransactionKind::Single(SingleTransactionKind::PayAllSui(_))
-        )
-    }
-
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
@@ -1322,7 +1138,7 @@ impl TransactionKind {
         )
     }
 
-    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
@@ -1340,15 +1156,8 @@ impl TransactionKind {
                 );
                 // Check that all transaction kinds can be in a batch.
                 let valid = b.iter().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
+                    SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_)
                     | SingleTransactionKind::ConsensusCommitPrologue(_)
                     | SingleTransactionKind::ProgrammableTransaction(_) => false,
                 });
@@ -1361,10 +1170,10 @@ impl TransactionKind {
                     }
                 );
                 for s in b {
-                    s.validity_check(config, gas)?
+                    s.validity_check(config)?
                 }
             }
-            TransactionKind::Single(s) => s.validity_check(config, gas)?,
+            TransactionKind::Single(s) => s.validity_check(config)?,
         }
         Ok(())
     }
@@ -1956,7 +1765,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let mut inputs = self.kind.input_objects()?;
 
-        if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
+        if !self.kind.is_system_tx() {
             inputs.extend(
                 self.gas()
                     .iter()
@@ -1975,7 +1784,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                 value: config.max_gas_payment_objects().to_string()
             }
         );
-        self.kind().validity_check(config, gas)?;
+        self.kind().validity_check(config)?;
         self.check_sponsorship()
     }
 
@@ -1990,15 +1799,8 @@ impl TransactionDataAPI for TransactionDataV1 {
             // to be sponsored.
             TransactionKind::Batch(_b) => false,
             TransactionKind::Single(s) => match s {
-                SingleTransactionKind::Call(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::ProgrammableTransaction(_) => true,
-                SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::PaySui(_)
-                | SingleTransactionKind::PayAllSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
+                SingleTransactionKind::ProgrammableTransaction(_) => true,
+                SingleTransactionKind::ChangeEpoch(_)
                 | SingleTransactionKind::ConsensusCommitPrologue(_)
                 | SingleTransactionKind::Genesis(_) => false,
             },

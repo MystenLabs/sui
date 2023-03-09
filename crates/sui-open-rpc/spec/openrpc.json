@@ -3074,10 +3074,10 @@
             }
           },
           "results": {
-            "description": "Execution results (including return values) from executing the transaction commands",
+            "description": "Execution results (including return values) from executing the transactions Currently contains only return values from Move calls",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Result_of_Array_of_SuiExecutionResult_or_String"
+                "$ref": "#/components/schemas/Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String"
               }
             ]
           }
@@ -5133,7 +5133,7 @@
           }
         ]
       },
-      "Result_of_Array_of_SuiExecutionResult_or_String": {
+      "Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String": {
         "oneOf": [
           {
             "type": "object",
@@ -5144,7 +5144,19 @@
               "Ok": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/SuiExecutionResult"
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "integer",
+                      "format": "uint",
+                      "minimum": 0.0
+                    },
+                    {
+                      "$ref": "#/components/schemas/SuiExecutionResult"
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
                 }
               }
             }
@@ -5584,7 +5596,9 @@
               "type": "array",
               "items": [
                 {
-                  "$ref": "#/components/schemas/SuiArgument"
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
                 },
                 {
                   "type": "array",
@@ -5603,7 +5617,7 @@
             }
           },
           "returnValues": {
-            "description": "The return values from the command",
+            "description": "The return values from the function",
             "type": "array",
             "items": {
               "type": "array",

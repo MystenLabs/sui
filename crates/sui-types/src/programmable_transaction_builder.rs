@@ -12,55 +12,11 @@ use serde::Serialize;
 use crate::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     messages::{
-        Argument, CallArg, Command, MoveCall, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
-        ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
-        TransactionKind, TransferObject, TransferSui,
+        Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
     },
     move_package::PACKAGE_MODULE_NAME,
     SUI_FRAMEWORK_OBJECT_ID,
 };
-
-pub fn migrate_transaction_data(m: TransactionData) -> anyhow::Result<TransactionData> {
-    let mut builder = ProgrammableTransactionBuilder::new();
-    let TransactionData::V1(mut v1) = m;
-    match v1.kind {
-        TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins,
-            recipients,
-            amounts,
-        })) => {
-            builder.pay_sui(recipients, amounts)?;
-            let mut v = v1.gas_data.payment;
-            v.extend(coins);
-            v1.gas_data.payment = unique_obj_vec(v);
-        }
-        TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-            coins,
-            recipient,
-        })) => {
-            builder.pay_all_sui(recipient);
-            let mut v = v1.gas_data.payment;
-            v.extend(coins);
-            v1.gas_data.payment = unique_obj_vec(v);
-        }
-        TransactionKind::Single(t) => builder.single_transaction(t)?,
-        TransactionKind::Batch(ts) => {
-            for t in ts {
-                builder.single_transaction(t)?
-            }
-        }
-    };
-    let pt = builder.finish();
-    v1.kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
-    Ok(TransactionData::V1(v1))
-}
-
-/// Collects an iterator of object refs into a vector,
-/// ensuring the output is unique but while preserving a stable ordering
-fn unique_obj_vec(objs: impl IntoIterator<Item = ObjectRef>) -> Vec<ObjectRef> {
-    let set: IndexSet<ObjectRef> = IndexSet::from_iter(objs);
-    set.into_iter().collect()
-}
 
 #[derive(Default)]
 pub struct ProgrammableTransactionBuilder {
@@ -115,46 +71,6 @@ impl ProgrammableTransactionBuilder {
         let i = self.commands.len();
         self.commands.push(command);
         Argument::Result(i as u16)
-    }
-
-    pub fn single_transaction(&mut self, t: SingleTransactionKind) -> anyhow::Result<()> {
-        match t {
-            SingleTransactionKind::ProgrammableTransaction(_) => anyhow::bail!(
-                "ProgrammableTransaction are not supported in ProgrammableTransactionBuilder"
-            ),
-            SingleTransactionKind::TransferObject(TransferObject {
-                recipient,
-                object_ref,
-            }) => self.transfer_object(recipient, object_ref),
-            SingleTransactionKind::Publish(MoveModulePublish { modules }) => self.publish(modules),
-            SingleTransactionKind::Call(MoveCall {
-                package,
-                module,
-                function,
-                type_arguments,
-                arguments,
-            }) => self.move_call(package, module, function, type_arguments, arguments)?,
-            SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
-                self.transfer_sui(recipient, amount)
-            }
-            SingleTransactionKind::Pay(Pay {
-                coins,
-                recipients,
-                amounts,
-            }) => self.pay(coins, recipients, amounts)?,
-            SingleTransactionKind::PaySui(_) | SingleTransactionKind::PayAllSui(_) => {
-                anyhow::bail!(
-                    "PaySui and PayAllSui cannot be migrated as a single transaction kind, \
-                only as a full transaction"
-                )
-            }
-            SingleTransactionKind::ChangeEpoch(_)
-            | SingleTransactionKind::Genesis(_)
-            | SingleTransactionKind::ConsensusCommitPrologue(_) => anyhow::bail!(
-                "System transactions are not expressed with programmable transactions"
-            ),
-        };
-        Ok(())
     }
 
     /// Will fail to generate if given an empty ObjVec

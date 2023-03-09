@@ -666,10 +666,12 @@ fn test_sponsored_transaction_message() {
     let sender = (&sender_kp.public()).into();
     let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sponsor = (&sponsor_kp.public()).into();
-    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-        recipient: get_new_address::<AccountKeyPair>(),
-        object_ref: random_object_ref(),
-    }));
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
     let gas_obj_ref = random_object_ref();
     let gas_data = GasData {
         payment: vec![gas_obj_ref],
@@ -778,16 +780,15 @@ fn test_sponsored_transaction_validity_check() {
         budget: 10000,
     };
 
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-            recipient: get_new_address::<AccountKeyPair>(),
-            object_ref: random_object_ref(),
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
+        .validity_check(&ProtocolConfig::get_for_max_version())
+        .unwrap();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -809,89 +810,65 @@ fn test_sponsored_transaction_validity_check() {
         .validity_check(&ProtocolConfig::get_for_max_version())
         .unwrap();
 
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
-            modules: vec![vec![]],
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
-
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::Pay(Pay {
-            coins: vec![random_object_ref()],
-            recipients: vec![SuiAddress::random_for_testing_only()],
-            amounts: vec![100000],
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
-
-    // TransferSui cannot be sponsored
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
-                recipient: SuiAddress::random_for_testing_only(),
-                amount: Some(50000),
-            })),
-            sender,
-            gas_data.clone(),
-        )
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish(vec![vec![]]);
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
 
-    // PaySui cannot be sponsored
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-                coins: gas_data.payment.clone(),
-                recipients: vec![],
-                amounts: vec![],
-            })),
-            sender,
-            gas_data.clone(),
-        )
+    // Pay
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .pay(
+                vec![random_object_ref()],
+                vec![SuiAddress::random_for_testing_only()],
+                vec![100000],
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
 
-    // PayAllSui cannot be sponsored
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-                coins: gas_data.payment.clone(),
-                recipient: SuiAddress::random_for_testing_only(),
-            })),
-            sender,
-            gas_data.clone(),
-        )
+    // TransferSui
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(SuiAddress::random_for_testing_only(), Some(50000));
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
 
-    // Batch is non-sponsorable
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Batch(vec![SingleTransactionKind::Pay(Pay {
-                coins: vec![random_object_ref()],
-                recipients: vec![SuiAddress::random_for_testing_only()],
-                amounts: vec![100000],
-            })]),
-            sender,
-            gas_data,
-        )
+    // PaySui
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_sui(vec![], vec![]).unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
+
+    // PayAllSui
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_all_sui(SuiAddress::random_for_testing_only());
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data)
+        .validity_check(&ProtocolConfig::get_for_max_version())
+        .unwrap();
 }
 
 #[test]

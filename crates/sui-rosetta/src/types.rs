@@ -399,12 +399,6 @@ pub enum OperationType {
     WithdrawDelegation,
     SwitchDelegation,
     // All other Sui transaction types, readonly
-    TransferSUI,
-    Pay,
-    PayAllSui,
-    TransferObject,
-    Publish,
-    MoveCall,
     EpochChange,
     Genesis,
     ConsensusCommitPrologue,
@@ -414,13 +408,6 @@ pub enum OperationType {
 impl From<&SuiTransactionKind> for OperationType {
     fn from(tx: &SuiTransactionKind) -> Self {
         match tx {
-            SuiTransactionKind::TransferObject(_) => OperationType::TransferObject,
-            SuiTransactionKind::Pay(_) => OperationType::Pay,
-            SuiTransactionKind::PaySui(_) => OperationType::PaySui,
-            SuiTransactionKind::PayAllSui(_) => OperationType::PayAllSui,
-            SuiTransactionKind::Publish(_) => OperationType::Publish,
-            SuiTransactionKind::Call(_) => OperationType::MoveCall,
-            SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
             SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionKind::Genesis(_) => OperationType::Genesis,
             SuiTransactionKind::ConsensusCommitPrologue(_) => {
