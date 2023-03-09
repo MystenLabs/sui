@@ -341,7 +341,11 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         gas_object.object_size_for_gas_metering(),
         0.into(),
     )?;
-    assert_eq!(gas_cost, &gas_status.summary(true));
+    // Actual gas cost will be greater than the expected summary because of the cost to discard the
+    // `UpgradeCap`.
+    let gas_summary = gas_status.summary(true);
+    assert!(gas_cost.computation_cost >= gas_summary.computation_cost);
+    assert_eq!(gas_cost.storage_cost, gas_summary.storage_cost);
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.gas_used();
