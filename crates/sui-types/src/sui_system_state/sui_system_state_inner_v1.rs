@@ -351,6 +351,7 @@ pub struct PoolTokenExchangeRate {
 }
 
 impl PoolTokenExchangeRate {
+    /// Rate of the staking pool, pool token amount : Sui amount
     pub fn rate(&self) -> f64 {
         self.pool_token_amount as f64 / self.sui_amount as f64
     }
