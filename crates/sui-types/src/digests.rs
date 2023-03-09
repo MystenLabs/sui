@@ -280,6 +280,16 @@ impl fmt::UpperHex for CheckpointContentsDigest {
     }
 }
 
+/// A digest of a cerificate, which commits to the signatures as well as the tx.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CertificateDigest(Sha3Digest);
+
+impl CertificateDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+}
+
 /// A transaction will have a (unique) digest.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(Sha3Digest);

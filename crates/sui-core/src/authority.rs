@@ -91,6 +91,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+pub use crate::authority::authority_per_epoch_store::VerifiedCertificateCache;
 use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
 };
