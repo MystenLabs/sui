@@ -16,12 +16,12 @@ export function useFaucetMutation() {
             if (!address) {
                 throw new Error('Failed, wallet address not found.');
             }
-            const { error, transferred_gas_objects } =
+            const { error, transferredGasObjects } =
                 await api.requestSuiFromFaucet(address);
             if (error) {
                 throw new Error(error);
             }
-            return transferred_gas_objects.reduce(
+            return transferredGasObjects.reduce(
                 (total, { amount }) => total + amount,
                 0
             );
