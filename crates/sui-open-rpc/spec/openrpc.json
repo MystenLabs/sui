@@ -1833,6 +1833,45 @@
       }
     },
     {
+      "name": "sui_multiGetObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the object data for a list of objects",
+      "params": [
+        {
+          "name": "object_ids",
+          "description": "the IDs of the queried objects",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectDataOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiObjectResponse>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectRead"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_multiGetTransactions",
       "tags": [
         {
