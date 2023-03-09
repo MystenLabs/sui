@@ -33,6 +33,19 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
                 {
+
+                use sui_core::authority::{VerifiedCertificateCache, VerifiedCertificateCacheMetrics};
+                let registry = prometheus::Registry::new();
+                let metrics = VerifiedCertificateCacheMetrics(&registry);
+                let cache = VerifiedCertificateCache::new(metrics);
+                let d = CertificateDigest::random();
+                cache.cache_cert_verified(d);
+                assert!(cache.is_cert_verified(&d));
+
+
+                }
+
+                {
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
                     use std::path::PathBuf;
