@@ -56,7 +56,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use mysten_metrics::monitored_scope;
-use prometheus::IntCounter;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -393,6 +393,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
+        verified_cert_cache_metrics: Arc<VerifiedCertificateCacheMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -436,7 +437,7 @@ impl AuthorityPerEpochStore {
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
-            verified_cert_cache: VerifiedCertificateCache::new(),
+            verified_cert_cache: VerifiedCertificateCache::new(verified_cert_cache_metrics),
             checkpoint_state_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -482,6 +483,7 @@ impl AuthorityPerEpochStore {
             epoch_start_configuration,
             store,
             self.execution_component.metrics(),
+            self.verified_cert_cache.metrics.clone(),
         )
     }
 
@@ -2053,39 +2055,72 @@ impl ExecutionComponents {
 // on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
 const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
 
-pub struct VerifiedCertificateCache {
-    inner: RwLock<LruCache<CertificateDigest, ()>>,
+pub struct VerifiedCertificateCacheMetrics {
+    certificate_signatures_cache_hits: IntCounter,
+    certificate_signatures_cache_evictions: IntCounter,
 }
 
-impl Default for VerifiedCertificateCache {
-    fn default() -> Self {
-        Self::new()
+impl VerifiedCertificateCacheMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            certificate_signatures_cache_hits: register_int_counter_with_registry!(
+                "certificate_signatures_cache_hits",
+                "Number of certificates which were known to be verified because of signature cache.",
+                registry
+            )
+            .unwrap(),
+            certificate_signatures_cache_evictions: register_int_counter_with_registry!(
+                "certificate_signatures_cache_evictions",
+                "Number of times we evict a pre-existing key were known to be verified because of signature cache.",
+                registry
+            )
+            .unwrap(),
+        })
     }
 }
 
+pub struct VerifiedCertificateCache {
+    inner: RwLock<LruCache<CertificateDigest, ()>>,
+    metrics: Arc<VerifiedCertificateCacheMetrics>,
+}
+
 impl VerifiedCertificateCache {
-    pub fn new() -> Self {
+    pub fn new(metrics: Arc<VerifiedCertificateCacheMetrics>) -> Self {
         Self {
             inner: RwLock::new(LruCache::new(
                 NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
             )),
+            metrics,
         }
     }
 
     pub fn is_cert_verified(&self, digest: &CertificateDigest) -> bool {
         let inner = self.inner.read();
-        inner.contains(digest)
+        if inner.contains(digest) {
+            self.metrics.certificate_signatures_cache_hits.inc();
+            true
+        } else {
+            false
+        }
     }
 
     pub fn cache_cert_verified(&self, digest: CertificateDigest) {
         let mut inner = self.inner.write();
-        inner.put(digest, ());
+        if let Some(old) = inner.push(digest, ()) {
+            if old.0 != digest {
+                self.metrics.certificate_signatures_cache_evictions.inc();
+            }
+        }
     }
 
     pub fn cache_certs_verified(&self, digests: Vec<CertificateDigest>) {
         let mut inner = self.inner.write();
         digests.into_iter().for_each(|d| {
-            inner.put(d, ());
+            if let Some(old) = inner.push(d, ()) {
+                if old.0 != d {
+                    self.metrics.certificate_signatures_cache_evictions.inc();
+                }
+            }
         });
     }
 }

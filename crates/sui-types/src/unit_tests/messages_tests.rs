@@ -1319,7 +1319,7 @@ fn test_certificate_digest() {
     assert_ne!(digest, cert.certificate_digest());
 
     // mutating signature changes digest
-    cert = orig.clone();
+    cert = orig;
     *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
     assert_ne!(digest, cert.certificate_digest());
 }

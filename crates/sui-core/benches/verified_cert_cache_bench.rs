@@ -3,7 +3,7 @@
 
 use criterion::*;
 
-use sui_core::authority::VerifiedCertificateCache;
+use sui_core::authority::{VerifiedCertificateCache, VerifiedCertificateCacheMetrics};
 use sui_types::digests::CertificateDigest;
 
 use criterion::Criterion;
@@ -20,11 +20,13 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
     let chunks: Vec<Vec<CertificateDigest>> = digests
         .chunks(chunk_size)
         .take(cpus)
-        .map(|c| c.iter().cloned().collect())
+        .map(|c| c.to_vec())
         .collect();
     assert_eq!(chunks.len(), cpus);
 
-    let cache = VerifiedCertificateCache::new();
+    let registry = prometheus::Registry::new();
+    let metrics = VerifiedCertificateCacheMetrics::new(&registry);
+    let cache = VerifiedCertificateCache::new(metrics);
 
     let mut group = c.benchmark_group("digest-caching");
     group.throughput(Throughput::Elements(chunk_size as u64));
@@ -34,7 +36,7 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
             std::thread::scope(|s| {
                 let threads = chunks.iter().map(|chunk| {
                     s.spawn(|| {
-                        for digest in &*chunk {
+                        for digest in &**chunk {
                             if cache.is_cert_verified(digest) {
                                 continue;
                             } else {
