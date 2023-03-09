@@ -1,22 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import WebHIDTransport from '@ledgerhq/hw-transport-webhid';
+import WebUSBTransport from '@ledgerhq/hw-transport-webusb';
+import { useState } from 'react';
+
 import ExternalLink from '_components/external-link';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
 
+import type Transport from '@ledgerhq/hw-transport';
+
 type ConnectLedgerModalProps = {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    onError: (error: any) => void;
 };
 
 export function ConnectLedgerModal({
     isOpen,
     onClose,
     onConfirm,
+    onError,
 }: ConnectLedgerModalProps) {
+    const [ledgerTransport, setLedgerTransport] = useState<Transport>();
+    const [isLedgerTransportLoading, setLedgerTransportLoading] =
+        useState(false);
+
     return (
         <ModalDialog
             isOpen={isOpen}
@@ -58,7 +70,27 @@ export function ConnectLedgerModal({
                     <Button
                         variant="outline"
                         text="Continue"
-                        onClick={onConfirm}
+                        onClick={async () => {
+                            try {
+                                setLedgerTransportLoading(true);
+
+                                console.log(
+                                    await WebHIDTransport.isSupported()
+                                );
+                                const transport =
+                                    await WebHIDTransport.request();
+                                console.log(transport.deviceModel);
+
+                                onConfirm();
+                            } catch (e) {
+                                console.log(e);
+                                onError('Ledger connection failed.');
+                            } finally {
+                                setLedgerTransportLoading(false);
+                            }
+                            onConfirm();
+                        }}
+                        loading={isLedgerTransportLoading}
                     />
                 </div>
             }
