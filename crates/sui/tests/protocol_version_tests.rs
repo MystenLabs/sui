@@ -67,8 +67,9 @@ mod sim_only_tests {
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_types::{
         digests::TransactionDigest,
-        messages::{MoveCall, SingleTransactionKind, TransactionKind},
+        messages::TransactionKind,
         object::{Object, OBJECT_START_VERSION},
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
         SUI_FRAMEWORK_OBJECT_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
@@ -236,13 +237,20 @@ mod sim_only_tests {
         let client = cluster.rpc_client();
         let sender = cluster.accounts.first().cloned().unwrap();
 
-        let txn = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
-            package: SUI_FRAMEWORK_OBJECT_ID,
-            module: ident_str!("msim_extra_1").to_owned(),
-            function: ident_str!("canary").to_owned(),
-            type_arguments: vec![],
-            arguments: vec![],
-        }));
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    SUI_FRAMEWORK_OBJECT_ID,
+                    ident_str!("msim_extra_1").to_owned(),
+                    ident_str!("canary").to_owned(),
+                    vec![],
+                    vec![],
+                )
+                .unwrap();
+            builder.finish()
+        };
+        let txn = TransactionKind::programmable(pt);
 
         let response = client
             .dev_inspect_transaction(
