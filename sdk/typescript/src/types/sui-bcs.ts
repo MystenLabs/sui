@@ -113,22 +113,11 @@ export type SharedObjectRef = {
 };
 
 /**
- * A reference to a shared object from 0.23.0.
- */
-export type SharedObjectRef_23 = {
-  /** Hex code as string representing the object id */
-  objectId: string;
-
-  /** The version the object was shared at */
-  initialSharedVersion: number;
-};
-
-/**
  * An object argument.
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef | SharedObjectRef_23 };
+  | { Shared: SharedObjectRef };
 
 /**
  * A pure argument.
@@ -430,38 +419,10 @@ const BCS_SPEC: TypeSchema = {
   },
 };
 
-// for version <= 0.27.0
-const BCS_0_27_SPEC: TypeSchema = {
-  structs: {
-    ...BCS_SPEC.structs,
-    TransactionData: {
-      kind: 'TransactionKind',
-      sender: BCS.ADDRESS,
-      gasData: 'GasData',
-    },
-    SenderSignedData: {
-      data: 'TransactionData',
-      txSignature: [VECTOR, BCS.U8],
-    },
-  },
-  enums: BCS_SPEC.enums,
-  aliases: {
-    ObjectDigest: BCS.BASE64,
-  },
-};
-
 const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
-// ========== Backward Compatibility ===========
-const bcs_0_27 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_27_SPEC });
-registerUTF8String(bcs_0_27);
-
-export function bcsForVersion(v?: RpcApiVersion) {
-  if (v?.major === 0 && v?.minor <= 27) {
-    return bcs_0_27;
-  }
-
+export function bcsForVersion(_v?: RpcApiVersion) {
   return bcs;
 }
 

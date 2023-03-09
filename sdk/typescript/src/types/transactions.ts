@@ -14,7 +14,7 @@ import {
   unknown,
   boolean,
   tuple,
-  any,
+  nullable,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
@@ -94,6 +94,31 @@ export const Genesis = object({
 });
 export type Genesis = Infer<typeof Genesis>;
 
+export const SuiArgument = unknown();
+
+export const SuiCommand = union([
+  object({
+    MoveCall: object({
+      arguments: array(SuiArgument),
+      type_arguments: array(string()),
+      package: ObjectId,
+      module: string(),
+      function: string(),
+    }),
+  }),
+  object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
+  object({ SplitCoin: tuple([SuiArgument, SuiAddress]) }),
+  object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
+  object({ Publish: SuiMovePackage }),
+  object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
+]);
+
+export const ProgrammableTransaction = object({
+  commands: array(),
+  inputs: array(SuiJsonValue),
+});
+export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
+
 export type ExecuteTransactionRequestType =
   | 'WaitForEffectsCert'
   | 'WaitForLocalExecution';
@@ -108,7 +133,8 @@ export type TransactionKindName =
   | 'Pay'
   | 'PaySui'
   | 'PayAllSui'
-  | 'Genesis';
+  | 'Genesis'
+  | 'ProgrammableTransaction';
 
 export const SuiTransactionKind = union([
   object({ TransferObject: TransferObject }),
@@ -121,8 +147,7 @@ export const SuiTransactionKind = union([
   object({ PaySui: PaySui }),
   object({ PayAllSui: PayAllSui }),
   object({ Genesis: Genesis }),
-  // TODO: Refine object type
-  object({ ProgrammableTransaction: any() }),
+  object({ ProgrammableTransaction: ProgrammableTransaction }),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
@@ -274,13 +299,6 @@ export type TransactionQuery =
 export type EmptySignInfo = object;
 export type AuthorityName = Infer<typeof AuthorityName>;
 export const AuthorityName = string();
-
-export const TransactionBytes = object({
-  txBytes: string(),
-  gas: array(SuiObjectRef),
-  // TODO: Type input_objects field
-  inputObjects: unknown(),
-});
 
 export const SuiTransaction = object({
   data: SuiTransactionData,
