@@ -65,16 +65,13 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
     pub fn stringify(&self, index: usize) -> String {
         let mut str = (self.command)(index);
         if let Some(log_file) = &self.log_file {
-            str = format!("{str} |& tee {}", log_file.as_path().display().to_string());
+            str = format!("{str} |& tee {}", log_file.as_path().display());
         }
         if let Some(id) = &self.background {
             str = format!("tmux new -d -s \"{id}\" \"{str}\"");
         }
         if let Some(exec_path) = &self.path {
-            str = format!(
-                "(cd {} && {str})",
-                exec_path.as_path().display().to_string()
-            );
+            str = format!("(cd {} && {str})", exec_path.as_path().display());
         }
         str
     }
@@ -218,7 +215,7 @@ impl SshConnection {
     /// Make a useful session error from the lower level error message.
     fn make_session_error(&self, error: ssh2::Error) -> SshError {
         SshError::SessionError {
-            address: self.address.clone(),
+            address: self.address,
             error,
         }
     }
@@ -226,7 +223,7 @@ impl SshConnection {
     /// Make a useful connection error from the lower level error message.
     fn make_connection_error(&self, error: std::io::Error) -> SshError {
         SshError::ConnectionError {
-            address: self.address.clone(),
+            address: self.address,
             error,
         }
     }
@@ -251,7 +248,7 @@ impl SshConnection {
             .session
             .channel_session()
             .map_err(|e| self.make_session_error(e))?;
-        let command = format!("(cd {} && {command})", path.as_ref().display().to_string());
+        let command = format!("(cd {} && {command})", path.as_ref().display());
         self.execute_impl(channel, command)
     }
 

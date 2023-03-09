@@ -27,8 +27,8 @@ pub enum SettingsError {
     #[error("Failed to read ssh public key file '{file:?}': {message}")]
     InvalidSshPublicKeyFile { file: String, message: String },
 
-    #[error("Invalid repository url: {0:?}")]
-    InvalidRepositoryUrl(Url),
+    #[error("Malformed repository url: {0:?}")]
+    MalformedRepositoryUrl(Url),
 }
 
 pub type CloudProviderResult<T> = Result<T, CloudProviderError>;

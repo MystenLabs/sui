@@ -224,11 +224,11 @@ impl Orchestrator {
         .unwrap();
 
         let command = [
-            &format!("git fetch -f"),
+            "git fetch -f",
             &format!("git checkout -f {commit}"),
-            &format!("git pull -f"),
+            "git pull -f",
             "source $HOME/.cargo/env",
-            &format!("cargo build --release"),
+            "cargo build --release",
         ]
         .join(" && ");
 
@@ -365,7 +365,7 @@ impl Orchestrator {
 
         // Deploy the load generators.
         let committee_size = instances.len();
-        let load_share = parameters.load.clone() / committee_size;
+        let load_share = parameters.load / committee_size;
         let shared_counter = parameters.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let command = move |i: usize| -> String {
@@ -537,7 +537,7 @@ impl Orchestrator {
             stdout(),
             SetForegroundColor(Color::Green),
             SetAttribute(Attribute::Bold),
-            Print(format!("\nPreparing testbed\n")),
+            Print("\nPreparing testbed\n"),
             ResetColor
         )
         .unwrap();

@@ -87,7 +87,7 @@ impl AwsClient {
     }
 
     /// Convert an AWS instance into an orchestrator instance (used in the rest of the codebase).
-    fn into_instance(
+    fn make_instance(
         &self,
         region: String,
         aws_instance: &aws_sdk_ec2::model::Instance,
@@ -100,7 +100,7 @@ impl AwsClient {
             region,
             main_ip: aws_instance
                 .public_ip_address()
-                .unwrap_or_else(|| "0.0.0.0") // Stopped instances do not have an ip address.
+                .unwrap_or("0.0.0.0") // Stopped instances do not have an ip address.
                 .parse()
                 .expect("AWS instance should have a valid ip"),
             tags: vec![self.settings.testbed_id.clone()],
@@ -136,8 +136,7 @@ impl AwsClient {
         // Parse the response to select the first returned image id.
         response
             .images()
-            .map(|images| images.first())
-            .flatten()
+            .and_then(|images| images.first())
             .ok_or_else(|| CloudProviderError::RequestError("Cannot find image id".into()))?
             .image_id
             .clone()
@@ -193,7 +192,7 @@ impl ServerProviderClient for AwsClient {
                 for reservation in reservations {
                     if let Some(aws_instances) = reservation.instances() {
                         for instance in aws_instances {
-                            instances.push(self.into_instance(region.clone(), instance));
+                            instances.push(self.make_instance(region.clone(), instance));
                         }
                     }
                 }
@@ -262,10 +261,10 @@ impl ServerProviderClient for AwsClient {
         })?;
 
         // Create a security group (if needed).
-        self.create_security_group(&client).await?;
+        self.create_security_group(client).await?;
 
         // Query the image id.
-        let image_id = self.find_image_id(&client).await?;
+        let image_id = self.find_image_id(client).await?;
 
         // Create a new instance.
         let tags = tag_specification::Builder::default()
@@ -303,11 +302,10 @@ impl ServerProviderClient for AwsClient {
         let response = request.send().await?;
         let instance = &response
             .instances()
-            .map(|x| x.first())
-            .flatten()
+            .and_then(|x| x.first())
             .expect("AWS instances list should contain instances");
 
-        Ok(self.into_instance(region, instance))
+        Ok(self.make_instance(region, instance))
     }
 
     async fn delete_instance(&self, instance: Instance) -> CloudProviderResult<()> {

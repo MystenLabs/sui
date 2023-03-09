@@ -36,13 +36,11 @@ impl LogsAnalyzer {
     pub fn aggregate(counters: Vec<Self>) -> Self {
         let mut highest = Self::default();
         for counter in counters {
-            if counter.node_panic {
+            if counter.node_panic || counter.client_panic {
                 return counter;
-            } else if counter.client_panic {
-                return counter;
-            } else if counter.client_errors > highest.client_errors {
-                highest = counter;
-            } else if counter.node_errors > highest.node_errors {
+            } else if counter.client_errors > highest.client_errors
+                || counter.node_errors > highest.node_errors
+            {
                 highest = counter;
             }
         }

@@ -128,18 +128,16 @@ impl Plotter {
         path.set_extension("json");
 
         if let Ok(files) = glob(&path.display().to_string()) {
-            for file in files {
-                if let Ok(file) = file {
-                    match MeasurementsCollection::load(&file) {
-                        Ok(measurement) => {
-                            let id = measurement.clone().into();
-                            self.measurements
-                                .entry(id)
-                                .or_insert_with(Vec::new)
-                                .push(measurement);
-                        }
-                        Err(e) => println!("skipping {file:?}: {e}"),
+            for file in files.flatten() {
+                match MeasurementsCollection::load(&file) {
+                    Ok(measurement) => {
+                        let id = measurement.clone().into();
+                        self.measurements
+                            .entry(id)
+                            .or_insert_with(Vec::new)
+                            .push(measurement);
                     }
+                    Err(e) => println!("skipping {file:?}: {e}"),
                 }
             }
         }
@@ -218,7 +216,7 @@ impl Plotter {
         // Plot the measurements points.
         chart.draw_series(LineSeries::new(
             data_points.iter().map(|data| (data.x, data.y)),
-            &RED,
+            RED,
         ))?;
 
         // Save the plot to file.

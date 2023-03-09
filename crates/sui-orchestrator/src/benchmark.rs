@@ -224,7 +224,7 @@ impl BenchmarkParametersGenerator {
                 self.nodes,
                 self.faults,
                 load,
-                self.duration.clone(),
+                self.duration,
             )
         })
     }

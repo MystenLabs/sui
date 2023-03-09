@@ -240,7 +240,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
             // Create a new orchestrator to instruct the testbed.
             let username = testbed.username();
-            let private_key_file = settings.ssh_private_key_file.clone().into();
+            let private_key_file = settings.ssh_private_key_file.clone();
             let ssh_manager = SshConnectionManager::new(username.into(), private_key_file)
                 .with_timeout(timeout)
                 .with_retries(retries);

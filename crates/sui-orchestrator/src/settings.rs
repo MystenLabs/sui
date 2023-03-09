@@ -27,15 +27,10 @@ where
     D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(deserializer)?;
-    let url = Url::parse(&s).map_err(D::Error::custom)?;
+    let url = Url::parse(s).map_err(D::Error::custom)?;
 
-    match url
-        .path_segments()
-        .map(|x| x.collect::<Vec<_>>().len() >= 2)
-    {
-        None | Some(false) => Err(D::Error::custom(SettingsError::InvalidRepositoryUrl(
-            url.clone(),
-        ))),
+    match url.path_segments().map(|x| x.count() >= 2) {
+        None | Some(false) => Err(D::Error::custom(SettingsError::MalformedRepositoryUrl(url))),
         _ => Ok(url),
     }
 }

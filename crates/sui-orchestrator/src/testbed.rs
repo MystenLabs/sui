@@ -140,15 +140,9 @@ impl<C: ServerProviderClient> Testbed<C> {
                 try_join_all((0..quantity).map(|_| self.client.create_instance(x.clone()))).await?
             }
             None => {
-                try_join_all(
-                    self.settings
-                        .regions
-                        .iter()
-                        .map(|region| {
-                            (0..quantity).map(|_| self.client.create_instance(region.clone()))
-                        })
-                        .flatten(),
-                )
+                try_join_all(self.settings.regions.iter().flat_map(|region| {
+                    (0..quantity).map(|_| self.client.create_instance(region.clone()))
+                }))
                 .await?
             }
         };
@@ -185,8 +179,8 @@ impl<C: ServerProviderClient> Testbed<C> {
                     .filter(|x| {
                         x.is_inactive()
                             && &x.region == region
-                            && x.specs.to_lowercase().replace(".", "")
-                                == self.settings.specs.to_lowercase().replace(".", "")
+                            && x.specs.to_lowercase().replace('.', "")
+                                == self.settings.specs.to_lowercase().replace('.', "")
                     })
                     .take(quantity)
                     .cloned()
