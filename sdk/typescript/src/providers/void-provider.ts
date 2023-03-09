@@ -157,7 +157,7 @@ export class VoidProvider extends Provider {
 
   async executeTransaction(
     _txnBytes: Uint8Array,
-    _signature: SerializedSignature,
+    _signature: SerializedSignature | SerializedSignature[],
     _requestType: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse> {
     throw this.newError('executeTransaction with request Type');

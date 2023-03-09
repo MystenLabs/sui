@@ -83,7 +83,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
     let tx_response: SuiTransactionResponse = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes1,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -134,7 +134,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -184,7 +184,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -243,7 +243,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForEffectsCert,
@@ -278,7 +278,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -329,7 +329,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -441,7 +441,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -498,7 +498,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -573,7 +573,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -613,7 +613,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let response = http_client
-            .submit_transaction(
+            .execute_transaction(
                 tx_bytes,
                 signatures,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -977,7 +977,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1035,7 +1035,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1097,7 +1097,7 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1164,7 +1164,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1198,7 +1198,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
