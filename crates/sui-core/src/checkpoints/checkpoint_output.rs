@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
@@ -74,11 +75,14 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         LogCheckpointOutput
             .checkpoint_created(summary, contents, epoch_store)
             .await?;
-        let summary = SignedCheckpointSummary::new_from_summary(
+
+        let summary = SignedCheckpointSummary::new(
+            epoch_store.epoch(),
             summary.clone(),
-            self.authority,
             &*self.signer,
+            self.authority,
         );
+
         let message = CheckpointSignatureMessage { summary };
         let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
         self.sender
@@ -130,8 +134,8 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
     ) -> SuiResult {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
-            summary.summary.sequence_number,
-            summary.summary.digest()
+            summary.sequence_number,
+            summary.digest()
         );
         Ok(())
     }
@@ -155,8 +159,8 @@ impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
     ) -> SuiResult {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
-            summary.summary.sequence_number,
-            summary.summary.digest()
+            summary.sequence_number,
+            summary.digest()
         );
         self.handle
             .send_checkpoint(VerifiedCheckpoint::new_unchecked(summary.to_owned()))

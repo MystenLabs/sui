@@ -2120,7 +2120,7 @@ impl Message for SenderSignedData {
         TransactionDigest::new(sha3_hash(&self.intent_message.value))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
         if self.intent_message.value.is_system_tx() {
             return Ok(());
         }
@@ -3553,7 +3553,7 @@ impl Message for TransactionEffects {
         TransactionEffectsDigest::new(sha3_hash(self))
     }
 
-    fn verify(&self) -> SuiResult {
+    fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
         Ok(())
     }
 }
@@ -3940,7 +3940,7 @@ impl ConsensusTransaction {
 
     pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
-        data.summary.auth_signature.signature.hash(&mut hasher);
+        data.summary.auth_sig().signature.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
@@ -3994,8 +3994,8 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::CheckpointSignature(data) => {
                 ConsensusTransactionKey::CheckpointSignature(
-                    data.summary.auth_signature.authority,
-                    data.summary.summary.sequence_number,
+                    data.summary.auth_sig().authority,
+                    data.summary.sequence_number,
                 )
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {

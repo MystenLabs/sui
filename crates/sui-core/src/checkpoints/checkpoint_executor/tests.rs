@@ -158,16 +158,16 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         .checkpoint_store
         .epoch_last_checkpoint_map
         .insert(
-            &end_of_epoch_0_checkpoint.summary.epoch,
-            &end_of_epoch_0_checkpoint.sequence_number(),
+            &end_of_epoch_0_checkpoint.epoch,
+            end_of_epoch_0_checkpoint.sequence_number(),
         )
         .unwrap();
     authority_state
         .checkpoint_store
         .certified_checkpoints
         .insert(
-            &end_of_epoch_0_checkpoint.sequence_number(),
-            &end_of_epoch_0_checkpoint,
+            end_of_epoch_0_checkpoint.sequence_number(),
+            end_of_epoch_0_checkpoint.serializable_ref(),
         )
         .unwrap();
     // sync end of epoch checkpoint
@@ -320,7 +320,7 @@ pub async fn test_reconfig_crash_recovery() {
             .get_highest_executed_checkpoint_seq_number()
             .unwrap()
             .unwrap(),
-        end_of_epoch_checkpoint.sequence_number(),
+        *end_of_epoch_checkpoint.sequence_number(),
     );
 
     // Drop and re-istantiate checkpoint executor without performing reconfig. This
@@ -350,7 +350,7 @@ pub async fn test_reconfig_crash_recovery() {
             .get_highest_executed_checkpoint_seq_number()
             .unwrap()
             .unwrap(),
-        end_of_epoch_checkpoint.sequence_number(),
+        *end_of_epoch_checkpoint.sequence_number(),
     );
 }
 

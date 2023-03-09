@@ -400,7 +400,7 @@ where
         expected_seq: Option<CheckpointSequenceNumber>,
         checkpoint: &Option<CertifiedCheckpointSummary>,
     ) -> SuiResult {
-        let observed_seq = checkpoint.as_ref().map(|c| c.summary().sequence_number);
+        let observed_seq = checkpoint.as_ref().map(|c| c.sequence_number);
 
         if let (Some(e), Some(o)) = (expected_seq, observed_seq) {
             fp_ensure!(
@@ -445,8 +445,8 @@ where
         // Verify signature.
         match checkpoint {
             Some(c) => {
-                let epoch_id = c.summary().epoch;
-                c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
+                let epoch_id = c.epoch;
+                c.verify_with_contents(&self.get_committee(&epoch_id)?, contents.as_ref())
             }
             None => Ok(()),
         }

@@ -1481,7 +1481,7 @@ impl AuthorityState {
         let contents = match &summary {
             Some(s) => self
                 .checkpoint_store
-                .get_checkpoint_contents(&s.content_digest())?,
+                .get_checkpoint_contents(&s.content_digest)?,
             None => None,
         };
         Ok(CheckpointResponse {
@@ -2258,7 +2258,7 @@ impl AuthorityState {
             .get_checkpoint_store()
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
-            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().summary),
+            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
             None => Err(anyhow!(
                 "Verified checkpoint not found for sequence number {}",
                 sequence_number
@@ -2274,7 +2274,7 @@ impl AuthorityState {
             .get_checkpoint_store()
             .get_checkpoint_by_digest(&digest)?;
         match verified_checkpoint {
-            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().summary),
+            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
             None => Err(anyhow!(
                 "Verified checkpoint not found for digest: {}",
                 Base58::encode(digest)
@@ -2300,7 +2300,7 @@ impl AuthorityState {
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => {
-                let content_digest = verified_checkpoint.into_inner().content_digest();
+                let content_digest = verified_checkpoint.into_inner().content_digest;
                 self.get_checkpoint_contents(content_digest)
             }
             None => Err(anyhow!(

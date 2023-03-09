@@ -24,7 +24,7 @@ use sui_types::clock::Clock;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
+    SuiAuthoritySignature, ToFromBytes,
 };
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
@@ -76,10 +76,10 @@ pub struct GenesisTuple(
 // Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
 impl PartialEq for Genesis {
     fn eq(&self, other: &Self) -> bool {
-        self.checkpoint.summary() == other.checkpoint.summary()
+        self.checkpoint.data() == other.checkpoint.data()
             && {
-                let this = &self.checkpoint.auth_signature;
-                let other = &other.checkpoint.auth_signature;
+                let this = self.checkpoint.auth_sig();
+                let other = other.checkpoint.auth_sig();
 
                 this.epoch == other.epoch
                     && this.signature.as_ref() == other.signature.as_ref()
@@ -115,7 +115,10 @@ impl Genesis {
     }
 
     pub fn checkpoint(&self) -> VerifiedCheckpoint {
-        VerifiedCheckpoint::new(self.checkpoint.clone(), &self.committee().unwrap()).unwrap()
+        self.checkpoint
+            .clone()
+            .verify(&self.committee().unwrap())
+            .unwrap()
     }
 
     pub fn checkpoint_contents(&self) -> &CheckpointContents {
@@ -515,19 +518,13 @@ impl Builder {
                 .map(|(_, s)| s)
                 .collect();
 
-            CertifiedCheckpointSummary {
-                summary: checkpoint,
-                auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
-                    signatures, &committee,
-                )
-                .unwrap(),
-            }
+            CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
         let validators = self.validators.into_values().collect::<Vec<_>>();
 
         // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
+        assert_eq!(checkpoint.auth_sig().len(), validators.len() as u64);
 
         let genesis = Genesis {
             checkpoint,

@@ -222,7 +222,7 @@ impl ReadApiServer for ReadApi {
             .state
             .get_transaction_checkpoint(&digest)
             .map_err(|e| anyhow!("{e}"))?;
-        let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.summary.timestamp_ms);
+        let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
 
         let events = if let Some(digest) = effects.events_digest() {
             let events = self
@@ -252,7 +252,7 @@ impl ReadApiServer for ReadApi {
             events,
             timestamp_ms: checkpoint_timestamp,
             confirmed_local_execution: None,
-            checkpoint: checkpoint.map(|c| c.summary.sequence_number),
+            checkpoint: checkpoint.map(|c| c.sequence_number),
         })
     }
 

@@ -7,6 +7,7 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
     CheckpointTimestamp, EndOfEpochData,
