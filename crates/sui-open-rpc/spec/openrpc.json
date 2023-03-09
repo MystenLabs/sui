@@ -1914,9 +1914,7 @@
           "schema": {
             "type": "array",
             "items": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/components/schemas/BigInt"
             }
           }
         },
@@ -2047,9 +2045,7 @@
           "schema": {
             "type": "array",
             "items": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
+              "$ref": "#/components/schemas/BigInt"
             }
           }
         },
@@ -2877,6 +2873,10 @@
       },
       "Base64": {
         "description": "Base64 encoding",
+        "type": "string"
+      },
+      "BigInt": {
+        "description": "Type for de/serializing number to string",
         "type": "string"
       },
       "Checkpoint": {
@@ -6917,9 +6917,7 @@
                 "description": "The amounts each recipient will receive. Must be the same length as amounts",
                 "type": "array",
                 "items": {
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
+                  "$ref": "#/components/schemas/BigInt"
                 }
               },
               "coins": {
@@ -6958,9 +6956,7 @@
                 "description": "The amounts each recipient will receive. Must be the same length as amounts",
                 "type": "array",
                 "items": {
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
+                  "$ref": "#/components/schemas/BigInt"
                 }
               },
               "coins": {

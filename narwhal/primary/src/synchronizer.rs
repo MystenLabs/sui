@@ -125,6 +125,15 @@ impl Inner {
     ) -> DagResult<()> {
         let digest = certificate.digest();
 
+        // TODO: remove this validation later to reduce rocksdb access.
+        if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
+            for digest in &certificate.header.parents {
+                if !self.certificate_store.contains(digest).unwrap() {
+                    panic!("Parent {digest:?} not found for {certificate:?}!");
+                }
+            }
+        }
+
         // Store the certificate. After this, the certificate must be sent to consensus
         // or Narwhal needs to shutdown, to avoid inconsistencies in certificate store and
         // consensus dag.
@@ -353,32 +362,6 @@ impl Synchronizer {
     ) -> DagResult<()> {
         self.process_certificate_internal(certificate, network, false, false)
             .await
-    }
-
-    /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
-    /// and has all parents in the certificate store.
-    /// If the certificate has missing parents, wait until all parents are available to accept the
-    /// certificate.
-    /// Otherwise returns an error.
-    pub async fn wait_to_accept_certificate(
-        &self,
-        certificate: Certificate,
-        network: &Network,
-    ) -> DagResult<()> {
-        match self
-            .process_certificate_internal(certificate, network, true, true)
-            .await
-        {
-            Err(DagError::Suspended(notify)) => {
-                let notify = notify.lock().unwrap().take();
-                notify
-                    .unwrap()
-                    .recv()
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
-            }
-            result => result,
-        }
     }
 
     /// Accepts a certificate produced by this primary. This is not expected to fail unless

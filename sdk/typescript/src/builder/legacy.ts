@@ -132,7 +132,14 @@ export async function convertToTransactionBuilder(
           ...(typeof data === 'string' ? fromB64(data) : Array.from(data)),
         ],
       );
-      tx.add(Commands.Publish(modules));
+      const cap = tx.add(Commands.Publish(modules));
+      tx.add(
+        Commands.MoveCall({
+          target: '0x2::package::make_immutable',
+          typeArguments: [],
+          arguments: [cap],
+        }),
+      );
       break;
     }
     case 'pay': {

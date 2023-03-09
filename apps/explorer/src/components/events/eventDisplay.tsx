@@ -263,10 +263,16 @@ export function eventToDisplay(event: SuiEvent) {
     )
         return transferObjectEventDisplay(getTransferObjectEvent(event)!);
 
-    if (isEventType(event, 'mutateObject') && is(event.content, MutateObjectEvent))
+    if (
+        isEventType(event, 'mutateObject') &&
+        is(event.content, MutateObjectEvent)
+    )
         return mutateObjectEventDisplay(getMutateObjectEvent(event)!);
 
-    if (isEventType(event, 'deleteObject') && is(event.content, DeleteObjectEvent))
+    if (
+        isEventType(event, 'deleteObject') &&
+        is(event.content, DeleteObjectEvent)
+    )
         return deleteObjectEventDisplay(getDeletObjectEvent(event)!);
 
     if (
@@ -279,11 +285,22 @@ export function eventToDisplay(event: SuiEvent) {
         return publishEventDisplay(getPublishEvent(event)!);
 
     // TODO - once epoch and checkpoint pages exist, make these links
-    if (isEventType(event, 'epochChange') && is(event.content, EpochChangeEvent))
-        return bigintDisplay('Epoch Change', 'Epoch ID', getEpochChangeEvent(event)!);
+    if (
+        isEventType(event, 'epochChange') &&
+        is(event.content, EpochChangeEvent)
+    )
+        return bigintDisplay(
+            'Epoch Change',
+            'Epoch ID',
+            getEpochChangeEvent(event)!
+        );
 
     if (isEventType(event, 'checkpoint') && is(event.content, CheckpointEvent))
-        return bigintDisplay('Checkpoint', 'Sequence #', getCheckpointEvent(event)!);
+        return bigintDisplay(
+            'Checkpoint',
+            'Sequence #',
+            getCheckpointEvent(event)!
+        );
 
     return null;
 }

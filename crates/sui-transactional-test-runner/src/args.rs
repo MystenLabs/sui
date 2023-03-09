@@ -27,6 +27,8 @@ pub struct SuiRunArgs {
 pub struct SuiPublishArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
+    #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
+    pub upgradeable: bool,
 }
 
 #[derive(Debug, clap::Parser)]

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
@@ -102,15 +103,19 @@ export class Transaction {
    * - A byte array (or base64-encoded bytes) containing BCS transaction data.
    */
   static from(serialized: string | Uint8Array) {
+    const tx = new Transaction();
+
     // Check for bytes:
     if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
-      // TODO: Support fromBytes.
-      throw new Error('from() does not yet support bytes');
+      tx.#transactionData = TransactionDataBuilder.fromBytes(
+        typeof serialized === 'string' ? fromB64(serialized) : serialized,
+      );
+    } else {
+      tx.#transactionData = TransactionDataBuilder.restore(
+        JSON.parse(serialized),
+      );
     }
 
-    const parsed = JSON.parse(serialized);
-    const tx = new Transaction();
-    tx.#transactionData = TransactionDataBuilder.restore(parsed);
     return tx;
   }
 

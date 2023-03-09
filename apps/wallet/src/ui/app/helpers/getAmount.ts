@@ -84,7 +84,7 @@ export function getAmount(
                 ...acc,
                 [recipient]: {
                     amount:
-                        paySuiData.amounts[index] +
+                        Number(paySuiData.amounts[index]) +
                         (recipient in acc ? acc[recipient].amount : 0),
                     coinType,
                     recipientAddress: recipient,
@@ -100,5 +100,5 @@ export function getAmount(
         }
     );
 
-    return amountByRecipient ? Object.values(amountByRecipient) : null;
+    return amountByRecipient ? Object.values(Number(amountByRecipient)) : null;
 }

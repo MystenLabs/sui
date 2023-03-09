@@ -199,7 +199,7 @@ describe('Transaction Serialization and deserialization', () => {
           },
         ],
         recipients: [DEFAULT_RECIPIENT],
-        amounts: [100],
+        amounts: ['100'],
       },
     } as PaySuiTx;
 
@@ -236,7 +236,7 @@ describe('Transaction Serialization and deserialization', () => {
       data: {
         inputCoins: [coins[0].coinObjectId.substring(2)],
         recipients: [DEFAULT_RECIPIENT.substring(2)],
-        amounts: [BigInt(100)] as unknown as number[],
+        amounts: [BigInt(100)] as unknown as string[],
       } as PaySuiTransaction,
     } as UnserializedSignableTransaction;
     expect(expectedTx).toEqual(deserialized);

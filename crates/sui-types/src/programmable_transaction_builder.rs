@@ -6,7 +6,7 @@
 
 use anyhow::Context;
 use indexmap::{IndexMap, IndexSet};
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
 use crate::{
@@ -16,6 +16,8 @@ use crate::{
         ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
         TransactionKind, TransferObject, TransferSui,
     },
+    move_package::PACKAGE_MODULE_NAME,
+    SUI_FRAMEWORK_OBJECT_ID,
 };
 
 pub fn migrate_transaction_data(m: TransactionData) -> anyhow::Result<TransactionData> {
@@ -195,8 +197,29 @@ impl ProgrammableTransactionBuilder {
         })))
     }
 
+    pub fn publish_upgradeable(&mut self, modules: Vec<Vec<u8>>) -> Argument {
+        self.command(Command::Publish(modules))
+    }
+
     pub fn publish(&mut self, modules: Vec<Vec<u8>>) {
-        self.commands.push(Command::Publish(modules))
+        let cap = self.publish_upgradeable(modules);
+        self.commands
+            .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: SUI_FRAMEWORK_OBJECT_ID,
+                module: PACKAGE_MODULE_NAME.to_owned(),
+                function: ident_str!("make_immutable").to_owned(),
+                type_arguments: vec![],
+                arguments: vec![cap],
+            })));
+    }
+
+    pub fn transfer_arg(&mut self, recipient: SuiAddress, arg: Argument) {
+        self.transfer_args(recipient, vec![arg])
+    }
+
+    pub fn transfer_args(&mut self, recipient: SuiAddress, args: Vec<Argument>) {
+        let rec_arg = self.pure(recipient).unwrap();
+        self.commands.push(Command::TransferObjects(args, rec_arg));
     }
 
     pub fn transfer_object(&mut self, recipient: SuiAddress, object_ref: ObjectRef) {

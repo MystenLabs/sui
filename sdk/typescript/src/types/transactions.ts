@@ -15,7 +15,7 @@ import {
   boolean,
   tuple,
   assign,
-  any,
+  nullable,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
@@ -64,14 +64,14 @@ export type SuiConsensusCommitPrologue = Infer<
 export const Pay = object({
   coins: array(SuiObjectRef),
   recipients: array(SuiAddress),
-  amounts: array(number()),
+  amounts: array(string()),
 });
 export type Pay = Infer<typeof Pay>;
 
 export const PaySui = object({
   coins: array(SuiObjectRef),
   recipients: array(SuiAddress),
-  amounts: array(number()),
+  amounts: array(string()),
 });
 export type PaySui = Infer<typeof PaySui>;
 
@@ -95,12 +95,29 @@ export const Genesis = object({
 });
 export type Genesis = Infer<typeof Genesis>;
 
-// TODO: Refine object type
-export const ProgrammableTransaction = object({
-  inputs: array(SuiJsonValue),
-  commands: array(any()),
-});
+export const SuiArgument = unknown();
 
+export const SuiCommand = union([
+  object({
+    MoveCall: object({
+      arguments: array(SuiArgument),
+      type_arguments: array(string()),
+      package: ObjectId,
+      module: string(),
+      function: string(),
+    }),
+  }),
+  object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
+  object({ SplitCoin: tuple([SuiArgument, SuiAddress]) }),
+  object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
+  object({ Publish: SuiMovePackage }),
+  object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
+]);
+
+export const ProgrammableTransaction = object({
+  commands: array(),
+  inputs: array(SuiJsonValue),
+});
 export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
 
 export type ExecuteTransactionRequestType =
@@ -136,7 +153,6 @@ export const SuiTransactionKind = union([
   assign(PaySui, object({ kind: literal('PaySui') })),
   assign(PayAllSui, object({ kind: literal('PayAllSui') })),
   assign(Genesis, object({ kind: literal('Genesis') })),
-  // TODO: Refine object type
   assign(
     ProgrammableTransaction,
     object({ kind: literal('ProgrammableTransaction') }),
@@ -149,7 +165,6 @@ export const SuiTransactionData = object({
   messageVersion: literal('v1'),
   transactions: array(SuiTransactionKind),
   sender: SuiAddress,
-  gasData: SuiGasData,
 });
 export type SuiTransactionData = Infer<typeof SuiTransactionData>;
 
@@ -292,13 +307,6 @@ export type TransactionQuery =
 export type EmptySignInfo = object;
 export type AuthorityName = Infer<typeof AuthorityName>;
 export const AuthorityName = string();
-
-export const TransactionBytes = object({
-  txBytes: string(),
-  gas: array(SuiObjectRef),
-  // TODO: Type input_objects field
-  inputObjects: unknown(),
-});
 
 export const SuiTransaction = object({
   data: SuiTransactionData,
