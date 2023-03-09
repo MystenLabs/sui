@@ -7,6 +7,8 @@
 
 -  [Struct `ValidatorSet`](#0x2_validator_set_ValidatorSet)
 -  [Struct `ValidatorEpochInfo`](#0x2_validator_set_ValidatorEpochInfo)
+-  [Struct `ValidatorJoinEvent`](#0x2_validator_set_ValidatorJoinEvent)
+-  [Struct `ValidatorLeaveEvent`](#0x2_validator_set_ValidatorLeaveEvent)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_validator_set_new)
 -  [Function `request_add_validator_candidate`](#0x2_validator_set_request_add_validator_candidate)
@@ -217,6 +219,88 @@ each validator, emitted during epoch advancement.
 </dd>
 <dt>
 <code>tallying_rule_global_score: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_set_ValidatorJoinEvent"></a>
+
+## Struct `ValidatorJoinEvent`
+
+Event emitted every time a new validator joins the committee.
+The epoch value corresponds to the first epoch this change takes place.
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x2_validator_set_ValidatorJoinEvent">ValidatorJoinEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>staking_pool_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_set_ValidatorLeaveEvent"></a>
+
+## Struct `ValidatorLeaveEvent`
+
+Event emitted every time a validator leaves the committee.
+The epoch value corresponds to the first epoch this change takes place.
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x2_validator_set_ValidatorLeaveEvent">ValidatorLeaveEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>staking_pool_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
 
@@ -1431,6 +1515,14 @@ is removed from <code>validators</code> and its staking pool is put into the <co
         <a href="validator_set.md#0x2_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(
             validator_report_records, <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>));
 
+        <a href="event.md#0x2_event_emit">event::emit</a>(
+            <a href="validator_set.md#0x2_validator_set_ValidatorLeaveEvent">ValidatorLeaveEvent</a> {
+                epoch: new_epoch,
+                validator_address: <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>),
+                staking_pool_id: staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>),
+            }
+        );
+
         // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
         <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
         <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
@@ -1510,6 +1602,13 @@ Process the pending new validators. They are activated and inserted into <code>v
     <b>while</b> (!<a href="table_vec.md#0x2_table_vec_is_empty">table_vec::is_empty</a>(&self.pending_active_validators)) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> self.pending_active_validators);
         <a href="validator.md#0x2_validator_activate">validator::activate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
+        <a href="event.md#0x2_event_emit">event::emit</a>(
+            <a href="validator_set.md#0x2_validator_set_ValidatorJoinEvent">ValidatorJoinEvent</a> {
+                epoch: new_epoch,
+                validator_address: <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>),
+                staking_pool_id: staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>),
+            }
+        );
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.active_validators, <a href="validator.md#0x2_validator">validator</a>);
     }
 }
