@@ -3,7 +3,7 @@
 
 use crate::balance::Balance;
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::collection_types::{MoveOption, Table, TableVec, VecMap, VecSet};
+use crate::collection_types::{Table, TableVec, VecMap, VecSet};
 use crate::committee::{
     Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
 };
@@ -14,7 +14,6 @@ use crate::sui_system_state::epoch_start_sui_system_state::{
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -30,7 +29,7 @@ const E_METADATA_INVALID_PRIMARY_ADDR: u64 = 6;
 const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
@@ -39,7 +38,7 @@ pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
@@ -109,6 +108,10 @@ impl ValidatorMetadataV1 {
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
             .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+        // Also make sure that the p2p address is a valid anemo address.
+        // TODO: This will trigger a bunch of Move test failures today since we did not give proper
+        // value for p2p address.
+        // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
         let primary_address = Multiaddr::try_from(self.primary_address.clone())
             .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
         let worker_address = Multiaddr::try_from(self.worker_address.clone())
@@ -204,7 +207,7 @@ impl ValidatorMetadataV1 {
 }
 
 /// Rust version of the Move sui::validator::Validator type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "Validator")]
 pub struct ValidatorV1 {
@@ -226,18 +229,10 @@ impl ValidatorV1 {
                 .expect("Validity of public key bytes should be verified on-chain"),
             self.voting_power,
             NetworkMetadata {
-                network_pubkey: narwhal_crypto::NetworkPublicKey::from_bytes(
-                    &self.metadata.network_pubkey_bytes,
-                )
-                .expect("Validity of network public key should be verified on-chain"),
                 network_address: self
                     .metadata
                     .network_address()
                     .expect("Validity of network address should be verified on-chain"),
-                p2p_address: self
-                    .metadata
-                    .p2p_address()
-                    .expect("Validity of p2p address should be verified on-chain"),
             },
         )
     }
@@ -246,16 +241,108 @@ impl ValidatorV1 {
         AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
             .expect("Validity of public key bytes should be verified on-chain")
     }
+
+    pub fn into_sui_validator_summary(self) -> SuiValidatorSummary {
+        let Self {
+            metadata:
+                ValidatorMetadataV1 {
+                    sui_address,
+                    protocol_pubkey_bytes,
+                    network_pubkey_bytes,
+                    worker_pubkey_bytes,
+                    proof_of_possession_bytes,
+                    name,
+                    description,
+                    image_url,
+                    project_url,
+                    net_address,
+                    p2p_address,
+                    primary_address,
+                    worker_address,
+                    next_epoch_protocol_pubkey_bytes,
+                    next_epoch_proof_of_possession,
+                    next_epoch_network_pubkey_bytes,
+                    next_epoch_worker_pubkey_bytes,
+                    next_epoch_net_address,
+                    next_epoch_p2p_address,
+                    next_epoch_primary_address,
+                    next_epoch_worker_address,
+                },
+            voting_power,
+            gas_price,
+            staking_pool:
+                StakingPoolV1 {
+                    id: staking_pool_id,
+                    activation_epoch: staking_pool_activation_epoch,
+                    deactivation_epoch: staking_pool_deactivation_epoch,
+                    sui_balance: staking_pool_sui_balance,
+                    rewards_pool,
+                    pool_token_balance,
+                    exchange_rates:
+                        Table {
+                            id: exchange_rates_id,
+                            size: exchange_rates_size,
+                        },
+                    pending_delegation,
+                    pending_total_sui_withdraw,
+                    pending_pool_token_withdraw,
+                },
+            commission_rate,
+            next_epoch_stake,
+            next_epoch_gas_price,
+            next_epoch_commission_rate,
+        } = self;
+        SuiValidatorSummary {
+            sui_address,
+            protocol_pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession_bytes,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            next_epoch_protocol_pubkey_bytes,
+            next_epoch_proof_of_possession,
+            next_epoch_network_pubkey_bytes,
+            next_epoch_worker_pubkey_bytes,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_primary_address,
+            next_epoch_worker_address,
+            voting_power,
+            gas_price,
+            staking_pool_id,
+            staking_pool_activation_epoch,
+            staking_pool_deactivation_epoch,
+            staking_pool_sui_balance,
+            rewards_pool: rewards_pool.value(),
+            pool_token_balance,
+            exchange_rates_id,
+            exchange_rates_size,
+            pending_delegation,
+            pending_total_sui_withdraw,
+            pending_pool_token_withdraw,
+            commission_rate,
+            next_epoch_stake,
+            next_epoch_gas_price,
+            next_epoch_commission_rate,
+        }
+    }
 }
 
 /// Rust version of the Move sui::staking_pool::StakingPool type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
-    pub activation_epoch: MoveOption<u64>,
-    pub deactivation_epoch: MoveOption<u64>,
+    pub activation_epoch: Option<u64>,
+    pub deactivation_epoch: Option<u64>,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub pool_token_balance: u64,
@@ -266,7 +353,7 @@ pub struct StakingPoolV1 {
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
@@ -281,7 +368,7 @@ pub struct ValidatorSetV1 {
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
 /// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
@@ -296,7 +383,7 @@ pub struct SuiSystemStateInnerV1 {
     // TODO: Use getters instead of all pub.
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
@@ -351,24 +438,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             .collect()
     }
 
-    /// Maps from validator Sui address to (public key bytes, staking pool sui balance).
-    /// TODO: Might be useful to return a more organized data structure.
-    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)> {
-        self.validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                (
-                    validator.metadata.sui_address,
-                    (
-                        validator.metadata.protocol_pubkey_bytes.clone(),
-                        validator.staking_pool.sui_balance,
-                    ),
-                )
-            })
-            .collect()
-    }
-
     fn into_epoch_start_state(self) -> EpochStartSystemState {
         EpochStartSystemState {
             epoch: self.epoch,
@@ -402,65 +471,92 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
     }
 
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary {
+        // If you are making any changes to SuiSystemStateV1 or any of its dependent types before
+        // mainnet, please also update SuiSystemStateSummary and its corresponding TS type.
+        // Post-mainnet, we will need to introduce a new version.
+        let Self {
+            epoch,
+            protocol_version,
+            validators:
+                ValidatorSetV1 {
+                    total_stake,
+                    active_validators,
+                    pending_active_validators:
+                        TableVec {
+                            contents:
+                                Table {
+                                    id: pending_active_validators_id,
+                                    size: pending_active_validators_size,
+                                },
+                        },
+                    pending_removals,
+                    staking_pool_mappings:
+                        Table {
+                            id: staking_pool_mappings_id,
+                            size: staking_pool_mappings_size,
+                        },
+                    inactive_pools:
+                        Table {
+                            id: inactive_pools_id,
+                            size: inactive_pools_size,
+                        },
+                    validator_candidates:
+                        Table {
+                            id: validator_candidates_id,
+                            size: validator_candidates_size,
+                        },
+                },
+            storage_fund,
+            parameters:
+                SystemParametersV1 {
+                    min_validator_stake,
+                    max_validator_count,
+                    governance_start_epoch,
+                },
+            reference_gas_price,
+            validator_report_records:
+                VecMap {
+                    contents: validator_report_records,
+                },
+            stake_subsidy:
+                StakeSubsidyV1 {
+                    epoch_counter: stake_subsidy_epoch_counter,
+                    balance: stake_subsidy_balance,
+                    current_epoch_amount: stake_subsidy_current_epoch_amount,
+                },
+            safe_mode,
+            epoch_start_timestamp_ms,
+        } = self;
         SuiSystemStateSummary {
-            epoch: self.epoch,
-            protocol_version: self.protocol_version,
-            storage_fund: self.storage_fund.value(),
-            reference_gas_price: self.reference_gas_price,
-            safe_mode: self.safe_mode,
-            epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
-            min_validator_stake: self.parameters.min_validator_stake,
-            max_validator_candidate_count: self.parameters.max_validator_count,
-            governance_start_epoch: self.parameters.governance_start_epoch,
-            stake_subsidy_epoch_counter: self.stake_subsidy.epoch_counter,
-            stake_subsidy_balance: self.stake_subsidy.balance.value(),
-            stake_subsidy_current_epoch_amount: self.stake_subsidy.current_epoch_amount,
-            total_stake: self.validators.total_stake,
-            active_validators: self
-                .validators
-                .active_validators
+            epoch,
+            protocol_version,
+            storage_fund: storage_fund.value(),
+            reference_gas_price,
+            safe_mode,
+            epoch_start_timestamp_ms,
+            min_validator_stake,
+            max_validator_count,
+            governance_start_epoch,
+            stake_subsidy_epoch_counter,
+            stake_subsidy_balance: stake_subsidy_balance.value(),
+            stake_subsidy_current_epoch_amount,
+            total_stake,
+            active_validators: active_validators
                 .into_iter()
-                .map(|v| SuiValidatorSummary {
-                    sui_address: v.metadata.sui_address,
-                    protocol_pubkey_bytes: v.metadata.protocol_pubkey_bytes,
-                    network_pubkey_bytes: v.metadata.network_pubkey_bytes,
-                    worker_pubkey_bytes: v.metadata.worker_pubkey_bytes,
-                    proof_of_possession_bytes: v.metadata.proof_of_possession_bytes,
-                    name: v.metadata.name,
-                    description: v.metadata.description,
-                    image_url: v.metadata.image_url,
-                    project_url: v.metadata.project_url,
-                    net_address: v.metadata.net_address,
-                    p2p_address: v.metadata.p2p_address,
-                    primary_address: v.metadata.primary_address,
-                    worker_address: v.metadata.worker_address,
-                    next_epoch_protocol_pubkey_bytes: v.metadata.next_epoch_protocol_pubkey_bytes,
-                    next_epoch_proof_of_possession: v.metadata.next_epoch_proof_of_possession,
-                    next_epoch_network_pubkey_bytes: v.metadata.next_epoch_network_pubkey_bytes,
-                    next_epoch_worker_pubkey_bytes: v.metadata.next_epoch_worker_pubkey_bytes,
-                    next_epoch_net_address: v.metadata.next_epoch_net_address,
-                    next_epoch_p2p_address: v.metadata.next_epoch_p2p_address,
-                    next_epoch_primary_address: v.metadata.next_epoch_primary_address,
-                    next_epoch_worker_address: v.metadata.next_epoch_worker_address,
-                    voting_power: v.voting_power,
-                    gas_price: v.gas_price,
-                    commission_rate: v.commission_rate,
-                    next_epoch_stake: v.next_epoch_stake,
-                    next_epoch_gas_price: v.next_epoch_gas_price,
-                    next_epoch_commission_rate: v.next_epoch_commission_rate,
-                    staking_pool_id: v.staking_pool.id,
-                    staking_pool_activation_epoch: v.staking_pool.activation_epoch.into_option(),
-                    staking_pool_deactivation_epoch: v
-                        .staking_pool
-                        .deactivation_epoch
-                        .into_option(),
-                    staking_pool_sui_balance: v.staking_pool.sui_balance,
-                    rewards_pool: v.staking_pool.rewards_pool.value(),
-                    pool_token_balance: v.staking_pool.pool_token_balance,
-                    pending_delegation: v.staking_pool.pending_delegation,
-                    pending_total_sui_withdraw: v.staking_pool.pending_total_sui_withdraw,
-                    pending_pool_token_withdraw: v.staking_pool.pending_pool_token_withdraw,
-                })
+                .map(|v| v.into_sui_validator_summary())
+                .collect(),
+            pending_active_validators_id,
+            pending_active_validators_size,
+            pending_removals,
+            staking_pool_mappings_id,
+            staking_pool_mappings_size,
+            inactive_pools_id,
+            inactive_pools_size,
+            validator_candidates_id,
+            validator_candidates_size,
+            validator_report_records: validator_report_records
+                .into_iter()
+                .map(|e| (e.key, e.value.contents))
                 .collect(),
         }
     }

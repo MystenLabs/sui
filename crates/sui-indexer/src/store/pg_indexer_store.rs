@@ -9,7 +9,6 @@ use crate::schema::addresses::account_address;
 use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
 use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
 use crate::schema::move_calls::dsl as move_calls_dsl;
-use crate::schema::packages::{author, module_names, package_content, package_id};
 use crate::schema::recipients::dsl as recipients_dsl;
 use crate::schema::transactions::{dsl, transaction_digest};
 use crate::schema::{addresses, events, move_calls, objects, packages, recipients, transactions};
@@ -114,14 +113,14 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
-    fn get_transaction_by_digest(&self, txn_digest: String) -> Result<Transaction, IndexerError> {
+    fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
                 dsl::transactions
-                    .filter(transaction_digest.eq(txn_digest.clone()))
+                    .filter(transaction_digest.eq(txn_digest))
                     .first::<Transaction>(conn)
             })
             .map_err(|e| {
@@ -210,7 +209,7 @@ impl IndexerStore for PgIndexerStore {
                     .read_only()
                     .run(|conn| {
                         let mut boxed_query = recipients_dsl::recipients
-                            .filter(recipients_dsl::transaction_digest.eq(txn_digest.clone()))
+                            .filter(recipients_dsl::transaction_digest.eq(&txn_digest))
                             .into_boxed();
                         if is_descending {
                             boxed_query = boxed_query.order(recipients_dsl::id.desc());
@@ -554,13 +553,9 @@ impl IndexerStore for PgIndexerStore {
 
                 diesel::insert_into(packages::table)
                     .values(packages)
-                    .on_conflict(package_id)
-                    .do_update()
-                    .set((
-                        author.eq(excluded(author)),
-                        module_names.eq(excluded(module_names)),
-                        package_content.eq(excluded(package_content)),
-                    ))
+                    // We need to keep multiple version of the object in the database because of package upgrade.
+                    // Package with the same version number will not change, ignoring conflicts.
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
 
                 diesel::insert_into(move_calls::table)

@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SentryRpcClient } from '@mysten/core';
-import {
-    Connection,
-    JsonRpcProvider,
-    LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
@@ -129,11 +125,7 @@ export default class ApiProvider {
                 new BackgroundServiceSigner(
                     address,
                     backgroundClient,
-                    this._apiFullNodeProvider,
-                    growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
-                        ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                          new LocalTxnDataSerializer(this._apiFullNodeProvider!)
-                        : undefined
+                    this._apiFullNodeProvider
                 )
             );
         }

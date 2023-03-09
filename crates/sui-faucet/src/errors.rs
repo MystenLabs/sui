@@ -8,6 +8,9 @@ pub enum FaucetError {
     #[error("Faucet cannot read objects from fullnode")]
     FullnodeReadingError,
 
+    #[error("Failed to parse transaction response {0}")]
+    ParseTransactionResponseError(String),
+
     #[error(
         "Gas coin `{0}` does not have sufficient balance and has been removed from gas coin pool"
     )]

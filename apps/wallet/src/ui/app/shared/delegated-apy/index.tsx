@@ -22,12 +22,12 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
 
     const averageNetworkAPY = useMemo(() => {
         if (!data) return 0;
-        const validators = data.validators.active_validators;
+        const validators = data.active_validators;
 
         let stakedAPYs = 0;
 
         validators.forEach((validator) => {
-            if (stakedValidators.includes(validator.metadata.sui_address)) {
+            if (stakedValidators.includes(validator.sui_address)) {
                 stakedAPYs += calculateAPY(validator, +data.epoch);
             }
         });

@@ -146,6 +146,9 @@ pub struct ProtocolConfig {
     /// Maximum number of individual transactions in a Batch transaction.
     max_tx_in_batch: Option<u32>,
 
+    /// Maximum number of gas payment objets for a transaction.
+    max_gas_payment_objects: Option<u32>,
+
     /// Maximum number of modules in a Publish transaction.
     max_modules_in_publish: Option<u32>,
 
@@ -374,6 +377,9 @@ impl ProtocolConfig {
     }
     pub fn max_tx_in_batch(&self) -> u32 {
         self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_gas_payment_objects(&self) -> u32 {
+        self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_modules_in_publish(&self) -> u32 {
         self.max_modules_in_publish.expect(CONSTANT_ERR_MSG)
@@ -675,15 +681,16 @@ impl ProtocolConfig {
 
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
+                max_gas_payment_objects: Some(32),
                 max_modules_in_publish: Some(128),
-                max_arguments: Some(128),
+                max_arguments: Some(512),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
                 max_pure_argument_size: Some(16 * 1024),
                 max_object_vec_argument_size: Some(128),
                 max_coins: Some(1024),
                 max_pay_recipients: Some(1024),
-                max_programmable_tx_commands: Some(128),
+                max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),

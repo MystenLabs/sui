@@ -6,6 +6,7 @@ import {
   RawSigner,
   getExecutionStatusType,
   SuiSystemStateUtil,
+  SUI_TYPE_ARG,
 } from '../../src';
 import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
 
@@ -38,18 +39,9 @@ describe('Governance API', () => {
     // TODO: implement this
   });
 
-  it('test getValidators', async () => {
-    const validators = await toolbox.provider.getValidators();
-    expect(validators.length).greaterThan(0);
-  });
-
   it('test getCommitteeInfo', async () => {
     const committeeInfo = await toolbox.provider.getCommitteeInfo(0);
     expect(committeeInfo.validators?.length).greaterThan(0);
-  });
-
-  it('test getSuiSystemState', async () => {
-    await toolbox.provider.getSuiSystemState();
   });
 
   it('test getLatestSuiSystemState', async () => {
@@ -58,15 +50,17 @@ describe('Governance API', () => {
 });
 
 async function addDelegation(signer: RawSigner) {
-  const coins = await signer.provider.getGasObjectsOwnedByAddress(
-    await signer.getAddress(),
-  );
+  const coins = await signer.provider.getCoins({
+    owner: await signer.getAddress(),
+    coinType: SUI_TYPE_ARG,
+  });
 
-  const validators = await signer.provider.getValidators();
+  const system = await signer.provider.getLatestSuiSystemState();
+  const validators = system.active_validators;
 
   const tx = await SuiSystemStateUtil.newRequestAddDelegationTxn(
     signer.provider,
-    [coins[0].objectId],
+    [coins.data[0].coinObjectId],
     BigInt(DEFAULT_STAKED_AMOUNT),
     validators[0].sui_address,
   );

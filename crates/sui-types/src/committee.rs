@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{
-    random_committee_key_pairs, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
-};
+use crate::crypto::{random_committee_key_pairs, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
@@ -35,11 +33,8 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
-    #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
-    #[serde(skip)]
     loaded: bool,
 }
 
@@ -134,12 +129,15 @@ impl Committee {
     }
 
     pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
+        debug_assert_eq!(self.expanded_keys.len(), self.voting_rights.len());
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            None => Err(SuiError::InvalidCommittee(format!(
+                "Authority #{} not found, committee size {}",
+                authority,
+                self.expanded_keys.len()
+            ))),
         }
     }
 
@@ -351,9 +349,7 @@ pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkMetadata {
-    pub network_pubkey: NetworkPublicKey,
     pub network_address: Multiaddr,
-    pub p2p_address: Multiaddr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

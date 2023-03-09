@@ -4,7 +4,7 @@
 import {
     type SuiTransactionResponse,
     type SuiAddress,
-    getTransactions,
+    getTransactionKinds,
     getTransactionSender,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
@@ -17,15 +17,15 @@ type Props = {
 };
 
 export function useGetTxnRecipientAddress({ txn, address }: Props) {
-    const { events } = txn;
+    const events = txn.events!;
 
     const eventsSummary = useMemo(() => {
         const { coins } = getEventsSummary(events, address);
         return coins;
     }, [events, address]);
 
-    const [transaction] = getTransactions(txn);
-    const amountByRecipient = getAmount(transaction, txn.effects, events);
+    const [transaction] = getTransactionKinds(txn)!;
+    const amountByRecipient = getAmount(transaction, txn.effects!, events);
 
     const recipientAddress = useMemo(() => {
         const transferObjectRecipientAddress =

@@ -142,7 +142,7 @@ impl CheckpointExecutor {
         let mut now_time = Instant::now();
         let mut now_transaction_num = highest_executed
             .as_ref()
-            .map(|c| c.summary.network_total_transactions)
+            .map(|c| c.network_total_transactions)
             .unwrap_or(0);
 
         loop {
@@ -176,7 +176,7 @@ impl CheckpointExecutor {
 
                     // Estimate TPS every 10k transactions or 30 sec
                     let elapsed = now_time.elapsed().as_millis();
-                    let current_transaction_num =  highest_executed.as_ref().map(|c| c.summary.network_total_transactions).unwrap_or(0);
+                    let current_transaction_num =  highest_executed.as_ref().map(|c| c.network_total_transactions).unwrap_or(0);
                     if current_transaction_num - now_transaction_num > 10_000 || elapsed > 30_000{
                         let tps = (1000.0 * (current_transaction_num - now_transaction_num) as f64 / elapsed as f64) as i32;
                         self.metrics.checkpoint_exec_sync_tps.set(tps as i64);
@@ -189,10 +189,10 @@ impl CheckpointExecutor {
                 received = self.mailbox.recv() => match received {
                     Ok(checkpoint) => {
                         debug!(
-                            sequence_number = ?checkpoint.summary.sequence_number,
+                            sequence_number = ?checkpoint.sequence_number,
                             "received checkpoint summary from state sync"
                         );
-                        SystemTime::now().duration_since(checkpoint.summary.timestamp())
+                        SystemTime::now().duration_since(checkpoint.timestamp())
                             .map(|latency|
                                 self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
                             )
@@ -219,7 +219,7 @@ impl CheckpointExecutor {
     /// to be called in the order of checkpoint sequence number.
     fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
-        let seq = checkpoint.sequence_number();
+        let seq = *checkpoint.sequence_number();
         if let Some(prev_highest) = self
             .checkpoint_store
             .get_highest_executed_checkpoint_seq_number()
@@ -253,7 +253,7 @@ impl CheckpointExecutor {
             return;
         };
 
-        while *next_to_schedule <= latest_synced_checkpoint.sequence_number()
+        while *next_to_schedule <= *latest_synced_checkpoint.sequence_number()
             && pending.len() < self.config.checkpoint_execution_max_concurrency
         {
             let checkpoint = self
@@ -344,7 +344,7 @@ impl CheckpointExecutor {
                 if let Some(EndOfEpochData {
                     next_epoch_protocol_version,
                     ..
-                }) = &checkpoint.summary.end_of_epoch_data
+                }) = &checkpoint.end_of_epoch_data
                 {
                     info!(
                         ended_epoch = cur_epoch,
@@ -356,7 +356,7 @@ impl CheckpointExecutor {
                     self.accumulator
                         .accumulate_epoch(
                             &cur_epoch,
-                            checkpoint.sequence_number(),
+                            *checkpoint.sequence_number(),
                             epoch_store.clone(),
                         )
                         .in_monitored_scope("CheckpointExecutor::accumulate_epoch")
@@ -387,11 +387,11 @@ pub async fn execute_checkpoint(
         checkpoint.sequence_number(),
     );
     let txes = checkpoint_store
-        .get_checkpoint_contents(&checkpoint.content_digest())?
+        .get_checkpoint_contents(&checkpoint.content_digest)?
         .unwrap_or_else(|| {
             panic!(
                 "Checkpoint contents for digest {:?} does not exist",
-                checkpoint.content_digest()
+                checkpoint.content_digest
             )
         })
         .into_inner();
@@ -426,7 +426,7 @@ async fn execute_transactions(
     checkpoint: VerifiedCheckpoint,
     accumulator: Arc<StateAccumulator>,
 ) -> SuiResult {
-    let checkpoint_sequence = checkpoint.sequence_number();
+    let checkpoint_sequence = *checkpoint.sequence_number();
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
@@ -508,7 +508,7 @@ async fn execute_transactions(
             }
             Ok(Err(err)) => return Err(err),
             Ok(Ok(effects)) => {
-                let checkpoint_sequence = checkpoint.sequence_number();
+                let checkpoint_sequence = *checkpoint.sequence_number();
                 for (tx_digest, expected_digest, actual_effects) in
                     izip!(&all_tx_digests, &execution_digests, &effects)
                 {

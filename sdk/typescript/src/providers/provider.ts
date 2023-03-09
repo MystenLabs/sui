@@ -33,9 +33,7 @@ import {
   Order,
   CoinMetadata,
   DevInspectResults,
-  SuiSystemState,
   DelegatedStake,
-  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
@@ -89,37 +87,37 @@ export abstract class Provider {
    * @param cursor optional paging cursor
    * @param limit maximum number of items per page
    */
-  abstract getCoins(
-    owner: SuiAddress,
-    coinType: string | null,
-    cursor: ObjectId | null,
-    limit: number | null,
-  ): Promise<PaginatedCoins>;
+  abstract getCoins(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins>;
 
   /**
    * Get all Coin objects owned by an address.
    * @param cursor optional paging cursor
    * @param limt maximum number of items per page
    */
-  abstract getAllCoins(
-    owner: SuiAddress,
-    cursor: ObjectId | null,
-    limit: number | null,
-  ): Promise<PaginatedCoins>;
+  abstract getAllCoins(input: {
+    owner: SuiAddress;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins>;
 
   /**
    * Get the total coin balance for one coin type, owned by the address owner.
    * @param coinType optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
    */
-  abstract getBalance(
-    owner: SuiAddress,
-    coinType: string | null,
-  ): Promise<CoinBalance>;
+  abstract getBalance(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+  }): Promise<CoinBalance>;
 
   /**
    * Get the total coin balance for all coin type, owned by the address owner.
    */
-  abstract getAllBalances(owner: SuiAddress): Promise<CoinBalance[]>;
+  abstract getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]>;
 
   /**
    * Fetch CoinMetadata for a given coin type
@@ -127,13 +125,13 @@ export abstract class Provider {
    * 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
    *
    */
-  abstract getCoinMetadata(coinType: string): Promise<CoinMetadata>;
+  abstract getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata>;
 
   /**
    *  Fetch total supply for a coin
    * @param coinType fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
    */
-  abstract getTotalSupply(coinType: string): Promise<CoinSupply>;
+  abstract getTotalSupply(input: { coinType: string }): Promise<CoinSupply>;
 
   // Objects
   /**
@@ -147,13 +145,6 @@ export abstract class Provider {
   abstract getObjectsOwnedByAddress(
     addressOrObjectId: string,
     typeFilter?: string,
-  ): Promise<SuiObjectInfo[]>;
-
-  /**
-   * Convenience method for getting all gas objects(SUI Tokens) owned by an address
-   */
-  abstract getGasObjectsOwnedByAddress(
-    _address: string,
   ): Promise<SuiObjectInfo[]>;
 
   /**
@@ -378,16 +369,6 @@ export abstract class Provider {
    * Return the delegated stakes for an address
    */
   abstract getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]>;
-
-  /**
-   * Return all validators available for stake delegation.
-   */
-  abstract getValidators(): Promise<ValidatorMetaData[]>;
-
-  /**
-   * Return the content of `0x5` object
-   */
-  abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
    * Return the latest system state content.

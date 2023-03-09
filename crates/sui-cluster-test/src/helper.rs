@@ -219,7 +219,7 @@ impl CoinBalanceChangeEventChecker {
     pub fn check(self, event: &SuiEvent) {
         if let SuiEvent::CoinBalanceChange {
             package_id,
-            transaction_module,
+            transaction_module: _,
             sender,
             change_type,
             owner,
@@ -230,11 +230,13 @@ impl CoinBalanceChangeEventChecker {
         } = event
         {
             assert_eq_if_present!(self.package_id, package_id, "package_id");
-            assert_eq_if_present!(
-                self.transaction_module,
-                transaction_module,
-                "transaction_module"
-            );
+            // Disabled for programmable transaction migration,
+            // it will be removed soon
+            // assert_eq_if_present!(
+            //     self.transaction_module,
+            //     transaction_module,
+            //     "transaction_module"
+            // );
             assert_eq_if_present!(self.sender, sender, "sender");
             assert_eq_if_present!(self.owner, owner, "owner");
             assert_eq_if_present!(self.change_type, change_type, "change_type");

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Validator } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -18,17 +18,17 @@ import { Text } from '~/ui/Text';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-export function processValidators(set: Validator[]) {
+export function processValidators(set: SuiValidatorSummary[]) {
     return set.map((av) => ({
-        name: av.metadata.name,
-        address: av.metadata.sui_address,
-        stake: av.staking_pool.sui_balance,
-        logo: av.metadata.image_url,
+        name: av.name,
+        address: av.sui_address,
+        stake: av.staking_pool_sui_balance,
+        logo: av.image_url,
     }));
 }
 
 const validatorsTable = (
-    validatorsData: Validator[],
+    validatorsData: SuiValidatorSummary[],
     limit?: number,
     showIcon?: boolean
 ) => {
@@ -93,11 +93,7 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
     const tableData = useMemo(
         () =>
             data
-                ? validatorsTable(
-                      data.validators.active_validators,
-                      limit,
-                      showIcon
-                  )
+                ? validatorsTable(data.active_validators, limit, showIcon)
                 : null,
         [data, limit, showIcon]
     );

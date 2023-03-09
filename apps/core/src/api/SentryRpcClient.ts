@@ -40,7 +40,7 @@ export class SentryRpcClient extends JsonRpcClient {
         }
     }
 
-    async request(method: string, args: unknown[]) {
+    async request(method: string, args: any) {
         return this.#withRequest(method, { args }, () =>
             super.request(method, args)
         );

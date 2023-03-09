@@ -360,7 +360,8 @@ fn test_sign_command() -> Result<(), anyhow::Error> {
         vec![10000],
         gas,
         1000,
-    );
+    )
+    .unwrap();
 
     // Sign an intent message for the transaction data and a passed-in intent with scope as PersonalMessage.
     KeyToolCommand::Sign {

@@ -5,7 +5,7 @@
 //! migrating legacy transactions
 
 use anyhow::Context;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
@@ -14,27 +14,32 @@ use crate::{
     messages::{
         Argument, CallArg, Command, MoveCall, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
         ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
-        TransactionDataAPI, TransactionKind, TransferObject, TransferSui,
+        TransactionKind, TransferObject, TransferSui,
     },
 };
 
-pub fn migrate_transaction_data(mut m: TransactionData) -> anyhow::Result<TransactionData> {
+pub fn migrate_transaction_data(m: TransactionData) -> anyhow::Result<TransactionData> {
     let mut builder = ProgrammableTransactionBuilder::new();
-    match m.kind().clone() {
+    let TransactionData::V1(mut v1) = m;
+    match v1.kind {
         TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins: _coins,
+            coins,
             recipients,
             amounts,
         })) => {
             builder.pay_sui(recipients, amounts)?;
-            anyhow::bail!("blocked by gas smashing")
+            let mut v = v1.gas_data.payment;
+            v.extend(coins);
+            v1.gas_data.payment = unique_obj_vec(v);
         }
         TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-            coins: _coins,
+            coins,
             recipient,
         })) => {
             builder.pay_all_sui(recipient);
-            anyhow::bail!("blocked by gas smashing")
+            let mut v = v1.gas_data.payment;
+            v.extend(coins);
+            v1.gas_data.payment = unique_obj_vec(v);
         }
         TransactionKind::Single(t) => builder.single_transaction(t)?,
         TransactionKind::Batch(ts) => {
@@ -44,8 +49,15 @@ pub fn migrate_transaction_data(mut m: TransactionData) -> anyhow::Result<Transa
         }
     };
     let pt = builder.finish();
-    *m.kind_mut() = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
-    Ok(m)
+    v1.kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+    Ok(TransactionData::V1(v1))
+}
+
+/// Collects an iterator of object refs into a vector,
+/// ensuring the output is unique but while preserving a stable ordering
+fn unique_obj_vec(objs: impl IntoIterator<Item = ObjectRef>) -> Vec<ObjectRef> {
+    let set: IndexSet<ObjectRef> = IndexSet::from_iter(objs);
+    set.into_iter().collect()
 }
 
 #[derive(Default)]
@@ -166,6 +178,23 @@ impl ProgrammableTransactionBuilder {
         Ok(())
     }
 
+    pub fn programmable_move_call(
+        &mut self,
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        arguments: Vec<Argument>,
+    ) -> Argument {
+        self.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        })))
+    }
+
     pub fn publish(&mut self, modules: Vec<Vec<u8>>) {
         self.commands.push(Command::Publish(modules))
     }
@@ -238,11 +267,24 @@ impl ProgrammableTransactionBuilder {
                 amounts.len()
             )
         }
+
+        // collect recipients in the case where they are non-unique in order
+        // to minimize the number of transfers that must be performed
+        let mut recipient_map = IndexMap::new();
         for (recipient, amount) in recipients.into_iter().zip(amounts) {
+            recipient_map
+                .entry(recipient)
+                .or_insert_with(Vec::new)
+                .push(amount);
+        }
+        for (recipient, amounts) in recipient_map {
             let rec_arg = self.pure(recipient).unwrap();
-            let amt_arg = self.pure(amount).unwrap();
-            let coin_arg = self.command(Command::SplitCoin(coin, amt_arg));
-            self.command(Command::TransferObjects(vec![coin_arg], rec_arg));
+            let mut coins = vec![];
+            for amount in amounts {
+                let amt_arg = self.pure(amount).unwrap();
+                coins.push(self.command(Command::SplitCoin(coin, amt_arg)));
+            }
+            self.command(Command::TransferObjects(coins, rec_arg));
         }
         Ok(())
     }

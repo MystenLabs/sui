@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type Validator } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
@@ -12,7 +12,7 @@ import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
 
 type StatsCardProps = {
-    validatorData: Validator;
+    validatorData: SuiValidatorSummary;
     epoch: number | string;
     epochRewards: string;
 };
@@ -33,9 +33,9 @@ export function ValidatorStats({
         () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
-    const totalStake = +validatorData.staking_pool.sui_balance;
+    const totalStake = +validatorData.staking_pool_sui_balance;
     const commission = +validatorData.commission_rate / 100;
-    const rewardsPoolBalance = +validatorData.staking_pool.rewards_pool;
+    const rewardsPoolBalance = +validatorData.rewards_pool;
 
     return (
         <div className="flex flex-col items-stretch gap-5 md:flex-row">

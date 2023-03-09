@@ -7,7 +7,6 @@ import {
   getCreatedObjects,
   getExecutionStatusType,
   ObjectId,
-  RawSigner,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../src';
 import {
@@ -19,11 +18,10 @@ import {
 
 describe.skip('Test Move call with a vector of objects as input (skipped due to move vector requirement)', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: ObjectId;
 
   async function mintObject(val: number) {
-    const txn = await signer.signAndExecuteTransaction({
+    const txn = await toolbox.signer.signAndExecuteTransaction({
       kind: 'moveCall',
       data: {
         packageObjectId: packageId,
@@ -39,7 +37,7 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
   }
 
   async function destroyObjects(objects: ObjectId[]) {
-    const txn = await signer.signAndExecuteTransaction({
+    const txn = await toolbox.signer.signAndExecuteTransaction({
       kind: 'moveCall',
       data: {
         packageObjectId: packageId,
@@ -55,11 +53,10 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_vector';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   it('Test object vector', async () => {
@@ -67,11 +64,9 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
   });
 
   it('Test regular arg mixed with object vector arg', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coinIDs = coins.map((coin) => Coin.getID(coin));
-    const txn = await signer.signAndExecuteTransaction({
+    const txn = await toolbox.signer.signAndExecuteTransaction({
       kind: 'moveCall',
       data: {
         packageObjectId: SUI_FRAMEWORK_ADDRESS,

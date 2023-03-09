@@ -19,32 +19,7 @@ import { AuthorityName } from './transactions';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
-export const ValidatorMetaData = object({
-  sui_address: SuiAddress,
-  protocol_pubkey_bytes: array(number()),
-  network_pubkey_bytes: array(number()),
-  worker_pubkey_bytes: array(number()),
-  proof_of_possession_bytes: array(number()),
-  name: string(),
-  description: string(),
-  image_url: string(),
-  project_url: string(),
-  p2p_address: array(number()),
-  net_address: array(number()),
-  primary_address: array(number()),
-  worker_address: array(number()),
-  next_epoch_protocol_pubkey_bytes: nullable(array(number())),
-  next_epoch_proof_of_possession: nullable(array(number())),
-  next_epoch_network_pubkey_bytes: nullable(array(number())),
-  next_epoch_worker_pubkey_bytes: nullable(array(number())),
-  next_epoch_net_address: nullable(array(number())),
-  next_epoch_p2p_address: nullable(array(number())),
-  next_epoch_primary_address: nullable(array(number())),
-  next_epoch_worker_address: nullable(array(number())),
-});
-
 export type DelegatedStake = Infer<typeof DelegatedStake>;
-export type ValidatorMetaData = Infer<typeof ValidatorMetaData>;
 export type CommitteeInfo = Infer<typeof CommitteeInfo>;
 
 // Staking
@@ -152,69 +127,6 @@ export const CommitteeInfo = object({
   validators: optional(array(tuple([AuthorityName, number()]))),
 });
 
-export const SystemParameters = object({
-  min_validator_stake: number(),
-  max_validator_count: number(),
-  governance_start_epoch: number(),
-  storage_gas_price: optional(number()),
-});
-
-export const Validator = object({
-  metadata: ValidatorMetaData,
-  voting_power: number(),
-  gas_price: number(),
-  staking_pool: DelegationStakingPoolFields,
-  commission_rate: number(),
-  next_epoch_stake: number(),
-  next_epoch_gas_price: number(),
-  next_epoch_commission_rate: number(),
-});
-export type Validator = Infer<typeof Validator>;
-
-export const ValidatorPair = object({
-  from: SuiAddress,
-  to: SuiAddress,
-});
-
-export const ValidatorSet = object({
-  total_stake: number(),
-  active_validators: array(Validator),
-  pending_active_validators: object({
-    contents: object({
-      id: string(),
-      size: number(),
-    }),
-  }),
-  pending_removals: array(number()),
-  staking_pool_mappings: object({
-    id: string(),
-    size: number(),
-  }),
-  inactive_pools: object({
-    id: string(),
-    size: number(),
-  }),
-  validator_candidates: object({
-    id: string(),
-    size: number(),
-  }),
-});
-
-export const SuiSystemState = object({
-  epoch: number(),
-  protocol_version: number(),
-  validators: ValidatorSet,
-  storage_fund: Balance,
-  parameters: SystemParameters,
-  reference_gas_price: number(),
-  validator_report_records: object({ contents: array() }),
-  stake_subsidy: StakeSubsidyFields,
-  safe_mode: boolean(),
-  epoch_start_timestamp_ms: optional(number()),
-});
-
-export type SuiSystemState = Infer<typeof SuiSystemState>;
-
 export const SuiValidatorSummary = object({
   sui_address: SuiAddress,
   protocol_pubkey_bytes: array(number()),
@@ -252,6 +164,8 @@ export const SuiValidatorSummary = object({
   pending_delegation: number(),
   pending_pool_token_withdraw: number(),
   pending_total_sui_withdraw: number(),
+  exchange_rates_id: string(),
+  exchange_rates_size: number(),
 });
 
 export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
@@ -264,13 +178,23 @@ export const SuiSystemStateSummary = object({
   safe_mode: boolean(),
   epoch_start_timestamp_ms: number(),
   min_validator_stake: number(),
-  max_validator_candidate_count: number(),
+  max_validator_count: number(),
   governance_start_epoch: number(),
   stake_subsidy_epoch_counter: number(),
   stake_subsidy_balance: number(),
   stake_subsidy_current_epoch_amount: number(),
   total_stake: number(),
   active_validators: array(SuiValidatorSummary),
+  pending_active_validators_id: string(),
+  pending_active_validators_size: number(),
+  pending_removals: array(number()),
+  staking_pool_mappings_id: string(),
+  staking_pool_mappings_size: number(),
+  inactive_pools_id: string(),
+  inactive_pools_size: number(),
+  validator_candidates_id: string(),
+  validator_candidates_size: number(),
+  validator_report_records: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 
 export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;
