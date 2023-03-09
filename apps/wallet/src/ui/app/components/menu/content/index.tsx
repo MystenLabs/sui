@@ -94,12 +94,12 @@ function MenuContent() {
                                 <Navigate to={menuHomeUrl} replace={true} />
                             }
                         />
-                        {
+                        {isLedgerIntegrationEnabled && (
                             <Route
                                 path="/import-ledger-accounts"
                                 element={<ImportLedgerAccounts />}
                             />
-                        }
+                        )}
                     </Routes>
                 </MainLocationContext.Provider>
             </ErrorBoundary>

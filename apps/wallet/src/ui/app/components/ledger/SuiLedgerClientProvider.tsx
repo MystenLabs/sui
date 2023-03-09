@@ -6,6 +6,11 @@ import TransportWebUSB from '@ledgerhq/hw-transport-webusb';
 import SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 import { createContext, useContext, useState } from 'react';
 
+import {
+    LedgerConnectionFailedError,
+    LedgerNoTransportMechanismError,
+} from './LedgerExceptions';
+
 import type Transport from '@ledgerhq/hw-transport';
 
 type SuiLedgerClientProviderProps = {
@@ -53,12 +58,14 @@ async function getLedgerTransport() {
     try {
         ledgerTransport = await initiateLedgerConnection();
     } catch (error) {
-        throw new Error('Ledger connection failed.');
+        throw new LedgerConnectionFailedError(
+            "Unable to connect to the user's Ledger device"
+        );
     }
 
     if (!ledgerTransport) {
-        throw new Error(
-            "Your machine doesn't support HID or USB transport mechanisms."
+        throw new LedgerNoTransportMechanismError(
+            "There are no supported transport mechanisms to connect to the user's Ledger device"
         );
     }
 

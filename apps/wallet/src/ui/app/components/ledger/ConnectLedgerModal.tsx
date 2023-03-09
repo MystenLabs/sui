@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { LockedDeviceError } from '@ledgerhq/errors';
-import { TransportStatusError } from '@ledgerhq/hw-transport';
 import { useState } from 'react';
 
+import {
+    LedgerConnectionFailedError,
+    LedgerNoTransportMechanismError,
+} from './LedgerExceptions';
 import ExternalLink from '_components/external-link';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
@@ -31,12 +34,15 @@ export function ConnectLedgerModal({
         try {
             setConnectingToLedger(true);
 
+            await connectToLedger();
+
             // Let's make sure that the user has the Sui application open
             // by making a call to getVersion. We can probably abstract this
             // away at the SDK level in some follow-up work
             // (See https://github.com/LedgerHQ/ledgerjs/issues/122)
-            const suiLedgerClient = await connectToLedger();
-            await suiLedgerClient.getVersion();
+            // TODO: I'll un-comment this out when I can actually load the
+            // Sui application onto my Ledger device.
+            // await suiLedgerClient.getVersion();
 
             onConfirm();
         } catch (error) {
@@ -100,10 +106,10 @@ export function ConnectLedgerModal({
 function getErrorMessageForFailedConnection(error: unknown) {
     if (error instanceof LockedDeviceError) {
         return 'Your device is locked. Un-lock it and try again.';
-    } else if (error instanceof TransportStatusError) {
-        return 'Something went wrong. Try again.';
-    } else if (error instanceof Error) {
-        return error.message;
+    } else if (error instanceof LedgerConnectionFailedError) {
+        return 'Ledger connection failed.';
+    } else if (error instanceof LedgerNoTransportMechanismError) {
+        return "Your machine doesn't support USB or HID.";
     }
     return 'Something went wrong. Try again.';
 }
