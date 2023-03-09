@@ -41,24 +41,24 @@ export function validatorsTableData(
     return {
         data: validators.map((validator) => {
             const validatorName = validator.name;
-            const totalStake = validator.staking_pool_sui_balance;
-            const img = validator.image_url;
+            const totalStake = validator.stakingPoolSuiBalance;
+            const img = validator.imageUrl;
 
             const event = getValidatorMoveEvent(
                 validatorsEvents,
-                validator.sui_address
+                validator.suiAddress
             );
 
             return {
                 name: {
                     name: validatorName,
-                    logo: validator.image_url,
+                    logo: validator.imageUrl,
                 },
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.commission_rate / 100,
+                commission: +validator.commissionRate / 100,
                 img: img,
-                address: validator.sui_address,
+                address: validator.suiAddress,
                 lastReward: event?.fields.stake_rewards || 0,
                 atRisk: totalStake < minimumStake,
             };
@@ -181,7 +181,7 @@ function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const numberOfValidators = useMemo(
-        () => data?.active_validators.length || null,
+        () => data?.activeValidators.length || null,
         [data]
     );
 
@@ -196,17 +196,17 @@ function ValidatorPageResult() {
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
-        const validators = data.active_validators;
+        const validators = data.activeValidators;
 
         return validators.reduce(
-            (acc, cur) => acc + +cur.staking_pool_sui_balance,
+            (acc, cur) => acc + +cur.stakingPoolSuiBalance,
             0
         );
     }, [data]);
 
     const averageAPY = useMemo(() => {
         if (!data) return 0;
-        const validators = data.active_validators;
+        const validators = data.activeValidators;
 
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +data.epoch)
@@ -235,13 +235,13 @@ function ValidatorPageResult() {
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
 
-        const validators = data.active_validators;
+        const validators = data.activeValidators;
 
         return validatorsTableData(
             validators,
             +data.epoch,
             validatorEvents.data,
-            data.min_validator_stake
+            data.minValidatorStake
         );
     }, [validatorEvents, data]);
 

@@ -2892,12 +2892,31 @@
       "Balance": {
         "type": "object",
         "required": [
-          "value"
+          "coinObjectCount",
+          "coinType",
+          "lockedBalance",
+          "totalBalance"
         ],
         "properties": {
-          "value": {
+          "coinObjectCount": {
             "type": "integer",
-            "format": "uint64",
+            "format": "uint",
+            "minimum": 0.0
+          },
+          "coinType": {
+            "type": "string"
+          },
+          "lockedBalance": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "uint128",
+              "minimum": 0.0
+            }
+          },
+          "totalBalance": {
+            "type": "integer",
+            "format": "uint128",
             "minimum": 0.0
           }
         }
@@ -3215,64 +3234,34 @@
       "DelegatedStake": {
         "type": "object",
         "required": [
-          "delegation_status",
-          "staked_sui"
+          "stakes",
+          "stakingPool",
+          "validatorAddress"
         ],
         "properties": {
-          "delegation_status": {
-            "$ref": "#/components/schemas/DelegationStatus"
+          "stakes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Stake"
+            }
           },
-          "staked_sui": {
-            "$ref": "#/components/schemas/StakedSui"
-          }
-        }
-      },
-      "Delegation": {
-        "type": "object",
-        "required": [
-          "id",
-          "pool_tokens",
-          "principal_sui_amount",
-          "staked_sui_id"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/UID"
-          },
-          "pool_tokens": {
-            "$ref": "#/components/schemas/Balance"
-          },
-          "principal_sui_amount": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "staked_sui_id": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      },
-      "DelegationStatus": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "Pending"
+          "stakingPool": {
+            "description": "Staking pool object id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
             ]
           },
-          {
-            "type": "object",
-            "required": [
-              "Active"
-            ],
-            "properties": {
-              "Active": {
-                "$ref": "#/components/schemas/Delegation"
+          "validatorAddress": {
+            "description": "Validator's Address.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuiAddress"
               }
-            },
-            "additionalProperties": false
+            ]
           }
-        ]
+        }
       },
       "DevInspectResults": {
         "description": "The response from processing a dev inspect transaction",
@@ -3329,6 +3318,7 @@
       "DynamicFieldInfo": {
         "type": "object",
         "required": [
+          "bcsName",
           "digest",
           "name",
           "objectId",
@@ -3337,6 +3327,9 @@
           "version"
         ],
         "properties": {
+          "bcsName": {
+            "$ref": "#/components/schemas/Base58"
+          },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
           },
@@ -5442,40 +5435,81 @@
           }
         ]
       },
-      "StakedSui": {
+      "Stake": {
         "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Pending"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "estimatedReward",
+              "status"
+            ],
+            "properties": {
+              "estimatedReward": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Active"
+                ]
+              }
+            }
+          }
+        ],
         "required": [
-          "delegation_request_epoch",
-          "id",
-          "pool_id",
           "principal",
-          "validator_address"
+          "stakeActiveEpoch",
+          "stakeRequestEpoch",
+          "stakedSuiId"
         ],
         "properties": {
-          "delegation_request_epoch": {
+          "principal": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "id": {
-            "$ref": "#/components/schemas/UID"
+          "stakeActiveEpoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
-          "pool_id": {
-            "$ref": "#/components/schemas/ObjectID"
+          "stakeRequestEpoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
-          "principal": {
-            "$ref": "#/components/schemas/Balance"
+          "stakedSuiId": {
+            "description": "ID of the StakedSui receipt object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
           },
-          "sui_token_lock": {
+          "tokenLock": {
             "type": [
               "integer",
               "null"
             ],
             "format": "uint64",
             "minimum": 0.0
-          },
-          "validator_address": {
-            "$ref": "#/components/schemas/SuiAddress"
           }
         }
       },
@@ -6134,33 +6168,33 @@
         "description": "This is the JSON-RPC type for the SUI system state object. It flattens all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
         "type": "object",
         "required": [
-          "active_validators",
+          "activeValidators",
           "epoch",
-          "epoch_start_timestamp_ms",
-          "governance_start_epoch",
-          "inactive_pools_id",
-          "inactive_pools_size",
-          "max_validator_count",
-          "min_validator_stake",
-          "pending_active_validators_id",
-          "pending_active_validators_size",
-          "pending_removals",
-          "protocol_version",
-          "reference_gas_price",
-          "safe_mode",
-          "stake_subsidy_balance",
-          "stake_subsidy_current_epoch_amount",
-          "stake_subsidy_epoch_counter",
-          "staking_pool_mappings_id",
-          "staking_pool_mappings_size",
-          "storage_fund",
-          "total_stake",
-          "validator_candidates_id",
-          "validator_candidates_size",
-          "validator_report_records"
+          "epochStartTimestampMs",
+          "governanceStartEpoch",
+          "inactivePoolsId",
+          "inactivePoolsSize",
+          "maxValidatorCount",
+          "minValidatorStake",
+          "pendingActiveValidatorsId",
+          "pendingActiveValidatorsSize",
+          "pendingRemovals",
+          "protocolVersion",
+          "referenceGasPrice",
+          "safeMode",
+          "stakeSubsidyBalance",
+          "stakeSubsidyCurrentEpochAmount",
+          "stakeSubsidyEpochCounter",
+          "stakingPoolMappingsId",
+          "stakingPoolMappingsSize",
+          "storageFund",
+          "totalStake",
+          "validatorCandidatesId",
+          "validatorCandidatesSize",
+          "validatorReportRecords"
         ],
         "properties": {
-          "active_validators": {
+          "activeValidators": {
             "description": "The list of active validators in the current epoch.",
             "type": "array",
             "items": {
@@ -6173,19 +6207,19 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "epoch_start_timestamp_ms": {
+          "epochStartTimestampMs": {
             "description": "Unix timestamp of the current epoch start",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "governance_start_epoch": {
+          "governanceStartEpoch": {
             "description": "The starting epoch in which various on-chain governance features take effect.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "inactive_pools_id": {
+          "inactivePoolsId": {
             "description": "ID of the object that maps from a staking pool ID to the inactive validator that has that pool as its staking pool.",
             "allOf": [
               {
@@ -6193,25 +6227,25 @@
               }
             ]
           },
-          "inactive_pools_size": {
+          "inactivePoolsSize": {
             "description": "Number of inactive staking pools.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "max_validator_count": {
+          "maxValidatorCount": {
             "description": "Maximum number of active validators at any moment. We do not allow the number of validators in any epoch to go above this.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "min_validator_stake": {
+          "minValidatorStake": {
             "description": "Lower-bound on the amount of stake required to become a validator.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_active_validators_id": {
+          "pendingActiveValidatorsId": {
             "description": "ID of the object that contains the list of new validators that will join at the end of the epoch.",
             "allOf": [
               {
@@ -6219,13 +6253,13 @@
               }
             ]
           },
-          "pending_active_validators_size": {
+          "pendingActiveValidatorsSize": {
             "description": "Number of new validators that will join at the end of the epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_removals": {
+          "pendingRemovals": {
             "description": "Removal requests from the validators. Each element is an index pointing to `active_validators`.",
             "type": "array",
             "items": {
@@ -6234,41 +6268,41 @@
               "minimum": 0.0
             }
           },
-          "protocol_version": {
+          "protocolVersion": {
             "description": "The current protocol version, starting from 1.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "reference_gas_price": {
+          "referenceGasPrice": {
             "description": "The reference gas price for the current epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "safe_mode": {
+          "safeMode": {
             "description": "Whether the system is running in a downgraded safe mode due to a non-recoverable bug. This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode. It can be reset once we are able to successfully execute advance_epoch.",
             "type": "boolean"
           },
-          "stake_subsidy_balance": {
+          "stakeSubsidyBalance": {
             "description": "Balance of SUI set aside for stake subsidies that will be drawn down over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_subsidy_current_epoch_amount": {
+          "stakeSubsidyCurrentEpochAmount": {
             "description": "The amount of stake subsidy to be drawn down per epoch. This amount decays and decreases over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_subsidy_epoch_counter": {
+          "stakeSubsidyEpochCounter": {
             "description": "This counter may be different from the current epoch number if in some epochs we decide to skip the subsidy.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_mappings_id": {
+          "stakingPoolMappingsId": {
             "description": "ID of the object that maps from staking pool's ID to the sui address of a validator.",
             "allOf": [
               {
@@ -6276,25 +6310,25 @@
               }
             ]
           },
-          "staking_pool_mappings_size": {
+          "stakingPoolMappingsSize": {
             "description": "Number of staking pool mappings.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_fund": {
+          "storageFund": {
             "description": "The storage fund balance.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "total_stake": {
+          "totalStake": {
             "description": "Total amount of stake from all active validators at the beginning of the epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "validator_candidates_id": {
+          "validatorCandidatesId": {
             "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.",
             "allOf": [
               {
@@ -6302,13 +6336,13 @@
               }
             ]
           },
-          "validator_candidates_size": {
+          "validatorCandidatesSize": {
             "description": "Number of preactive validators.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "validator_report_records": {
+          "validatorReportRecords": {
             "description": "A map storing the records of validator reporting each other.",
             "type": "array",
             "items": {
@@ -6384,41 +6418,41 @@
         ]
       },
       "SuiValidatorSummary": {
-        "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures to top-level fields so that they are decoupled from the internal definitions.",
+        "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner structures to top-level fields so that they are decoupled from the internal definitions.",
         "type": "object",
         "required": [
-          "commission_rate",
+          "commissionRate",
           "description",
-          "exchange_rates_id",
-          "exchange_rates_size",
-          "gas_price",
-          "image_url",
+          "exchangeRatesId",
+          "exchangeRatesSize",
+          "gasPrice",
+          "imageUrl",
           "name",
-          "net_address",
-          "network_pubkey_bytes",
-          "next_epoch_commission_rate",
-          "next_epoch_gas_price",
-          "next_epoch_stake",
-          "operation_cap_id",
-          "p2p_address",
-          "pending_delegation",
-          "pending_pool_token_withdraw",
-          "pending_total_sui_withdraw",
-          "pool_token_balance",
-          "primary_address",
-          "project_url",
-          "proof_of_possession_bytes",
-          "protocol_pubkey_bytes",
-          "rewards_pool",
-          "staking_pool_id",
-          "staking_pool_sui_balance",
-          "sui_address",
-          "voting_power",
-          "worker_address",
-          "worker_pubkey_bytes"
+          "netAddress",
+          "networkPubkeyBytes",
+          "nextEpochCommissionRate",
+          "nextEpochGasPrice",
+          "nextEpochStake",
+          "operationCapId",
+          "p2pAddress",
+          "pendingDelegation",
+          "pendingPoolTokenWithdraw",
+          "pendingTotalSuiWithdraw",
+          "poolTokenBalance",
+          "primaryAddress",
+          "projectUrl",
+          "proofOfPossessionBytes",
+          "protocolPubkeyBytes",
+          "rewardsPool",
+          "stakingPoolId",
+          "stakingPoolSuiBalance",
+          "suiAddress",
+          "votingPower",
+          "workerAddress",
+          "workerPubkeyBytes"
         ],
         "properties": {
-          "commission_rate": {
+          "commissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6426,7 +6460,7 @@
           "description": {
             "type": "string"
           },
-          "exchange_rates_id": {
+          "exchangeRatesId": {
             "description": "ID of the exchange rate table object.",
             "allOf": [
               {
@@ -6434,211 +6468,165 @@
               }
             ]
           },
-          "exchange_rates_size": {
+          "exchangeRatesSize": {
             "description": "Number of exchange rates in the table.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "gas_price": {
+          "gasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "image_url": {
+          "imageUrl": {
             "type": "string"
           },
           "name": {
             "type": "string"
           },
-          "net_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "netAddress": {
+            "type": "string"
           },
-          "network_pubkey_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "networkPubkeyBytes": {
+            "$ref": "#/components/schemas/Base58"
           },
-          "next_epoch_commission_rate": {
+          "nextEpochCommissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_gas_price": {
+          "nextEpochGasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_net_address": {
+          "nextEpochNetAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_network_pubkey_bytes": {
+          "nextEpochNetworkPubkeyBytes": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextEpochP2pAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_p2p_address": {
+          "nextEpochPrimaryAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_primary_address": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "nextEpochProofOfPossession": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "next_epoch_proof_of_possession": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "nextEpochProtocolPubkeyBytes": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "next_epoch_protocol_pubkey_bytes": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
-          "next_epoch_stake": {
+          "nextEpochStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_worker_address": {
+          "nextEpochWorkerAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_worker_pubkey_bytes": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "nextEpochWorkerPubkeyBytes": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "operation_cap_id": {
+          "operationCapId": {
             "$ref": "#/components/schemas/ObjectID"
           },
-          "p2p_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "p2pAddress": {
+            "type": "string"
           },
-          "pending_delegation": {
+          "pendingDelegation": {
             "description": "Pending delegation amount for this epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_pool_token_withdraw": {
+          "pendingPoolTokenWithdraw": {
             "description": "Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_total_sui_withdraw": {
+          "pendingTotalSuiWithdraw": {
             "description": "Pending delegation withdrawn during the current epoch, emptied at epoch boundaries.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pool_token_balance": {
+          "poolTokenBalance": {
             "description": "Total number of pool tokens issued by the pool.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "primary_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
-          "project_url": {
+          "primaryAddress": {
             "type": "string"
           },
-          "proof_of_possession_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "projectUrl": {
+            "type": "string"
           },
-          "protocol_pubkey_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "proofOfPossessionBytes": {
+            "$ref": "#/components/schemas/Base58"
           },
-          "rewards_pool": {
+          "protocolPubkeyBytes": {
+            "$ref": "#/components/schemas/Base58"
+          },
+          "rewardsPool": {
             "description": "The epoch delegation rewards will be added here at the end of each epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_activation_epoch": {
+          "stakingPoolActivationEpoch": {
             "description": "The epoch at which this pool became active.",
             "type": [
               "integer",
@@ -6647,7 +6635,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_deactivation_epoch": {
+          "stakingPoolDeactivationEpoch": {
             "description": "The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},",
             "type": [
               "integer",
@@ -6656,7 +6644,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_id": {
+          "stakingPoolId": {
             "description": "ID of the staking pool object.",
             "allOf": [
               {
@@ -6664,35 +6652,25 @@
               }
             ]
           },
-          "staking_pool_sui_balance": {
+          "stakingPoolSuiBalance": {
             "description": "The total number of SUI tokens in this pool.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "sui_address": {
+          "suiAddress": {
             "$ref": "#/components/schemas/SuiAddress"
           },
-          "voting_power": {
+          "votingPower": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "worker_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "workerAddress": {
+            "type": "string"
           },
-          "worker_pubkey_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "workerPubkeyBytes": {
+            "$ref": "#/components/schemas/Base58"
           }
         }
       },
@@ -7487,18 +7465,6 @@
       },
       "TypeTag": {
         "type": "string"
-      },
-      "UID": {
-        "description": "Rust version of the Move sui::object::Info type",
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
       }
     }
   }

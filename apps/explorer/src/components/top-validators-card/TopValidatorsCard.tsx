@@ -21,9 +21,9 @@ const NUMBER_OF_VALIDATORS = 10;
 export function processValidators(set: SuiValidatorSummary[]) {
     return set.map((av) => ({
         name: av.name,
-        address: av.sui_address,
-        stake: av.staking_pool_sui_balance,
-        logo: av.image_url,
+        address: av.suiAddress,
+        stake: av.stakingPoolSuiBalance,
+        logo: av.imageUrl,
     }));
 }
 
@@ -93,7 +93,7 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
     const tableData = useMemo(
         () =>
             data
-                ? validatorsTable(data.active_validators, limit, showIcon)
+                ? validatorsTable(data.activeValidators, limit, showIcon)
                 : null,
         [data, limit, showIcon]
     );

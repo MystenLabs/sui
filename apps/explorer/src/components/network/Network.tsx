@@ -29,7 +29,7 @@ export default function WrappedNetworkSelect() {
             value={network}
             onChange={setNetwork}
             networks={networks}
-            version={data?.protocol_version}
+            version={data?.protocolVersion}
         />
     );
 }

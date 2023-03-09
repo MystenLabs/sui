@@ -547,12 +547,11 @@ impl IndexStore {
         Ok(self.tables.transactions_seq.get(digest)?)
     }
 
-    pub fn get_dynamic_fields(
+    pub fn get_dynamic_fields_iterator(
         &self,
         object: ObjectID,
         cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         debug!(?object, "get_dynamic_fields");
         Ok(self
             .tables
@@ -562,10 +561,8 @@ impl IndexStore {
             .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
-            .take_while(|((object_owner, _), _)| (object_owner == &object))
-            .map(|(_, object_info)| object_info)
-            .take(limit)
-            .collect())
+            .take_while(move |((object_owner, _), _)| (object_owner == &object))
+            .map(|(_, object_info)| object_info))
     }
 
     pub fn get_dynamic_field_object_id(
