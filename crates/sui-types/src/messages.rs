@@ -9,7 +9,7 @@ use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::TransactionEventsDigest;
+use crate::digests::{CertificateDigest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage, IntentScope};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -26,7 +26,10 @@ use crate::{
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
-use fastcrypto::encoding::Base64;
+use fastcrypto::{
+    encoding::Base64,
+    hash::{HashFunction, Sha3_256},
+};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -2342,6 +2345,16 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
+
+impl CertifiedTransaction {
+    pub fn certificate_digest(&self) -> CertificateDigest {
+        let mut digest = Sha3_256::default();
+        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        let hash = digest.finalize();
+        CertificateDigest::new(hash.into())
+    }
+}
+
 pub type TxCertAndSignedEffects = (
     CertifiedTransaction,
     SignedTransactionEffects,

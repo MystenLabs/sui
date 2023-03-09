@@ -4220,6 +4220,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03f1160296536f10c833a82dca22267d5486734230d47bf00bf435885814ba1e"
+dependencies = [
+ "hashbrown 0.13.2",
+]
+
+[[package]]
 name = "lz4-sys"
 version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8651,6 +8660,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "itertools",
+ "lru",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",

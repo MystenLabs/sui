@@ -68,9 +68,26 @@ impl TransactionValidator for SuiTxValidator {
 
         // let mut owned_tx_certs = Vec::new();
         let mut obligation = VerificationObligation::default();
+        let mut cached_cert_digests = Vec::new();
+        let mut verified_cert_digests = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
+                    let cert_digest = certificate.certificate_digest();
+                    if self
+                        .epoch_store
+                        .verified_cert_cache()
+                        .is_cert_verified(&cert_digest)
+                    {
+                        cached_cert_digests.push(cert_digest);
+                        self.metrics.certificate_signatures_cache_hits.inc();
+                        continue;
+                    } else {
+                        // obviously, this is not verified until after the batch verification
+                        // completes.
+                        verified_cert_digests.push(cert_digest);
+                    }
+
                     self.metrics.certificate_signatures_verified.inc();
                     certificate.data().verify(None)?;
                     let idx = obligation.add_message(
@@ -112,7 +129,14 @@ impl TransactionValidator for SuiTxValidator {
         obligation
             .verify_all()
             .tap_err(|e| warn!("batch verification error: {}", e))
-            .wrap_err("Malformed batch (failed to verify)")
+            .wrap_err("Malformed batch (failed to verify)")?;
+
+        // All the certs that we just batch verified can now be cached as verified.
+        self.epoch_store
+            .verified_cert_cache()
+            .cache_certs_verified(verified_cert_digests);
+
+        Ok(())
 
         // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
         // all certificates had valid signatures, schedule them for execution prior to sequencing
@@ -127,6 +151,7 @@ impl TransactionValidator for SuiTxValidator {
 
 pub struct SuiTxValidatorMetrics {
     certificate_signatures_verified: IntCounter,
+    certificate_signatures_cache_hits: IntCounter,
     checkpoint_signatures_verified: IntCounter,
 }
 
@@ -136,6 +161,12 @@ impl SuiTxValidatorMetrics {
             certificate_signatures_verified: register_int_counter_with_registry!(
                 "certificate_signatures_verified",
                 "Number of certificates verified in narwhal batch verifier",
+                registry
+            )
+            .unwrap(),
+            certificate_signatures_cache_hits: register_int_counter_with_registry!(
+                "certificate_signatures_cache_hits",
+                "Number of certificates which were known to be verified because of signature cache.",
                 registry
             )
             .unwrap(),
