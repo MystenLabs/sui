@@ -356,30 +356,6 @@ impl Operations {
                 || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())
     }
 
-<<<<<<< HEAD
-    fn parse_pay_sui_operations(
-        sender: SuiAddress,
-        tx: SuiPaySui,
-        status: Option<OperationStatus>,
-    ) -> Vec<Operation> {
-        let recipients = tx.recipients.iter().zip(&tx.amounts);
-        let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
-
-        for (recipient, amount) in recipients {
-            *aggregated_recipients.entry(*recipient).or_default() += u64::from(*amount)
-        }
-
-        let mut pay_operations = aggregated_recipients
-            .into_iter()
-            .map(|(recipient, amount)| Operation::pay_sui(status, recipient, amount.into()))
-            .collect::<Vec<_>>();
-        let total_paid = tx.amounts.into_iter().map(u64::from).sum::<u64>();
-        pay_operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
-        pay_operations
-    }
-
-=======
->>>>>>> main
     fn get_balance_operation_from_events(
         events: &[SuiEvent],
         status: Option<OperationStatus>,
