@@ -3,7 +3,7 @@
 
 use bytes::Bytes;
 use config::{Epoch, Parameters};
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::{KeyPair, PublicKey};
 use fastcrypto::{
@@ -85,7 +85,7 @@ async fn test_rounds_errors() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -188,7 +188,7 @@ async fn test_rounds_return_successful_response() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -356,7 +356,7 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -393,7 +393,7 @@ async fn test_node_read_causal_signed_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 

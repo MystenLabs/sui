@@ -27,7 +27,7 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Committee, Parameters, WorkerCache, WorkerId, WorkerInfo};
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{
@@ -111,7 +111,7 @@ impl Primary {
         vote_digest_store: Store<PublicKey, VoteInfo>,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-        rx_consensus_round_updates: watch::Receiver<RoundUpdate>,
+        rx_consensus_round_updates: watch::Receiver<CommittedRound>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_shutdown: &mut PreSubscribedBroadcastSender,

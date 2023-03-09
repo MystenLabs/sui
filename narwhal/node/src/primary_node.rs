@@ -4,7 +4,7 @@ use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use config::{Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use consensus::dag::Dag;
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 use consensus::Consensus;
@@ -218,7 +218,7 @@ impl PrimaryNodeInner {
         let mut handles = Vec::new();
         let (tx_executor_network, rx_executor_network) = oneshot::channel();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
-            watch::channel(RoundUpdate::new(0, 0));
+            watch::channel(CommittedRound::new(0, 0));
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -294,7 +294,7 @@ impl PrimaryNodeInner {
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
-        tx_consensus_round_updates: watch::Sender<RoundUpdate>,
+        tx_consensus_round_updates: watch::Sender<CommittedRound>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where

@@ -5,7 +5,7 @@ use super::*;
 use crate::common::create_db_stores;
 
 use crate::primary;
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use fastcrypto::traits::KeyPair;
 use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
@@ -33,7 +33,7 @@ async fn propose_header() {
     let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(0, 0));
+        watch::channel(CommittedRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
@@ -143,7 +143,7 @@ async fn propose_header_failure() {
     let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
@@ -237,7 +237,7 @@ async fn shutdown_core() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(0, 0));
+        watch::channel(CommittedRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.

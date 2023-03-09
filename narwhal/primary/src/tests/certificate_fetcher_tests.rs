@@ -18,7 +18,7 @@ use storage::CertificateStore;
 use storage::NodeStorage;
 use tokio::sync::oneshot;
 
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
@@ -165,7 +165,7 @@ async fn fetch_certificates_basic() {
 
     // Signal rounds
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(0, 0));
+        watch::channel(CommittedRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Make a synchronizer for certificates.

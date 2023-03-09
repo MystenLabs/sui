@@ -9,7 +9,7 @@ use crate::{
 };
 use bincode::Options;
 use config::{Committee, Parameters, WorkerId};
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{
@@ -82,7 +82,7 @@ async fn get_network_peers_from_admin_server() {
         .unwrap(),
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -206,7 +206,7 @@ async fn get_network_peers_from_admin_server() {
         .unwrap(),
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -313,7 +313,7 @@ async fn test_request_vote_send_missing_parents() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(1, 0));
+        watch::channel(CommittedRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -457,7 +457,7 @@ async fn test_request_vote_accept_missing_parents() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(1, 0));
+        watch::channel(CommittedRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -593,7 +593,7 @@ async fn test_request_vote_missing_batches() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(1, 0));
+        watch::channel(CommittedRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -718,7 +718,7 @@ async fn test_request_vote_already_voted() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(1, 0));
+        watch::channel(CommittedRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -876,7 +876,7 @@ async fn test_fetch_certificates_handler() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1044,7 +1044,7 @@ async fn test_process_payload_availability_success() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1195,7 +1195,7 @@ async fn test_process_payload_availability_when_failures() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::default());
+        watch::channel(CommittedRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1294,7 +1294,7 @@ async fn test_request_vote_created_at_in_future() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
-        watch::channel(RoundUpdate::new(1, 0));
+        watch::channel(CommittedRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 

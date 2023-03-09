@@ -4,7 +4,7 @@
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Network;
 use config::Committee;
-use consensus::consensus::RoundUpdate;
+use consensus::consensus::CommittedRound;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -61,7 +61,7 @@ pub(crate) struct CertificateFetcher {
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
     /// Receiver for signal of round changes.
-    rx_consensus_round_updates: watch::Receiver<RoundUpdate>,
+    rx_consensus_round_updates: watch::Receiver<CommittedRound>,
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives certificates with missing parents from the `Synchronizer`.
@@ -96,7 +96,7 @@ impl CertificateFetcher {
         committee: Committee,
         network: anemo::Network,
         certificate_store: CertificateStore,
-        rx_consensus_round_updates: watch::Receiver<RoundUpdate>,
+        rx_consensus_round_updates: watch::Receiver<CommittedRound>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificate_fetcher: Receiver<Certificate>,
         synchronizer: Arc<Synchronizer>,
