@@ -120,6 +120,15 @@ export const ProgrammableTransaction = object({
 });
 export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
 
+/**
+ * 1. WaitForEffectsCert: waits for TransactionEffectsCert and then returns to the client.
+ *    This mode is a proxy for transaction finality.
+ * 2. WaitForLocalExecution: waits for TransactionEffectsCert and makes sure the node
+ *    executed the transaction locally before returning to the client. The local execution
+ *    makes sure this node is aware of this transaction when the client fires subsequent queries.
+ *    However, if the node fails to execute the transaction locally in a timely manner,
+ *    a bool type in the response is set to false to indicate the case.
+ */
 export type ExecuteTransactionRequestType =
   | 'WaitForEffectsCert'
   | 'WaitForLocalExecution';

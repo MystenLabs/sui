@@ -249,11 +249,14 @@
           }
         },
         {
-          "name": "signature",
-          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.",
+          "name": "signatures",
+          "description": "A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Base64"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Base64"
+            }
           }
         },
         {
@@ -274,15 +277,17 @@
       },
       "examples": [
         {
-          "name": "Execute an transaction with serialized signature",
+          "name": "Execute an transaction with serialized signatures",
           "params": [
             {
               "name": "tx_bytes",
               "value": "AAAKAgAg4fwXyBRwidxDGP3UANtnNk7zUMlSZ22FfcN/rn2TKYoBABJFwxtCBojBaGy00TVtFxgN2C6TpIPFq18BopiHodleAgAAAAAAAAAgVX3EKq7+64wVTX3cRWuK6qMTLHQDUx3JjoP24ZjS19EBAQEBAQABAAC2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgFbVIthbaY7DOB9gW6J73uaOCF3tEIruqJ/fmJeoxmqCgIAAAAAAAAAIBhIZm/+0ika4ko/gXc1OgUiDXZcqcQho2gIPxj+Ry85tsQvvoHuwWA2oR4hJAeo21LD3nhYWwAWu7NkBXXeo74BAAAAAAAAAOgDAAAAAAAAAA=="
             },
             {
-              "name": "signature",
-              "value": "ABJgjRjAVl+CNx9WAq5c3dBdHw925j16zeaVsEqcO0JyEAD0KdY/HaDioE5q0r37hUit96WBHnKw0Vv4A8HmKAslVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+              "name": "signatures",
+              "value": [
+                "ABJgjRjAVl+CNx9WAq5c3dBdHw925j16zeaVsEqcO0JyEAD0KdY/HaDioE5q0r37hUit96WBHnKw0Vv4A8HmKAslVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+              ]
             },
             {
               "name": "request_type",
@@ -403,48 +408,6 @@
           }
         }
       ],
-      "deprecated": true
-    },
-    {
-      "name": "sui_executeTransactionSerializedSig",
-      "tags": [
-        {
-          "name": "Write API"
-        }
-      ],
-      "params": [
-        {
-          "name": "tx_bytes",
-          "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "signature",
-          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "request_type",
-          "description": "The request type",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ExecuteTransactionRequestType"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiTransactionResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
-        }
-      },
       "deprecated": true
     },
     {
@@ -590,9 +553,9 @@
             "value": {
               "epoch": 5000,
               "sequenceNumber": 1000,
-              "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS",
+              "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9",
               "networkTotalTransactions": 792385,
-              "previousDigest": "3yndxsmJNXFrRAUnuqKT6aekThhqmSDJ46opD7UjtL9N",
+              "previousDigest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt",
               "epochRollingGasCostSummary": {
                 "computation_cost": 0,
                 "storage_cost": 0,
@@ -601,7 +564,7 @@
               "timestampMs": 1676911928,
               "endOfEpochData": null,
               "transactions": [
-                "BhbWpBeESxuRWvmvLMyb2JNUuFa6j4aG1T4WUiPgKAHm"
+                "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
               ],
               "checkpointCommitments": []
             }
@@ -2418,183 +2381,6 @@
           "$ref": "#/components/schemas/TransactionBytes"
         }
       }
-    },
-    {
-      "name": "sui_submitTransaction",
-      "tags": [
-        {
-          "name": "Write API"
-        }
-      ],
-      "params": [
-        {
-          "name": "tx_bytes",
-          "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "signatures",
-          "description": "A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Base64"
-            }
-          }
-        },
-        {
-          "name": "request_type",
-          "description": "The request type",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ExecuteTransactionRequestType"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiTransactionResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
-        }
-      },
-      "examples": [
-        {
-          "name": "Execute an transaction with serialized signature",
-          "params": [
-            {
-              "name": "tx_bytes",
-              "value": "AAAKAgAgo9vZKoPvJtEouI/ma/JuDg0Jza9yfR2EzMqpegLMOpgBAAQWcOFgnbcU6YWMlunkaYVfHPO/35foZbEMAEbik8CMAgAAAAAAAAAgMvS/bD6KxC7vE4XgFAPkmkspatyyLqJ9PJLkziJWrGQBAQEBAQABAACPLqvygft/cUSQXoDZoUEqKxN7oOKTKRGEbKUUTLt7wwHsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/+VVpf+K3BMlQIAAAAAAAAAIECjhG6SmLddtyXB7jAnt4PqaJ4aOOtHbG78RO21zT3+jy6r8oH7f3FEkF6A2aFBKisTe6DikykRhGylFEy7e8MBAAAAAAAAAOgDAAAAAAAAAA=="
-            },
-            {
-              "name": "signatures",
-              "value": [
-                "ABUEpVIlKSxoeP9rAoSiIQPXAkxE1+qKl8pb5hIc2X+M7mduBamfU58wMyGHt6L4iwpH3uqL+00c39MYGdlroQ3tuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
-              ]
-            },
-            {
-              "name": "request_type",
-              "value": "WaitForLocalExecution"
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": {
-              "digest": "7DLsgW7cpwga58b8jHPFSR2j7eXx4y7eBdvSd36y3YoQ",
-              "transaction": {
-                "data": {
-                  "messageVersion": "v1",
-                  "transactions": [
-                    {
-                      "kind": "ProgrammableTransaction",
-                      "inputs": [
-                        "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98",
-                        "041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c"
-                      ],
-                      "commands": [
-                        {
-                          "TransferObjects": [
-                            [
-                              {
-                                "Input": 1
-                              }
-                            ],
-                            {
-                              "Input": 0
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ],
-                  "sender": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
-                  "gasData": {
-                    "payment": [
-                      {
-                        "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                        "version": 2,
-                        "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                      }
-                    ],
-                    "owner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
-                    "price": 1,
-                    "budget": 1000
-                  }
-                },
-                "txSignatures": [
-                  "ABUEpVIlKSxoeP9rAoSiIQPXAkxE1+qKl8pb5hIc2X+M7mduBamfU58wMyGHt6L4iwpH3uqL+00c39MYGdlroQ3tuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
-                ]
-              },
-              "effects": {
-                "messageVersion": "v1",
-                "status": {
-                  "status": "success"
-                },
-                "executedEpoch": 0,
-                "gasUsed": {
-                  "computationCost": 100,
-                  "storageCost": 100,
-                  "storageRebate": 10
-                },
-                "transactionDigest": "7EyfTiUYik55JWka5aGUkSFMCQeLzGnUM7wT8AYMh71b",
-                "mutated": [
-                  {
-                    "owner": {
-                      "AddressOwner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3"
-                    },
-                    "reference": {
-                      "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                      "version": 2,
-                      "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                    }
-                  },
-                  {
-                    "owner": {
-                      "AddressOwner": "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98"
-                    },
-                    "reference": {
-                      "objectId": "0x041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c",
-                      "version": 2,
-                      "digest": "4RuqnEzNdF4nKWjW1MhnKQ1E6sijZvSM5dUNgiPmjme3"
-                    }
-                  }
-                ],
-                "gasObject": {
-                  "owner": {
-                    "ObjectOwner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3"
-                  },
-                  "reference": {
-                    "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                    "version": 2,
-                    "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                  }
-                },
-                "eventsDigest": "7z6qPvSvB629YJdVvCxF4nG35Lm1CQeFeU9GSMMc6wFr"
-              },
-              "events": [
-                {
-                  "type": "transferObject",
-                  "content": {
-                    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
-                    "recipient": {
-                      "AddressOwner": "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c",
-                    "version": 2
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
     },
     {
       "name": "sui_subscribeEvent",

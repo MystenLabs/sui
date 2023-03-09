@@ -78,7 +78,6 @@ impl RpcExampleProvider {
             self.get_transactions(),
             self.get_events(),
             self.execute_transaction_example(),
-            self.submit_transaction_example(),
             self.get_checkpoint_example(),
         ]
         .into_iter()
@@ -159,14 +158,14 @@ impl RpcExampleProvider {
         )
     }
 
-    fn submit_transaction_example(&mut self) -> Examples {
+    fn execute_transaction_example(&mut self) -> Examples {
         let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_submitTransaction",
+            "sui_executeTransaction",
             vec![ExamplePairing::new(
-                "Execute an transaction with serialized signature",
+                "Execute an transaction with serialized signatures",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
                     (
@@ -176,27 +175,6 @@ impl RpcExampleProvider {
                             .map(|sig| sig.encode_base64())
                             .collect::<Vec<_>>()),
                     ),
-                    (
-                        "request_type",
-                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
-                    ),
-                ],
-                json!(result),
-            )],
-        )
-    }
-
-    fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data).unwrap();
-
-        Examples::new(
-            "sui_executeTransaction",
-            vec![ExamplePairing::new(
-                "Execute an transaction with serialized signature",
-                vec![
-                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("signature", json!(signatures[0].encode_base64())),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),

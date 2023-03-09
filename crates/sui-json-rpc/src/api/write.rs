@@ -22,32 +22,8 @@ pub trait WriteApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
-    // TODO(joyqvq): remove this and rename executeTransactionSerializedSig to executeTransaction
     #[method(name = "executeTransaction", deprecated)]
     async fn execute_transaction(
-        &self,
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
-        tx_bytes: Base64,
-        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
-        signature: Base64,
-        /// The request type
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse>;
-
-    #[method(name = "executeTransactionSerializedSig", deprecated)]
-    async fn execute_transaction_serialized_sig(
-        &self,
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
-        tx_bytes: Base64,
-        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
-        signature: Base64,
-        /// The request type
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse>;
-
-    // TODO: migrate above two rpc calls to this one eventually.
-    #[method(name = "submitTransaction")]
-    async fn submit_transaction(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
