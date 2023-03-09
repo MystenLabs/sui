@@ -14,7 +14,7 @@ import type { StakeObject } from '@mysten/sui.js';
 export enum DelegationState {
     EARNING = 'EARNING',
     COOL_DOWN = 'COOL_DOWN',
-    WITH_DRAW = 'WITH_DRAW',
+    WITHDRAW = 'WITHDRAW',
     IN_ACTIVE = 'IN_ACTIVE',
 }
 
@@ -28,7 +28,7 @@ interface DelegationCardProps {
 
 // For delegationsRequestEpoch n  through n + 2, show Start Earning
 // Show epoch number or date/time for n + 3 epochs
-// TODO: Add cool-down state
+// TODO: Change delegation to Stake
 export function DelegationCard({
     delegationObject,
     currentEpoch,
