@@ -123,7 +123,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AAECAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCmRldm5ldF9uZnQEbWludAADAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ALJLjsFo/kiW9bcMyxDxpwXgYdD9+hiWGNKLDUTv75LLZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dpsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
+              "txBytes": "AAMFAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ACCyS47BaP5IlvW3DMsQ8acF4GHQ/foYlhjSiw1E7++SywEAZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMBAAABAQABAgABAQEEAAEDAJsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
               "gas": [
                 {
                   "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
@@ -133,14 +133,14 @@
               ],
               "inputObjects": [
                 {
-                  "MovePackage": "0x0000000000000000000000000000000000000000000000000000000000000002"
-                },
-                {
                   "ImmOrOwnedMoveObject": {
                     "objectId": "0x672f0dbe129f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a8",
                     "version": 1,
                     "digest": "58WQqUhrsHbxjkMtiiGtkJfCpBwufnJCDVr88hExPwFs"
                   }
+                },
+                {
+                  "MovePackage": "0x0000000000000000000000000000000000000000000000000000000000000002"
                 },
                 {
                   "ImmOrOwnedMoveObject": {
@@ -281,12 +281,12 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AAAKAgAg4fwXyBRwidxDGP3UANtnNk7zUMlSZ22FfcN/rn2TKYoBABJFwxtCBojBaGy00TVtFxgN2C6TpIPFq18BopiHodleAgAAAAAAAAAgVX3EKq7+64wVTX3cRWuK6qMTLHQDUx3JjoP24ZjS19EBAQEBAQABAAC2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgFbVIthbaY7DOB9gW6J73uaOCF3tEIruqJ/fmJeoxmqCgIAAAAAAAAAIBhIZm/+0ika4ko/gXc1OgUiDXZcqcQho2gIPxj+Ry85tsQvvoHuwWA2oR4hJAeo21LD3nhYWwAWu7NkBXXeo74BAAAAAAAAAOgDAAAAAAAAAA=="
+              "value": "AAMCACDh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpigEAEkXDG0IGiMFobLTRNW0XGA3YLpOkg8WrXwGimIeh2V4CAAAAAAAAACBVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0QEBAQEBAAEAALbEL76B7sFgNqEeISQHqNtSw954WFsAFruzZAV13qO+AVtUi2FtpjsM4H2Bbonve5o4IXe0Qiu6on9+Yl6jGaoKAgAAAAAAAAAgGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzm2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgEAAAAAAAAA6AMAAAAAAAAA"
             },
             {
               "name": "signatures",
               "value": [
-                "ABJgjRjAVl+CNx9WAq5c3dBdHw925j16zeaVsEqcO0JyEAD0KdY/HaDioE5q0r37hUit96WBHnKw0Vv4A8HmKAslVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
               ]
             },
             {
@@ -297,13 +297,12 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "RimyyhH99Bs6p7DJP6UwEbWYzb19NSczqARBzqi4GGC",
+              "digest": "63MjNcBWJW2e8vZFmwjQBN22ysW9s3tVRcKrCFtJGSqx",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
-                  "transactions": [
-                    {
-                      "kind": "ProgrammableTransaction",
+                  "transaction": {
+                    "ProgrammableTransaction": {
                       "inputs": [
                         "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
                         "1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e"
@@ -323,7 +322,7 @@
                         }
                       ]
                     }
-                  ],
+                  },
                   "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
                   "gasData": {
                     "payment": [
@@ -339,7 +338,7 @@
                   }
                 },
                 "txSignatures": [
-                  "ABJgjRjAVl+CNx9WAq5c3dBdHw925j16zeaVsEqcO0JyEAD0KdY/HaDioE5q0r37hUit96WBHnKw0Vv4A8HmKAslVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                  "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
                 ]
               },
               "effects": {
@@ -833,13 +832,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4"
+                "Transaction": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
+                "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
                 "eventSeq": 10
               }
             },
@@ -858,9 +857,9 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
+                  "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
                   "id": {
-                    "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
+                    "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
                     "eventSeq": 0
                   },
                   "event": {
@@ -1386,7 +1385,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y"
+              "value": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7"
             },
             {
               "name": "options",
@@ -1400,13 +1399,12 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y",
+              "digest": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
-                  "transactions": [
-                    {
-                      "kind": "ProgrammableTransaction",
+                  "transaction": {
+                    "ProgrammableTransaction": {
                       "inputs": [
                         "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653",
                         "8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
@@ -1426,7 +1424,7 @@
                         }
                       ]
                     }
-                  ],
+                  },
                   "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
                   "gasData": {
                     "payment": [
@@ -1442,7 +1440,7 @@
                   }
                 },
                 "txSignatures": [
-                  "ANz4ZC5C0V79Q7BbAbkw2Py+jAz1GFdPFrpx1D973kltE+y68n7KRJnshM7o9rLcdPxfhzRAUC+9eMLAgwClPAdQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
+                  "AP2VCkYKve0kNoX49RpmfMqrxybOWJj6YoY2SVeX2mhKuVdktSb2W6lNI7dPMZ7VOmAOJQBS9BpkIZd4TVyotgFQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
                 ]
               },
               "effects": {
@@ -3074,10 +3072,10 @@
             }
           },
           "results": {
-            "description": "Execution results (including return values) from executing the transactions Currently contains only return values from Move calls",
+            "description": "Execution results (including return values) from executing the transaction commands",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String"
+                "$ref": "#/components/schemas/Result_of_Array_of_SuiExecutionResult_or_String"
               }
             ]
           }
@@ -5133,7 +5131,7 @@
           }
         ]
       },
-      "Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String": {
+      "Result_of_Array_of_SuiExecutionResult_or_String": {
         "oneOf": [
           {
             "type": "object",
@@ -5144,19 +5142,7 @@
               "Ok": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": [
-                    {
-                      "type": "integer",
-                      "format": "uint",
-                      "minimum": 0.0
-                    },
-                    {
-                      "$ref": "#/components/schemas/SuiExecutionResult"
-                    }
-                  ],
-                  "maxItems": 2,
-                  "minItems": 2
+                  "$ref": "#/components/schemas/SuiExecutionResult"
                 }
               }
             }
@@ -5404,6 +5390,43 @@
           }
         }
       },
+      "SuiChangeEpoch": {
+        "type": "object",
+        "required": [
+          "computation_charge",
+          "epoch",
+          "epoch_start_timestamp_ms",
+          "storage_charge",
+          "storage_rebate"
+        ],
+        "properties": {
+          "computation_charge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_start_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_charge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_rebate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "SuiCoinMetadata": {
         "type": "object",
         "required": [
@@ -5586,6 +5609,31 @@
           }
         ]
       },
+      "SuiConsensusCommitPrologue": {
+        "type": "object",
+        "required": [
+          "commit_timestamp_ms",
+          "epoch",
+          "round"
+        ],
+        "properties": {
+          "commit_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "round": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "SuiExecutionResult": {
         "type": "object",
         "properties": {
@@ -5596,9 +5644,7 @@
               "type": "array",
               "items": [
                 {
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
+                  "$ref": "#/components/schemas/SuiArgument"
                 },
                 {
                   "type": "array",
@@ -5617,7 +5663,7 @@
             }
           },
           "returnValues": {
-            "description": "The return values from the function",
+            "description": "The return values from the command",
             "type": "array",
             "items": {
               "type": "array",
@@ -5636,6 +5682,20 @@
               ],
               "maxItems": 2,
               "minItems": 2
+            }
+          }
+        }
+      },
+      "SuiGenesisTransaction": {
+        "type": "object",
+        "required": [
+          "objects"
+        ],
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
             }
           }
         }
@@ -5960,6 +6020,30 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "SuiProgrammableTransaction": {
+        "description": "A series of commands where the results of one command can be used in future commands",
+        "type": "object",
+        "required": [
+          "commands",
+          "inputs"
+        ],
+        "properties": {
+          "commands": {
+            "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiCommand"
+            }
+          },
+          "inputs": {
+            "description": "Input objects or primitive values",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiJsonValue"
             }
           }
         }
@@ -6545,7 +6629,7 @@
               "gasData",
               "messageVersion",
               "sender",
-              "transactions"
+              "transaction"
             ],
             "properties": {
               "gasData": {
@@ -6560,11 +6644,8 @@
               "sender": {
                 "$ref": "#/components/schemas/SuiAddress"
               },
-              "transactions": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/TransactionKind"
-                }
+              "transaction": {
+                "$ref": "#/components/schemas/TransactionKind"
               }
             }
           }
@@ -6711,354 +6792,56 @@
       "TransactionKind": {
         "oneOf": [
           {
-            "description": "Initiate an object transfer between addresses",
-            "type": "object",
-            "required": [
-              "kind",
-              "objectRef",
-              "recipient"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "TransferObject"
-                ]
-              },
-              "objectRef": {
-                "$ref": "#/components/schemas/ObjectRef"
-              },
-              "recipient": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            }
-          },
-          {
-            "description": "Pay one or more recipients from a set of input coins",
-            "type": "object",
-            "required": [
-              "amounts",
-              "coins",
-              "kind",
-              "recipients"
-            ],
-            "properties": {
-              "amounts": {
-                "description": "The amounts each recipient will receive. Must be the same length as amounts",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/BigInt"
-                }
-              },
-              "coins": {
-                "description": "The coins to be used for payment",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ObjectRef"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "Pay"
-                ]
-              },
-              "recipients": {
-                "description": "The addresses that will receive payment",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiAddress"
-                }
-              }
-            }
-          },
-          {
-            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
-            "type": "object",
-            "required": [
-              "amounts",
-              "coins",
-              "kind",
-              "recipients"
-            ],
-            "properties": {
-              "amounts": {
-                "description": "The amounts each recipient will receive. Must be the same length as amounts",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/BigInt"
-                }
-              },
-              "coins": {
-                "description": "The coins to be used for payment",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ObjectRef"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "PaySui"
-                ]
-              },
-              "recipients": {
-                "description": "The addresses that will receive payment",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiAddress"
-                }
-              }
-            }
-          },
-          {
-            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
-            "type": "object",
-            "required": [
-              "coins",
-              "kind",
-              "recipient"
-            ],
-            "properties": {
-              "coins": {
-                "description": "The coins to be used for payment",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ObjectRef"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "PayAllSui"
-                ]
-              },
-              "recipient": {
-                "description": "The addresses that will receive payment",
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "description": "Publish a new Move module",
-            "type": "object",
-            "required": [
-              "disassembled",
-              "kind"
-            ],
-            "properties": {
-              "disassembled": {
-                "type": "object",
-                "additionalProperties": true
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "Publish"
-                ]
-              }
-            }
-          },
-          {
-            "description": "Call a function in a published Move module",
-            "type": "object",
-            "required": [
-              "function",
-              "kind",
-              "module",
-              "package"
-            ],
-            "properties": {
-              "arguments": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiJsonValue"
-                }
-              },
-              "function": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "Call"
-                ]
-              },
-              "module": {
-                "type": "string"
-              },
-              "package": {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              "typeArguments": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          {
-            "description": "Initiate a SUI coin transfer between addresses",
-            "type": "object",
-            "required": [
-              "kind",
-              "recipient"
-            ],
-            "properties": {
-              "amount": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "TransferSui"
-                ]
-              },
-              "recipient": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            }
-          },
-          {
             "description": "A system transaction that will update epoch information on-chain.",
             "type": "object",
             "required": [
-              "computation_charge",
-              "epoch",
-              "epoch_start_timestamp_ms",
-              "kind",
-              "storage_charge",
-              "storage_rebate"
+              "ChangeEpoch"
             ],
             "properties": {
-              "computation_charge": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "epoch": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "epoch_start_timestamp_ms": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "ChangeEpoch"
-                ]
-              },
-              "storage_charge": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "storage_rebate": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+              "ChangeEpoch": {
+                "$ref": "#/components/schemas/SuiChangeEpoch"
               }
-            }
+            },
+            "additionalProperties": false
           },
           {
             "description": "A system transaction used for initializing the initial state of the chain.",
             "type": "object",
             "required": [
-              "kind",
-              "objects"
+              "Genesis"
             ],
             "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "Genesis"
-                ]
-              },
-              "objects": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ObjectID"
-                }
+              "Genesis": {
+                "$ref": "#/components/schemas/SuiGenesisTransaction"
               }
-            }
+            },
+            "additionalProperties": false
           },
           {
             "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
             "type": "object",
             "required": [
-              "commit_timestamp_ms",
-              "epoch",
-              "kind",
-              "round"
+              "ConsensusCommitPrologue"
             ],
             "properties": {
-              "commit_timestamp_ms": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "epoch": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "ConsensusCommitPrologue"
-                ]
-              },
-              "round": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+              "ConsensusCommitPrologue": {
+                "$ref": "#/components/schemas/SuiConsensusCommitPrologue"
               }
-            }
+            },
+            "additionalProperties": false
           },
           {
             "description": "A series of commands where the results of one command can be used in future commands",
             "type": "object",
             "required": [
-              "commands",
-              "inputs",
-              "kind"
+              "ProgrammableTransaction"
             ],
             "properties": {
-              "commands": {
-                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiCommand"
-                }
-              },
-              "inputs": {
-                "description": "Input objects or primitive values",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiJsonValue"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "ProgrammableTransaction"
-                ]
+              "ProgrammableTransaction": {
+                "$ref": "#/components/schemas/SuiProgrammableTransaction"
               }
-            }
+            },
+            "additionalProperties": false
           }
         ]
       },
