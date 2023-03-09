@@ -138,7 +138,7 @@ impl BuildConfig {
                 })?
         } else {
             self.config
-                .resolution_graph_for_package(&path, &mut Vec::new())
+                .resolution_graph_for_package(&path, &mut std::io::sink())
                 .map_err(|err| SuiError::ModuleBuildFailure {
                     error: format!("{:?}", err),
                 })?
@@ -161,7 +161,7 @@ pub fn build_from_resolution_graph(
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, &mut Vec::new())
+        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
