@@ -19,7 +19,7 @@ jobs:
       - name: Install Teleport
         uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
         with:
-          version: 11.3.1
+          version: 11.3.4
 
       - name: Authorize against Teleport
         id: auth
