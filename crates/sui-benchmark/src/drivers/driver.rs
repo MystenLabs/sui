@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use crate::drivers::Interval;
+use crate::system_state_observer::SystemStateObserver;
 use crate::ValidatorProxy;
 use async_trait::async_trait;
 use prometheus::Registry;
@@ -14,8 +15,8 @@ use crate::workloads::workload::WorkloadInfo;
 pub trait Driver<T> {
     async fn run(
         &self,
-        workload: Vec<WorkloadInfo>,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        proxy_workloads: Vec<(Arc<dyn ValidatorProxy + Send + Sync>, Vec<WorkloadInfo>)>,
+        system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,

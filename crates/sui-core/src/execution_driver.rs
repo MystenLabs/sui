@@ -7,12 +7,12 @@ use std::{
 };
 
 use mysten_metrics::spawn_monitored_task;
-use sui_types::messages::VerifiedCertificate;
+use sui_types::messages::VerifiedExecutableTransaction;
 use tokio::{
-    sync::{mpsc::UnboundedReceiver, Semaphore},
+    sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, error_span, info, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -29,7 +29,8 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<VerifiedCertificate>,
+    mut rx_ready_certificates: UnboundedReceiver<VerifiedExecutableTransaction>,
+    mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
 
@@ -38,14 +39,24 @@ pub async fn execution_process(
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let certificate = if let Some(cert) = rx_ready_certificates.recv().await {
-            cert
-        } else {
-            // Should only happen after the AuthorityState has shut down and tx_ready_certificate
-            // has been dropped by TransactionManager.
-            info!("No more certificate will be received. Exiting ...");
-            return;
+        let certificate;
+        tokio::select! {
+            result = rx_ready_certificates.recv() => {
+                if let Some(cert) = result {
+                    certificate = cert;
+                } else {
+                    // Should only happen after the AuthorityState has shut down and tx_ready_certificate
+                    // has been dropped by TransactionManager.
+                    info!("No more certificate will be received. Exiting executor ...");
+                    return;
+                };
+            }
+            _ = &mut rx_execution_shutdown => {
+                info!("Shutdown signal received. Exiting executor ...");
+                return;
+            }
         };
+
         let authority = if let Some(authority) = authority_state.upgrade() {
             authority
         } else {
@@ -55,13 +66,11 @@ pub async fn execution_process(
             return;
         };
 
+        // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
-
-        // Process any tx that failed to commit.
-        if let Err(err) = authority.process_tx_recovery_log(None).await {
-            tracing::error!("Error processing tx recovery log: {:?}", err);
-        }
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
@@ -77,16 +86,16 @@ pub async fn execution_process(
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.try_execute_immediately(&certificate).await;
+                let res = authority
+                    .try_execute_immediately(&certificate, &epoch_store)
+                    .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
-                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                        authority.metrics.execution_driver_execution_failures.inc();
-                        return;
+                        panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
                     }
                     // Assume only transient failure can happen. Permanent failure is probably
                     // a bug. There is nothing that can be done to recover from permanent failures.
-                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                    error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
                     sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
                 } else {
                     break;
@@ -94,12 +103,13 @@ pub async fn execution_process(
             }
 
             // Remove the certificate that finished execution from the pending_certificates table.
-            authority.certificate_executed(&digest).await;
+            authority.certificate_executed(&digest, &epoch_store);
 
             authority
                 .metrics
                 .execution_driver_executed_transactions
                 .inc();
-        });
+
+        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
     }
 }

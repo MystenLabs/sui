@@ -8,8 +8,10 @@
   },
   "references": [
     { "path": "../../typescript" },
-    { "path": "../react-providers" },
+    { "path": "../wallet-kit-core" },
+    { "path": "../wallet-standard" },
     { "path": "../adapters/base-adapter" },
-    { "path": "../adapters/wallet-standard-adapter" }
+    { "path": "../adapters/wallet-standard-adapter" },
+    { "path": "../adapters/unsafe-burner" },
   ]
 }

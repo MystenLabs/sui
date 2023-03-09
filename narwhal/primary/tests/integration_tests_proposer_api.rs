@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::{KeyPair, PublicKey};
 use fastcrypto::{
     hash::Hash,
     traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
+use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
+use rand::thread_rng;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -25,8 +26,8 @@ use test_utils::{
 use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
-    Certificate, CertificateDigest, NodeReadCausalRequest, ProposerClient, PublicKeyProto,
-    ReconfigureNotification, RoundsRequest,
+    Certificate, CertificateDigest, NodeReadCausalRequest, PreSubscribedBroadcastSender,
+    ProposerClient, PublicKeyProto, RoundsRequest,
 };
 
 #[tokio::test]
@@ -34,12 +35,14 @@ async fn test_rounds_errors() {
     // GIVEN keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
     let network_keypair = author.network_keypair().copy();
     let name = keypair.public().clone();
+
+    let other_keypair = KeyPair::generate(&mut thread_rng());
 
     struct TestCase {
         public_key: Bytes,
@@ -56,7 +59,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(PublicKey::default().as_bytes().to_vec()),
+            public_key: Bytes::from(other_keypair.public().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },
@@ -81,8 +84,8 @@ async fn test_rounds_errors() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
@@ -101,7 +104,7 @@ async fn test_rounds_errors() {
         name.clone(),
         keypair.copy(),
         network_keypair,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -114,10 +117,16 @@ async fn test_rounds_errors() {
         rx_consensus_round_updates,
         /* external_consensus */
         Some(Arc::new(
-            Dag::new(&no_name_committee, rx_new_certificates, consensus_metrics).1,
+            Dag::new(
+                &no_name_committee,
+                rx_new_certificates,
+                consensus_metrics,
+                tx_shutdown.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -157,7 +166,7 @@ async fn test_rounds_return_successful_response() {
     // GIVEN keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
@@ -177,18 +186,26 @@ async fn test_rounds_return_successful_response() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND setup the DAG
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
+    let dag = Arc::new(
+        Dag::new(
+            &committee,
+            rx_new_certificates,
+            consensus_metrics,
+            tx_shutdown.subscribe(),
+        )
+        .1,
+    );
 
     Primary::spawn(
         name.clone(),
         keypair.copy(),
         author.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache,
         parameters.clone(),
         store_primary.header_store,
@@ -201,7 +218,7 @@ async fn test_rounds_return_successful_response() {
         rx_consensus_round_updates,
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -256,7 +273,7 @@ async fn test_rounds_return_successful_response() {
 async fn test_node_read_causal_signed_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
@@ -271,7 +288,17 @@ async fn test_node_read_causal_signed_certificates() {
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
+    let dag = Arc::new(
+        Dag::new(
+            &committee,
+            rx_new_certificates,
+            consensus_metrics,
+            tx_shutdown.subscribe(),
+        )
+        .1,
+    );
 
     // No need to populate genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -326,8 +353,6 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -341,7 +366,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_1.clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
@@ -354,7 +379,7 @@ async fn test_node_read_causal_signed_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -365,8 +390,7 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -381,7 +405,7 @@ async fn test_node_read_causal_signed_certificates() {
         name_2.clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
@@ -394,10 +418,16 @@ async fn test_node_read_causal_signed_certificates() {
         rx_consensus_round_updates_2,
         /* external_consensus */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates_2,
+                consensus_metrics_2,
+                tx_shutdown.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

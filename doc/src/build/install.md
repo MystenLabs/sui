@@ -9,7 +9,7 @@ Before you install Sui, you need to install some prerequisite tools and configur
 The steps to install Sui include:
 
 1. Install [prerequisites](#prerequisites) for your operating system.
-1. Install the [Sui binaries](#install-sui-binaries).
+1. Install the [Sui binaries](#install-or-update-sui-binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet.
 1. Optionally, download the [source code](#source-code) to have local
@@ -53,7 +53,7 @@ Install the prerequisites and tools you need to work with Sui. Click a marker in
 
 ### Rust and Cargo
 
-Sui requires Rust and Cargo on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
+Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
 
 Use the following command to install Rust and Cargo on macOS or Linux:
 ```shell
@@ -113,12 +113,32 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 Install CMake using the instructions at [Installing CMake](https://cmake.org/install/) on the CMake website.
 
+Or you can use the following command
+
+```shell
+sudo apt-get install cmake
+```
+
+### GCC
+
+Use the following command to install `gcc`:
+
+```shell
+sudo apt-get install gcc
+```
+
 ### libssl-dev
 
 Use the following command to install `libssl-dev`:
 
 ```shell
 sudo apt-get install libssl-dev
+```
+
+(Optional) If you have OpenSSL it may be required to also install `pkg-config`:
+
+```shell
+sudo apt-get install pkg-config
 ```
 
 ### libclang-dev
@@ -129,8 +149,22 @@ Use the following command to install `libclang-dev`:
 sudo apt-get install libclang-dev
 ```
 
-Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
+### libpq-dev
 
+Use the following command to install `libpq-dev`:
+
+```shell
+sudo apt-get install libpq-dev
+```
+
+### build-essential
+Use the following command to install `build-essential`"
+
+```shell
+sudo apt-get install build-essential
+```
+
+Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 ## macOS prerequisites
 
@@ -166,7 +200,7 @@ brew install git
 
 After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
 
-Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-or-update-sui-binaries) to continue installing Sui.
 
 ## Windows prerequisites
 
@@ -200,9 +234,9 @@ If the progress appears to freeze, press **Enter** in the command prompt to fix 
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
-## Install Sui binaries
+## Install (or update) Sui binaries <a name="binaries"></a>
 
-With Cargo installed, use the following command to install Sui binaries:
+With Cargo installed, use the following command to install or update the sui executable:
 
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
@@ -211,12 +245,19 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devn
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 
-If the previous command fails, make sure you have the latest version of Rust installed:
+Install procedure to expect: (40min (depends on the RAM you have available for the build process))
+- update git repository
+- update crates.io index
+- compile (~1850) dependencies
+- (replace the previous version of the 'sui' package with the new one)
 
+Throubleshooting:
+* make sure you have the latest version of Rust installed:
 ```
 rustup update stable
 source "$HOME/.cargo/env"
 ```
+* reach out on [Discord](https://discord.com/invite/sui)
 
 ### macOS and Linux
 
@@ -236,10 +277,10 @@ Use the `--help` flag to access helpful information for any of these binaries.
 
 ## Integrated development environment
 
-The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` using the `--features` flag:
+The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), then install the move-analyzer language server passing `address20` using the `--features` flag and passing `sui-move` to the `branch` flag:
 
 ```shell
-cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
+cargo install --git https://github.com/move-language/move move-analyzer --branch sui-move --features "address32"
 ```
 
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.
@@ -278,11 +319,12 @@ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 The following primary directories offer a good starting point for exploring Sui's source code:
-* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui CLI binary
-* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
+* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui CLI binary
+* [sui_framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources) - Sui Move core smart contracts (e.g., coin.move, object.move, test_scenario.move, ...)
+* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
 * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
-* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - object explorer for the Sui network
+* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - browser-based object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
 ## Rustdoc
@@ -297,7 +339,7 @@ See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
 > **Note:** The previous `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run a network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
- 
+
 ## Next steps
 
 Continue your journey through:

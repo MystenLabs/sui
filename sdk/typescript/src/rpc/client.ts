@@ -3,7 +3,20 @@
 
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
-import { isErrorResponse, isValidResponse } from './client.guard';
+import {
+  any,
+  Infer,
+  is,
+  literal,
+  object,
+  optional,
+  string,
+  Struct,
+  validate,
+} from 'superstruct';
+import { pkgVersion } from '../pkg-version';
+import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
+import { RequestParamsLike } from 'jayson';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -23,28 +36,41 @@ const TYPE_MISMATCH_ERROR =
   `the TypeScript definition. This is likely because the SDK version is not ` +
   `compatible with the RPC server. Please update your SDK version to the latest. `;
 
+export const ValidResponse = object({
+  jsonrpc: literal('2.0'),
+  id: string(),
+  result: any(),
+});
+
+export const ErrorResponse = object({
+  jsonrpc: literal('2.0'),
+  id: string(),
+  error: object({
+    code: any(),
+    message: string(),
+    data: optional(any()),
+  }),
+});
+
 export class JsonRpcClient {
   private rpcClient: RpcClient;
 
   constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders);
-  }
-
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(
+    this.rpcClient = new RpcClient(
       async (
         request: any,
-        callback: (arg0: Error | null, arg1?: string | undefined) => void
+        callback: (arg0: Error | null, arg1?: string | undefined) => void,
       ) => {
         const options = {
           method: 'POST',
           body: request,
-          headers: Object.assign(
-            {
-              'Content-Type': 'application/json',
-            },
-            httpHeaders || {}
-          ),
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-Sdk-Type': 'typescript',
+            'Client-Sdk-Version': pkgVersion,
+            'Client-Target-Api-Version': TARGETED_RPC_VERSION,
+            ...httpHeaders,
+          },
         };
 
         try {
@@ -53,37 +79,42 @@ export class JsonRpcClient {
           if (res.ok) {
             callback(null, result);
           } else {
-            callback(new Error(`${res.status} ${res.statusText}: ${result}`));
+            const isHtml = res.headers.get('content-type') === 'text/html';
+            callback(
+              new Error(
+                `${res.status} ${res.statusText}${isHtml ? '' : `: ${result}`}`,
+              ),
+            );
           }
         } catch (err) {
           if (err instanceof Error) callback(err);
         }
       },
-      {}
+      {},
     );
-
-    return client;
   }
 
   async requestWithType<T>(
     method: string,
-    args: Array<any>,
-    isT: (val: any) => val is T,
-    skipDataValidation: boolean = false
+    args: RequestParamsLike,
+    struct: Struct<T>,
+    skipDataValidation: boolean = false,
   ): Promise<T> {
     const response = await this.request(method, args);
-    if (isErrorResponse(response)) {
+    if (is(response, ErrorResponse)) {
       throw new Error(`RPC Error: ${response.error.message}`);
-    } else if (isValidResponse(response)) {
-      const expectedSchema = isT(response.result);
+    } else if (is(response, ValidResponse)) {
+      const err = validate(response.result, struct)[0];
       const errMsg =
         TYPE_MISMATCH_ERROR +
-        `Result received was: ${JSON.stringify(response.result)}`;
+        `Result received was: ${JSON.stringify(
+          response.result,
+        )}. Debug info: ${err}`;
 
-      if (skipDataValidation && !expectedSchema) {
+      if (skipDataValidation && err) {
         console.warn(errMsg);
         return response.result;
-      } else if (!expectedSchema) {
+      } else if (err) {
         throw new Error(`RPC Error: ${errMsg}`);
       }
       return response.result;
@@ -91,7 +122,7 @@ export class JsonRpcClient {
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
 
-  async request(method: string, args: Array<any>): Promise<any> {
+  async request(method: string, args: RequestParamsLike): Promise<any> {
     return new Promise((resolve, reject) => {
       this.rpcClient.request(method, args, (err: any, response: any) => {
         if (err) {
@@ -103,49 +134,54 @@ export class JsonRpcClient {
     });
   }
 
+  // TODO: Improve validation errors:
   async batchRequestWithType<T>(
     requests: RpcParams[],
-    isT: (val: any) => val is T,
-    skipDataValidation: boolean = false
+    struct: Struct<T>,
+    skipDataValidation: boolean = false,
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
     // TODO: supports other error modes such as throw or return
     const validResponses = responses.filter(
       (response: any) =>
-        isValidResponse(response) &&
-        (skipDataValidation || isT(response.result))
+        is(response, ValidResponse) &&
+        (skipDataValidation || is(response.result, struct)),
     );
 
     if (responses.length > validResponses.length) {
       console.warn(
         `Batch request contains invalid responses. ${
           responses.length - validResponses.length
-        } of the ${responses.length} requests has invalid schema.`
+        } of the ${responses.length} requests has invalid schema.`,
       );
-      const exampleTypeMismatch = responses.find((r: any) => !isT(r.result));
+      const exampleTypeMismatch = responses.find(
+        (r: any) => !is(r.result, struct),
+      );
       const exampleInvalidResponseIndex = responses.findIndex(
-        (r: any) => !isValidResponse(r)
+        (r: any) => !is(r, ValidResponse),
       );
       if (exampleTypeMismatch) {
         console.warn(
           TYPE_MISMATCH_ERROR +
             `One example mismatch is: ${JSON.stringify(
-              exampleTypeMismatch.result
-            )}`
+              exampleTypeMismatch.result,
+            )}`,
         );
       }
       if (exampleInvalidResponseIndex !== -1) {
         console.warn(
           `The request ${JSON.stringify(
-            requests[exampleInvalidResponseIndex]
+            requests[exampleInvalidResponseIndex],
           )} within a batch request returns an invalid response ${JSON.stringify(
-            responses[exampleInvalidResponseIndex]
-          )}`
+            responses[exampleInvalidResponseIndex],
+          )}`,
         );
       }
     }
 
-    return validResponses.map((response: ValidResponse) => response.result);
+    return validResponses.map(
+      (response: Infer<typeof ValidResponse>) => response.result,
+    );
   }
 
   async batchRequest(requests: RpcParams[]): Promise<any> {
@@ -167,19 +203,3 @@ export class JsonRpcClient {
     });
   }
 }
-
-export type ValidResponse = {
-  jsonrpc: '2.0';
-  id: string;
-  result: any;
-};
-
-export type ErrorResponse = {
-  jsonrpc: '2.0';
-  id: string;
-  error: {
-    code: any;
-    message: string;
-    data?: any;
-  };
-};

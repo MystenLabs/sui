@@ -1,7 +1,8 @@
 Sui indexer is an off-fullnode service to serve data from Sui protocol, including both data directly generated from chain and derivative data.
 
-## Current architecture Dec 2022 (will change soon)
-![indexer_simple](https://user-images.githubusercontent.com/106119108/209000367-4c7d23d8-fef2-4485-8472-89c31f0e2d62.png)
+## Architecture 
+![enhanced_FN](https://user-images.githubusercontent.com/106119108/221022505-a1d873c6-60e2-45f1-b2aa-e50192c4dfbb.png)
+
 
 ## Steps to run locally
 ### Prerequisites
@@ -10,24 +11,30 @@ Sui indexer is an off-fullnode service to serve data from Sui protocol, includin
 - [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.
 
 ### Steps
-1. DB setup
+1. DB setup, under `sui/crates/sui-indexer` run:
 ```sh
-# DB setup, run the following commands from the /sui-indexer folder
-# .env file under /sui-indexer is required for diesel cmds
-# in .env file, DATABASE_URL should point to your local PG server
-# an example is:
-# DATABASE_URL="postgres://postgres:postgres@localhost/gegao"
-diesel setup
-
-# and then run 
-diesel migration run
+# an example DATABASE_URL is "postgres://postgres:postgres@localhost/gegao"
+diesel setup --database-url="<DATABASE_URL>"
+diesel migration run --database-url="<DATABASE_URL>"
 ```
-2. cargo run under `/sui-indexer`
+2. Checkout devnet
 ```sh
-# DATABASE_URL should be the same value as above
+git fetch upstream devnet && git reset --hard upstream/devnet
+```
+3. Start indexer binary, under `sui/crates/sui-indexer` run:
+```sh
+# Change the RPC_CLIENT_URL to http://0.0.0.0:9000 to run indexer against local validator & fullnode
 cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
 ```
-  
-### Clean up and re-run
-- Run `diesel migration revert` under `/sui-indexer` until no more tables are deleted;
-- Also delete `__diesel_schema_migrations`, you can do this via Postico client
+### DB reset in case of restarting indexer
+```sh
+diesel database reset --database-url="<DATABASE_URL>"
+```
+
+## Integration test
+Integration tests in the `integration_tests.rs` will be run by GitHub action as part of the CI checks
+to run the test locally, start a Postgresql DB and run the test using following command:
+```sh
+POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration
+```
+Note: all existing data will be wiped during the test.

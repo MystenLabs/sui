@@ -84,6 +84,22 @@ longer be transferred or mutated.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>false</b>;
+<b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_IMMUTABLE">prover::IMMUTABLE</a>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_transfer_share_object"></a>
 
 ## Function `share_object`
@@ -111,6 +127,22 @@ in this transaction. This restriction may be relaxed in the future.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] sui::prover::owned(obj);
+<b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_SHARED">prover::SHARED</a>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_transfer_transfer_internal"></a>
 
 ## Function `transfer_internal`
@@ -127,6 +159,23 @@ in this transaction. This restriction may be relaxed in the future.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>false</b>;
+<b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).owner == recipient;
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_OWNED">prover::OWNED</a>;
 </code></pre>
 
 

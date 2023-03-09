@@ -21,6 +21,8 @@ pub enum TypedStoreError {
     CrossDBBatch,
     #[error("Metric reporting thread failed with error")]
     MetricsReporting,
+    #[error("Transaction should be retried")]
+    RetryableTransactionError,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Error)]
@@ -64,19 +66,19 @@ pub(crate) enum BincodeErrorDef {
 impl fmt::Display for BincodeErrorDef {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            BincodeErrorDef::Io(ref ioerr) => write!(fmt, "io error: {}", ioerr),
+            BincodeErrorDef::Io(ref ioerr) => write!(fmt, "io error: {ioerr}"),
             BincodeErrorDef::InvalidUtf8Encoding(ref e) => {
-                write!(fmt, "{}", e)
+                write!(fmt, "{e}")
             }
             BincodeErrorDef::InvalidBoolEncoding(b) => {
-                write!(fmt, "expected 0 or 1, found {}", b)
+                write!(fmt, "expected 0 or 1, found {b}")
             }
-            BincodeErrorDef::InvalidCharEncoding => write!(fmt, "{:?}", self),
+            BincodeErrorDef::InvalidCharEncoding => write!(fmt, "{self:?}"),
             BincodeErrorDef::InvalidTagEncoding(tag) => {
-                write!(fmt, "found {}", tag)
+                write!(fmt, "found {tag}")
             }
-            BincodeErrorDef::SequenceMustHaveLength => write!(fmt, "{:?}", self),
-            BincodeErrorDef::SizeLimit => write!(fmt, "{:?}", self),
+            BincodeErrorDef::SequenceMustHaveLength => write!(fmt, "{self:?}"),
+            BincodeErrorDef::SizeLimit => write!(fmt, "{self:?}"),
             BincodeErrorDef::DeserializeAnyNotSupported => write!(
                 fmt,
                 "Bincode does not support the serde::Deserializer::deserialize_any method"
@@ -105,6 +107,12 @@ impl From<bincode::Error> for BincodeErrorDef {
             BincodeErrorKind::SequenceMustHaveLength => BincodeErrorDef::SequenceMustHaveLength,
             BincodeErrorKind::Custom(str) => BincodeErrorDef::Custom(str.to_owned()),
         }
+    }
+}
+
+impl From<bcs::Error> for TypedStoreError {
+    fn from(err: bcs::Error) -> Self {
+        TypedStoreError::SerializationError(format!("{err}"))
     }
 }
 

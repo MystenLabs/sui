@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::KeyPair as KeypairTraits;
-use signature::Signer;
 
+use crate::crypto::Signer;
+use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::{
-    base_types::{dbg_addr, ObjectID},
+    base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
     crypto::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
     },
+    gas::GasCostSummary,
     intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
+    messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
+    },
     object::Object,
 };
 use std::collections::BTreeMap;
@@ -51,11 +56,15 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui(
-        recipient,
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(recipient, None);
+        builder.finish()
+    };
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
         sender,
-        None,
-        object.compute_object_reference(),
+        vec![object.compute_object_reference()],
+        pt,
         10000,
     );
     to_sender_signed_transaction(data, &sender_key)
@@ -66,9 +75,47 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
+    to_sender_signed_transaction_with_multi_signers(data, vec![signer])
+}
+
+pub fn to_sender_signed_transaction_with_multi_signers(
+    data: TransactionData,
+    signers: Vec<&dyn Signer<Signature>>,
+) -> VerifiedTransaction {
     VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         data,
         Intent::default(),
-        signer,
+        signers,
     ))
+}
+
+pub fn mock_certified_checkpoint<'a>(
+    keys: impl Iterator<Item = &'a AuthorityKeyPair>,
+    committee: Committee,
+    seq_num: u64,
+) -> CertifiedCheckpointSummary {
+    let contents = CheckpointContents::new_with_causally_ordered_transactions(
+        [ExecutionDigests::random()].into_iter(),
+    );
+
+    let summary = CheckpointSummary::new(
+        committee.epoch,
+        seq_num,
+        0,
+        &contents,
+        None,
+        GasCostSummary::default(),
+        None,
+        0,
+    );
+
+    let sign_infos: Vec<_> = keys
+        .map(|k| {
+            let name = k.public().into();
+
+            SignedCheckpointSummary::sign(committee.epoch, &summary, k, name)
+        })
+        .collect();
+
+    CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK")
 }

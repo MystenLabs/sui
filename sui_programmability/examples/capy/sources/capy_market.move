@@ -150,7 +150,7 @@ module capy::capy_market {
     public fun delist<T: key + store>(
         market: &mut CapyMarket<T>,
         listing_id: ID,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ): T {
         let Listing { id, price: _, owner } = dof::remove<ID, Listing>(&mut market.id, listing_id);
         let item = dof::remove(&mut id, true);
@@ -170,7 +170,7 @@ module capy::capy_market {
     entry fun delist_and_take<T: key + store>(
         market: &mut CapyMarket<T>,
         listing_id: ID,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         transfer::transfer(
             delist(market, listing_id, ctx),
@@ -179,10 +179,10 @@ module capy::capy_market {
     }
 
     /// Withdraw profits from the marketplace as a single Coin (accumulated as a DOF).
-    /// Uses sender of transaction to determine storage and controll access.
+    /// Uses sender of transaction to determine storage and control access.
     entry fun take_profits<T: key + store>(
         market: &mut CapyMarket<T>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         let sender = tx_context::sender(ctx);
         assert!(dof::exists_(&market.id, sender), ENoProfits);
@@ -203,7 +203,7 @@ module capy::capy_market {
         market: &mut CapyMarket<T>,
         listing_id: ID,
         paid: Coin<SUI>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ): T {
         let Listing { id, price, owner } = dof::remove<ID, Listing>(&mut market.id, listing_id);
         let item = dof::remove(&mut id, true);
@@ -234,7 +234,7 @@ module capy::capy_market {
         market: &mut CapyMarket<T>,
         listing_id: ID,
         paid: Coin<SUI>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         transfer::transfer(
             purchase(market, listing_id, paid, ctx),

@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    net::{IpAddr, SocketAddr},
+};
 
 use anyhow::Result;
 use multiaddr::Multiaddr;
@@ -10,17 +13,15 @@ use serde_with::serde_as;
 use tracing::info;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::committee::StakeUnit;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::object::Object;
-use sui_types::sui_serde::KeyPairBase64;
 
 use crate::genesis::GenesisChainParameters;
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
-use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
+use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE};
 
 // All information needed to build a NodeConfig for a validator.
 #[derive(Serialize, Deserialize)]
@@ -102,20 +103,32 @@ impl GenesisConfig {
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorGenesisInfo {
-    #[serde_as(as = "KeyPairBase64")]
     pub key_pair: AuthorityKeyPair,
-    #[serde_as(as = "KeyPairBase64")]
     pub worker_key_pair: NetworkKeyPair,
     pub account_key_pair: SuiKeyPair,
-    #[serde_as(as = "KeyPairBase64")]
     pub network_key_pair: NetworkKeyPair,
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
-    pub stake: StakeUnit,
+    pub p2p_listen_address: Option<SocketAddr>,
+    #[serde(default = "default_socket_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_multiaddr_address")]
+    pub narwhal_metrics_address: Multiaddr,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+}
+
+fn default_socket_address() -> SocketAddr {
+    utils::available_local_socket_address()
+}
+
+fn default_multiaddr_address() -> Multiaddr {
+    let addr = utils::available_local_socket_address();
+    format!("/ip4/{:?}/tcp/{}/http", addr.ip(), addr.port())
+        .parse()
+        .unwrap()
 }
 
 impl ValidatorGenesisInfo {
@@ -132,7 +145,9 @@ impl ValidatorGenesisInfo {
             network_key_pair,
             network_address: utils::new_tcp_network_address(),
             p2p_address: utils::new_udp_network_address(),
-            stake: DEFAULT_STAKE,
+            p2p_listen_address: None,
+            metrics_address: utils::available_local_socket_address(),
+            narwhal_metrics_address: utils::new_tcp_network_address(),
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_udp_network_address(),
@@ -145,6 +160,7 @@ impl ValidatorGenesisInfo {
         worker_key_pair: NetworkKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: NetworkKeyPair,
+        p2p_listen_address: Option<IpAddr>,
         ip: String,
         // Port offset allows running many SuiNodes inside the same simulator node, which is
         // helpful for tests that don't use Swarm.
@@ -164,7 +180,9 @@ impl ValidatorGenesisInfo {
             network_key_pair,
             network_address: make_tcp_addr(1000 + port_offset),
             p2p_address: make_udp_addr(5000 + port_offset),
-            stake: DEFAULT_STAKE,
+            p2p_listen_address: p2p_listen_address.map(|x| SocketAddr::new(x, 4000 + port_offset)),
+            metrics_address: format!("127.0.0.1:{}", 6000 + port_offset).parse().unwrap(),
+            narwhal_metrics_address: make_tcp_addr(7000 + port_offset),
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: make_udp_addr(2000 + port_offset),

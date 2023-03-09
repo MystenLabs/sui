@@ -10,6 +10,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::SequenceNumber;
+use crate::committee::EpochId;
 use crate::object::{MoveObject, Owner};
 use crate::storage::{DeleteKind, SingleTxContext, WriteKind};
 use crate::temporary_store::TemporaryStore;
@@ -35,6 +36,9 @@ pub const PAY_MODULE_NAME: &IdentStr = ident_str!("pay");
 pub const PAY_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
 pub const PAY_SPLIT_N_FUNC_NAME: &IdentStr = ident_str!("divide_and_keep");
 pub const PAY_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
+
+pub const LOCKED_COIN_MODULE_NAME: &IdentStr = ident_str!("locked_coin");
+pub const LOCKED_COIN_STRUCT_NAME: &IdentStr = ident_str!("LockedCoin");
 
 // Rust version of the Move sui::coin::Coin type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
@@ -123,24 +127,85 @@ impl Coin {
     }
 
     // Shift balance of coins_to_merge to this coin.
-    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // Related coin objects need to be updated in temporary_store to persist the changes,
     // including deleting the coin objects that have been merged.
-    pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) {
-        let total_coins = coins_to_merge.iter().fold(0, |acc, c| acc + c.value());
+    pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) -> Result<(), ExecutionError> {
+        let Some(total_coins) =
+            coins_to_merge.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::CoinTooLarge,
+                    format!("Coin {} exceeds maximum value", self.id())
+                ))
+            };
+
         for coin in coins_to_merge.iter_mut() {
             // unwrap() is safe because balance value is the same as coin value
             coin.balance.withdraw(coin.value()).unwrap();
         }
-        self.balance = Balance::new(self.value() + total_coins);
+        let Some(new_balance) = self.value().checked_add(total_coins) else {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::CoinTooLarge,
+                format!("Coin {} exceeds maximum value", self.id())
+            ))
+        };
+        self.balance = Balance::new(new_balance);
+        Ok(())
     }
 
     // Split amount out of this coin to a new coin.
-    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // Related coin objects need to be updated in temporary_store to persist the changes,
     // including creating the coin object related to the newly created coin.
     pub fn split_coin(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
         self.balance.withdraw(amount)?;
         Ok(Coin::new(new_coin_id, amount))
     }
+}
+
+pub fn check_coins(
+    coin_objects: &[Object],
+    mut coin_type: Option<StructTag>,
+) -> Result<(Vec<Coin>, StructTag), ExecutionError> {
+    if coin_objects.is_empty() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::EmptyInputCoins,
+            "Pay transaction requires a non-empty list of input coins".to_string(),
+        ));
+    }
+    let mut coins = Vec::new();
+    for coin_obj in coin_objects {
+        match &coin_obj.data {
+            Data::Move(move_obj) => {
+                if !Coin::is_coin(&move_obj.type_) {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::InvalidCoinObject,
+                        "Provided non-Coin<T> object as input to pay/pay_sui/pay_all_sui transaction".to_string(),
+                    ));
+                }
+                if let Some(typ) = &coin_type {
+                    if typ != &move_obj.type_ {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::CoinTypeMismatch,
+                            format!("Coin type check failed in pay/pay_sui/pay_all_sui transaction, expected: {:?}, found: {:}", typ, move_obj.type_),
+                        ));
+                    }
+                } else {
+                    coin_type = Some(move_obj.type_.clone())
+                }
+
+                let coin = Coin::from_bcs_bytes(move_obj.contents())
+                    .expect("Deserializing coin object should not fail");
+                coins.push(coin)
+            }
+            _ => {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvalidCoinObject,
+                    "Provided non-Coin<T> object as input to pay transaction".to_string(),
+                ))
+            }
+        }
+    }
+    // safe because coin_objects must be non-empty, and coin_type must be set in loop above.
+    Ok((coins, coin_type.unwrap()))
 }
 
 // Rust version of the Move sui::coin::TreasuryCap type
@@ -198,8 +263,7 @@ pub fn update_input_coins<S>(
     let new_contents = bcs::to_bytes(gas_coin).expect("Coin serialization should not fail");
     // unwrap is safe because we checked that it was a coin object above.
     let move_obj = gas_coin_obj.data.try_as_move_mut().unwrap();
-    // unwrap is safe because size of coin contents should never change
-    move_obj.update_contents(new_contents).unwrap();
+    move_obj.update_coin_contents(new_contents);
     if let Some(recipient) = recipient {
         gas_coin_obj.transfer(recipient);
     }
@@ -271,5 +335,21 @@ impl TryFrom<Object> for CoinMetadata {
         Err(SuiError::TypeError {
             error: format!("Object type is not a CoinMetadata: {:?}", object),
         })
+    }
+}
+// Rust version of the Move sui::locked_coin::LockedCoin type
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
+pub struct LockedCoin {
+    pub id: UID,
+    pub balance: Balance,
+    pub locked_until_epoch: EpochId,
+}
+
+impl LockedCoin {
+    /// Is this other StructTag representing a Coin?
+    pub fn is_locked_coin(other: &StructTag) -> bool {
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == LOCKED_COIN_MODULE_NAME
+            && other.name.as_ident_str() == LOCKED_COIN_STRUCT_NAME
     }
 }

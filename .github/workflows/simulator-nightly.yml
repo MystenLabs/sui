@@ -1,0 +1,120 @@
+name: Simulator Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # every day at 2am
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+
+jobs:
+  simtest:
+    timeout-minutes: 120
+    runs-on: [ubuntu-ghcloud]
+    env:
+      RUST_LOG: off
+      # Runs tests much faster - disables signing and verification
+      USE_MOCK_CRYPTO: 1
+
+    steps:
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+
+    - name: Install rust toolchain
+      uses: actions-rs/toolchain@v1
+
+    - name: Install nexttest
+      uses: taiki-e/install-action@nextest
+
+    - name: Build simtest
+      run: |
+        ./scripts/simtest/cargo-simtest simtest build
+
+    - name: Run simtest
+      run: |
+        ./scripts/simtest/simtest-run.sh
+
+  notify:
+    name: Notify
+    needs: [simtest]
+    runs-on: [self-hosted, self-hosted-arc]
+    if: always() # always notify
+
+    steps:
+    - uses: technote-space/workflow-conclusion-action@v3
+
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    
+    - name: Get sui commit
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        export sui_sha=$(git rev-parse HEAD)
+        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+    - name: Get link to logs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+
+    - name: Post to slack
+      uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        SUI_SHA: ${{ env.sui_sha }}
+        GH_JOB_LINK: ${{ env.gh_job_link }}
+      with:
+        channel-id: 'simtest-nightly'
+        payload: |
+          {
+            "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+                }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "<${{ env.GH_JOB_LINK }}|logs>"
+                }
+              }
+            ]
+          }

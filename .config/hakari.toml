@@ -3,8 +3,8 @@
 
 hakari-package = "workspace-hack"
 
-# Format for `workspace-hack = ...` lines in other Cargo.tomls. Requires cargo-hakari 0.9.8 or above.
-dep-format-version = "1"
+# Format for `workspace-hack = ...` lines in other Cargo.tomls.
+dep-format-version = "4"
 
 # Setting workspace.resolver = "2" in the root Cargo.toml is HIGHLY recommended.
 # Hakari works much better with the new feature resolver.
@@ -25,6 +25,16 @@ platforms = [
 # exact-versions = true
 
 output-single-feature = true
+
+[traversal-excludes]
+workspace-members = [ "sui-move" ]
+third-party = [
+    ## Exclude the 'move-unit-test' crate in order to ensure that the 'testing'
+    # feature isn't enabled in the workspace-hack
+    { name = "move-unit-test", git = "https://github.com/move-language/move", rev = "8729cf2445696cb29f1e0ca06df7d09cf3c2c55f" },
+    { name = "move-cli", git = "https://github.com/move-language/move", rev = "8729cf2445696cb29f1e0ca06df7d09cf3c2c55f" },
+    { name = "move-transactional-test-runner", git = "https://github.com/move-language/move", rev = "8729cf2445696cb29f1e0ca06df7d09cf3c2c55f" },
+]
 
 [final-excludes]
 workspace-members = [

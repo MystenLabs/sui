@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "git": {
+    "deploymentEnabled": {
+      "main": false,
+      "gh-pages": false
+    }
+  },
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "cache-control",
+          "value": "public,max-age=31536000,immutable"
+        }
+      ]
+    }
+  ]
+}

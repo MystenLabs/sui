@@ -6,10 +6,10 @@ use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{CancelOnDropHandler, ReliableNetwork};
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::task::JoinHandle;
 use types::{
-    metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage,
+    metered_channel::Receiver, ConditionalBroadcastReceiver, PrimaryResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage,
 };
 
 /// The maximum number of digests kept in memory waiting to be sent to the primary.
@@ -19,8 +19,8 @@ pub const MAX_PENDING_DIGESTS: usize = 10_000;
 pub struct PrimaryConnector {
     /// The public key of this authority.
     primary_name: NetworkPublicKey,
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Input channels to receive the messages to send to the primary.
     rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
     rx_others_batch: Receiver<WorkerOthersBatchMessage>,
@@ -32,7 +32,7 @@ impl PrimaryConnector {
     #[must_use]
     pub fn spawn(
         primary_name: NetworkPublicKey,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
         rx_others_batch: Receiver<WorkerOthersBatchMessage>,
         primary_client: anemo::Network,
@@ -41,7 +41,7 @@ impl PrimaryConnector {
             async move {
                 Self {
                     primary_name,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_our_batch,
                     rx_others_batch,
                     primary_client,
@@ -82,14 +82,8 @@ impl PrimaryConnector {
                     futures.push( monitor(handle_future(handle, None)) );
                 },
 
-                // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    // TODO: Move logic to handle epoch & committee changes to wherever anemo
-                    // network is managed after worker-to-worker interface is migrated.
-                    if self.rx_reconfigure.borrow().clone() == ReconfigureNotification::Shutdown {
-                        return
-                    }
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
                 }
 
                 Some(_result) = futures.next() => ()

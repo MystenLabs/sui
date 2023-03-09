@@ -18,13 +18,12 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 rand = "0.8.5"
 
 [dev-dependencies]
 insta = { version = "1.21.1", features = ["json"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
-tracing-test = "0.2.3"
 
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

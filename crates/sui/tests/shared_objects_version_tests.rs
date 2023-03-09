@@ -10,6 +10,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::error::SuiResult;
 use sui_types::messages::{
     CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
+    TransactionEffectsAPI, TransactionEvents,
 };
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -120,7 +121,7 @@ struct TestEnvironment {
     configs: NetworkConfig,
     #[allow(dead_code)]
     node_handles: Vec<SuiNodeHandle>,
-    move_package: ObjectRef,
+    move_package: ObjectID,
 }
 
 impl TestEnvironment {
@@ -130,7 +131,9 @@ impl TestEnvironment {
         let node_handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
         let move_package =
-            publish_move_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+            publish_move_package(gas_objects.pop().unwrap(), &configs.validator_set())
+                .await
+                .0;
 
         Self {
             gas_objects,
@@ -144,7 +147,7 @@ impl TestEnvironment {
         &mut self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> TransactionEffects {
+    ) -> (TransactionEffects, TransactionEvents) {
         submit_single_owner_transaction(
             move_transaction(
                 self.gas_objects.pop().unwrap(),
@@ -153,7 +156,7 @@ impl TestEnvironment {
                 self.move_package,
                 arguments,
             ),
-            self.configs.validator_set(),
+            &self.configs.validator_set(),
         )
         .await
     }
@@ -162,7 +165,7 @@ impl TestEnvironment {
         &mut self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> SuiResult<TransactionEffects> {
+    ) -> SuiResult<(TransactionEffects, TransactionEvents)> {
         submit_shared_object_transaction(
             move_transaction(
                 self.gas_objects.pop().unwrap(),
@@ -171,26 +174,26 @@ impl TestEnvironment {
                 self.move_package,
                 arguments,
             ),
-            self.configs.validator_set(),
+            &self.configs.validator_set(),
         )
         .await
     }
 
     async fn create_counter(&mut self) -> (ObjectRef, Owner) {
-        let fx = self.owned_move_call("create_counter", vec![]).await;
-        assert!(fx.status.is_ok());
+        let (fx, _) = self.owned_move_call("create_counter", vec![]).await;
+        assert!(fx.status().is_ok());
 
-        *fx.created
+        *fx.created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
             .expect("Owned object created")
     }
 
     async fn create_shared_counter(&mut self) -> (ObjectRef, Owner) {
-        let fx = self.owned_move_call("create_shared_counter", vec![]).await;
-        assert!(fx.status.is_ok());
+        let (fx, _) = self.owned_move_call("create_shared_counter", vec![]).await;
+        assert!(fx.status().is_ok());
 
-        *fx.created
+        *fx.created()
             .iter()
             .find(|(_, owner)| owner.is_shared())
             .expect("Shared object created")
@@ -200,35 +203,35 @@ impl TestEnvironment {
         &mut self,
         counter: ObjectRef,
     ) -> Result<(ObjectRef, Owner), ExecutionFailureStatus> {
-        let fx = self
+        let (fx, _) = self
             .owned_move_call(
                 "share_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
             )
             .await;
 
-        if let ExecutionStatus::Failure { error } = fx.status {
-            return Err(error);
+        if let ExecutionStatus::Failure { error, .. } = fx.status() {
+            return Err(error.clone());
         }
 
         Ok(*fx
-            .mutated
+            .mutated()
             .iter()
             .find(|(obj, _)| obj.0 == counter.0)
             .expect("Counter mutated"))
     }
 
     async fn increment_owned_counter(&mut self, counter: ObjectRef) -> (ObjectRef, Owner) {
-        let fx = self
+        let (fx, _) = self
             .owned_move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
             )
             .await;
 
-        assert!(fx.status.is_ok());
+        assert!(fx.status().is_ok());
 
-        *fx.mutated
+        *fx.mutated()
             .iter()
             .find(|(obj, _)| obj.0 == counter.0)
             .expect("Counter modified")
@@ -239,20 +242,21 @@ impl TestEnvironment {
         counter: ObjectID,
         initial_shared_version: SequenceNumber,
     ) -> SuiResult<(ObjectRef, Owner)> {
-        let fx = self
+        let (fx, _) = self
             .shared_move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: counter,
                     initial_shared_version,
+                    mutable: true,
                 })],
             )
             .await?;
 
-        assert!(fx.status.is_ok());
+        assert!(fx.status().is_ok());
 
         Ok(*fx
-            .mutated
+            .mutated()
             .iter()
             .find(|(obj, _)| obj.0 == counter)
             .expect("Counter modified"))

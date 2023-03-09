@@ -3,9 +3,12 @@
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
+import FeatureGating from '../FeatureGating';
+import NetworkEnv from '../NetworkEnv';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
-import { isBasePayload } from '_payloads';
+import { type ErrorPayload, isBasePayload } from '_payloads';
+import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import {
     isGetPermissionRequests,
     isPermissionResponse,
@@ -20,10 +23,11 @@ import Keyring from '_src/background/keyring';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
+import type { LoadedFeaturesPayload } from '_payloads/feature-gating';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { Permission, PermissionRequests } from '_payloads/permissions';
 import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import type { Runtime } from 'webextension-polyfill';
 
@@ -52,17 +56,28 @@ export class UiConnection extends Connection {
             });
     }
 
-    public async sendLockedStatusUpdate(isLocked: boolean) {
+    public async sendLockedStatusUpdate(
+        isLocked: boolean,
+        replyForId?: string
+    ) {
         this.send(
-            createMessage<KeyringPayload<'walletStatusUpdate'>>({
-                type: 'keyring',
-                method: 'walletStatusUpdate',
-                return: {
-                    isLocked,
-                    activeAccount: Keyring.keypair?.export(),
-                    isInitialized: await Keyring.isWalletInitialized(),
+            createMessage<KeyringPayload<'walletStatusUpdate'>>(
+                {
+                    type: 'keyring',
+                    method: 'walletStatusUpdate',
+                    return: {
+                        isLocked,
+                        accounts:
+                            (await Keyring.getAccounts())?.map((anAccount) =>
+                                anAccount.toJSON()
+                            ) || [],
+                        activeAddress:
+                            (await Keyring.getActiveAccount())?.address || null,
+                        isInitialized: await Keyring.isWalletInitialized(),
+                    },
                 },
-            })
+                replyForId
+            )
         );
     }
 
@@ -88,14 +103,54 @@ export class UiConnection extends Connection {
                     id
                 );
             } else if (isDisconnectApp(payload)) {
-                await Permissions.delete(payload.origin);
+                await Permissions.delete(
+                    payload.origin,
+                    payload.specificAccounts
+                );
                 this.send(createMessage({ type: 'done' }, id));
             } else if (isBasePayload(payload) && payload.type === 'keyring') {
                 await Keyring.handleUiMessage(msg, this);
+            } else if (
+                isBasePayload(payload) &&
+                payload.type === 'get-features'
+            ) {
+                this.send(
+                    createMessage<LoadedFeaturesPayload>(
+                        {
+                            type: 'features-response',
+                            features: await FeatureGating.getLoadedFeatures(),
+                        },
+                        id
+                    )
+                );
+            } else if (
+                isBasePayload(payload) &&
+                payload.type === 'get-network'
+            ) {
+                this.send(
+                    createMessage<SetNetworkPayload>(
+                        {
+                            type: 'set-network',
+                            network: await NetworkEnv.getActiveNetwork(),
+                        },
+                        id
+                    )
+                );
+            } else if (isSetNetworkPayload(payload)) {
+                await NetworkEnv.setActiveNetwork(payload.network);
+                this.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
-            // just in case
-            // we could log it also
+            this.send(
+                createMessage<ErrorPayload>(
+                    {
+                        error: true,
+                        code: -1,
+                        message: (e as Error).message,
+                    },
+                    id
+                )
+            );
         }
     }
 
@@ -112,7 +167,7 @@ export class UiConnection extends Connection {
     }
 
     private sendTransactionRequests(
-        txRequests: TransactionRequest[],
+        txRequests: ApprovalRequest[],
         requestID: string
     ) {
         this.send(

@@ -1,13 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { memo, useCallback } from 'react';
-import NumberFormat from 'react-number-format';
-
-import { useNumberDelimiters } from '_hooks';
+import { NumericFormat } from 'react-number-format';
 
 import type { FieldProps } from 'formik';
-import type { NumberFormatValues } from 'react-number-format';
 
 export interface NumberInputProps<Values> extends FieldProps<string, Values> {
     allowNegative: boolean;
@@ -15,6 +11,8 @@ export interface NumberInputProps<Values> extends FieldProps<string, Values> {
     placeholder?: string;
     disabled?: boolean;
     decimals?: boolean;
+    suffix?: string;
+    prefix?: string;
 }
 
 function NumberInput<FormValues>({
@@ -25,19 +23,14 @@ function NumberInput<FormValues>({
     decimals = false,
     field: { onBlur, name, value },
     form: { isSubmitting, setFieldValue },
+    prefix,
+    suffix,
 }: NumberInputProps<FormValues>) {
     const disabled =
         forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
-    const { groupDelimiter, decimalDelimiter } = useNumberDelimiters();
-    const handleOnValueChange = useCallback(
-        (values: NumberFormatValues) => {
-            setFieldValue(name, values.value);
-        },
-        [name, setFieldValue]
-    );
     return (
-        <NumberFormat
-            type="text"
+        <NumericFormat
+            valueIsNumericString
             {...{
                 className,
                 placeholder,
@@ -46,13 +39,14 @@ function NumberInput<FormValues>({
                 name,
                 allowNegative,
                 decimalScale: decimals ? undefined : 0,
-                decimalSeparator: decimalDelimiter || '.',
-                thousandSeparator: groupDelimiter || ',',
+                thousandSeparator: true,
                 onBlur,
-                onValueChange: handleOnValueChange,
+                onValueChange: (values) => setFieldValue(name, values.value),
+                prefix,
+                suffix,
             }}
         />
     );
 }
 
-export default memo(NumberInput);
+export default NumberInput;

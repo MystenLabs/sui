@@ -5,8 +5,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
-use fastcrypto::encoding::Base64;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -16,30 +15,30 @@ use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    EventPage, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
-    SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectInfo, SuiObjectRead, SuiObjectRef, SuiParsedData,
-    SuiPastObjectRead, SuiRawData, SuiRawMoveObject, SuiTransactionAuthSignersResponse,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
-    TransactionsPage, TransferObjectParams,
+    Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
+    RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
+    SuiGasCostSummary, SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef,
+    SuiObjectResponse, SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
+    SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature,
-};
-use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
-use sui_types::object::{Owner, PACKAGE_VERSION};
+use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::object::Owner;
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
+use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
@@ -71,18 +70,16 @@ impl RpcExampleProvider {
     pub fn examples(&mut self) -> BTreeMap<String, Vec<ExamplePairing>> {
         [
             self.batch_transaction_examples(),
-            self.execute_transaction_example(),
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_objects_owned_by_address(),
-            self.get_objects_owned_by_object(),
-            self.get_raw_object(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transaction_auth_signers(),
             self.get_transactions(),
             self.get_events(),
-            self.execute_transaction_serialized_sig_example(),
+            self.execute_transaction_example(),
+            self.submit_transaction_example(),
+            self.get_checkpoint_example(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -113,14 +110,10 @@ impl RpcExampleProvider {
             }),
         ];
 
-        let data = TransactionData::new(
+        let data = TransactionData::new_with_dummy_gas_price(
             TransactionKind::Batch(vec![
                 SingleTransactionKind::Call(MoveCall {
-                    package: (
-                        SUI_FRAMEWORK_OBJECT_ID,
-                        PACKAGE_VERSION,
-                        ObjectDigest::new(self.rng.gen()),
-                    ),
+                    package: SUI_FRAMEWORK_OBJECT_ID,
                     module: Identifier::from_str("devnet_nft").unwrap(),
                     function: Identifier::from_str("mint").unwrap(),
                     type_arguments: vec![],
@@ -166,26 +159,22 @@ impl RpcExampleProvider {
         )
     }
 
-    fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
+    fn submit_transaction_example(&mut self) -> Examples {
+        let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
+        let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_executeTransaction",
+            "sui_submitTransaction",
             vec![ExamplePairing::new(
-                "Execute an object transfer transaction",
+                "Execute an transaction with serialized signature",
                 vec![
+                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
                     (
-                        "tx_bytes",
-                        json!(Base64::from_bytes(bcs::to_bytes(&data).unwrap().as_slice())),
-                    ),
-                    ("sig_scheme", json!(signature.scheme())),
-                    (
-                        "signature",
-                        json!(Base64::from_bytes(signature.signature_bytes())),
-                    ),
-                    (
-                        "pub_key",
-                        json!(Base64::from_bytes(signature.public_key_bytes())),
+                        "signatures",
+                        json!(signatures
+                            .into_iter()
+                            .map(|sig| sig.encode_base64())
+                            .collect::<Vec<_>>()),
                     ),
                     (
                         "request_type",
@@ -197,17 +186,17 @@ impl RpcExampleProvider {
         )
     }
 
-    fn execute_transaction_serialized_sig_example(&mut self) -> Examples {
-        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
+    fn execute_transaction_example(&mut self) -> Examples {
+        let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_executeTransactionSerializedSig",
+            "sui_executeTransaction",
             vec![ExamplePairing::new(
                 "Execute an transaction with serialized signature",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("signature", json!(Base64::from_bytes(signature.as_ref()))),
+                    ("signature", json!(signatures[0].encode_base64())),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -223,27 +212,35 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectRead::Exists(SuiObject {
-            data: SuiParsedData::try_from_object(
-                coin.to_object(SequenceNumber::from_u64(1)),
-                GasCoin::layout(),
-            )
-            .unwrap(),
-            owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-            previous_transaction: TransactionDigest::new(self.rng.gen()),
-            storage_rebate: 100,
-            reference: SuiObjectRef::from((
-                object_id,
-                SequenceNumber::from_u64(1),
-                ObjectDigest::new(self.rng.gen()),
-            )),
+        let result = SuiObjectResponse::Exists(SuiObjectData {
+            content: Some(
+                SuiParsedData::try_from_object(
+                    coin.to_object(SequenceNumber::from_u64(1)),
+                    GasCoin::layout(),
+                )
+                .unwrap(),
+            ),
+            owner: Some(Owner::AddressOwner(SuiAddress::from(ObjectID::new(
+                self.rng.gen(),
+            )))),
+            previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
+            storage_rebate: Some(100),
+            object_id,
+            version: SequenceNumber::from_u64(1),
+            digest: ObjectDigest::new(self.rng.gen()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
+            bcs: None,
+            display: None,
         });
 
         Examples::new(
             "sui_getObject",
             vec![ExamplePairing::new(
                 "Get Object data",
-                vec![("object_id", json!(object_id))],
+                vec![
+                    ("object_id", json!(object_id)),
+                    ("options", json!(SuiObjectDataOptions::full_content())),
+                ],
                 json!(result),
             )],
         )
@@ -254,27 +251,60 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiPastObjectRead::VersionFound(SuiObject {
-            data: SuiParsedData::try_from_object(
-                coin.to_object(SequenceNumber::from_u64(1)),
-                GasCoin::layout(),
-            )
-            .unwrap(),
-            owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-            previous_transaction: TransactionDigest::new(self.rng.gen()),
-            storage_rebate: 100,
-            reference: SuiObjectRef::from((
-                object_id,
-                SequenceNumber::from_u64(4),
-                ObjectDigest::new(self.rng.gen()),
-            )),
+        let result = SuiPastObjectResponse::VersionFound(SuiObjectData {
+            content: Some(
+                SuiParsedData::try_from_object(
+                    coin.to_object(SequenceNumber::from_u64(1)),
+                    GasCoin::layout(),
+                )
+                .unwrap(),
+            ),
+            owner: Some(Owner::AddressOwner(SuiAddress::from(ObjectID::new(
+                self.rng.gen(),
+            )))),
+            previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
+            storage_rebate: Some(100),
+            object_id,
+            version: SequenceNumber::from_u64(4),
+            digest: ObjectDigest::new(self.rng.gen()),
+            type_: Some(ObjectType::Struct(GasCoin::type_())),
+            bcs: None,
+            display: None,
         });
 
         Examples::new(
             "sui_tryGetPastObject",
             vec![ExamplePairing::new(
                 "Get Past Object data",
-                vec![("object_id", json!(object_id)), ("version", json!(4))],
+                vec![
+                    ("object_id", json!(object_id)),
+                    ("version", json!(4)),
+                    ("options", json!(SuiObjectDataOptions::full_content())),
+                ],
+                json!(result),
+            )],
+        )
+    }
+
+    fn get_checkpoint_example(&mut self) -> Examples {
+        let result = Checkpoint {
+            epoch: 5000,
+            sequence_number: 1000,
+            digest: CheckpointDigest::new(self.rng.gen()),
+            network_total_transactions: 792385,
+            previous_digest: Some(CheckpointDigest::new(self.rng.gen())),
+            epoch_rolling_gas_cost_summary: Default::default(),
+            timestamp_ms: 1676911928,
+            end_of_epoch_data: None,
+            transactions: vec![TransactionDigest::new(self.rng.gen())],
+            checkpoint_commitments: vec![],
+        };
+
+        Examples::new(
+            "sui_getCheckpoint",
+            vec![ExamplePairing::new(
+                "Get checkpoint",
+                vec![("id", json!(CheckpointId::SequenceNumber(1000)))],
                 json!(result),
             )],
         )
@@ -302,60 +332,6 @@ impl RpcExampleProvider {
             )],
         )
     }
-    fn get_objects_owned_by_object(&mut self) -> Examples {
-        let owner = ObjectID::new(self.rng.gen());
-        let result = (0..4)
-            .map(|_| SuiObjectInfo {
-                object_id: ObjectID::new(self.rng.gen()),
-                version: Default::default(),
-                digest: ObjectDigest::new(self.rng.gen()),
-                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
-                owner: Owner::ObjectOwner(SuiAddress::from(owner)),
-                previous_transaction: TransactionDigest::new(self.rng.gen()),
-            })
-            .collect::<Vec<_>>();
-
-        Examples::new(
-            "sui_getObjectsOwnedByObject",
-            vec![ExamplePairing::new(
-                "Get objects owned by an object",
-                vec![("object_id", json!(owner))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_raw_object(&mut self) -> Examples {
-        let object_id = ObjectID::new(self.rng.gen());
-
-        let coin = GasCoin::new(object_id, 10000);
-        let object = coin.to_object(SequenceNumber::from_u64(1));
-        let result = SuiObjectRead::Exists(SuiObject {
-            data: SuiRawData::MoveObject(SuiRawMoveObject {
-                type_: GasCoin::type_().to_string(),
-                has_public_transfer: object.has_public_transfer(),
-                version: object.version(),
-                bcs_bytes: object.into_contents(),
-            }),
-            owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-            previous_transaction: TransactionDigest::new(self.rng.gen()),
-            storage_rebate: 100,
-            reference: SuiObjectRef::from((
-                object_id,
-                SequenceNumber::from_u64(1),
-                ObjectDigest::new(self.rng.gen()),
-            )),
-        });
-
-        Examples::new(
-            "sui_getRawObject",
-            vec![ExamplePairing::new(
-                "Get Raw Object data",
-                vec![("object_id", json!(object_id))],
-                json!(result),
-            )],
-        )
-    }
 
     fn get_total_transaction_number(&mut self) -> Examples {
         Examples::new(
@@ -374,36 +350,16 @@ impl RpcExampleProvider {
             "sui_getTransaction",
             vec![ExamplePairing::new(
                 "Return the transaction response object for specified transaction digest",
-                vec![(
-                    "digest",
-                    json!(result.certificate.transaction_digest.clone()),
-                )],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transaction_auth_signers(&mut self) -> Examples {
-        let (_, _, _, _, tx_result, _) = self.get_transfer_data_response();
-        let sec1: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-        let sec2: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([1; 32])).1;
-        let sec3: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([2; 32])).1;
-
-        let result = SuiTransactionAuthSignersResponse {
-            signers: vec![
-                AuthorityPublicKeyBytes::from(sec1.public()),
-                AuthorityPublicKeyBytes::from(sec2.public()),
-                AuthorityPublicKeyBytes::from(sec3.public()),
-            ],
-        };
-        Examples::new(
-            "sui_getTransactionAuthSigners",
-            vec![ExamplePairing::new(
-                "Return the list of authorities that committed to the authority signature of the specified transaction digest",
-                vec![(
-                    "digest",
-                    json!(tx_result.certificate.transaction_digest.clone()),
-                )],
+                vec![
+                    ("digest", json!(result.digest)),
+                    (
+                        "options",
+                        json!(SuiTransactionResponseOptions::new()
+                            .with_input()
+                            .with_effects()
+                            .with_events()),
+                    ),
+                ],
                 json!(result),
             )],
         )
@@ -443,7 +399,7 @@ impl RpcExampleProvider {
         &mut self,
     ) -> (
         TransactionData,
-        Signature,
+        Vec<GenericSignature>,
         SuiAddress,
         ObjectID,
         SuiTransactionResponse,
@@ -463,13 +419,15 @@ impl RpcExampleProvider {
             ObjectDigest::new(self.rng.gen()),
         );
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_ref, 1000);
+        let data = TransactionData::new_transfer_with_dummy_gas_price(
+            recipient, object_ref, signer, gas_ref, 1000,
+        );
         let data1 = data.clone();
         let data2 = data.clone();
 
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
-        let signature = tx.into_inner().tx_signature.clone();
+        let signatures = tx.into_inner().tx_signatures.clone();
 
         let tx_digest = tx1.digest();
         let sui_event = SuiEvent::TransferObject {
@@ -483,23 +441,15 @@ impl RpcExampleProvider {
         };
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),
-            tx_digest: Some(*tx_digest),
-            id: EventID::from((0, 0)),
+            tx_digest: *tx_digest,
+            id: EventID::from((*tx_digest, 0)),
             event: sui_event.clone(),
         }];
         let result = SuiTransactionResponse {
-            certificate: SuiCertifiedTransaction {
-                transaction_digest: *tx_digest,
-                data: SuiTransactionData::try_from(data1).unwrap(),
-                tx_signature: signature.clone(),
-                auth_sign_info: AuthorityQuorumSignInfo {
-                    epoch: 0,
-                    signature: Default::default(),
-                    signers_map: Default::default(),
-                },
-            },
-            effects: SuiTransactionEffects {
+            digest: *tx_digest,
+            effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: SuiExecutionStatus::Success,
+                executed_epoch: 0,
                 gas_used: SuiGasCostSummary {
                     computation_cost: 100,
                     storage_cost: 100,
@@ -520,43 +470,50 @@ impl RpcExampleProvider {
                 ],
                 unwrapped: vec![],
                 deleted: vec![],
+                unwrapped_then_deleted: vec![],
                 wrapped: vec![],
                 gas_object: OwnedObjectRef {
                     owner: Owner::ObjectOwner(signer),
                     reference: SuiObjectRef::from(gas_ref),
                 },
-                events: vec![sui_event],
+                events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
                 dependencies: vec![],
-            },
+            })),
+            events: Some(SuiTransactionEvents {
+                data: vec![sui_event],
+            }),
             timestamp_ms: None,
-            parsed_data: None,
+            transaction: Some(SuiTransaction {
+                data: SuiTransactionData::try_from(data1).unwrap(),
+                tx_signatures: signatures.clone(),
+            }),
+            confirmed_local_execution: None,
+            checkpoint: None,
+            errors: vec![],
         };
 
-        (data2, signature, recipient, obj_id, result, events)
+        (data2, signatures, recipient, obj_id, result, events)
     }
 
     fn get_events(&mut self) -> Examples {
         let (_, _, _, _, result, events) = self.get_transfer_data_response();
+        let tx_dig =
+            TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
         let page = EventPage {
             data: events.clone(),
-            next_cursor: Some((1000, 5).into()),
+            next_cursor: Some((tx_dig, 5).into()),
         };
         Examples::new(
             "sui_getEvents",
             vec![ExamplePairing::new(
                 "Return the Events emitted by a transaction",
                 vec![
-                    (
-                        "query",
-                        json!(EventQuery::Transaction(
-                            result.certificate.transaction_digest
-                        )),
-                    ),
+                    ("query", json!(EventQuery::Transaction(result.digest))),
                     (
                         "cursor",
                         json!(EventID {
                             event_seq: 10,
-                            tx_seq: 500
+                            tx_digest: result.digest
                         }),
                     ),
                     ("limit", json!(events.len())),

@@ -9,7 +9,7 @@ and playing it to the end.
 
 ## Set up
 
-1. [Install Sui binaries](../build/install.md#binaries) and
+1. [Install Sui binaries](../build/install.md#install-or-update-sui-binaries) and
    [download Sui source code](../build/install.md#source-code).
 1. [Create Sui genesis](../build/cli-client.md#genesis) by running the
    `sui genesis` command.
@@ -29,7 +29,7 @@ gas units) times the price of gas in the SUI currency (i.e. the gas price).
 When you complete the setup steps, you can either use the following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
 
 ## Quick script
-If you prefer not to enter command step by step, or need to go though it multiple
+If you prefer not to enter command step by step, or need to go through it multiple
 times (such as when you change some Move source code), the following automated script
 may be useful to save some time.
 Run this script from the project repo root.
@@ -58,7 +58,7 @@ read -a tmparr <<< "$O_GAS_INFO"
 O_GAS_ID=`echo ${tmparr[0]} | xargs`
 
 # publish games
-certificate=$(sui client publish --path ./sui_programmability/examples/games --gas $ADMIN_GAS_ID --gas-budget 30000)
+certificate=$(sui client publish ./sui_programmability/examples/games --gas $ADMIN_GAS_ID --gas-budget 30000)
 
 package_id_identifier="The newly published package object ID:"
 res=$(echo $certificate | awk -v s="$package_id_identifier" 'index($0, s) == 1')
@@ -143,7 +143,7 @@ Find even more [examples](examples.md) in the Sui repository. Of course, you are
 
 To publish the game, we run the publish command and specify the path to the source code of the game package:
 ```shell
-$ sui client publish --path ./sui/sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
+$ sui client publish ./sui/sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
 ```
 
 Which yields results resembling:

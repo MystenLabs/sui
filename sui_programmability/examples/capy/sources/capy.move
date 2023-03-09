@@ -259,7 +259,7 @@ module capy::capy {
     }
 
     /// Remove item from the Capy.
-    public entry fun remove_item<T: key + store>(capy: &mut Capy, item_id: ID, ctx: &mut TxContext) {
+    public entry fun remove_item<T: key + store>(capy: &mut Capy, item_id: ID, ctx: &TxContext) {
         emit(ItemRemoved<T> {
             capy_id: object::id(capy),
             item_id: *&item_id

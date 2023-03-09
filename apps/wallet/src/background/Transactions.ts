@@ -1,37 +1,164 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type SignedTransaction,
+    type SuiTransactionResponse,
+} from '@mysten/sui.js';
+import { type SuiSignMessageOutput } from '@mysten/wallet-standard';
 import { filter, lastValueFrom, map, race, Subject, take } from 'rxjs';
 import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
 
 import { Window } from './Window';
+import {
+    type TransactionDataType,
+    type ApprovalRequest,
+} from '_payloads/transactions/ApprovalRequest';
+import { type SignMessageRequest } from '_payloads/transactions/SignMessage';
 
-import type { TransactionDataType } from '_messages/payloads/transactions/ExecuteTransactionRequest';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { SuiSignTransactionSerialized } from '_payloads/transactions/ExecuteTransactionRequest';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
 
 const TX_STORE_KEY = 'transactions';
 
-function openTxWindow(txRequestID: string) {
+function openTxWindow(requestID: string) {
     return new Window(
         Browser.runtime.getURL('ui.html') +
-            `#/dapp/tx-approval/${encodeURIComponent(txRequestID)}`
+            `#/dapp/approve/${encodeURIComponent(requestID)}`
     );
 }
 
 class Transactions {
     private _txResponseMessages = new Subject<TransactionRequestResponse>();
 
-    public async executeTransaction(
-        tx: TransactionDataType,
-        connection: ContentScriptConnection
-    ) {
-        const txRequest = this.createTransactionRequest(
+    public async executeOrSignTransaction(
+        {
             tx,
+            sign,
+        }:
+            | { tx: TransactionDataType; sign?: undefined }
+            | {
+                  tx?: undefined;
+                  sign: SuiSignTransactionSerialized;
+              },
+        connection: ContentScriptConnection
+    ): Promise<SuiTransactionResponse | SignedTransaction> {
+        const { txResultError, txResult, txSigned } =
+            await this.requestApproval(
+                tx ?? {
+                    type: 'v2',
+                    justSign: true,
+                    data: sign.transaction,
+                    account: sign.account,
+                },
+                connection.origin,
+                connection.originFavIcon
+            );
+        if (txResultError) {
+            throw new Error(
+                `Transaction failed with the following error. ${txResultError}`
+            );
+        }
+        if (sign && !txSigned) {
+            throw new Error('Transaction signature is empty');
+        }
+        if (tx) {
+            if (!txResult || !('transaction' in txResult)) {
+                throw new Error(`Transaction result is empty`);
+            }
+            return txResult;
+        }
+        return txSigned!;
+    }
+
+    public async signMessage(
+        {
+            accountAddress,
+            message,
+        }: Required<Pick<SignMessageRequest, 'args'>>['args'],
+        connection: ContentScriptConnection
+    ): Promise<SuiSignMessageOutput> {
+        const { txResult, txResultError } = await this.requestApproval(
+            { type: 'sign-message', accountAddress, message },
             connection.origin,
             connection.originFavIcon
+        );
+        if (txResultError) {
+            throw new Error(
+                `Signing message failed with the following error ${txResultError}`
+            );
+        }
+        if (!txResult) {
+            throw new Error('Sign message result is empty');
+        }
+        if (!('messageBytes' in txResult)) {
+            throw new Error('Sign message error, unknown result');
+        }
+        return txResult;
+    }
+
+    public async getTransactionRequests(): Promise<
+        Record<string, ApprovalRequest>
+    > {
+        return (await Browser.storage.local.get({ [TX_STORE_KEY]: {} }))[
+            TX_STORE_KEY
+        ];
+    }
+
+    public async getTransactionRequest(
+        txRequestID: string
+    ): Promise<ApprovalRequest | null> {
+        return (await this.getTransactionRequests())[txRequestID] || null;
+    }
+
+    public handleMessage(msg: TransactionRequestResponse) {
+        this._txResponseMessages.next(msg);
+    }
+
+    private createTransactionRequest(
+        tx: ApprovalRequest['tx'],
+        origin: string,
+        originFavIcon?: string
+    ): ApprovalRequest {
+        return {
+            id: uuidV4(),
+            approved: null,
+            origin,
+            originFavIcon,
+            createdDate: new Date().toISOString(),
+            tx,
+        };
+    }
+
+    private async saveTransactionRequests(
+        txRequests: Record<string, ApprovalRequest>
+    ) {
+        await Browser.storage.local.set({ [TX_STORE_KEY]: txRequests });
+    }
+
+    private async storeTransactionRequest(txRequest: ApprovalRequest) {
+        const txs = await this.getTransactionRequests();
+        txs[txRequest.id] = txRequest;
+        await this.saveTransactionRequests(txs);
+    }
+
+    private async removeTransactionRequest(txID: string) {
+        const txs = await this.getTransactionRequests();
+        delete txs[txID];
+        await this.saveTransactionRequests(txs);
+    }
+
+    private async requestApproval(
+        request: ApprovalRequest['tx'],
+        origin: string,
+        favIcon?: string
+    ) {
+        const txRequest = this.createTransactionRequest(
+            request,
+            origin,
+            favIcon
         );
         await this.storeTransactionRequest(txRequest);
         const popUp = openTxWindow(txRequest.id);
@@ -48,79 +175,22 @@ class Transactions {
                 take(1),
                 map(async (response) => {
                     if (response) {
-                        const { approved, txResult, tsResultError } = response;
+                        const { approved, txResult, txSigned, txResultError } =
+                            response;
                         if (approved) {
                             txRequest.approved = approved;
                             txRequest.txResult = txResult;
-                            txRequest.txResultError = tsResultError;
+                            txRequest.txResultError = txResultError;
+                            txRequest.txSigned = txSigned;
                             await this.storeTransactionRequest(txRequest);
-                            if (tsResultError) {
-                                throw new Error(
-                                    `Transaction failed with the following error. ${tsResultError}`
-                                );
-                            }
-                            if (!txResult) {
-                                throw new Error(`Transaction result is empty`);
-                            }
-                            return txResult;
+                            return txRequest;
                         }
                     }
                     await this.removeTransactionRequest(txRequest.id);
-                    throw new Error('Transaction rejected from user');
+                    throw new Error('Rejected from user');
                 })
             )
         );
-    }
-
-    public async getTransactionRequests(): Promise<
-        Record<string, TransactionRequest>
-    > {
-        return (await Browser.storage.local.get({ [TX_STORE_KEY]: {} }))[
-            TX_STORE_KEY
-        ];
-    }
-
-    public async getTransactionRequest(
-        txRequestID: string
-    ): Promise<TransactionRequest | null> {
-        return (await this.getTransactionRequests())[txRequestID] || null;
-    }
-
-    public handleMessage(msg: TransactionRequestResponse) {
-        this._txResponseMessages.next(msg);
-    }
-
-    private createTransactionRequest(
-        tx: TransactionDataType,
-        origin: string,
-        originFavIcon?: string
-    ): TransactionRequest {
-        return {
-            id: uuidV4(),
-            approved: null,
-            origin,
-            originFavIcon,
-            createdDate: new Date().toISOString(),
-            tx,
-        };
-    }
-
-    private async saveTransactionRequests(
-        txRequests: Record<string, TransactionRequest>
-    ) {
-        await Browser.storage.local.set({ [TX_STORE_KEY]: txRequests });
-    }
-
-    private async storeTransactionRequest(txRequest: TransactionRequest) {
-        const txs = await this.getTransactionRequests();
-        txs[txRequest.id] = txRequest;
-        await this.saveTransactionRequests(txs);
-    }
-
-    private async removeTransactionRequest(txID: string) {
-        const txs = await this.getTransactionRequests();
-        delete txs[txID];
-        await this.saveTransactionRequests(txs);
     }
 }
 

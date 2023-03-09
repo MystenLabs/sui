@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use serde_json::json;
 use strum::IntoEnumIterator;
 
@@ -35,23 +35,26 @@ pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListRespon
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkstatus)
 pub async fn status(
-    Json(request): Json<NetworkRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<NetworkRequest>, Error>,
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context.client.read_api().get_sui_system_state().await?;
+    let system_state = context
+        .client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?;
 
     let peers = system_state
-        .validators
         .active_validators
         .iter()
-        .map(|v| Peer {
-            peer_id: ObjectID::from(v.metadata.sui_address).into(),
+        .map(|validator| Peer {
+            peer_id: ObjectID::from(validator.sui_address).into(),
             metadata: Some(json!({
-                "public_key": Hex::from_bytes(&v.metadata.pubkey_bytes),
-                "stake_amount": v.stake_amount
+                "public_key": Hex::from_bytes(&validator.protocol_pubkey_bytes),
+                "stake_amount": validator.staking_pool_sui_balance,
             })),
         })
         .collect();
@@ -61,13 +64,13 @@ pub async fn status(
     let target = context
         .client
         .read_api()
-        .get_total_transaction_number()
+        .get_latest_checkpoint_sequence_number()
         .await?;
 
     Ok(NetworkStatusResponse {
         current_block_identifier: current_block.block.block_identifier,
         current_block_timestamp: current_block.block.timestamp,
-        genesis_block_identifier: blocks.genesis_block_identifier(),
+        genesis_block_identifier: blocks.genesis_block_identifier().await?,
         oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
         sync_status: Some(SyncStatus {
             current_index: Some(index),
@@ -83,8 +86,8 @@ pub async fn status(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkoptions)
 pub async fn options(
-    Json(request): Json<NetworkRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<NetworkRequest>, Error>,
 ) -> Result<NetworkOptionsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 

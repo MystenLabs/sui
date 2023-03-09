@@ -58,7 +58,7 @@ fn test_authority_signature_intent() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui(
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
         recipient,
         sender,
         None,
@@ -69,13 +69,13 @@ fn test_authority_signature_intent() {
     let data2 = data.clone();
     let signature =
         Signature::new_secure(&IntentMessage::new(Intent::default(), data1), &sender_key);
-    let tx = Transaction::from_data(data2, Intent::default(), signature);
+    let tx = Transaction::from_data(data2, Intent::default(), vec![signature]);
     let tx1 = tx.clone();
     assert!(tx.verify().is_ok());
 
     // signature does not sign on intent fails.
     let signature_insecure = Signature::new(&data, &sender_key);
-    let tx_1 = Transaction::from_data(data, Intent::default(), signature_insecure);
+    let tx_1 = Transaction::from_data(data, Intent::default(), vec![signature_insecure]);
     assert!(tx_1.verify().is_err());
 
     // Create an intent with signed data.
@@ -96,7 +96,7 @@ fn test_authority_signature_intent() {
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, &kp);
-    let verification = s.verify_secure(&tx1.data().intent_message, kp.public().into());
+    let s = AuthoritySignature::new_secure(&tx1.data().intent_message, &0, &kp);
+    let verification = s.verify_secure(&tx1.data().intent_message, 0, kp.public().into());
     assert!(verification.is_ok())
 }

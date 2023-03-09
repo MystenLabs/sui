@@ -11,14 +11,19 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 use std::time::Duration;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::be_fix_int_ser;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
+use typed_store::rocks::RocksDBAccessType;
+use typed_store::rocks::{be_fix_int_ser, MetricConf};
+use typed_store::sally::SallyColumn;
+use typed_store::sally::SallyDBOptions;
+use typed_store::sally::SallyReadOnlyDBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Store;
 use typed_store_derive::DBMapUtils;
+use typed_store_derive::SallyDB;
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -31,7 +36,6 @@ struct Tables {
     table1: DBMap<String, String>,
     table2: DBMap<i32, String>,
 }
-
 // Check that generics work
 #[derive(DBMapUtils)]
 struct TablesGenerics<Q, W> {
@@ -61,7 +65,8 @@ struct TablesSingle {
 #[tokio::test]
 async fn macro_test() {
     let primary_path = temp_dir();
-    let tbls_primary = Tables::open_tables_read_write(primary_path.clone(), None, None);
+    let tbls_primary =
+        Tables::open_tables_read_write(primary_path.clone(), MetricConf::default(), None, None);
 
     // Write to both tables
     let mut raw_key_bytes1 = 0;
@@ -70,8 +75,8 @@ async fn macro_test() {
     for i in kv_range.clone() {
         let key = i.to_string();
         let value = i.to_string();
-        let k_buf = be_fix_int_ser::<String>(key.borrow()).unwrap();
-        let value_buf = bincode::serialize::<String>(value.borrow()).unwrap();
+        let k_buf = be_fix_int_ser::<String>(&key).unwrap();
+        let value_buf = bcs::to_bytes::<String>(&value).unwrap();
         raw_key_bytes1 += k_buf.len();
         raw_value_bytes1 += value_buf.len();
     }
@@ -88,7 +93,7 @@ async fn macro_test() {
         let key = i;
         let value = i.to_string();
         let k_buf = be_fix_int_ser(key.borrow()).unwrap();
-        let value_buf = bincode::serialize::<String>(value.borrow()).unwrap();
+        let value_buf = bcs::to_bytes::<String>(&value).unwrap();
         raw_key_bytes2 += k_buf.len();
         raw_value_bytes2 += value_buf.len();
     }
@@ -99,7 +104,8 @@ async fn macro_test() {
         .expect("Failed to multi-insert");
 
     // Open in secondary mode
-    let tbls_secondary = Tables::get_read_only_handle(primary_path.clone(), None, None);
+    let tbls_secondary =
+        Tables::get_read_only_handle(primary_path.clone(), None, None, MetricConf::default());
 
     // Check all the tables can be listed
     let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
@@ -159,11 +165,98 @@ async fn macro_test() {
     assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
 }
 
+#[derive(SallyDB)]
+pub struct SallyDBExample {
+    col1: SallyColumn<String, String>,
+    col2: SallyColumn<i32, String>,
+}
+
+#[tokio::test]
+async fn test_sallydb() {
+    let primary_path = temp_dir();
+    let example_db = SallyDBExample::init(SallyDBOptions::RocksDB((
+        primary_path.clone(),
+        MetricConf::default(),
+        RocksDBAccessType::Primary,
+        None,
+        None,
+    )));
+
+    // Write to both columns
+    let keys_vals_1 = (1..10).map(|i| (i.to_string(), i.to_string()));
+    let mut wb = example_db.col1.batch();
+    wb.insert_batch(&example_db.col1, keys_vals_1.clone())
+        .expect("Failed to insert");
+
+    let keys_vals_2 = (3..10).map(|i| (i, i.to_string()));
+    wb.insert_batch(&example_db.col2, keys_vals_2.clone())
+        .expect("Failed to insert");
+
+    wb.write().await.expect("Failed to commit write batch");
+
+    // Open in secondary mode
+    let example_db_secondary =
+        SallyDBExample::get_read_only_handle(SallyReadOnlyDBOptions::RocksDB(Box::new((
+            primary_path.clone(),
+            MetricConf::default(),
+            None,
+            None,
+        ))));
+
+    // Check all the tables can be listed
+    let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
+    let observed_table_names: HashSet<_> = SallyDBExample::describe_tables()
+        .iter()
+        .map(|q| q.0.clone())
+        .collect();
+
+    let exp: HashSet<String> =
+        HashSet::from_iter(vec!["col1", "col2"].into_iter().map(|s| s.to_owned()));
+    assert_eq!(HashSet::from_iter(actual_table_names), exp);
+    assert_eq!(HashSet::from_iter(observed_table_names), exp);
+
+    // Check the counts
+    assert_eq!(9, example_db_secondary.count_keys("col1").unwrap());
+    assert_eq!(7, example_db_secondary.count_keys("col2").unwrap());
+
+    // Test all entries
+    let m = example_db_secondary.dump("col1", 100, 0).unwrap();
+    for (k, v) in keys_vals_1 {
+        assert_eq!(format!("\"{v}\""), *m.get(&format!("\"{k}\"")).unwrap());
+    }
+
+    let m = example_db_secondary.dump("col2", 100, 0).unwrap();
+    for (k, v) in keys_vals_2 {
+        assert_eq!(format!("\"{v}\""), *m.get(&k.to_string()).unwrap());
+    }
+
+    // Check that catchup logic works
+    let keys_vals_1 = (100..110).map(|i| (i.to_string(), i.to_string()));
+    let mut wb = example_db.col1.batch();
+    wb.insert_batch(&example_db.col1, keys_vals_1.clone())
+        .expect("Failed to insert");
+    wb.write().await.expect("Failed to commit write batch");
+
+    // New entries should be present in secondary
+    assert_eq!(19, example_db_secondary.count_keys("col1").unwrap());
+
+    // Test pagination
+    let m = example_db_secondary.dump("col1", 2, 0).unwrap();
+    assert_eq!(2, m.len());
+    assert_eq!(format!("\"1\""), *m.get(&"\"1\"".to_string()).unwrap());
+    assert_eq!(format!("\"2\""), *m.get(&"\"2\"".to_string()).unwrap());
+
+    let m = example_db_secondary.dump("col1", 3, 2).unwrap();
+    assert_eq!(3, m.len());
+    assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
+    assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+}
+
 #[tokio::test]
 async fn macro_transactional_test() {
     let key = "key".to_string();
     let primary_path = temp_dir();
-    let tables = Tables::open_tables_transactional(primary_path, None, None);
+    let tables = Tables::open_tables_transactional(primary_path, MetricConf::default(), None, None);
     let mut transaction = tables
         .table1
         .transaction()
@@ -221,14 +314,24 @@ async fn macro_test_configure() {
     config.table2.options.create_if_missing(false);
 
     // Build and open with new config
-    let _ = Tables::open_tables_read_write(primary_path, None, Some(config.build()));
+    let _ = Tables::open_tables_read_write(
+        primary_path,
+        MetricConf::default(),
+        None,
+        Some(config.build()),
+    );
 
     // Test the static config options
     let primary_path = temp_dir();
 
     assert_eq!(TABLE1_OPTIONS_SET_FLAG.lock().unwrap().len(), 0);
 
-    let _ = TablesCustomOptions::open_tables_read_write(primary_path, None, None);
+    let _ = TablesCustomOptions::open_tables_read_write(
+        primary_path,
+        MetricConf::default(),
+        None,
+        None,
+    );
 
     // Ensures that the function to set options was called
     assert_eq!(TABLE1_OPTIONS_SET_FLAG.lock().unwrap().len(), 1);
@@ -265,7 +368,12 @@ async fn store_iter_and_filter_successfully() {
 
     config.table2.options.create_if_missing(false);
     let path = temp_dir();
-    let str = StoreTables::open_tables_read_write(path.clone(), None, Some(config.build()));
+    let str = StoreTables::open_tables_read_write(
+        path.clone(),
+        MetricConf::default(),
+        None,
+        Some(config.build()),
+    );
 
     // AND key-values to store.
     let key_values = vec![

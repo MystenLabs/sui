@@ -1,45 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Coin } from '@mysten/sui.js';
 import { Link } from 'react-router-dom';
 
-import PageTitle from '_app/shared/page-title';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
-import NFTdisplay from '_components/nft-display';
-import { useAppSelector, useObjectsState } from '_hooks';
-import { accountNftsSelector } from '_redux/slices/account';
+import { NFTDisplayCard } from '_components/nft-display';
+import { useObjectsOwnedByAddress } from '_hooks';
+import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function NftsPage() {
-    const nfts = useAppSelector(accountNftsSelector);
-    const { error, loading, showError } = useObjectsState();
-    const isNftsFound = nfts.length > 0;
+    const accountAddress = useActiveAddress();
+    const { data, isLoading, error, isError } =
+        useObjectsOwnedByAddress(accountAddress);
+    const nfts = data?.filter((obj) => !Coin.isCoin(obj));
+
     return (
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
-            <Loading loading={loading}>
-                <PageTitle title="NFTs" className="justify-center" />
-                {showError && error ? (
+            <PageTitle title="NFTs" />
+            <Loading loading={isLoading}>
+                {isError ? (
                     <Alert>
-                        <strong>Sync error (data might be outdated).</strong>{' '}
-                        <small>{error.message}</small>
+                        <div>
+                            <strong>Sync error (data might be outdated)</strong>
+                        </div>
+                        <small>{(error as Error).message}</small>
                     </Alert>
                 ) : null}
-                {isNftsFound ? (
-                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4">
-                        {nfts.map((nft) => (
+
+                {nfts?.length ? (
+                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 w-full h-full">
+                        {nfts.map(({ objectId }) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
-                                    objectId: nft.reference.objectId,
+                                    objectId,
                                 }).toString()}`}
-                                key={nft.reference.objectId}
+                                key={objectId}
                                 className="no-underline"
                             >
                                 <ErrorBoundary>
-                                    <NFTdisplay
-                                        nftobj={nft}
+                                    <NFTDisplayCard
+                                        objectId={objectId}
                                         size="md"
-                                        showlabel
+                                        showLabel
                                         animateHover
                                         borderRadius="xl"
                                     />

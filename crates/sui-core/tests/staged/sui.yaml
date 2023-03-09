@@ -11,16 +11,24 @@ AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 20
+      SIZE: 32
+Argument:
+  ENUM:
+    0:
+      GasCoin: UNIT
+    1:
+      Input:
+        NEWTYPE: U16
+    2:
+      Result:
+        NEWTYPE: U16
+    3:
+      NestedResult:
+        TUPLE:
+          - U16
+          - U16
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
-BLS12381KeyPair:
-  STRUCT:
-    - name: STR
-    - secret: STR
-BLS12381Signature:
-  STRUCT:
-    - sig: BYTES
 CallArg:
   ENUM:
     0:
@@ -39,13 +47,95 @@ CallArg:
 ChangeEpoch:
   STRUCT:
     - epoch: U64
+    - protocol_version:
+        TYPENAME: ProtocolVersion
     - storage_charge: U64
     - computation_charge: U64
     - storage_rebate: U64
+    - epoch_start_timestamp_ms: U64
+    - system_packages:
+        SEQ:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - SEQ:
+                SEQ: U8
 CircularObjectOwnership:
   STRUCT:
     - object:
         TYPENAME: ObjectID
+Command:
+  ENUM:
+    0:
+      MoveCall:
+        NEWTYPE:
+          TYPENAME: ProgrammableMoveCall
+    1:
+      TransferObjects:
+        TUPLE:
+          - SEQ:
+              TYPENAME: Argument
+          - TYPENAME: Argument
+    2:
+      SplitCoin:
+        TUPLE:
+          - TYPENAME: Argument
+          - TYPENAME: Argument
+    3:
+      MergeCoins:
+        TUPLE:
+          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: Argument
+    4:
+      Publish:
+        NEWTYPE:
+          SEQ:
+            SEQ: U8
+    5:
+      MakeMoveVec:
+        TUPLE:
+          - OPTION:
+              TYPENAME: TypeTag
+          - SEQ:
+              TYPENAME: Argument
+CommandArgumentError:
+  ENUM:
+    0:
+      TypeMismatch: UNIT
+    1:
+      InvalidBCSBytes: UNIT
+    2:
+      InvalidUsageOfPureArg: UNIT
+    3:
+      InvalidArgumentToPrivateEntryFunction: UNIT
+    4:
+      IndexOutOfBounds:
+        STRUCT:
+          - idx: U16
+    5:
+      SecondaryIndexOutOfBounds:
+        STRUCT:
+          - result_idx: U16
+          - secondary_idx: U16
+    6:
+      InvalidResultArity:
+        STRUCT:
+          - result_idx: U16
+    7:
+      InvalidGasCoinUsage: UNIT
+    8:
+      InvalidUsageOfBorrowedValue: UNIT
+    9:
+      InvalidUsageOfTakenValue: UNIT
+    10:
+      InvalidObjectByValue: UNIT
+    11:
+      InvalidObjectByMutRef: UNIT
+ConsensusCommitPrologue:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
 Data:
   ENUM:
     0:
@@ -64,10 +154,6 @@ DeleteKind:
       UnwrapThenDelete: UNIT
     2:
       Wrap: UNIT
-Ed25519KeyPair:
-  STRUCT:
-    - name: STR
-    - secret: STR
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8
@@ -87,6 +173,8 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+    6:
+      ObjectMutabilityMismatch: UNIT
 EntryTypeArgumentError:
   STRUCT:
     - argument_idx: U16
@@ -95,12 +183,10 @@ EntryTypeArgumentError:
 EntryTypeArgumentErrorKind:
   ENUM:
     0:
-      ModuleNotFound: UNIT
-    1:
       TypeNotFound: UNIT
-    2:
+    1:
       ArityMismatch: UNIT
-    3:
+    2:
       ConstraintNotSatisfied: UNIT
 ExecutionFailureStatus:
   ENUM:
@@ -111,39 +197,39 @@ ExecutionFailureStatus:
     2:
       InvalidTransactionUpdate: UNIT
     3:
-      ModuleNotFound: UNIT
-    4:
       FunctionNotFound: UNIT
-    5:
+    4:
       InvariantViolation: UNIT
-    6:
+    5:
       MoveObjectTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    7:
+    6:
       MovePackageTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    8:
+    7:
       InvalidTransferObject: UNIT
-    9:
+    8:
       InvalidTransferSui: UNIT
-    10:
+    9:
       InvalidTransferSuiInsufficientBalance: UNIT
-    11:
+    10:
       InvalidCoinObject: UNIT
-    12:
+    11:
       EmptyInputCoins: UNIT
-    13:
+    12:
       EmptyRecipients: UNIT
-    14:
+    13:
       RecipientsAmountsArityMismatch: UNIT
-    15:
+    14:
       InsufficientBalance: UNIT
-    16:
+    15:
       CoinTypeMismatch: UNIT
+    16:
+      CoinTooLarge: UNIT
     17:
       NonEntryFunctionInvoked: UNIT
     18:
@@ -208,6 +294,27 @@ ExecutionFailureStatus:
       VMVerificationOrDeserializationError: UNIT
     34:
       VMInvariantViolation: UNIT
+    35:
+      TotalPaymentAmountOverflow: UNIT
+    36:
+      TotalCoinBalanceOverflow: UNIT
+    37:
+      CommandArgumentError:
+        STRUCT:
+          - arg_idx: U16
+          - kind:
+              TYPENAME: CommandArgumentError
+    38:
+      UnusedValueWithoutDrop:
+        STRUCT:
+          - result_idx: U16
+          - secondary_idx: U16
+    39:
+      InvalidPublicFunctionReturnType:
+        STRUCT:
+          - idx: U16
+    40:
+      ArityMismatch: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -217,6 +324,22 @@ ExecutionStatus:
         STRUCT:
           - error:
               TYPENAME: ExecutionFailureStatus
+          - command:
+              OPTION: U64
+GenesisObject:
+  ENUM:
+    0:
+      RawObject:
+        STRUCT:
+          - data:
+              TYPENAME: Data
+          - owner:
+              TYPENAME: Owner
+GenesisTransaction:
+  STRUCT:
+    - objects:
+        SEQ:
+          TYPENAME: GenesisObject
 Identifier:
   NEWTYPESTRUCT: STR
 InvalidChildObjectArgument:
@@ -238,10 +361,7 @@ ModuleId:
 MoveCall:
   STRUCT:
     - package:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
+        TYPENAME: ObjectID
     - module:
         TYPENAME: Identifier
     - function:
@@ -264,6 +384,8 @@ MoveLocation:
         TYPENAME: ModuleId
     - function: U16
     - instruction: U16
+    - function_name:
+        OPTION: STR
 MoveModulePublish:
   STRUCT:
     - modules:
@@ -280,6 +402,8 @@ MovePackage:
   STRUCT:
     - id:
         TYPENAME: ObjectID
+    - version:
+        TYPENAME: SequenceNumber
     - module_map:
         MAP:
           KEY: STR
@@ -348,31 +472,21 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
+          - mutable: BOOL
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
-ObjectFormatOptions:
-  STRUCT:
-    - include_types: BOOL
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
 ObjectInfoRequestKind:
   ENUM:
     0:
-      LatestObjectInfo:
-        NEWTYPE:
-          OPTION:
-            TYPENAME: ObjectFormatOptions
+      LatestObjectInfo: UNIT
     1:
-      PastObjectInfo:
+      PastObjectInfoDebug:
         NEWTYPE:
           TYPENAME: SequenceNumber
-    2:
-      PastObjectInfoDebug:
-        TUPLE:
-          - TYPENAME: SequenceNumber
-          - OPTION:
-              TYPENAME: ObjectFormatOptions
 Owner:
   ENUM:
     0:
@@ -426,8 +540,34 @@ PaySui:
           TYPENAME: SuiAddress
     - amounts:
         SEQ: U64
+ProgrammableMoveCall:
+  STRUCT:
+    - package:
+        TYPENAME: ObjectID
+    - module:
+        TYPENAME: Identifier
+    - function:
+        TYPENAME: Identifier
+    - type_arguments:
+        SEQ:
+          TYPENAME: TypeTag
+    - arguments:
+        SEQ:
+          TYPENAME: Argument
+ProgrammableTransaction:
+  STRUCT:
+    - inputs:
+        SEQ:
+          TYPENAME: CallArg
+    - commands:
+        SEQ:
+          TYPENAME: Command
+ProtocolVersion:
+  NEWTYPESTRUCT: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
+Sha3Digest:
+  NEWTYPESTRUCT: BYTES
 SingleTransactionKind:
   ENUM:
     0:
@@ -462,6 +602,18 @@ SingleTransactionKind:
       ChangeEpoch:
         NEWTYPE:
           TYPENAME: ChangeEpoch
+    8:
+      Genesis:
+        NEWTYPE:
+          TYPENAME: GenesisTransaction
+    9:
+      ConsensusCommitPrologue:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologue
+    10:
+      ProgrammableTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
 StructTag:
   STRUCT:
     - address:
@@ -477,11 +629,13 @@ SuiAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 20
+      SIZE: 32
 TransactionDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 TransactionEffectsDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 TransactionKind:
   ENUM:
     0:
@@ -551,4 +705,6 @@ TypedStoreError:
       CrossDBBatch: UNIT
     4:
       MetricsReporting: UNIT
+    5:
+      RetryableTransactionError: UNIT
 

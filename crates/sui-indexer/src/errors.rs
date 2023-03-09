@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use jsonrpsee::core::Error as RpcError;
+use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[derive(Debug, Error)]
 pub enum IndexerError {
     #[error("Indexer failed to convert timestamp to NaiveDateTime with error: `{0}`")]
     DateTimeParsingError(String),
@@ -16,6 +18,9 @@ pub enum IndexerError {
 
     #[error("Indexer failed to convert structs to diesel Insertable with error: `{0}`")]
     InsertableParsingError(String),
+
+    #[error("Indexer failed to build JsonRpcServer with error: `{0}`")]
+    JsonRpcServerError(#[from] sui_json_rpc::error::Error),
 
     #[error("Indexer failed to find object mutations, which should never happen.")]
     ObjectMutationNotAvailable,
@@ -35,8 +40,8 @@ pub enum IndexerError {
     #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
     RpcClientInitError(String),
 
-    #[error("Indexer failed to parse transaction digest read from DB with error: `{0}`")]
-    TransactionDigestParsingError(String),
+    #[error("Indexer failed to serialize/deserialize JSON with error: `{0}`")]
+    JsonSerdeError(String),
 }
 
 impl IndexerError {
@@ -47,14 +52,19 @@ impl IndexerError {
             IndexerError::PostgresWriteError(_) => "PostgresWriteError".into(),
             IndexerError::InsertableParsingError(_) => "InsertableParsingError".into(),
             IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".into(),
-            IndexerError::TransactionDigestParsingError(_) => {
-                "TransactionDigestParsingError".into()
-            }
             IndexerError::ObjectMutationNotAvailable => "ObjectMutationNotAvailable".into(),
             IndexerError::EventDeserializationError(_) => "EventDeserializationError".into(),
             IndexerError::PgConnectionPoolInitError(_) => "PgConnectionPoolInitError".into(),
             IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
             IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
+            IndexerError::JsonRpcServerError(_) => "JsonRpcServerError".into(),
+            IndexerError::JsonSerdeError(_) => "JsonSerdeError".into(),
         }
+    }
+}
+
+impl From<IndexerError> for RpcError {
+    fn from(e: IndexerError) -> Self {
+        RpcError::Call(CallError::Failed(e.into()))
     }
 }

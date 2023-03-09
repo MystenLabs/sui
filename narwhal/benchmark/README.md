@@ -8,7 +8,7 @@ When running benchmarks, the codebase is automatically compiled with the feature
 
 ### Parametrize the benchmark
 
-After [cloning the repo and installing all dependencies](https://github.com/mystenlabs/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine. Locate the task called `local` in the file [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py):
+After [cloning the repo and installing all dependencies](https://github.com/mystenlabs/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine. Locate the task called `local` in the file [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py):
 
 ```python
 @task
@@ -39,7 +39,8 @@ The nodes parameters determine the configuration for the primaries and workers:
 node_params = {
     'header_num_of_batches_threshold': 32,
     'max_header_num_of_batches': 1000,
-    'max_header_delay': '100ms',
+    'max_header_delay': '2000ms',
+    'min_header_delay': '500ms',
     'gc_depth': 50,
     'sync_retry_delay': '10000ms',
     'sync_retry_nodes': 3,
@@ -65,7 +66,8 @@ They are defined as follows:
 
 - `header_num_of_batches_threshold`: The minimum number of batches that will trigger a new header creation
 - `max_header_num_of_batches`: The maximum number of batch digests included in a header.
-- `max_header_delay`: The maximum delay that the primary waits between generating two headers, even if the header did not reach `header_num_of_batches_threshold`. Denominated in milliseconds (ms).
+- `max_header_delay`: The maximum delay that the primary waits between generating two headers, even if the header does not reach `header_num_of_batches_threshold` or contain leader in parents. Denominated in milliseconds (ms).
+- `min_header_delay`: The delay that the primary waits between generating two headers, even if `header_num_of_batches_threshold` is not reached. Denominated in ms.
 - `gc_depth`: The depth of the garbage collection. Denominated in number of rounds.
 - `sync_retry_delay`: The delay after which the synchronizer retries to send sync requests. Denominated in ms.
 - `sync_retry_nodes`: How many nodes to sync when re-trying to send sync-request. These nodes are picked at random from the committee.
@@ -133,14 +135,14 @@ The 'Consensus TPS' and 'Consensus latency' report the average throughput and la
 
 Memory profiling for benchmarks are possible via `jemalloc` on Linux. It can be enabled in the following way:
 
-- Intall `jemalloc`, e.g. `sudo apt install libjemalloc-dev`
+- Install `jemalloc`, e.g. `sudo apt install libjemalloc-dev`
 - Enable `jemalloc` by setting `export MALLOC_CONF=prof:true,prof_prefix:jeprof.out,lg_prof_interval:33` before launching the benchmark script.
 
 Memory profiles with names `jeprof.out*` will be written to the currently directory.
 
 To visualize the profile,
 
-- Intall `graphviz`, e.g. `sudo apt install graphviz`
+- Install `graphviz`, e.g. `sudo apt install graphviz`
 - `sudo jeprof --svg <path to Narwhal binary> <path to profile> > prof.svg`
 
 ## AWS Benchmarks
@@ -177,7 +179,7 @@ This operation is manual (AWS exposes APIs to manipulate keys) and needs to be r
 
 ### Step 3. Configure the testbed
 
-The file [settings.json](https://github.com/mystenlabs/narwhal/blob/main/benchmark/settings.json) (located in [narwhal/benchmarks](https://github.com/mystenlabs/narwhal/blob/main/benchmark)) contains all the configuration parameters of the testbed to deploy. Its content looks as follows:
+The file [settings.json](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/settings.json) (located in [narwhal/benchmarks](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark)) contains all the configuration parameters of the testbed to deploy. Its content looks as follows:
 
 ```json
 {
@@ -250,14 +252,14 @@ If you require more nodes than data centers, the Python scripts will distribute 
 
 ### Step 4. Create a testbed
 
-The AWS instances are orchestrated with [Fabric](http://www.fabfile.org) from the file [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py) (located in [narwhal/benchmarks](https://github.com/mystenlabs/narwhal/blob/main/benchmark)); you can list all possible commands as follows:
+The AWS instances are orchestrated with [Fabric](http://www.fabfile.org) from the file [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py) (located in [narwhal/benchmarks](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark)); you can list all possible commands as follows:
 
 ```
 $ cd narwhal/benchmark
 $ fab --list
 ```
 
-The command `fab create` creates new AWS instances; open [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py) and locate the `create` task:
+The command `fab create` creates new AWS instances; open [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py) and locate the `create` task:
 
 ```python
 @task
@@ -289,7 +291,7 @@ The commands `fab stop` and `fab start` respectively stop and start the testbed 
 
 ### Step 5. Run a benchmark
 
-After setting up the testbed, running a benchmark on AWS is similar to running it locally (see [Run Local Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark#local-benchmarks)). Locate the task `remote` in [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py):
+After setting up the testbed, running a benchmark on AWS is similar to running it locally (see [Run Local Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark#local-benchmarks)). Locate the task `remote` in [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py):
 
 ```python
 @task
@@ -320,7 +322,7 @@ Once you specified both `bench_params` and `node_params` as desired, run:
 $ fab remote
 ```
 
-This command first updates all machines with the latest commit of the GitHub repo and branch specified in your file [settings.json](https://github.com/mystenlabs/narwhal/blob/main/benchmark/settings.json) (step 3); this ensures that benchmarks are always run with the latest version of the code. It then generates and uploads the configuration files to each machine, runs the benchmarks with the specified parameters, and downloads the logs. It finally parses the logs and prints the results into a folder called `results` (which is automatically created if it doesn't already exist). You can run `fab remote` multiple times without fear of overriding previous results; the command either appends new results to a file containing existing results or prints them in separate files. If anything goes wrong during a benchmark, you can always stop it by running `fab kill`.
+This command first updates all machines with the latest commit of the GitHub repo and branch specified in your file [settings.json](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/settings.json) (step 3); this ensures that benchmarks are always run with the latest version of the code. It then generates and uploads the configuration files to each machine, runs the benchmarks with the specified parameters, and downloads the logs. It finally parses the logs and prints the results into a folder called `results` (which is automatically created if it doesn't already exist). You can run `fab remote` multiple times without fear of overriding previous results; the command either appends new results to a file containing existing results or prints them in separate files. If anything goes wrong during a benchmark, you can always stop it by running `fab kill`.
 
 ### Step 6. Plot the results
 

@@ -12,7 +12,7 @@ use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
 use crate::filter::{EventFilter, Filter};
 use crate::gas_coin::GasCoin;
-use crate::object::{Owner, PACKAGE_VERSION};
+use crate::object::{Owner, OBJECT_START_VERSION};
 use crate::{ObjectID, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
@@ -30,7 +30,7 @@ fn test_move_event_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 0,
         event_num: 0,
         event: move_event,
@@ -86,7 +86,7 @@ fn test_transfer_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 1,
         event_num: 0,
         event: move_event,
@@ -117,7 +117,7 @@ fn test_transfer_filter() {
 fn test_publish_filter() {
     let package_id = ObjectID::random();
     let sender = SuiAddress::random_for_testing_only();
-    let version = PACKAGE_VERSION;
+    let version = OBJECT_START_VERSION;
     let digest = ObjectDigest::random();
     // Create a test publish event.
     let move_event = Event::Publish {
@@ -128,7 +128,7 @@ fn test_publish_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 0,
         event_num: 0,
         event: move_event,
@@ -167,7 +167,7 @@ fn test_delete_object_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         event_num: 0,
         seq_num: 0,
         event: move_event,
@@ -207,11 +207,11 @@ fn test_new_object_filter() {
         recipient,
         object_type: "0x2::example::Object".into(),
         object_id,
-        version: PACKAGE_VERSION,
+        version: OBJECT_START_VERSION,
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 0,
         event_num: 0,
         event: move_event,
@@ -244,7 +244,7 @@ fn test_epoch_change_filter() {
     let move_event = Event::EpochChange(0);
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 1,
         event_num: 0,
         event: move_event,
@@ -260,7 +260,7 @@ fn test_checkpoint_filter() {
     let move_event = Event::Checkpoint(0);
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 1,
         event_num: 0,
         event: move_event,

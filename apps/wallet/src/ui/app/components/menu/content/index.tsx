@@ -1,28 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
+import { useFeature } from '@growthbook/growthbook-react';
 import { useCallback } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import {
+    Navigate,
+    Route,
+    Routes,
+    useLocation,
+    useNavigate,
+} from 'react-router-dom';
 
-import Account from './account';
-import MenuList from './menu-list';
-import Network from './network';
+import { AccountsSettings } from './AccountsSettings';
+import { AutoLockSettings } from './AutoLockSettings';
+import { ExportAccount } from './ExportAccount';
+import { ImportPrivateKey } from './ImportPrivateKey';
+import MenuList from './MenuList';
+import { NetworkSettings } from './NetworkSettings';
+import { ImportLedgerAccounts } from './ledger/ImportLedgerAccounts';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
+    MainLocationContext,
     useMenuIsOpen,
     useMenuUrl,
     useNextMenuUrl,
 } from '_components/menu/hooks';
 import { useOnKeyboardEvent } from '_hooks';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { MouseEvent } from 'react';
-
-import st from './MenuContent.module.scss';
 
 const CLOSE_KEY_CODES: string[] = ['Escape'];
 
 function MenuContent() {
+    const mainLocation = useLocation();
     const isOpen = useMenuIsOpen();
     const menuUrl = useMenuUrl();
     const menuHomeUrl = useNextMenuUrl(true, '/');
@@ -38,28 +49,60 @@ function MenuContent() {
         [isOpen, navigate, closeMenuUrl]
     );
     useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
-    const expanded = menuUrl !== '/';
+
+    const isMultiAccountsEnabled = useFeature(
+        FEATURES.WALLET_MULTI_ACCOUNTS
+    ).on;
+    const { on: isLedgerIntegrationEnabled } = useFeature(
+        FEATURES.WALLET_LEDGER_INTEGRATION
+    );
+
     if (!isOpen) {
         return null;
     }
+
     return (
-        <div className={st.container}>
-            <div className={st.backdrop} onClick={handleOnCloseMenu} />
-            <div className={cl(st.content, { [st.expanded]: expanded })}>
-                <ErrorBoundary>
+        <div className="absolute flex flex-col justify-items-stretch inset-0 bg-white pb-8 px-2.5 z-50 rounded-tl-20 rounded-tr-20 overflow-y-auto">
+            <ErrorBoundary>
+                <MainLocationContext.Provider value={mainLocation}>
                     <Routes location={menuUrl || ''}>
                         <Route path="/" element={<MenuList />} />
-                        <Route path="/account" element={<Account />} />
-                        <Route path="/network" element={<Network />} />
+                        {isMultiAccountsEnabled ? (
+                            <>
+                                <Route
+                                    path="/accounts"
+                                    element={<AccountsSettings />}
+                                />
+                                <Route
+                                    path="/export/:account"
+                                    element={<ExportAccount />}
+                                />
+                                <Route
+                                    path="/import-private-key"
+                                    element={<ImportPrivateKey />}
+                                />
+                            </>
+                        ) : null}
+                        <Route path="/network" element={<NetworkSettings />} />
+                        <Route
+                            path="/auto-lock"
+                            element={<AutoLockSettings />}
+                        />
                         <Route
                             path="*"
                             element={
                                 <Navigate to={menuHomeUrl} replace={true} />
                             }
                         />
+                        {isLedgerIntegrationEnabled && (
+                            <Route
+                                path="/import-ledger-accounts"
+                                element={<ImportLedgerAccounts />}
+                            />
+                        )}
                     </Routes>
-                </ErrorBoundary>
-            </div>
+                </MainLocationContext.Provider>
+            </ErrorBoundary>
         </div>
     );
 }

@@ -3,10 +3,10 @@
 
 //! SQL and SQLite-based Event Store
 
-use core::time::Duration;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -17,6 +17,7 @@ use sqlx::{
 };
 use sqlx::{ConnectOptions, Sqlite};
 use strum::{EnumMessage, IntoEnumIterator};
+use tokio::sync::RwLock;
 use tracing::{info, instrument, log, warn};
 
 use sui_types::base_types::SuiAddress;
@@ -35,6 +36,10 @@ use super::*;
 /// - fields is JSON for now (for easy JSON filtering) and contains all fields not in main columns
 pub struct SqlEventStore {
     pool: SqlitePool,
+    // Query lock is held for read by both read and write API calls. Periodically, a background
+    // task wakes up, acquires the lock for write (which excludes any access to the db) and attempts
+    // to compact the WAL, which otherwise may grow too large.
+    query_lock: RwLock<()>,
 }
 
 /// Important for updating Columns:
@@ -105,7 +110,11 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!("Created new in-memory SQLite EventStore for testing");
-        Ok(Self { pool })
+
+        Ok(Self {
+            pool,
+            query_lock: Default::default(),
+        })
     }
 
     /// Creates or opens a new SQLite database at a specific path
@@ -119,9 +128,11 @@ impl SqlEventStore {
             .synchronous(SqliteSynchronous::Normal)
             // Minimal journal size and frequent autocheckpoints help prevent giant WALs
             .pragma("journal_size_limit", "0")
-            .pragma("wal_autocheckpoint", "400") // In pages of 4KB each
+            // "wal_autocheckpoint" default to 1000 => auto checkpointing every 1000 pages
             .create_if_missing(true);
         options.log_statements(log::LevelFilter::Off);
+        // Duration is not relevant here, just is required
+        options.log_slow_statements(log::LevelFilter::Off, Duration::from_secs(1));
 
         let pool = PoolOptions::<Sqlite>::new()
             .max_connections(100)
@@ -131,7 +142,10 @@ impl SqlEventStore {
 
         info!(?db_path, "Created/opened SQLite EventStore on disk");
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            query_lock: Default::default(),
+        })
     }
 
     /// Starts a WAL truncation/cleanup periodic task at interval duration
@@ -140,10 +154,14 @@ impl SqlEventStore {
             let mut interval = tokio::time::interval(cleanup_interval);
             loop {
                 interval.tick().await;
+                let start = Instant::now();
                 info!("Running SQLite WAL truncation...");
+                let _guard = self.query_lock.write().await;
+                info!("Acquired query_lock for write after {:?}", start.elapsed());
                 let _ = self.force_wal_truncation().await.map_err(|e| {
                     warn!("Unable to truncate Event Store SQLite WAL: {}", e);
                 });
+                info!("SQLite WAL truncation finished");
             }
         }
     }
@@ -152,10 +170,12 @@ impl SqlEventStore {
     /// grows too big.
     #[instrument(level = "debug", skip_all, err)]
     pub async fn force_wal_truncation(&self) -> Result<(), SuiError> {
-        self.pool
+        let res = self
+            .pool
             .execute("PRAGMA wal_checkpoint(TRUNCATE)")
             .await
             .map_err(convert_sqlx_err)?;
+        info!("force_wal_truncation result: {:?}", res);
         Ok(())
     }
 
@@ -277,7 +297,7 @@ impl SqlEventStore {
                 fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
             }
             if let Some(digest) = event.event.digest() {
-                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::encode(&digest));
+                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::base58_encode(&digest));
             }
             json!(fields).to_string()
         }
@@ -336,9 +356,10 @@ impl From<SqliteRow> for StoredEvent {
             .expect("Error converting stored recipient address to Owner");
 
         StoredEvent {
-            id: (seq_num, event_num).into(),
+            id: (tx_digest.unwrap(), event_num).into(),
             timestamp: timestamp as u64,
-            tx_digest,
+            seq_num,
+            tx_digest: tx_digest.unwrap(),
             event_type: SharedStr::from(Event::name_from_ordinal(event_type as usize)),
             package_id,
             module_name: module_name.map(|s| s.into()),
@@ -360,6 +381,7 @@ const MAX_INSERT_BATCH: usize = 1000;
 impl EventStore for SqlEventStore {
     #[instrument(level = "debug", skip_all, err)]
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
+        let _guard = self.query_lock.read().await;
         let mut rows_affected = 0;
 
         if events.is_empty() {
@@ -375,7 +397,7 @@ impl EventStore for SqlEventStore {
                 b.push_bind(event.timestamp as i64)
                     .push_bind(event.seq_num as i64)
                     .push_bind(event.event_num as i64)
-                    .push_bind(event.tx_digest.map(|txd| txd.to_bytes()))
+                    .push_bind(event.tx_digest.into_inner().to_vec())
                     .push_bind(event_type as u16)
                     .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
                     .push_bind(event.event.module_name())
@@ -408,15 +430,18 @@ impl EventStore for SqlEventStore {
     #[instrument(level = "debug", skip_all, err)]
     async fn all_events(
         &self,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(limit as i64)
             .map(StoredEvent::from)
             .fetch_all(&self.pool)
@@ -429,16 +454,19 @@ impl EventStore for SqlEventStore {
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("tx_digest", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
-            .bind(digest.to_bytes())
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
+            .bind(digest.into_inner().to_vec())
             .bind(limit as i64)
             .map(StoredEvent::from)
             .fetch_all(&self.pool)
@@ -451,15 +479,18 @@ impl EventStore for SqlEventStore {
     async fn events_by_type(
         &self,
         event_type: EventType,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("event_type", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(event_type as u16)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -474,10 +505,12 @@ impl EventStore for SqlEventStore {
         &self,
         start_time: u64,
         end_time: u64,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(
             vec![
                 ("timestamp", Comparator::MoreThanOrEq),
@@ -486,8 +519,9 @@ impl EventStore for SqlEventStore {
             descending,
         );
         let rows = sqlx::query(&query)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(start_time as i64)
             .bind(end_time as i64)
             .bind(limit as i64)
@@ -502,10 +536,12 @@ impl EventStore for SqlEventStore {
     async fn events_by_module_id(
         &self,
         module: &ModuleId,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(
             vec![
                 ("package_id", Comparator::Equal),
@@ -515,8 +551,9 @@ impl EventStore for SqlEventStore {
         );
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(module.address().to_vec())
             .bind(module.name().to_string())
             .bind(limit as i64)
@@ -531,16 +568,19 @@ impl EventStore for SqlEventStore {
     async fn events_by_move_event_struct_name(
         &self,
         move_event_struct_name: &str,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("move_event_name", Comparator::Equal)], descending);
         // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(move_event_struct_name)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -554,16 +594,19 @@ impl EventStore for SqlEventStore {
     async fn events_by_sender(
         &self,
         sender: &SuiAddress,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("sender", Comparator::Equal)], descending);
         let sender_vec = sender.to_vec();
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(sender_vec)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -577,10 +620,12 @@ impl EventStore for SqlEventStore {
     async fn events_by_recipient(
         &self,
         recipient: &Owner,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("recipient", Comparator::Equal)], descending);
         let recipient_str =
             serde_json::to_string(recipient).map_err(|e| SuiError::OwnerFailedToSerialize {
@@ -588,8 +633,9 @@ impl EventStore for SqlEventStore {
             })?;
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(recipient_str)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -603,16 +649,19 @@ impl EventStore for SqlEventStore {
     async fn events_by_object(
         &self,
         object: &ObjectID,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("object_id", Comparator::Equal)], descending);
         let object_vec = object.to_vec();
         let rows = sqlx::query(&query)
             .persistent(true)
-            .bind(cursor.tx_seq)
-            .bind(cursor.event_seq)
+            .bind(tx_seq)
+            .bind(tx_seq)
+            .bind(event_seq)
             .bind(object_vec)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -628,13 +677,14 @@ fn convert_sqlx_err(err: sqlx::Error) -> SuiError {
 }
 
 fn get_event_query(causes: Vec<(&str, Comparator)>, descending: bool) -> String {
-    let (seq_cmp, order) = if descending {
-        (Comparator::LessThanOrEq, "DESC")
+    let (seq_num_cmp, event_num_cmp, order) = if descending {
+        (Comparator::LessThan, Comparator::LessThanOrEq, "DESC")
     } else {
-        (Comparator::MoreThanOrEq, "ASC")
+        (Comparator::MoreThan, Comparator::MoreThanOrEq, "ASC")
     };
-    let mut query =
-        format!("SELECT * FROM events WHERE seq_num {seq_cmp} ? AND event_num {seq_cmp} ?");
+    let mut query = format!(
+        "SELECT * FROM events WHERE (seq_num {seq_num_cmp} ? OR (seq_num = ? AND event_num {event_num_cmp} ?))"
+    );
     if !causes.is_empty() {
         query.push_str(" AND ");
     }
@@ -654,6 +704,7 @@ enum Comparator {
     Equal,
     LessThanOrEq,
     MoreThanOrEq,
+    MoreThan,
     LessThan,
 }
 
@@ -664,6 +715,7 @@ impl Display for Comparator {
             Comparator::LessThanOrEq => "<=",
             Comparator::MoreThanOrEq => ">=",
             Comparator::LessThan => "<",
+            Comparator::MoreThan => ">",
         };
         write!(f, "{s}")
     }
@@ -783,7 +835,7 @@ mod tests {
 
         // Query for records in time range, end should be exclusive - should get 8
         let queried_events = db
-            .event_iterator(1_000_000, 1_008_000, (0, 0).into(), 20, false)
+            .event_iterator(1_000_000, 1_008_000, 0, 0, 20, false)
             .await?;
         assert_eq!(queried_events.len(), 8);
         for i in 0..8 {
@@ -791,6 +843,46 @@ mod tests {
             test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i]);
         }
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_eventstore_cursor_read() -> Result<(), SuiError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
+        db.initialize().await?;
+
+        // Insert some records
+        info!("Inserting records!");
+        let to_insert = (1..11u64)
+            .into_iter()
+            .flat_map(|seq_num| {
+                (0..10u64).into_iter().map(move |event_num| {
+                    test_utils::new_test_newobj_event(
+                        1_000_000,
+                        TransactionDigest::random(),
+                        seq_num,
+                        event_num, // event_num
+                        None,
+                        None,
+                        None,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(db.add_events(&to_insert).await?, 100);
+        info!("Done inserting");
+
+        assert_eq!(db.total_event_count().await?, 100);
+
+        let queried_events = db.all_events(1, 5, 100, false).await?;
+        assert_eq!(queried_events.len(), 95);
+
+        let queried_events = db.all_events(5, 4, 100, true).await?;
+        assert_eq!(queried_events.len(), 45);
         Ok(())
     }
 
@@ -867,7 +959,7 @@ mod tests {
 
         // Query for transfer event
         let mut events = db
-            .events_by_transaction(target_event.tx_digest.unwrap(), (0, 0).into(), 10, false)
+            .events_by_transaction(target_event.tx_digest, 0, 0, 10, false)
             .await?;
         assert_eq!(events.len(), 1); // Should be no more events, just that one
         let transfer_event = events.pop().unwrap();
@@ -953,7 +1045,7 @@ mod tests {
         info!("Done inserting");
 
         let queried_events = db
-            .events_by_type(EventType::TransferObject, (3, 0).into(), 2, false)
+            .events_by_type(EventType::TransferObject, 3, 0, 2, false)
             .await?;
         assert_eq!(queried_events.len(), 2);
 
@@ -963,7 +1055,7 @@ mod tests {
 
         // Query again with limit of 1, it should return only the last transfer event
         let queried_events = db
-            .events_by_type(EventType::TransferObject, (3, 0).into(), 1, false)
+            .events_by_type(EventType::TransferObject, 3, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[2]);
@@ -971,13 +1063,13 @@ mod tests {
 
         // Query with wrong time range, return 0 events
         let queried_events = db
-            .events_by_type(EventType::TransferObject, (6, 0).into(), 1, false)
+            .events_by_type(EventType::TransferObject, 6, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 0);
 
         // Query Publish Event
         let queried_events = db
-            .events_by_type(EventType::Publish, (2, 0).into(), 1, false)
+            .events_by_type(EventType::Publish, 2, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[1]);
@@ -985,7 +1077,7 @@ mod tests {
 
         // Query NewObject Event
         let queried_events = db
-            .events_by_type(EventType::NewObject, (0, 0).into(), 1, false)
+            .events_by_type(EventType::NewObject, 0, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[0]);
@@ -993,7 +1085,7 @@ mod tests {
 
         // Query DeleteObject Event
         let queried_events = db
-            .events_by_type(EventType::DeleteObject, (3, 0).into(), 1, false)
+            .events_by_type(EventType::DeleteObject, 3, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[3]);
@@ -1001,7 +1093,7 @@ mod tests {
 
         // Query Move Event
         let queried_events = db
-            .events_by_type(EventType::MoveEvent, (4, 0).into(), 1, false)
+            .events_by_type(EventType::MoveEvent, 4, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
@@ -1009,7 +1101,7 @@ mod tests {
 
         // Query Balance Change Event
         let queried_events = db
-            .events_by_type(EventType::CoinBalanceChange, (6, 0).into(), 1, false)
+            .events_by_type(EventType::CoinBalanceChange, 6, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);
@@ -1099,7 +1191,7 @@ mod tests {
 
         // Query for the Move event and validate basic fields
         let events = db
-            .events_by_transaction(to_insert[5].tx_digest.unwrap(), (0, 0).into(), 10, false)
+            .events_by_transaction(to_insert[5].tx_digest, 0, 0, 10, false)
             .await?;
         let move_event = &events[0];
         assert_eq!(events.len(), 1); // Should be no more events, just that one
@@ -1112,9 +1204,7 @@ mod tests {
             AccountAddress::from(ObjectID::from_hex_literal("0x3").unwrap()),
             Identifier::from_str("test_module").unwrap(),
         );
-        let queried_events = db
-            .events_by_module_id(&mod_id, (0, 0).into(), 3, false)
-            .await?;
+        let queried_events = db.events_by_module_id(&mod_id, 0, 0, 3, false).await?;
         assert_eq!(queried_events.len(), 2);
 
         // results are sorted in DESC order
@@ -1172,7 +1262,8 @@ mod tests {
         let events = db
             .events_by_move_event_struct_name(
                 "0x2::SUI::test_foo<address, vector<u8>>",
-                (0, 0).into(),
+                0,
+                0,
                 10,
                 false,
             )
@@ -1285,9 +1376,7 @@ mod tests {
         info!("Done inserting");
 
         // Query by sender
-        let events = db
-            .events_by_sender(&sender, (0, 0).into(), 10, false)
-            .await?;
+        let events = db.events_by_sender(&sender, 0, 0, 10, false).await?;
         assert_eq!(events.len(), 5);
 
         test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
@@ -1297,9 +1386,7 @@ mod tests {
         test_queried_event_vs_test_envelope(&events[4], &to_insert[7]);
 
         // Query by recipient
-        let events = db
-            .events_by_recipient(&recipient, (0, 0).into(), 10, false)
-            .await?;
+        let events = db.events_by_recipient(&recipient, 0, 0, 10, false).await?;
         assert_eq!(events.len(), 3);
 
         test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
@@ -1307,9 +1394,7 @@ mod tests {
         test_queried_event_vs_test_envelope(&events[2], &to_insert[3]);
 
         // Query by object
-        let events = db
-            .events_by_object(&object_id, (0, 0).into(), 10, false)
-            .await?;
+        let events = db.events_by_object(&object_id, 0, 0, 10, false).await?;
         assert_eq!(events.len(), 4);
 
         test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
@@ -1343,7 +1428,7 @@ mod tests {
         db.add_events(&to_insert).await?;
 
         let events = db
-            .events_by_transaction(to_insert[0].tx_digest.unwrap(), (0, 0).into(), 10, false)
+            .events_by_transaction(to_insert[0].tx_digest, 0, 0, 10, false)
             .await?;
         assert_eq!(events.len(), 1);
         info!("events[0]: {:?}", events[0]);
@@ -1453,23 +1538,20 @@ mod tests {
     fn event_query_test() {
         let query = get_event_query(vec![], false);
         assert_eq!(
-            "SELECT * FROM events WHERE seq_num >= ? AND event_num >= ? ORDER BY seq_num ASC, event_num ASC LIMIT ?",
+            "SELECT * FROM events WHERE (seq_num > ? OR (seq_num = ? AND event_num >= ?)) ORDER BY seq_num ASC, event_num ASC LIMIT ?",
             query
         );
         let query = get_event_query(vec![], true);
         assert_eq!(
-            "SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? ORDER BY seq_num DESC, event_num DESC LIMIT ?",
+            "SELECT * FROM events WHERE (seq_num < ? OR (seq_num = ? AND event_num <= ?)) ORDER BY seq_num DESC, event_num DESC LIMIT ?",
             query
         );
 
         let query = get_event_query(vec![("event_type", Comparator::Equal)], false);
-        assert_eq!("SELECT * FROM events WHERE seq_num >= ? AND event_num >= ? AND event_type = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num > ? OR (seq_num = ? AND event_num >= ?)) AND event_type = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
 
         let query = get_event_query(vec![("event_type", Comparator::Equal)], true);
-        assert_eq!("SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? AND event_type = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
-
-        let query = get_event_query(vec![("event_type", Comparator::Equal)], true);
-        assert_eq!("SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? AND event_type = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num < ? OR (seq_num = ? AND event_num <= ?)) AND event_type = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
 
         let query = get_event_query(
             vec![
@@ -1478,7 +1560,7 @@ mod tests {
             ],
             false,
         );
-        assert_eq!("SELECT * FROM events WHERE seq_num >= ? AND event_num >= ? AND package_id = ? AND module_name = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num > ? OR (seq_num = ? AND event_num >= ?)) AND package_id = ? AND module_name = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
 
         let query = get_event_query(
             vec![
@@ -1487,6 +1569,6 @@ mod tests {
             ],
             true,
         );
-        assert_eq!("SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? AND package_id = ? AND module_name = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num < ? OR (seq_num = ? AND event_num <= ?)) AND package_id = ? AND module_name = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
     }
 }

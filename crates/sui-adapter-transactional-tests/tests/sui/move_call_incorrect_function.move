@@ -12,7 +12,7 @@ module Test::M {
 
 }
 
-// Instead of calling on the Test package, we are calling a non-existant package
+// Instead of calling on the Test package, we are calling a non-existent package
 //# run 0x242::M::create
 
 // Calling a non-existent function.

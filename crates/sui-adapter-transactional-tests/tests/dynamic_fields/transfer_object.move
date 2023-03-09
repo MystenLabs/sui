@@ -23,8 +23,8 @@ struct Counter has key, store {
     count: u64,
 }
 
-fun new(id: UID): Counter {
-    Counter { id, count: 0 }
+fun new(ctx: &mut TxContext): Counter {
+    Counter { id: object::new(ctx), count: 0 }
 }
 
 fun count(counter: &Counter): u64 {
@@ -48,7 +48,7 @@ entry fun create(ctx: &mut TxContext) {
 }
 
 entry fun add_counter(obj: &mut Obj, ctx: &mut TxContext) {
-    add(&mut obj.id, 0, new(object::new(ctx)))
+    add(&mut obj.id, 0, new(ctx))
 }
 
 entry fun obj_bump(obj: &mut Obj) {
@@ -70,16 +70,16 @@ entry fun transfer(o1: &mut Obj, o2: &mut Obj) {
 
 //# run a::m::create --sender A
 
-//# run a::m::add_counter --sender A --args object(106)
+//# run a::m::add_counter --sender A --args object(107)
 
-//# run a::m::obj_bump --sender A --args object(106)
+//# run a::m::obj_bump --sender A --args object(107)
 
-//# run a::m::assert_count --sender A --args object(106) 1
+//# run a::m::assert_count --sender A --args object(107) 1
 
-//# run a::m::transfer --sender A --args object(106) object(108)
+//# run a::m::transfer --sender A --args object(107) object(109)
 
-//# run a::m::obj_bump --sender A --args object(108)
+//# run a::m::obj_bump --sender A --args object(109)
 
-//# run a::m::assert_count --sender A --args object(108) 2
+//# run a::m::assert_count --sender A --args object(109) 2
 
-//# run a::m::obj_bump --sender A --args object(106)
+//# run a::m::obj_bump --sender A --args object(107)

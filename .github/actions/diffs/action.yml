@@ -7,6 +7,10 @@ outputs:
   isRust:
     description: True when changes happened to the Rust code
     value: "${{ steps.diff.outputs.isRust }}"
+  isMove:
+    description: True when changes happened to the Move code
+    value: "${{ steps.diff.outputs.isMove }}"
+
 runs:
   using: composite
   steps:
@@ -27,3 +31,8 @@ runs:
           - 'doc/**'
           - '*.md'
           - '.github/workflows/docs.yml'
+        isMove:
+          - 'crates/sui-framework/sources/**'
+          - 'crates/sui/src/sui_move/**'
+          - 'Cargo.toml'
+          - 'Cargo.lock'

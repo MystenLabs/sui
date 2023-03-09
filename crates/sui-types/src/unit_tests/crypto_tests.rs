@@ -6,6 +6,23 @@ use proptest::collection;
 use proptest::prelude::*;
 
 #[test]
+fn temp_test() {
+    let info = AuthorityQuorumSignInfo::<true> {
+        epoch: 0,
+        signature: Default::default(),
+        signers_map: RoaringBitmap::new(),
+    };
+    let ser = serde_json::to_string(&info).unwrap();
+    println!("{}", ser);
+    let schema = schemars::schema_for!(AuthorityQuorumSignInfo<true>);
+    println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+
+    let bytes = bcs::to_bytes(&info).unwrap();
+    let info2: AuthorityQuorumSignInfo<true> = bcs::from_bytes(&bytes).unwrap();
+    assert_eq!(info.signature.sig, info2.signature.sig);
+}
+
+#[test]
 fn public_key_equality() {
     let ed_kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
     let ed_kp2: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
@@ -32,6 +49,23 @@ fn public_key_equality() {
     // different key
     assert_ne!(ed_pk1, ed_pk2);
     assert_ne!(k1_pk1, k1_pk2);
+}
+
+#[test]
+fn test_proof_of_possession() {
+    let address =
+        SuiAddress::from_str("0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357")
+            .unwrap();
+    let kp: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let pop = generate_proof_of_possession(&kp, address);
+    let mut msg = vec![];
+    msg.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
+    msg.extend_from_slice(kp.public().as_bytes());
+    msg.extend_from_slice(address.as_ref());
+    println!("Address: {:?}", address);
+    println!("Pubkey: {:?}", Hex::encode(kp.public().as_bytes()));
+    println!("Proof of possession: {:?}", Hex::encode(&pop));
+    assert!(kp.public().verify(&msg, &pop).is_ok());
 }
 
 proptest! {
@@ -69,8 +103,8 @@ proptest! {
     fn test_deserialize_keypair(
         bytes in collection::vec(any::<u8>(), 0..1024)
     ){
-        let _skp: Result<SuiKeyPair, _> = bincode::deserialize(&bytes);
-        let _pk: Result<PublicKey, _> = bincode::deserialize(&bytes);
+        let _skp: Result<SuiKeyPair, _> = bcs::from_bytes(&bytes);
+        let _pk: Result<PublicKey, _> = bcs::from_bytes(&bytes);
     }
 
 

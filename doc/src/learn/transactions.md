@@ -63,6 +63,44 @@ This transaction type combines several coin objects into one. It includes the fo
 
 Inputs: A list of unique object references pointing to mutable objects owned by the sender. The objects must all have the same type: `sui::coin::Coin<T>` with arbitrary `T`--that is, any fungible token. The list must contain at least two objects. All objects except the first one will be destroyed, and the new value of the first object will be its old value plus the sum of the value of all destroyed objects. The gas input object from above cannot also appear as an object input.
 
+## Transactions flow - example
+
+Here's an example showing how objects and transactions are connected to each other in Sui.
+
+In the following example we have two objects:
+- Object A with 5 SUI coins that belongs to Tom
+- Object B with 2 SUI coins that belongs to John
+
+Tom decides to send 1 SUI coin to Alice. In this case, Object A is the input to this transaction and 1 SUI coin is debited from this object. The output of the transaction is two objects: 
+- Object A with 4 SUI coins that still belongs to Tom
+- new created Object C with 1 SUI coin that belongs now to Alice
+
+At the same time, John decides to send 2 SUI coins to Anna. Because [the relationship between objects and transactions is written in a directed acyclic graph (DAG)](objects.md#the-transaction-object-dag-relating-objects-and-transactions), and both transactions interact with different objects, this transaction executes in parallel with the transaction that sends coins from Tom to Alice.
+This transaction changes only the owner of Object B from John to Anna.
+
+After receiving 2 SUI coins, Anna sent it immediately to Tom. Now Tom has 6 SUI coins (4 from Object A and 2 from Object B).
+
+Finally, Tom sends all of his SUI coins to John. For this transaction, the input is actually two objects (Object A and Object B). Object B is destroyed, and its value is added to Object A. As a result, the transaction's output is only Object A with a value of 6 SUI.
+
+```mermaid
+flowchart LR
+    id1(Object A\nfa:fa-coins 5 SUI\n fa:fa-person Tom):::object-a
+    id2(Object C\nfa:fa-coins 1 SUI\n fa:fa-person Alice)
+    id3(Object A\nfa:fa-coins 4 SUI\n fa:fa-person Tom):::object-a
+    id4(Object B\nfa:fa-coins 2 SUI\n fa:fa-person John):::object-b
+    id5(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Anna):::object-b
+    id6(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Tom):::object-b
+    id7(Object A\nfa:fa-coins 6 SUI\n fa:fa-person John):::object-a
+    id1-->|tx-1|id2
+    id1-->|tx-1|id3
+    id4-->|tx-2|id5
+    id5-->|tx-3|id6
+    id3-->|tx-4|id7
+    id6-->|tx-4|id7
+    classDef object-a fill:#f225
+    classDef object-b fill:#ff43
+```
+
 ## Further reading
 
 * See the [Move tutorial](move/index.md) to develop Sui smart contracts.

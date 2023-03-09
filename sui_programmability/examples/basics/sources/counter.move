@@ -41,7 +41,7 @@ module basics::counter {
     }
 
     /// Set value (only runnable by the Counter owner)
-    public entry fun set_value(counter: &mut Counter, value: u64, ctx: &mut TxContext) {
+    public entry fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
         assert!(counter.owner == tx_context::sender(ctx), 0);
         counter.value = value;
     }

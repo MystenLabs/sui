@@ -163,7 +163,7 @@ Create a new devnet_nft
 Update the <code>description</code> of <code>nft</code> to <code>new_description</code>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_update_description">update_description</a>(nft: &<b>mut</b> <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, new_description: <a href="">vector</a>&lt;u8&gt;, _: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_update_description">update_description</a>(nft: &<b>mut</b> <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, new_description: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -175,7 +175,6 @@ Update the <code>description</code> of <code>nft</code> to <code>new_description
 <pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_update_description">update_description</a>(
     nft: &<b>mut</b> <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">DevNetNFT</a>,
     new_description: <a href="">vector</a>&lt;u8&gt;,
-    _: &<b>mut</b> TxContext
 ) {
     nft.description = <a href="_utf8">string::utf8</a>(new_description)
 }
@@ -192,7 +191,7 @@ Update the <code>description</code> of <code>nft</code> to <code>new_description
 Permanently delete <code>nft</code>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_burn">burn</a>(nft: <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>, _: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_burn">burn</a>(nft: <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">devnet_nft::DevNetNFT</a>)
 </code></pre>
 
 
@@ -201,7 +200,7 @@ Permanently delete <code>nft</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_burn">burn</a>(nft: <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">DevNetNFT</a>, _: &<b>mut</b> TxContext) {
+<pre><code><b>public</b> entry <b>fun</b> <a href="devnet_nft.md#0x2_devnet_nft_burn">burn</a>(nft: <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">DevNetNFT</a>) {
     <b>let</b> <a href="devnet_nft.md#0x2_devnet_nft_DevNetNFT">DevNetNFT</a> { id, name: _, description: _, <a href="url.md#0x2_url">url</a>: _ } = nft;
     <a href="object.md#0x2_object_delete">object::delete</a>(id)
 }

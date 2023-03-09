@@ -3,15 +3,16 @@
 
 import {
   Ed25519Keypair,
-  getCertifiedTransaction,
-  getTransactionEffects,
   JsonRpcProvider,
-  LocalTxnDataSerializer,
-  Network,
   RawSigner,
-  SignableTransaction,
+  Connection,
+  devnetConnection,
 } from "@mysten/sui.js";
-import { WalletAdapter } from "@mysten/wallet-adapter-base";
+import {
+  WalletAdapter,
+  WalletAdapterEvents,
+} from "@mysten/wallet-adapter-base";
+import { ReadonlyWalletAccount } from "@mysten/wallet-standard";
 
 export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   name = "Unsafe Burner Wallet";
@@ -24,37 +25,47 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   #provider: JsonRpcProvider;
   #keypair: Ed25519Keypair;
   #signer: RawSigner;
+  #account: ReadonlyWalletAccount;
 
-  constructor(network: string | Network = Network.LOCAL) {
+  constructor(network: Connection = devnetConnection) {
     this.#keypair = new Ed25519Keypair();
     this.#provider = new JsonRpcProvider(network);
-    this.#signer = new RawSigner(
-      this.#keypair,
-      this.#provider,
-      new LocalTxnDataSerializer(this.#provider)
-    );
+    this.#account = new ReadonlyWalletAccount({
+      address: this.#keypair.getPublicKey().toSuiAddress(),
+      chains: ["sui:unknown"],
+      features: ["sui:signAndExecuteTransaction", "sui:signTransaction"],
+      publicKey: this.#keypair.getPublicKey().toBytes(),
+    });
+    this.#signer = new RawSigner(this.#keypair, this.#provider);
     this.connecting = false;
     this.connected = false;
 
     console.warn(
-      "Your application is presently configured to use the `UnsafeBurnerWalletAdapter`. Ensure that this adapter is removed for production."
+      "Your application is currently using the `UnsafeBurnerWalletAdapter`. Make sure that this adapter is not included in production."
     );
   }
 
   async getAccounts() {
-    return [this.#keypair.getPublicKey().toSuiAddress()];
+    return [this.#account];
   }
 
-  async signAndExecuteTransaction(transaction: SignableTransaction) {
-    const response = await this.#signer.signAndExecuteTransaction(transaction);
+  signMessage: WalletAdapter["signMessage"] = async (messageInput) => {
+    return this.#signer.signMessage(messageInput.message);
+  };
 
-    return {
-      certificate: getCertifiedTransaction(response)!,
-      effects: getTransactionEffects(response)!,
-      timestamp_ms: null,
-      parsed_data: null,
+  signTransaction: WalletAdapter["signTransaction"] = async (
+    transactionInput
+  ) => {
+    return this.#signer.signTransaction(transactionInput.transaction);
+  };
+
+  signAndExecuteTransaction: WalletAdapter["signAndExecuteTransaction"] =
+    async (transactionInput) => {
+      return await this.#signer.signAndExecuteTransaction(
+        transactionInput.transaction,
+        transactionInput.options?.requestType
+      );
     };
-  }
 
   async connect() {
     this.connecting = true;
@@ -74,4 +85,11 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     this.connecting = false;
     this.connected = false;
   }
+
+  on: <E extends keyof WalletAdapterEvents>(
+    event: E,
+    callback: WalletAdapterEvents[E]
+  ) => () => void = () => {
+    return () => {};
+  };
 }

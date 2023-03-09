@@ -1,23 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type GetObjectDataResponse,
-    normalizeSuiAddress,
-} from '@mysten/sui.js';
+import { useRpcClient } from '@mysten/core';
+import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-
-import { useRpc } from '_hooks';
 
 export function useGetObject(
     objectId: string
-): UseQueryResult<GetObjectDataResponse, unknown> {
-    const rpc = useRpc();
+): UseQueryResult<SuiObjectResponse, unknown> {
+    const rpc = useRpcClient();
     const normalizedObjId = normalizeSuiAddress(objectId);
     const response = useQuery(
         ['object', normalizedObjId],
         async () => {
-            return rpc.getObject(normalizedObjId);
+            return rpc.getObject(normalizedObjId, {
+                showType: true,
+                showContent: true,
+                showOwner: true,
+            });
         },
         { enabled: !!objectId }
     );

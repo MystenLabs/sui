@@ -3,10 +3,14 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: network_config
 ---
 validator_configs:
-  - protocol-key-pair: VTDx4HjVmRBqdqBWg2zN+zcFE20io3CrBchGy/iV1lqZ8l72H4AyuRRjZGCYLFzG8TTvHdrnZlfyy/7B6/yNCXN0CA32/PDcuLxLDY4K9dgOu/8rTFmfVPQtYxLfwxQnYHjBzDR+u77FGYviWFE/OGuTDQLCdJqAPiMwlV69GhA=
-    worker-key-pair: fsz863qJR38mPjuvloaZBE4vbibFPgrwQXUa+OGTTNMfKnkBqELk02I7xhzhwXF9LnaOD9ct+DQa9WYVuRbwOA==
-    account-key-pair: AJTkqEkxROnmliCMvtACWebdtW+Xm5HDKWdWCYW+YZCbZeUwqtiSP4IuiO1U/Br2sTVBQpkckD5caF+BanumitE=
-    network-key-pair: KUrb+C2JL5zKk+XaKXpgLj08mCQegCCekpnR0SLAhTC+ODDLDFddhaGYhOUoOWrDb5Dh27EywDr6A1haMSoZgA==
+  - protocol-key-pair:
+      value: VTDx4HjVmRBqdqBWg2zN+zcFE20io3CrBchGy/iV1lo=
+    worker-key-pair:
+      value: AH7M/Ot6iUd/Jj47r5aGmQROL24mxT4K8EF1Gvjhk0zT
+    account-key-pair:
+      value: AGXlMKrYkj+CLojtVPwa9rE1QUKZHJA+XGhfgWp7porR
+    network-key-pair:
+      value: AClK2/gtiS+cypPl2il6YC49PJgkHoAgnpKZ0dEiwIUw
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -20,7 +24,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -42,9 +47,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -52,13 +62,26 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1BhvqNz/bRVQQKZW9IGbExEbUsV0aoa6cvOV+6/i7DhH0egUDmJKdR/fa18gULxyBc+dMABMkLDHQK/9Mmzmc8wrI6LSTVPir+sobfxmj9QGAInW0rF7eZ3Tb5DTMuVKejONQ=
-    worker-key-pair: pPBKumCrkESEmAiG/7UfSMyIlAyKCQaysBb0RA9oxIjUlkEGAVZiydeHbfhB9gYL7kzDBgkDW+FtKKCCdkKJrw==
-    account-key-pair: ACxHMS0iupHOTDgHm2HYa+f/ft9OjvxBk5+C7f/APsXUezeV+HwuWFqdYT/NOM6oMWQ2IMvai7GOMn5YNPn+FWA=
-    network-key-pair: 25MXKYkbDqXWtIZXl27gbhE44t3hp1Qi3HFWHLfWWc02Qa/dLNgUCurzqAJUBNJX3l41lsEQSc4BU7HWKBcBww==
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
+  - protocol-key-pair:
+      value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
+    worker-key-pair:
+      value: AKTwSrpgq5BEhJgIhv+1H0jMiJQMigkGsrAW9EQPaMSI
+    account-key-pair:
+      value: AHs3lfh8LlhanWE/zTjOqDFkNiDL2ouxjjJ+WDT5/hVg
+    network-key-pair:
+      value: ANuTFymJGw6l1rSGV5du4G4ROOLd4adUItxxVhy31lnN
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -72,7 +95,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -94,9 +118,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -104,13 +133,26 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+Kt3u+U2JjIjkDb3v+RxfEF+c8sdH+28rw37APWyR7bLhpXjPVEvosJMeJfJD1ZsMMNmKFs47odbPHX9QQmmS6wrbMTSwVb6BQNLbXyX7ANg/jkIivwH9ask6H/TXnaWPI=
-    worker-key-pair: 1Dh27FOw52h9QAd9IijyRq42PtJGYtmCZ2RvXYPDEXq1VgdNLiQC+WWvRST+Sy8o3vw/3KhkD6LkKgSI3cA21A==
-    account-key-pair: ANoED1MVNxaUbvcp8K7QXQLx/JQAamix308cQdCKwKu2YYJojLU7C+8u2vatwd7CUkkEgsvOGsRqjhCYXQPZRPM=
-    network-key-pair: oUiBY+hNlv3/NS7/U/zAW3EMNi45uTXGv9BrFnYfjyL3DKDUcV6AMIaYPpJDgVBG5KinqsQjwmcuxI+1bSHPXg==
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
+  - protocol-key-pair:
+      value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
+    worker-key-pair:
+      value: ANQ4duxTsOdofUAHfSIo8kauNj7SRmLZgmdkb12DwxF6
+    account-key-pair:
+      value: AGGCaIy1OwvvLtr2rcHewlJJBILLzhrEao4QmF0D2UTz
+    network-key-pair:
+      value: AKFIgWPoTZb9/zUu/1P8wFtxDDYuObk1xr/QaxZ2H48i
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -124,7 +166,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -146,9 +189,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -156,13 +204,26 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2uz/V77XIckA6StE/EZlRNgbSM1SoRSSa6hV1ZMI/88FcbJ5lK3LXQOjKy5PLzAaGsOwMwMHHYL+0K0NlGfxagFS3ZTOpep8jmH0JfvlrHyUmuyBz+hCncZlBdyNH7ydPQ=
-    worker-key-pair: EHX7HidEWjJgbesq5yxWacBkHUx/wALB90Mm8SiaEZbxwBkF+0PK7tSN8SKVyFzxOP/rMtxd+udylT/0hBBhPA==
-    account-key-pair: AEgi5sKIaNYxb+8Vr0MKLUWpdrRfjLPiCeYy4hQTtSBHkXLa5CsQhIUzlhFBEFTP1eKxJ6lBGRYzNkOjrDamlU8=
-    network-key-pair: jQ5isfeCs5cO8kQfRoNiE6Ex250niEtXCH7U4Y3Khd6oQCQy7u0KEQ5fzh2GiqaHnTSuv58CtSk5zSJ3oCPwCA==
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
+  - protocol-key-pair:
+      value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
+    worker-key-pair:
+      value: ABB1+x4nRFoyYG3rKucsVmnAZB1Mf8ACwfdDJvEomhGW
+    account-key-pair:
+      value: AJFy2uQrEISFM5YRQRBUz9XisSepQRkWMzZDo6w2ppVP
+    network-key-pair:
+      value: AI0OYrH3grOXDvJEH0aDYhOhMdudJ4hLVwh+1OGNyoXe
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -176,7 +237,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -198,9 +260,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -208,13 +275,26 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY2LKRqlcXQ8gPmO3CO3s3dl0lrqWlZovhKpzENp8u9pfBsBwUrId0LiiiqQmP5hlGIVXp7GiO2wX9ApVqo6d7/nZNYB3hOX5NaeinAfDxN4Q6VzStZNxQS3bN/CiKF3/iE=
-    worker-key-pair: UkqY1k2SrJLzldSoAqzDZp1vudV6MzAZqojam0XY2ZMLuRQO9Y+pqy4+d18HnybxccBJ0Peox1wNntUCw83jtg==
-    account-key-pair: AB86G1ccGVVMFPrc3src2g3fB3NMyEcsS5pzI+Yr6cyKJ0hDQggulPK2ZTpGNWrch+vg73OQ9lWfRXu9uN+Qo88=
-    network-key-pair: UqrQzLuBAdMMbnxVAxgiaFTXz6PaV70e0XTyeF6Fu8oK9Zu9eLjNEPIBuXXKvlrVfhuwWWfvZo8RITUz+oGi4A==
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
+  - protocol-key-pair:
+      value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
+    worker-key-pair:
+      value: AFJKmNZNkqyS85XUqAKsw2adb7nVejMwGaqI2ptF2NmT
+    account-key-pair:
+      value: ACdIQ0IILpTytmU6RjVq3Ifr4O9zkPZVn0V7vbjfkKPP
+    network-key-pair:
+      value: AFKq0My7gQHTDG58VQMYImhU18+j2le9HtF08nhehbvK
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -228,7 +308,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -250,9 +331,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -260,13 +346,26 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnWEMb3Jb7ZvUxW7p0L15A9+Ny8jfF4iDYHfNhg7BiZTXnhH7PRqjjRKWiGtteU4i5UBGlk8bfQSL3/irX6AKKlrCeq9hDdpJepQFWPVhieWLV0wwgqu0wIbxNDn2/0eHJU=
-    worker-key-pair: Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA7wMp6899Qoe0RPBXQsG+CDt54MPp/xImMAyKkV3ZKPbQ==
-    account-key-pair: AHH6sQEDMUJH0Spm5nDLrKbFAUcBHYL/VIORf2ervCbbpvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=
-    network-key-pair: tPu3gzoWoFbHbnuaUp1whWKFV7mtDVfOtTHDWWR2ZoXf5b5cvKkChqZePWeh13cAvg+1CyvrtPB1cQOBhwx4vw==
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
+  - protocol-key-pair:
+      value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
+    worker-key-pair:
+      value: AB5aMuKZ3/KVhBxj/uDhbF8+emy3SCYZA9jvjnSjKggO
+    account-key-pair:
+      value: AKbzEnI6DEfw2jdDOSDsUtlaRgufTepL+oA5ut7ny0Oc
+    network-key-pair:
+      value: ALT7t4M6FqBWx257mlKdcIVihVe5rQ1XzrUxw1lkdmaF
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -280,7 +379,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -302,9 +402,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -312,13 +417,26 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjuVqZ6UqSbldl5MDBHXjF3VHT99e6CgZTuSXpFCRSfw+GMYVuQEwO09WVY8511moRYTuFgfR51108NKCT8re+ppKiuqitxb4BlONYsg4CavliJXCWosawcKZDcea7D6Fe0=
-    worker-key-pair: 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi993DP7RJ8jr9I9OXm/Mf3nxvRozBZQnRUoPY8tvhMCGA==
-    account-key-pair: AKHC3Gr1i6u+zAK1Yj1vys0hB83qha4jRCfzoHqLAo6FQ5EkvCcy5cw1JKStwSs0v/QByW0I8JXCqdnagoupCMg=
-    network-key-pair: +EEIX4hOQB79xqDr8Cp0UGNNC4sEE849/ORTGY1iwxe4WYJPZ9nNye8f+ObULC/wnR4X87tIAH4wvXsZ8OKWwQ==
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
+  - protocol-key-pair:
+      value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
+    worker-key-pair:
+      value: AOUVpWBdto0vYu+sy5fIz9g9w/BguYbfiD9XVlARmcYv
+    account-key-pair:
+      value: AEORJLwnMuXMNSSkrcErNL/0AcltCPCVwqnZ2oKLqQjI
+    network-key-pair:
+      value: APhBCF+ITkAe/cag6/AqdFBjTQuLBBPOPfzkUxmNYsMX
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -332,7 +450,8 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 100ms
+        max_header_delay: 2000ms
+        min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -354,9 +473,14 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_certificate_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -364,14 +488,23 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 2
-      objects-pruning-period-secs: 43200
-      objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
+      num-epochs-to-retain: 1
+      max-checkpoints-in-batch: 200
+      max-transactions-in-batch: 1000
+      use-range-deletion: true
+    end-of-epoch-broadcast-channel-capacity: 128
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 200
+      local-execution-timeout-sec: 10
+    db-checkpoint-config:
+      perform-db-checkpoints-at-epoch-end: false
 account_keys:
-  - 10wECHkYvXqL5/CY6WhjbfFPotZb5tjEbpmumqbRxul6/9LaD95rkXfiBEoGJR8u81q9fCiP+O7nXOsprVTPUQ==
-  - ZTWBfKEmFOyYM9oBU9dNfREBuAU5fm2OBhg/vPtI00ee91o4Td1upRqxdMC/5khQi58pBG83ZvbMUnI2shFOvw==
-  - +0LdRe35y6TgXPz6qcArpf0T8/Hh7zkjJL0yT19jbjdWZVO3wT0uCs8sHK38p5+DiwNKSfKm/iqb6R7vmIsYNg==
-  - cHifntmjxd4QLaC71WRMoOeCpvicyDJMbTKRuo2v3R9UjI8DXP6RwO6c5B70OPjZEdiV0XB+RVfcjX6/JKfZeg==
-  - mTzV/JVz4RdheOnQVFF3xuCPFF4AYAPyShHQCUizJX9pHbCeXB5wKAz9LCwtuoC4PCML0v4vko2/c16HlmPrbQ==
+  - 10wECHkYvXqL5/CY6WhjbfFPotZb5tjEbpmumqbRxuk=
+  - ZTWBfKEmFOyYM9oBU9dNfREBuAU5fm2OBhg/vPtI00c=
+  - +0LdRe35y6TgXPz6qcArpf0T8/Hh7zkjJL0yT19jbjc=
+  - cHifntmjxd4QLaC71WRMoOeCpvicyDJMbTKRuo2v3R8=
+  - mTzV/JVz4RdheOnQVFF3xuCPFF4AYAPyShHQCUizJX8=
 genesis: "[fake genesis]"
 

@@ -3,7 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::trace;
 
@@ -38,7 +37,7 @@ struct IpResponse {
 }
 
 pub async fn send_telemetry_event(is_validator: bool) {
-    let git_rev = get_git_rev();
+    let git_rev = env!("CARGO_PKG_VERSION").to_string();
     let ip_address = get_ip().await;
     let since_the_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -69,18 +68,6 @@ pub async fn send_telemetry_event(is_validator: bool) {
     };
 
     send_telemetry_event_impl(telemetry_payload).await
-}
-
-fn get_git_rev() -> String {
-    let output_res = Command::new("git")
-        .args(["describe", "--always", "--dirty"])
-        .output();
-    if let Ok(output) = output_res {
-        if output.status.success() {
-            return String::from_utf8(output.stdout).unwrap().trim().to_owned();
-        }
-    }
-    "GIT_CMD_ERROR".into()
 }
 
 async fn get_ip() -> String {

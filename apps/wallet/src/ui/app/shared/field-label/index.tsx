@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ReactNode } from 'react';
+import { Text } from '_app/shared/text';
 
-import st from './FieldLabel.module.scss';
+import type { ReactNode } from 'react';
 
 export type FieldLabelProps = {
     txt: string;
@@ -12,8 +12,13 @@ export type FieldLabelProps = {
 
 export default function FieldLabel({ txt, children }: FieldLabelProps) {
     return (
-        <label className={st.container}>
-            <span className={st.label}>{txt}</span>
+        <label className="flex flex-col flex-nowrap gap-2.5 mt-7.5 first:mt-0">
+            <div className="ml-2">
+                <Text variant="body" color="steel-darker" weight="semibold">
+                    {txt}
+                </Text>
+            </div>
+
             {children}
         </label>
     );

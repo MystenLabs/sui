@@ -40,7 +40,7 @@ pub fn derive_key_pair_from_path(
             let derived = derive_ed25519_private_key(seed, &indexes);
             let sk = Ed25519PrivateKey::from_bytes(&derived)
                 .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-            let kp = Ed25519KeyPair::from(sk);
+            let kp: Ed25519KeyPair = sk.into();
             Ok((kp.public().into(), SuiKeyPair::Ed25519(kp)))
         }
         SignatureScheme::Secp256k1 => {
@@ -61,9 +61,11 @@ pub fn derive_key_pair_from_path(
             );
             Ok((kp.public().into(), SuiKeyPair::Secp256r1(kp)))
         }
-        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS12381 key derivation is currently not supported".to_string(),
-        }),
+        SignatureScheme::BLS12381 | SignatureScheme::MultiSig => {
+            Err(SuiError::UnsupportedFeatureError {
+                error: format!("key derivation not supported {:?}", key_scheme),
+            })
+        }
     }
 }
 
@@ -156,9 +158,11 @@ pub fn validate_path(
                 .map_err(|_| SuiError::SignatureKeyGenError("Cannot parse path".to_string()))?),
             }
         }
-        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS12381 key derivation is currently not supported".to_string(),
-        }),
+        SignatureScheme::BLS12381 | SignatureScheme::MultiSig => {
+            Err(SuiError::UnsupportedFeatureError {
+                error: format!("key derivation not supported {:?}", key_scheme),
+            })
+        }
     }
 }
 

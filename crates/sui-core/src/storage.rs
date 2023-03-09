@@ -4,17 +4,18 @@
 use std::sync::Arc;
 
 use sui_types::base_types::TransactionDigest;
-use sui_types::base_types::TransactionEffectsDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::message_envelope::Message;
-use sui_types::messages::TransactionEffects;
-use sui_types::messages::VerifiedCertificate;
-use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::digests::{TransactionEffectsDigest, TransactionEventsDigest};
+use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::EndOfEpochData;
+use sui_types::messages_checkpoint::FullCheckpointContents;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
 use typed_store::Map;
@@ -62,19 +63,32 @@ impl ReadStore for RocksDbStore {
             .get_checkpoint_by_sequence_number(sequence_number)
     }
 
-    fn get_highest_verified_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
-        self.checkpoint_store.get_highest_verified_checkpoint()
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        self.checkpoint_store
+            .get_highest_verified_checkpoint()
+            .map(|maybe_checkpoint| {
+                maybe_checkpoint
+                    .expect("storage should have been initialized with genesis checkpoint")
+            })
     }
 
-    fn get_highest_synced_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
-        self.checkpoint_store.get_highest_synced_checkpoint()
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        self.checkpoint_store
+            .get_highest_synced_checkpoint()
+            .map(|maybe_checkpoint| {
+                maybe_checkpoint
+                    .expect("storage should have been initialized with genesis checkpoint")
+            })
     }
 
-    fn get_checkpoint_contents(
+    fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointContents>, Self::Error> {
-        self.checkpoint_store.get_checkpoint_contents(digest)
+    ) -> Result<Option<FullCheckpointContents>, Self::Error> {
+        self.checkpoint_store
+            .get_checkpoint_contents(digest)?
+            .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
+            .transpose()
     }
 
     fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
@@ -84,26 +98,8 @@ impl ReadStore for RocksDbStore {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, Self::Error> {
-        if let Some(transaction) = self
-            .authority_store
-            .perpetual_tables
-            .certificates
-            .get(digest)?
-        {
-            return Ok(Some(transaction.into()));
-        }
-
-        if let Some(transaction) = self
-            .authority_store
-            .perpetual_tables
-            .synced_transactions
-            .get(digest)?
-        {
-            return Ok(Some(transaction.into()));
-        }
-
-        Ok(None)
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
+        self.authority_store.get_transaction(digest)
     }
 
     fn get_transaction_effects(
@@ -112,12 +108,23 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<TransactionEffects>, Self::Error> {
         self.authority_store.perpetual_tables.effects.get(digest)
     }
+
+    fn get_transaction_events(
+        &self,
+        digest: &TransactionEventsDigest,
+    ) -> Result<Option<TransactionEvents>, Self::Error> {
+        self.authority_store.perpetual_tables.events.get(digest)
+    }
 }
 
 impl WriteStore for RocksDbStore {
     fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
-        if let Some(next_committee) = checkpoint.next_epoch_committee() {
-            let next_committee = next_committee.iter().cloned().collect();
+        if let Some(EndOfEpochData {
+            next_epoch_committee,
+            ..
+        }) = checkpoint.end_of_epoch_data.as_ref()
+        {
+            let next_committee = next_epoch_committee.iter().cloned().collect();
             let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
                 .expect("new committee from consensus should be constructable");
             self.insert_committee(committee)?;
@@ -134,8 +141,14 @@ impl WriteStore for RocksDbStore {
             .update_highest_synced_checkpoint(checkpoint)
     }
 
-    fn insert_checkpoint_contents(&self, contents: CheckpointContents) -> Result<(), Self::Error> {
-        self.checkpoint_store.insert_checkpoint_contents(contents)
+    fn insert_checkpoint_contents(
+        &self,
+        contents: VerifiedCheckpointContents,
+    ) -> Result<(), Self::Error> {
+        self.authority_store
+            .multi_insert_transaction_and_effects(contents.iter())?;
+        self.checkpoint_store
+            .insert_checkpoint_contents(contents.into_inner().into_checkpoint_contents())
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
@@ -143,22 +156,5 @@ impl WriteStore for RocksDbStore {
             .insert_new_committee(&new_committee)
             .unwrap();
         Ok(())
-    }
-
-    fn insert_transaction(&self, transaction: VerifiedCertificate) -> Result<(), Self::Error> {
-        self.authority_store
-            .perpetual_tables
-            .synced_transactions
-            .insert(transaction.digest(), transaction.serializable_ref())
-    }
-
-    fn insert_transaction_effects(
-        &self,
-        transaction_effects: TransactionEffects,
-    ) -> Result<(), Self::Error> {
-        self.authority_store
-            .perpetual_tables
-            .effects
-            .insert(&transaction_effects.digest(), &transaction_effects)
     }
 }

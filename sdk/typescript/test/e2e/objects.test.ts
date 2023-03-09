@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getMoveObjectType } from '../../src';
+import { getObjectType } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Object Reading API', () => {
@@ -14,25 +14,23 @@ describe('Object Reading API', () => {
 
   it('Get Owned Objects', async () => {
     const gasObjects = await toolbox.provider.getObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     expect(gasObjects.length).to.greaterThan(0);
   });
 
   it('Get Object', async () => {
-    const gasObjects = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
-    );
+    const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
       gasObjects.map((gasObject) =>
-        toolbox.provider.getObject(gasObject['objectId'])
-      )
+        toolbox.provider.getObject(gasObject['objectId'], { showType: true }),
+      ),
     );
     objectInfos.forEach((objectInfo) =>
-      expect(getMoveObjectType(objectInfo)).to.equal(
-        '0x2::coin::Coin<0x2::sui::SUI>'
-      )
+      expect(getObjectType(objectInfo)).to.equal(
+        '0x2::coin::Coin<0x2::sui::SUI>',
+      ),
     );
   });
 });

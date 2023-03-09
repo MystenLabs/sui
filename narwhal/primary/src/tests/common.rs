@@ -4,18 +4,19 @@ use config::WorkerId;
 use crypto::NetworkKeyPair;
 use std::time::Duration;
 use storage::CertificateStore;
-use store::{reopen, rocks, rocks::DBMap, Store};
+use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions, Store};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_DIGEST_BY_ORIGIN_CF,
     CERTIFICATE_DIGEST_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF, VOTES_CF,
 };
 use types::{
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round, VoteInfo,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage,
+    WorkerSynchronizeMessage,
 };
 
 use crypto::PublicKey;
 use storage::PayloadToken;
+use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
 
 pub fn create_db_stores() -> (
@@ -27,6 +28,7 @@ pub fn create_db_stores() -> (
     let rocksdb = rocks::open_cf(
         temp_dir(),
         None,
+        MetricConf::default(),
         &[
             HEADERS_CF,
             CERTIFICATES_CF,
@@ -63,7 +65,8 @@ pub fn create_db_stores() -> (
 
 pub fn create_test_vote_store() -> Store<PublicKey, VoteInfo> {
     // Create a new test store.
-    let rocksdb = rocks::open_cf(temp_dir(), None, &[VOTES_CF]).expect("Failed creating database");
+    let rocksdb = rocks::open_cf(temp_dir(), None, MetricConf::default(), &[VOTES_CF])
+        .expect("Failed creating database");
     let votes_map = reopen!(&rocksdb, VOTES_CF;<PublicKey, VoteInfo>);
     Store::new(votes_map)
 }
@@ -74,11 +77,9 @@ pub fn worker_listener(
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,
     keypair: NetworkKeyPair,
-) -> JoinHandle<(Vec<WorkerReconfigureMessage>, Vec<WorkerSynchronizeMessage>)> {
+) -> JoinHandle<Vec<WorkerSynchronizeMessage>> {
     tokio::spawn(async move {
-        let (mut recv_msg, mut recv_sync, _network) =
-            PrimaryToWorkerMockServer::spawn(keypair, address);
-        let mut msgs = Vec::new();
+        let (mut recv_sync, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
         let mut syncs = Vec::new();
 
         let timer = tokio::time::sleep(Duration::from_secs(1));
@@ -86,27 +87,18 @@ pub fn worker_listener(
 
         loop {
             tokio::select! {
-                Some(message) = recv_msg.recv() => {
-                    timer.as_mut().reset(Instant::now() + Duration::from_secs(1));
-                    msgs.push(message);
-                    if num_of_expected_responses != -1
-                        && (msgs.len() + syncs.len()) as i32 == num_of_expected_responses
-                    {
-                        return (msgs, syncs);
-                    }
-                }
                 Some(message) = recv_sync.recv() => {
                     timer.as_mut().reset(Instant::now() + Duration::from_secs(1));
                     syncs.push(message);
                     if num_of_expected_responses != -1
-                        && (msgs.len() + syncs.len()) as i32 == num_of_expected_responses
+                        && syncs.len() as i32 == num_of_expected_responses
                     {
-                        return (msgs, syncs);
+                        return syncs;
                     }
                 }
                 () = &mut timer => {
                     // timeout happened - just return whatever has already
-                    return (msgs, syncs);
+                    return syncs;
                 }
             }
         }

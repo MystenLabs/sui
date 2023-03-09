@@ -4,16 +4,16 @@
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
+use std::net::IpAddr;
 use std::time::Duration;
-use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
+use sui_config::{builder::ConfigBuilder, NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_types::object::Object;
-
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::TEST_COMMITTEE_SIZE;
-use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
+use sui_types::messages::ObjectInfoRequest;
+use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -33,10 +33,39 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         // Narwhal parameters may result in tests taking >60 seconds.
         parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
+        parameters.min_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
     }
     configs
+}
+
+pub fn test_authority_configs_with_objects(objects: Vec<Object>) -> (NetworkConfig, Vec<Object>) {
+    let config_dir = tempfile::tempdir().unwrap().into_path();
+    let rng = StdRng::from_seed([0; 32]);
+    let mut configs = ConfigBuilder::new(&config_dir)
+        .rng(rng)
+        .committee_size(TEST_COMMITTEE_SIZE.try_into().unwrap())
+        .with_objects(objects.clone())
+        .build();
+
+    for config in configs.validator_configs.iter_mut() {
+        let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
+        // NOTE: the following parameters are important to ensure tests run fast. Using the default
+        // Narwhal parameters may result in tests taking >60 seconds.
+        parameters.header_num_of_batches_threshold = 1;
+        parameters.max_header_delay = Duration::from_millis(200);
+        parameters.min_header_delay = Duration::from_millis(200);
+        parameters.batch_size = 1;
+        parameters.max_batch_delay = Duration::from_millis(200);
+    }
+
+    let objects = objects
+        .into_iter()
+        .map(|o| configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    (configs, objects)
 }
 
 #[cfg(not(msim))]
@@ -57,7 +86,7 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 /// most of the time.
 #[cfg(msim)]
 pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) -> SuiNodeHandle {
-    use std::net::{IpAddr, SocketAddr};
+    use std::net::SocketAddr;
 
     let config = config.clone();
     let socket_addr = mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
@@ -68,6 +97,7 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 
     let handle = sui_simulator::runtime::Handle::current();
     let builder = handle.create_node();
+    tracing::info!("starting new node with ip {:?}", ip);
     let node = builder
         .ip(ip)
         .name(format!("{:?}", config.protocol_public_key().concise()))
@@ -106,6 +136,29 @@ where
     handles
 }
 
+/// This function can be called after `spawn_test_authorities` to
+/// start a fullnode.
+pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle {
+    let registry_service = RegistryService::new(Registry::new());
+
+    let mut builder = config.fullnode_config_builder();
+
+    if cfg!(msim) {
+        let ip_addr: IpAddr = "11.10.0.0".to_string().parse().unwrap();
+        builder = builder
+            .with_listen_ip(ip_addr)
+            .with_port(8080)
+            .with_p2p_port(8084)
+            .with_rpc_port(rpc_port.unwrap_or(9000))
+            .with_admin_port(8888);
+    } else {
+        builder = builder.set_rpc_port(rpc_port);
+    }
+
+    let fullnode_config = builder.build().unwrap();
+    start_node(&fullnode_config, registry_service).await
+}
+
 /// Get a network client to communicate with the consensus.
 pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
     NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
@@ -113,13 +166,10 @@ pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
 
 pub async fn get_object(config: &ValidatorInfo, object_id: ObjectID) -> Object {
     get_client(config)
-        .handle_object_info_request(ObjectInfoRequest {
-            object_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
-        })
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
         .await
         .unwrap()
-        .object()
-        .unwrap()
-        .clone()
+        .object
 }

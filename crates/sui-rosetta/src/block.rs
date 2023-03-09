@@ -1,26 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use tracing::debug;
 
-use crate::operations::Operation;
 use crate::types::{
     BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Transaction,
     TransactionIdentifier,
 };
 use crate::{Error, OnlineServerContext, SuiEnv};
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 
 /// This module implements the [Rosetta Block API](https://www.rosetta-api.org/docs/BlockApi.html)
 
 /// Get a block by its Block Identifier.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/BlockApi.html#block)
 pub async fn block(
-    Json(request): Json<BlockRequest>,
-    Extension(state): Extension<Arc<OnlineServerContext>>,
+    State(state): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<BlockRequest>, Error>,
 ) -> Result<BlockResponse, Error> {
     debug!("Called /block endpoint: {:?}", request.block_identifier);
     env.check_network_identifier(&request.network_identifier)?;
@@ -37,18 +37,20 @@ pub async fn block(
 /// Get a transaction in a block by its Transaction Identifier.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/BlockApi.html#blocktransaction)
 pub async fn transaction(
-    Json(request): Json<BlockTransactionRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<BlockTransactionRequest>, Error>,
 ) -> Result<BlockTransactionResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
-    let response = context.client.read_api().get_transaction(digest).await?;
-    let hash = response.certificate.transaction_digest;
-    let data = &response.certificate.data;
-    let effects = response.effects;
+    let response = context
+        .client
+        .read_api()
+        .get_transaction_with_options(digest, SuiTransactionResponseOptions::full_content())
+        .await?;
+    let hash = response.digest;
 
-    let operations = Operation::from_data_and_events(data, &effects.status, &effects.events)?;
+    let operations = response.try_into()?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

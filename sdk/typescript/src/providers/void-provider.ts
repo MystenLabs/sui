@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
+import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
-  CertifiedTransaction,
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
   SuiObjectInfo,
-  GetObjectDataResponse,
+  SuiObjectResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -21,7 +19,6 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   SuiAddress,
   ObjectId,
   TransactionQuery,
@@ -32,11 +29,26 @@ import {
   RpcApiVersion,
   FaucetResponse,
   Order,
-  TransactionEffects,
   CoinMetadata,
-  DevInspectResults
+  DevInspectResults,
+  DelegatedStake,
+  PaginatedCoins,
+  CoinBalance,
+  CoinSupply,
+  CheckpointDigest,
+  CommitteeInfo,
+  Checkpoint,
+  DryRunTransactionResponse,
+  SuiTransactionResponse,
+  SuiObjectDataOptions,
+  SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 import { Provider } from './provider';
+
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
+import { SerializedSignature } from '../cryptography/signature';
+import { Transaction } from '../builder';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -44,42 +56,71 @@ export class VoidProvider extends Provider {
     throw this.newError('getRpcApiVersion');
   }
 
-  getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
-    throw new Error('getCoinMetadata');
+  // Governance
+  async getReferenceGasPrice(): Promise<number> {
+    throw this.newError('getReferenceGasPrice');
+  }
+
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
+    throw this.newError('getLatestSuiSystemState');
+  }
+
+  async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
+    throw this.newError('getDelegatedStakes');
   }
 
   // Faucet
   async requestSuiFromFaucet(
     _recipient: SuiAddress,
-    _httpHeaders?: HttpHeaders
+    _httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
     throw this.newError('requestSuiFromFaucet');
   }
 
+  // RPC Endpoint
+  call(_endpoint: string, _params: any[]): Promise<any> {
+    throw this.newError('call');
+  }
+
+  // Coins
+  async getCoins(): Promise<PaginatedCoins> {
+    throw this.newError('getCoins');
+  }
+
+  async getAllCoins(): Promise<PaginatedCoins> {
+    throw this.newError('getAllCoins');
+  }
+
+  async getBalance(): Promise<CoinBalance> {
+    throw this.newError('getBalance');
+  }
+
+  async getAllBalances(): Promise<CoinBalance[]> {
+    throw this.newError('getAllBalances');
+  }
+
+  async getCoinMetadata(): Promise<CoinMetadata> {
+    throw new Error('getCoinMetadata');
+  }
+
+  async getTotalSupply(): Promise<CoinSupply> {
+    throw new Error('getTotalSupply');
+  }
+
   // Objects
-  async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
-    throw this.newError('getObjectsOwnedByAddress');
-  }
-
-  async getGasObjectsOwnedByAddress(
-    _address: string
-  ): Promise<SuiObjectInfo[]> {
-    throw this.newError('getGasObjectsOwnedByAddress');
-  }
-
-  async getCoinBalancesOwnedByAddress(
+  async getObjectsOwnedByAddress(
     _address: string,
-    _typeArg?: string
-  ): Promise<GetObjectDataResponse[]> {
-    throw this.newError('getCoinBalancesOwnedByAddress');
+    _typefilter?: string,
+  ): Promise<SuiObjectInfo[]> {
+    throw this.newError('getObjectsOwnedByAddress');
   }
 
   async selectCoinsWithBalanceGreaterThanOrEqual(
     _address: string,
     _amount: bigint,
     _typeArg: string,
-    _exclude: ObjectId[] = []
-  ): Promise<GetObjectDataResponse[]> {
+    _exclude: ObjectId[] = [],
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -87,12 +128,12 @@ export class VoidProvider extends Provider {
     _address: string,
     _amount: bigint,
     _typeArg: string,
-    _exclude: ObjectId[]
-  ): Promise<GetObjectDataResponse[]> {
+    _exclude: ObjectId[],
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
-  async getObject(_objectId: string): Promise<GetObjectDataResponse> {
+  async getObject(_objectId: string): Promise<SuiObjectResponse> {
     throw this.newError('getObject');
   }
 
@@ -100,29 +141,54 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectRef');
   }
 
+  async getObjectBatch(
+    _objectIds: ObjectId[],
+    _options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]> {
+    throw this.newError('getObjectBatch');
+  }
+
   // Transactions
   async getTransaction(
-    _digest: TransactionDigest
-  ): Promise<CertifiedTransaction> {
+    _digest: TransactionDigest,
+  ): Promise<SuiTransactionResponse> {
     throw this.newError('getTransaction');
   }
 
   async executeTransaction(
-    _txnBytes: Base64DataBuffer,
-    _signatureScheme: SignatureScheme,
-    _signature: Base64DataBuffer,
-    _pubkey: PublicKey,
-    _requestType: ExecuteTransactionRequestType
-  ): Promise<SuiExecuteTransactionResponse> {
+    _txnBytes: Uint8Array,
+    _signature: SerializedSignature,
+    _requestType: ExecuteTransactionRequestType,
+  ): Promise<SuiTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
   }
 
-  devInspectTransaction(_txBytes: string): Promise<DevInspectResults> {
+  devInspectTransaction(
+    _sender: SuiAddress,
+    _txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
+    _gasPrice: number | null = null,
+    _epoch: number | null = null,
+  ): Promise<DevInspectResults> {
     throw this.newError('devInspectTransaction');
   }
 
-  dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
+  dryRunTransaction(_txBytes: Uint8Array): Promise<DryRunTransactionResponse> {
     throw this.newError('dryRunTransaction');
+  }
+
+  getDynamicFields(
+    _parent_object_id: ObjectId,
+    _cursor: ObjectId | null = null,
+    _limit: number | null = null,
+  ): Promise<DynamicFieldPage> {
+    throw this.newError('getDynamicFields');
+  }
+
+  getDynamicFieldObject(
+    _parent_object_id: ObjectId,
+    _name: string | DynamicFieldName,
+  ): Promise<SuiObjectResponse> {
+    throw this.newError('getDynamicFieldObject');
   }
 
   async getTotalTransactionNumber(): Promise<number> {
@@ -131,7 +197,7 @@ export class VoidProvider extends Provider {
 
   async getTransactionDigestsInRange(
     _start: GatewayTxSeqNumber,
-    _end: GatewayTxSeqNumber
+    _end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
   }
@@ -139,20 +205,20 @@ export class VoidProvider extends Provider {
   async getMoveFunctionArgTypes(
     _objectId: string,
     _moduleName: string,
-    _functionName: string
+    _functionName: string,
   ): Promise<SuiMoveFunctionArgTypes> {
     throw this.newError('getMoveFunctionArgTypes');
   }
 
   async getNormalizedMoveModulesByPackage(
-    _objectId: string
+    _objectId: string,
   ): Promise<SuiMoveNormalizedModules> {
     throw this.newError('getNormalizedMoveModulesByPackage');
   }
 
   async getNormalizedMoveModule(
     _objectId: string,
-    _moduleName: string
+    _moduleName: string,
   ): Promise<SuiMoveNormalizedModule> {
     throw this.newError('getNormalizedMoveModule');
   }
@@ -160,7 +226,7 @@ export class VoidProvider extends Provider {
   async getNormalizedMoveFunction(
     _objectId: string,
     _moduleName: string,
-    _functionName: string
+    _functionName: string,
   ): Promise<SuiMoveNormalizedFunction> {
     throw this.newError('getNormalizedMoveFunction');
   }
@@ -168,7 +234,7 @@ export class VoidProvider extends Provider {
   async getNormalizedMoveStruct(
     _objectId: string,
     _oduleName: string,
-    _structName: string
+    _structName: string,
   ): Promise<SuiMoveNormalizedStruct> {
     throw this.newError('getNormalizedMoveStruct');
   }
@@ -179,7 +245,7 @@ export class VoidProvider extends Provider {
 
   async subscribeEvent(
     _filter: SuiEventFilter,
-    _onMessage: (event: SuiEventEnvelope) => void
+    _onMessage: (event: SuiEventEnvelope) => void,
   ): Promise<SubscriptionId> {
     throw this.newError('subscribeEvent');
   }
@@ -196,7 +262,7 @@ export class VoidProvider extends Provider {
     _query: TransactionQuery,
     _cursor: TransactionDigest | null,
     _limit: number | null,
-    _order: Order
+    _order: Order,
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
   }
@@ -205,8 +271,21 @@ export class VoidProvider extends Provider {
     _query: EventQuery,
     _cursor: EventId | null,
     _limit: number | null,
-    _order: Order
+    _order: Order,
   ): Promise<PaginatedEvents> {
     throw this.newError('getEvents');
+  }
+
+  // Checkpoints
+  async getLatestCheckpointSequenceNumber(): Promise<number> {
+    throw this.newError('getLatestCheckpointSequenceNumber');
+  }
+
+  async getCheckpoint(_id: CheckpointDigest | number): Promise<Checkpoint> {
+    throw this.newError('getCheckpoint');
+  }
+
+  async getCommitteeInfo(_epoch?: number): Promise<CommitteeInfo> {
+    throw this.newError('getCommitteeInfo');
   }
 }

@@ -14,6 +14,10 @@ const METRICS_ROUTE: &str = "/metrics";
 const PRIMARY_METRICS_PREFIX: &str = "narwhal_primary";
 const WORKER_METRICS_PREFIX: &str = "narwhal_worker";
 
+pub fn new_registry() -> Registry {
+    Registry::new_custom(None, None).unwrap()
+}
+
 pub fn primary_metrics_registry(name: PublicKey) -> Registry {
     let mut labels = HashMap::new();
     labels.insert("node_name".to_string(), name.to_string());

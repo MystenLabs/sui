@@ -6,5 +6,8 @@
     "rootDir": "src",
     "baseUrl": "."
   },
-  "references": [{ "path": "../../../typescript" }]
+  "references": [
+    { "path": "../../../typescript" },
+    { "path": "../../wallet-standard" }
+  ]
 }

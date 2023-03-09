@@ -6,7 +6,7 @@ import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 import OwnedCoinView from './OwnedCoinView';
 import OwnedNFTView from './OwnedNFTView';
 
-import styles from '../styles/OwnedObjects.module.css';
+import { Heading } from '~/ui/Heading';
 
 const viewFn = (results: any) => <OwnedNFTView results={results} />;
 
@@ -29,30 +29,33 @@ export default function OwnedObjectView({ results }: { results: DataType }) {
             stats_text: 'Total NFTs',
         },
     };
-
     return (
-        <div className={styles.layout}>
+        <div className="grid w-full grid-cols-1 divide-x-0 divide-gray-45 md:grid-cols-2 md:divide-x">
             {coin_results.length > 0 && (
-                <div>
-                    <div className={styles.ownedobjectheader}>
-                        <h2>Coins</h2>
-                    </div>
+                <div className="space-y-5 pt-5 pr-0 xl:pr-10">
+                    <Heading color="gray-90" variant="heading4/semibold">
+                        Coins
+                    </Heading>
                     <OwnedCoinView results={coin_results} />
                 </div>
             )}
-            {other_results.length > 0 && (
-                <div id="NFTSection">
-                    <div className={styles.ownedobjectheader}>
-                        <h2>NFTs</h2>
+
+            <div className="pl-0 md:pl-10">
+                {other_results.length > 0 && (
+                    <div className="py-5" data-testid="owned-nfts">
+                        <Heading color="gray-90" variant="heading4/semibold">
+                            NFTs
+                        </Heading>
                     </div>
-                    <PaginationLogic
-                        results={other_results}
-                        viewComponentFn={viewFn}
-                        itemsPerPage={ITEMS_PER_PAGE}
-                        stats={nftFooter.stats}
-                    />
-                </div>
-            )}
+                )}
+
+                <PaginationLogic
+                    results={other_results}
+                    viewComponentFn={viewFn}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    stats={nftFooter.stats}
+                />
+            </div>
         </div>
     );
 }

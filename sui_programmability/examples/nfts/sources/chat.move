@@ -23,7 +23,7 @@ module nfts::chat {
         // Post's text.
         text: String,
         // Set if referencing an another object (i.e., due to a Like, Retweet, Reply etc).
-        // We allow referencing any object type, not ony Chat NFTs.
+        // We allow referencing any object type, not only Chat NFTs.
         ref_id: Option<address>,
         // app-specific metadata. We do not enforce a metadata format and delegate this to app layer.
         metadata: vector<u8>,

@@ -4,50 +4,50 @@ init:
 A: object(100)
 
 task 1 'publish'. lines 8-41:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 43-43:
-created: object(106), object(107), object(108)
-written: object(105)
+created: object(107), object(108), object(109)
+written: object(106)
 
 task 3 'view-object'. lines 45-45:
-Owner: Object ID: ( fake(108) )
+Owner: Object ID: ( fake(109) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'run'. lines 47-47:
-created: object(110)
-written: object(106), object(109)
-deleted: object(107), object(108)
+created: object(111)
+written: object(107), object(110)
+deleted: object(108), object(109)
 
 task 5 'run'. lines 50-50:
-created: object(112), object(113), object(114)
-written: object(111)
+created: object(113), object(114), object(115)
+written: object(112)
 
 task 6 'view-object'. lines 52-52:
-Owner: Object ID: ( fake(114) )
+Owner: Object ID: ( fake(115) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
 
 task 7 'run'. lines 54-54:
-written: object(113), object(115)
-deleted: object(112), object(114)
+written: object(113), object(116)
+deleted: object(114), object(115)
 
 task 8 'run'. lines 57-57:
-created: object(117), object(118), object(119)
-written: object(116)
+created: object(118), object(119), object(120)
+written: object(117)
 
 task 9 'view-object'. lines 59-59:
-Owner: Object ID: ( fake(119) )
+Owner: Object ID: ( fake(120) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(118)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
 
 task 10 'run'. lines 61-61:
-written: object(117), object(118), object(120)
-deleted: object(119)
+written: object(118), object(119), object(121)
+deleted: object(120)
 
 task 11 'view-object'. lines 63-63:
 Owner: Account Address ( A )
 Version: 3
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(118)}}}
+Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}

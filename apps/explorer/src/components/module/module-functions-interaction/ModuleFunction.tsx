@@ -5,7 +5,7 @@ import {
     getExecutionStatusType,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import { useWallet, ConnectButton } from '@mysten/wallet-kit';
+import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo } from 'react';
@@ -45,10 +45,12 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { connected, signAndExecuteTransaction } = useWallet();
+    const { isConnected, signAndExecuteTransaction } = useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
+    const { isValidating, isValid, isSubmitting } = formState;
+
     const typeArguments = useFunctionTypeArguments(
         functionDetails.type_parameters
     );
@@ -67,14 +69,16 @@ export function ModuleFunction({
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const result = await signAndExecuteTransaction({
-                kind: 'moveCall',
-                data: {
-                    packageObjectId: packageId,
-                    module: moduleName,
-                    function: functionName,
-                    arguments: params || [],
-                    typeArguments: types || [],
-                    gasBudget: 2000,
+                transaction: {
+                    kind: 'moveCall',
+                    data: {
+                        packageObjectId: packageId,
+                        module: moduleName,
+                        function: functionName,
+                        arguments: params || [],
+                        typeArguments: types || [],
+                        gasBudget: 2000,
+                    },
                 },
             });
             if (getExecutionStatusType(result) === 'failure') {
@@ -86,15 +90,15 @@ export function ModuleFunction({
         },
     });
     const isExecuteDisabled =
-        formState.isValidating ||
-        !formState.isValid ||
-        formState.isSubmitting ||
-        !connected;
+        isValidating || !isValid || isSubmitting || !isConnected;
+
     return (
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
                 onSubmit={handleSubmit((formData) =>
-                    execute.mutateAsync(formData)
+                    execute.mutateAsync(formData).catch(() => {
+                        /* ignore tx execution errors */
+                    })
                 )}
                 autoComplete="off"
                 className="flex flex-col flex-nowrap items-stretch gap-4"
@@ -113,7 +117,7 @@ export function ModuleFunction({
                         label={`Arg${index}`}
                         {...register(`params.${index}` as const)}
                         placeholder={paramTypeText}
-                        disabled={formState.isSubmitting}
+                        disabled={isSubmitting}
                     />
                 ))}
                 <div className="flex items-stretch justify-end gap-1.5">
@@ -138,8 +142,8 @@ export function ModuleFunction({
                         size="md"
                         className={clsx(
                             '!rounded-md !text-bodySmall',
-                            connected
-                                ? '!border !border-solid !border-steel !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
+                            isConnected
+                                ? '!border !border-solid !border-steel !bg-white !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
                                 : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
                         )}
                     />

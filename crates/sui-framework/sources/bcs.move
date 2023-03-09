@@ -47,9 +47,6 @@ module sui::bcs {
     /// For when ULEB byte is out of range (or not found).
     const ELenOutOfRange: u64 = 2;
 
-    /// Address length in Sui is 20 bytes.
-    const SUI_ADDRESS_LENGTH: u64 = 20;
-
     /// A helper struct that saves resources on operations. For better
     /// vector performance, it stores reversed bytes of the BCS and
     /// enables use of `vector::pop_back`.
@@ -80,9 +77,9 @@ module sui::bcs {
 
     /// Read address from the bcs-serialized bytes.
     public fun peel_address(bcs: &mut BCS): address {
-        assert!(v::length(&bcs.bytes) >= SUI_ADDRESS_LENGTH, EOutOfRange);
+        assert!(v::length(&bcs.bytes) >= address::length(), EOutOfRange);
         let (addr_bytes, i) = (v::empty(), 0);
-        while (i < 20) {
+        while (i < address::length()) {
             v::push_back(&mut addr_bytes, v::pop_back(&mut bcs.bytes));
             i = i + 1;
         };
@@ -155,10 +152,6 @@ module sui::bcs {
             shift = shift + 7;
         };
         total
-    }
-
-    spec peel_vec_length {
-        pragma intrinsic = true;
     }
 
     /// Peel a vector of `address` from serialized bytes.
@@ -267,6 +260,9 @@ module sui::bcs {
             option::none()
         }
     }
+
+    // TODO: re-enable once bit-wise operators in peel_vec_length are supported in the prover
+    spec module { pragma verify = false; }
 
     // === Tests ===
 

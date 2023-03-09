@@ -4,70 +4,71 @@ init:
 A: object(100)
 
 task 1 'publish'. lines 8-116:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 118-118:
-written: object(105)
-
-task 3 'run'. lines 120-124:
-created: object(107)
 written: object(106)
 
+task 3 'run'. lines 120-124:
+created: object(108)
+written: object(107)
+
 task 4 'run'. lines 126-126:
-written: object(108)
-deleted: object(107)
+written: object(109)
+deleted: object(108)
 
 task 5 'run'. lines 128-128:
-created: object(110)
-written: object(109)
+created: object(111)
+written: object(110)
 
 task 6 'run'. lines 130-130:
-created: object(112), object(113)
-written: object(110), object(111)
+created: object(113), object(114)
+written: object(111), object(112)
 
 task 7 'run'. lines 132-136:
-Error: Transaction Effects Status: Invalid Object Owned Argument. Object fake(112) is owned by object fake(113). Objects owned by other objects cannot be used as input arguments.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidChildObjectArgument(InvalidChildObjectArgument { child: fake(112), parent: fake(113) }), source: None } }
+Error: Object 0x01b2156087ad45d0d2fb96eb055cd6257a53618f4086e94ee301ec3388d82896 is owned by object 0xb221913a3af7acfea147609cf80ac9ff54e941c3fc918fc4972a9a2c95b9c5ba. Objects owned by other objects cannot be used as input arguments.
 
 task 8 'run'. lines 138-138:
-created: object(116)
-written: object(115)
+created: object(117)
+written: object(116)
 
 task 9 'run'. lines 140-143:
-Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::Obj, but found type Test::M::AnotherObj") } }
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
 task 10 'run'. lines 145-145:
-created: object(119)
-written: object(118)
+created: object(120)
+written: object(119)
 
 task 11 'run'. lines 147-147:
-created: object(121)
-written: object(120)
+created: object(122)
+written: object(121)
 
 task 12 'run'. lines 149-152:
-Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::Obj, but found type Test::M::AnotherObj") } }
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
 
 task 13 'run'. lines 154-154:
-created: object(124)
-written: object(123)
+created: object(125)
+written: object(124)
 
 task 14 'run'. lines 156-159:
-Error: Transaction Effects Status: Entry Argument Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
 
 task 15 'run'. lines 161-161:
-created: object(127)
-written: object(126)
+created: object(128)
+written: object(127)
 
 task 16 'run'. lines 163-166:
-Error: The transaction inputs contain duplicates ObjectRef's
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of already taken value. There is now no value available at this location
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfTakenValue }, source: None, command: Some(1) } }
 
 task 17 'run'. lines 168-168:
-created: object(130)
-written: object(129)
+created: object(131)
+written: object(130)
 
 task 18 'run'. lines 170-170:
-Error: The transaction inputs contain duplicates ObjectRef's
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of already taken value. There is now no value available at this location
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfTakenValue }, source: None, command: Some(1) } }

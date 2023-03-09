@@ -8,7 +8,9 @@ edition = "2021"
 
 [dependencies]
 anemo.workspace = true
-async-trait = "0.1.57"
+anemo-tower.workspace = true
+async-trait = "0.1.61"
+governor = "0.5.1"
 serde = { version = "1.0.144", features = ["derive"] }
 tonic = "0.8"
 
@@ -16,7 +18,8 @@ sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 
 mysten-network.workspace = true
-workspace-hack.workspace = true
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.37"
 futures = "0.3.24"
@@ -25,6 +28,7 @@ tap = "1.0.1"
 rand = "0.8.5"
 anyhow = "1.0.65"
 prometheus = "0.13.3"
+mysten-metrics = { path = "../mysten-metrics" }
 
 [build-dependencies]
 anemo-build.workspace = true
@@ -33,3 +37,5 @@ tonic-build = { version = "0.8.2", features = [ "transport" ] }
 [dev-dependencies]
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
+ed25519-consensus = { version = "2.0.1" }
+fastcrypto = { workspace = true }

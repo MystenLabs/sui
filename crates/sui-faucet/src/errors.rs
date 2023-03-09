@@ -8,6 +8,9 @@ pub enum FaucetError {
     #[error("Faucet cannot read objects from fullnode")]
     FullnodeReadingError,
 
+    #[error("Failed to parse transaction response {0}")]
+    ParseTransactionResponseError(String),
+
     #[error(
         "Gas coin `{0}` does not have sufficient balance and has been removed from gas coin pool"
     )]
@@ -19,7 +22,7 @@ pub enum FaucetError {
     #[error("Gas coin `{0}` is not valid and has been removed from gas coin pool")]
     InvalidGasCoin(String),
 
-    #[error("No gas coin available in the gas coin pool")]
+    #[error("Timed out waiting for a coin from the gas coin pool")]
     NoGasCoinAvailable,
 
     #[error("Wallet Error: `{0}`")]
@@ -30,4 +33,10 @@ pub enum FaucetError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+impl FaucetError {
+    pub(crate) fn internal(e: impl ToString) -> Self {
+        FaucetError::Internal(e.to_string())
+    }
 }

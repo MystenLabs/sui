@@ -20,9 +20,11 @@ use std::collections::VecDeque;
 use std::fmt::{self, Debug, Formatter};
 use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
-    is_tx_context, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
+    is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
+    RESOLVED_UTF8_STR,
 };
 
 const HEX_PREFIX: &str = "0x";
@@ -122,6 +124,10 @@ impl SuiJsonValue {
 
     pub fn to_json_value(&self) -> JsonValue {
         self.0.clone()
+    }
+
+    pub fn to_sui_address(&self) -> anyhow::Result<SuiAddress> {
+        json_value_to_sui_address(&self.0)
     }
 
     fn handle_inner_struct_layout(
@@ -242,13 +248,9 @@ impl SuiJsonValue {
                 )
             }
 
-            (JsonValue::String(s), MoveTypeLayout::Address) => {
-                let s = s.trim().to_lowercase();
-                if !s.starts_with(HEX_PREFIX) {
-                    bail!("Address hex string must start with 0x.",);
-                }
-                let r = SuiAddress::from_str(&s)?;
-                MoveValue::Address(r.into())
+            (v, MoveTypeLayout::Address) => {
+                let addr = json_value_to_sui_address(v)?;
+                MoveValue::Address(addr.into())
             }
             _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })
@@ -261,12 +263,26 @@ impl Debug for SuiJsonValue {
     }
 }
 
+fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
+    match value {
+        JsonValue::String(s) => {
+            let s = s.trim().to_lowercase();
+            if !s.starts_with(HEX_PREFIX) {
+                bail!("Address hex string must start with 0x.",);
+            }
+            Ok(SuiAddress::from_str(&s)?)
+        }
+        v => bail!("Unexpected arg {v} for expected type address"),
+    }
+}
+
 fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
     // Try to deserialize data
     if let Ok(v) = bcs::from_bytes::<String>(bytes) {
         Ok(JsonValue::String(v))
     } else if let Ok(v) = bcs::from_bytes::<AccountAddress>(bytes) {
-        Ok(JsonValue::String(v.to_hex_literal()))
+        // Converting address to string without trimming 0
+        Ok(JsonValue::String(format!("{v:#x}")))
     } else if let Ok(v) = bcs::from_bytes::<u8>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<u16>(bytes) {
@@ -299,6 +315,29 @@ impl std::str::FromStr for SuiJsonValue {
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
         // Wrap input with json! if serde_json fails, the failure usually cause by missing quote escapes.
         SuiJsonValue::new(serde_json::from_str(s).or_else(|_| serde_json::from_value(json!(s)))?)
+    }
+}
+
+impl TryFrom<CallArg> for SuiJsonValue {
+    type Error = anyhow::Error;
+
+    fn try_from(value: CallArg) -> Result<Self, Self::Error> {
+        use serde_json::Value;
+        match value {
+            CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
+            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                SuiJsonValue::new(Value::String(Hex::encode(id)))
+            }
+            CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
+                vec.iter()
+                    .map(|obj_arg| match obj_arg {
+                        ObjectArg::ImmOrOwnedObject((id, _, _))
+                        | ObjectArg::SharedObject { id, .. } => Value::String(Hex::encode(id)),
+                    })
+                    .collect(),
+            )),
+        }
     }
 }
 
@@ -455,8 +494,10 @@ pub fn primitive_type(
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 // there is no MoveLayout for this so while we can still report whether a type
                 // is primitive or not, we can't return the layout
-                let (is_primitive, _) = primitive_type(view, type_args, &targs[0]);
-                (is_primitive, None)
+                let (is_primitive, inner_layout) = primitive_type(view, type_args, &targs[0]);
+                let layout =
+                    inner_layout.map(|inner_layout| MoveTypeLayout::Vector(Box::new(inner_layout)));
+                (is_primitive, layout)
             } else {
                 (false, None)
             }
@@ -655,7 +696,7 @@ pub fn resolve_move_function_args(
 
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if is_tx_context(&view, param) => parameters.len() - 1,
+        Some(param) if is_tx_context(&view, param) != TxContextKind::None => parameters.len() - 1,
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {

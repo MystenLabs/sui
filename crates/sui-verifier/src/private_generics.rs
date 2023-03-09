@@ -10,12 +10,19 @@ use move_binary_format::{
     },
     CompiledModule,
 };
-use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
-use crate::{format_signature_token, verification_failure};
+use crate::{format_signature_token, verification_failure, TEST_SCENARIO_MODULE_NAME};
 
-const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";
+pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
+pub const EVENT_MODULE: &IdentStr = ident_str!("event");
+pub const TRANSFER_FUNCTIONS: &[&IdentStr] = &[
+    ident_str!("transfer"),
+    ident_str!("freeze_object"),
+    ident_str!("share_object"),
+];
+pub const INTERNAL_TRANFER_FUNCTION: &IdentStr = ident_str!("transfer_internal");
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
 /// restricted to the module.
@@ -67,17 +74,11 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
             let mhandle = view.module_handle_at(fhandle.module);
 
             let type_arguments = &view.signature_at(*type_parameters).0;
-            match addr_module(view, mhandle) {
-                (SUI_FRAMEWORK_ADDRESS, "transfer") => verify_private_transfer(
-                    view,
-                    function_type_parameters,
-                    fhandle,
-                    type_arguments,
-                )?,
-                (SUI_FRAMEWORK_ADDRESS, "event") => {
-                    verify_private_event_emit(view, fhandle, type_arguments)?
-                }
-                _ => (),
+            let ident = addr_module(view, mhandle);
+            if ident == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
+                verify_private_transfer(view, function_type_parameters, fhandle, type_arguments)?
+            } else if ident == (SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+                verify_private_event_emit(view, fhandle, type_arguments)?
             }
         }
     }
@@ -91,24 +92,20 @@ fn verify_private_transfer(
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
     let self_handle = view.module_handle_at(view.self_handle_idx().unwrap());
-    if addr_module(view, self_handle) == (SUI_FRAMEWORK_ADDRESS, "transfer") {
+    if addr_module(view, self_handle) == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
         return Ok(());
     }
     let fident = view.identifier_at(fhandle.name);
-    match fident.as_str() {
-        // transfer functions
-        "transfer" | "freeze_object" | "share_object" => (),
+    if !TRANSFER_FUNCTIONS.contains(&fident) {
         // should be unreachable
         // these are private and the module itself is skipped
-        "transfer_internal" => {
-            debug_assert!(false, "internal error. Unexpected private function");
-            return Ok(());
-        }
+        debug_assert!(
+            fident != INTERNAL_TRANFER_FUNCTION,
+            "internal error. Unexpected private function"
+        );
         // unknown function, so a bug in the implementation here
-        s => {
-            debug_assert!(false, "unknown transfer function {}", s);
-            return Ok(());
-        }
+        debug_assert!(false, "unknown transfer function {}", fident);
+        return Ok(());
     };
     for type_arg in type_arguments {
         let has_store = view
@@ -183,8 +180,8 @@ fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureTo
 fn addr_module<'a>(
     view: &'a BinaryIndexedView,
     mhandle: &ModuleHandle,
-) -> (AccountAddress, &'a str) {
+) -> (AccountAddress, &'a IdentStr) {
     let maddr = view.address_identifier_at(mhandle.address);
     let mident = view.identifier_at(mhandle.name);
-    (*maddr, mident.as_str())
+    (*maddr, mident)
 }

@@ -21,7 +21,7 @@ export function IconButton({ icon, ...props }: IconButtonProps) {
     const IconComponent = iconTypeToIcon[icon];
     return (
         <ButtonOrLink
-            className="inline-flex cursor-pointer items-center justify-center border-0 bg-transparent px-3 py-2 text-steel-dark hover:text-steel-darker active:text-steel disabled:cursor-default disabled:text-gray-60"
+            className="inline-flex cursor-pointer items-center justify-center bg-transparent px-3 py-2 text-steel-dark hover:text-steel-darker active:text-steel disabled:cursor-default disabled:text-gray-60"
             {...props}
         >
             <IconComponent />

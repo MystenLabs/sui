@@ -13,7 +13,8 @@ use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
-    SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects, TransactionBytes,
+    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionBytes,
 };
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -128,22 +129,24 @@ impl TestContext {
         &self,
         txn_data: TransactionData,
         desc: &str,
-    ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+    ) -> SuiTransactionResponse {
         let signature = self.get_context().sign(&txn_data, desc);
         let resp = self
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction(
-                Transaction::from_data(txn_data, Intent::default(), signature)
+                Transaction::from_data(txn_data, Intent::default(), vec![signature])
                     .verify()
                     .unwrap(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
-        let (tx_cert, effects) = (resp.tx_cert.unwrap(), resp.effects.unwrap());
-        assert!(matches!(effects.status, SuiExecutionStatus::Success));
-        (tx_cert, effects)
+        assert!(matches!(
+            resp.effects.as_ref().unwrap().status(),
+            SuiExecutionStatus::Success
+        ));
+        resp
     }
 
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
@@ -196,7 +199,7 @@ impl TestContext {
             .client
             .get_fullnode_client()
             .read_api()
-            .get_transaction(digest)
+            .get_transaction_with_options(digest, SuiTransactionResponseOptions::new())
             .await
         {
             Ok(_) => (true, digest, retry_times),

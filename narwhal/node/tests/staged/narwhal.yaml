@@ -1,16 +1,4 @@
 ---
-Authority:
-  STRUCT:
-    - stake: U64
-    - primary_address: BYTES
-    - network_key: STR
-BLS12381AggregateSignature:
-  STRUCT:
-    - sig:
-        OPTION: BYTES
-BLS12381Signature:
-  STRUCT:
-    - sig: BYTES
 Batch:
   STRUCT:
     - transactions:
@@ -28,7 +16,9 @@ Certificate:
     - header:
         TYPENAME: Header
     - aggregated_signature:
-        TYPENAME: BLS12381AggregateSignature
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
@@ -37,17 +27,12 @@ CertificateDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Committee:
-  STRUCT:
-    - authorities:
-        MAP:
-          KEY: STR
-          VALUE:
-            TYPENAME: Authority
-    - epoch: U64
 Header:
   STRUCT:
-    - author: STR
+    - author:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
     - round: U64
     - epoch: U64
     - created_at: U64
@@ -55,12 +40,12 @@ Header:
         SEQ:
           TUPLE:
             - TYPENAME: BatchDigest
-            - U32
+            - TUPLE:
+                - U32
+                - U64
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-    - signature:
-        TYPENAME: BLS12381Signature
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -69,14 +54,6 @@ HeaderDigest:
 Metadata:
   STRUCT:
     - created_at: U64
-ReconfigureNotification:
-  ENUM:
-    0:
-      NewEpoch:
-        NEWTYPE:
-          TYPENAME: Committee
-    2:
-      Shutdown: UNIT
 WorkerIndex:
   NEWTYPESTRUCT:
     MAP:
@@ -85,7 +62,10 @@ WorkerIndex:
         TYPENAME: WorkerInfo
 WorkerInfo:
   STRUCT:
-    - name: STR
+    - name:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
     - transactions: BYTES
     - worker_address: BYTES
 WorkerOthersBatchMessage:
@@ -100,13 +80,13 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
-WorkerReconfigureMessage:
-  STRUCT:
-    - message:
-        TYPENAME: ReconfigureNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:
         SEQ:
           TYPENAME: BatchDigest
-    - target: STR
+    - target:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
+

@@ -44,7 +44,7 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
     let mut parents = vec![leader];
     for r in (prev_leader.round()..leader.round()).rev() {
         parents = dag
-            .get(&(r))
+            .get(&r)
             .expect("We should have the whole history by now")
             .values()
             .filter(|(digest, _)| parents.iter().any(|x| x.header.parents.contains(digest)))
@@ -62,6 +62,9 @@ pub fn order_dag(
     state: &ConsensusState,
 ) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
+    assert!(leader.round() > 0);
+    let gc_round = leader.round().saturating_sub(gc_depth);
+
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
 
@@ -69,6 +72,10 @@ pub fn order_dag(
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
+        if x.round() == gc_round + 1 {
+            // Do not try to order parents of the certificate, since they have been GC'ed.
+            continue;
+        }
         for parent in &x.header.parents {
             let (digest, certificate) = match state
                 .dag
@@ -76,25 +83,22 @@ pub fn order_dag(
                 .and_then(|x| x.values().find(|(x, _)| x == parent))
             {
                 Some(x) => x,
-                None => continue, // We already ordered or GC up to here.
+                None => panic!("Parent digest {parent:?} not found for {x:?}!"),
             };
 
             // We skip the certificate if we (1) already processed it or (2) we reached a round that we already
-            // committed for this authority.
+            // committed or will never commit for this authority.
             let mut skip = already_ordered.contains(&digest);
             skip |= state
                 .last_committed
                 .get(&certificate.origin())
-                .map_or_else(|| false, |r| r == &certificate.round());
+                .map_or_else(|| false, |r| &certificate.round() <= r);
             if !skip {
                 buffer.push(certificate);
                 already_ordered.insert(digest);
             }
         }
     }
-
-    // Ensure we do not commit garbage collected certificates.
-    ordered.retain(|x| x.round() + gc_depth >= state.last_committed_round);
 
     // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
     ordered.sort_by_key(|x| x.round());

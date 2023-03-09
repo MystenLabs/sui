@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { type GetTxnDigestsResponse } from '@mysten/sui.js';
 import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { deduplicate } from '../../utils/searchUtil';
-import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
-import ErrorResult from '../error-result/ErrorResult';
 import PaginationLogic from '../pagination/PaginationLogic';
 import {
     type TxnData,
@@ -17,10 +14,9 @@ import {
     getDataOnTxDigests,
 } from './TxCardUtils';
 
-import { useRpc } from '~/hooks/useRpc';
+import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
 
-const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
 
 const DATATYPE_DEFAULT = {
@@ -43,7 +39,7 @@ const viewFn = (results: any) => <TxForIDView showData={results} />;
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return null;
 
-    const tableData = genTableDataFromTxData(showData, TRUNCATE_LENGTH);
+    const tableData = genTableDataFromTxData(showData);
 
     return (
         <div data-testid="tx">
@@ -52,34 +48,13 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     );
 }
 
-function TxForIDStatic({
-    id,
-    category,
-}: {
-    id: string;
-    category: categoryType;
-}) {
-    const data = deduplicate(findTxfromID(id)?.data as string[] | undefined)
-        .map((id) => findTxDatafromID(id))
-        .filter((x) => x !== undefined) as TxnData[];
-    if (!data) return null;
-    return (
-        <PaginationLogic
-            results={data}
-            viewComponentFn={viewFn}
-            itemsPerPage={ITEMS_PER_PAGE}
-            canVaryItemsPerPage
-        />
-    );
-}
-
-function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
+function TxForID({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] = useState<{
         data?: TxnData[];
         loadState: string;
     }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     useEffect(() => {
         getTx(id, network, category).then(
             (transactions) => {
@@ -124,23 +99,11 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     }
 
     return (
-        <ErrorResult
-            id={id}
-            errorMsg="Transactions could not be extracted on the following specified ID"
-        />
+        <Banner variant="error" fullWidth>
+            Transactions could not be extracted on the following specified ID:{' '}
+            {id}
+        </Banner>
     );
 }
 
-export default function TxForID({
-    id,
-    category,
-}: {
-    id: string;
-    category: categoryType;
-}) {
-    return IS_STATIC_ENV ? (
-        <TxForIDStatic id={id} category={category} />
-    ) : (
-        <TxForIDAPI id={id} category={category} />
-    );
-}
+export default TxForID;

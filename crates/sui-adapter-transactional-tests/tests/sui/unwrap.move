@@ -72,10 +72,10 @@ module test::object_basics {
 
 //# run test::object_basics::create --args 10 @A
 
-//# view-object 106
+//# view-object 107
 
-//# run test::object_basics::wrap --args object(106) --sender A
+//# run test::object_basics::wrap --args object(107) --sender A
 
-//# run test::object_basics::unwrap --args object(108) --sender A
+//# run test::object_basics::unwrap --args object(109) --sender A
 
-//# view-object 106
+//# view-object 107

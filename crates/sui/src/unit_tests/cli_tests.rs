@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
@@ -21,12 +22,11 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
-    SuiTransactionEffects,
+    SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectType, SuiAddress};
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
@@ -161,38 +161,26 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         .await? else{
         panic!()
     };
-
-    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
 
-    // test cluster will not response if this call is in the same thread
-    let out = thread::spawn(move || {
-        cmd.args([
-            "client",
-            "--client.config",
-            config_path.to_str().unwrap(),
-            "call",
-            "--package",
-            "0x2",
-            "--module",
-            "sui",
-            "--function",
-            "transfer",
-            "--args",
-            &coins.first().unwrap().object_id.to_string(),
-            &test_cluster.get_address_1().to_string(),
-            "--gas-budget",
-            "10000",
-        ])
-        .assert()
-    });
-
-    while !out.is_finished() {
-        sleep(Duration::from_millis(100)).await;
-    }
-
-    out.join().unwrap().success();
-    Ok(())
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui",
+        "--function",
+        "transfer",
+        "--args",
+        &coins.first().unwrap().object_id.to_string(),
+        &test_cluster.get_address_1().to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await
 }
 
 #[sim_test]
@@ -213,11 +201,14 @@ async fn test_create_example_nft_command() {
     .unwrap();
 
     match result {
-        SuiClientCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
-            assert_eq!(obj.owner, address);
+        SuiClientCommandResult::CreateExampleNFT(SuiObjectResponse::Exists(obj)) => {
+            assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
             assert_eq!(
-                obj.data.type_().unwrap(),
-                sui_framework_address_concat_string("::devnet_nft::DevNetNFT")
+                obj.type_.clone().unwrap(),
+                ObjectType::from_str(&sui_framework_address_concat_string(
+                    "::devnet_nft::DevNetNFT"
+                ))
+                .unwrap()
             );
             Ok(obj)
         }
@@ -344,7 +335,6 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -368,13 +358,14 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
-        verify_dependencies: true,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
     }
     .execute(context)
     .await?;
 
     let package = if let SuiClientCommandResult::Publish(response) = resp {
-        response.effects.created[0].reference.object_id
+        response.effects.unwrap().created()[0].reference.object_id
     } else {
         unreachable!("Invalid response");
     };
@@ -421,19 +412,16 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the created object
-    let created_obj: ObjectID = if let SuiClientCommandResult::Call(
-        _,
-        SuiTransactionEffects {
-            created: new_objs, ..
-        },
-    ) = resp
-    {
-        new_objs.first().unwrap().reference.object_id
+    let created_obj: ObjectID = if let SuiClientCommandResult::Call(resp) = resp {
+        resp.effects
+            .unwrap()
+            .created()
+            .first()
+            .unwrap()
+            .reference
+            .object_id
     } else {
-        // User assert since panic causes test issues
-        assert!(false);
-        // Use this to satisfy type checker
-        ObjectID::random()
+        panic!();
     };
 
     // Try a bad argument: decimal
@@ -511,7 +499,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -536,7 +523,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
-        verify_dependencies: true,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
     }
     .execute(context)
     .await?;
@@ -547,7 +535,9 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
         response
             .effects
-            .created
+            .as_ref()
+            .unwrap()
+            .created()
             .iter()
             .map(|refe| refe.reference.object_id)
             .collect::<Vec<_>>()
@@ -563,7 +553,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -594,17 +583,30 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) =
-        if let SuiClientCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp
-        {
-            (
-                mutated.get(0).unwrap().reference.object_id,
-                mutated.get(1).unwrap().reference.object_id,
-            )
-        } else {
-            assert!(false);
-            panic!()
-        };
+    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        (
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .mutated()
+                .get(0)
+                .unwrap()
+                .reference
+                .object_id,
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .mutated()
+                .get(1)
+                .unwrap()
+                .reference
+                .object_id,
+        )
+    } else {
+        panic!()
+    };
 
     // Check the objects
     let resp = SuiClientCommands::Object {
@@ -613,15 +615,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 = if let SuiClientCommandResult::Object(
-        GetObjectDataResponse::Exists(object),
-        false,
-    ) = resp
-    {
+    let mut_obj1 = if let SuiClientCommandResult::Object(SuiObjectResponse::Exists(object)) = resp {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
         panic!()
     };
 
@@ -631,26 +627,20 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj2 = if let SuiClientCommandResult::Object(
-        GetObjectDataResponse::Exists(object),
-        false,
-    ) = resp
-    {
+    let mut_obj2 = if let SuiClientCommandResult::Object(SuiObjectResponse::Exists(object)) = resp {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
         panic!()
     };
 
-    let (gas, obj) = if mut_obj1.owner.get_owner_address().unwrap() == address {
+    let (gas, obj) = if mut_obj1.owner.unwrap().get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
     } else {
         (mut_obj2, mut_obj1)
     };
 
-    assert_eq!(gas.owner.get_owner_address().unwrap(), address);
-    assert_eq!(obj.owner.get_owner_address().unwrap(), recipient);
+    assert_eq!(gas.owner.unwrap().get_owner_address().unwrap(), address);
+    assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), recipient);
 
     let object_refs = client
         .read_api()
@@ -673,17 +663,30 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (_mut_obj1, _mut_obj2) =
-        if let SuiClientCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp
-        {
-            (
-                mutated.get(0).unwrap().reference.object_id,
-                mutated.get(1).unwrap().reference.object_id,
-            )
-        } else {
-            assert!(false);
-            panic!()
-        };
+    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(_, response) = resp {
+        (
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .mutated()
+                .get(0)
+                .unwrap()
+                .reference
+                .object_id,
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .mutated()
+                .get(1)
+                .unwrap()
+                .reference
+                .object_id,
+        )
+    } else {
+        panic!()
+    };
 
     Ok(())
 }
@@ -691,15 +694,13 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read =
-        SuiClientCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()), false);
+    let read = SuiClientCommandResult::Object(SuiObjectResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
     write!(writer, "{:?}", read).unwrap();
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await?;
@@ -828,7 +829,6 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await?;
@@ -867,14 +867,18 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn get_gas_value(o: &SuiParsedObject) -> u64 {
+fn get_gas_value(o: &SuiObjectData) -> u64 {
     GasCoin::try_from(o).unwrap().value()
 }
 
-async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiParsedObject> {
+async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiObjectData> {
     let client = context.get_client().await.unwrap();
-    let response = client.read_api().get_parsed_object(id).await.unwrap();
-    if let GetObjectDataResponse::Exists(o) = response {
+    let response = client
+        .read_api()
+        .get_object_with_options(id, SuiObjectDataOptions::full_content())
+        .await
+        .unwrap();
+    if let SuiObjectResponse::Exists(o) = response {
         Some(o)
     } else {
         None
@@ -884,13 +888,12 @@ async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiParsedOb
 async fn get_parsed_object_assert_existence(
     object_id: ObjectID,
     context: &WalletContext,
-) -> SuiObject<SuiParsedData> {
+) -> SuiObjectData {
     get_object(object_id, context)
         .await
         .expect("Object {object_id} does not exist.")
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -922,7 +925,10 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
         let object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
+            .into_iter()
             .next()
             .unwrap()
             .reference
@@ -962,7 +968,10 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
         let object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
+            .into_iter()
             .next()
             .unwrap()
             .reference
@@ -981,7 +990,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -1013,13 +1021,16 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         let updated_object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
+            .into_iter()
             .next()
             .unwrap()
             .reference
             .object_id;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.created;
+        let new_object_refs = r.effects.unwrap().created().to_vec();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
             new_objects.push(
@@ -1063,13 +1074,16 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         let updated_object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
+            .into_iter()
             .next()
             .unwrap()
             .reference
             .object_id;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.created;
+        let new_object_refs = r.effects.unwrap().created().to_vec();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
             new_objects.push(
@@ -1116,13 +1130,16 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
         let updated_object_id = r
             .effects
+            .as_ref()
+            .unwrap()
             .mutated_excluding_gas()
+            .into_iter()
             .next()
             .unwrap()
             .reference
             .object_id;
         let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-        let new_object_refs = r.effects.created;
+        let new_object_refs = r.effects.unwrap().created().to_vec();
         let mut new_objects = Vec::with_capacity(new_object_refs.len());
         for obj_ref in new_object_refs {
             new_objects.push(
@@ -1167,10 +1184,10 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     let mut txns = make_transactions_with_wallet_context(context, 1).await;
     let txn = txns.swap_remove(0);
 
-    let (tx_data, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_data, signatures) = txn.to_tx_bytes_and_signatures();
     SuiClientCommands::ExecuteSignedTx {
         tx_bytes: tx_data.encoded(),
-        signature: signature.encoded(),
+        signatures: signatures.into_iter().map(|s| s.encoded()).collect(),
     }
     .execute(context)
     .await?;
@@ -1198,5 +1215,124 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_add_delegation_mul_coin",
+        "--args",
+        "0x5",
+        &format!("[{}]", coins.first().unwrap().coin_object_id),
+        "[]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await?;
+
+    let stake = client
+        .governance_api()
+        .get_delegated_stakes(address)
+        .await?;
+
+    assert_eq!(1, stake.len());
+    assert_eq!(
+        coins.first().unwrap().balance,
+        stake.first().unwrap().staked_sui.principal()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_add_delegation_mul_coin",
+        "--args",
+        "0x5",
+        &format!("[{}]", coins.first().unwrap().coin_object_id),
+        "[10000]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await?;
+
+    let stake = client
+        .governance_api()
+        .get_delegated_stakes(address)
+        .await?;
+
+    assert_eq!(1, stake.len());
+    assert_eq!(10000, stake.first().unwrap().staked_sui.principal());
+    Ok(())
+}
+
+async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // test cluster will not response if this call is in the same thread
+    let out = thread::spawn(move || cmd.args(args).assert());
+    while !out.is_finished() {
+        sleep(Duration::from_millis(100)).await;
+    }
+    out.join().unwrap().success();
     Ok(())
 }

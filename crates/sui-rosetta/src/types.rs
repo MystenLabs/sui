@@ -1,26 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
-
-use axum::response::{IntoResponse, Response};
+use anyhow::anyhow;
 use axum::Json;
+use std::fmt::Debug;
+use std::str::FromStr;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+
+use crate::errors::{Error, ErrorType};
+use crate::operations::Operations;
+use crate::SUI;
+use axum::response::{IntoResponse, Response};
 use fastcrypto::encoding::Hex;
+use fastcrypto::traits::ToFromBytes;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
 use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
-use sui_sdk::rpc_types::SuiExecutionStatus;
+use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionKind};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::committee::EpochId;
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-
-use crate::errors::{Error, ErrorType};
-use crate::operations::Operation;
-use crate::SUI;
+use sui_types::governance::{
+    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
+};
+use sui_types::messages::{CallArg, ObjectArg, TransactionData};
+use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 
 pub type BlockHeight = u64;
 
@@ -62,11 +74,29 @@ impl SuiEnv {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AccountIdentifier {
     pub address: SuiAddress,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_account: Option<SubAccount>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SubAccount {
+    #[serde(rename = "address")]
+    pub account_type: SubAccountType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum SubAccountType {
+    DelegatedSui,
+    PendingDelegation,
+    LockedSui,
 }
 
 impl From<SuiAddress> for AccountIdentifier {
     fn from(address: SuiAddress) -> Self {
-        AccountIdentifier { address }
+        AccountIdentifier {
+            address,
+            sub_account: None,
+        }
     }
 }
 
@@ -75,7 +105,7 @@ pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
     pub account_identifier: AccountIdentifier,
@@ -84,7 +114,7 @@ pub struct AccountBalanceRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub currencies: Vec<Currency>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceResponse {
     pub block_identifier: BlockIdentifier,
     pub balances: Vec<Amount>,
@@ -102,129 +132,59 @@ pub struct BlockIdentifier {
     pub hash: BlockHash,
 }
 
-pub type BlockHash = TransactionDigest;
+pub type BlockHash = CheckpointDigest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {
-    pub value: SignedValue,
+    #[serde(with = "str_format")]
+    pub value: i128,
     pub currency: Currency,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<AmountMetadata>,
 }
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
-pub struct SignedValue {
-    negative: bool,
-    value: u128,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AmountMetadata {
+    pub lock_until_epoch: EpochId,
 }
 
-impl From<u64> for SignedValue {
-    fn from(value: u64) -> Self {
+impl Amount {
+    pub fn new(value: i128) -> Self {
         Self {
-            negative: false,
-            value: value as u128,
-        }
-    }
-}
-
-impl From<u128> for SignedValue {
-    fn from(value: u128) -> Self {
-        Self {
-            negative: false,
             value,
+            currency: SUI.clone(),
+            metadata: None,
         }
     }
-}
-
-impl From<i128> for SignedValue {
-    fn from(value: i128) -> Self {
+    pub fn new_locked(epoch: EpochId, value: i128) -> Self {
         Self {
-            negative: value.is_negative(),
-            value: value.unsigned_abs(),
+            value,
+            currency: SUI.clone(),
+            metadata: Some(AmountMetadata {
+                lock_until_epoch: epoch,
+            }),
         }
     }
 }
 
-impl From<i64> for SignedValue {
-    fn from(value: i64) -> Self {
-        Self {
-            negative: value.is_negative(),
-            value: value.unsigned_abs().into(),
-        }
-    }
-}
+mod str_format {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::str::FromStr;
 
-impl SignedValue {
-    pub fn neg(v: u128) -> Self {
-        Self {
-            negative: true,
-            value: v,
-        }
-    }
-    pub fn is_negative(&self) -> bool {
-        self.negative
-    }
-
-    pub fn abs(&self) -> u128 {
-        self.value
-    }
-
-    pub fn add(&mut self, other: &Self) {
-        if self.negative ^ other.negative {
-            if self.value > other.value {
-                self.value -= other.value;
-            } else {
-                self.value = other.value - self.value;
-                self.negative = !self.negative;
-            }
-        } else {
-            self.value += other.value
-        }
-    }
-}
-
-impl Display for SignedValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.negative {
-            write!(f, "-")?;
-        }
-        write!(f, "{}", self.value)
-    }
-}
-
-impl Serialize for SignedValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(value: &i128, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        self.to_string().serialize(serializer)
+        value.to_string().serialize(serializer)
     }
-}
 
-impl<'de> Deserialize<'de> for SignedValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<i128, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(if let Some(value) = s.strip_prefix('-') {
-            SignedValue {
-                negative: true,
-                value: u128::from_str(value).map_err(D::Error::custom)?,
-            }
-        } else {
-            SignedValue {
-                negative: false,
-                value: u128::from_str(&s).map_err(D::Error::custom)?,
-            }
-        })
-    }
-}
-
-impl Amount {
-    pub fn new(value: SignedValue) -> Self {
-        Self {
-            value,
-            currency: SUI.clone(),
-        }
+        i128::from_str(&s).map_err(Error::custom)
     }
 }
 
@@ -260,8 +220,11 @@ impl From<sui_sdk::rpc_types::Coin> for Coin {
                 },
             },
             amount: Amount {
-                value: SignedValue::from(coin.balance),
+                value: coin.balance as i128,
                 currency: SUI.clone(),
+                metadata: coin.locked_until_epoch.map(|epoch| AmountMetadata {
+                    lock_until_epoch: epoch,
+                }),
             },
         }
     }
@@ -351,10 +314,29 @@ pub struct ConstructionDeriveRequest {
     pub public_key: PublicKey,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PublicKey {
     pub hex_bytes: Hex,
     pub curve_type: CurveType,
+}
+
+impl From<SuiPublicKey> for PublicKey {
+    fn from(pk: SuiPublicKey) -> Self {
+        match pk {
+            SuiPublicKey::Ed25519(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                curve_type: CurveType::Edwards25519,
+            },
+            SuiPublicKey::Secp256k1(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                curve_type: CurveType::Secp256k1,
+            },
+            SuiPublicKey::Secp256r1(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(k.as_bytes()),
+                curve_type: CurveType::Secp256r1,
+            },
+        }
+    }
 }
 
 impl TryInto<SuiAddress> for PublicKey {
@@ -396,11 +378,10 @@ impl IntoResponse for ConstructionDeriveResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionPayloadsRequest {
     pub network_identifier: NetworkIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<ConstructionMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -410,11 +391,13 @@ pub struct ConstructionPayloadsRequest {
 #[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter, Eq, PartialEq)]
 pub enum OperationType {
     // Balance changing operations from TransactionEffect
-    GasSpent,
+    Gas,
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
-    GasBudget,
+    Delegation,
+    WithdrawDelegation,
+    SwitchDelegation,
     // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
@@ -423,11 +406,34 @@ pub enum OperationType {
     Publish,
     MoveCall,
     EpochChange,
-    // Rosetta only transaction type, used for fabricating genesis transactions.
     Genesis,
+    ConsensusCommitPrologue,
+    ProgrammableTransaction,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+impl From<&SuiTransactionKind> for OperationType {
+    fn from(tx: &SuiTransactionKind) -> Self {
+        match tx {
+            SuiTransactionKind::TransferObject(_) => OperationType::TransferObject,
+            SuiTransactionKind::Pay(_) => OperationType::Pay,
+            SuiTransactionKind::PaySui(_) => OperationType::PaySui,
+            SuiTransactionKind::PayAllSui(_) => OperationType::PayAllSui,
+            SuiTransactionKind::Publish(_) => OperationType::Publish,
+            SuiTransactionKind::Call(_) => OperationType::MoveCall,
+            SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
+            SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
+            SuiTransactionKind::Genesis(_) => OperationType::Genesis,
+            SuiTransactionKind::ConsensusCommitPrologue(_) => {
+                OperationType::ConsensusCommitPrologue
+            }
+            SuiTransactionKind::ProgrammableTransaction(_) => {
+                OperationType::ProgrammableTransaction
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct OperationIdentifier {
     index: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -456,7 +462,7 @@ pub enum CoinAction {
     CoinSpent,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionPayloadsResponse {
     pub unsigned_transaction: Hex,
     pub payloads: Vec<SigningPayload>,
@@ -468,29 +474,30 @@ impl IntoResponse for ConstructionPayloadsResponse {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SigningPayload {
     pub account_identifier: AccountIdentifier,
+    // Rosetta need the hex string without `0x`, cannot use fastcrypto's Hex
     pub hex_bytes: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_type: Option<SignatureType>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum SignatureType {
     Ed25519,
     Ecdsa,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ConstructionCombineRequest {
     pub network_identifier: NetworkIdentifier,
     pub unsigned_transaction: Hex,
     pub signatures: Vec<Signature>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Signature {
     pub signing_payload: SigningPayload,
     pub public_key: PublicKey,
@@ -498,7 +505,7 @@ pub struct Signature {
     pub hex_bytes: Hex,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionCombineResponse {
     pub signed_transaction: Hex,
 }
@@ -509,12 +516,12 @@ impl IntoResponse for ConstructionCombineResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionSubmitRequest {
     pub network_identifier: NetworkIdentifier,
     pub signed_transaction: Hex,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TransactionIdentifierResponse {
     pub transaction_identifier: TransactionIdentifier,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -532,19 +539,32 @@ pub struct TransactionIdentifier {
     pub hash: TransactionDigest,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub max_fee: Vec<Amount>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub suggested_fee_multiplier: Option<u64>,
+    pub metadata: Option<PreprocessMetadata>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
+pub enum PreprocessMetadata {
+    PaySui,
+    Delegation { locked_until_epoch: Option<EpochId> },
+}
+
+impl From<TransactionMetadata> for PreprocessMetadata {
+    fn from(tx_metadata: TransactionMetadata) -> Self {
+        match tx_metadata {
+            TransactionMetadata::PaySui => Self::PaySui,
+            TransactionMetadata::Delegation {
+                locked_until_epoch, ..
+            } => Self::Delegation { locked_until_epoch },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionPreprocessResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options: Option<MetadataOptions>,
@@ -552,10 +572,9 @@ pub struct ConstructionPreprocessResponse {
     pub required_public_keys: Vec<AccountIdentifier>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MetadataOptions {
-    pub sender: SuiAddress,
-    pub amount: u128,
+    pub internal_operation: InternalOperation,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -569,7 +588,7 @@ pub struct ConstructionHashRequest {
     pub signed_transaction: Hex,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ConstructionMetadataRequest {
     pub network_identifier: NetworkIdentifier,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -578,22 +597,34 @@ pub struct ConstructionMetadataRequest {
     pub public_keys: Vec<PublicKey>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionMetadataResponse {
     pub metadata: ConstructionMetadata,
     #[serde(default)]
     pub suggested_fee: Vec<Amount>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionMetadata {
-    pub sender_coins: Vec<ObjectRef>,
+    pub tx_metadata: TransactionMetadata,
+    pub sender: SuiAddress,
+    pub gas: Vec<ObjectRef>,
+    pub gas_price: u64,
+    pub budget: u64,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
     }
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum TransactionMetadata {
+    PaySui,
+    Delegation {
+        coins: Vec<ObjectRef>,
+        locked_until_epoch: Option<EpochId>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -605,7 +636,7 @@ pub struct ConstructionParseRequest {
 
 #[derive(Serialize)]
 pub struct ConstructionParseResponse {
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     pub account_identifier_signers: Vec<AccountIdentifier>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
@@ -706,8 +737,8 @@ pub enum OperationStatus {
     Failure,
 }
 
-impl From<&SuiExecutionStatus> for OperationStatus {
-    fn from(es: &SuiExecutionStatus) -> Self {
+impl From<SuiExecutionStatus> for OperationStatus {
+    fn from(es: SuiExecutionStatus) -> Self {
         match es {
             SuiExecutionStatus::Success => OperationStatus::Success,
             SuiExecutionStatus::Failure { .. } => OperationStatus::Failure,
@@ -744,7 +775,7 @@ pub enum Case {
     Null,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Block {
     pub block_identifier: BlockIdentifier,
     pub parent_block_identifier: BlockIdentifier,
@@ -754,24 +785,24 @@ pub struct Block {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Transaction {
     pub transaction_identifier: TransactionIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related_transactions: Vec<RelatedTransaction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RelatedTransaction {
     network_identifier: NetworkIdentifier,
     transaction_identifier: TransactionIdentifier,
     direction: Direction,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 #[allow(dead_code)]
 pub enum Direction {
@@ -779,7 +810,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockResponse {
     pub block: Block,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -791,7 +822,7 @@ impl IntoResponse for BlockResponse {
         Json(self).into_response()
     }
 }
-#[derive(Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct PartialBlockIdentifier {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index: Option<u64>,
@@ -823,23 +854,101 @@ impl IntoResponse for BlockTransactionResponse {
     }
 }
 
-#[derive(Default)]
-pub struct IndexCounter {
-    index: u64,
-}
-
-impl IndexCounter {
-    pub fn next_idx(&mut self) -> u64 {
-        let next = self.index;
-        self.index += 1;
-        next
-    }
-}
-
 #[derive(Serialize, Clone)]
 pub struct PrefundedAccount {
     pub privkey: String,
     pub account_identifier: AccountIdentifier,
     pub curve_type: CurveType,
     pub currency: Currency,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum InternalOperation {
+    PaySui {
+        sender: SuiAddress,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+    },
+    Delegation {
+        sender: SuiAddress,
+        validator: SuiAddress,
+        amount: u128,
+        locked_until_epoch: Option<EpochId>,
+    },
+}
+
+impl InternalOperation {
+    pub fn sender(&self) -> SuiAddress {
+        match self {
+            InternalOperation::PaySui { sender, .. }
+            | InternalOperation::Delegation { sender, .. } => *sender,
+        }
+    }
+    /// Combine with ConstructionMetadata to form the TransactionData
+    pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
+        let pt = match (self, metadata.tx_metadata) {
+            (
+                Self::PaySui {
+                    recipients,
+                    amounts,
+                    ..
+                },
+                TransactionMetadata::PaySui,
+            ) => {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.pay_sui(recipients, amounts)?;
+                builder.finish()
+            }
+            (
+                InternalOperation::Delegation {
+                    validator,
+                    amount,
+                    locked_until_epoch,
+                    ..
+                },
+                TransactionMetadata::Delegation { coins, .. },
+            ) => {
+                let function = if locked_until_epoch.is_some() {
+                    ADD_DELEGATION_LOCKED_COIN_FUN_NAME.to_owned()
+                } else {
+                    ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
+                };
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.move_call(
+                    SUI_FRAMEWORK_OBJECT_ID,
+                    SUI_SYSTEM_MODULE_NAME.to_owned(),
+                    function,
+                    vec![],
+                    vec![
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_SYSTEM_STATE_OBJECT_ID,
+                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                            mutable: true,
+                        }),
+                        CallArg::ObjVec(
+                            coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
+                        ),
+                        CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
+                        CallArg::Pure(bcs::to_bytes(&validator)?),
+                    ],
+                )?;
+                builder.finish()
+            }
+            (op, metadata) => {
+                return Err(Error::InternalError(anyhow!(
+                "Cannot construct TransactionData from provided operation and metadata, {:?}, {:?}",
+                op,
+                metadata
+            )))
+            }
+        };
+
+        Ok(TransactionData::new_programmable(
+            metadata.sender,
+            metadata.gas,
+            pt,
+            metadata.budget,
+            metadata.gas_price,
+        ))
+    }
 }

@@ -8,7 +8,6 @@ proposals that typically require shared objects have been transformed to variant
 final step and not for every action, such as voting and lotteries and DeFi Oracle price quotes submission.
 
 1. Regular peer-to-peer (p2p) transactions ([see how to create a new Coin with just 7 lines of Sui Move code](https://www.linkedin.com/posts/chalkiaskostas_startup-smartcontract-cryptocurrency-activity-6946006856528003072-CvI0)).
-1. Confidential p2p Txs: same as FastPay but with pedersen commitments to hide amounts transferred; this still ensures input amount = output amount - we can set amount limits, i.e., N transfers up to $1,000 can be confidential.
 1. Public bulletin board; users store only publicly accessed data, files, links, metadata.
 1. Proof of existence: similar to the above, but for time-stamped documents; it can be extended to support commitment proof of existence, i.e. publish your hash, then reveal.
 1. Private decentralized repository (users store private files, encrypted under their public keys; users' public keys can be represented as NFTs.

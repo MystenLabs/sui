@@ -47,13 +47,13 @@ module nfts::auction_lib {
     /// Creates an auction. This is executed by the owner of the asset to be
     /// auctioned.
     public(friend) fun create_auction<T: key + store>(
-        id: UID, to_sell: T, ctx: &mut TxContext
+        to_sell: T, ctx: &mut TxContext
     ): Auction<T> {
         // A question one might asked is how do we know that to_sell
         // is owned by the caller of this entry function and the
         // answer is that it's checked by the runtime.
         Auction<T> {
-            id,
+            id: object::new(ctx),
             to_sell: option::some(to_sell),
             owner: tx_context::sender(ctx),
             bid_data: option::none(),

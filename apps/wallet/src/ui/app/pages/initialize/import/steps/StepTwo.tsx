@@ -12,8 +12,6 @@ import { passwordFieldsValidation } from '_pages/initialize/shared/password-fiel
 
 import type { StepProps } from '.';
 
-import st from './StepTwo.module.scss';
-
 const validationSchema = object(passwordFieldsValidation);
 
 export default function StepTwo({ next, data, mode }: StepProps) {
@@ -28,21 +26,21 @@ export default function StepTwo({ next, data, mode }: StepProps) {
             enableReinitialize={true}
         >
             {({ isSubmitting, isValid, values }) => (
-                <Form className={st.form}>
+                <Form className="flex flex-col flex-nowrap self-stretch flex-1">
                     <PasswordFields />
-                    <div className={st.fill} />
-                    <div className={st.actions}>
+                    <div className="flex-1" />
+                    <div className="flex flex-nowrap gap-2.5 mt-5">
                         <Button
                             type="button"
                             disabled={isSubmitting}
-                            className={st.btn}
+                            className="flex-1 !text-steel-dark"
                             mode="neutral"
                             size="large"
                             onClick={() => next(values, -1)}
                         >
                             <Icon
                                 icon={SuiIcons.ArrowLeft}
-                                className={st.prev}
+                                className="text-subtitleSmallExtra font-normal"
                             />
                             Back
                         </Button>
@@ -50,14 +48,14 @@ export default function StepTwo({ next, data, mode }: StepProps) {
                             type="submit"
                             disabled={isSubmitting || !isValid}
                             mode="primary"
-                            className={st.btn}
+                            className="flex-1"
                             size="large"
                         >
                             <Loading loading={isSubmitting}>
                                 {mode === 'import' ? 'Import' : 'Reset'}
                                 <Icon
                                     icon={SuiIcons.ArrowRight}
-                                    className={st.next}
+                                    className="text-subtitleSmallExtra font-light"
                                 />
                             </Loading>
                         </Button>

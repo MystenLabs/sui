@@ -16,12 +16,11 @@ use serde_json::{json, Value};
 use tracing::info;
 use tracing::log::warn;
 
-use sui_config::genesis::Genesis;
 use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_node::{metrics, SuiNode};
-use sui_rosetta::types::{AccountIdentifier, CurveType, PrefundedAccount, SuiEnv};
+use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
 
@@ -45,9 +44,7 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         full_node_url: String,
-        #[clap(long, default_value = "genesis.blob")]
-        genesis_path: PathBuf,
-        #[clap(long, default_value = "data")]
+        #[clap(long, default_value = "/data")]
         data_path: PathBuf,
     },
     StartOnlineServer {
@@ -57,7 +54,7 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         node_config: Option<PathBuf>,
-        #[clap(long, default_value = "data")]
+        #[clap(long, default_value = "/data")]
         data_path: PathBuf,
     },
     StartOfflineServer {
@@ -138,19 +135,15 @@ impl RosettaServerCommand {
                 env,
                 addr,
                 full_node_url,
-                genesis_path,
                 data_path,
             } => {
                 info!(
                     "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
                 );
                 let sui_client = wait_for_sui_client(full_node_url).await;
-                let rosetta = RosettaOnlineServer::new(
-                    env,
-                    sui_client,
-                    Genesis::load(&genesis_path)?,
-                    &data_path,
-                );
+                let rosetta_path = data_path.join("rosetta_db");
+                info!("Rosetta db path : {rosetta_path:?}");
+                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
                 rosetta.serve(addr).await??;
             }
 
@@ -161,21 +154,28 @@ impl RosettaServerCommand {
                 data_path,
             } => {
                 info!("Starting Rosetta Online Server with embedded Sui full node.");
+                info!("Data directory path: {data_path:?}");
 
                 let node_config = node_config.unwrap_or_else(|| {
                     let path = sui_config_dir().unwrap().join(SUI_FULLNODE_CONFIG);
                     info!("Using default node config from {path:?}");
                     path
                 });
-                let config = NodeConfig::load(&node_config)?;
+
+                let mut config = NodeConfig::load(&node_config)?;
+                config.db_path = data_path.join("sui_db");
+                info!("Overriding Sui db path to : {:?}", config.db_path);
+
                 let registry_service = metrics::start_prometheus_server(config.metrics_address);
                 // Staring a full node for the rosetta server.
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
-                let genesis = config.genesis.genesis()?.clone();
                 let _node = SuiNode::start(&config, registry_service).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
-                let rosetta = RosettaOnlineServer::new(env, sui_client, genesis, &data_path);
+
+                let rosetta_path = data_path.join("rosetta_db");
+                info!("Rosetta db path : {rosetta_path:?}");
+                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
                 rosetta.serve(addr).await??;
             }
         };
@@ -185,7 +185,11 @@ impl RosettaServerCommand {
 
 async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
     loop {
-        match SuiClient::new(&rpc_address, None, None).await {
+        match SuiClientBuilder::default()
+            .max_concurrent_requests(usize::MAX)
+            .build(&rpc_address)
+            .await
+        {
             Ok(client) => return client,
             Err(e) => {
                 warn!("Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
@@ -226,7 +230,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
             };
             PrefundedAccount {
                 privkey,
-                account_identifier: AccountIdentifier { address },
+                account_identifier: address.into(),
                 curve_type,
                 currency: SUI.clone(),
             }
@@ -272,7 +276,7 @@ fn test_read_keystore() {
 async fn main() -> Result<(), anyhow::Error> {
     let cmd: RosettaServerCommand = RosettaServerCommand::parse();
 
-    let (_guard, _) = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let (_guard, _) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 

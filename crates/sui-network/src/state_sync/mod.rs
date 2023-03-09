@@ -47,25 +47,20 @@
 //! channel will always be made in order. StateSync will also send out a notification to its peers
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
-// TODO
-// * When querying a peer make sure that we're sending to peers that are on the same "network" as
-// us. this means verifying their genesis or something else
-
-use anemo::{rpc::Status, types::PeerEvent, PeerId, Request, Response, Result};
+use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use anyhow::anyhow;
 use futures::{FutureExt, StreamExt};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
-    base_types::ExecutionDigests,
-    message_envelope::Message,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
-        CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
+        VerifiedCheckpoint, VerifiedCheckpointContents,
     },
     storage::ReadStore,
     storage::WriteStore,
@@ -76,8 +71,6 @@ use tokio::{
     task::{AbortHandle, JoinSet},
 };
 use tracing::{debug, info, trace, warn};
-
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(2);
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -132,65 +125,103 @@ impl Handle {
 
 struct PeerHeights {
     /// Table used to track the highest checkpoint for each of our peers.
-    ///
-    /// Today we don't have the concept of a "genesis checkpoint" so when a node starts up with an
-    /// empty db it won't have any checkpoints, the None case indicates this. If a node shows up in
-    /// this map then they support state-sync.
-    heights: HashMap<PeerId, Option<CheckpointSequenceNumber>>,
+    peers: HashMap<PeerId, PeerStateSyncInfo>,
     unprocessed_checkpoints: HashMap<CheckpointDigest, Checkpoint>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct PeerStateSyncInfo {
+    /// The digest of the Peer's genesis checkpoint.
+    genesis_checkpoint_digest: CheckpointDigest,
+    /// Indicates if this Peer is on the same chain as us.
+    on_same_chain_as_us: bool,
+    /// Highest checkpoint sequence number we know of for this Peer.
+    height: CheckpointSequenceNumber,
+}
+
 impl PeerHeights {
     pub fn highest_known_checkpoint(&self) -> Option<&Checkpoint> {
-        self.heights
-            .values()
-            .max()
-            .and_then(Clone::clone)
+        self.highest_known_checkpoint_sequence_number()
             .and_then(|s| self.sequence_number_to_digest.get(&s))
             .and_then(|digest| self.unprocessed_checkpoints.get(digest))
     }
 
     pub fn highest_known_checkpoint_sequence_number(&self) -> Option<CheckpointSequenceNumber> {
-        self.heights.values().max().and_then(Clone::clone)
+        self.peers
+            .values()
+            .filter_map(|info| info.on_same_chain_as_us.then_some(info.height))
+            .max()
     }
 
-    pub fn update_peer_height(&mut self, peer_id: PeerId, checkpoint: Option<Checkpoint>) {
+    pub fn peers_on_same_chain(&self) -> impl Iterator<Item = (&PeerId, &PeerStateSyncInfo)> {
+        self.peers
+            .iter()
+            .filter(|(_peer_id, info)| info.on_same_chain_as_us)
+    }
+
+    // Returns a bool that indicates if the update was done successfully.
+    //
+    // This will return false if the given peer doesn't have an entry or is not on the same chain
+    // as us
+    pub fn update_peer_info(&mut self, peer_id: PeerId, checkpoint: Checkpoint) -> bool {
+        let info = match self.peers.get_mut(&peer_id) {
+            Some(info) if info.on_same_chain_as_us => info,
+            _ => return false,
+        };
+
+        info.height = std::cmp::max(*checkpoint.sequence_number(), info.height);
+        self.insert_checkpoint(checkpoint);
+
+        true
+    }
+
+    pub fn insert_peer_info(&mut self, peer_id: PeerId, info: PeerStateSyncInfo) {
         use std::collections::hash_map::Entry;
 
-        let latest = checkpoint
-            .as_ref()
-            .map(|checkpoint| checkpoint.sequence_number());
-
-        match self.heights.entry(peer_id) {
+        match self.peers.entry(peer_id) {
             Entry::Occupied(mut entry) => {
-                if latest > *entry.get() {
-                    entry.insert(latest);
+                // If there's already an entry and the genesis checkpoint digests match then update
+                // the maximum height. Otherwise we'll use the more recent one
+                let entry = entry.get_mut();
+                if entry.genesis_checkpoint_digest == info.genesis_checkpoint_digest {
+                    entry.height = std::cmp::max(entry.height, info.height);
+                } else {
+                    *entry = info;
                 }
             }
             Entry::Vacant(entry) => {
-                entry.insert(latest);
+                entry.insert(info);
             }
         }
+    }
 
-        if let Some(checkpoint) = checkpoint {
-            self.insert_checkpoint(checkpoint);
+    pub fn mark_peer_as_not_on_same_chain(&mut self, peer_id: PeerId) {
+        if let Some(info) = self.peers.get_mut(&peer_id) {
+            info.on_same_chain_as_us = false;
         }
     }
 
     pub fn cleanup_old_checkpoints(&mut self, sequence_number: CheckpointSequenceNumber) {
         self.unprocessed_checkpoints
-            .retain(|_digest, checkpoint| checkpoint.sequence_number() > sequence_number);
+            .retain(|_digest, checkpoint| *checkpoint.sequence_number() > sequence_number);
         self.sequence_number_to_digest
             .retain(|&s, _digest| s > sequence_number);
     }
 
     pub fn insert_checkpoint(&mut self, checkpoint: Checkpoint) {
-        let digest = checkpoint.digest();
-        let sequence_number = checkpoint.sequence_number();
+        let digest = *checkpoint.digest();
+        let sequence_number = *checkpoint.sequence_number();
         self.unprocessed_checkpoints.insert(digest, checkpoint);
         self.sequence_number_to_digest
             .insert(sequence_number, digest);
+    }
+
+    pub fn remove_checkpoint(&mut self, digest: &CheckpointDigest) {
+        if let Some(checkpoint) = self.unprocessed_checkpoints.remove(digest) {
+            self.sequence_number_to_digest
+                .remove(checkpoint.sequence_number());
+        }
     }
 
     pub fn get_checkpoint_by_sequence_number(
@@ -258,6 +289,22 @@ where
             subscriber
         };
 
+        // Initialize checkpoint watermark metrics
+        self.metrics.set_highest_verified_checkpoint(
+            *self
+                .store
+                .get_highest_verified_checkpoint()
+                .expect("store operation should not fail")
+                .sequence_number(),
+        );
+        self.metrics.set_highest_synced_checkpoint(
+            *self
+                .store
+                .get_highest_synced_checkpoint()
+                .expect("store operation should not fail")
+                .sequence_number(),
+        );
+
         loop {
             tokio::select! {
                 now = interval.tick() => {
@@ -296,6 +343,7 @@ where
     }
 
     fn handle_message(&mut self, message: StateSyncMessage) {
+        debug!("Received message: {:?}", message);
         match message {
             StateSyncMessage::StartSyncJob => self.maybe_start_checkpoint_summary_sync_task(),
             StateSyncMessage::VerifiedCheckpoint(checkpoint) => {
@@ -317,46 +365,28 @@ where
                 .expect("store operation should not fail");
 
             // If this is an older checkpoint, just ignore it
-            if latest_checkpoint.as_ref().map(|x| x.sequence_number())
-                >= Some(checkpoint.sequence_number())
-            {
+            if latest_checkpoint.sequence_number() >= checkpoint.sequence_number() {
                 return;
             }
 
-            let next_sequence_number = latest_checkpoint
-                .as_ref()
-                .map(|x| x.sequence_number().saturating_add(1))
-                .unwrap_or(0);
-            let previous_digest = latest_checkpoint.map(|x| x.digest());
+            let next_sequence_number = latest_checkpoint.sequence_number().saturating_add(1);
+            let previous_digest = *latest_checkpoint.digest();
             (next_sequence_number, previous_digest)
         };
 
         // If this is exactly the next checkpoint then insert it and then notify our peers
-        if checkpoint.sequence_number() == next_sequence_number
-            && checkpoint.previous_digest() == previous_digest
+        if *checkpoint.sequence_number() == next_sequence_number
+            && checkpoint.previous_digest == Some(previous_digest)
         {
             let checkpoint = *checkpoint;
 
             // Check invariant that consensus must only send state-sync fully synced checkpoints
             #[cfg(debug_assertions)]
             {
-                let contents = self
-                    .store
-                    .get_checkpoint_contents(&checkpoint.content_digest())
+                self.store
+                    .get_full_checkpoint_contents(&checkpoint.content_digest)
                     .expect("store operation should not fail")
                     .unwrap();
-                for digests in contents.into_inner() {
-                    debug_assert!(self
-                        .store
-                        .get_transaction(&digests.transaction)
-                        .expect("store operation should not fail")
-                        .is_some());
-                    debug_assert!(self
-                        .store
-                        .get_transaction_effects(&digests.effects)
-                        .expect("store operation should not fail")
-                        .is_some());
-                }
             }
 
             self.store
@@ -366,22 +396,46 @@ where
                 .update_highest_synced_checkpoint(&checkpoint)
                 .expect("store operation should not fail");
             self.metrics
-                .set_highest_verified_checkpoint(checkpoint.sequence_number());
+                .set_highest_verified_checkpoint(*checkpoint.sequence_number());
             self.metrics
-                .set_highest_synced_checkpoint(checkpoint.sequence_number());
+                .set_highest_synced_checkpoint(*checkpoint.sequence_number());
 
             // We don't care if no one is listening as this is a broadcast channel
             let _ = self.checkpoint_event_sender.send(checkpoint.clone());
 
             self.spawn_notify_peers_of_checkpoint(checkpoint);
         } else {
-            // Otherwise stick it with the other unprocessed checkpoints and we can try to sync the missing
-            // ones
-            self.peer_heights
-                .write()
-                .unwrap()
-                .insert_checkpoint(checkpoint.into_inner());
-            warn!("Consensus gave us too new of a checkpoint");
+            // Ensure that if consensus sends us a checkpoint that we expect to be the next one,
+            // that it isn't on a fork
+            if *checkpoint.sequence_number() == next_sequence_number {
+                assert_eq!(checkpoint.previous_digest, Some(previous_digest));
+            }
+
+            debug!("consensus sent too new of a checkpoint");
+
+            // See if the missing checkpoints are already in our store and quickly update our
+            // watermarks
+            let mut checkpoints_from_storage =
+                (next_sequence_number..=*checkpoint.sequence_number()).map(|n| {
+                    self.store
+                        .get_checkpoint_by_sequence_number(n)
+                        .expect("store operation should not fail")
+                });
+            while let Some(Some(checkpoint)) = checkpoints_from_storage.next() {
+                self.store
+                    .insert_checkpoint(checkpoint.clone())
+                    .expect("store operation should not fail");
+                self.store
+                    .update_highest_synced_checkpoint(&checkpoint)
+                    .expect("store operation should not fail");
+                self.metrics
+                    .set_highest_verified_checkpoint(*checkpoint.sequence_number());
+                self.metrics
+                    .set_highest_synced_checkpoint(*checkpoint.sequence_number());
+
+                // We don't care if no one is listening as this is a broadcast channel
+                let _ = self.checkpoint_event_sender.send(checkpoint.clone());
+            }
         }
     }
 
@@ -396,7 +450,7 @@ where
                 self.spawn_get_latest_from_peer(peer_id);
             }
             Ok(PeerEvent::LostPeer(peer_id, _)) => {
-                self.peer_heights.write().unwrap().heights.remove(&peer_id);
+                self.peer_heights.write().unwrap().peers.remove(&peer_id);
             }
 
             Err(RecvError::Closed) => {
@@ -411,7 +465,18 @@ where
 
     fn spawn_get_latest_from_peer(&mut self, peer_id: PeerId) {
         if let Some(peer) = self.network.peer(peer_id) {
-            let task = get_latest_from_peer(peer, self.peer_heights.clone());
+            let genesis_checkpoint_digest = *self
+                .store
+                .get_checkpoint_by_sequence_number(0)
+                .expect("store operation should not fail")
+                .expect("store should contain genesis checkpoint")
+                .digest();
+            let task = get_latest_from_peer(
+                genesis_checkpoint_digest,
+                peer,
+                self.peer_heights.clone(),
+                self.config.timeout(),
+            );
             self.tasks.spawn(task);
         }
     }
@@ -421,6 +486,7 @@ where
             self.network.clone(),
             self.peer_heights.clone(),
             self.weak_sender.clone(),
+            self.config.timeout(),
         );
         self.tasks.spawn(task);
     }
@@ -443,7 +509,7 @@ where
             .highest_known_checkpoint()
             .cloned();
 
-        if highest_processed_checkpoint.map(|x| x.sequence_number())
+        if Some(highest_processed_checkpoint.sequence_number())
             < highest_known_checkpoint
                 .as_ref()
                 .map(|x| x.sequence_number())
@@ -455,6 +521,7 @@ where
                 self.peer_heights.clone(),
                 self.metrics.clone(),
                 self.config.checkpoint_header_download_concurrency(),
+                self.config.timeout(),
                 // The if condition should ensure that this is Some
                 highest_known_checkpoint.unwrap(),
             )
@@ -484,21 +551,15 @@ where
             .get_highest_synced_checkpoint()
             .expect("store operation should not fail");
 
-        if highest_verified_checkpoint
-            .as_ref()
-            .map(|x| x.sequence_number())
-            > highest_synced_checkpoint
-                .as_ref()
-                .map(|x| x.sequence_number())
+        if highest_verified_checkpoint.sequence_number()
+            > highest_synced_checkpoint.sequence_number()
             // skip if we aren't connected to any peers that can help
             && self
                 .peer_heights
                 .read()
                 .unwrap()
                 .highest_known_checkpoint_sequence_number()
-                > highest_synced_checkpoint
-                    .as_ref()
-                    .map(|x| x.sequence_number())
+                > Some(*highest_synced_checkpoint.sequence_number())
         {
             let task = sync_checkpoint_contents(
                 self.network.clone(),
@@ -507,10 +568,9 @@ where
                 self.weak_sender.clone(),
                 self.checkpoint_event_sender.clone(),
                 self.metrics.clone(),
-                self.config.transaction_download_concurrency(),
                 self.config.checkpoint_content_download_concurrency(),
-                // The if condition should ensure that this is Some
-                highest_verified_checkpoint.unwrap(),
+                self.config.checkpoint_content_timeout(),
+                highest_verified_checkpoint,
             );
 
             let task_handle = self.tasks.spawn(task);
@@ -519,8 +579,12 @@ where
     }
 
     fn spawn_notify_peers_of_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        let task =
-            notify_peers_of_checkpoint(self.network.clone(), self.peer_heights.clone(), checkpoint);
+        let task = notify_peers_of_checkpoint(
+            self.network.clone(),
+            self.peer_heights.clone(),
+            checkpoint,
+            self.config.timeout(),
+        );
         self.tasks.spawn(task);
     }
 }
@@ -529,92 +593,150 @@ async fn notify_peers_of_checkpoint(
     network: anemo::Network,
     peer_heights: Arc<RwLock<PeerHeights>>,
     checkpoint: VerifiedCheckpoint,
+    timeout: Duration,
 ) {
     let futs = peer_heights
         .read()
         .unwrap()
-        .heights
-        .iter()
+        .peers_on_same_chain()
         // Filter out any peers who we know already have a checkpoint higher than this one
-        .filter(|(_peer_id, &height)| Some(checkpoint.sequence_number()) > height)
-        .map(|(peer_id, _height)| peer_id)
+        .filter_map(|(peer_id, info)| {
+            (*checkpoint.sequence_number() > info.height).then_some(peer_id)
+        })
         // Filter out any peers who we aren't connected with
         .flat_map(|peer_id| network.peer(*peer_id))
         .map(StateSyncClient::new)
         .map(|mut client| {
-            let request = Request::new(checkpoint.inner().clone()).with_timeout(DEFAULT_TIMEOUT);
+            let request = Request::new(checkpoint.inner().clone()).with_timeout(timeout);
             async move { client.push_checkpoint_summary(request).await }
         })
         .collect::<Vec<_>>();
     futures::future::join_all(futs).await;
 }
 
-async fn get_latest_from_peer(peer: anemo::Peer, peer_heights: Arc<RwLock<PeerHeights>>) {
-    let peer_id = peer.peer_id();
-    let request = Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(DEFAULT_TIMEOUT);
-    let response = StateSyncClient::new(peer)
-        .get_checkpoint_summary(request)
-        .await
-        .map(Response::into_inner);
-    update_peer_height(&peer_heights, peer_id, &response);
-}
-
-fn update_peer_height(
-    peer_heights: &RwLock<PeerHeights>,
-    peer_id: PeerId,
-    response: &Result<Option<Checkpoint>, Status>,
+async fn get_latest_from_peer(
+    our_genesis_checkpoint_digest: CheckpointDigest,
+    peer: anemo::Peer,
+    peer_heights: Arc<RwLock<PeerHeights>>,
+    timeout: Duration,
 ) {
-    match response {
-        Ok(latest) => {
+    let peer_id = peer.peer_id();
+    let mut client = StateSyncClient::new(peer);
+
+    let info = {
+        let maybe_info = peer_heights.read().unwrap().peers.get(&peer_id).copied();
+
+        if let Some(info) = maybe_info {
+            info
+        } else {
+            // TODO do we want to create a new API just for querying a node's chainid?
+            //
+            // We need to query this node's genesis checkpoint to see if they're on the same chain
+            // as us
+            let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(0))
+                .with_timeout(timeout);
+            let response = client
+                .get_checkpoint_summary(request)
+                .await
+                .map(Response::into_inner);
+
+            let info = match response {
+                Ok(Some(checkpoint)) => {
+                    let digest = *checkpoint.digest();
+                    PeerStateSyncInfo {
+                        genesis_checkpoint_digest: digest,
+                        on_same_chain_as_us: our_genesis_checkpoint_digest == digest,
+                        height: *checkpoint.sequence_number(),
+                    }
+                }
+                Ok(None) => PeerStateSyncInfo {
+                    genesis_checkpoint_digest: CheckpointDigest::default(),
+                    on_same_chain_as_us: false,
+                    height: CheckpointSequenceNumber::default(),
+                },
+                Err(status) => {
+                    trace!("get_latest_checkpoint_summary request failed: {status:?}");
+                    return;
+                }
+            };
             peer_heights
                 .write()
                 .unwrap()
-                .update_peer_height(peer_id, latest.clone());
+                .insert_peer_info(peer_id, info);
+            info
         }
-        Err(status) => {
-            trace!("get_latest_checkpoint_summary request failed: {status:?}");
-            peer_heights.write().unwrap().heights.remove(&peer_id);
-        }
+    };
+
+    // Bail early if this node isn't on the same chain as us
+    if !info.on_same_chain_as_us {
+        return;
     }
+
+    let checkpoint = {
+        let request = Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(timeout);
+        let response = client
+            .get_checkpoint_summary(request)
+            .await
+            .map(Response::into_inner);
+        match response {
+            Ok(Some(checkpoint)) => checkpoint,
+            Ok(None) => return,
+            Err(status) => {
+                trace!("get_latest_checkpoint_summary request failed: {status:?}");
+                return;
+            }
+        }
+    };
+
+    peer_heights
+        .write()
+        .unwrap()
+        .update_peer_info(peer_id, checkpoint);
 }
 
 async fn query_peers_for_their_latest_checkpoint(
     network: anemo::Network,
     peer_heights: Arc<RwLock<PeerHeights>>,
     sender: mpsc::WeakSender<StateSyncMessage>,
+    timeout: Duration,
 ) {
     let peer_heights = &peer_heights;
     let futs = peer_heights
         .read()
         .unwrap()
-        .heights
-        .keys()
+        .peers_on_same_chain()
         // Filter out any peers who we aren't connected with
-        .flat_map(|peer_id| network.peer(*peer_id))
+        .flat_map(|(peer_id, _info)| network.peer(*peer_id))
         .map(|peer| {
             let peer_id = peer.peer_id();
             let mut client = StateSyncClient::new(peer);
 
-            let request =
-                Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(DEFAULT_TIMEOUT);
             async move {
+                let request =
+                    Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(timeout);
                 let response = client
                     .get_checkpoint_summary(request)
                     .await
                     .map(Response::into_inner);
-                update_peer_height(peer_heights, peer_id, &response);
-                response
+                match response {
+                    Ok(Some(checkpoint)) => peer_heights
+                        .write()
+                        .unwrap()
+                        .update_peer_info(peer_id, checkpoint.clone())
+                        .then_some(checkpoint),
+                    Ok(None) => None,
+                    Err(status) => {
+                        trace!("get_latest_checkpoint_summary request failed: {status:?}");
+                        None
+                    }
+                }
             }
         })
         .collect::<Vec<_>>();
 
-    let checkpoints = futures::future::join_all(futs)
-        .await
-        .into_iter()
-        .flatten()
-        .flatten();
+    let checkpoints = futures::future::join_all(futs).await.into_iter().flatten();
 
-    let highest_checkpoint = checkpoints.max_by_key(|checkpoint| checkpoint.sequence_number());
+    let highest_checkpoint = checkpoints.max_by_key(|checkpoint| *checkpoint.sequence_number());
 
     let our_highest_checkpoint = peer_heights
         .read()
@@ -639,22 +761,23 @@ async fn sync_to_checkpoint<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     metrics: Metrics,
     checkpoint_header_download_concurrency: usize,
+    timeout: Duration,
     checkpoint: Checkpoint,
 ) -> Result<()>
 where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
 {
-    metrics.set_highest_known_checkpoint(checkpoint.sequence_number());
+    metrics.set_highest_known_checkpoint(*checkpoint.sequence_number());
 
     let mut current = store
         .get_highest_verified_checkpoint()
         .expect("store operation should not fail");
-    if current.as_ref().map(|x| x.sequence_number()) >= Some(checkpoint.sequence_number()) {
+    if current.sequence_number() >= checkpoint.sequence_number() {
         return Err(anyhow::anyhow!(
             "target checkpoint {} is older than highest verified checkpoint {}",
             checkpoint.sequence_number(),
-            current.map(|x| x.sequence_number()).unwrap_or(0)
+            current.sequence_number(),
         ));
     }
 
@@ -663,23 +786,20 @@ where
     let peers = peer_heights
         .read()
         .unwrap()
-        .heights
-        .iter()
+        .peers_on_same_chain()
         // Filter out any peers who can't help
-        .filter(|(_peer_id, &height)| height > current.as_ref().map(|x| x.sequence_number()))
-        .map(|(&peer_id, &height)| (peer_id, height))
+        .filter(|(_peer_id, info)| info.height > *current.sequence_number())
+        .map(|(&peer_id, &info)| (peer_id, info))
         .collect::<Vec<_>>();
 
     // range of the next sequence_numbers to fetch
-    let mut request_stream = (current
-        .as_ref()
-        .map(|x| x.sequence_number().saturating_add(1))
-        .unwrap_or(0)..=checkpoint.sequence_number())
+    let mut request_stream = (current.sequence_number().saturating_add(1)
+        ..=*checkpoint.sequence_number())
         .map(|next| {
             let mut peers = peers
                 .iter()
                 // Filter out any peers who can't help with this particular checkpoint
-                .filter(|(_peer_id, height)| height >= &Some(next))
+                .filter(|(_peer_id, info)| info.height >= next)
                 // Filter out any peers who we aren't connected with
                 .flat_map(|(peer_id, _height)| network.peer(*peer_id))
                 .map(StateSyncClient::new)
@@ -692,14 +812,14 @@ where
                     .unwrap()
                     .get_checkpoint_by_sequence_number(next)
                 {
-                    return (Some(checkpoint.to_owned()), next);
+                    return (Some(checkpoint.to_owned()), next, None);
                 }
 
                 // Iterate through our selected peers trying each one in turn until we're able to
                 // successfully get the target checkpoint
                 for mut peer in peers {
                     let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(next))
-                        .with_timeout(DEFAULT_TIMEOUT);
+                        .with_timeout(timeout);
                     if let Some(checkpoint) = peer
                         .get_checkpoint_summary(request)
                         .await
@@ -709,7 +829,7 @@ where
                         .tap_none(|| trace!("peer unable to help sync"))
                     {
                         // peer didn't give us a checkpoint with the height that we requested
-                        if checkpoint.sequence_number() != next {
+                        if *checkpoint.sequence_number() != next {
                             continue;
                         }
 
@@ -718,73 +838,124 @@ where
                             .write()
                             .unwrap()
                             .insert_checkpoint(checkpoint.clone());
-                        return (Some(checkpoint), next);
+                        return (Some(checkpoint), next, Some(peer.inner().peer_id()));
                     }
                 }
 
-                (None, next)
+                (None, next, None)
             }
         })
         .pipe(futures::stream::iter)
         .buffered(checkpoint_header_download_concurrency);
 
-    while let Some((maybe_checkpoint, next)) = request_stream.next().await {
+    while let Some((maybe_checkpoint, next, maybe_peer_id)) = request_stream.next().await {
+        debug_assert!(current.sequence_number().saturating_add(1) == next);
+
         // Verify the checkpoint
         let checkpoint = {
             let checkpoint = maybe_checkpoint
                 .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
+            match verify_checkpoint(&current, &store, checkpoint) {
+                Ok(verified_checkpoint) => verified_checkpoint,
+                Err(checkpoint) => {
+                    let mut peer_heights = peer_heights.write().unwrap();
+                    // Remove the checkpoint from our temporary store so that we can try querying
+                    // another peer for a different one
+                    peer_heights.remove_checkpoint(checkpoint.digest());
 
-            if checkpoint.sequence_number() != next
-                || current.as_ref().map(|x| x.digest()) != checkpoint.previous_digest()
-            {
-                return Err(anyhow::anyhow!("detected fork"));
+                    // Mark peer as not on the same chain as us
+                    if let Some(peer_id) = maybe_peer_id {
+                        peer_heights.mark_peer_as_not_on_same_chain(peer_id);
+                    }
+
+                    return Err(anyhow::anyhow!(
+                        "unable to verify checkpoint {checkpoint:?}"
+                    ));
+                }
             }
-
-            let current_epoch = current.as_ref().map(|x| x.epoch()).unwrap_or(0);
-            if checkpoint.epoch() != current_epoch
-                && checkpoint.epoch() != current_epoch.saturating_add(1)
-            {
-                return Err(anyhow::anyhow!(
-                    "cannot verify checkpoint with too high of an epoch {}, current epoch {}",
-                    checkpoint.epoch(),
-                    current_epoch,
-                ));
-            }
-
-            if checkpoint.epoch() == current_epoch.saturating_add(1)
-                && current
-                    .as_ref()
-                    .and_then(|x| x.next_epoch_committee())
-                    .is_none()
-            {
-                return Err(anyhow::anyhow!(
-                    "next checkpoint claims to be from the next epoch but the latest verified \
-                    checkpoint does not indicate that it is the last checkpoint of an epoch"
-                ));
-            }
-
-            let committee = store
-                .get_committee(checkpoint.epoch())
-            .expect("store operation should not fail")
-                .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
-            VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
 
-        current = Some(checkpoint.clone());
+        debug!(sequence_number = ?checkpoint.sequence_number(), "verified checkpoint summary");
+        SystemTime::now()
+            .duration_since(checkpoint.timestamp())
+            .map(|latency| metrics.report_checkpoint_summary_age(latency))
+            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
+            .ok();
+
+        current = checkpoint.clone();
         // Insert the newly verified checkpoint into our store, which will bump our highest
         // verified checkpoint watermark as well.
         store
             .insert_checkpoint(checkpoint.clone())
             .expect("store operation should not fail");
-        metrics.set_highest_verified_checkpoint(checkpoint.sequence_number());
+        metrics.set_highest_verified_checkpoint(*checkpoint.sequence_number());
     }
 
     peer_heights
         .write()
         .unwrap()
-        .cleanup_old_checkpoints(checkpoint.sequence_number());
+        .cleanup_old_checkpoints(*checkpoint.sequence_number());
 
     Ok(())
+}
+
+fn verify_checkpoint<S>(
+    current: &VerifiedCheckpoint,
+    store: S,
+    checkpoint: Checkpoint,
+) -> Result<VerifiedCheckpoint, Checkpoint>
+where
+    S: WriteStore,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    assert_eq!(
+        *checkpoint.sequence_number(),
+        current.sequence_number().saturating_add(1)
+    );
+
+    if Some(*current.digest()) != checkpoint.previous_digest {
+        debug!(
+            current_sequence_number = current.sequence_number(),
+            current_digest =% current.digest(),
+            checkpoint_sequence_number = checkpoint.sequence_number(),
+            checkpoint_digest =% checkpoint.digest(),
+            checkpoint_previous_digest =? checkpoint.previous_digest,
+            "checkpoint not on same chain"
+        );
+        return Err(checkpoint);
+    }
+
+    let current_epoch = current.epoch();
+    if checkpoint.epoch() != current_epoch && checkpoint.epoch() != current_epoch.saturating_add(1)
+    {
+        debug!(
+            current_epoch = current_epoch,
+            checkpoint_epoch = checkpoint.epoch(),
+            "cannont verify checkpoint with too high of an epoch",
+        );
+        return Err(checkpoint);
+    }
+
+    if checkpoint.epoch() == current_epoch.saturating_add(1)
+        && current.next_epoch_committee().is_none()
+    {
+        debug!(
+            "next checkpoint claims to be from the next epoch but the latest verified \
+            checkpoint does not indicate that it is the last checkpoint of an epoch"
+        );
+        return Err(checkpoint);
+    }
+
+    let committee = store
+        .get_committee(checkpoint.epoch())
+        .expect("store operation should not fail")
+        .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
+
+    checkpoint.verify_signature(&committee).map_err(|e| {
+        debug!("error verifying checkpoint: {e}");
+        checkpoint.clone()
+    })?;
+    Ok(VerifiedCheckpoint::new_unchecked(checkpoint))
 }
 
 async fn sync_checkpoint_contents<S>(
@@ -794,8 +965,8 @@ async fn sync_checkpoint_contents<S>(
     sender: mpsc::WeakSender<StateSyncMessage>,
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     metrics: Metrics,
-    transaction_download_concurrency: usize,
     checkpoint_content_download_concurrency: usize,
+    timeout: Duration,
     target_checkpoint: VerifiedCheckpoint,
 ) where
     S: WriteStore + Clone,
@@ -805,12 +976,9 @@ async fn sync_checkpoint_contents<S>(
         .get_highest_synced_checkpoint()
         .expect("store operation should not fail");
 
-    let start = highest_synced
-        .as_ref()
-        .map(|x| x.sequence_number().saturating_add(1))
-        .unwrap_or(0);
+    let start = highest_synced.sequence_number().saturating_add(1);
 
-    let mut checkpoint_contents_stream = (start..=target_checkpoint.sequence_number())
+    let mut checkpoint_contents_stream = (start..=*target_checkpoint.sequence_number())
         .map(|next| {
             store
                 .get_checkpoint_by_sequence_number(next)
@@ -824,7 +992,7 @@ async fn sync_checkpoint_contents<S>(
                 network.clone(),
                 &store,
                 peer_heights.clone(),
-                transaction_download_concurrency,
+                timeout,
                 checkpoint,
             )
         })
@@ -834,22 +1002,20 @@ async fn sync_checkpoint_contents<S>(
     while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
         match maybe_checkpoint {
             Ok((checkpoint, num_txns)) => {
-                if let Some(highest_synced) = &highest_synced {
-                    // if this fails, there is a bug in checkpoint construction (or the chain is
-                    // corrupted)
-                    assert_eq!(
-                        highest_synced.summary.network_total_transactions + num_txns,
-                        checkpoint.summary.network_total_transactions
-                    );
-                }
+                // if this fails, there is a bug in checkpoint construction (or the chain is
+                // corrupted)
+                assert_eq!(
+                    highest_synced.network_total_transactions + num_txns,
+                    checkpoint.network_total_transactions
+                );
 
                 store
                     .update_highest_synced_checkpoint(&checkpoint)
                     .expect("store operation should not fail");
-                metrics.set_highest_synced_checkpoint(checkpoint.sequence_number());
+                metrics.set_highest_synced_checkpoint(*checkpoint.sequence_number());
                 // We don't care if no one is listening as this is a broadcast channel
                 let _ = checkpoint_event_sender.send(checkpoint.clone());
-                highest_synced = Some(checkpoint);
+                highest_synced = checkpoint;
             }
             Err(err) => {
                 debug!("unable to sync contents of checkpoint: {err}");
@@ -859,11 +1025,9 @@ async fn sync_checkpoint_contents<S>(
     }
 
     // Notify event loop to notify our peers that we've synced to a new checkpoint height
-    if let Some(checkpoint) = highest_synced {
-        if let Some(sender) = sender.upgrade() {
-            let message = StateSyncMessage::SyncedCheckpoint(Box::new(checkpoint));
-            let _ = sender.send(message).await;
-        }
+    if let Some(sender) = sender.upgrade() {
+        let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced));
+        let _ = sender.send(message).await;
     }
 }
 
@@ -871,7 +1035,7 @@ async fn sync_one_checkpoint_contents<S>(
     network: anemo::Network,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
-    transaction_download_concurrency: usize,
+    timeout: Duration,
     checkpoint: VerifiedCheckpoint,
 ) -> Result<(VerifiedCheckpoint, u64)>
 where
@@ -883,48 +1047,36 @@ where
     let mut peers = peer_heights
         .read()
         .unwrap()
-        .heights
-        .iter()
+        .peers_on_same_chain()
         // Filter out any peers who can't help with this particular checkpoint
-        .filter(|(_peer_id, &height)| height >= Some(checkpoint.sequence_number()))
+        .filter(|(_peer_id, info)| info.height >= *checkpoint.sequence_number())
         // Filter out any peers who we aren't connected with
         .flat_map(|(peer_id, _height)| network.peer(*peer_id))
         .map(StateSyncClient::new)
         .collect::<Vec<_>>();
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
-    let Some(contents) = get_checkpoint_contents(&mut peers, &store, checkpoint.content_digest()).await else {
+    let Some(contents) = get_full_checkpoint_contents(&mut peers, &store, checkpoint.content_digest, timeout).await else {
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
 
     let num_txns = contents.size() as u64;
 
-    // Sync transactions and effects
-    let mut stream = contents
-        .into_inner()
-        .into_iter()
-        .map(|digests| get_transaction_and_effects(peers.clone(), store.clone(), digests))
-        .pipe(futures::stream::iter)
-        .buffer_unordered(transaction_download_concurrency);
-
-    while let Some(result) = stream.next().await {
-        result?;
-    }
-
     Ok((checkpoint, num_txns))
 }
 
-async fn get_checkpoint_contents<S>(
+async fn get_full_checkpoint_contents<S>(
     peers: &mut [StateSyncClient<anemo::Peer>],
     store: S,
     digest: CheckpointContentsDigest,
-) -> Option<CheckpointContents>
+    timeout: Duration,
+) -> Option<FullCheckpointContents>
 where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
 {
     if let Some(contents) = store
-        .get_checkpoint_contents(&digest)
+        .get_full_checkpoint_contents(&digest)
         .expect("store operation should not fail")
     {
         return Some(contents);
@@ -933,7 +1085,7 @@ where
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
     for peer in peers.iter_mut() {
-        let request = Request::new(digest).with_timeout(DEFAULT_TIMEOUT);
+        let request = Request::new(digest).with_timeout(timeout);
         if let Some(contents) = peer
             .get_checkpoint_contents(request)
             .await
@@ -942,9 +1094,10 @@ where
             .and_then(Response::into_inner)
             .tap_none(|| trace!("peer unable to help sync"))
         {
-            if digest == contents.digest() {
+            if contents.verify_digests(digest).is_ok() {
+                let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
                 store
-                    .insert_checkpoint_contents(contents.clone())
+                    .insert_checkpoint_contents(verified_contents)
                     .expect("store operation should not fail");
                 return Some(contents);
             }
@@ -952,62 +1105,4 @@ where
     }
 
     None
-}
-
-async fn get_transaction_and_effects<S>(
-    peers: Vec<StateSyncClient<anemo::Peer>>,
-    store: S,
-    digests: ExecutionDigests,
-) -> Result<()>
-where
-    S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
-{
-    if let (Some(_transaction), Some(_effects)) = (
-        store
-            .get_transaction(&digests.transaction)
-            .expect("store operation should not fail"),
-        store
-            .get_transaction_effects(&digests.effects)
-            .expect("store operation should not fail"),
-    ) {
-        return Ok(());
-    }
-
-    // Iterate through our selected peers trying each one in turn until we're able to
-    // successfully get the target checkpoint
-    for mut peer in peers {
-        let request = Request::new(digests).with_timeout(DEFAULT_TIMEOUT);
-        if let Some((transaction, effects)) = peer
-            .get_transaction_and_effects(request)
-            .await
-            .tap_err(|e| trace!("{e:?}"))
-            .ok()
-            .and_then(Response::into_inner)
-            .tap_none(|| trace!("peer unable to help sync"))
-        {
-            if transaction.digest() == &digests.transaction
-                && effects.digest() == digests.effects
-                && effects.transaction_digest == digests.transaction
-            {
-                // TODO this should just be a bare Transaction type and not a TransactionCertificate
-                // since Certificates are indended to be ephemeral and thrown away at the end of an
-                // epoch
-                store
-                    .insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(
-                        transaction,
-                    ))
-                    .expect("store operation should not fail");
-                store
-                    .insert_transaction_effects(effects)
-                    .expect("store operation should not fail");
-                return Ok(());
-            }
-        }
-    }
-
-    Err(anyhow!(
-        "unable to sync transaction {:?} from any of our peers",
-        digests.transaction
-    ))
 }

@@ -1,54 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    RawSigner,
-    JsonRpcProvider,
-    LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { SentryRpcClient } from '@mysten/core';
+import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 
-import { growthbook } from './experimentation/feature-gating';
-import { FEATURES } from './experimentation/features';
+import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
+import { growthbook } from '_app/experimentation/feature-gating';
+import { API_ENV } from '_src/shared/api-env';
+import { FEATURES } from '_src/shared/experimentation/features';
 
-import type { Keypair } from '@mysten/sui.js';
-
-export enum API_ENV {
-    local = 'local',
-    devNet = 'devNet',
-    testNet = 'testNet',
-    customRPC = 'customRPC',
-}
+import type { BackgroundClient } from './background-client';
+import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
 
 type EnvInfo = {
     name: string;
+    env: API_ENV;
 };
 
-type ApiEndpoints = {
-    fullNode: string;
-    faucet: string;
-} | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
-    [API_ENV.local]: { name: 'Local' },
-    [API_ENV.devNet]: { name: 'Sui Devnet' },
-    [API_ENV.customRPC]: { name: 'Custom RPC URL' },
-    [API_ENV.testNet]: { name: 'Sui Testnet' },
+    [API_ENV.local]: { name: 'Local', env: API_ENV.local },
+    [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
+    [API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
+    [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
 };
 
-export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
-    [API_ENV.local]: {
-        fullNode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
+export const ENV_TO_API: Record<API_ENV, Connection | null> = {
+    [API_ENV.local]: new Connection({
+        fullnode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
-    },
-    [API_ENV.devNet]: {
-        fullNode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
+    }),
+    [API_ENV.devNet]: new Connection({
+        fullnode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
-    },
+    }),
     [API_ENV.customRPC]: null,
-    [API_ENV.testNet]: {
-        fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-        faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
-    },
+    [API_ENV.testNet]: new Connection({
+        fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
+        // NOTE: Faucet is currently disabled for testnet:
+        // faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
+    }),
 };
 
 function getDefaultApiEnv() {
@@ -63,7 +54,7 @@ function getDefaultAPI(env: API_ENV) {
     const apiEndpoint = ENV_TO_API[env];
     if (
         !apiEndpoint ||
-        apiEndpoint.fullNode === '' ||
+        apiEndpoint.fullnode === '' ||
         apiEndpoint.faucet === ''
     ) {
         throw new Error(`API endpoint not found for API_ENV ${env}`);
@@ -72,6 +63,7 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
+const SENTRY_MONITORED_ENVS = [API_ENV.devNet, API_ENV.testNet];
 
 type NetworkTypes = keyof typeof API_ENV;
 
@@ -82,10 +74,6 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
         excludedNetworks.push(API_ENV.testNet);
     }
 
-    if (!growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL)) {
-        excludedNetworks.push(API_ENV.customRPC);
-    }
-
     return Object.values(API_ENV).filter(
         (env) => !excludedNetworks.includes(env as keyof typeof API_ENV)
     );
@@ -93,18 +81,25 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
 
 export default class ApiProvider {
     private _apiFullNodeProvider?: JsonRpcProvider;
-    private _signer: RawSigner | null = null;
+    private _signerByAddress: Map<SuiAddress, SignerWithProvider> = new Map();
 
     public setNewJsonRpcProvider(
         apiEnv: API_ENV = DEFAULT_API_ENV,
         customRPC?: string | null
     ) {
+        const connection = customRPC
+            ? new Connection({ fullnode: customRPC })
+            : getDefaultAPI(apiEnv);
+        this._apiFullNodeProvider = new JsonRpcProvider(connection, {
+            rpcClient:
+                !customRPC && SENTRY_MONITORED_ENVS.includes(apiEnv)
+                    ? new SentryRpcClient(connection.fullnode)
+                    : undefined,
+        });
+        this._signerByAddress.clear();
         // We also clear the query client whenever set set a new API provider:
+        queryClient.resetQueries();
         queryClient.clear();
-        this._apiFullNodeProvider = new JsonRpcProvider(
-            customRPC ?? getDefaultAPI(apiEnv).fullNode
-        );
-        this._signer = null;
     }
 
     public get instance() {
@@ -117,21 +112,24 @@ export default class ApiProvider {
         };
     }
 
-    public getSignerInstance(keypair: Keypair): RawSigner {
+    public getSignerInstance(
+        address: SuiAddress,
+        backgroundClient: BackgroundClient
+    ): SignerWithProvider {
         if (!this._apiFullNodeProvider) {
             this.setNewJsonRpcProvider();
         }
-        if (!this._signer) {
-            this._signer = new RawSigner(
-                keypair,
-                this._apiFullNodeProvider,
-
-                growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
-                    ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                      new LocalTxnDataSerializer(this._apiFullNodeProvider!)
-                    : undefined
+        if (!this._signerByAddress.has(address)) {
+            this._signerByAddress.set(
+                address,
+                new BackgroundServiceSigner(
+                    address,
+                    backgroundClient,
+                    this._apiFullNodeProvider
+                )
             );
         }
-        return this._signer;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return this._signerByAddress.get(address)!;
     }
 }

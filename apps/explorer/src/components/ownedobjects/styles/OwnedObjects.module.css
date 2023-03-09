@@ -12,7 +12,7 @@
 }
 
 .layout > div:first-child {
-    @apply sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-gray-45 sm:pr-[4vw];
+    @apply sm:mr-[4vw] sm:border-0 sm:border-r sm:border-gray-45 sm:pr-[4vw];
 }
 
 .ownedobjects {
@@ -20,7 +20,7 @@
 }
 
 .objectbox {
-    @apply my-[5vh] flex h-fit min-h-[72px] items-center break-all sm:my-[1vh] lg:w-[50%];
+    @apply my-2 flex h-fit min-h-[72px] items-center break-all sm:my-[1vh] lg:w-[50%];
 }
 
 .objectbox a {
@@ -32,7 +32,7 @@
 }
 
 .ownedobjectheader {
-    @apply pb-1;
+    @apply my-4;
 }
 
 .ownedobjectheader > h2 {

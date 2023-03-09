@@ -126,7 +126,7 @@ function TokenView({ data }: { data: DataType }) {
 
                             <tr>
                                 <td>Owner</td>
-                                <td id="owner">
+                                <td data-testid="owner">
                                     <Longtext
                                         text={
                                             typeof viewedData.owner === 'string'

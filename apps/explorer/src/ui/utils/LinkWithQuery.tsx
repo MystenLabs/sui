@@ -29,9 +29,8 @@ export function useNavigateWithQuery() {
     const { search } = useLocation();
 
     const navigateWithQuery = useCallback(
-        (url: string, options: NavigateOptions) => {
-            return navigate(`${url}${search}`, options);
-        },
+        (url: string, options: NavigateOptions) =>
+            navigate(`${url}${search}`, options),
         [navigate, search]
     );
 
@@ -61,7 +60,7 @@ export function useSearchParamsMerged() {
 }
 
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
-    ({ to, ...props }) => {
+    ({ to, ...props }, ref) => {
         const href = useHref(to);
         const [searchParams] = useSearchParams();
         const [toBaseURL, toSearchParamString] = href.split('?');
@@ -78,6 +77,7 @@ export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
 
         return (
             <Link
+                ref={ref}
                 to={{
                     pathname: toBaseURL,
                     search: mergedSearchParams,

@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::RpcTransactionBuilderServer;
+use crate::api::TransactionBuilderServer;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
-use sui_adapter::execution_mode;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    GetRawObjectDataResponse, SuiObjectInfo, SuiTransactionBuilderMode, SuiTypeTag,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
     TransactionBytes,
 };
 use sui_open_rpc::Module;
@@ -21,19 +20,22 @@ use sui_types::{
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
+use sui_adapter::execution_mode::{DevInspect, Normal};
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
 
-pub struct FullNodeTransactionBuilderApi {
-    builder: TransactionBuilder,
+pub struct TransactionBuilderApi {
+    builder: TransactionBuilder<Normal>,
+    dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
-impl FullNodeTransactionBuilderApi {
+impl TransactionBuilderApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self {
-            builder: TransactionBuilder(reader),
+            builder: TransactionBuilder::new(reader.clone()),
+            dev_inspect_builder: TransactionBuilder::new(reader),
         }
     }
 }
@@ -61,17 +63,23 @@ impl DataReader for AuthorityStateDataReader {
         Ok(refs)
     }
 
-    async fn get_object(
+    async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+        options: SuiObjectDataOptions,
+    ) -> Result<SuiObjectResponse, anyhow::Error> {
         let result = self.0.get_object_read(&object_id).await?;
-        Ok(result.try_into()?)
+        Ok((result, options).try_into()?)
+    }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        let epoch_store = self.0.load_epoch_store_one_call_per_task();
+        Ok(epoch_store.reference_gas_price())
     }
 }
 
 #[async_trait]
-impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
+impl TransactionBuilderServer for TransactionBuilderApi {
     async fn transfer_object(
         &self,
         signer: SuiAddress,
@@ -225,8 +233,8 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
         let data: TransactionData = match mode {
             SuiTransactionBuilderMode::DevInspect => {
-                self.builder
-                    .move_call::<execution_mode::DevInspect>(
+                self.dev_inspect_builder
+                    .move_call(
                         signer,
                         package_object_id,
                         &module,
@@ -240,7 +248,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
             }
             SuiTransactionBuilderMode::Commit => {
                 self.builder
-                    .move_call::<execution_mode::Normal>(
+                    .move_call(
                         signer,
                         package_object_id,
                         &module,
@@ -267,28 +275,57 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
         let data = match mode {
             SuiTransactionBuilderMode::DevInspect => {
-                self.builder
-                    .batch_transaction::<execution_mode::DevInspect>(
-                        signer, params, gas, gas_budget,
-                    )
+                self.dev_inspect_builder
+                    .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
             SuiTransactionBuilderMode::Commit => {
                 self.builder
-                    .batch_transaction::<execution_mode::Normal>(signer, params, gas, gas_budget)
+                    .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
         };
         Ok(TransactionBytes::from_data(data)?)
     }
+
+    async fn request_add_delegation(
+        &self,
+        signer: SuiAddress,
+        coins: Vec<ObjectID>,
+        amount: Option<u64>,
+        validator: SuiAddress,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        Ok(TransactionBytes::from_data(
+            self.builder
+                .request_add_delegation(signer, coins, amount, validator, gas, gas_budget)
+                .await?,
+        )?)
+    }
+
+    async fn request_withdraw_delegation(
+        &self,
+        signer: SuiAddress,
+        delegation: ObjectID,
+        staked_sui: ObjectID,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        Ok(TransactionBytes::from_data(
+            self.builder
+                .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
+                .await?,
+        )?)
+    }
 }
 
-impl SuiRpcModule for FullNodeTransactionBuilderApi {
+impl SuiRpcModule for TransactionBuilderApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
+        crate::api::TransactionBuilderOpenRpc::module_doc()
     }
 }

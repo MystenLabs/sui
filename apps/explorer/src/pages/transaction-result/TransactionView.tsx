@@ -1,23 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinFormat, useFormatCoin } from '@mysten/core';
 import {
     getMoveCallTransaction,
     getPublishTransaction,
     getTransactionKindName,
-    getTransactions,
+    getTransactionKinds,
     getTransactionSender,
     getTransferObjectTransaction,
+    getTransactionSignature,
     getMovePackageContent,
-    getObjectId,
     SUI_TYPE_ARG,
     getExecutionStatusType,
     getTotalGasUsed,
     getExecutionStatusError,
     type SuiTransactionResponse,
+    getGasData,
+    getTransactionDigest,
+    fromSerializedSignature,
+    toB64,
+    type SignaturePubkeyPair,
+    type SuiAddress,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
@@ -26,6 +33,8 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
+// TODO: (Jibz) Create a new pagination component
+import Pagination from '../../components/pagination/Pagination';
 import {
     type LinkObj,
     TxAddresses,
@@ -39,36 +48,41 @@ import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
-import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
-import { SenderRecipient } from '~/ui/SenderRecipient';
 import { StatAmount } from '~/ui/StatAmount';
 import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import {
+    RecipientTransactionAddresses,
+    SenderTransactionAddress,
+    SponsorTransactionAddress,
+} from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
+const MAX_RECIPIENTS_PER_PAGE = 10;
+
 function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
-        ...(tx.effects.mutated?.length
+        ...(tx.effects!.mutated?.length
             ? [
                   {
                       label: 'Updated',
-                      links: tx.effects.mutated.map((item) => item.reference),
+                      links: tx.effects!.mutated.map((item) => item.reference),
                   },
               ]
             : []),
-        ...(tx.effects.created?.length
+        ...(tx.effects!.created?.length
             ? [
                   {
                       label: 'Created',
-                      links: tx.effects.created?.map((item) => item.reference),
+                      links: tx.effects!.created?.map((item) => item.reference),
                   },
               ]
             : []),
@@ -111,7 +125,7 @@ function formatByTransactionKind(
                     category: 'address',
                 },
                 package: {
-                    value: getObjectId(moveCall.package),
+                    value: moveCall.package,
                     link: true,
                     category: 'object',
                 },
@@ -151,6 +165,15 @@ function formatByTransactionKind(
         default:
             return {};
     }
+}
+
+function getSignatureFromAddress(
+    signatures: SignaturePubkeyPair[],
+    suiAddress: SuiAddress
+) {
+    return signatures.find(
+        (signature) => `0x${signature.pubKey.toSuiAddress()}` === suiAddress
+    );
 }
 
 type TxItemView = {
@@ -254,16 +277,16 @@ function GasAmount({
     return (
         <div className="flex h-full items-center gap-1">
             <div className="flex items-baseline gap-0.5 text-gray-90">
-                <Text variant="body">{formattedAmount}</Text>
-                <Text variant="subtitleSmall">{symbol}</Text>
+                <Text variant="body/medium">{formattedAmount}</Text>
+                <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
 
-            <Text variant="bodySmall">
+            <Text variant="bodySmall/medium">
                 <div className="flex items-center text-steel">
                     (
                     <div className="flex items-baseline gap-0.5">
                         <div>{amount?.toLocaleString()}</div>
-                        <Text variant="subtitleSmall">MIST</Text>
+                        <Text variant="subtitleSmall/medium">MIST</Text>
                     </div>
                     )
                 </div>
@@ -285,34 +308,43 @@ function TransactionView({
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const txdetails = getTransactions(transaction.certificate)[0];
-    const txKindName = getTransactionKindName(txdetails);
-    const sender = getTransactionSender(transaction.certificate);
-    const gasUsed = transaction?.effects.gasUsed;
+    const [txnDetails] = getTransactionKinds(transaction)!;
+    const txKindName = getTransactionKindName(txnDetails);
+    const sender = getTransactionSender(transaction)!;
+    const gasUsed = transaction?.effects!.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
-    const txnTransfer = getAmount(txdetails, transaction?.effects);
-    const sendReceiveRecipients = txnTransfer?.map((item) => ({
-        address: item.recipientAddress,
-        ...(item?.amount
-            ? {
-                  coin: {
-                      amount: item.amount,
-                      coinType: item?.coinType || null,
-                  },
-              }
-            : {}),
-    }));
+    const [recipientsPageNumber, setRecipientsPageNumber] = useState(1);
 
-    const [formattedAmount, symbol] = useFormatCoin(
-        txnTransfer?.[0].amount,
-        txnTransfer?.[0].coinType
+    const coinTransfer = useMemo(
+        () =>
+            getAmount({
+                txnData: transaction,
+            }),
+        [transaction]
     );
 
-    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
+    const recipients = useMemo(() => {
+        const startAt = (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE;
+        const endAt = recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE;
+        return coinTransfer.slice(startAt, endAt);
+    }, [coinTransfer, recipientsPageNumber]);
 
-    const txEventData = transaction.effects.events?.map(eventToDisplay);
+    // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
+    // use absolute value
+    const totalRecipientsCount = coinTransfer.length;
+    const transferAmount = coinTransfer?.[0]?.amount
+        ? Math.abs(coinTransfer[0].amount)
+        : null;
+
+    const [formattedAmount, symbol] = useFormatCoin(
+        transferAmount,
+        coinTransfer?.[0]?.coinType
+    );
+
+    const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
+    const txEventData = transaction.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
     const txEventDisplay = txEventData?.map((ed, index) => {
@@ -333,42 +365,6 @@ function TransactionView({
             {title}
         </div>
     ));
-
-    const transactionSignatureData = {
-        title: 'Transaction Signatures',
-        content: [
-            {
-                label: 'Signature',
-                value: transaction.certificate.txSignature,
-                monotypeClass: true,
-            },
-        ],
-    };
-
-    let validatorSignatureData;
-    if (Array.isArray(transaction.certificate.authSignInfo.signature)) {
-        validatorSignatureData = {
-            title: 'Validator Signatures',
-            content: transaction.certificate.authSignInfo.signature.map(
-                (validatorSign, index) => ({
-                    label: `Signature #${index + 1}`,
-                    value: validatorSign,
-                    monotypeClass: true,
-                })
-            ),
-        };
-    } else {
-        validatorSignatureData = {
-            title: 'Aggregated Validator Signature',
-            content: [
-                {
-                    label: `Signature`,
-                    value: transaction.certificate.authSignInfo.signature,
-                    monotypeClass: true,
-                },
-            ],
-        };
-    }
 
     const createdMutateData = generateMutatedCreated(transaction);
 
@@ -398,7 +394,9 @@ function TransactionView({
                       {
                           label: 'Argument',
                           monotypeClass: true,
-                          value: JSON.stringify(txKindData.arguments.value),
+                          value: JSON.stringify(
+                              txKindData.arguments.value ?? []
+                          ),
                       },
                   ],
               }
@@ -424,12 +422,33 @@ function TransactionView({
 
     const txError = getExecutionStatusError(transaction);
 
+    const gasData = getGasData(transaction)!;
+    const gasPrice = gasData.price || 1;
+    const gasPayment = gasData.payment;
+    const gasBudget = gasData.budget;
+    const gasOwner = gasData.owner;
+    const isSponsoredTransaction = gasOwner !== sender;
+
+    const transactionSignatures = getTransactionSignature(transaction)!;
+    const deserializedTransactionSignatures = transactionSignatures.map(
+        (signature) => fromSerializedSignature(signature)
+    );
+    const accountSignature = getSignatureFromAddress(
+        deserializedTransactionSignatures,
+        sender!
+    );
+    const sponsorSignature = isSponsoredTransaction
+        ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
+        : null;
+
+    const timestamp = transaction.timestampMs;
+
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
                     type={txKindName}
-                    title={transaction.certificate.transactionDigest}
+                    title={getTransactionDigest(transaction)}
                     status={getExecutionStatusType(transaction)}
                 />
                 {txError && (
@@ -449,7 +468,7 @@ function TransactionView({
                         <div
                             className={styles.txgridcomponent}
                             // TODO: Change to test ID
-                            id={transaction.certificate.transactionDigest}
+                            id={getTransactionDigest(transaction)}
                         >
                             {typearguments && (
                                 <section
@@ -470,28 +489,55 @@ function TransactionView({
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {txnTransfer?.[0].amount ? (
+                                {coinTransfer.length === 1 &&
+                                coinTransfer?.[0]?.coinType &&
+                                formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={formattedAmount}
                                             symbol={symbol}
-                                            date={transaction.timestamp_ms}
+                                            date={timestamp}
                                         />
                                     </section>
                                 ) : (
-                                    transaction.timestamp_ms && (
+                                    timestamp && (
                                         <div className="mb-3">
-                                            <DateCard
-                                                date={transaction.timestamp_ms}
-                                            />
+                                            <DateCard date={timestamp} />
                                         </div>
                                     )
                                 )}
-                                <SenderRecipient
-                                    sender={sender}
-                                    transferCoin={txnTransfer?.[0].isCoin}
-                                    recipients={sendReceiveRecipients}
-                                />
+                                {isSponsoredTransaction && (
+                                    <div className="mt-10">
+                                        <SponsorTransactionAddress
+                                            sponsor={gasOwner}
+                                        />
+                                    </div>
+                                )}
+                                <div className="mt-10">
+                                    <SenderTransactionAddress sender={sender} />
+                                </div>
+                                {recipients.length > 0 && (
+                                    <div className="mt-10">
+                                        <RecipientTransactionAddresses
+                                            recipients={recipients}
+                                        />
+                                    </div>
+                                )}
+                                <div className="mt-5 flex w-full max-w-lg">
+                                    {totalRecipientsCount >
+                                        MAX_RECIPIENTS_PER_PAGE && (
+                                        <Pagination
+                                            totalItems={totalRecipientsCount}
+                                            itemsPerPage={
+                                                MAX_RECIPIENTS_PER_PAGE
+                                            }
+                                            currentPage={recipientsPageNumber}
+                                            onPagiChangeFn={
+                                                setRecipientsPageNumber
+                                            }
+                                        />
+                                    )}
+                                </div>
                             </section>
 
                             <section
@@ -523,31 +569,35 @@ function TransactionView({
                                 </section>
                             )}
                         </div>
-                        <div className="mt-8">
-                            <TableHeader>Gas & Storage Fees</TableHeader>
+                        <div data-testid="gas-breakdown" className="mt-8">
+                            <TableHeader
+                                subText={
+                                    isSponsoredTransaction
+                                        ? '(Paid by Sponsor)'
+                                        : undefined
+                                }
+                            >
+                                Gas & Storage Fees
+                            </TableHeader>
 
                             <DescriptionList>
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
                                         noTruncate
-                                        objectId={
-                                            transaction.certificate.data
-                                                .gasPayment.objectId
-                                        }
+                                        // TODO: support multiple gas coins
+                                        objectId={gasPayment[0].objectId}
                                     />
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount
-                                        amount={
-                                            transaction.certificate.data
-                                                .gasBudget
-                                        }
-                                    />
+                                    <GasAmount amount={gasBudget * gasPrice} />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (
                                     <>
+                                        <DescriptionItem title="Gas Price">
+                                            <GasAmount amount={gasPrice} />
+                                        </DescriptionItem>
                                         <DescriptionItem title="Computation Fee">
                                             <GasAmount
                                                 amount={
@@ -575,8 +625,7 @@ function TransactionView({
                                 <DescriptionItem
                                     title={
                                         <Text
-                                            variant="body"
-                                            weight="semibold"
+                                            variant="body/semibold"
                                             color="steel-darker"
                                         >
                                             Total Gas Fee
@@ -626,8 +675,54 @@ function TransactionView({
                     )}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
-                            <ItemView data={transactionSignatureData} />
-                            <ItemView data={validatorSignatureData} />
+                            {accountSignature && (
+                                <ItemView
+                                    data={{
+                                        title: 'Account Signature',
+                                        content: [
+                                            {
+                                                label: 'Scheme',
+                                                value: accountSignature.signatureScheme,
+                                            },
+                                            {
+                                                label: 'PubKey',
+                                                value: `0x${accountSignature.pubKey.toSuiAddress()}`,
+                                                monotypeClass: true,
+                                            },
+                                            {
+                                                label: 'Signature',
+                                                value: toB64(
+                                                    accountSignature.signature
+                                                ),
+                                            },
+                                        ],
+                                    }}
+                                />
+                            )}
+                            {sponsorSignature && (
+                                <ItemView
+                                    data={{
+                                        title: 'Sponsor Signature',
+                                        content: [
+                                            {
+                                                label: 'Scheme',
+                                                value: sponsorSignature.signatureScheme,
+                                            },
+                                            {
+                                                label: 'PubKey',
+                                                value: `0x${sponsorSignature.pubKey.toSuiAddress()}`,
+                                                monotypeClass: true,
+                                            },
+                                            {
+                                                label: 'Signature',
+                                                value: toB64(
+                                                    sponsorSignature.signature
+                                                ),
+                                            },
+                                        ],
+                                    }}
+                                />
+                            )}
                         </div>
                     </TabPanel>
                 </TabPanels>

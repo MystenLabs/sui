@@ -27,7 +27,7 @@ export type TabGroupProps = ExtractProps<typeof HeadlessTab.Group> & {
 export function TabGroup({ size, ...props }: TabGroupProps) {
     return (
         <TabSizeContext.Provider value={size}>
-            <HeadlessTab.Group {...props} />
+            <HeadlessTab.Group as="div" {...props} />
         </TabSizeContext.Provider>
     );
 }
@@ -35,14 +35,12 @@ export function TabGroup({ size, ...props }: TabGroupProps) {
 const tabStyles = cva(
     [
         'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark hover:text-steel-darker active:text-steel pb-2 -mb-px',
-        // TODO: remove once we have a CSS reset:
-        'bg-transparent border-0 border-solid outline-none px-0 cursor-pointer',
     ],
     {
         variants: {
             size: {
-                lg: 'text-heading4 ui-selected:text-gray-100',
-                md: 'text-body ui-selected:text-gray-90',
+                lg: 'text-heading4 ui-selected:text-steel-darker',
+                md: 'text-body ui-selected:text-steel-darker',
             },
         },
         defaultVariants: {
@@ -72,7 +70,7 @@ export function TabList({
     return (
         <HeadlessTab.List
             className={clsx(
-                'flex gap-6 border-0 border-solid border-gray-45',
+                'flex gap-6 border-gray-45',
                 fullWidth && 'flex-1',
                 !disableBottomBorder && 'border-b'
             )}

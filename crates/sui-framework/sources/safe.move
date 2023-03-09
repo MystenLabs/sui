@@ -14,10 +14,10 @@ module sui::safe {
     const MAX_CAPABILITY_ISSUABLE: u64 = 1000;
 
     // Errors
-    const INVALID_TRANSFER_CAPABILITY: u64 = 0;
-    const INVALID_OWNER_CAPABILITY: u64 = 1;
-    const TRANSFER_CAPABILITY_REVOKED: u64 = 2;
-    const OVERDRAWN: u64 = 3;
+    const EInvalidTransferCapability: u64 = 0;
+    const EInvalidOwnerCapability: u64 = 1;
+    const ETransferCapabilityRevoked: u64 = 2;
+    const EOverdrawn: u64 = 3;
 
     //
     /// Allows any holder of a capability to transfer a fixed amount of assets from the safe.
@@ -55,13 +55,13 @@ module sui::safe {
     /// Check that the capability has not yet been revoked by the owner.
     fun check_capability_validity<T>(safe: &Safe<T>, capability: &TransferCapability<T>) {
         // Check that the ids match
-        assert!(object::id(safe) == capability.safe_id, INVALID_TRANSFER_CAPABILITY);
+        assert!(object::id(safe) == capability.safe_id, EInvalidTransferCapability);
         // Check that it has not been cancelled
-        assert!(vec_set::contains(&safe.allowed_safes, &object::id(capability)), TRANSFER_CAPABILITY_REVOKED);
+        assert!(vec_set::contains(&safe.allowed_safes, &object::id(capability)), ETransferCapabilityRevoked);
     }
 
     fun check_owner_capability_validity<T>(safe: &Safe<T>, capability: &OwnerCapability<T>) {
-        assert!(object::id(safe) == capability.safe_id, INVALID_OWNER_CAPABILITY);
+        assert!(object::id(safe) == capability.safe_id, EInvalidOwnerCapability);
     }
 
     /// Helper function to create a capability.
@@ -145,7 +145,7 @@ module sui::safe {
         check_capability_validity(safe, capability);
 
         // Withdraw funds
-        assert!(capability.amount >= withdraw_amount, OVERDRAWN);
+        assert!(capability.amount >= withdraw_amount, EOverdrawn);
         capability.amount = capability.amount - withdraw_amount;
         balance::split(&mut safe.balance, withdraw_amount)
     }

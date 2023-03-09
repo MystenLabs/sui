@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics, ExecutionState};
 
-use config::{Committee, SharedWorkerCache, WorkerId};
+use config::{Committee, WorkerCache, WorkerId};
 use crypto::{NetworkPublicKey, PublicKey};
 
 use futures::stream::FuturesOrdered;
@@ -21,23 +21,20 @@ use mysten_metrics::spawn_logged_monitored_task;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use tokio::time::Instant;
-use tokio::{
-    sync::{oneshot, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ConsensusOutput,
-    ReconfigureNotification, Timestamp,
+    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag,
+    ConditionalBroadcastReceiver, ConsensusOutput, Timestamp,
 };
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
 /// forward the certificates to the Executor Core.
 pub struct Subscriber<Network> {
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// A channel to receive sequenced consensus messages.
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     /// The metrics handler
@@ -54,9 +51,9 @@ struct Fetcher<Network> {
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     name: PublicKey,
     network: oneshot::Receiver<anemo::Network>,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     committee: Committee,
-    tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+    mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
@@ -70,12 +67,16 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     let (tx_notifier, rx_notifier) =
         metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
 
-    let rx_reconfigure_notify = tx_reconfigure.subscribe();
-    let rx_reconfigure_subscriber = tx_reconfigure.subscribe();
+    let rx_shutdown_notify = shutdown_receivers
+        .pop()
+        .unwrap_or_else(|| panic!("Not enough shutdown receivers"));
+    let rx_shutdown_subscriber = shutdown_receivers
+        .pop()
+        .unwrap_or_else(|| panic!("Not enough shutdown receivers"));
 
     vec![
         spawn_logged_monitored_task!(
-            run_notify(state, rx_notifier, rx_reconfigure_notify),
+            run_notify(state, rx_notifier, rx_shutdown_notify),
             "SubscriberNotifyTask"
         ),
         spawn_logged_monitored_task!(
@@ -84,7 +85,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
                 network,
                 worker_cache,
                 committee,
-                rx_reconfigure_subscriber,
+                rx_shutdown_subscriber,
                 rx_sequence,
                 metrics,
                 restored_consensus_output,
@@ -98,7 +99,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
 async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
     state: State,
     mut tr_notify: metered_channel::Receiver<ConsensusOutput>,
-    mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    mut rx_shutdown: ConditionalBroadcastReceiver,
 ) {
     loop {
         tokio::select! {
@@ -106,14 +107,10 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
                 state.handle_consensus_output(message).await;
             }
 
-            // Check for reconfiguration.
-            result = rx_reconfigure.changed() => {
-                result.expect("Committee channel dropped");
-                let message = rx_reconfigure.borrow().clone();
-                if let ReconfigureNotification::Shutdown = message {
-                    return
-                }
+            _ = rx_shutdown.receiver.recv() => {
+                return
             }
+
         }
     }
 }
@@ -121,9 +118,9 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
 async fn create_and_run_subscriber(
     name: PublicKey,
     network: oneshot::Receiver<anemo::Network>,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     committee: Committee,
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: ConditionalBroadcastReceiver,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
@@ -142,7 +139,7 @@ async fn create_and_run_subscriber(
         metrics: metrics.clone(),
     };
     let subscriber = Subscriber {
-        rx_reconfigure,
+        rx_shutdown,
         rx_sequence,
         metrics,
         fetcher,
@@ -154,8 +151,8 @@ async fn create_and_run_subscriber(
 }
 
 impl<Network: SubscriberNetwork> Subscriber<Network> {
-    /// Returns the max amount of pending consensus messages we should expect.
-    const MAX_PENDING_PAYLOADS: usize = 32;
+    /// Returns the max number of sub-dag to fetch payloads concurrently.
+    const MAX_PENDING_PAYLOADS: usize = 1000;
 
     /// Main loop connecting to the consensus to listen to sequence messages.
     async fn run(
@@ -166,7 +163,7 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
         // It's important to have the futures in ordered fashion as we want
         // to guarantee that will deliver to the executor the certificates
         // in the same order we received from rx_sequence. So it doesn't
-        // mater if we somehow managed to fetch the batches from a later
+        // matter if we somehow managed to fetch the batches from a later
         // certificate. Unless the earlier certificate's payload has been
         // fetched, no later certificate will be delivered.
         let mut waiting = FuturesOrdered::new();
@@ -197,17 +194,12 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                         error!("tx_notifier closed: {}", e);
                         return Ok(());
                     }
-
                 },
 
-                // Check for reconfiguration.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    if let ReconfigureNotification::Shutdown = message {
-                        return Ok(());
-                    }
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return Ok(())
                 }
+
             }
 
             self.metrics
@@ -242,14 +234,17 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for cert in &sub_dag.certificates {
             let mut batches = Vec::with_capacity(num_batches);
             let output_cert = cert.clone();
-            for (digest, worker_id) in cert.header.payload.iter() {
-                self.metrics
-                    .subscriber_current_round
-                    .set(cert.round() as i64);
-                self.metrics.subscriber_processed_certificates.inc();
-                self.metrics
-                    .subscriber_certificate_latency
-                    .observe(cert.metadata.created_at.elapsed().as_secs_f64());
+
+            self.metrics
+                .subscriber_current_round
+                .set(cert.round() as i64);
+
+            self.metrics
+                .subscriber_certificate_latency
+                .observe(cert.metadata.created_at.elapsed().as_secs_f64());
+
+            for (digest, (worker_id, _)) in cert.header.payload.iter() {
+                self.metrics.subscriber_processed_batches.inc();
 
                 let mut workers = self.network.workers_for_certificate(cert, worker_id);
 
@@ -280,6 +275,15 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         workers: Vec<NetworkPublicKey>,
     ) -> Batch {
         if let Some(payload) = self.try_fetch_locally(digest, worker_id).await {
+            let batch_fetch_duration = payload.metadata.created_at.elapsed().as_secs_f64();
+            self.metrics
+                .batch_execution_latency
+                .observe(batch_fetch_duration);
+            debug!(
+                "Batch {:?} took {} seconds to be fetched for execution since creation",
+                payload.digest(),
+                batch_fetch_duration
+            );
             return payload;
         }
         let _timer = self.metrics.subscriber_remote_fetch_latency.start_timer();
@@ -293,9 +297,15 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             stagger += Duration::from_millis(200);
         }
         let (batch, _, _) = futures::future::select_all(futures).await;
+        let batch_fetch_duration = batch.metadata.created_at.elapsed().as_secs_f64();
         self.metrics
             .batch_execution_latency
-            .observe(batch.metadata.created_at.elapsed().as_secs_f64());
+            .observe(batch_fetch_duration);
+        debug!(
+            "Batch {:?} took {} seconds to be fetched for execution since creation",
+            batch.digest(),
+            batch_fetch_duration
+        );
         batch
     }
 
@@ -311,7 +321,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 return Some(batch);
             }
             Ok(None) => debug!("Payload {} not found locally", digest),
-            Err(err) => error!("Error communicating with own worker: {}", err),
+            Err(err) => warn!("Error communicating with own worker: {}", err),
         }
         None
     }
@@ -415,7 +425,7 @@ pub trait SubscriberNetwork: Send + Sync {
 struct SubscriberNetworkImpl {
     name: PublicKey,
     network: anemo::Network,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     committee: Committee,
 }
 
@@ -423,7 +433,6 @@ struct SubscriberNetworkImpl {
 impl SubscriberNetwork for SubscriberNetworkImpl {
     fn my_worker(&self, worker_id: &WorkerId) -> NetworkPublicKey {
         self.worker_cache
-            .load()
             .worker(&self.name, worker_id)
             .expect("Own worker not found in cache")
             .name
@@ -438,7 +447,7 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
         authorities
             .into_iter()
             .filter_map(|authority| {
-                let worker = self.worker_cache.load().worker(&authority, worker_id);
+                let worker = self.worker_cache.worker(&authority, worker_id);
                 match worker {
                     Ok(worker) => Some(worker.name),
                     Err(err) => {

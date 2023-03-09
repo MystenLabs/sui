@@ -345,10 +345,10 @@ module defi::pool {
 /// ```
 module defi::pool_tests {
     use sui::sui::SUI;
-    use sui::coin::{mint_for_testing as mint, destroy_for_testing as burn};
-    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx}
-    ;
+    use sui::coin::{Self, Coin, mint_for_testing as mint};
+    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use defi::pool::{Self, Pool, LSP};
+    use sui::test_utils;
 
     /// Gonna be our test token.
     struct BEEP {}
@@ -397,6 +397,13 @@ module defi::pool_tests {
         let scenario = scenario();
         test_math_(&mut scenario);
         test::end(scenario);
+    }
+
+    #[test_only]
+    fun burn<T>(x: Coin<T>): u64 {
+        let value = coin::value(&x);
+        test_utils::destroy(x);
+        value
     }
 
     /// Init a Pool with a 1_000_000 BEEP and 1_000_000_000 SUI;
@@ -568,7 +575,7 @@ module defi::pool_tests {
         // Try small values
         assert!(pool::get_input_price(10, 1000, 1000, 0) == 9, 0);
 
-        // Even with 0 comission there's this small loss of 1
+        // Even with 0 commission there's this small loss of 1
         assert!(pool::get_input_price(10000, max_val, max_val, 0) == 9999, 0);
         assert!(pool::get_input_price(1000, max_val, max_val, 0) == 999, 0);
         assert!(pool::get_input_price(100, max_val, max_val, 0) == 99, 0);

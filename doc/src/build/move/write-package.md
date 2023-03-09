@@ -4,7 +4,7 @@ title: Write a Sui Move Package
 
 ##
 
-In order to build a Move package and run code defined in this package, first [install Sui binaries](../install.md#binaries).
+In order to build a Move package and run code defined in this package, first [install Sui binaries](../install.md#install-or-update-sui-binaries).
 
 ### Creating the package
 
@@ -95,10 +95,10 @@ module my_first_package::my_module {
 
 Let's break down the four different parts of this code:
 
-1. Imports: these allow our module to use types and functions declared in other modules. In this case, we pull in imports from three different modules.
+1. Imports: allow our module to use types and functions declared in other modules. In this case, we pull in imports from three different modules.
 
-2. Struct declarations: these define types that can be created/destroyed by this module. Here the `key` *abilities* indicate that these structs are Sui objects that can be transferred between addresses. The `store` ability on the sword allows it to appear in fields of other structs and to be transferred freely.
+2. Struct declarations: define types that can be created/destroyed by this module. Here the `key` *abilities* indicate that these structs are Sui objects that can be transferred between addresses. The `store` ability on the sword struct allows it to appear in other struct's fields and be transferred freely.
 
-3. Module initializer: this is a special function that is invoked exactly once when the module is published.
+3. Module initializer: a special function that is invoked exactly once when the module is published.
 
-4. Accessor functions--these allow the fields of the fields of module's struct to be read from other modules.
+4. Accessor functions: allow the fields of the module's structs to be read from other modules.

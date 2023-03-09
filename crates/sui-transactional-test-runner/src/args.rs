@@ -52,11 +52,19 @@ pub struct TransferObjectCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct ConsensusCommitPrologueCommand {
+    #[clap(long = "timestamp-ms")]
+    pub timestamp_ms: u64,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
     #[clap(name = "transfer-object")]
     TransferObject(TransferObjectCommand),
+    #[clap(name = "consensus-commit-prologue")]
+    ConsensusCommitPrologue(ConsensusCommitPrologueCommand),
 }
 
 #[derive(Debug)]
@@ -119,6 +127,7 @@ impl SuiValue {
             } => Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
+                mutable: true,
             }),
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 let obj_ref = obj.compute_object_reference();

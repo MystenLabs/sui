@@ -33,9 +33,9 @@ module games::drand_based_scratch_card_tests {
         let drand_final_round = drand_based_scratch_card::end_of_game_round(drand_based_scratch_card::get_game_base_drand_round(&game));
         assert!(drand_final_round == 5890, 1);
 
-        // Since everything here is deterministic, we know that the 9th ticket will be a winner.
+        // Since everything here is deterministic, we know that the 4th ticket will be a winner.
         let i = 0;
-        while (i < 10) {
+        loop {
             // User2 buys a ticket.
             test_scenario::next_tx(scenario, user2);
             mint(user2, 1, scenario);
@@ -62,7 +62,7 @@ module games::drand_based_scratch_card_tests {
             };
             i = i + 1;
         };
-        assert!(i == 8, 1);
+        assert!(i == 2, 1);
 
         // Claim the reward.
         let winner = test_scenario::take_from_sender<drand_based_scratch_card::Winner>(scenario);

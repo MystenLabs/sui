@@ -13,8 +13,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, HeaderBuilder, HeaderDigest, Metadata,
-    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -42,7 +41,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &pk)?;
 
     let msg = b"Hello world!";
-    let signature = kp.try_sign(msg).unwrap();
+    let signature = kp.sign(msg);
     tracer.trace_value(&mut samples, &signature)?;
 
     let committee = Committee {
@@ -76,9 +75,13 @@ fn get_registry() -> Result<Registry> {
         .epoch(0)
         .created_at(0)
         .round(1)
-        .payload((0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect())
+        .payload(
+            (0..4u32)
+                .map(|wid| (BatchDigest([0u8; 32]), (wid, 0u64)))
+                .collect(),
+        )
         .parents(certificates.iter().map(|x| x.digest()).collect())
-        .build(&kp)
+        .build()
         .unwrap();
 
     let worker_pk = network_keys[0].public().clone();
@@ -120,21 +123,10 @@ fn get_registry() -> Result<Registry> {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
     };
-    let epoch_change = WorkerReconfigureMessage {
-        message: ReconfigureNotification::NewEpoch(committee.clone()),
-    };
-    let update_committee = WorkerReconfigureMessage {
-        message: ReconfigureNotification::NewEpoch(committee),
-    };
-    let shutdown = WorkerReconfigureMessage {
-        message: ReconfigureNotification::Shutdown,
-    };
+
     tracer.trace_value(&mut samples, &our_batch)?;
     tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
-    tracer.trace_value(&mut samples, &epoch_change)?;
-    tracer.trace_value(&mut samples, &update_committee)?;
-    tracer.trace_value(&mut samples, &shutdown)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Batch>(&samples)?;

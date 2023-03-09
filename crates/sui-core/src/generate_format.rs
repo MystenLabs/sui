@@ -9,7 +9,6 @@ use move_core_types::{
 };
 use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
-use signature::Signer;
 use std::{fs::File, io::Write};
 use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
@@ -18,12 +17,14 @@ use sui_types::{
         AuthoritySignature, KeypairTraits, Signature,
     },
     messages::{
-        CallArg, EntryArgumentErrorKind, EntryTypeArgumentErrorKind, ExecutionFailureStatus,
-        ExecutionStatus, ObjectArg, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+        Argument, CallArg, Command, EntryArgumentErrorKind, EntryTypeArgumentErrorKind,
+        ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind,
+        SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
     storage::DeleteKind,
 };
+use sui_types::{crypto::Signer, messages::CommandArgumentError};
 use typed_store::rocks::TypedStoreError;
 
 fn get_registry() -> Result<Registry> {
@@ -49,11 +50,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &s_kp)?;
 
     // We have two signature types: one for Authority Signatures, which don't include the PubKey ...
-    let sig: AuthoritySignature = kp.sign(b"hello world");
+    let sig: AuthoritySignature = Signer::sign(&kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
     // ... and the user signature which does
 
-    let sig: Signature = s_kp.sign(b"hello world");
+    let sig: Signature = Signer::sign(&s_kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
 
     // ObjectID and SuiAddress are the same length
@@ -89,6 +90,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
     tracer.trace_type::<DeleteKind>(&samples)?;
+    tracer.trace_type::<Argument>(&samples)?;
+    tracer.trace_type::<Command>(&samples)?;
+    tracer.trace_type::<CommandArgumentError>(&samples)?;
 
     tracer.registry()
 }

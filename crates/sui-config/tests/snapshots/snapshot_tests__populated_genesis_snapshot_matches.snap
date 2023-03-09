@@ -7,11 +7,13 @@ expression: genesis.validator_set()
   protocol-key: mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ
   worker-key: DX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=
   network-key: DX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=
-  stake: 1
-  delegation: 0
   gas-price: 1
   commission-rate: 0
   network-address: ""
   p2p-address: ""
   narwhal-primary-address: ""
   narwhal-worker-address: ""
+  description: ""
+  image-url: ""
+  project-url: ""
+

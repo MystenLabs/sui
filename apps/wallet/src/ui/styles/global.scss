@@ -5,6 +5,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+    input[type='number']::-webkit-inner-spin-button,
+    input[type='number']::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+    }
+}
+
+@layer components {
+    .custom-scrollbar::-webkit-scrollbar {
+        @apply w-1.5;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-50 rounded-full;
+    }
+}
+
 html,
 body {
     min-width: 0;
@@ -66,4 +84,9 @@ textarea {
 
 textarea {
     font-family: InterVariable, sans-serif;
+}
+
+// remove default password reveal button edge
+::-ms-reveal {
+    display: none;
 }

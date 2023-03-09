@@ -10,9 +10,7 @@ export default {
 } as Meta;
 
 export const DisclosureBoxDefault: StoryObj<DisclosureBoxProps> = {
-    render: (props) => {
-        return <DisclosureBox {...props}>Test content</DisclosureBox>;
-    },
+    render: (props) => <DisclosureBox {...props}>Test content</DisclosureBox>,
     args: { title: 'Closed by default' },
 };
 

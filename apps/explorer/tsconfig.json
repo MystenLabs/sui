@@ -17,29 +17,12 @@
         "jsx": "react-jsx",
         "baseUrl": ".",
         "paths": {
-            "~/*": ["./src/*"],
-            "@mysten/sui.js": ["../../sdk/typescript/src/"],
-            "@mysten/bcs": ["../../sdk/bcs/src/"],
-            "@mysten/wallet-adapter-base": [
-                "../../sdk/wallet-adapter/adapters/base-adapter/src/"
-            ],
-            "@mysten/wallet-standard": [
-                "../../sdk/wallet-adapter/wallet-standard/src/"
-            ],
-            "@mysten/wallet-adapter-all-wallets": [
-                "../../sdk/wallet-adapter/adapters/all-wallets/src/"
-            ],
-            "@mysten/wallet-adapter-unsafe-burner": [
-                "../../sdk/wallet-adapter/adapters/unsafe-burner/src/"
-            ],
-            "@mysten/wallet-adapter-wallet-standard": [
-                "../../sdk/wallet-adapter/adapters/wallet-standard-adapter/src/"
-            ],
-            "@mysten/wallet-adapter-react": [
-                "../../sdk/wallet-adapter/react-providers/src/"
-            ],
-            "@mysten/wallet-kit": ["../../sdk/wallet-adapter/wallet-kit/src/"]
+            "~/*": ["./src/*"]
         }
     },
-    "include": ["src"]
+    "include": ["src", "tests"],
+    "references": [
+        { "path": "../../sdk/typescript/" },
+        { "path": "../../sdk/wallet-adapter/wallet-kit/" }
+    ]
 }

@@ -1,14 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSubscriptionEvent } from '../types/index.guard';
-import { SuiEventFilter, SuiEventEnvelope, SubscriptionId } from '../types';
+import { is } from 'superstruct';
+import {
+  SuiEventFilter,
+  SuiEventEnvelope,
+  SubscriptionId,
+  SubscriptionEvent,
+} from '../types';
 import { Client as WsRpcClient } from 'rpc-websockets';
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   const url = new URL(httpUrl);
   url.protocol = url.protocol.replace('http', 'ws');
-  url.port = (port ?? 9001).toString();
+  if (port) {
+    url.port = port.toString();
+  }
   return url.toString();
 };
 
@@ -41,7 +48,7 @@ type MinimumSubscriptionMessage = {
 };
 
 const isMinimumSubscriptionMessage = (
-  msg: any
+  msg: any,
 ): msg is MinimumSubscriptionMessage =>
   msg &&
   'subscription' in msg &&
@@ -103,7 +110,7 @@ export class WebsocketClient {
   constructor(
     public endpoint: string,
     public skipValidation: boolean,
-    public options: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
+    public options: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS,
   ) {
     if (this.endpoint.startsWith('http'))
       this.endpoint = getWebsocketUrl(this.endpoint);
@@ -128,7 +135,7 @@ export class WebsocketClient {
       // to access messages sent by the node
       (this.rpcClient as any).socket.on(
         'message',
-        this.onSocketMessage.bind(this)
+        this.onSocketMessage.bind(this),
       );
     });
 
@@ -152,7 +159,7 @@ export class WebsocketClient {
         if (sub)
           // cast to bypass type validation of 'result'
           (sub.onMessage as (m: any) => void)(params.result);
-      } else if (isSubscriptionEvent(params)) {
+      } else if (is(params, SubscriptionEvent)) {
         // call any registered handler for the message's subscription
         const sub = this.eventSubscriptions.get(params.subscription);
         if (sub) sub.onMessage(params.result);
@@ -173,7 +180,7 @@ export class WebsocketClient {
     this.connectionPromise = new Promise<void>((resolve, reject) => {
       this.connectionTimeout = setTimeout(
         () => reject(new Error('timeout')),
-        this.options.connectTimeout
+        this.options.connectTimeout,
       ) as any as number;
 
       this.rpcClient.once('open', () => {
@@ -213,7 +220,7 @@ export class WebsocketClient {
           */
           const id = await this.subscribeEvent(filter, onMessage);
           return { id, onMessage, filter };
-        })
+        }),
       );
 
       newSubsArr.forEach((entry) => {
@@ -231,37 +238,41 @@ export class WebsocketClient {
 
   async subscribeEvent(
     filter: SuiEventFilter,
-    onMessage: (event: SuiEventEnvelope) => void
+    onMessage: (event: SuiEventEnvelope) => void,
   ): Promise<SubscriptionId> {
     try {
       // lazily connect to websocket to avoid spamming node with connections
-      if (this.connectionState != ConnectionState.Connected)
+      if (this.connectionState !== ConnectionState.Connected)
         await this.connect();
 
       let subId = (await this.rpcClient.call(
         SUBSCRIBE_EVENT_METHOD,
         [filter],
-        this.options.callTimeout
+        this.options.callTimeout,
       )) as SubscriptionId;
 
       this.eventSubscriptions.set(subId, { filter, onMessage });
       return subId;
     } catch (err) {
       throw new Error(
-        `Error subscribing to event: ${err}, filter: ${JSON.stringify(filter)}`
+        `Error subscribing to event: ${JSON.stringify(
+          err,
+          null,
+          2,
+        )}, filter: ${JSON.stringify(filter)}`,
       );
     }
   }
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     try {
-      if (this.connectionState != ConnectionState.Connected)
+      if (this.connectionState !== ConnectionState.Connected)
         await this.connect();
 
       let removedOnNode = (await this.rpcClient.call(
         UNSUBSCRIBE_EVENT_METHOD,
         [id],
-        this.options.callTimeout
+        this.options.callTimeout,
       )) as boolean;
       /**
         if the connection closes before unsubscribe is called,
@@ -272,7 +283,7 @@ export class WebsocketClient {
       return this.eventSubscriptions.delete(id) || removedOnNode;
     } catch (err) {
       throw new Error(
-        `Error unsubscribing from event: ${err}, subscription: ${id}}`
+        `Error unsubscribing from event: ${err}, subscription: ${id}`,
       );
     }
   }

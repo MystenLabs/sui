@@ -10,7 +10,9 @@ pub mod write_ahead_log;
 pub mod write_path_pending_tx_log;
 
 use rocksdb::Options;
-use typed_store::rocks::{default_db_options as default_rocksdb_options, DBOptions};
+use typed_store::rocks::{
+    default_db_options as default_rocksdb_options, DBOptions, ReadWriteOptions,
+};
 
 /// Given a provided `db_options`, add a few default options.
 /// Returns the default option and the point lookup option.
@@ -19,7 +21,10 @@ pub fn default_db_options(
     cache_capacity: Option<usize>,
 ) -> (DBOptions, DBOptions) {
     let mut db_options = db_options
-        .map(|o| DBOptions { options: o })
+        .map(|o| DBOptions {
+            options: o,
+            rw_options: ReadWriteOptions::default(),
+        })
         .unwrap_or_else(default_rocksdb_options);
 
     // One common issue when running tests on Mac is that the default ulimit is too low,

@@ -9,7 +9,7 @@ use crate::{
 };
 use anemo::PeerId;
 use anyhow::anyhow;
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::traits::ToFromBytes;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash;
@@ -29,15 +29,11 @@ use std::{
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use thiserror::Error;
-use tokio::{
-    sync::{mpsc::Sender, watch},
-    task::JoinHandle,
-    time::timeout,
-};
+use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
-    metered_channel, BatchDigest, Certificate, CertificateDigest, GetCertificatesRequest,
-    PayloadAvailabilityRequest, PrimaryToPrimaryClient, ReconfigureNotification,
+    metered_channel, BatchDigest, Certificate, CertificateDigest, ConditionalBroadcastReceiver,
+    GetCertificatesRequest, PayloadAvailabilityRequest, PrimaryToPrimaryClient,
     WorkerSynchronizeMessage,
 };
 
@@ -157,10 +153,10 @@ pub struct BlockSynchronizer {
     committee: Committee,
 
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
 
-    /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
 
     /// Receive the commands for the synchronizer
     rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
@@ -192,8 +188,8 @@ impl BlockSynchronizer {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        worker_cache: WorkerCache,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
         network: anemo::Network,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -207,7 +203,7 @@ impl BlockSynchronizer {
                     name,
                     committee,
                     worker_cache,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_block_synchronizer_commands,
                     pending_requests: HashMap::new(),
                     network,
@@ -297,21 +293,10 @@ impl BlockSynchronizer {
                     }
                 }
 
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee)=> {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::UpdateCommittee(new_committee)=> {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::Shutdown => return
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
                 }
+
             }
         }
     }
@@ -544,8 +529,13 @@ impl BlockSynchronizer {
         let mut futures = Vec::new();
 
         for certificate in certificates {
-            let payload: Vec<(BatchDigest, WorkerId)> =
-                certificate.header.payload.clone().into_iter().collect();
+            let payload: Vec<(BatchDigest, WorkerId)> = certificate
+                .header
+                .payload
+                .clone()
+                .into_iter()
+                .map(|(batch, (worker_id, _))| (batch, worker_id))
+                .collect();
 
             let payload_available = if certificate.header.author == self.name {
                 trace!(
@@ -652,7 +642,6 @@ impl BlockSynchronizer {
         for (worker_id, batch_ids) in batches_by_worker {
             let worker_name = self
                 .worker_cache
-                .load()
                 .worker(&self.name, &worker_id)
                 .expect("Worker id not found")
                 .name;
@@ -680,7 +669,9 @@ impl BlockSynchronizer {
             .header
             .payload
             .iter()
-            .map(|(batch_digest, worker_id)| payload_store.notify_read((*batch_digest, *worker_id)))
+            .map(|(batch_digest, (worker_id, _))| {
+                payload_store.notify_read((*batch_digest, *worker_id))
+            })
             .collect::<Vec<_>>();
 
         // Wait for all the items to sync - have a timeout
@@ -711,7 +702,7 @@ impl BlockSynchronizer {
         targets: Vec<NetworkPublicKey>,
         timeout: Duration,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         digests: Vec<CertificateDigest>,
     ) -> State {
         let request = GetCertificatesRequest {
@@ -776,7 +767,7 @@ impl BlockSynchronizer {
             let certificates = &response.body().certificates;
             let mut found_invalid_certificate = false;
             for certificate in certificates {
-                if let Err(err) = certificate.verify(&committee, worker_cache.clone()) {
+                if let Err(err) = certificate.verify(&committee, &worker_cache) {
                     error!(
                         "Ignoring certificates from peer {response_peer:?}: certificate verification failed for digest {} with error {err:?}",
                         certificate.digest(),
@@ -830,10 +821,8 @@ impl BlockSynchronizer {
             .iter()
             .map(|c| (c.digest(), c.clone()))
             .collect();
-        let block_ids: Vec<CertificateDigest> = certificates_by_id
-            .iter()
-            .map(|(id, _)| id.to_owned())
-            .collect();
+        let block_ids: Vec<CertificateDigest> =
+            certificates_by_id.keys().map(|id| id.to_owned()).collect();
 
         let get_payload_availability_fn =
             move |mut client: PrimaryToPrimaryClient<network::anemo_ext::WaitingPeer>, request| {

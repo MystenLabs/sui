@@ -40,7 +40,7 @@ async fn test_restore_from_disk() {
     ] {
         let mut c = client.clone();
         tokio::spawn(async move {
-            let tr = bincode::serialize(&tx).unwrap();
+            let tr = bcs::to_bytes(&tx).unwrap();
             let txn = TransactionProto {
                 transaction: Bytes::from(tr),
             };
@@ -77,7 +77,7 @@ async fn test_restore_from_disk() {
     let primary = node.primary().await;
 
     let node_recovered_state =
-        if let Some(metric) = primary.metric("narwhal_primary_recovered_consensus_state") {
+        if let Some(metric) = primary.metric("recovered_consensus_state").await {
             let value = metric.get_counter().get_value();
             info!("Found metric for recovered consensus state.");
 
@@ -96,7 +96,7 @@ fn string_transaction() -> StringTransaction {
 #[ignore]
 #[tokio::test]
 async fn test_read_causal_signed_certificates() {
-    const CURRENT_ROUND_METRIC: &str = "narwhal_primary_current_round";
+    const CURRENT_ROUND_METRIC: &str = "current_round";
 
     // Enabled debug tracing so we can easily observe the
     // nodes logs.
@@ -112,7 +112,7 @@ async fn test_read_causal_signed_certificates() {
 
     // Ensure all nodes advanced
     for authority in cluster.authorities().await {
-        if let Some(metric) = authority.primary().await.metric(CURRENT_ROUND_METRIC) {
+        if let Some(metric) = authority.primary().await.metric(CURRENT_ROUND_METRIC).await {
             let value = metric.get_gauge().get_value();
 
             info!("Metric -> {:?}", value);
@@ -141,7 +141,7 @@ async fn test_read_causal_signed_certificates() {
     for _ in 0..10 {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        if let Some(metric) = node.metric(CURRENT_ROUND_METRIC) {
+        if let Some(metric) = node.metric(CURRENT_ROUND_METRIC).await {
             let value = metric.get_gauge().get_value();
             info!("Metric -> {:?}", value);
 

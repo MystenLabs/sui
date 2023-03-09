@@ -1,10 +1,45 @@
 {
-  "name": "@mysten/core",
-  "private": true,
-  "devDependencies": {
-    "@headlessui/tailwindcss": "^0.1.2",
-    "@tailwindcss/aspect-ratio": "^0.4.2",
-    "tailwindcss": "^3.2.4",
-    "typescript": "^4.8.3"
-  }
+    "name": "@mysten/core",
+    "main": "src/index.ts",
+    "private": true,
+    "sideEffects": false,
+    "author": "Mysten Labs <build@mystenlabs.com>",
+    "repository": {
+        "type": "git",
+        "url": "github.com:MystenLabs/sui.git"
+    },
+    "license": "Apache-2.0",
+    "scripts": {
+        "prettier:check": "prettier -c --ignore-unknown .",
+        "prettier:fix": "prettier -w --ignore-unknown .",
+        "prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
+        "eslint:check": "eslint --max-warnings=0 .eslintrc.js .",
+        "eslint:fix": "pnpm run eslint:check --fix",
+        "lint": "pnpm run eslint:check && pnpm run prettier:check",
+        "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@mysten/sui.js": "workspace:*",
+        "@sentry/react": "^7.38.0",
+        "@sentry/tracing": "^7.38.0",
+        "@tanstack/react-query": "^4.20.9",
+        "bignumber.js": "^9.1.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+    },
+    "devDependencies": {
+        "@headlessui/tailwindcss": "^0.1.2",
+        "@tailwindcss/aspect-ratio": "^0.4.2",
+        "@types/react": "^18.0.26",
+        "eslint": "^8.31.0",
+        "eslint-config-prettier": "^8.6.0",
+        "postcss": "^8.4.19",
+        "prettier": "^2.8.1",
+        "tailwindcss": "^3.2.4",
+        "typescript": "^4.9.4",
+        "vite": "^4.0.4",
+        "vitest": "^0.26.3"
+    }
 }

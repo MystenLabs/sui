@@ -4,6 +4,7 @@ use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use clap::*;
 use std::net::SocketAddr;
+use std::path::Path;
 use sui::client_commands::WalletContext;
 use sui::config::{SuiClientConfig, SuiEnv};
 use sui_config::genesis_config::GenesisConfig;
@@ -23,7 +24,7 @@ const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.ci.sui.io:443";
 const TESTNET_FAUCET_ADDR: &str = "https://faucet.testnet.sui.io:443";
-const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
+const DEVNET_FULLNODE_ADDR: &str = "https://fullnode-faucet.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
@@ -57,12 +58,16 @@ pub trait Cluster {
 
     /// Returns faucet key in a local cluster.
     fn local_faucet_key(&self) -> Option<&AccountKeyPair>;
+
+    /// Place to put config for the wallet, and any locally running services.
+    fn config_directory(&self) -> &Path;
 }
 
 /// Represents an up and running cluster deployed remotely.
 pub struct RemoteRunningCluster {
     fullnode_url: String,
     faucet_url: String,
+    config_directory: tempfile::TempDir,
 }
 
 #[async_trait]
@@ -107,8 +112,10 @@ impl Cluster for RemoteRunningCluster {
         Ok(Self {
             fullnode_url,
             faucet_url,
+            config_directory: tempfile::tempdir()?,
         })
     }
+
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
     }
@@ -116,11 +123,17 @@ impl Cluster for RemoteRunningCluster {
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
+
     fn remote_faucet_url(&self) -> Option<&str> {
         Some(&self.faucet_url)
     }
+
     fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
         None
+    }
+
+    fn config_directory(&self) -> &Path {
+        self.config_directory.path()
     }
 }
 
@@ -129,6 +142,7 @@ pub struct LocalNewCluster {
     test_cluster: TestCluster,
     fullnode_url: String,
     faucet_key: AccountKeyPair,
+    config_directory: tempfile::TempDir,
 }
 
 impl LocalNewCluster {
@@ -177,6 +191,7 @@ impl Cluster for LocalNewCluster {
             test_cluster,
             fullnode_url,
             faucet_key,
+            config_directory: tempfile::tempdir()?,
         })
     }
 
@@ -194,6 +209,10 @@ impl Cluster for LocalNewCluster {
 
     fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
         Some(&self.faucet_key)
+    }
+
+    fn config_directory(&self) -> &Path {
+        self.config_directory.path()
     }
 }
 
@@ -220,17 +239,21 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
         (**self).local_faucet_key()
     }
+
+    fn config_directory(&self) -> &Path {
+        (**self).config_directory()
+    }
 }
 
 pub async fn new_wallet_context_from_cluster(
     cluster: &(dyn Cluster + Sync + Send),
     key_pair: AccountKeyPair,
 ) -> WalletContext {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let wallet_config_path = temp_dir.path().join("client.yaml");
+    let config_dir = cluster.config_directory();
+    let wallet_config_path = config_dir.join("client.yaml");
     let fullnode_url = cluster.fullnode_url();
     info!("Use RPC: {}", &fullnode_url);
-    let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
+    let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
     keystore.add_key(SuiKeyPair::Ed25519(key_pair)).unwrap();

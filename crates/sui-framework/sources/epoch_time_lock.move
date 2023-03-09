@@ -3,6 +3,8 @@
 
 module sui::epoch_time_lock {
     use sui::tx_context::{Self, TxContext};
+    friend sui::sui_system;
+    friend sui::staking_pool;
 
     /// The epoch passed into the creation of a lock has already passed.
     const EEpochAlreadyPassed: u64 = 0;
@@ -17,15 +19,20 @@ module sui::epoch_time_lock {
     }
 
     /// Create a new epoch time lock with `epoch`. Aborts if the current epoch is less than the input epoch.
-    public fun new(epoch: u64, ctx: &mut TxContext) : EpochTimeLock {
+    public fun new(epoch: u64, ctx: &TxContext) : EpochTimeLock {
         assert!(tx_context::epoch(ctx) < epoch, EEpochAlreadyPassed);
         EpochTimeLock { epoch }
     }
 
     /// Destroys an epoch time lock. Aborts if the current epoch is less than the locked epoch.
-    public fun destroy(lock: EpochTimeLock, ctx: &mut TxContext) {
+    public fun destroy(lock: EpochTimeLock, ctx: &TxContext) {
         let EpochTimeLock { epoch } = lock;
         assert!(tx_context::epoch(ctx) >= epoch, EEpochNotYetEnded);
+    }
+
+    /// Destroys an epoch time lock.
+    public(friend) fun destroy_unchecked(lock: EpochTimeLock) {
+        let EpochTimeLock { epoch: _ } = lock;
     }
 
     /// Getter for the epoch number.

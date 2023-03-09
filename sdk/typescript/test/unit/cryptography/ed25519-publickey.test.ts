@@ -11,23 +11,23 @@ import { Ed25519PublicKey } from '../../../src';
 let TEST_CASES = new Map<string, string>([
   [
     'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
-    '3415400a4bfdf924aefa55446e5f4cd6e9a9399f',
+    '3415400a4bfdf924aefa55446e5f4cd6e9a9399f1e8830321ed2af0b4b4b6936',
   ],
   [
     '0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
-    '2e6dad710b343b8655825bc420783aaa5ade08c2',
+    '2e6dad710b343b8655825bc420783aaa5ade08c26244a34040398cb42ba16a1c',
   ],
   [
     '6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
-    '607a2403069d547c3fbba4b9e22793c7d78abb1f',
+    '607a2403069d547c3fbba4b9e22793c7d78abb1f65b1766d54d6878cf46a7ccb',
   ],
   [
     '6qZ88i8NJjaD+qZety3qXi4pLptGKS3wwO8bfDmUD+Y=',
-    '7a4b0fd76cce17ef014d64ec5e073117bfc0b4de',
+    '7a4b0fd76cce17ef014d64ec5e073117bfc0b4de5b28a83710ce147eed60c0db',
   ],
   [
     'RgdFhZXGe21x48rhe9X+Kh/WyFCo9ft6e9nQKZYHpi0=',
-    'ecd7ef15f92a26bc8f22a88a7786fe1aae1051c6',
+    'ecd7ef15f92a26bc8f22a88a7786fe1aae1051c6d3d48e920bf9b380d22e78e5',
   ],
 ]);
 
@@ -50,19 +50,19 @@ describe('Ed25519PublicKey', () => {
 
     expect(() => {
       new Ed25519PublicKey(
-        '0x300000000000000000000000000000000000000000000000000000000000000000000'
+        '0x300000000000000000000000000000000000000000000000000000000000000000000',
       );
     }).toThrow();
 
     expect(() => {
       new Ed25519PublicKey(
-        '0x300000000000000000000000000000000000000000000000000000000000000'
+        '0x300000000000000000000000000000000000000000000000000000000000000',
       );
     }).toThrow();
 
     expect(() => {
       new Ed25519PublicKey(
-        '135693854574979916511997248057056142015550763280047535983739356259273198796800000'
+        '135693854574979916511997248057056142015550763280047535983739356259273198796800000',
       );
     }).toThrow();
 
@@ -86,7 +86,7 @@ describe('Ed25519PublicKey', () => {
   it('toSuiAddress', () => {
     const key = new Ed25519PublicKey(new Uint8Array(BASE64_KEY_BYTES));
     expect(key.toSuiAddress()).toEqual(
-      '98fc1c8179b95274327069cf3b0ed051fb14e0bc'
+      '98fc1c8179b95274327069cf3b0ed051fb14e0bcdf46f0a0f8f0a8b916880adc',
     );
   });
 

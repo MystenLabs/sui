@@ -21,7 +21,6 @@ const METRICS_ROUTE: &str = "/metrics";
 // A RegistryService is returned that can be used to get access in prometheus Registries.
 pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
     let registry = Registry::new();
-    registry.register(uptime_metric()).unwrap();
 
     let registry_service = RegistryService::new(registry);
 
@@ -55,6 +54,108 @@ async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (St
             format!("unable to encode metrics: {error}"),
         ),
     }
+}
+
+pub struct MetricsPushClient {
+    certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
+    client: reqwest::Client,
+}
+
+impl MetricsPushClient {
+    pub fn new(network_key: sui_types::crypto::NetworkKeyPair) -> Self {
+        use fastcrypto::traits::KeyPair;
+        let certificate = std::sync::Arc::new(sui_tls::SelfSignedCertificate::new(
+            network_key.private(),
+            sui_tls::SUI_VALIDATOR_SERVER_NAME,
+        ));
+        let identity = certificate.reqwest_identity();
+        let client = reqwest::Client::builder()
+            .identity(identity)
+            .build()
+            .unwrap();
+
+        Self {
+            certificate,
+            client,
+        }
+    }
+
+    pub fn certificate(&self) -> &sui_tls::SelfSignedCertificate {
+        &self.certificate
+    }
+
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+}
+
+/// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
+/// is configured.
+pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: RegistryService) {
+    use anyhow::Context;
+    use fastcrypto::traits::KeyPair;
+    use sui_config::node::MetricsConfig;
+
+    const DEFAULT_METRICS_PUSH_INTERVAL: Duration = Duration::from_secs(60);
+
+    let (interval, url) = match &config.metrics {
+        Some(MetricsConfig {
+            push_interval_seconds,
+            push_url: Some(url),
+        }) => {
+            let interval = push_interval_seconds
+                .map(Duration::from_secs)
+                .unwrap_or(DEFAULT_METRICS_PUSH_INTERVAL);
+            let url = reqwest::Url::parse(url).expect("unable to parse metrics push url");
+            (interval, url)
+        }
+        _ => return,
+    };
+
+    let client = MetricsPushClient::new(config.network_key_pair().copy());
+
+    async fn push_metrics(
+        client: &MetricsPushClient,
+        url: &reqwest::Url,
+        registry: &RegistryService,
+    ) -> Result<(), anyhow::Error> {
+        let metrics = TextEncoder
+            .encode_to_string(&registry.gather_all())
+            .context("encoding metrics")?;
+
+        let response = client
+            .client()
+            .post(url.to_owned())
+            .body(metrics)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "metrics push failed with status: {}",
+                response.status()
+            ));
+        }
+
+        tracing::debug!("successfully pushed metrics to {url}");
+
+        Ok(())
+    }
+
+    tokio::spawn(async move {
+        tracing::info!(push_url =% url, interval =? interval, "Started Metrics Push Service");
+
+        let mut interval = tokio::time::interval(interval);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            interval.tick().await;
+
+            if let Err(error) = push_metrics(&client, &url, &registry).await {
+                tracing::warn!("unable to push metrics: {error}");
+            }
+        }
+    });
 }
 
 #[derive(Clone)]
@@ -105,34 +206,9 @@ impl MetricsCallbackProvider for GrpcMetrics {
     }
 }
 
-/// Create a metric that measures the uptime from when this metric was constructed.
-/// The metric is labeled with the node version: semver-gitrevision
-fn uptime_metric() -> Box<dyn prometheus::core::Collector> {
-    let version: &str = version();
-
-    let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
-        .variable_label("version");
-
-    let start_time = std::time::Instant::now();
-    let uptime = move || start_time.elapsed().as_secs();
-    let metric = prometheus_closure_metric::ClosureMetric::new(
-        opts,
-        prometheus_closure_metric::ValueType::Counter,
-        uptime,
-        &[version],
-    )
-    .unwrap();
-
-    Box::new(metric)
-}
-
-fn version() -> &'static str {
-    concat!(env!("CARGO_PKG_VERSION"), "-", env!("GIT_REVISION"))
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::metrics::{start_prometheus_server, version};
+    use crate::metrics::start_prometheus_server;
     use prometheus::{IntCounter, Registry};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -171,14 +247,6 @@ sui_counter_2 0"
 # TYPE narwhal_counter_1 counter
 narwhal_counter_1 0"
         ));
-
-        let exp = format!(
-            "# HELP uptime uptime of the node service in seconds
-# TYPE uptime counter
-uptime{{version=\"{}\"}} 0",
-            version()
-        );
-        assert!(result.contains(&exp));
 
         // Now remove registry 1
         assert!(registry_service.remove(registry_1_id));

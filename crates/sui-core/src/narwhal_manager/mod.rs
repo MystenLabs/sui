@@ -5,183 +5,266 @@
 #[path = "../unit_tests/narwhal_manager_tests.rs"]
 pub mod narwhal_manager_tests;
 
-use arc_swap::ArcSwap;
-use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
-use futures::future::join_all;
 use mysten_metrics::RegistryService;
-use narwhal_config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use narwhal_config::{Committee, Epoch, Parameters, WorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
-use narwhal_node::{Node, NodeStorage};
-use narwhal_types::ReconfigureNotification;
+use narwhal_node::primary_node::PrimaryNode;
+use narwhal_node::worker_node::WorkerNodes;
+use narwhal_node::NodeStorage;
 use narwhal_worker::TransactionValidator;
-use prometheus::Registry;
-use std::fmt::{Debug, Formatter};
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_types::crypto::NetworkKeyPair;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::task::JoinHandle;
+use std::time::Instant;
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use tokio::sync::Mutex;
 
-pub struct NarwhalStartMessage<State> {
-    pub committee: Arc<Committee>,
-    pub shared_worker_cache: SharedWorkerCache,
-    pub execution_state: Arc<State>,
+#[derive(PartialEq)]
+enum Running {
+    True(Epoch),
+    False,
 }
 
-impl<State> Debug for NarwhalStartMessage<State> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.committee.fmt(f)?;
-        self.shared_worker_cache.fmt(f)
-    }
-}
-
-pub struct NarwhalManager<State> {
-    pub join_handle: JoinHandle<()>,
-    pub tx_start: Sender<NarwhalStartMessage<State>>,
-    pub tx_stop: Sender<()>,
-}
-
-pub struct NarwhalConfiguration<TxValidator: TransactionValidator> {
-    pub primary_keypair: bls12381::min_sig::BLS12381KeyPair,
+pub struct NarwhalConfiguration {
+    pub primary_keypair: AuthorityKeyPair,
     pub network_keypair: NetworkKeyPair,
     pub worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
 
     pub storage_base_path: PathBuf,
     pub parameters: Parameters,
-    pub tx_validator: TxValidator,
-
     pub registry_service: RegistryService,
 }
 
-pub async fn run_narwhal_manager<State, TxValidator>(
-    config: NarwhalConfiguration<TxValidator>,
-    mut tr_start: Receiver<NarwhalStartMessage<State>>,
-    mut tr_stop: Receiver<()>,
-) where
-    State: ExecutionState + Send + Sync + 'static,
-    TxValidator: TransactionValidator,
-{
-    let port = config
-        .parameters
-        .network_admin_server
-        .primary_network_admin_server_port;
+pub struct NarwhalManagerMetrics {
+    start_latency: IntGauge,
+    shutdown_latency: IntGauge,
+    start_primary_retries: IntGauge,
+    start_worker_retries: IntGauge,
+}
 
-    loop {
-        // Copy the config for this iteration of the loop
-        let mut id_keypair_copy = Vec::new();
-        for (id, keypair) in &config.worker_ids_and_keypairs {
-            id_keypair_copy.push((*id, keypair.copy()));
+impl NarwhalManagerMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            start_latency: register_int_gauge_with_registry!(
+                "narwhal_manager_start_latency",
+                "The latency of starting up narwhal nodes",
+                registry,
+            )
+            .unwrap(),
+            shutdown_latency: register_int_gauge_with_registry!(
+                "narwhal_manager_shutdown_latency",
+                "The latency of shutting down narwhal nodes",
+                registry,
+            )
+            .unwrap(),
+            start_primary_retries: register_int_gauge_with_registry!(
+                "narwhal_manager_start_primary_retries",
+                "The number of retries took to start narwhal primary node",
+                registry
+            )
+            .unwrap(),
+            start_worker_retries: register_int_gauge_with_registry!(
+                "narwhal_manager_start_worker_retries",
+                "The number of retries took to start narwhal worker node",
+                registry
+            )
+            .unwrap(),
         }
-
-        // Wait for instruction to start an instance of narwhal
-        let NarwhalStartMessage {
-            committee,
-            shared_worker_cache,
-            execution_state,
-        } = match tr_start.recv().await {
-            Some(m) => m,
-            None => break,
-        };
-
-        let new_registry = Registry::new();
-        let _ = config.registry_service.add(new_registry.clone());
-
-        let config_copy = NarwhalConfiguration {
-            primary_keypair: config.primary_keypair.copy(),
-            network_keypair: config.network_keypair.copy(),
-            worker_ids_and_keypairs: id_keypair_copy,
-            storage_base_path: config.storage_base_path.clone(),
-            parameters: config.parameters.clone(),
-            tx_validator: config.tx_validator.clone(),
-            registry_service: config.registry_service.clone(),
-        };
-
-        let narwhal_handles = start_narwhal(
-            config_copy,
-            committee,
-            shared_worker_cache,
-            execution_state,
-            new_registry,
-        )
-        .await;
-
-        // Wait for instruction to stop the instance of narwhal
-        match tr_stop.recv().await {
-            Some(_) => {
-                shutdown_narwhal(port, narwhal_handles).await;
-            }
-            None => break,
-        };
     }
 }
 
-async fn shutdown_narwhal(port: u16, narwhal_handles: Vec<JoinHandle<()>>) {
-    tracing::info!("Sending shutdown message to narwhal");
-
-    // Send shutdown message to the primary, who will forward it to its workers
-    let client = reqwest::Client::new();
-    client
-        .post(format!("http://127.0.0.1:{}/reconfigure", port))
-        .json(&ReconfigureNotification::Shutdown)
-        .send()
-        .await
-        .unwrap();
-
-    // Shutdown the running instances of Narwhal
-    join_all(narwhal_handles).await;
-
-    tracing::info!("Narwhal shutdown is complete");
+pub struct NarwhalManager {
+    storage_base_path: PathBuf,
+    primary_keypair: AuthorityKeyPair,
+    network_keypair: NetworkKeyPair,
+    worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
+    primary_node: PrimaryNode,
+    worker_nodes: WorkerNodes,
+    running: Mutex<Running>,
+    metrics: NarwhalManagerMetrics,
 }
 
-async fn start_narwhal<State, TxValidator>(
-    config: NarwhalConfiguration<TxValidator>,
-    committee: Arc<Committee>,
-    worker_cache: SharedWorkerCache,
-    execution_state: Arc<State>,
-    registry: Registry,
-) -> Vec<JoinHandle<()>>
-where
-    State: ExecutionState + Send + Sync + 'static,
-    TxValidator: TransactionValidator,
-{
-    // Create a new store
-    let mut store_path = config.storage_base_path.clone();
-    store_path.push(format!("epoch{}", committee.epoch()));
-    let store = NodeStorage::reopen(store_path);
+impl NarwhalManager {
+    pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
+        // Create the Narwhal Primary with configuration
+        let primary_node = PrimaryNode::new(
+            config.parameters.clone(),
+            true,
+            config.registry_service.clone(),
+        );
 
-    let name = config.primary_keypair.public().clone();
+        // Create Narwhal Workers with configuration
+        let worker_nodes =
+            WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
 
-    tracing::info!("Starting up narwhal");
+        Self {
+            primary_node,
+            worker_nodes,
+            primary_keypair: config.primary_keypair,
+            network_keypair: config.network_keypair,
+            worker_ids_and_keypairs: config.worker_ids_and_keypairs,
+            storage_base_path: config.storage_base_path,
+            running: Mutex::new(Running::False),
+            metrics,
+        }
+    }
 
-    // Start Narwhal Primary with configuration
-    let mut narwhal_handles = Node::spawn_primary(
-        config.primary_keypair.copy(),
-        config.network_keypair.copy(),
-        Arc::new(ArcSwap::new(committee.clone())),
-        worker_cache.clone(),
-        &store,
-        config.parameters.clone(),
-        /* consensus */ true,
-        execution_state,
-        &registry,
-    )
-    .await
-    .unwrap();
+    // Starts the Narwhal (primary & worker(s)) - if not already running.
+    pub async fn start<State, TxValidator: TransactionValidator>(
+        &self,
+        committee: Committee,
+        worker_cache: WorkerCache,
+        execution_state: Arc<State>,
+        tx_validator: TxValidator,
+    ) where
+        State: ExecutionState + Send + Sync + 'static,
+    {
+        let mut running = self.running.lock().await;
 
-    // Start Narwhal Workers with configuration
-    narwhal_handles.extend(Node::spawn_workers(
-        name,
-        config.worker_ids_and_keypairs,
-        Arc::new(ArcSwap::new(committee.clone())),
-        worker_cache,
-        &store,
-        config.parameters.clone(),
-        config.tx_validator.clone(),
-        &registry,
-    ));
+        if let Running::True(epoch) = *running {
+            tracing::warn!(
+                "Narwhal node is already Running at epoch {:?} - shutdown first before starting",
+                epoch
+            );
+            return;
+        }
 
-    tracing::info!("Starting up narwhal is complete");
+        let now = Instant::now();
 
-    narwhal_handles
+        // Create a new store
+        let store_path = self.get_store_path(committee.epoch());
+        let store = NodeStorage::reopen(store_path);
+
+        let name = self.primary_keypair.public().clone();
+
+        tracing::info!("Starting up Narwhal for epoch {}", committee.epoch());
+
+        // start primary
+        const MAX_PRIMARY_RETRIES: u32 = 2;
+        let mut primary_retries = 0;
+        loop {
+            match self
+                .primary_node
+                .start(
+                    self.primary_keypair.copy(),
+                    self.network_keypair.copy(),
+                    committee.clone(),
+                    worker_cache.clone(),
+                    &store,
+                    execution_state.clone(),
+                )
+                .await
+            {
+                Ok(_) => {
+                    break;
+                }
+                Err(e) => {
+                    primary_retries += 1;
+                    if primary_retries >= MAX_PRIMARY_RETRIES {
+                        panic!("Unable to start Narwhal Primary: {:?}", e);
+                    }
+                    tracing::error!("Unable to start Narwhal Primary: {:?}, retrying", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        // Start Narwhal Workers with configuration
+        const MAX_WORKER_RETRIES: u32 = 2;
+        let mut worker_retries = 0;
+        loop {
+            // Copy the config for this iteration of the loop
+            let id_keypair_copy = self
+                .worker_ids_and_keypairs
+                .iter()
+                .map(|(id, keypair)| (*id, keypair.copy()))
+                .collect();
+
+            match self
+                .worker_nodes
+                .start(
+                    name.clone(),
+                    id_keypair_copy,
+                    committee.clone(),
+                    worker_cache.clone(),
+                    &store,
+                    tx_validator.clone(),
+                )
+                .await
+            {
+                Ok(_) => {
+                    break;
+                }
+                Err(e) => {
+                    worker_retries += 1;
+                    if worker_retries >= MAX_WORKER_RETRIES {
+                        panic!("Unable to start Narwhal Worker: {:?}", e);
+                    }
+                    tracing::error!("Unable to start Narwhal Worker: {:?}, retrying", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        tracing::info!(
+            "Starting up Narwhal for epoch {} is complete - took {} seconds",
+            committee.epoch(),
+            now.elapsed().as_secs_f64()
+        );
+
+        self.metrics
+            .start_latency
+            .set(now.elapsed().as_secs_f64() as i64);
+
+        self.metrics
+            .start_primary_retries
+            .set(primary_retries as i64);
+        self.metrics.start_worker_retries.set(worker_retries as i64);
+
+        *running = Running::True(committee.epoch());
+    }
+
+    // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
+    // have shutdown.
+    pub async fn shutdown(&self) {
+        let mut running = self.running.lock().await;
+
+        match *running {
+            Running::True(epoch) => {
+                let now = Instant::now();
+                tracing::info!("Shutting down Narwhal epoch {:?}", epoch);
+
+                self.primary_node.shutdown().await;
+                self.worker_nodes.shutdown().await;
+
+                tracing::info!(
+                    "Narwhal shutdown for epoch {:?} is complete - took {} seconds",
+                    epoch,
+                    now.elapsed().as_secs_f64()
+                );
+
+                self.metrics
+                    .shutdown_latency
+                    .set(now.elapsed().as_secs_f64() as i64);
+            }
+            Running::False => {
+                tracing::info!(
+                    "Narwhal Manager shutdown was called but Narwhal node is not running"
+                );
+            }
+        }
+
+        *running = Running::False;
+    }
+
+    fn get_store_path(&self, epoch: Epoch) -> PathBuf {
+        let mut store_path = self.storage_base_path.clone();
+        store_path.push(format!("{}", epoch));
+        store_path
+    }
+
+    pub fn get_storage_base_path(&self) -> PathBuf {
+        self.storage_base_path.clone()
+    }
 }

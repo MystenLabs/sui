@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-unsafe-burner",
-  "version": "0.3.2",
+  "version": "0.7.1",
   "description": "",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "source": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
@@ -20,16 +21,19 @@
   ],
   "scripts": {
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "dev": "pnpm build --watch",
+    "build": "pnpm build:types && pnpm build:tsup",
+    "build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*",
-    "@mysten/wallet-adapter-base": "workspace:*"
+    "@mysten/wallet-adapter-base": "workspace:*",
+    "@mysten/wallet-standard": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^6.5.0",
-    "typescript": "^4.8.3"
+    "typescript": "^4.9.4"
   }
 }

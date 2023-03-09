@@ -13,6 +13,7 @@ use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     base_types::ObjectID,
     messages::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
@@ -38,6 +39,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
     let (sender, keypair) = deterministic_random_account_key();
 
     let mut certificates = Vec::new();
@@ -45,16 +47,16 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
     let shared_object_arg = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
+        mutable: true,
     };
     for gas_object in test_gas_objects() {
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
-        let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
-        let data = TransactionData::new_move_call(
+        let data = TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            package_object_ref,
+            SUI_FRAMEWORK_OBJECT_ID,
             ident_str!(module).to_owned(),
             ident_str!(function).to_owned(),
             /* type_args */ vec![],
@@ -66,20 +68,21 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             /* max_gas */ 10_000,
-        );
+        )
+        .unwrap();
 
         let transaction = to_sender_signed_transaction(data, &keypair);
 
         // Submit the transaction and assemble a certificate.
         let response = authority
-            .handle_transaction(transaction.clone())
+            .handle_transaction(&epoch_store, transaction.clone())
             .await
             .unwrap();
-        let vote = response.signed_transaction.unwrap();
+        let vote = response.status.into_signed_for_testing();
         let certificate = CertifiedTransaction::new(
             transaction.into_message(),
-            vec![vote.auth_sig().clone()],
-            &authority.clone_committee(),
+            vec![vote.clone()],
+            &authority.clone_committee_for_testing(),
         )
         .unwrap();
         certificates.push(certificate);
@@ -103,9 +106,12 @@ async fn submit_transaction_to_consensus_adapter() {
 
     #[async_trait::async_trait]
     impl SubmitToConsensus for SubmitDirectly {
-        async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
-            self.0
-                .epoch_store()
+        async fn submit_to_consensus(
+            &self,
+            transaction: &ConsensusTransaction,
+            epoch_store: &Arc<AuthorityPerEpochStore>,
+        ) -> SuiResult {
+            epoch_store
                 .handle_consensus_transaction(
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
@@ -118,17 +124,20 @@ async fn submit_transaction_to_consensus_adapter() {
     // Make a new consensus adapter instance.
     let adapter = ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
-        state.clone(),
+        state.name,
+        Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
         metrics,
     );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
     let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
+    let epoch_store = state.epoch_store_for_testing();
     let waiter = adapter
         .submit(
             transaction.clone(),
-            Some(&state.epoch_store().get_reconfig_state_read_lock_guard()),
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
         )
         .unwrap();
     waiter.await.unwrap();

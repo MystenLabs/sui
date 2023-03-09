@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::time::Duration;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::sync::Arc;
 
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use tokio_stream::Stream;
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -12,10 +12,11 @@ use sui_json_rpc_types::SuiMoveStruct;
 use sui_storage::event_store::{EventStore, EventStoreType};
 use sui_types::base_types::TransactionDigest;
 use sui_types::filter::EventFilter;
+use sui_types::messages::TransactionEvents;
 use sui_types::{
     error::{SuiError, SuiResult},
     event::{Event, EventEnvelope},
-    messages::TransactionEffects,
+    messages::{TransactionEffects, TransactionEffectsAPI},
 };
 
 use crate::authority::{AuthorityStore, ResolverWrapper};
@@ -28,19 +29,14 @@ mod event_handler_tests;
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
-    module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     event_streamer: Streamer<EventEnvelope, EventFilter>,
     pub(crate) event_store: Arc<EventStoreType>,
 }
 
 impl EventHandler {
-    pub fn new(
-        event_store: Arc<EventStoreType>,
-        module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
-    ) -> Self {
+    pub fn new(event_store: Arc<EventStoreType>) -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
-            module_cache,
             event_streamer: streamer,
             event_store,
         }
@@ -49,32 +45,38 @@ impl EventHandler {
     /// Run a regular cleanup task on the store
     pub fn regular_cleanup_task(&self) {
         let store_copy = self.event_store.clone();
-        match store_copy.as_ref() {
-            EventStoreType::SqlEventStore(db) => {
-                // Start periodic task to clean up WAL
-                let _handle = db.wal_cleanup_thread(Some(Duration::from_secs(300)));
+        tokio::spawn(async move {
+            match store_copy.as_ref() {
+                EventStoreType::SqlEventStore(db) => {
+                    // Start periodic task to clean up WAL every 30 minutes
+                    db.wal_cleanup_thread(Some(Duration::from_secs(30 * 60)))
+                        .await;
+                }
             }
-        }
+        });
     }
 
-    #[instrument(level = "debug", skip_all, fields(seq=?seq_num, tx_digest=?effects.transaction_digest), err)]
+    #[instrument(level = "debug", skip_all, fields(seq=?seq_num, tx_digest=?effects.transaction_digest()), err)]
     pub async fn process_events(
         &self,
         effects: &TransactionEffects,
+        events: &TransactionEvents,
         timestamp_ms: u64,
         seq_num: u64,
+        module_cache: &SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     ) -> SuiResult {
-        let res: Result<Vec<_>, _> = effects
-            .events
+        let res: Result<Vec<_>, _> = events
+            .data
             .iter()
             .enumerate()
             .map(|(event_num, e)| {
                 self.create_envelope(
                     e,
-                    effects.transaction_digest,
+                    *effects.transaction_digest(),
                     event_num.try_into().unwrap(),
                     seq_num,
                     timestamp_ms,
+                    module_cache,
                 )
             })
             .collect();
@@ -87,14 +89,14 @@ impl EventHandler {
             warn!(
                 num_events = envelopes.len(),
                 row_inserted = row_inserted,
-                tx_digest =? effects.transaction_digest,
+                tx_digest =? effects.transaction_digest(),
                 "Inserted event record is less than expected."
             );
         }
 
         trace!(
             num_events = envelopes.len(),
-            tx_digest =? effects.transaction_digest,
+            tx_digest =? effects.transaction_digest(),
             "Finished writing events to event store"
         );
 
@@ -115,28 +117,24 @@ impl EventHandler {
         event_num: u64,
         seq_num: u64,
         timestamp_ms: u64,
+        module_cache: &SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     ) -> Result<EventEnvelope, SuiError> {
         let json_value = match event {
             Event::MoveEvent {
                 type_, contents, ..
             } => {
                 debug!(event =? event, "Process MoveEvent.");
-                let move_struct =
-                    Event::move_event_to_move_struct(type_, contents, self.module_cache.as_ref())?;
+                let move_struct = Event::move_event_to_move_struct(type_, contents, module_cache)?;
                 // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but with additional type supports, (e.g. ascii::String).
                 let sui_move_struct = SuiMoveStruct::from(move_struct);
-                Some(sui_move_struct.to_json_value().map_err(|e| {
-                    SuiError::ObjectSerializationError {
-                        error: e.to_string(),
-                    }
-                })?)
+                Some(sui_move_struct.to_json_value())
             }
             _ => None,
         };
 
         Ok(EventEnvelope::new(
             timestamp_ms,
-            Some(digest),
+            digest,
             seq_num,
             event_num,
             event.clone(),

@@ -3,11 +3,9 @@
 
 import sha3 from 'js-sha3';
 import { fromB64, toB64 } from '@mysten/bcs';
-import {
-  bytesEqual,
-  PublicKeyInitData,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from './publickey';
+import { bytesEqual, PublicKeyInitData } from './publickey';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
+import { SUI_ADDRESS_LENGTH } from '../types';
 
 const PUBLIC_KEY_SIZE = 32;
 
@@ -15,6 +13,7 @@ const PUBLIC_KEY_SIZE = 32;
  * An Ed25519 public key
  */
 export class Ed25519PublicKey {
+  static SIZE = PUBLIC_KEY_SIZE;
   private data: Uint8Array;
 
   /**
@@ -32,7 +31,7 @@ export class Ed25519PublicKey {
 
     if (this.data.length !== PUBLIC_KEY_SIZE) {
       throw new Error(
-        `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`
+        `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`,
       );
     }
   }
@@ -72,6 +71,7 @@ export class Ed25519PublicKey {
     let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['ED25519']]);
     tmp.set(this.toBytes(), 1);
-    return sha3.sha3_256(tmp).slice(0, 40);
+    // Each hex char represents half a byte, hence hex address doubles the length
+    return sha3.sha3_256(tmp).slice(0, SUI_ADDRESS_LENGTH * 2);
   }
 }

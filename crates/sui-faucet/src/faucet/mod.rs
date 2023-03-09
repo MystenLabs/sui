@@ -7,6 +7,7 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use uuid::Uuid;
 
 mod simple_faucet;
+mod write_ahead_log;
 pub use self::simple_faucet::SimpleFaucet;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

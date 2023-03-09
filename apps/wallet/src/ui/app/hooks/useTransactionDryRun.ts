@@ -5,18 +5,24 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useSigner } from '_hooks';
 
-import type { SignerWithProvider } from '@mysten/sui.js';
+import type { SignerWithProvider, SuiAddress } from '@mysten/sui.js';
 
 export type TransactionDryRun = Parameters<
     SignerWithProvider['dryRunTransaction']
 >['0'];
 
-export function useTransactionDryRun(txData: TransactionDryRun) {
-    const signer = useSigner();
-
-    const response = useQuery(['executeDryRunTxn', txData], async () => {
-        return signer.dryRunTransaction(txData);
+export function useTransactionDryRun(
+    txData: TransactionDryRun,
+    addressForTransaction: SuiAddress
+) {
+    const signer = useSigner(addressForTransaction);
+    const response = useQuery({
+        queryKey: ['executeDryRunTxn', txData, addressForTransaction],
+        queryFn: async () => {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            return signer!.dryRunTransaction(txData);
+        },
+        enabled: !!signer,
     });
-
     return response;
 }

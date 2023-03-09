@@ -11,7 +11,8 @@ use move_core_types::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const OBJECT_MODULE_NAME: &IdentStr = ident_str!("object");
+pub const OBJECT_MODULE_NAME_STR: &str = "object";
+pub const OBJECT_MODULE_NAME: &IdentStr = ident_str!(OBJECT_MODULE_NAME_STR);
 pub const UID_STRUCT_NAME: &IdentStr = ident_str!("UID");
 pub const ID_STRUCT_NAME: &IdentStr = ident_str!("ID");
 

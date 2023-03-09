@@ -2,18 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { Base64DataBuffer } from '../serialization/base64';
-import type { ExportedKeypair, Keypair } from './keypair';
+import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
-import { SignatureScheme } from './publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
-import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
+import { derivePath } from '../utils/ed25519-hd-key';
 import { toB64 } from '@mysten/bcs';
+import { SignatureScheme } from './signature';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
 /**
- * Ed25519 Keypair data
+ * Ed25519 Keypair data. The publickey is the 32-byte public key and
+ * the secretkey is 64-byte, where the first 32 bytes is the secret
+ * key and the last 32 bytes is the public key.
  */
 export interface Ed25519KeypairData {
   publicKey: Uint8Array;
@@ -55,11 +56,22 @@ export class Ed25519Keypair implements Keypair {
   }
 
   /**
-   * Create a Ed25519 keypair from a raw secret key byte array.
+   * Create a Ed25519 keypair from a raw secret key byte array, also known as seed.
+   * This is NOT the private scalar which is result of hashing and bit clamping of
+   * the raw secret key.
    *
-   * This method should only be used to recreate a keypair from a previously
-   * generated secret key.
-   *
+   * The sui.keystore key is a list of Base64 encoded `flag || privkey`. To import
+   * a key from sui.keystore to typescript, decode from base64 and remove the first
+   * flag byte after checking it is indeed the Ed25519 scheme flag 0x00 (See more
+   * on flag for signature scheme: https://github.com/MystenLabs/sui/blob/818406c5abdf7de1b80915a0519071eec3a5b1c7/crates/sui-types/src/crypto.rs#L1650):
+   * ```
+   * import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
+   * const raw = fromB64(t[1]);
+   * if (raw[0] !== 0 || raw.length !== PRIVATE_KEY_SIZE + 1) {
+   *   throw new Error('invalid key');
+   * }
+   * const imported = Ed25519Keypair.fromSecretKey(raw.slice(1))
+   * ```
    * @throws error if the provided secret key is invalid and validation is not skipped.
    *
    * @param secretKey secret key byte array
@@ -67,21 +79,15 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSecretKey(
     secretKey: Uint8Array,
-    options?: { skipValidation?: boolean }
+    options?: { skipValidation?: boolean },
   ): Ed25519Keypair {
     const secretKeyLength = secretKey.length;
-    if (secretKeyLength != 64) {
-      // Many users actually wanted to invoke fromSeed(seed: Uint8Array), especially when reading from keystore.
-      if (secretKeyLength == 32) {
-        throw new Error(
-          'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)'
-        );
-      }
+    if (secretKeyLength !== PRIVATE_KEY_SIZE) {
       throw new Error(
-        `Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`
+        `Wrong secretKey size. Expected ${PRIVATE_KEY_SIZE} bytes, got ${secretKeyLength}.`,
       );
     }
-    const keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
+    const keypair = nacl.sign.keyPair.fromSeed(secretKey);
     if (!options || !options.skipValidation) {
       const encoder = new TextEncoder();
       const signData = encoder.encode('sui validation');
@@ -94,19 +100,6 @@ export class Ed25519Keypair implements Keypair {
   }
 
   /**
-   * Generate an Ed25519 keypair from a 32 byte seed.
-   *
-   * @param seed seed byte array
-   */
-  static fromSeed(seed: Uint8Array): Ed25519Keypair {
-    const seedLength = seed.length;
-    if (seedLength != 32) {
-      throw new Error(`Wrong seed size. Expected 32 bytes, got ${seedLength}.`);
-    }
-    return new Ed25519Keypair(nacl.sign.keyPair.fromSeed(seed));
-  }
-
-  /**
    * The public key for this Ed25519 keypair
    */
   getPublicKey(): Ed25519PublicKey {
@@ -116,10 +109,8 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Return the signature for the provided data using Ed25519.
    */
-  signData(data: Base64DataBuffer): Base64DataBuffer {
-    return new Base64DataBuffer(
-      nacl.sign.detached(data.getData(), this.keypair.secretKey)
-    );
+  signData(data: Uint8Array, _useRecoverable: boolean = false): Uint8Array {
+    return nacl.sign.detached(data, this.keypair.secretKey);
   }
 
   /**
@@ -137,20 +128,17 @@ export class Ed25519Keypair implements Keypair {
       throw new Error('Invalid derivation path');
     }
     const { key } = derivePath(path, mnemonicToSeedHex(mnemonics));
-    const pubkey = getPublicKey(key, false);
 
-    // Ed25519 private key returned here has 32 bytes. NaCl expects 64 bytes where the last 32 bytes are the public key.
-    let fullPrivateKey = new Uint8Array(64);
-    fullPrivateKey.set(key);
-    fullPrivateKey.set(pubkey, 32);
-
-    return new Ed25519Keypair({ publicKey: pubkey, secretKey: fullPrivateKey });
+    return Ed25519Keypair.fromSecretKey(key);
   }
 
+  /**
+   * This returns an exported keypair object, the private key field is the pure 32-byte seed.
+   */
   export(): ExportedKeypair {
     return {
       schema: 'ED25519',
-      privateKey: toB64(this.keypair.secretKey),
+      privateKey: toB64(this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE)),
     };
   }
 }

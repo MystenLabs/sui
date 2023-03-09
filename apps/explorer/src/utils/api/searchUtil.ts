@@ -11,16 +11,14 @@ export const navigateWithUnknown = async (
     network: Network | string
 ) => {
     let searchPromises = [];
-    const version = await rpc(network).getRpcApiVersion();
-    if (
-        isValidTransactionDigest(
-            input,
-            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
-        )
-    ) {
+    if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
-                .getTransactionWithEffects(input)
+                .getTransactionResponse(input, {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                })
                 .then((data) => ({
                     category: 'transaction',
                     data: data,
@@ -45,7 +43,13 @@ export const navigateWithUnknown = async (
                     };
                 }),
             rpc(network)
-                .getObject(input)
+                .getObject(input, {
+                    showType: true,
+                    showContent: true,
+                    showOwner: true,
+                    showPreviousTransaction: true,
+                    showStorageRebate: true,
+                })
                 .then((data) => {
                     if (data.status !== 'Exists') {
                         throw new Error('no object found');

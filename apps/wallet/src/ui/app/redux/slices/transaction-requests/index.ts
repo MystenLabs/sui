@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    Base64DataBuffer,
-    getCertifiedTransaction,
-    getTransactionEffects,
-    LocalTxnDataSerializer,
+    fromB64,
+    type SignedMessage,
+    type SignedTransaction,
+    type SuiAddress,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -17,16 +17,14 @@ import type {
     SuiMoveNormalizedFunction,
     SuiTransactionResponse,
     SignableTransaction,
-    SuiExecuteTransactionResponse,
-    MoveCallTransaction,
     UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
-const txRequestsAdapter = createEntityAdapter<TransactionRequest>({
+const txRequestsAdapter = createEntityAdapter<ApprovalRequest>({
     sortComparer: (a, b) => {
         const aDate = new Date(a.createdDate);
         const bDate = new Date(b.createdDate);
@@ -70,53 +68,51 @@ export const deserializeTxn = createAsyncThunk<
         txRequestID: string;
         unSerializedTxn: UnserializedSignableTransaction | null;
     },
-    { serializedTxn: string; id: string },
+    { serializedTxn: string; id: string; addressForTransaction: SuiAddress },
     AppThunkConfig
 >(
     'deserialize-transaction',
-    async (data, { dispatch, extra: { api, keypairVault } }) => {
-        const { id, serializedTxn } = data;
-        const signer = api.getSignerInstance(keypairVault.getKeypair());
-        const localSerializer = new LocalTxnDataSerializer(signer.provider);
-        const txnBytes = new Base64DataBuffer(serializedTxn);
-        const version = await api.instance.fullNode.getRpcApiVersion();
+    async (
+        { id, serializedTxn, addressForTransaction },
+        { dispatch, extra: { api, background } }
+    ) => {
+        // TODO: Deserialize transaction:
+        // const signer = api.getSignerInstance(addressForTransaction, background);
+        // const txnBytes = fromB64(serializedTxn);
 
-        //TODO: Error handling - either show the error or use the serialized txn
-        const useIntentSigning =
-            version != null && version.major >= 0 && version.minor > 18;
-        const deserializeTx =
-            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-                useIntentSigning,
-                txnBytes
-            )) as UnserializedSignableTransaction;
+        // //TODO: Error handling - either show the error or use the serialized txn
+        // const deserializeTx =
+        //     (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+        //         txnBytes
+        //     )) as UnserializedSignableTransaction;
 
-        const deserializeData = deserializeTx?.data as MoveCallTransaction;
+        // const deserializeData = deserializeTx?.data as MoveCallTransaction;
 
-        const normalized = {
-            ...deserializeData,
-            gasBudget: Number(deserializeData.gasBudget.toString(10)),
-            gasPayment: '0x' + deserializeData.gasPayment,
-            arguments: deserializeData.arguments.map((d) => '0x' + d),
-        };
+        // const normalized = {
+        //     ...deserializeData,
+        //     gasPayment: '0x' + deserializeData.gasPayment,
+        //     arguments: deserializeData.arguments.map((d) => '0x' + d),
+        // };
 
-        if (deserializeTx && normalized) {
-            dispatch(
-                loadTransactionResponseMetadata({
-                    txRequestID: id,
-                    objectId: normalized.packageObjectId,
-                    moduleName: normalized.module,
-                    functionName: normalized.function,
-                })
-            );
-        }
+        // if (deserializeTx && normalized) {
+        //     dispatch(
+        //         loadTransactionResponseMetadata({
+        //             txRequestID: id,
+        //             objectId: normalized.packageObjectId,
+        //             moduleName: normalized.module,
+        //             functionName: normalized.function,
+        //         })
+        //     );
+        // }
 
         return {
             txRequestID: id,
-            unSerializedTxn:
-                ({
-                    ...deserializeTx,
-                    data: normalized,
-                } as UnserializedSignableTransaction) || null,
+            unSerializedTxn: null,
+            // unSerializedTxn:
+            //     ({
+            //         ...deserializeTx,
+            //         data: normalized,
+            //     } as UnserializedSignableTransaction) || null,
         };
     }
 );
@@ -127,55 +123,74 @@ export const respondToTransactionRequest = createAsyncThunk<
         approved: boolean;
         txResponse: SuiTransactionResponse | null;
     },
-    { txRequestID: string; approved: boolean },
+    {
+        txRequestID: string;
+        approved: boolean;
+        addressForTransaction: SuiAddress;
+    },
     AppThunkConfig
 >(
     'respond-to-transaction-request',
     async (
-        { txRequestID, approved },
-        { extra: { background, api, keypairVault }, getState }
+        { txRequestID, approved, addressForTransaction },
+        { extra: { background, api }, getState }
     ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
         if (!txRequest) {
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
-        let txResult: SuiTransactionResponse | undefined = undefined;
+        let txSigned: SignedTransaction | undefined = undefined;
+        let txResult: SuiTransactionResponse | SignedMessage | undefined =
+            undefined;
         let tsResultError: string | undefined;
         if (approved) {
-            const signer = api.getSignerInstance(keypairVault.getKeypair());
+            const signer = api.getSignerInstance(
+                addressForTransaction,
+                background
+            );
             try {
-                let response: SuiExecuteTransactionResponse;
-                if (
-                    txRequest.tx.type === 'v2' ||
-                    txRequest.tx.type === 'move-call'
-                ) {
-                    const txn: SignableTransaction =
-                        txRequest.tx.type === 'move-call'
-                            ? {
-                                  kind: 'moveCall',
-                                  data: txRequest.tx.data,
-                              }
-                            : txRequest.tx.data;
-
-                    response = await signer.signAndExecuteTransaction(txn);
-                } else if (txRequest.tx.type === 'serialized-move-call') {
-                    const txBytes = new Base64DataBuffer(txRequest.tx.data);
-                    response = await signer.signAndExecuteTransaction(txBytes);
-                } else {
-                    throw new Error(
-                        `Either tx or txBytes needs to be defined.`
+                if (txRequest.tx.type === 'v2' && txRequest.tx.justSign) {
+                    // TODO: Try / catch
+                    // Just a signing request, do not submit
+                    txSigned = await signer.signTransaction(txRequest.tx.data);
+                } else if (txRequest.tx.type === 'sign-message') {
+                    txResult = await signer.signMessage(
+                        fromB64(txRequest.tx.message)
                     );
-                }
+                } else {
+                    let response: SuiTransactionResponse;
+                    if (
+                        txRequest.tx.type === 'v2' ||
+                        txRequest.tx.type === 'move-call'
+                    ) {
+                        const txn: SignableTransaction =
+                            txRequest.tx.type === 'move-call'
+                                ? {
+                                      kind: 'moveCall',
+                                      data: txRequest.tx.data,
+                                  }
+                                : txRequest.tx.data;
 
-                txResult = {
-                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                    certificate: getCertifiedTransaction(response)!,
-                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                    effects: getTransactionEffects(response)!,
-                    timestamp_ms: null,
-                    parsed_data: null,
-                };
+                        response = await signer.signAndExecuteTransaction(
+                            txn,
+                            txRequest.tx.type === 'v2'
+                                ? txRequest.tx.options?.requestType
+                                : undefined
+                        );
+                    } else if (txRequest.tx.type === 'serialized-move-call') {
+                        const txBytes = fromB64(txRequest.tx.data);
+                        response = await signer.signAndExecuteTransaction(
+                            txBytes
+                        );
+                    } else {
+                        throw new Error(
+                            `Either tx or txBytes needs to be defined.`
+                        );
+                    }
+
+                    txResult = response;
+                }
             } catch (e) {
                 tsResultError = (e as Error).message;
             }
@@ -184,7 +199,8 @@ export const respondToTransactionRequest = createAsyncThunk<
             txRequestID,
             approved,
             txResult,
-            tsResultError
+            tsResultError,
+            txSigned
         );
         return { txRequestID, approved: approved, txResponse: null };
     }
@@ -200,7 +216,7 @@ const slice = createSlice({
     reducers: {
         setTransactionRequests: (
             state,
-            { payload }: PayloadAction<TransactionRequest[]>
+            { payload }: PayloadAction<ApprovalRequest[]>
         ) => {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore

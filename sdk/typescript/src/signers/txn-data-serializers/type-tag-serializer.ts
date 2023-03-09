@@ -4,11 +4,10 @@
 import { normalizeSuiAddress, TypeTag } from '../../types';
 
 const VECTOR_REGEX = /^vector<(.+)>$/;
-const STRUCT_REGEX = /^([^:]+)::([^:]+)::(.+)/;
-const STRUCT_TYPE_TAG_REGEX = /^[^<]+<(.+)>$/;
+const STRUCT_REGEX = /^([^:]+)::([^:]+)::([^<]+)(<(.+)>)?/;
 
 export class TypeTagSerializer {
-  parseFromStr(str: string): TypeTag {
+  static parseFromStr(str: string, normalizeAddress = false): TypeTag {
     if (str === 'address') {
       return { address: null };
     } else if (str === 'bool') {
@@ -30,38 +29,108 @@ export class TypeTagSerializer {
     }
     const vectorMatch = str.match(VECTOR_REGEX);
     if (vectorMatch) {
-      return { vector: this.parseFromStr(vectorMatch[1]) };
+      return {
+        vector: TypeTagSerializer.parseFromStr(
+          vectorMatch[1],
+          normalizeAddress,
+        ),
+      };
     }
 
     const structMatch = str.match(STRUCT_REGEX);
     if (structMatch) {
-      try {
-        return {
-          struct: {
-            address: normalizeSuiAddress(structMatch[1]),
-            module: structMatch[2],
-            name: structMatch[3].match(/^([^<]+)/)![1],
-            typeParams: this.parseStructTypeTag(structMatch[3]),
-          },
-        };
-      } catch (e) {
-        throw new Error(`Encounter error parsing type args for ${str}`);
-      }
+      const address = normalizeAddress
+        ? normalizeSuiAddress(structMatch[1])
+        : structMatch[1];
+      return {
+        struct: {
+          address,
+          module: structMatch[2],
+          name: structMatch[3],
+          typeParams:
+            structMatch[5] === undefined
+              ? []
+              : TypeTagSerializer.parseStructTypeArgs(
+                  structMatch[5],
+                  normalizeAddress,
+                ),
+        },
+      };
     }
 
     throw new Error(
-      `Encounter unexpected token when parsing type args for ${str}`
+      `Encountered unexpected token when parsing type args for ${str}`,
     );
   }
 
-  parseStructTypeTag(str: string): TypeTag[] {
-    const typeTagsMatch = str.match(STRUCT_TYPE_TAG_REGEX);
-    if (!typeTagsMatch) {
-      return [];
+  static parseStructTypeArgs(str: string, normalizeAddress = false): TypeTag[] {
+    // split `str` by all `,` outside angle brackets
+    const tok: Array<string> = [];
+    let word = '';
+    let nestedAngleBrackets = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (char === '<') {
+        nestedAngleBrackets++;
+      }
+      if (char === '>') {
+        nestedAngleBrackets--;
+      }
+      if (nestedAngleBrackets === 0 && char === ',') {
+        tok.push(word.trim());
+        word = '';
+        continue;
+      }
+      word += char;
     }
-    // TODO: This will fail if the struct has nested type args with commas. Need
-    // to implement proper parsing for this case
-    const typeTags = typeTagsMatch[1].split(',');
-    return typeTags.map((tag) => this.parseFromStr(tag));
+
+    tok.push(word.trim());
+
+    return tok.map((tok) =>
+      TypeTagSerializer.parseFromStr(tok, normalizeAddress),
+    );
+  }
+
+  static tagToString(tag: TypeTag): string {
+    if ('bool' in tag) {
+      return 'bool';
+    }
+    if ('u8' in tag) {
+      return 'u8';
+    }
+    if ('u16' in tag) {
+      return 'u16';
+    }
+    if ('u32' in tag) {
+      return 'u32';
+    }
+    if ('u64' in tag) {
+      return 'u64';
+    }
+    if ('u128' in tag) {
+      return 'u128';
+    }
+    if ('u256' in tag) {
+      return 'u256';
+    }
+    if ('address' in tag) {
+      return 'address';
+    }
+    if ('signer' in tag) {
+      return 'signer';
+    }
+    if ('vector' in tag) {
+      return `vector<${TypeTagSerializer.tagToString(tag.vector)}>`;
+    }
+    if ('struct' in tag) {
+      const struct = tag.struct;
+      const typeParams = struct.typeParams
+        .map(TypeTagSerializer.tagToString)
+        .join(', ');
+      return `${struct.address}::${struct.module}::${struct.name}${
+        typeParams ? `<${typeParams}>` : ''
+      }`;
+    }
+    throw new Error('Invalid TypeTag');
   }
 }

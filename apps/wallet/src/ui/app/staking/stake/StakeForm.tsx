@@ -1,64 +1,48 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useCallback } from 'react';
+import { Field, Form, useFormikContext } from 'formik';
+import { memo, useCallback, useEffect } from 'react';
 
-import { Content } from '_app/shared/bottom-menu-layout';
+import Loading from '../../components/loading';
+import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { useFormatCoin } from '_hooks';
 import {
-    GAS_SYMBOL,
+    DEFAULT_GAS_BUDGET_FOR_PAY,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
 } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
-import st from './StakeForm.module.scss';
+const HIDE_MAX = true;
 
 export type StakeFromProps = {
-    submitError: string | null;
     coinBalance: bigint;
     coinType: string;
-    unstake: boolean;
-    onClearSubmitError: () => void;
+    epoch?: string | number;
 };
 
-function StakeForm({
-    submitError,
-    coinBalance,
-    unstake,
-    coinType,
-    onClearSubmitError,
-}: StakeFromProps) {
-    const {
-        setFieldValue,
-        values: { amount },
-    } = useFormikContext<FormValues>();
+function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
+    const { setFieldValue } = useFormikContext<FormValues>();
 
-    const onClearRef = useRef(onClearSubmitError);
-    onClearRef.current = onClearSubmitError;
-    useEffect(() => {
-        onClearRef.current();
-    }, [amount]);
-
-    const [formatted] = useFormatCoin(coinBalance, coinType);
-
-    const [gasBudgetEstimation] = useFormatCoin(
-        DEFAULT_GAS_BUDGET_FOR_STAKE,
-        SUI_TYPE_ARG
+    const { gasBudget: gasBudgetInMist, isLoading } = useGasBudgetInMist(
+        DEFAULT_GAS_BUDGET_FOR_PAY * 4 + DEFAULT_GAS_BUDGET_FOR_STAKE
     );
+    const [gasBudgetEstimation] = useFormatCoin(gasBudgetInMist, SUI_TYPE_ARG);
 
-    const coinBalanceMinusGas =
+    let totalAvailableBalance =
         coinBalance -
-        BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
+        BigInt(coinType === SUI_TYPE_ARG ? gasBudgetInMist || 0 : 0);
+    if (totalAvailableBalance < 0) {
+        totalAvailableBalance = 0n;
+    }
 
     const [maxToken, symbol, queryResult] = useFormatCoin(
-        coinBalanceMinusGas,
+        totalAvailableBalance,
         coinType
     );
 
@@ -66,33 +50,49 @@ function StakeForm({
         if (!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
+    useEffect(() => {
+        setFieldValue(
+            'gasBudget',
+            isLoading ? '' : (gasBudgetInMist || 0).toString()
+        );
+    }, [setFieldValue, gasBudgetInMist, isLoading]);
 
     return (
         <Form
-            className="flex flex-1 flex-col flex-nowrap"
+            className="flex flex-1 flex-col flex-nowrap items-center"
             autoComplete="off"
-            noValidate={true}
         >
-            <Content>
+            <Loading loading={isLoading}>
+                <div className="flex flex-col justify-between items-center mb-3 mt-3.5 w-full gap-1.5">
+                    <Text variant="caption" color="gray-85" weight="semibold">
+                        Enter the amount of SUI to stake
+                    </Text>
+                    <Text variant="bodySmall" color="steel" weight="medium">
+                        Available - {maxToken} {symbol}
+                    </Text>
+                </div>
                 <Card
-                    variant="blue"
+                    variant="gray"
+                    titleDivider
                     header={
                         <div className="p-2.5 w-full flex bg-white">
                             <Field
                                 component={NumberInput}
                                 allowNegative={false}
                                 name="amount"
-                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium"
+                                className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
                                 decimals
                             />
-                            <button
-                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
-                                onClick={setMaxToken}
-                                disabled={queryResult.isLoading}
-                                type="button"
-                            >
-                                Max
-                            </button>
+                            {!HIDE_MAX ? (
+                                <button
+                                    className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
+                                    onClick={setMaxToken}
+                                    disabled={queryResult.isLoading}
+                                    type="button"
+                                >
+                                    Max
+                                </button>
+                            ) : null}
                         </div>
                     }
                     footer={
@@ -102,54 +102,36 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Gas Fee
+                                Gas Fees
                             </Text>
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {gasBudgetEstimation} {GAS_SYMBOL}
+                                {gasBudgetEstimation} {symbol}
                             </Text>
                         </div>
                     }
                 >
-                    {!unstake && (
-                        <div className="flex justify-between w-full mb-3.5">
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                Available balance:
-                            </Text>
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                {formatted} {symbol}
-                            </Text>
-                        </div>
-                    )}
-                </Card>
-                <ErrorMessage
-                    className={st.error}
-                    name="amount"
-                    component="div"
-                />
-
-                {submitError ? (
-                    <div className="mt-2 flex flex-col flex-nowrap">
-                        <Alert mode="warning">
-                            <strong>
-                                {unstake ? 'Unstake failed' : 'Stake failed'}.
-                            </strong>
-                            <small>{submitError}</small>
-                        </Alert>
+                    <div className="pb-3.75 flex justify-between w-full">
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            Staking Rewards Start
+                        </Text>
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            {epoch ? `Epoch #${+epoch + 2}` : '--'}
+                        </Text>
                     </div>
-                ) : null}
-            </Content>
+                </Card>
+            </Loading>
         </Form>
     );
 }

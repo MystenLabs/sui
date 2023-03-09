@@ -2,23 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{server::Server, Discovery, DiscoveryEventLoop, DiscoveryServer, State};
+use crate::discovery::TrustedPeerChangeEvent;
+use anemo::codegen::InboundRequestLayer;
+use anemo_tower::rate_limit;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
 use sui_config::p2p::P2pConfig;
 use tap::Pipe;
-use tokio::{sync::oneshot, task::JoinSet};
+use tokio::{
+    sync::{oneshot, watch},
+    task::JoinSet,
+};
 
 /// Discovery Service Builder.
 pub struct Builder {
     config: Option<P2pConfig>,
+    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl Builder {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self { config: None }
+    pub fn new(trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>) -> Self {
+        Self {
+            config: None,
+            trusted_peer_change_rx,
+        }
     }
 
     pub fn config(mut self, config: P2pConfig) -> Self {
@@ -27,14 +37,33 @@ impl Builder {
     }
 
     pub fn build(self) -> (UnstartedDiscovery, DiscoveryServer<impl Discovery>) {
+        let discovery_config = self
+            .config
+            .clone()
+            .and_then(|config| config.discovery)
+            .unwrap_or_default();
         let (builder, server) = self.build_internal();
-        (builder, DiscoveryServer::new(server))
+        let mut discovery_server = DiscoveryServer::new(server);
+
+        // Apply rate limits from configuration as needed.
+        if let Some(limit) = discovery_config.get_known_peers_rate_limit {
+            discovery_server = discovery_server.add_layer_for_get_known_peers(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        (builder, discovery_server)
     }
 
     pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
-        let Builder { config } = self;
+        let Builder {
+            config,
+            trusted_peer_change_rx,
+        } = self;
         let config = config.unwrap();
-        let (sender, reciever) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel();
 
         let handle = Handle {
             _shutdown_handle: Arc::new(sender),
@@ -56,8 +85,9 @@ impl Builder {
             UnstartedDiscovery {
                 handle,
                 config,
-                shutdown_handle: reciever,
+                shutdown_handle: receiver,
                 state,
+                trusted_peer_change_rx,
             },
             server,
         )
@@ -70,6 +100,7 @@ pub struct UnstartedDiscovery {
     pub(super) config: P2pConfig,
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
+    pub(super) trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl UnstartedDiscovery {
@@ -79,6 +110,7 @@ impl UnstartedDiscovery {
             config,
             shutdown_handle,
             state,
+            trusted_peer_change_rx,
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
@@ -93,6 +125,7 @@ impl UnstartedDiscovery {
                 dial_seed_peers_task: None,
                 shutdown_handle,
                 state,
+                trusted_peer_change_rx,
             },
             handle,
         )

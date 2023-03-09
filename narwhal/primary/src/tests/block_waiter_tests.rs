@@ -23,7 +23,7 @@ async fn test_successfully_retrieve_block() {
     // GIVEN
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -32,7 +32,7 @@ async fn test_successfully_retrieve_block() {
     let header = author
         .header_builder(&committee)
         .payload(fixture_payload(2))
-        .build(author.keypair())
+        .build()
         .unwrap();
     let certificate = fixture.certificate(&header);
     let digest = certificate.digest();
@@ -103,7 +103,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     // GIVEN
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -127,8 +127,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
         let batch_2 = fixture_batch_with_transactions(10);
 
         builder = builder
-            .with_payload_batch(batch_1.clone(), worker_id)
-            .with_payload_batch(batch_2.clone(), worker_id);
+            .with_payload_batch(batch_1.clone(), worker_id, 0)
+            .with_payload_batch(batch_2.clone(), worker_id, 0);
 
         for b in [batch_1.clone(), batch_2.clone()] {
             let digest = b.digest();
@@ -158,8 +158,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // batches will be used)
         if i > 5 {
             builder = builder
-                .with_payload_batch(common_batch_1.clone(), worker_id)
-                .with_payload_batch(common_batch_2.clone(), worker_id);
+                .with_payload_batch(common_batch_1.clone(), worker_id, 0)
+                .with_payload_batch(common_batch_2.clone(), worker_id, 0);
 
             for b in [common_batch_1.clone(), common_batch_2.clone()] {
                 let digest = b.digest();
@@ -186,7 +186,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // sort the batches to make sure that the response is the expected one.
         batches.sort_by(|a, b| a.digest.cmp(&b.digest));
 
-        let header = builder.build(author.keypair()).unwrap();
+        let header = builder.build().unwrap();
 
         let certificate = fixture.certificate(&header);
         certificates.push(certificate.clone());
@@ -264,7 +264,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
 
@@ -305,7 +305,7 @@ async fn test_return_error_when_certificate_is_missing() {
 async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
 

@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::{AuthorityState, EffectsNotifyRead, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     transfer_object_move_transaction,
 };
-use crate::authority_client::LocalAuthorityClient;
 use crate::safe_client::SafeClient;
+use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::init_local_authorities;
 
 use std::collections::BTreeSet;
@@ -18,11 +18,14 @@ use itertools::Itertools;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
-use sui_types::messages::{TransactionEffects, VerifiedCertificate, VerifiedTransaction};
+use sui_types::error::SuiResult;
+use sui_types::messages::{
+    TransactionEffects, TransactionEffectsAPI, VerifiedCertificate, VerifiedTransaction,
+};
 use sui_types::object::{Object, Owner};
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 #[allow(dead_code)]
 async fn wait_for_certs(
@@ -244,12 +247,11 @@ pub async fn do_cert_with_shared_objects(
     send_consensus(authority, cert).await;
     authority
         .database
-        .notify_read_effects(vec![*cert.digest()])
+        .notify_read_executed_effects(vec![*cert.digest()])
         .await
         .unwrap()
         .pop()
         .unwrap()
-        .into_data()
 }
 
 async fn execute_shared_on_first_three_authorities(
@@ -295,7 +297,7 @@ async fn test_transaction_manager() {
         .collect_vec();
     let all_gas_objects = gas_objects.clone().into_iter().flatten().collect_vec();
 
-    let (aggregator, authorities, framework_obj_ref) =
+    let (aggregator, authorities, _genesis, package) =
         init_local_authorities(4, all_gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()
@@ -310,21 +312,21 @@ async fn test_transaction_manager() {
     // Initialize an object owned by 1st account.
     let (addr1, key1): &(_, AccountKeyPair) = &accounts[0];
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, framework_obj_ref, gas_ref);
+    let tx1 = create_object_move_transaction(*addr1, key1, *addr1, 100, package, gas_ref);
     let (cert, effects1) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
             .await;
     executed_owned_certs.push(cert);
-    let mut owned_object_ref = effects1.created[0].0;
+    let mut owned_object_ref = effects1.created()[0].0;
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx2 = make_counter_create_transaction(gas_ref, framework_obj_ref, *addr1, key1);
+    let tx2 = make_counter_create_transaction(gas_ref, package, *addr1, key1, None);
     let (cert, effects2) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
     executed_owned_certs.push(cert);
-    let (mut shared_counter_ref, owner) = effects2.created[0];
+    let (mut shared_counter_ref, owner) = effects2.created()[0];
     let shared_counter_initial_version = if let Owner::Shared {
         initial_shared_version,
     } = owner
@@ -356,7 +358,7 @@ async fn test_transaction_manager() {
             source_key,
             *dest_addr,
             owned_object_ref,
-            framework_obj_ref,
+            package,
             gas_ref,
         );
         let (cert, effects) = execute_owned_on_first_three_authorities(
@@ -366,7 +368,7 @@ async fn test_transaction_manager() {
         )
         .await;
         executed_owned_certs.push(cert);
-        owned_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
+        owned_object_ref = effects.mutated_excluding_gas().first().unwrap().0;
 
         let gas_ref = get_latest_ref(
             authority_clients[source_index],
@@ -375,11 +377,12 @@ async fn test_transaction_manager() {
         .await;
         let shared_tx = make_counter_increment_transaction(
             gas_ref,
-            framework_obj_ref,
+            package,
             shared_counter_ref.0,
             shared_counter_initial_version,
             *source_addr,
             source_key,
+            None,
         );
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
@@ -388,7 +391,7 @@ async fn test_transaction_manager() {
         )
         .await;
         executed_shared_certs.push(cert);
-        shared_counter_ref = effects.mutated_excluding_gas().next().unwrap().0;
+        shared_counter_ref = effects.mutated_excluding_gas().first().unwrap().0;
     }
 
     // ---- Execute transactions in reverse dependency order on the last authority.
@@ -401,14 +404,18 @@ async fn test_transaction_manager() {
     // Enqueue certs out of dependency order for executions.
     for cert in executed_shared_certs.iter().rev() {
         authorities[3]
-            .enqueue_certificates_for_execution(vec![cert.clone()])
-            .await
+            .enqueue_certificates_for_execution(
+                vec![cert.clone()],
+                &authorities[3].epoch_store_for_testing(),
+            )
             .unwrap();
     }
     for cert in executed_owned_certs.iter().rev() {
         authorities[3]
-            .enqueue_certificates_for_execution(vec![cert.clone()])
-            .await
+            .enqueue_certificates_for_execution(
+                vec![cert.clone()],
+                &authorities[3].epoch_store_for_testing(),
+            )
             .unwrap();
     }
 
@@ -420,7 +427,140 @@ async fn test_transaction_manager() {
         .collect();
     authorities[3]
         .database
-        .notify_read_effects(digests)
+        .notify_read_executed_effects(digests)
         .await
         .unwrap();
+}
+
+async fn try_sign_on_first_three_authorities(
+    authority_clients: &[&SafeClient<LocalAuthorityClient>],
+    committee: &Committee,
+    txn: &VerifiedTransaction,
+) -> SuiResult<VerifiedCertificate> {
+    for client in authority_clients.iter().take(3) {
+        client.handle_transaction(txn.clone()).await?;
+    }
+    extract_cert(authority_clients, committee, txn.digest())
+        .await
+        .verify(committee)
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_per_object_overload() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize a network with 1 account and 2000 gas objects.
+    let (addr, key) = get_key_pair();
+    const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 2000;
+    let gas_objects = (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
+        .into_iter()
+        .map(|_| Object::with_owner_for_testing(addr))
+        .collect_vec();
+    let (aggregator, authorities, _genesis, package) =
+        init_local_authorities(4, gas_objects.clone()).await;
+    let authority_clients: Vec<_> = authorities
+        .iter()
+        .map(|a| &aggregator.authority_clients[&a.name])
+        .collect();
+
+    // Create a shared counter.
+    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0].id()).await;
+    let create_counter_txn = make_counter_create_transaction(gas_ref, package, addr, &key, None);
+    let create_counter_cert = try_sign_on_first_three_authorities(
+        &authority_clients,
+        &aggregator.committee,
+        &create_counter_txn,
+    )
+    .await
+    .unwrap();
+    for authority in authorities.iter().take(3) {
+        send_consensus(authority, &create_counter_cert).await;
+    }
+    for authority in authorities.iter().take(3) {
+        authority
+            .database
+            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+    }
+
+    // Signing and executing this transaction on the last authority should succeed.
+    authority_clients[3]
+        .handle_transaction(create_counter_txn.clone())
+        .await
+        .unwrap();
+    send_consensus(&authorities[3], &create_counter_cert).await;
+    let create_counter_effects = authorities[3]
+        .database
+        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
+    let Owner::Shared {
+        initial_shared_version: shared_counter_initial_version
+    } = owner else {
+        panic!("Not a shared object! {:?} {:?}", shared_counter_ref, owner);
+    };
+
+    // Stop execution on the last authority, to simulate having a backlog.
+    authorities[3].shutdown_execution_for_test();
+    // Make sure execution driver has exited.
+    sleep(Duration::from_secs(1)).await;
+
+    // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
+    let mut shared_txns = Vec::new();
+    let mut shared_certs = Vec::new();
+    // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
+    // txn is needed.
+    let num_txns = MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH + 1;
+    for gas_object in gas_objects.iter().take(num_txns) {
+        let gas_ref = get_latest_ref(authority_clients[0], gas_object.id()).await;
+        let shared_txn = make_counter_increment_transaction(
+            gas_ref,
+            package,
+            shared_counter_ref.0,
+            shared_counter_initial_version,
+            addr,
+            &key,
+            None,
+        );
+        let shared_cert = try_sign_on_first_three_authorities(
+            &authority_clients,
+            &aggregator.committee,
+            &shared_txn,
+        )
+        .await
+        .unwrap();
+        for authority in authorities.iter().take(3) {
+            send_consensus(authority, &shared_cert).await;
+        }
+        send_consensus(&authorities[3], &shared_cert).await;
+        shared_txns.push(shared_txn);
+        shared_certs.push(shared_cert);
+    }
+
+    // Trying to sign a new transaction would now fail.
+    let gas_ref = get_latest_ref(authority_clients[0], gas_objects[num_txns].id()).await;
+    let shared_txn = make_counter_increment_transaction(
+        gas_ref,
+        package,
+        shared_counter_ref.0,
+        shared_counter_initial_version,
+        addr,
+        &key,
+        None,
+    );
+    let sign_result = authority_clients[3]
+        .handle_transaction(shared_txn.clone())
+        .await;
+    let message = format!("{sign_result:?}");
+    assert!(
+        message.contains("TooManyTransactionsPendingOnObject"),
+        "Signing should fail with backlogs on the shared counter: {}",
+        message,
+    );
 }

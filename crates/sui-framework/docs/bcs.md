@@ -58,6 +58,7 @@ let leftovers = bcs::into_remainder_bytes(prepared);
 -  [Function `peel_option_u8`](#0x2_bcs_peel_option_u8)
 -  [Function `peel_option_u64`](#0x2_bcs_peel_option_u64)
 -  [Function `peel_option_u128`](#0x2_bcs_peel_option_u128)
+-  [Module Specification](#@Module_Specification_1)
 
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
@@ -129,16 +130,6 @@ For when bytes length is less than required for deserialization.
 
 
 <pre><code><b>const</b> <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="0x2_bcs_SUI_ADDRESS_LENGTH"></a>
-
-Address length in Sui is 20 bytes.
-
-
-<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>: u64 = 20;
 </code></pre>
 
 
@@ -241,13 +232,13 @@ Read address from the bcs-serialized bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <b>address</b> {
-    <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
+    <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= <a href="_length">address::length</a>(), <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
     <b>let</b> (addr_bytes, i) = (v::empty(), 0);
-    <b>while</b> (i &lt; 20) {
+    <b>while</b> (i &lt; <a href="_length">address::length</a>()) {
         v::push_back(&<b>mut</b> addr_bytes, v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes));
         i = i + 1;
     };
-    <a href="address.md#0x2_address_from_bytes">address::from_bytes</a>(addr_bytes)
+    address::from_bytes(addr_bytes)
 }
 </code></pre>
 
@@ -415,18 +406,6 @@ See more here: https://en.wikipedia.org/wiki/LEB128
     };
     total
 }
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
 </code></pre>
 
 
@@ -757,3 +736,12 @@ Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
 
 
 </details>
+
+<a name="@Module_Specification_1"></a>
+
+## Module Specification
+
+
+
+<pre><code><b>pragma</b> verify = <b>false</b>;
+</code></pre>

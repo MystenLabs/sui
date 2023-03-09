@@ -16,6 +16,8 @@ use tracing::warn;
 pub use scopeguard;
 use uuid::Uuid;
 
+pub mod histogram;
+
 #[derive(Debug)]
 pub struct Metrics {
     pub tasks: IntGaugeVec,
@@ -218,7 +220,7 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
     }
 }
 
-type RegistryID = Uuid;
+pub type RegistryID = Uuid;
 
 /// A service to manage the prometheus registries. This service allow us to create
 /// a new Registry on demand and keep it accessible for processing/polling.
@@ -287,10 +289,31 @@ impl RegistryService {
     }
 }
 
+/// Create a metric that measures the uptime from when this metric was constructed.
+/// The metric is labeled with the provided 'version' label (this should generally be of the
+/// format: 'semver-gitrevision').
+pub fn uptime_metric(version: &'static str) -> Box<dyn prometheus::core::Collector> {
+    let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("version");
+
+    let start_time = std::time::Instant::now();
+    let uptime = move || start_time.elapsed().as_secs();
+    let metric = prometheus_closure_metric::ClosureMetric::new(
+        opts,
+        prometheus_closure_metric::ValueType::Counter,
+        uptime,
+        &[version],
+    )
+    .unwrap();
+
+    Box::new(metric)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::RegistryService;
-    use prometheus::{IntCounter, Registry};
+    use prometheus::IntCounter;
+    use prometheus::Registry;
 
     #[test]
     fn registry_service() {

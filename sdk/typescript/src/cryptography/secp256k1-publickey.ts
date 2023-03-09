@@ -3,12 +3,9 @@
 
 import { fromB64, toB64 } from '@mysten/bcs';
 import sha3 from 'js-sha3';
-import {
-  bytesEqual,
-  PublicKey,
-  PublicKeyInitData,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from './publickey';
+import { SUI_ADDRESS_LENGTH } from '../types';
+import { bytesEqual, PublicKey, PublicKeyInitData } from './publickey';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
 
 const SECP256K1_PUBLIC_KEY_SIZE = 33;
 
@@ -16,6 +13,7 @@ const SECP256K1_PUBLIC_KEY_SIZE = 33;
  * A Secp256k1 public key
  */
 export class Secp256k1PublicKey implements PublicKey {
+  static SIZE = SECP256K1_PUBLIC_KEY_SIZE;
   private data: Uint8Array;
 
   /**
@@ -33,7 +31,7 @@ export class Secp256k1PublicKey implements PublicKey {
 
     if (this.data.length !== SECP256K1_PUBLIC_KEY_SIZE) {
       throw new Error(
-        `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`
+        `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`,
       );
     }
   }
@@ -73,6 +71,7 @@ export class Secp256k1PublicKey implements PublicKey {
     let tmp = new Uint8Array(SECP256K1_PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['Secp256k1']]);
     tmp.set(this.toBytes(), 1);
-    return sha3.sha3_256(tmp).slice(0, 40);
+    // Each hex char represents half a byte, hence hex address doubles the length
+    return sha3.sha3_256(tmp).slice(0, SUI_ADDRESS_LENGTH * 2);
   }
 }

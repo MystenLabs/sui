@@ -1,14 +1,12 @@
-CREATE TABLE packages (
-    package_id TEXT PRIMARY KEY,
-    author TEXT NOT NULL,
+CREATE TABLE packages
+(
+    package_id address     NOT NULL,
+    version    BIGINT      NOT NULL,
+    author     address     NOT NULL,
     -- means the column cannot be null,
-    -- the element in the array can stil be null
-    module_names TEXT[] NOT NULL,
-    package_content TEXT NOT NULL
+    -- the element in the array can still be null
+    data       bcs_bytes[] NOT NULL,
+    CONSTRAINT packages_pk PRIMARY KEY (package_id, version)
 );
 
-CREATE TABLE package_logs (
-    last_processed_id BIGINT PRIMARY KEY
-);
-
-INSERT INTO package_logs (last_processed_id) VALUES (0);
+CREATE INDEX packages_package_id ON packages (package_id);

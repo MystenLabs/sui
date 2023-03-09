@@ -48,7 +48,7 @@ You can also join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://di
 
 ## Are you looking for partners?
 
-We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
+We are seeking partners that can contribute to the ecosystem, primarily in development, by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
 
 ## Do you need moderators in Discord? Can I be the mod for my country?
 
@@ -80,7 +80,7 @@ To be blunt: even if we preferred the EVM/Solidity to Move, we could not use the
 
 See [Why move?](../learn/why-move.md) for more details on this. In addition, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md) for why we think that - despite being the most popular smart contract language of today - EVM is holding back the crypto space.
 
-Finally, the EVM developer community is very small--approximately 4,000 programmers according to [this study](https://medium.com/electric-capital/electric-capital-developer-report-2021-f37874efea6d). Compare this to (e.g.) the [>20M registered iOS developers](https://techcrunch.com/2018/06/04/app-store-hits-20m-registered-developers-at-100b-in-revenues-500m-visitors-per-week/#:~:text=Today%20at%20WWDC%2C%20Apple's%20CEO,500%20million%20visitors%20per%20week.). Thus, the practical path to scaling the smart contract dev community is to bring folks in from the broader population, not to pull them from the tiny pool of existing Solidity developers. We think Move is much safer and much more approachable for mainstream programmers than the EVM.
+Finally, the EVM developer community is very small--approximately 4,000 programmers according to [this study](https://medium.com/electric-capital/electric-capital-developer-report-2021-f37874efea6d). Compare this to (e.g.) the [>20M registered iOS developers](https://techcrunch.com/2018/06/04/app-store-hits-20m-registered-developers-at-100b-in-revenues-500m-visitors-per-week). Thus, the practical path to scaling the smart contract dev community is to bring folks in from the broader population, not to pull them from the tiny pool of existing Solidity developers. We think Move is much safer and much more approachable for mainstream programmers than the EVM.
 
 ## Is Sui an L2, or are there plans to support L2s?
 

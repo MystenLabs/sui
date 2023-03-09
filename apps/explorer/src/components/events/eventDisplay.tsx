@@ -2,33 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    isMoveEvent,
-    isNewObjectEvent,
-    isTransferObjectEvent,
-    isDeleteObjectEvent,
-    isPublishEvent,
-    isCoinBalanceChangeEvent,
-    isMutateObjectEvent,
-} from '@mysten/sui.js';
-
-import { isBigIntOrNumber } from '../../utils/numberUtil';
-import { getOwnerStr } from '../../utils/objectUtils';
-import { truncate } from '../../utils/stringUtils';
-
-import type { Category } from '../../pages/transaction-result/TransactionResultType';
-import type { LinkObj } from '../transaction-card/TxCardUtils';
-import type {
-    MoveEvent,
+    is,
     NewObjectEvent,
-    ObjectId,
-    SuiAddress,
-    SuiEvent,
     TransferObjectEvent,
     DeleteObjectEvent,
     PublishEvent,
     CoinBalanceChangeEvent,
     MutateObjectEvent,
+    MoveEvent,
+    EpochChangeEvent,
+    CheckpointEvent,
+    type SuiEvent,
+    type SuiAddress,
+    type ObjectId,
+    formatAddress,
 } from '@mysten/sui.js';
+
+import { getOwnerStr } from '../../utils/objectUtils';
+
+import type { Category } from '../../pages/transaction-result/TransactionResultType';
+import type { LinkObj } from '../transaction-card/TxCardUtils';
 
 export type ContentItem = {
     label: string;
@@ -73,16 +66,14 @@ function objectContent(label: string, id: ObjectId) {
 
 function fieldsContent(fields: { [key: string]: any } | undefined) {
     if (!fields) return [];
-    return Object.keys(fields).map((k) => {
-        return {
-            label: k,
-            value:
-                typeof fields[k] === 'object'
-                    ? JSON.stringify(fields[k])
-                    : fields[k].toString(),
-            monotypeClass: true,
-        };
-    });
+    return Object.keys(fields).map((k) => ({
+        label: k,
+        value:
+            typeof fields[k] === 'object'
+                ? JSON.stringify(fields[k])
+                : fields[k].toString(),
+        monotypeClass: true,
+    }));
 }
 
 function contentLine(
@@ -98,10 +89,12 @@ function contentLine(
 }
 
 export function moveEventDisplay(event: MoveEvent): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Move Event',
             content: [
+                contentLine('Module', packMod, true),
                 contentLine('Type', event.type, true),
                 addressContent('Sender', event.sender as string),
                 contentLine('BCS', event.bcs, true),
@@ -123,6 +116,9 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
             title: 'New Object',
             content: [
                 contentLine('Module', packMod, true),
+                contentLine('Object Type', event.objectType),
+                objectContent('Object ID', event.objectId),
+                contentLine('Version', event.version.toString()),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
@@ -135,10 +131,12 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
 export function transferObjectEventDisplay(
     event: TransferObjectEvent
 ): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Transfer Object',
             content: [
+                contentLine('Module', packMod, true),
                 contentLine('Object Type', event.objectType, true),
                 objectContent('Object ID', event.objectId),
                 contentLine('Version', event.version.toString()),
@@ -154,10 +152,12 @@ export function transferObjectEventDisplay(
 export function mutateObjectEventDisplay(
     event: MutateObjectEvent
 ): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Mutate Object',
             content: [
+                contentLine('Module', packMod, true),
                 contentLine('Object Type', event.objectType, true),
                 objectContent('Object ID', event.objectId),
                 contentLine('Version', event.version.toString()),
@@ -189,13 +189,14 @@ export function coinBalanceChangeEventDisplay(
 export function getAddressesLinks(item: ContentItem[]): LinkObj[] {
     return item
         .filter((itm) => !!itm.category)
-        .map((content) => {
-            return {
-                url: content.value,
-                name: truncate(content.value, 20),
-                category: content.category,
-            } as LinkObj;
-        });
+        .map(
+            (content) =>
+                ({
+                    url: content.value,
+                    name: formatAddress(content.value),
+                    category: content.category,
+                } as LinkObj)
+        );
 }
 
 export function deleteObjectEventDisplay(
@@ -229,7 +230,7 @@ export function publishEventDisplay(event: PublishEvent): EventDisplayData {
 export function bigintDisplay(
     title: string,
     label: string,
-    value: bigint
+    value: bigint | number
 ): EventDisplayData {
     return {
         top: {
@@ -240,38 +241,38 @@ export function bigintDisplay(
 }
 
 export function eventToDisplay(event: SuiEvent) {
-    if ('moveEvent' in event && isMoveEvent(event.moveEvent))
+    if ('moveEvent' in event && is(event.moveEvent, MoveEvent))
         return moveEventDisplay(event.moveEvent);
 
-    if ('newObject' in event && isNewObjectEvent(event.newObject))
+    if ('newObject' in event && is(event.newObject, NewObjectEvent))
         return newObjectEventDisplay(event.newObject);
 
     if (
         'transferObject' in event &&
-        isTransferObjectEvent(event.transferObject)
+        is(event.transferObject, TransferObjectEvent)
     )
         return transferObjectEventDisplay(event.transferObject);
 
-    if ('mutateObject' in event && isMutateObjectEvent(event.mutateObject))
+    if ('mutateObject' in event && is(event.mutateObject, MutateObjectEvent))
         return mutateObjectEventDisplay(event.mutateObject);
 
-    if ('deleteObject' in event && isDeleteObjectEvent(event.deleteObject))
+    if ('deleteObject' in event && is(event.deleteObject, DeleteObjectEvent))
         return deleteObjectEventDisplay(event.deleteObject);
 
     if (
         'coinBalanceChange' in event &&
-        isCoinBalanceChangeEvent(event.coinBalanceChange)
+        is(event.coinBalanceChange, CoinBalanceChangeEvent)
     )
         return coinBalanceChangeEventDisplay(event.coinBalanceChange);
 
-    if ('publish' in event && isPublishEvent(event.publish))
+    if ('publish' in event && is(event.publish, PublishEvent))
         return publishEventDisplay(event.publish);
 
     // TODO - once epoch and checkpoint pages exist, make these links
-    if ('epochChange' in event && isBigIntOrNumber(event.epochChange))
+    if ('epochChange' in event && is(event.epochChange, EpochChangeEvent))
         return bigintDisplay('Epoch Change', 'Epoch ID', event.epochChange);
 
-    if ('checkpoint' in event && isBigIntOrNumber(event.checkpoint))
+    if ('checkpoint' in event && is(event.checkpoint, CheckpointEvent))
         return bigintDisplay('Checkpoint', 'Sequence #', event.checkpoint);
 
     return null;

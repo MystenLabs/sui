@@ -27,7 +27,7 @@ Sui provides the following tools to interact with Sui Devnet:
 
 ## Environment set up
 
-First, [Install Sui](../build/install.md#sui-tokens). After you install Sui, [request SUI test tokens](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
+First, [Install Sui](../build/install.md#install-or-update-sui-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 
 To check whether Sui is already installed, run the following command:
 
@@ -81,7 +81,7 @@ To switch the active network, run the following command:
 sui client switch --env <ALIAS>
 ```
 
-If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](../build/install.md#binaries).
+If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](../build/install.md#install-or-update-sui-binaries).
 
 ## Validating
 
@@ -116,7 +116,7 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-The preceding command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Use the Sui Client CLI to [view objects owned by the address](../build/cli-client.md#view-objects-owned-by-the-address).
+The preceding command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Use the Sui Client CLI to [view objects owned by the address](../build/cli-client.md#view-objects-an-address-owns).
 
 To view the created object in [Sui Explorer](https://explorer.sui.io), append the object ID to the following URL https://explorer.sui.io/objects/.
 
@@ -140,33 +140,50 @@ https://explorer.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
 ## Publish a Move module
 
-This section describes hwo to publish a sample Move package using code developed in the [Sui Move tutorial](../build/move/write-package.md).  The instructions assume that you installed Sui in the default location.
+This section describes how to publish a sample Move package using code developed in the [Sui Move tutorial](../build/move/write-package.md).  The instructions assume that you installed Sui in the default location.
 ```shell
-sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
+sui client publish <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
 
 The response resembles the following:
 ```shell
 ----- Certificate ----
-Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
+Transaction Hash: TransactionDigest(3a6fv6mde6U4xvT4wxJao8qnCBjKEuSqYgpXPDW8mCjj)
+Transaction Signature: [Signature(AA==@VmcFxKAwZszgLfgakdpAIbQGasp0pLHWuaLoOCFWGzaY6+FBgicyr65fD90Fa/9qQF/o7QXYDqVV1QxceJ9JDw==@aNxLU5gVv2cahhUeZ7Ig6IduqqFGZB/ULs8OkUoCgBo=)]
+Signed Authorities Bitmap: RoaringBitmap<[0, 1, 3]>
 Transaction Kind : Publish
-
------ Publish Results ----
-The newly published package object ID: 0689E58788C875E9C354F359792CEC016DA0A1B0
-List of objects created by running module initializers:
-
-ID: 898922A9CABE93C6C38C55BBE047BFB0A8C864BF
-Version: 1
-Owner: Account Address ( F16A5AEDCDF9F2A9C2BD0F077279EC3D5FF0DFEE )
-Type: 0x689e58788c875e9c354f359792cec016da0a1b0::my_module::Forge
-
-Updated Gas : Coin { id: 58C4DAA98694266F4DF47BA436CD99659B6A5342, value: 49552 }
+Sender: 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f
+Gas Payment: Object ID: 0x0c5b70eea9c634f27b0198163085748aa218f7e7, version: 0x1f60, digest: o#JS+wEZt+ZfLbiYD7893GWBXhnPhG9tPRZE7rmfx5NP8=
+Gas Owner: 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f
+Gas Price: 1
+Gas Budget: 1000
+----- Transaction Effects ----
+Status : Success
+Created Objects:
+  - ID: 0x93aedf72ed5ea0905f476defb5ad329654c4f103 , Owner: Immutable
+  - ID: 0xad1087d1da7fa964a9646a6eed968c9e118511dc , Owner: Account Address ( 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f )
+Mutated Objects:
+  - ID: 0x0c5b70eea9c634f27b0198163085748aa218f7e7 , Owner: Account Address ( 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f )
 ```
 
 The package publish operation does two important things:
 
-* Creates a package object (with ID `0689E58788C875E9C354F359792CEC016DA0A1B0`)
-* Creates a `Forge` object (with ID `898922A9CABE93C6C38C55BBE047BFB0A8C864BF`) as a result of running a [module initializer](../build/move/debug-publish.md#module-initializers) for the one (and only) module of this package.
+* Creates a package object (with ID `0x93aedf72ed5ea0905f476defb5ad329654c4f103`)
+* Creates a `Forge` object (with ID `0xad1087d1da7fa964a9646a6eed968c9e118511dc`) as a result of running a [module initializer](../build/move/debug-publish.md#module-initializers) for the one (and only) module of this package.
+
+You can check the details of each object using the `sui client object <OBJECT_ID>` command. For example, checking the forge object returns:
+
+```shell
+----- Move Object (0xad1087d1da7fa964a9646a6eed968c9e118511dc[8033]) -----
+Owner: Account Address ( 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f )
+Version: 8033
+Storage Rebate: 13
+Previous Transaction: TransactionDigest(3a6fv6mde6U4xvT4wxJao8qnCBjKEuSqYgpXPDW8mCjj)
+----- Data -----
+type: 0x93aedf72ed5ea0905f476defb5ad329654c4f103::my_module::Forge
+id: 0xad1087d1da7fa964a9646a6eed968c9e118511dc
+swords_created: 0
+```
 
 When you publish a package, the IDs for the objects created are different than the ones displayed in this example. This remainder of this topic uses <PACKAGE_ID> and <FORGE_ID> to represent the IDs for the created objects. You must replace these with the values for your package.
 

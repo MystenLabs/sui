@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import mitt from 'mitt';
 import {
     catchError,
     concatMap,
@@ -21,6 +22,7 @@ import {
 } from '_payloads/permissions';
 
 import type { ContentScriptConnection } from './connections/ContentScriptConnection';
+import type { SuiAddress } from '@mysten/sui.js';
 import type {
     Permission,
     PermissionResponse,
@@ -35,7 +37,16 @@ const PERMISSION_UI_URL_REGEX = new RegExp(
     'i'
 );
 
+type PermissionEvents = {
+    connectedAccountsChanged: {
+        origin: string;
+        accounts: SuiAddress[];
+    };
+};
+
 class Permissions {
+    #events = mitt<PermissionEvents>();
+
     public static getUiUrl(permissionID: string) {
         return `${PERMISSION_UI_URL}${encodeURIComponent(permissionID)}`;
     }
@@ -113,6 +124,15 @@ class Permissions {
                             (async () => {
                                 if (permission) {
                                     await this.storePermission(permission);
+                                    this.#events.emit(
+                                        'connectedAccountsChanged',
+                                        {
+                                            origin: permission.origin,
+                                            accounts: permission.allowed
+                                                ? permission.accounts
+                                                : [],
+                                        }
+                                    );
                                     return permission;
                                 }
                                 return null;
@@ -216,7 +236,8 @@ class Permissions {
     public async hasPermissions(
         origin: string,
         permissionTypes: readonly PermissionType[],
-        permission?: Permission | null
+        permission?: Permission | null,
+        address?: SuiAddress
     ): Promise<boolean> {
         const existingPermission = await this.getPermission(origin, permission);
         return Boolean(
@@ -224,19 +245,39 @@ class Permissions {
                 existingPermission.allowed &&
                 permissionTypes.every((permissionType) =>
                     existingPermission.permissions.includes(permissionType)
-                )
+                ) &&
+                (!address ||
+                    (address && existingPermission.accounts.includes(address)))
         );
     }
 
-    public async delete(origin: string) {
+    public async delete(origin: string, specificAccounts: SuiAddress[] = []) {
         const allPermissions = await this.getPermissions();
-        if (origin in allPermissions) {
-            delete allPermissions[origin];
+        const thePermission = allPermissions[origin];
+        if (thePermission) {
+            const remainingAccounts = specificAccounts.length
+                ? thePermission.accounts.filter(
+                      (anAccount) => !specificAccounts.includes(anAccount)
+                  )
+                : [];
+            if (!remainingAccounts.length) {
+                delete allPermissions[origin];
+            } else {
+                thePermission.accounts = remainingAccounts;
+            }
             await Browser.storage.local.set({
                 [PERMISSIONS_STORAGE_KEY]: allPermissions,
             });
+            this.#events.emit('connectedAccountsChanged', {
+                origin,
+                accounts: remainingAccounts,
+            });
         }
     }
+
+    public on = this.#events.on;
+
+    public off = this.#events.off;
 
     private async createPermissionRequest(
         origin: string,

@@ -9,14 +9,14 @@ use clap::Parser;
 use pretty_assertions::assert_str_eq;
 use sui_core::SUI_CORE_VERSION;
 
-use sui_json_rpc::api::EventReadApiOpenRpc;
-use sui_json_rpc::api::EventStreamingApiOpenRpc;
-use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
+use sui_json_rpc::event_api::EventReadApi;
+use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::sui_rpc_doc;
-use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
-use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
+use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
+use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
+use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::SuiRpcModule;
 
 use crate::examples::RpcExampleProvider;
@@ -49,12 +49,11 @@ async fn main() {
     let mut open_rpc = sui_rpc_doc(SUI_CORE_VERSION);
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(CoinReadApi::rpc_doc_module());
-    open_rpc.add_module(FullNodeApi::rpc_doc_module());
-    open_rpc.add_module(BcsApiImpl::rpc_doc_module());
-    open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
-    open_rpc.add_module(EventReadApiOpenRpc::module_doc());
-    open_rpc.add_module(FullNodeTransactionExecutionApi::rpc_doc_module());
-    open_rpc.add_module(FullNodeTransactionBuilderApi::rpc_doc_module());
+    open_rpc.add_module(EventReadApi::rpc_doc_module());
+    open_rpc.add_module(TransactionExecutionApi::rpc_doc_module());
+    open_rpc.add_module(TransactionBuilderApi::rpc_doc_module());
+    open_rpc.add_module(GovernanceReadApi::rpc_doc_module());
+    open_rpc.add_module(ThresholdBlsApi::rpc_doc_module());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
 

@@ -14,6 +14,13 @@ build
 storage/
 !narwhal/storage
 
+# Move-related files
+Move.lock
+!crates/sui-framework/Move.lock
+!crates/sui-framework/deps/move-stdlib/Move.lock
+.trace
+.coverage_map.mvcov
+
 # Thumbnails
 ._*
 
@@ -27,13 +34,29 @@ storage/
 # Node.js
 node_modules
 .tsbuildinfo
-tsconfig.tsbuildinfo
+*.tsbuildinfo
 .turbo
+
+# App build directories
+dist/
+storybook-static/
+web-ext-artifacts/
+.next/
+next-env.d.ts
+
+# App test artifacts
+coverage/
+playwright-report/
+playwright/.cache/
 
 # logs
 wallet.log.*
 sui.log.*
 .vercel
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # misc
 *.key
+.env

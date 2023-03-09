@@ -12,11 +12,11 @@ futures = "0.3.24"
 serde_json = "1.0.88"
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["full"] }
-jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["full"] }
+jsonrpsee = { version = "0.16.2", features = ["http-client"] }
 tracing = { version = "0.1.36", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
-reqwest = { version = "0.11.13", features = ["blocking", "json"] }
-async-trait = "0.1.57"
+reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
+async-trait = "0.1.61"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
 uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
@@ -37,5 +37,5 @@ sui-transaction-builder = { path = "../sui-transaction-builder" }
 telemetry-subscribers.workspace = true
 
 test-utils = { path = "../test-utils" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 move-core-types.workspace = true

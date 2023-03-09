@@ -6,6 +6,7 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
     friend sui::sui_system;
+    friend sui::sui;
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
@@ -103,18 +104,24 @@ module sui::balance {
         aborts_if balance.value != 0 with ENonZero;
     }
 
-    /// CAUTION: this function creates a `Balance` without increasing the supply. 
+    /// CAUTION: this function creates a `Balance` without increasing the supply.
     /// It should only be called by `sui_system::advance_epoch` to create staking rewards,
     /// and nowhere else.
     public(friend) fun create_staking_rewards<T>(value: u64): Balance<T> {
         Balance { value }
     }
 
-    /// CAUTION: this function destroys a `Balance` without decreasing the supply. 
+    /// CAUTION: this function destroys a `Balance` without decreasing the supply.
     /// It should only be called by `sui_system::advance_epoch` to destroy storage rebates,
     /// and nowhere else.
     public(friend) fun destroy_storage_rebates<T>(self: Balance<T>) {
         let Balance { value: _ } = self;
+    }
+
+    /// Destroy a `Supply` preventing any further minting and burning.
+    public(friend) fun destroy_supply<T>(self: Supply<T>): u64 {
+        let Supply { value } = self;
+        value
     }
 
     #[test_only]
@@ -122,32 +129,13 @@ module sui::balance {
     public fun create_for_testing<T>(value: u64): Balance<T> {
         Balance { value }
     }
-
-    #[test_only]
-    /// Destroy a `Balance` with any value in it for testing purposes.
-    public fun destroy_for_testing<T>(self: Balance<T>): u64 {
-        let Balance { value } = self;
-        value
-    }
-
-    #[test_only]
-    /// Destroy a `Supply` with any value in it for testing purposes.
-    public fun destroy_supply_for_testing<T>(self: Supply<T>): u64 {
-        let Supply { value } = self;
-        value
-    }
-
-    #[test_only]
-    /// Create a `Supply` of any coin for testing purposes.
-    public fun create_supply_for_testing<T>(value: u64): Supply<T> {
-        Supply { value }
-    }
 }
 
 #[test_only]
 module sui::balance_tests {
     use sui::balance;
     use sui::sui::SUI;
+    use sui::test_utils;
 
     #[test]
     fun test_balance() {
@@ -168,8 +156,8 @@ module sui::balance_tests {
         assert!(balance::value(&balance2) == 333, 2);
         assert!(balance::value(&balance3) == 334, 3);
 
-        balance::destroy_for_testing(balance1);
-        balance::destroy_for_testing(balance2);
-        balance::destroy_for_testing(balance3);
+        test_utils::destroy(balance1);
+        test_utils::destroy(balance2);
+        test_utils::destroy(balance3);
     }
 }

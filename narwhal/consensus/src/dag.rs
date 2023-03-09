@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::instrument;
-use types::{metered_channel, Certificate, CertificateDigest, Round};
+use types::{metered_channel, Certificate, CertificateDigest, ConditionalBroadcastReceiver, Round};
 
 use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 
@@ -46,11 +46,13 @@ struct InnerDag {
     /// The Virtual DAG data structure, which lets us track certificates in a memory-conscious way
     dag: NodeDag<Certificate>,
 
-    /// Secondary index: An authority-aware map of the DAG's veertex Certificates
+    /// Secondary index: An authority-aware map of the DAG's vertex Certificates
     vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
 
     /// Metrics handler
     metrics: Arc<ConsensusMetrics>,
+    /// Receiver of shutdown signal
+    rx_shutdown: ConditionalBroadcastReceiver,
 }
 
 /// The publicly exposed Dag handle, to which one can send commands
@@ -109,6 +111,7 @@ impl InnerDag {
         dag: NodeDag<Certificate>,
         vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
         metrics: Arc<ConsensusMetrics>,
+        rx_shutdown: ConditionalBroadcastReceiver,
     ) -> Self {
         let mut idg = InnerDag {
             rx_primary,
@@ -116,6 +119,7 @@ impl InnerDag {
             dag,
             vertices,
             metrics,
+            rx_shutdown,
         };
         let genesis = Certificate::genesis(committee);
         for cert in genesis.into_iter() {
@@ -177,6 +181,9 @@ impl InnerDag {
                             }
                         },
                     }
+                },
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return;
                 }
             }
         }
@@ -341,6 +348,7 @@ impl Dag {
         committee: &Committee,
         rx_primary: metered_channel::Receiver<Certificate>,
         metrics: Arc<ConsensusMetrics>,
+        rx_shutdown: ConditionalBroadcastReceiver,
     ) -> (JoinHandle<()>, Self) {
         let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let mut idg = InnerDag::new(
@@ -350,6 +358,7 @@ impl Dag {
             /* dag */ NodeDag::new(),
             /* vertices */ RwLock::new(BTreeMap::new()),
             metrics,
+            rx_shutdown,
         );
 
         let handle = spawn_logged_monitored_task!(async move { idg.run().await }, "DAGTask");
@@ -471,7 +480,7 @@ impl Dag {
 
     /// Removes certificates from the Dag, reclaiming memory in the process.
     ///
-    /// Note: If some digests are unkown to the Dag, this will return an error, but will nonetheless delete
+    /// Note: If some digests are unknown to the Dag, this will return an error, but will nonetheless delete
     /// the certificates for known digests which are removable.
     ///
     pub async fn remove<J: Borrow<CertificateDigest>>(
@@ -494,7 +503,7 @@ impl Dag {
             .expect("Failed to receive reply to Remove command from store")
     }
     /// Returns the certificate for the digest by waiting until it is
-    /// avaialable in the dag
+    /// available in the dag
     pub async fn notify_read(
         &self,
         digest: CertificateDigest,

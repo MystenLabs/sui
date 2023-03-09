@@ -7,6 +7,7 @@ use consensus::Consensus;
 use fastcrypto::hash::Hash;
 use narwhal_executor::get_restored_consensus_output;
 use narwhal_executor::MockExecutionState;
+use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
-use types::{Certificate, ReconfigureNotification, TransactionProto};
+use types::{Certificate, PreSubscribedBroadcastSender, Round, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
@@ -52,30 +53,31 @@ async fn test_recovery() {
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let gc_depth = 50;
+    const GC_DEPTH: Round = 50;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
+        GC_DEPTH,
         metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        GC_DEPTH,
         consensus_store.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        tx_shutdown.subscribe(),
         rx_waiter,
         tx_primary,
         tx_consensus_round_updates,
         tx_output,
         bullshark,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -165,7 +167,7 @@ async fn test_internal_consensus_output() {
         let tx = string_transaction(i);
 
         // serialise and send
-        let tr = bincode::serialize(&tx).unwrap();
+        let tr = bcs::to_bytes(&tx).unwrap();
         let txn = TransactionProto {
             transaction: Bytes::from(tr),
         };
@@ -179,7 +181,7 @@ async fn test_internal_consensus_output() {
         let result = receiver.recv().await.unwrap();
 
         // deserialise transaction
-        let output_transaction = bincode::deserialize::<String>(&result).unwrap();
+        let output_transaction = bcs::from_bytes::<String>(&result).unwrap();
 
         // we always remove the first transaction and check with the one
         // sequenced. We want the transactions to be sequenced in the
@@ -208,7 +210,7 @@ fn setup_tracing() -> TelemetryGuards {
 
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
 
-    telemetry_subscribers::TelemetryConfig::new("narwhal")
+    telemetry_subscribers::TelemetryConfig::new()
         // load env variables
         .with_env()
         // load special log filter

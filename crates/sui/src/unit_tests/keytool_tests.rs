@@ -1,16 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use crate::keytool::read_authority_keypair_from_file;
 use crate::keytool::read_keypair_from_file;
 
 use super::write_keypair_to_file;
 use super::KeyToolCommand;
+use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
-use fastcrypto::encoding::Hex;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
+use sui_types::base_types::ObjectDigest;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -24,6 +29,8 @@ use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use sui_types::intent::Intent;
+use sui_types::intent::IntentScope;
+use sui_types::messages::TransactionData;
 use tempfile::TempDir;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
@@ -136,6 +143,40 @@ fn test_read_write_keystore_with_flag() {
 }
 
 #[test]
+fn test_sui_operations_config() {
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("sui.keystore");
+    let path1 = path.clone();
+    // This is the hardcoded keystore in sui-operation: https://github.com/MystenLabs/sui-operations/blob/af04c9d3b61610dbb36401aff6bef29d06ef89f8/docker/config/generate/static/sui.keystore
+    // If this test fails, address hardcoded in sui-operations is likely needed be updated.
+    let kp = SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+    let contents = kp.encode_base64();
+    let res = std::fs::write(path, contents);
+    assert!(res.is_ok());
+    let kp_read = read_keypair_from_file(path1);
+    assert_eq!(
+        SuiAddress::from_str("849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3")
+            .unwrap(),
+        SuiAddress::from(&kp_read.unwrap().public())
+    );
+
+    // This is the hardcoded keystore in sui-operation: https://github.com/MystenLabs/sui-operations/blob/af04c9d3b61610dbb36401aff6bef29d06ef89f8/docker/config/generate/static/sui-benchmark.keystore
+    // If this test fails, address hardcoded in sui-operations is likely needed be updated.
+    let path2 = temp_dir.path().join("sui-benchmark.keystore");
+    let path3 = path2.clone();
+    let kp = SuiKeyPair::decode_base64("APCWxPNCbgGxOYKeMfPqPmXmwdNVyau9y4IsyBcmC14A").unwrap();
+    let contents = kp.encode_base64();
+    let res = std::fs::write(path2, contents);
+    assert!(res.is_ok());
+    let kp_read = read_keypair_from_file(path3);
+    assert_eq!(
+        SuiAddress::from_str("b9e0a0d97f83b5cd84a2df2f83c9d72af19a6952ed637a36dfacf884a2d6e27f")
+            .unwrap(),
+        SuiAddress::from(&kp_read.unwrap().public())
+    );
+}
+
+#[test]
 fn test_load_keystore_err() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().join("sui.keystore");
@@ -154,50 +195,46 @@ fn test_load_keystore_err() {
 #[test]
 fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
-    KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
-        key_scheme: SignatureScheme::ED25519,
-        derivation_path: None,
+    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AN0JMHpDum3BhrVwnkylH0/HGRHBQ/fO/8+MYOawO8j6", "8867068daf9111ee013450eea1b1e10ffd62fc874329f0eadadd62b5617011e4"],
+    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "AJrA997C1eVz6wYIp7bO8dpITSRBXpvg1m70/P3gusu2", "29bb131378438b6c7f50526e6a853a72ed97f10b75fc8127ca3faaf7e78add30"],
+    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AAEMSIQeqyz09StSwuOW4MElQcZ+4jHW4/QcWlJEf5Yk", "6e5387db7249f6b0dc5b68eb095109157dc192a0392343d67688835fecdf14e4"]];
+
+    for t in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new(0));
+        KeyToolCommand::Import {
+            mnemonic_phrase: t[0].to_string(),
+            key_scheme: SignatureScheme::ED25519,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)?;
+        let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
+        let addr = SuiAddress::from_str(t[2]).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(keystore.addresses().contains(&addr));
     }
-    .execute(&mut keystore)?;
-    keystore.keys().iter().for_each(|pk| {
-        assert_eq!(
-            Hex::encode(pk.as_ref()),
-            "685b2d6f98784dd763249af21c92f588ca1be80c40a98c55bf7c91b74e5ac1e2"
-        );
-    });
-    keystore.addresses().iter().for_each(|addr| {
-        assert_eq!(
-            addr.to_string(),
-            "0x1a4623343cd42be47d67314fce0ad042f3c82685"
-        );
-    });
     Ok(())
 }
 
 #[test]
 fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
-    // Test case generated from https://microbitcoinorg.github.io/mnemonic/ with path m/54'/784'/0'/0/0
-    let mut keystore = Keystore::from(InMemKeystore::new(0));
-    KeyToolCommand::Import {
-        mnemonic_phrase: TEST_MNEMONIC.to_string(),
-        key_scheme: SignatureScheme::Secp256k1,
-        derivation_path: None,
+    // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/secp256k1-keypair.test.ts
+    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AQA9EYZoLXirIahsXHQMDfdi5DPQ72wLA79zke4EY6CP", "88ea264013bd399f3cc69037aca2d6a0ce6adebb1accd679ab1cad80191894ca"],
+    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "Ae+TTptXI6WaJfzplSrphnrbTD5qgftfMX5kTyca7unQ", "fce7538e74e5df59529107d29f24991266e7165961932c205d85e04b00bc8a79"],
+    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AY2iJpGSDMhvGILPjjpyeM1bV4Jky979nUenB5kvQeSj", "d6929233d383bc8fa8df95b69feb04d7c7b4fd154d9d59a2564e4d50d14a569d"]];
+
+    for t in TEST_CASES {
+        let mut keystore = Keystore::from(InMemKeystore::new(0));
+        KeyToolCommand::Import {
+            mnemonic_phrase: t[0].to_string(),
+            key_scheme: SignatureScheme::Secp256k1,
+            derivation_path: None,
+        }
+        .execute(&mut keystore)?;
+        let kp = SuiKeyPair::decode_base64(t[1]).unwrap();
+        let addr = SuiAddress::from_str(t[2]).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(keystore.addresses().contains(&addr));
     }
-    .execute(&mut keystore)?;
-    keystore.keys().iter().for_each(|pk| {
-        assert_eq!(
-            Hex::encode(pk.as_ref()),
-            "03e3717435582ab33d2e315d21e9bc4e19500a1fc4c8cdc73a15365891774b131f"
-        );
-    });
-    keystore.addresses().iter().for_each(|addr| {
-        assert_eq!(
-            addr.to_string(),
-            "0xed17b3f435c03ff69c2cdc6d394932e68375f20f"
-        );
-    });
     Ok(())
 }
 
@@ -298,6 +335,47 @@ fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
     KeyToolCommand::Generate {
         key_scheme: SignatureScheme::BLS12381,
         derivation_path: None,
+    }
+    .execute(&mut keystore)?;
+    Ok(())
+}
+
+#[test]
+fn test_sign_command() -> Result<(), anyhow::Error> {
+    // Add a keypair
+    let mut keystore = Keystore::from(InMemKeystore::new(1));
+    let binding = keystore.addresses();
+    let sender = binding.first().unwrap();
+
+    // Create a dummy TransactionData
+    let gas = (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::random(),
+    );
+    let tx_data = TransactionData::new_pay_sui_with_dummy_gas_price(
+        *sender,
+        vec![gas],
+        vec![SuiAddress::random_for_testing_only()],
+        vec![10000],
+        gas,
+        1000,
+    )
+    .unwrap();
+
+    // Sign an intent message for the transaction data and a passed-in intent with scope as PersonalMessage.
+    KeyToolCommand::Sign {
+        address: *sender,
+        data: Base64::encode(bcs::to_bytes(&tx_data)?),
+        intent: Some(Intent::default().with_scope(IntentScope::PersonalMessage)),
+    }
+    .execute(&mut keystore)?;
+
+    // Sign an intent message for the transaction data without intent passed in, so default is used.
+    KeyToolCommand::Sign {
+        address: *sender,
+        data: Base64::encode(bcs::to_bytes(&tx_data)?),
+        intent: None,
     }
     .execute(&mut keystore)?;
     Ok(())

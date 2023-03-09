@@ -3,6 +3,7 @@
 
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module examples::object_basics {
+    use sui::clock::Clock;
     use sui::dynamic_object_field as ofield;
     use sui::event;
     use sui::object::{Self, UID, ID};
@@ -28,6 +29,10 @@ module examples::object_basics {
             Object { id: object::new(ctx), value },
             recipient
         )
+    }
+
+    public entry fun share(ctx: &mut TxContext) {
+        transfer::share_object(Object { id: object::new(ctx), value: 0 })
     }
 
     public entry fun transfer(o: Object, recipient: address) {
@@ -101,4 +106,36 @@ module examples::object_basics {
             tx_context::sender(ctx),
         );
     }
+
+    struct Name has copy, drop, store {
+        name_str: std::string::String
+    }
+
+    public entry fun add_field_with_struct_name(o: &mut Object, v: Object) {
+        sui::dynamic_field::add(&mut o.id, Name {name_str: std::string::utf8(b"Test Name")}, v);
+    }
+
+    public entry fun add_ofield_with_struct_name(o: &mut Object, v: Object) {
+        ofield::add(&mut o.id, Name {name_str: std::string::utf8(b"Test Name")}, v);
+    }
+
+    public entry fun add_field_with_bytearray_name(o: &mut Object, v: Object) {
+        sui::dynamic_field::add(&mut o.id,b"Test Name", v);
+    }
+
+    public entry fun add_ofield_with_bytearray_name(o: &mut Object, v: Object) {
+        ofield::add(&mut o.id,b"Test Name", v);
+    }
+
+    public entry fun add_field_with_address_name(o: &mut Object, v: Object,  ctx: &mut TxContext) {
+        sui::dynamic_field::add(&mut o.id,tx_context::sender(ctx), v);
+    }
+
+    public entry fun add_ofield_with_address_name(o: &mut Object, v: Object,  ctx: &mut TxContext) {
+        ofield::add(&mut o.id,tx_context::sender(ctx), v);
+    }
+
+    public entry fun generic_test<T>() {}
+
+    public entry fun use_clock(_clock: &Clock) {}
 }

@@ -151,7 +151,7 @@ module games::hero {
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
     public entry fun slay(
-        game: &GameInfo, hero: &mut Hero, boar: Boar, ctx: &mut TxContext
+        game: &GameInfo, hero: &mut Hero, boar: Boar, ctx: &TxContext
     ) {
         check_id(game, hero.game_id);
         check_id(game, boar.game_id);
@@ -334,7 +334,7 @@ module games::hero {
     }
 
     // --- Testing functions ---
-    public fun assert_hero_strength(hero: &Hero, strength: u64, _: &mut TxContext) {
+    public fun assert_hero_strength(hero: &Hero, strength: u64) {
         assert!(hero_strength(hero) == strength, ASSERT_ERR);
     }
 

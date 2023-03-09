@@ -2,7 +2,7 @@
 title: JSON-RPC API Quick Start
 ---
 
-Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and how to the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through how to connect and interact with the Sui network using the Sui JSON-RPC API. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
 
 This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
 
@@ -46,6 +46,7 @@ The examples in this section demonstrate how to create transfer transactions. To
 Objects IDs for `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjectsByAddress`](#sui_getObjectsOwnedByAddress) to return object IDs. 
 
+**Important:** As a security best practice, you should serialize data from the JSON-RPC service locally in the same location as the signer. This reduces the risk of trusting data from the service directly.
 #### Create an unsigned transaction to transfer a Sui coin from one address to another
 
 ```shell
@@ -82,7 +83,7 @@ sui keytool sign --address <owner_address> --data <tx_bytes>
 The keytool creates a key and then returns the signature and public key information.
 
 
-#### Execute a transaction with a signature and a public key
+#### Execute a transaction with a serialized signature
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -90,16 +91,15 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "sui_executeTransaction",
+  "method": "sui_executeTransactionSerializedSig",
   "params": [ 
     "{{tx_bytes}}",
-    "{{sig_scheme}}",
     "{{signature}}",
-    "{{pub_key}}",
     "{{request_type}}"
   ]
 }' | json_pp
 ```
+`signature` is a Base64 encoded `flag || signature || pubkey`. 
 
 Native transfer by `sui_transferObject` supports any object that allows for public transfers. Some objects cannot be transferred natively and require a [Move call](#sui_movecall). See [Transactions](../learn/transactions.md#native-transaction) for more information about native transfers.
 
@@ -165,13 +165,13 @@ sure the package is valid. If some modules have [initializers](move/debug-publis
 To publish a Move module, you also need to include `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui move` command. The `sui move` command supports printing the bytecode as base64:
 
 ```
-sui move --path <move-module-path> build --dump-bytecode-as-base64
+sui move <move-module-path> build --dump-bytecode-as-base64 
 ```
 
 Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command resembles the following:
 
 ```
-sui move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
+sui move $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
 
 ["oRzrCwUAAAAJAQAIAggUAxw3BFMKBV1yB88BdAjDAigK6wIFDPACQgAAAQEBAgEDAAACAAEEDAEAAQEBDAEAAQMDAgAABQABAAAGAgEAAAcDBAAACAUBAAEFBwEBAAEKCQoBAgMLCwwAAgwNAQEIAQcODwEAAQgQAQEABAYFBgcICAYJBgMHCwEBCAALAgEIAAcIAwABBwgDAwcLAQEIAAMHCAMBCwIBCAADCwEBCAAFBwgDAQgAAgsCAQkABwsBAQkAAQsBAQgAAgkABwgDAQsBAQkAAQYIAwEFAgkABQMDBwsBAQkABwgDAQsCAQkAAgsBAQkABQdNQU5BR0VEBENvaW4IVHJhbnNmZXIJVHhDb250ZXh0C1RyZWFzdXJ5Q2FwBGJ1cm4EaW5pdARtaW50DHRyYW5zZmVyX2NhcAtkdW1teV9maWVsZA9jcmVhdGVfY3VycmVuY3kGc2VuZGVyCHRyYW5zZmVyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAQkBAAEAAAEECwELADgAAgEAAAAICwkSAAoAOAEMAQsBCwAuEQY4AgICAQAAAQULAQsACwI4AwIDAQAAAQQLAAsBOAQCAA==", "oRzrCwUAAAALAQAOAg4kAzJZBIsBHAWnAasBB9IC6QEIuwQoBuMECgrtBB0MigWzAQ29BgYAAAABAQIBAwEEAQUBBgAAAgAABwgAAgIMAQABBAQCAAEBAgAGBgIAAxAEAAISDAEAAQAIAAEAAAkCAwAACgQFAAALBgcAAAwEBQAADQQFAAIVCgUBAAIICwMBAAIWDQ4BAAIXERIBAgYYAhMAAhkCDgEABRoVAwEIAhsWAwEAAgsXDgEAAg0YBQEABgkHCQgMCA8JCQsMCw8MFAYPBgwNDA0PDgkPCQMHCAELAgEIAAcIBQILAgEIAwsCAQgEAQcIBQABBggBAQMEBwgBCwIBCAMLAgEIBAcIBQELAgEIAAMLAgEIBAMLAgEIAwEIAAEGCwIBCQACCwIBCQAHCwcBCQABCAMDBwsCAQkAAwcIBQELAgEJAAEIBAELBwEIAAIJAAcIBQELBwEJAAEIBgEIAQEJAAIHCwIBCQALAgEJAAMDBwsHAQkABwgFAQYLBwEJAAZCQVNLRVQHTUFOQUdFRARDb2luAklEA1NVSQhUcmFuc2ZlcglUeENvbnRleHQHUmVzZXJ2ZQRidXJuBGluaXQObWFuYWdlZF9zdXBwbHkEbWludApzdWlfc3VwcGx5DHRvdGFsX3N1cHBseQtkdW1teV9maWVsZAJpZAtWZXJzaW9uZWRJRAx0cmVhc3VyeV9jYXALVHJlYXN1cnlDYXADc3VpB21hbmFnZWQFdmFsdWUId2l0aGRyYXcPY3JlYXRlX2N1cnJlbmN5Bm5ld19pZAR6ZXJvDHNoYXJlX29iamVjdARqb2luAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgMIAAAAAAAAAAAAAgEOAQECBA8IBhELBwEIABMLAgEIAxQLAgEIBAABAAAIFg4BOAAMBAsBCgAPADgBCgAPAQoECgI4AgwFCwAPAgsECwI4AwwDCwULAwIBAAAAEA8JEgAKADgEDAEKABEKCwEKADgFCwA4BhIBOAcCAgEAAAMECwAQAjgIAgMBAAAFHA4BOAkMBAoEDgI4CCEDDgsAAQsDAQcAJwoADwELATgKCgAPAgsCOAsLBAsADwALAzgMAgQBAAADBAsAEAE4CQIFAQAAAwQLABAAOA0CAQEBAgEDAA=="]
 Build Successful
@@ -181,3 +181,5 @@ Copy the output base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 The command generates a package object that represents the published Move code. You can use the package ID as an argument for subsequent Move calls to functions defined in this package.
+
+**Note:** If your package has dependencies that are unpublished, include the `--with-unpublished-dependencies` flag to have the modules in those packages added to the bytecode.

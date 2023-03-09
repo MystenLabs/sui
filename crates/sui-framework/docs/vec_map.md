@@ -19,6 +19,7 @@
 -  [Function `is_empty`](#0x2_vec_map_is_empty)
 -  [Function `destroy_empty`](#0x2_vec_map_destroy_empty)
 -  [Function `into_keys_values`](#0x2_vec_map_into_keys_values)
+-  [Function `keys`](#0x2_vec_map_keys)
 -  [Function `get_idx_opt`](#0x2_vec_map_get_idx_opt)
 -  [Function `get_idx`](#0x2_vec_map_get_idx)
 -  [Function `get_entry_by_idx`](#0x2_vec_map_get_entry_by_idx)
@@ -104,6 +105,16 @@ An entry in the map
 ## Constants
 
 
+<a name="0x2_vec_map_EIndexOutOfBounds"></a>
+
+Trying to access an element of the map at an invalid index
+
+
+<pre><code><b>const</b> <a href="vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="0x2_vec_map_EKeyAlreadyExists"></a>
 
 This key already exists in the map
@@ -120,16 +131,6 @@ This key does not exist in the map
 
 
 <pre><code><b>const</b> <a href="vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="0x2_vec_map_EIndexOutOfBounds"></a>
-
-Trying to access an element of the map at an invalid index
-
-
-<pre><code><b>const</b> <a href="vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
 </code></pre>
 
 
@@ -451,6 +452,40 @@ The output keys and values are stored in insertion order, *not* sorted by key.
     };
     <a href="_destroy_empty">vector::destroy_empty</a>(contents);
     (keys, values)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_map_keys"></a>
+
+## Function `keys`
+
+Returns a list of keys in the map.
+Do not assume any particular ordering.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_map.md#0x2_vec_map_keys">keys</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;): <a href="">vector</a>&lt;K&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_map.md#0x2_vec_map_keys">keys</a>&lt;K: <b>copy</b>, V&gt;(self: &<a href="vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K, V&gt;): <a href="">vector</a>&lt;K&gt; {
+    <b>let</b> i = 0;
+    <b>let</b> n = <a href="_length">vector::length</a>(&self.contents);
+    <b>let</b> keys = <a href="_empty">vector::empty</a>();
+    <b>while</b> (i &lt; n) {
+        <b>let</b> entry = <a href="_borrow">vector::borrow</a>(&self.contents, i);
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> keys, entry.key);
+        i = i + 1;
+    };
+    keys
 }
 </code></pre>
 

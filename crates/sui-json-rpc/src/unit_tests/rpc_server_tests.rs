@@ -1,22 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, ThresholdBlsApiClient,
+    TransactionBuilderClient, WriteApiClient,
+};
 use std::path::Path;
 
+#[cfg(not(msim))]
 use std::str::FromStr;
-
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+
 use sui_json_rpc_types::{
-    Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
-    SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
+    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
+    SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionBytes,
 };
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
+use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
@@ -25,11 +32,8 @@ use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
 
-use crate::api::CoinReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
-
 use sui_macros::sim_test;
+use sui_types::governance::{DelegatedStake, DelegationStatus};
 
 use tokio::time::{sleep, Duration};
 
@@ -66,23 +70,180 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
     let tx_bytes1 = tx_bytes.clone();
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
-    let tx_response: SuiExecuteTransactionResponse = http_client
-        .execute_transaction_serialized_sig(
+    let tx_response: SuiTransactionResponse = http_client
+        .submit_transaction(
             tx_bytes1,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiTransactionResponse { effects, .. } = tx_response;
     assert_eq!(
-        dryrun_response.transaction_digest,
-        effects.effects.transaction_digest
+        dryrun_response.effects.transaction_digest(),
+        effects.unwrap().transaction_digest()
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+
+    let address = cluster.accounts.first().unwrap();
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let gas = objects.first().unwrap();
+
+    ////////////////////////////////////////////////////////////////////////
+    // Trying to get a tBLS signature for a type that is not Randomness should fail.
+
+    let tx_response = http_client
+        .tbls_sign_randomness_object(
+            gas.object_id,
+            SuiTBlsSignObjectCommitmentType::ConsensusCommitted,
+        )
+        .await;
+    assert!(tx_response.is_err());
+
+    ////////////////////////////////////////////////////////////////////////
+    // Publish the basic randomness example
+
+    let compiled_modules = BuildConfig::new_for_testing()
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
+        .get_package_base64(false);
+    let transaction_bytes: TransactionBytes = http_client
+        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .await?;
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    let tx_response = http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let effects = tx_response.effects.as_ref().unwrap();
+    let read_resp = http_client
+        .get_transaction_with_options(
+            tx_response.digest,
+            Some(SuiTransactionResponseOptions::new().with_events()),
+        )
+        .await?;
+    let events = read_resp.events.as_ref().unwrap();
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
+
+    let package_id = events
+        .data
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::Publish { package_id, .. } = e {
+                Some(package_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    ////////////////////////////////////////////////////////////////////////
+    // Call create_owned_randomness
+
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            *package_id,
+            "randomness_basics".to_string(),
+            "create_owned_randomness".to_string(),
+            vec![],
+            vec![],
+            Some(gas.object_id),
+            10_000,
+            None,
+        )
+        .await?;
+    let tx = transaction_bytes.to_data()?;
+    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    let tx_response = http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let effects = tx_response.effects.as_ref().unwrap();
+    let events = tx_response.events.as_ref().unwrap();
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
+
+    let randomness_object_id = events
+        .data
+        .iter()
+        .find_map(|e| {
+            if let SuiEvent::NewObject { object_id, .. } = e {
+                Some(*object_id)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+
+    ////////////////////////////////////////////////////////////////////////
+    // Get the tBLS signature from the JSON-RPC.
+
+    let tx_response = http_client
+        .tbls_sign_randomness_object(
+            randomness_object_id,
+            SuiTBlsSignObjectCommitmentType::ConsensusCommitted,
+        )
+        .await?;
+
+    let sig = tx_response.signature.0;
+
+    ////////////////////////////////////////////////////////////////////////
+    // Call set_randomness
+
+    let transaction_bytes = http_client
+        .move_call(
+            *address,
+            *package_id,
+            "randomness_basics".to_string(),
+            "set_randomness".to_string(),
+            vec![],
+            vec![
+                SuiJsonValue::from_object_id(randomness_object_id),
+                SuiJsonValue::from_bcs_bytes(&sig).unwrap(),
+            ],
+            Some(gas.object_id),
+            10_000,
+            None,
+        )
+        .await?;
+    let tx = transaction_bytes.to_data()?;
+    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    let tx_response = http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForEffectsCert,
+        )
+        .await?;
+    let effects = tx_response.effects.unwrap();
+    assert_eq!(SuiExecutionStatus::Success, *effects.status());
+
     Ok(())
 }
 
@@ -95,9 +256,9 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
-        .get_package_base64();
+        .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
@@ -106,16 +267,16 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction_serialized_sig(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 6);
+    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 6);
     Ok(())
 }
 
@@ -157,16 +318,16 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction_serialized_sig(
+        .submit_transaction(
             tx_bytes,
-            signature_bytes,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 1);
+    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 1);
     Ok(())
 }
 
@@ -178,9 +339,14 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     for oref in objects {
-        let result: GetObjectDataResponse = http_client.get_object(oref.object_id).await?;
+        let result = http_client
+            .get_object_with_options(
+                oref.object_id,
+                Some(SuiObjectDataOptions::new().with_owner()),
+            )
+            .await?;
         assert!(
-            matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
+            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())
@@ -255,7 +421,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     // Publish test coin package
     let compiled_modules = BuildConfig::default()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64();
+        .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
@@ -264,23 +430,19 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
-
-    let package_id = effects
-        .effects
-        .events
+    let events = tx_response.events.as_ref().unwrap();
+    let package_id = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::Publish { package_id, .. } = e {
@@ -314,9 +476,9 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     // Publish test coin package
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64();
+        .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
@@ -325,23 +487,19 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
-
-    let package_id = effects
-        .effects
-        .events
+    let events = tx_response.events.as_ref().unwrap();
+    let package_id = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::Publish { package_id, .. } = e {
@@ -358,9 +516,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     assert_eq!(0, result.value);
 
-    let treasury_cap = effects
-        .effects
-        .events
+    let treasury_cap = events
+        .data
         .iter()
         .find_map(|e| {
             if let SuiEvent::NewObject {
@@ -405,21 +562,19 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = transaction_bytes.to_data()?;
 
     let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .submit_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiTransactionResponse { effects, .. } = tx_response;
 
-    assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
+    assert_eq!(SuiExecutionStatus::Success, *effects.unwrap().status());
 
     let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
     assert_eq!(100000, result.value);
@@ -437,7 +592,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let gas_id = objects.last().unwrap().object_id;
 
     // Make some transactions
-    let mut tx_responses: Vec<SuiExecuteTransactionResponse> = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
     for oref in &objects[..objects.len() - 1] {
         let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
@@ -447,12 +602,12 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let tx =
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
-        let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let response = http_client
-            .execute_transaction_serialized_sig(
+            .submit_transaction(
                 tx_bytes,
-                signature_bytes,
+                signatures,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
             )
             .await?;
@@ -461,7 +616,20 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     }
     // test get_transactions_in_range
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(0, 10).await?;
-    assert_eq!(4, tx.len());
+    assert_eq!(5, tx.len());
+
+    // test get_transaction_batch
+    let batch_responses: Vec<SuiTransactionResponse> = http_client
+        .multi_get_transactions_with_options(tx, Some(SuiTransactionResponseOptions::new()))
+        .await?;
+
+    assert_eq!(5, batch_responses.len());
+
+    for r in batch_responses.iter().skip(1) {
+        assert!(tx_responses
+            .iter()
+            .any(|resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == r.digest)))
+    }
 
     // test get_transactions_in_range with smaller range
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(1, 3).await?;
@@ -469,9 +637,11 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
     // test get_transaction
     for tx_digest in tx {
-        let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
+        let response: SuiTransactionResponse = http_client
+            .get_transaction_with_options(tx_digest, Some(SuiTransactionResponseOptions::new()))
+            .await?;
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
+            |resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == response.digest)
         ))
     }
 
@@ -486,7 +656,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let mut tx_responses = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
 
     let client = context.get_client().await.unwrap();
 
@@ -542,7 +712,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .get_transactions(TransactionQuery::All, first_page.next_cursor, None, false)
         .await
         .unwrap();
-    assert_eq!(15, second_page.data.len());
+    assert_eq!(16, second_page.data.len());
     assert!(second_page.next_cursor.is_none());
 
     let mut all_txs_rev = first_page.data.clone();
@@ -601,14 +771,14 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get_transaction
     for tx_digest in tx.data {
-        let response: SuiTransactionResponse =
-            client.read_api().get_transaction(tx_digest).await.unwrap();
-        assert!(tx_responses.iter().any(|effects| effects
-            .effects
-            .as_ref()
-            .unwrap()
-            .transaction_digest
-            == response.effects.transaction_digest))
+        let response: SuiTransactionResponse = client
+            .read_api()
+            .get_transaction_with_options(tx_digest, SuiTransactionResponseOptions::new())
+            .await
+            .unwrap();
+        assert!(tx_responses
+            .iter()
+            .any(|resp| resp.digest == response.digest))
     }
 
     Ok(())
@@ -624,7 +794,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     let client = cluster.wallet.get_client().await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let mut tx_responses = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
 
     for address in cluster.accounts.iter() {
         let objects = client
@@ -650,7 +820,6 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
                 )
                 .await
                 .unwrap();
-
             tx_responses.push(response);
         }
     }
@@ -661,14 +830,24 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     // test get all events ascending
     let page1 = client
         .event_api()
-        .get_events(EventQuery::All, Some((2, 0).into()), Some(3), false)
+        .get_events(
+            EventQuery::All,
+            Some((tx_responses[2].digest, 0).into()),
+            Some(3),
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((5, 0).into()), page1.next_cursor);
+    assert_eq!(Some((tx_responses[5].digest, 0).into()), page1.next_cursor);
     let page2 = client
         .event_api()
-        .get_events(EventQuery::All, Some((5, 0).into()), Some(20), false)
+        .get_events(
+            EventQuery::All,
+            Some((tx_responses[5].digest, 0).into()),
+            Some(20),
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(15, page2.data.len());
@@ -681,13 +860,20 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((16, 0).into()), page1.next_cursor);
+    assert_eq!(Some((tx_responses[16].digest, 0).into()), page1.next_cursor);
+
     let page2 = client
         .event_api()
-        .get_events(EventQuery::All, Some((16, 0).into()), None, true)
+        .get_events(
+            EventQuery::All,
+            Some((tx_responses[16].digest, 0).into()),
+            None,
+            true,
+        )
         .await
         .unwrap();
-    assert_eq!(17, page2.data.len());
+    // 17 events created by this test + 44 Genesis event
+    assert_eq!(61, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get sender events
@@ -714,7 +900,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    assert_eq!(4, page.data.len());
+    assert_eq!(9, page.data.len());
 
     let object = client
         .read_api()
@@ -731,7 +917,295 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .get_events(EventQuery::Object(object), None, Some(10), false)
         .await
         .unwrap();
-    assert_eq!(4, page.data.len());
+    assert_eq!(5, page.data.len());
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_locked_sui() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+    // verify coins and balance before test
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    let balance: Vec<Balance> = http_client.get_all_balances(*address).await?;
+
+    assert_eq!(5, coins.data.len());
+    for coin in &coins.data {
+        assert!(coin.locked_until_epoch.is_none());
+    }
+
+    assert_eq!(1, balance.len());
+    assert!(balance[0].locked_balance.is_empty());
+
+    // lock one coin
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            LOCKED_COIN_MODULE_NAME.to_string(),
+            "lock_coin".to_string(),
+            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
+            vec![
+                SuiJsonValue::from_str(&coins.data[0].coin_object_id.to_string())?,
+                SuiJsonValue::from_str(&format!("{address}"))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
+            ],
+            None,
+            1000,
+            None,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let balances: Vec<Balance> = http_client.get_all_balances(*address).await?;
+
+    assert_eq!(1, balance.len());
+
+    let balance = balances.first().unwrap();
+
+    assert_eq!(5, balance.coin_object_count);
+    assert_eq!(1, balance.locked_balance.len());
+    assert!(balance.locked_balance.contains_key(&20));
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delegation() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![objects[0].object_id],
+            Some(1000000),
+            validator,
+            None,
+            10000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(5, coins.data.len());
+
+    let genesis_coin_amount = coins.data[0].balance;
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![
+                coins.data[0].coin_object_id,
+                coins.data[1].coin_object_id,
+                coins.data[2].coin_object_id,
+            ],
+            Some(1000000),
+            validator,
+            None,
+            10000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
+
+    // Coins should be merged into one and returned to the sender.
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(3, coins.data.len());
+
+    // Find the new coin
+    let new_coin = coins
+        .data
+        .iter()
+        .find(|coin| coin.balance > genesis_coin_amount)
+        .unwrap();
+    assert_eq!((genesis_coin_amount * 3) - 1000000, new_coin.balance);
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+
+    // lock some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            LOCKED_COIN_MODULE_NAME.to_string(),
+            "lock_coin".to_string(),
+            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
+            vec![
+                SuiJsonValue::from_str(&objects[0].object_id.to_string())?,
+                SuiJsonValue::from_str(&format!("{address}"))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
+            ],
+            None,
+            1000,
+            None,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+    // Delegate some locked SUI
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    let locked_sui = coins
+        .data
+        .iter()
+        .find_map(|coin| coin.locked_until_epoch.map(|_| coin.coin_object_id))
+        .unwrap();
+
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![locked_sui],
+            Some(1000000),
+            validator,
+            None,
+            10000,
+        )
+        .await?;
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .submit_transaction(
+            tx_bytes,
+            signatures,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check StakedSui object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert_eq!(Some(20), staked_sui[0].staked_sui.sui_token_lock());
+
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
 
     Ok(())
 }

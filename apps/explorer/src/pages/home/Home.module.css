@@ -1,9 +1,0 @@
-div.home {
-    @apply bg-white;
-}
-
-div.container {
-    @apply mx-auto grid grid-cols-1 md:grid-cols-2;
-
-    column-gap: 2%;
-}

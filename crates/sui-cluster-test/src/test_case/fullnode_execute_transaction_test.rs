@@ -3,7 +3,9 @@
 
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
-use sui_json_rpc_types::SuiExecutionStatus;
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponseOptions,
+};
 use sui_sdk::SuiClient;
 use sui_types::{base_types::TransactionDigest, messages::ExecuteTransactionRequestType};
 use tracing::info;
@@ -14,7 +16,7 @@ impl FullNodeExecuteTransactionTest {
     async fn verify_transaction(fullnode: &SuiClient, tx_digest: TransactionDigest) {
         fullnode
             .read_api()
-            .get_transaction(tx_digest)
+            .get_transaction_with_options(tx_digest, SuiTransactionResponseOptions::new())
             .await
             .unwrap_or_else(|e| {
                 panic!(
@@ -58,14 +60,14 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             .execute_transaction(txn, Some(ExecuteTransactionRequestType::WaitForEffectsCert))
             .await?;
 
-        assert!(!response.confirmed_local_execution);
-        assert_eq!(txn_digest, response.tx_digest);
-        response.tx_cert.unwrap();
+        assert!(!response.confirmed_local_execution.unwrap());
+        assert_eq!(txn_digest, response.digest);
         let effects = response.effects.unwrap();
-        if !matches!(effects.status, SuiExecutionStatus::Success { .. }) {
+        if !matches!(effects.status(), SuiExecutionStatus::Success { .. }) {
             panic!(
-                "Failed to execute transfer tranasction {:?}: {:?}",
-                txn_digest, effects.status
+                "Failed to execute transfer transaction {:?}: {:?}",
+                txn_digest,
+                effects.status()
             )
         }
         // Verify fullnode observes the txn
@@ -83,14 +85,14 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
-        response.tx_cert.unwrap();
-        assert!(response.confirmed_local_execution);
-        assert_eq!(txn_digest, response.tx_digest);
+        assert!(response.confirmed_local_execution.unwrap());
+        assert_eq!(txn_digest, response.digest);
         let effects = response.effects.unwrap();
-        if !matches!(effects.status, SuiExecutionStatus::Success { .. }) {
+        if !matches!(effects.status(), SuiExecutionStatus::Success { .. }) {
             panic!(
-                "Failed to execute transfer tranasction {:?}: {:?}",
-                txn_digest, effects.status
+                "Failed to execute transfer transaction {:?}: {:?}",
+                txn_digest,
+                effects.status()
             )
         }
         // Unlike in other execution modes, there's no need to wait for the node to sync
