@@ -28,6 +28,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
 };
+use std::sync::{Arc, Mutex};
 use tracing::warn;
 
 /// The round number.
@@ -394,6 +395,7 @@ impl Vote {
         Self { signature, ..vote }
     }
 
+    // This function is used only in tests.
     pub fn new_with_signer<S>(header: &Header, author: &PublicKey, signer: &S) -> Self
     where
         S: Signer<Signature>,
@@ -492,14 +494,29 @@ impl PartialEq for Vote {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
+#[derive(Serialize, Deserialize, Default, MallocSizeOf)]
 pub struct Certificate {
     pub header: Header,
     aggregated_signature: AggregateSignature,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
     pub metadata: Metadata,
+    #[serde(skip)]
+    pub verified_count: Arc<Mutex<usize>>,
 }
+
+impl Clone for Certificate {
+    fn clone(&self) -> Self {
+        Self {
+            header: self.header.clone(),
+            aggregated_signature: self.aggregated_signature.clone(),
+            signed_authorities: self.signed_authorities.clone(),
+            metadata: self.metadata.clone(),
+            verified_count: self.verified_count.clone(),
+        }
+    }
+}
+
 
 impl Certificate {
     pub fn genesis(committee: &Committee) -> Vec<Self> {
@@ -604,6 +621,7 @@ impl Certificate {
             aggregated_signature,
             signed_authorities,
             metadata: Metadata::default(),
+            verified_count: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -668,6 +686,13 @@ impl Certificate {
         self.aggregated_signature
             .verify(&pks[..], certificate_digest.as_ref())
             .map_err(|_| DagError::InvalidSignature)?;
+
+        let mut v = self.verified_count.lock().unwrap();
+        *v += 1;
+        if *v > 1 {
+            //println!("!!! AuthorityQuorumSignInfo {:?}", v);
+            warn!("!!! Certificate {:?}", *v);
+        }
 
         Ok(())
     }

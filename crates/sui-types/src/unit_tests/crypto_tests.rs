@@ -11,6 +11,7 @@ fn temp_test() {
         epoch: 0,
         signature: Default::default(),
         signers_map: RoaringBitmap::new(),
+        verified_count: Arc::new(Mutex::new(0)),
     };
     let ser = serde_json::to_string(&info).unwrap();
     println!("{}", ser);

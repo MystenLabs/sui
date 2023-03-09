@@ -72,6 +72,7 @@ impl TransactionValidator for SuiTxValidator {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     self.metrics.certificate_signatures_verified.inc();
+                    // do we need this? we already have a cert on this tx
                     certificate.data().verify(None)?;
                     let idx = obligation.add_message(
                         certificate.data(),
@@ -113,6 +114,11 @@ impl TransactionValidator for SuiTxValidator {
             .verify_all()
             .tap_err(|e| warn!("batch verification error: {}", e))
             .wrap_err("Malformed batch (failed to verify)")
+
+        // obligation
+        //     .verify_all()
+        //     .wrap_err("Malformed batch (failed to verify)")
+
 
         // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
         // all certificates had valid signatures, schedule them for execution prior to sequencing

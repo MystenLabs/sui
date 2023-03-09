@@ -396,6 +396,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         })
                         .expect("Validator returned invalid signature"),
                     signers_map,
+                    verified_count: Arc::new(Mutex::new(0)),
                 };
 
                 Envelope::new_from_data_and_sig(tx.into_data(), quorum_signature)

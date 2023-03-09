@@ -45,6 +45,8 @@ use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{HashFunction, Sha3_256};
 pub use fastcrypto::traits::Signer;
 use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
+use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
@@ -1190,7 +1192,7 @@ impl PartialEq for AuthoritySignInfo {
 /// the quorum is valid when the total stake is at least the validity threshold (f+1) of
 /// the committee.
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     #[schemars(with = "Base64")]
@@ -1198,6 +1200,28 @@ pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     #[schemars(with = "Base64")]
     #[serde_as(as = "SuiBitmap")]
     pub signers_map: RoaringBitmap,
+    #[serde(skip)]
+    verified_count: Arc<Mutex<usize>>,
+}
+
+impl<const STRONG_THRESHOLD: bool> Drop for AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+    fn drop(&mut self) {
+        let v = self.verified_count.lock().unwrap();
+        if *v > 1 {
+            warn!("!!! AuthorityQuorumSignInfo {:?}", *v);
+        }
+    }
+}
+
+impl<const STRONG_THRESHOLD: bool> Clone for AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+    fn clone(&self) -> Self {
+        Self {
+            epoch: self.epoch,
+            signature: self.signature.clone(),
+            signers_map: self.signers_map.clone(),
+            verified_count: Arc::new(Mutex::new(*self.verified_count.lock().unwrap())),
+        }
+    }
 }
 
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
@@ -1233,6 +1257,7 @@ impl TryFrom<&SuiAuthorityStrongQuorumSignInfo> for AuthorityStrongQuorumSignInf
             epoch: info.epoch,
             signature: (&info.signature).try_into()?,
             signers_map: info.signers_map.clone(),
+            verified_count: Arc::new(Mutex::new(0)),
         })
     }
 }
@@ -1260,9 +1285,14 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
         committee: &Committee,
     ) -> SuiResult {
         let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(data, self.epoch, intent);
+        let idx = obligation.add_message(data, self.epoch, intent.clone());
         self.add_to_verification_obligation(committee, &mut obligation, idx)?;
         obligation.verify_all()?;
+        let mut v = self.verified_count.lock().unwrap();
+        *v += 1;
+        if self.signature.as_ref()[10] < 25 { // ~10% of the time
+            warn!("!!! signature: {:?} for {:?}", Hex::encode(&self.signature), &intent);
+        }
         Ok(())
     }
 
@@ -1380,6 +1410,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 }
             })?,
             signers_map: map,
+            verified_count: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -1521,6 +1552,16 @@ pub struct VerificationObligation {
     pub messages: Vec<Vec<u8>>,
     pub signatures: Vec<AggregateAuthoritySignature>,
     pub public_keys: Vec<Vec<AuthorityPublicKey>>,
+    pub verified_count: Arc<Mutex<usize>>,// not useful actually since verify_all consumes the object anyhow
+}
+
+impl Drop for VerificationObligation {
+    fn drop(&mut self) {
+        let v = self.verified_count.lock().unwrap();
+        if *v > 1 {
+            warn!("!!! VerificationObligation {:?}", *v);
+        }
+    }
 }
 
 impl VerificationObligation {
@@ -1579,6 +1620,8 @@ impl VerificationObligation {
         .map_err(|error| SuiError::InvalidSignature {
             error: format!("{error}"),
         })?;
+        let mut v = self.verified_count.lock().unwrap();
+        *v += 1;
         Ok(())
     }
 }
