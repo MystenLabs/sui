@@ -126,6 +126,46 @@ describe("BCS: Primitives", () => {
     expect(data.kitties).toHaveLength(2);
     expect(data.owner).toEqual("00000000000000000000000000c0ffee");
   });
+
+  it("should support growing size", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+
+    bcs.registerStructType("Coin", {
+      value: BCS.U64,
+      owner: BCS.STRING,
+      is_locked: BCS.BOOL,
+    });
+
+    const rustBcs = "gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA";
+    const expected = {
+      owner: "Big Wallet Guy",
+      value: 412412400000n,
+      is_locked: false,
+    };
+
+    const setBytes = bcs.ser("Coin", expected, { size: 1, maxSize: 1024 });
+
+    expect(bcs.de("Coin", fromB64(rustBcs))).toEqual(expected);
+    expect(setBytes.toString("base64")).toEqual(rustBcs);
+  });
+
+  it("should error when attempting to grow beyond the allowed size", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+
+    bcs.registerStructType("Coin", {
+      value: BCS.U64,
+      owner: BCS.STRING,
+      is_locked: BCS.BOOL,
+    });
+
+    const expected = {
+      owner: "Big Wallet Guy",
+      value: 412412400000n,
+      is_locked: false,
+    };
+
+    expect(() => bcs.ser("Coin", expected, { size: 1 })).toThrowError();
+  });
 });
 
 // @ts-ignore

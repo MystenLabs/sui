@@ -67,6 +67,8 @@ function prepareSuiAddress(address: string) {
   return normalizeSuiAddress(address).replace('0x', '');
 }
 
+const TRANSACTION_DATA_MAX_SIZE = 64 * 1024;
+
 export class TransactionDataBuilder {
   static fromBytes(bytes: Uint8Array) {
     const data = builder.de('TransactionData', bytes);
@@ -116,7 +118,7 @@ export class TransactionDataBuilder {
     this.commands = clone?.commands ?? [];
   }
 
-  build({ size }: { size?: number } = {}) {
+  build() {
     if (!this.gasConfig.budget) {
       throw new Error('Missing gas budget');
     }
@@ -159,7 +161,11 @@ export class TransactionDataBuilder {
     };
 
     return builder
-      .ser('TransactionData', { V1: transactionData }, size)
+      .ser(
+        'TransactionData',
+        { V1: transactionData },
+        { maxSize: TRANSACTION_DATA_MAX_SIZE },
+      )
       .toBytes();
   }
 
