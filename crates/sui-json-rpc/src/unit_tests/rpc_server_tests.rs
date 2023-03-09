@@ -872,8 +872,9 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    // 17 events created by this test + 44 Genesis event
-    assert_eq!(61, page2.data.len());
+
+    // 17 events created by this test + 48 Genesis event
+    assert_eq!(65, page2.data.len());
     assert!(!page2.has_next_page);
 
     // test get sender events

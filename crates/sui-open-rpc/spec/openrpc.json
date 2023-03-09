@@ -6538,6 +6538,7 @@
           "next_epoch_commission_rate",
           "next_epoch_gas_price",
           "next_epoch_stake",
+          "operation_cap_id",
           "p2p_address",
           "pending_delegation",
           "pending_pool_token_withdraw",
@@ -6707,6 +6708,9 @@
               "format": "uint8",
               "minimum": 0.0
             }
+          },
+          "operation_cap_id": {
+            "$ref": "#/components/schemas/ObjectID"
           },
           "p2p_address": {
             "type": "array",
