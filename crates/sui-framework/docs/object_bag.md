@@ -146,7 +146,7 @@ Aborts with <code>sui::dynamic_field::EFieldTypeMismatch</code> if the bag has a
 the value does not have the specified type.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>, k: K): &V
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">object_bag::ObjectBag</a>, k: K): &V
 </code></pre>
 
 
@@ -155,7 +155,7 @@ the value does not have the specified type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_borrow">borrow</a>&lt;K: <b>copy</b> + drop + store, V: key + store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a>, k: K): &V {
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;K: <b>copy</b> + drop + store, V: key + store&gt;(<a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a>, k: K): &V {
     ofield::borrow(&<a href="bag.md#0x2_bag">bag</a>.id, k)
 }
 </code></pre>

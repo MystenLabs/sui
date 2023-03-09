@@ -143,7 +143,7 @@ Aborts with <code>sui::dynamic_field::EFieldDoesNotExist</code> if the table doe
 that key <code>k: K</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_table.md#0x2_object_table_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">object_table::ObjectTable</a>&lt;K, V&gt;, k: K): &V
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;K: <b>copy</b>, drop, store, V: store, key&gt;(<a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">object_table::ObjectTable</a>&lt;K, V&gt;, k: K): &V
 </code></pre>
 
 
@@ -152,7 +152,7 @@ that key <code>k: K</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="object_table.md#0x2_object_table_borrow">borrow</a>&lt;K: <b>copy</b> + drop + store, V: key + store&gt;(<a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a>&lt;K, V&gt;, k: K): &V {
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;K: <b>copy</b> + drop + store, V: key + store&gt;(<a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a>&lt;K, V&gt;, k: K): &V {
     ofield::borrow(&<a href="table.md#0x2_table">table</a>.id, k)
 }
 </code></pre>

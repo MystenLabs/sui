@@ -17,6 +17,8 @@ require additional work on the creator side to set up metadata creation methods.
 -  [Function `create_collection`](#0x2_collectible_create_collection)
 -  [Function `mint`](#0x2_collectible_mint)
 -  [Function `batch_mint`](#0x2_collectible_batch_mint)
+-  [Function `borrow_display`](#0x2_collectible_borrow_display)
+-  [Function `return_display`](#0x2_collectible_return_display)
 -  [Function `uid_mut`](#0x2_collectible_uid_mut)
 -  [Function `img_url`](#0x2_collectible_img_url)
 -  [Function `name`](#0x2_collectible_name)
@@ -28,6 +30,7 @@ require additional work on the creator side to set up metadata creation methods.
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
+<b>use</b> <a href="borrow.md#0x2_borrow">0x2::borrow</a>;
 <b>use</b> <a href="display.md#0x2_display">0x2::display</a>;
 <b>use</b> <a href="kiosk.md#0x2_kiosk">0x2::kiosk</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -133,6 +136,12 @@ Contains the cap - maximum amount of Collectibles minted.
 
 </dd>
 <dt>
+<code><a href="display.md#0x2_display">display</a>: <a href="borrow.md#0x2_borrow_Referent">borrow::Referent</a>&lt;<a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
 <code>minted: u64</code>
 </dt>
 <dd>
@@ -150,7 +159,7 @@ Contains the cap - maximum amount of Collectibles minted.
 
 <a name="0x2_collectible_ENotOneTimeWitness"></a>
 
-For when a witness type passed is not an OTW.
+A witness type passed is not an OTW.
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_ENotOneTimeWitness">ENotOneTimeWitness</a>: u64 = 0;
@@ -160,7 +169,7 @@ For when a witness type passed is not an OTW.
 
 <a name="0x2_collectible_ECapReached"></a>
 
-For when maximum size of the Collection is reached - minting forbidden.
+Maximum size of the Collection is reached - minting forbidden.
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_ECapReached">ECapReached</a>: u64 = 2;
@@ -170,7 +179,7 @@ For when maximum size of the Collection is reached - minting forbidden.
 
 <a name="0x2_collectible_EModuleDoesNotContainT"></a>
 
-For when the type <code>T</code> is not from the same module as the OTW.
+The type <code>T</code> is not from the same module as the OTW.
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_EModuleDoesNotContainT">EModuleDoesNotContainT</a>: u64 = 1;
@@ -180,7 +189,7 @@ For when the type <code>T</code> is not from the same module as the OTW.
 
 <a name="0x2_collectible_EWrongCreatorsLength"></a>
 
-For when Creators length does not match <code>img_urls</code> length
+Creators length does not match <code>img_urls</code> length
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_EWrongCreatorsLength">EWrongCreatorsLength</a>: u64 = 5;
@@ -190,7 +199,7 @@ For when Creators length does not match <code>img_urls</code> length
 
 <a name="0x2_collectible_EWrongDescriptionsLength"></a>
 
-For when Descriptions length does not match <code>img_urls</code> length
+Descriptions length does not match <code>img_urls</code> length
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_EWrongDescriptionsLength">EWrongDescriptionsLength</a>: u64 = 4;
@@ -200,7 +209,7 @@ For when Descriptions length does not match <code>img_urls</code> length
 
 <a name="0x2_collectible_EWrongMetadatasLength"></a>
 
-For when Metadatas length does not match <code>img_urls</code> length
+Metadatas length does not match <code>img_urls</code> length
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_EWrongMetadatasLength">EWrongMetadatasLength</a>: u64 = 6;
@@ -210,7 +219,7 @@ For when Metadatas length does not match <code>img_urls</code> length
 
 <a name="0x2_collectible_EWrongNamesLength"></a>
 
-For when Names length does not match <code>img_urls</code> length
+Names length does not match <code>img_urls</code> length
 
 
 <pre><code><b>const</b> <a href="collectible.md#0x2_collectible_EWrongNamesLength">EWrongNamesLength</a>: u64 = 3;
@@ -232,7 +241,7 @@ Type parameter <code>T</code> is phantom; so we constrain it via <code>Publisher
 defined in the same module as the OTW. Aborts otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -245,23 +254,24 @@ defined in the same module as the OTW. Aborts otherwise.
     otw: OTW, max_supply: Option&lt;u64&gt;, ctx: &<b>mut</b> TxContext
 ): (
     Publisher,
-    Display&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
     TransferPolicyCap&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
     <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt;,
 ) {
     <b>assert</b>!(sui::types::is_one_time_witness(&otw), <a href="collectible.md#0x2_collectible_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
-    <b>let</b> pub = <a href="package.md#0x2_package_claim">package::claim</a>(otw, ctx);
-    <b>assert</b>!(<a href="package.md#0x2_package_from_module">package::from_module</a>&lt;T&gt;(&pub), <a href="collectible.md#0x2_collectible_EModuleDoesNotContainT">EModuleDoesNotContainT</a>);
+    <b>let</b> publisher = <a href="package.md#0x2_package_claim">package::claim</a>(otw, ctx);
+    <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_new_protected">display::new_protected</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(ctx);
+
+    <b>assert</b>!(<a href="package.md#0x2_package_from_module">package::from_module</a>&lt;T&gt;(&publisher), <a href="collectible.md#0x2_collectible_EModuleDoesNotContainT">EModuleDoesNotContainT</a>);
 
     (
-        pub,
-        <a href="display.md#0x2_display_new_protected">display::new_protected</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(ctx),
+        publisher,
         <a href="kiosk.md#0x2_kiosk_new_transfer_policy_cap_protected">kiosk::new_transfer_policy_cap_protected</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(ctx),
         <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt; {
             id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
             minted: 0,
             max_supply,
+            <a href="display.md#0x2_display">display</a>: <a href="borrow.md#0x2_borrow_new">borrow::new</a>(<a href="display.md#0x2_display">display</a>, ctx)
         }
     )
 }
@@ -375,6 +385,58 @@ Field for custom metadata can be used for custom Collectibles.
     };
 
     res
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_collectible_borrow_display"></a>
+
+## Function `borrow_display`
+
+Take the Display object.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_borrow_display">borrow_display</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;): (<a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="borrow.md#0x2_borrow_Borrow">borrow::Borrow</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_borrow_display">borrow_display</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt;): (Display&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;, Borrow) {
+    <a href="borrow.md#0x2_borrow_borrow">borrow::borrow</a>(&<b>mut</b> self.<a href="display.md#0x2_display">display</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_collectible_return_display"></a>
+
+## Function `return_display`
+
+Return the Display object.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_return_display">return_display</a>&lt;T: store&gt;(self: &<b>mut</b> <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;, <a href="display.md#0x2_display">display</a>: <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="borrow.md#0x2_borrow">borrow</a>: <a href="borrow.md#0x2_borrow_Borrow">borrow::Borrow</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_return_display">return_display</a>&lt;T: store&gt;(
+    self: &<b>mut</b> <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt;, <a href="display.md#0x2_display">display</a>: Display&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;, <a href="borrow.md#0x2_borrow">borrow</a>: Borrow
+) {
+    <a href="borrow.md#0x2_borrow_put_back">borrow::put_back</a>(&<b>mut</b> self.<a href="display.md#0x2_display">display</a>, <a href="display.md#0x2_display">display</a>, <a href="borrow.md#0x2_borrow">borrow</a>)
 }
 </code></pre>
 

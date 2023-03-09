@@ -237,7 +237,7 @@ module sui::kiosk {
     /// purchasable by anyone on the network.
     ///
     /// Performs an authorization check to make sure only owner can sell.
-    public fun make_offer<T: key + store>(
+    public fun list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
@@ -248,12 +248,12 @@ module sui::kiosk {
     }
 
     /// Place an item into the Kiosk and make an offer - simplifies the flow.
-    public fun place_and_offer<T: key + store>(
+    public fun place_and_list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T, price: u64
     ) {
         let id = object::id(&item);
         place(self, cap, item);
-        make_offer<T>(self, cap, id, price)
+        list<T>(self, cap, id, price)
     }
 
     /// Make a trade: pay the owner of the item and request a Transfer to the `target`
@@ -411,7 +411,7 @@ module sui::kiosk_tests {
             let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
             let kiosk_cap = ts::take_from_address<KioskOwnerCap>(&test, creator);
 
-            kiosk::place_and_offer(
+            kiosk::place_and_list(
                 &mut kiosk,
                 &kiosk_cap,
                 creature,

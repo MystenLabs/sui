@@ -187,7 +187,7 @@ Acquire an immutable reference to the <code>i</code>th element of the TableVec <
 Aborts if <code>i</code> is out of bounds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): &Element
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;, i: u64): &Element
 </code></pre>
 
 
@@ -196,7 +196,7 @@ Aborts if <code>i</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
+<pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
     <b>assert</b>!(<a href="table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <a href="table.md#0x2_table_borrow">table::borrow</a>(&t.contents, i)
 }
