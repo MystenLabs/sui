@@ -5,10 +5,12 @@ use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
 use crate::models::transactions::Transaction;
+use crate::models::objects::Object;
 use crate::schema::addresses::account_address;
 use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
 use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
 use crate::schema::move_calls::dsl as move_calls_dsl;
+use crate::schema::objects::dsl as objects_dsl;
 use crate::schema::recipients::dsl as recipients_dsl;
 use crate::schema::transactions::{dsl, transaction_digest};
 use crate::schema::{addresses, events, move_calls, objects, packages, recipients, transactions};
@@ -194,6 +196,27 @@ impl IndexerStore for PgIndexerStore {
                     })
             })
             .transpose()
+    }
+
+    fn get_object(
+        &self,
+        object_id: String,
+    ) -> Result<Object, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                objects_dsl::objects
+                    .filter(objects_dsl::object_id.eq(object_id))
+                    .first::<Object>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading object with id {} and err: {:?}",
+                    object_id, e
+                ))
+            })
     }
 
     fn get_recipient_sequence_by_digest(

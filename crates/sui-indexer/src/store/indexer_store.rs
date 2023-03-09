@@ -18,6 +18,10 @@ use sui_json_rpc_types::{
 
 #[async_trait]
 pub trait IndexerStore {
+    fn get_object(
+        &self,
+        object_id: String,
+    ) -> Result<Object, IndexerError>;
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError>;
 
