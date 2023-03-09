@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::max, io::stdout};
+use std::cmp::max;
 
-use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
+use crate::display;
 
 /// A simple log analyzer counting the number of errors and panics.
 #[derive(Default)]
@@ -50,33 +50,15 @@ impl LogsAnalyzer {
     /// Print a summary of the errors.
     pub fn print_summary(&self) {
         if self.node_panic {
-            crossterm::execute!(
-                stdout(),
-                SetForegroundColor(Color::Red),
-                SetAttribute(Attribute::Bold),
-                Print("\nNode(s) panicked!\n"),
-                ResetColor
-            )
-            .unwrap();
+            display::error("Client(s) panicked!");
         } else if self.client_panic {
-            crossterm::execute!(
-                stdout(),
-                SetForegroundColor(Color::Red),
-                SetAttribute(Attribute::Bold),
-                Print("\nClient(s) panicked!\n"),
-                ResetColor
-            )
-            .unwrap();
+            display::error("Client(s) panicked!");
         } else if self.node_errors != 0 || self.client_errors != 0 {
-            crossterm::execute!(
-                stdout(),
-                SetAttribute(Attribute::Bold),
-                Print(format!(
-                    "\nLogs contain errors (node: {}, client: {})\n",
-                    self.node_errors, self.client_errors
-                )),
-            )
-            .unwrap();
+            display::newline();
+            display::warn(format!(
+                "Logs contain errors (node: {}, client: {})",
+                self.node_errors, self.client_errors
+            ));
         }
     }
 }

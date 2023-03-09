@@ -1,20 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io::stdout, time::Duration};
+use std::time::Duration;
 
-use crossterm::{
-    cursor::MoveToColumn,
-    style::{Print, Stylize},
-};
 use futures::future::try_join_all;
-use prettytable::{format, row, Table};
+use prettytable::{row, Table};
 use tokio::time::sleep;
 
 use crate::{
-    client::ServerProviderClient,
-    error::{TestbedError, TestbedResult},
-    settings::Settings,
+    client::ServerProviderClient, display, error::TestbedResult, settings::Settings,
     ssh::SshConnection,
 };
 
@@ -71,30 +65,14 @@ impl<C: ServerProviderClient> Testbed<C> {
             })
             .collect();
 
-        println!();
-        println!("{} {}", "Client:".bold(), self.client);
-        println!(
-            "{} {} ({})",
-            "Repo:".bold(),
-            self.settings.repository.url,
-            self.settings.repository.commit
-        );
+        display::newline();
+        display::config("Client", &self.client);
+        let repo = &self.settings.repository;
+        display::config("Repo", format!("{} ({})", repo.url, repo.commit));
 
         let mut table = Table::new();
-        let format = format::FormatBuilder::new()
-            .separators(
-                &[
-                    format::LinePosition::Top,
-                    format::LinePosition::Bottom,
-                    format::LinePosition::Title,
-                ],
-                format::LineSeparator::new('-', '-', '-', '-'),
-            )
-            .padding(1, 1)
-            .build();
-        table.set_format(format);
+        table.set_format(display::default_table_format());
 
-        println!();
         table.set_titles(row![bH2->format!("Instances ({})",self.instances.len())]);
         for (i, (region, instances)) in sorted.iter().enumerate() {
             table.add_row(row![bH2->region.to_uppercase()]);
@@ -120,20 +98,16 @@ impl<C: ServerProviderClient> Testbed<C> {
                 table.add_row(row![]);
             }
         }
+
+        display::newline();
         table.printstd();
-        println!();
+        display::newline();
     }
 
     /// Populate the testbed by creating the specified amount of instances per region. The total
     /// number of instances created is thus the specified amount x the number of regions.
     pub async fn deploy(&mut self, quantity: usize, region: Option<String>) -> TestbedResult<()> {
-        crossterm::execute!(
-            stdout(),
-            Print(format!(
-                "Populating testbed with {quantity} instances per region...\n"
-            ))
-        )
-        .unwrap();
+        display::action(format!("Deploying instances ({quantity} per region)"));
 
         let instances = match region {
             Some(x) => {
@@ -149,27 +123,34 @@ impl<C: ServerProviderClient> Testbed<C> {
 
         // Wait until the instances are booted.
         if cfg!(not(test)) {
-            self.ready(instances.iter()).await?;
+            self.wait_until_reachable(instances.iter()).await?;
         }
         self.instances = self.client.list_instances().await?;
+
+        display::done();
         Ok(())
     }
 
     /// Destroy all instances of the testbed.
     pub async fn destroy(&mut self) -> TestbedResult<()> {
+        display::action("Destroying testbed");
+
         try_join_all(
             self.instances
                 .drain(..)
                 .map(|instance| self.client.delete_instance(instance)),
         )
-        .await
-        .map_err(TestbedError::from)
-        .map(|_| ())
+        .await?;
+
+        display::done();
+        Ok(())
     }
 
     /// Start the specified number of instances in each region. Returns an error if there are not
     /// enough available instances.
     pub async fn start(&mut self, quantity: usize) -> TestbedResult<()> {
+        display::action("Booting instances");
+
         // Gather available instances.
         let mut available = Vec::new();
         for region in &self.settings.regions {
@@ -193,14 +174,18 @@ impl<C: ServerProviderClient> Testbed<C> {
 
         // Wait until the instances are started.
         if cfg!(not(test)) {
-            self.ready(available.iter()).await?;
+            self.wait_until_reachable(available.iter()).await?;
         }
         self.instances = self.client.list_instances().await?;
+
+        display::done();
         Ok(())
     }
 
     /// Stop all instances of the testbed.
     pub async fn stop(&mut self) -> TestbedResult<()> {
+        display::action("Stopping instances");
+
         // Stop all instances.
         self.client.stop_instances(self.instances.iter()).await?;
 
@@ -212,39 +197,32 @@ impl<C: ServerProviderClient> Testbed<C> {
                 break;
             }
         }
+
+        display::done();
         Ok(())
     }
 
-    /// Signal when all instances are ready to accept ssh connections.
-    async fn ready<'a, I>(&self, instances: I) -> TestbedResult<()>
+    /// Wait until all specified instances are ready to accept ssh connections.
+    async fn wait_until_reachable<'a, I>(&self, instances: I) -> TestbedResult<()>
     where
         I: Iterator<Item = &'a Instance> + Clone,
     {
-        let mut waiting = 0;
+        let mut total_time = 0;
         loop {
             let duration = Duration::from_secs(5);
             sleep(duration).await;
 
-            waiting += duration.as_secs();
-            crossterm::execute!(
-                stdout(),
-                MoveToColumn(0),
-                Print(format!("Waiting for machines to boot ({waiting}s)..."))
-            )
-            .unwrap();
+            total_time += duration.as_secs();
+            display::status(format!("{}s", total_time));
 
-            if try_join_all(instances.clone().map(|instance| {
+            let futures = instances.clone().map(|instance| {
                 let private_key_file = self.settings.ssh_private_key_file.clone();
                 SshConnection::new(instance.ssh_address(), C::USERNAME, private_key_file)
-            }))
-            .await
-            .is_ok()
-            {
+            });
+            if try_join_all(futures).await.is_ok() {
                 break;
             }
         }
-
-        println!(" [{}]", "Ok".green());
         Ok(())
     }
 }

@@ -9,11 +9,11 @@ use std::{
     time::Duration,
 };
 
-use prettytable::{format, row, Table};
+use prettytable::{row, Table};
 use prometheus_parse::Scrape;
 use serde::{Deserialize, Serialize};
 
-use crate::{benchmark::BenchmarkParameters, settings::Settings};
+use crate::{benchmark::BenchmarkParameters, display, settings::Settings};
 
 /// The identifier of prometheus latency buckets.
 type BucketId = String;
@@ -244,18 +244,7 @@ impl MeasurementsCollection {
         let stdev_latency = self.aggregate_stdev_latency();
 
         let mut table = Table::new();
-        let format = format::FormatBuilder::new()
-            .separators(
-                &[
-                    format::LinePosition::Top,
-                    format::LinePosition::Bottom,
-                    format::LinePosition::Title,
-                ],
-                format::LineSeparator::new('-', '-', '-', '-'),
-            )
-            .padding(1, 1)
-            .build();
-        table.set_format(format);
+        table.set_format(display::default_table_format());
 
         table.set_titles(row![bH2->"Benchmark Summary"]);
         table.add_row(
@@ -271,9 +260,9 @@ impl MeasurementsCollection {
         table.add_row(row![b->"Latency (avg):", format!("{} ms", average_latency.as_millis())]);
         table.add_row(row![b->"Latency (stdev):", format!("{} ms", stdev_latency.as_millis())]);
 
-        println!();
+        display::newline();
         table.printstd();
-        println!();
+        display::newline();
     }
 }
 

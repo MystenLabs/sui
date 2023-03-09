@@ -4,22 +4,18 @@
 use std::{
     collections::{HashMap, VecDeque},
     fs::{self, File},
-    io::{stdout, Read},
+    io::Read,
     path::PathBuf,
     time::Duration,
 };
 
-use crossterm::{
-    cursor::MoveToColumn,
-    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor, Stylize},
-};
 use tokio::time::{self, sleep, Instant};
 
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkParametersGenerator},
     client::Instance,
     config::Config,
-    ensure,
+    display, ensure,
     error::{TestbedError, TestbedResult},
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
@@ -168,11 +164,7 @@ impl Orchestrator {
 
     /// Install the codebase and its dependencies on the testbed.
     pub async fn install(&self) -> TestbedResult<()> {
-        crossterm::execute!(
-            stdout(),
-            Print("Installing dependencies on all machines...")
-        )
-        .unwrap();
+        display::action("Installing dependencies on all machines");
 
         let url = self.settings.repository.url.clone();
         let command = [
@@ -207,21 +199,17 @@ impl Orchestrator {
         let ssh_command = SshCommand::new(move |_| command.clone());
         self.ssh_manager.execute(instances, ssh_command).await?;
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(())
     }
 
     /// Update all instances to use the version of the codebase specified in the setting file.
     pub async fn update(&self) -> TestbedResult<()> {
         let commit = self.settings.repository.commit.clone();
-        crossterm::execute!(
-            stdout(),
-            Print(format!(
-                "Updating {} instances (commit '{commit}')...",
-                self.instances.len()
-            ))
-        )
-        .unwrap();
+        display::action(format!(
+            "Updating {} instances (commit '{commit}')",
+            self.instances.len()
+        ));
 
         let command = [
             "git fetch -f",
@@ -244,12 +232,14 @@ impl Orchestrator {
 
         self.wait_for_command(instances, "update").await?;
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(())
     }
 
     /// Configure the instances with the appropriate configuration files.
     pub async fn configure(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+        display::action("Configuring instances");
+
         // Select instances to configure.
         let instances = self.select_instances(parameters)?;
 
@@ -260,17 +250,8 @@ impl Orchestrator {
         config.print_files();
 
         // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
-        let total_instances = instances.len();
         for (i, instance) in instances.iter().enumerate() {
-            crossterm::execute!(
-                stdout(),
-                MoveToColumn(0),
-                Print(format!(
-                    "[{}/{total_instances}] Uploading configuration files...",
-                    i + 1
-                ))
-            )
-            .unwrap();
+            display::status(format!("{}/{}", i + 1, instances.len()));
 
             // Connect to the instance.
             let connection = self
@@ -294,13 +275,13 @@ impl Orchestrator {
             connection.execute_from_path(command, repo_name)?;
         }
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(())
     }
 
     /// Cleanup all instances and optionally delete their log files.
     pub async fn cleanup(&self, cleanup: bool) -> TestbedResult<()> {
-        crossterm::execute!(stdout(), Print("Cleaning up testbed...")).unwrap();
+        display::action("Cleaning up testbed");
 
         // Kill all tmux servers and delete the nodes dbs. Optionally clear logs.
         let mut command = vec![
@@ -317,13 +298,13 @@ impl Orchestrator {
         let ssh_command = SshCommand::new(move |_| command.clone());
         self.ssh_manager.execute(instances, ssh_command).await?;
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(())
     }
 
     /// Deploy the nodes.
     pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        crossterm::execute!(stdout(), Print("Deploying validators...")).unwrap();
+        display::action("Deploying validators");
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
@@ -349,13 +330,13 @@ impl Orchestrator {
             .execute(instances.iter(), ssh_command)
             .await?;
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(())
     }
 
     /// Deploy the load generators.
     pub async fn run_clients(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
-        crossterm::execute!(stdout(), Print("Setting up load generators...")).unwrap();
+        display::action("Setting up load generators");
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
@@ -397,7 +378,7 @@ impl Orchestrator {
             .execute(instances.iter(), ssh_command)
             .await?;
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(())
     }
 
@@ -406,14 +387,10 @@ impl Orchestrator {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<MeasurementsCollection> {
-        crossterm::execute!(
-            stdout(),
-            Print(format!(
-                "Scrape metrics for {}s...\n",
-                parameters.duration.as_secs()
-            ))
-        )
-        .unwrap();
+        display::action(format!(
+            "Scraping metrics (at least {}s)\n",
+            parameters.duration.as_secs()
+        ));
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
@@ -435,28 +412,16 @@ impl Orchestrator {
                 .await
             {
                 Ok(stdio) => {
-                    crossterm::execute!(
-                        stdout(),
-                        MoveToColumn(0),
-                        Print(format!(
-                            "[{:?}s] Scraping metrics...",
-                            now.duration_since(start).as_secs_f64().ceil() as u64
-                        ))
-                    )
-                    .unwrap();
+                    display::status(format!(
+                        "{}s",
+                        now.duration_since(start).as_secs_f64().ceil() as u64
+                    ));
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
                         let measurement = Measurement::from_prometheus(stdout);
                         aggregator.add(i, measurement);
                     }
                 }
-                Err(e) => crossterm::execute!(
-                    stdout(),
-                    SetAttribute(Attribute::Bold),
-                    MoveToColumn(0),
-                    Print(format!("Failed to scrape metrics: {e}")),
-                    SetAttribute(Attribute::NormalIntensity),
-                )
-                .unwrap(),
+                Err(e) => display::warn(format!("Failed to scrape metrics: {e}")),
             }
             if aggregator.benchmark_duration() >= parameters.duration {
                 break;
@@ -473,23 +438,14 @@ impl Orchestrator {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<LogsAnalyzer> {
+        display::action("Downloading logs");
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
         // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
         let mut log_parsers = Vec::new();
-        let total_instances = instances.len();
         for (i, instance) in instances.iter().enumerate() {
-            crossterm::execute!(
-                stdout(),
-                MoveToColumn(0),
-                Print(format!(
-                    "[{}/{total_instances}] Downloading log files...",
-                    i + 1
-                ))
-            )
-            .unwrap();
-
+            display::status(format!("{}/{}", i + 1, instances.len()));
             let mut log_parser = LogsAnalyzer::default();
 
             // Connect to the instance.
@@ -524,7 +480,7 @@ impl Orchestrator {
             log_parsers.push(log_parser)
         }
 
-        println!(" [{}]", "Ok".green());
+        display::done();
         Ok(LogsAnalyzer::aggregate(log_parsers))
     }
 
@@ -533,14 +489,7 @@ impl Orchestrator {
         &mut self,
         mut generator: BenchmarkParametersGenerator,
     ) -> TestbedResult<()> {
-        crossterm::execute!(
-            stdout(),
-            SetForegroundColor(Color::Green),
-            SetAttribute(Attribute::Bold),
-            Print("\nPreparing testbed\n"),
-            ResetColor
-        )
-        .unwrap();
+        display::header("Preparing testbed");
 
         // Cleanup the testbed (in case the previous run was not completed).
         self.cleanup(true).await?;
@@ -555,15 +504,8 @@ impl Orchestrator {
         let mut i = 1;
         let mut latest_comittee_size = 0;
         while let Some(parameters) = generator.next_parameters() {
-            crossterm::execute!(
-                stdout(),
-                SetForegroundColor(Color::Green),
-                SetAttribute(Attribute::Bold),
-                Print(format!("\nStarting benchmark {i}\n")),
-                ResetColor,
-                Print(format!("{}: {parameters}\n\n", "Parameters".bold())),
-            )
-            .unwrap();
+            display::header(format!("Starting benchmark {i}"));
+            display::config("Parameters", &parameters);
 
             // Cleanup the testbed (in case the previous run was not completed).
             self.cleanup(true).await?;
@@ -597,6 +539,8 @@ impl Orchestrator {
             println!();
             i += 1;
         }
+
+        display::header("Benchmark completed");
         Ok(())
     }
 }
