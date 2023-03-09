@@ -9309,6 +9309,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "fastcrypto",
+ "lru",
  "move-package",
  "msim",
  "narwhal-network",

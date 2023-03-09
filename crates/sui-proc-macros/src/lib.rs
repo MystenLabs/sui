@@ -32,6 +32,12 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_framework::get_sui_framework();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
+                // For reasons I can't understand, LruCache causes divergent behavior the second
+                // time one is constructed and inserted into, so construct one before the first
+                // test run for determinism.
+                let mut cache = ::sui_simulator::lru::LruCache::new(1.try_into().unwrap());
+                cache.put(1, 1);
+
                 {
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
