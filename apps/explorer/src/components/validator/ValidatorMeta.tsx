@@ -17,14 +17,11 @@ type ValidatorMetaProps = {
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
-    const validatorPublicKey = toB64(
-        new Uint8Array(validatorData.protocol_pubkey_bytes)
-    );
-
+    const validatorPublicKey = validatorData.protocolPubkeyBytes;
     const validatorName = validatorData.name;
-    const logo = validatorData.image_url;
+    const logo = validatorData.imageUrl;
     const description = validatorData.description;
-    const projectUrl = validatorData.project_url;
+    const projectUrl = validatorData.projectUrl;
 
     return (
         <>
@@ -69,7 +66,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </DescriptionItem>
                     <DescriptionItem title="Address">
                         <AddressLink
-                            address={validatorData.sui_address}
+                            address={validatorData.suiAddress}
                             noTruncate
                         />
                     </DescriptionItem>

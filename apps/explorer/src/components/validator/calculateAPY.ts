@@ -11,19 +11,19 @@ const APY_DECIMALS = 4;
 export function calculateAPY(validator: SuiValidatorSummary, epoch: number) {
     let apy;
     const {
-        staking_pool_sui_balance,
-        staking_pool_activation_epoch,
-        pool_token_balance,
+        stakingPoolSuiBalance,
+        stakingPoolActivationEpoch,
+        poolTokenBalance,
     } = validator;
 
     // If the staking pool is active then we calculate its APY.
-    if (staking_pool_activation_epoch) {
-        const num_epochs_participated = +epoch - +staking_pool_activation_epoch;
+    if (stakingPoolActivationEpoch) {
+        const num_epochs_participated = +epoch - +stakingPoolActivationEpoch;
         apy =
             Math.pow(
                 1 +
-                    (+staking_pool_sui_balance - +pool_token_balance) /
-                        +pool_token_balance,
+                    (+stakingPoolSuiBalance - +poolTokenBalance) /
+                        +poolTokenBalance,
                 365 / num_epochs_participated
             ) - 1;
     } else {
