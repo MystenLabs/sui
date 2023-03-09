@@ -15,7 +15,11 @@ async function getLedgerTransport(): Promise<Transport | null> {
     return null;
 }
 
-export async function getSuiLedgerClient(): Promise<SuiLedgerClient> {
+export function getSuiLedgerClient() {
+    return suiLedgerClient;
+}
+
+export async function attemptConnectionAndGetSuiLedgerClient(): Promise<SuiLedgerClient> {
     if (!suiLedgerClient) {
         let ledgerTransport: Transport | null | undefined;
 

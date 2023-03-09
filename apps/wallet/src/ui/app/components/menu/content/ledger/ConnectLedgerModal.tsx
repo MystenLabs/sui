@@ -6,7 +6,7 @@ import { TransportStatusError } from '@ledgerhq/hw-transport';
 import { useState } from 'react';
 
 import ExternalLink from '_components/external-link';
-import { getSuiLedgerClient } from '_src/ui/app/helpers/SuiLedgerClient';
+import { attemptConnectionAndGetSuiLedgerClient } from '_src/ui/app/helpers/SuiLedgerClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
@@ -33,7 +33,8 @@ export function ConnectLedgerModal({
             // and then we'll test that the Sui application is actually open
             // on the user's device by making a call to getVersion
             // (See https://github.com/LedgerHQ/ledgerjs/issues/122)
-            const suiLedgerClient = await getSuiLedgerClient();
+            const suiLedgerClient =
+                await attemptConnectionAndGetSuiLedgerClient();
             await suiLedgerClient.getVersion();
 
             onConfirm();
