@@ -51,8 +51,8 @@ be used to implement application-specific transfer rules.
 -  [Function `destroy_transfer_policy_cap`](#0x2_kiosk_destroy_transfer_policy_cap)
 -  [Function `place`](#0x2_kiosk_place)
 -  [Function `take`](#0x2_kiosk_take)
--  [Function `make_offer`](#0x2_kiosk_make_offer)
--  [Function `place_and_offer`](#0x2_kiosk_place_and_offer)
+-  [Function `list`](#0x2_kiosk_list)
+-  [Function `place_and_list`](#0x2_kiosk_place_and_list)
 -  [Function `purchase`](#0x2_kiosk_purchase)
 -  [Function `allow_transfer`](#0x2_kiosk_allow_transfer)
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
@@ -688,9 +688,9 @@ Performs an authorization check to make sure only owner can do that.
 
 </details>
 
-<a name="0x2_kiosk_make_offer"></a>
+<a name="0x2_kiosk_list"></a>
 
-## Function `make_offer`
+## Function `list`
 
 Make an offer by setting a price for the item and making it publicly
 purchasable by anyone on the network.
@@ -698,7 +698,7 @@ purchasable by anyone on the network.
 Performs an authorization check to make sure only owner can sell.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64)
 </code></pre>
 
 
@@ -707,7 +707,7 @@ Performs an authorization check to make sure only owner can sell.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T: key + store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
@@ -722,14 +722,14 @@ Performs an authorization check to make sure only owner can sell.
 
 </details>
 
-<a name="0x2_kiosk_place_and_offer"></a>
+<a name="0x2_kiosk_place_and_list"></a>
 
-## Function `place_and_offer`
+## Function `place_and_list`
 
 Place an item into the Kiosk and make an offer - simplifies the flow.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_offer">place_and_offer</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: u64)
 </code></pre>
 
 
@@ -738,12 +738,12 @@ Place an item into the Kiosk and make an offer - simplifies the flow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_offer">place_and_offer</a>&lt;T: key + store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T, price: u64
 ) {
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&item);
     <a href="kiosk.md#0x2_kiosk_place">place</a>(self, cap, item);
-    <a href="kiosk.md#0x2_kiosk_make_offer">make_offer</a>&lt;T&gt;(self, cap, id, price)
+    <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T&gt;(self, cap, id, price)
 }
 </code></pre>
 
