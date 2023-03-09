@@ -4,6 +4,7 @@
 
 #![allow(clippy::mutable_key_type)]
 
+use crate::utils::gc_round;
 use crate::{metrics::ConsensusMetrics, ConsensusError, Outcome, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
@@ -35,6 +36,8 @@ pub struct ConsensusState {
     pub last_committed_round: Round,
     /// The current GC round.
     pub gc_round: Round,
+    /// The chosen gc_depth
+    pub gc_depth: Round,
     /// Keeps the last committed round for each authority. This map is used to clean up the dag and
     /// ensure we don't commit twice the same certificate.
     pub last_committed: HashMap<PublicKey, Round>,
@@ -53,10 +56,11 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee) -> Self {
+    pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee, gc_depth: Round) -> Self {
         Self {
             last_committed_round: 0,
             gc_round: 0,
+            gc_depth,
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
             dag: Default::default(),
@@ -75,7 +79,7 @@ impl ConsensusState {
         cert_store: CertificateStore,
         committee: &Committee,
     ) -> Self {
-        let gc_round = last_committed_round.saturating_sub(gc_depth);
+        let gc_round = gc_round(last_committed_round, gc_depth);
         let dag =
             Self::construct_dag_from_cert_store(cert_store, &recovered_last_committed, gc_round)
                 .expect("error when recovering DAG from store");
@@ -89,6 +93,7 @@ impl ConsensusState {
         Self {
             last_committed_round,
             gc_round,
+            gc_depth,
             last_committed: recovered_last_committed,
             last_consensus_reputation_score,
             latest_sub_dag_index,
@@ -176,13 +181,13 @@ impl ConsensusState {
     }
 
     /// Update and clean up internal state after committing a certificate.
-    pub fn update(&mut self, certificate: &Certificate, gc_depth: Round) {
+    pub fn update(&mut self, certificate: &Certificate) {
         self.last_committed
             .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
         self.last_committed_round = max(self.last_committed_round, certificate.round());
-        self.gc_round = self.last_committed_round.saturating_sub(gc_depth);
+        self.gc_round = gc_round(self.last_committed_round, self.gc_depth);
 
         self.metrics
             .last_committed_round
@@ -225,6 +230,10 @@ impl ConsensusState {
             panic!("Parent round not found in DAG for {certificate:?}!");
         }
     }
+
+    pub(crate) fn last_round_update(&self) -> RoundUpdate {
+        RoundUpdate::new(self.last_committed_round, self.gc_round)
+    }
 }
 
 /// Describe how to sequence input certificates.
@@ -238,6 +247,21 @@ pub trait ConsensusProtocol {
     ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
 }
 
+#[derive(Debug, Default)]
+pub struct RoundUpdate {
+    pub committed_round: Round,
+    pub gc_round: Round,
+}
+
+impl RoundUpdate {
+    pub fn new(committed_round: Round, gc_round: Round) -> Self {
+        Self {
+            committed_round,
+            gc_round,
+        }
+    }
+}
+
 pub struct Consensus<ConsensusProtocol> {
     /// The committee information.
     committee: Committee,
@@ -249,8 +273,8 @@ pub struct Consensus<ConsensusProtocol> {
     rx_new_certificates: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
     tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
-    /// Outputs the highest committed round in the consensus. Controls GC round downstream.
-    tx_consensus_round_updates: watch::Sender<Round>,
+    /// Outputs the highest committed round & corresponding gc_round in the consensus.
+    tx_consensus_round_updates: watch::Sender<RoundUpdate>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
 
@@ -277,7 +301,7 @@ where
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
-        tx_consensus_round_updates: watch::Sender<Round>,
+        tx_consensus_round_updates: watch::Sender<RoundUpdate>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
@@ -309,7 +333,7 @@ where
         );
 
         tx_consensus_round_updates
-            .send(state.last_committed_round)
+            .send(state.last_round_update())
             .expect("Failed to send last_committed_round on initialization!");
 
         let s = Self {
@@ -402,7 +426,9 @@ where
                         .await
                         .map_err(|_|ConsensusError::ShuttingDown)?;
 
-                        self.tx_consensus_round_updates.send(leader_commit_round)
+                        assert_eq!(self.state.last_committed_round, leader_commit_round);
+
+                        self.tx_consensus_round_updates.send(self.state.last_round_update())
                         .map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 

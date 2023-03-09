@@ -63,7 +63,7 @@ pub fn order_dag(
 ) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
     assert!(leader.round() > 0);
-    let gc_round = leader.round().saturating_sub(gc_depth);
+    let gc_round = gc_round(leader.round(), gc_depth);
 
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
@@ -103,4 +103,9 @@ pub fn order_dag(
     // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
     ordered.sort_by_key(|x| x.round());
     ordered
+}
+
+/// Calculates the GC round given a commit round and the gc_depth
+pub fn gc_round(commit_round: Round, gc_depth: Round) -> Round {
+    commit_round.saturating_sub(gc_depth)
 }

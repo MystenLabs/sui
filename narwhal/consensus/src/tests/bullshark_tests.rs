@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use crate::consensus::RoundUpdate;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
 use fastcrypto::hash::Hash;
@@ -47,7 +48,8 @@ async fn commit_one() {
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(RoundUpdate::new(0, 0));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -129,7 +131,8 @@ async fn dead_node() {
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(RoundUpdate::new(0, 0));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -285,7 +288,8 @@ async fn not_enough_support() {
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(RoundUpdate::new(0, 0));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -405,7 +409,8 @@ async fn missing_leader() {
     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(RoundUpdate::new(0, 0));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -490,7 +495,8 @@ async fn committed_round_after_restart() {
         let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(100);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(100);
         let (tx_output, mut rx_output) = test_utils::test_channel!(100);
-        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+        let (tx_consensus_round_updates, rx_consensus_round_updates) =
+            watch::channel(RoundUpdate::new(0, 0));
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let gc_depth = 50;
@@ -521,7 +527,7 @@ async fn committed_round_after_restart() {
         // and the expected commit round after sending in certificates up to `input_round` would
         // be 2 * r.
 
-        let last_committed_round = rx_consensus_round_updates.borrow().to_owned() as usize;
+        let last_committed_round = rx_consensus_round_updates.borrow().committed_round as usize;
         assert_eq!(last_committed_round, input_round.saturating_sub(3),);
         info!("Consensus started at last_committed_round={last_committed_round}");
 
@@ -548,7 +554,7 @@ async fn committed_round_after_restart() {
         // After sending inputs up to round 2 * r + 1 to consensus, round 2 * r should have been
         // committed.
         assert_eq!(
-            rx_consensus_round_updates.borrow().to_owned() as usize,
+            rx_consensus_round_updates.borrow().committed_round as usize,
             input_round.saturating_sub(1),
         );
         info!(
@@ -584,7 +590,7 @@ async fn delayed_certificates_are_rejected() {
         test_utils::make_certificates_with_epoch(&committee, 1..=5, epoch, &genesis, &keys);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -636,7 +642,7 @@ async fn submitting_equivocating_certificate_should_error() {
         test_utils::make_certificates_with_epoch(&committee, 1..=1, epoch, &genesis, &keys);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
     let mut bullshark = Bullshark::new(
         committee.clone(),
         store,
@@ -699,7 +705,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
         test_utils::make_certificates_with_epoch(&committee, 1..=50, epoch, &genesis, &keys);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -765,7 +771,8 @@ async fn restart_with_new_committee() {
         let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-        let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+        let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+            watch::channel(RoundUpdate::new(0, 0));
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let store = make_consensus_store(&test_utils::temp_dir());
@@ -889,7 +896,7 @@ async fn garbage_collection_basic() {
     let store = make_consensus_store(&test_utils::temp_dir());
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
     let mut bullshark = Bullshark::new(
         committee,
         store,
@@ -996,7 +1003,7 @@ async fn slow_node() {
     // Create Bullshark consensus engine
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
     let mut bullshark = Bullshark::new(
         committee.clone(),
         store,
@@ -1177,7 +1184,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     // Create Bullshark consensus engine
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone(), &committee);
+    let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
     let mut bullshark = Bullshark::new(
         committee,
         store,

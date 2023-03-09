@@ -165,7 +165,7 @@ impl ConsensusProtocol for Bullshark {
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
                 // Update and clean up internal state.
-                state.update(&x, self.gc_depth);
+                state.update(&x);
 
                 // For logging.
                 min_round = min_round.min(x.round());
