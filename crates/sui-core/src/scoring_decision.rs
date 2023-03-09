@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -46,6 +46,9 @@ pub fn update_low_scoring_authorities(
     if !reputation_scores.final_of_schedule {
         return;
     }
+
+    info!("calculating low scoring authorities");
+
     let mut score_list = vec![];
     for val in reputation_scores.scores_per_authority.values() {
         score_list.push(*val as f64);
@@ -249,6 +252,7 @@ pub fn test_update_low_scoring_authorities() {
     let mut authority_names = Vec::new();
     let mut authorities = BTreeMap::new();
     let num_nodes = 50;
+    let final_idx = num_nodes - 1;
 
     for _i in 0..num_nodes {
         let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
@@ -263,11 +267,14 @@ pub fn test_update_low_scoring_authorities() {
     let mut scores = HashMap::new();
     // scores clustered between 100 - 110
     for i in 0..num_nodes - 1 {
-        let score_add = i / 5_u64;
-        scores.insert(secs[i as usize].public().clone(), 100_u64 + score_add);
+        let score_add = i / 5;
+        scores.insert(
+            secs[i as usize].public().clone(),
+            100_u64 + (score_add as u64),
+        );
     }
     // the outlier
-    scores.insert(secs[num_nodes as usize].public().clone(), 70_u64);
+    scores.insert(secs[final_idx].public().clone(), 70_u64);
 
     let reputation_scores = ReputationScores {
         scores_per_authority: scores,
@@ -276,10 +283,7 @@ pub fn test_update_low_scoring_authorities() {
 
     update_low_scoring_authorities(&low_scoring, committee, reputation_scores, None);
     assert_eq!(
-        *low_scoring
-            .load()
-            .get(&authority_names[num_nodes as usize])
-            .unwrap(),
+        *low_scoring.load().get(&authority_names[final_idx]).unwrap(),
         70_u64
     );
     assert_eq!(low_scoring.load().len(), 1);
