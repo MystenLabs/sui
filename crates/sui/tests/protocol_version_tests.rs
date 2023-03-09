@@ -255,7 +255,7 @@ mod sim_only_tests {
             .unwrap();
 
         let results = response.results.unwrap();
-        let return_ = &results.first().unwrap().1.return_values.first().unwrap().0;
+        let return_ = &results.first().unwrap().return_values.first().unwrap().0;
 
         bcs::from_bytes(&return_).unwrap()
     }
