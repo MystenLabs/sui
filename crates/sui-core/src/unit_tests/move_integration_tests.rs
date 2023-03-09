@@ -2073,7 +2073,7 @@ async fn test_custom_property_ensure_published_at() {
     let expected = expect![[r#"
         Package dependency "CustomPropertiesInManifestDependencyInvalidPublishedAt" does not specify a valid published address: could not parse value "mystery" for published-at field.
         Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
-        If this is intentional, use the --with-unpublished-dependencies flag to skip this check."#]];
+        If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these packages as part of your package (they won't be linked to existing packages on-chain)."#]];
     expected.assert_eq(&error_message)
 }
 

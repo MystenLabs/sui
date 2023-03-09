@@ -552,8 +552,11 @@ pub fn ensure_published_dependencies(resolution_graph: &ResolvedGraph) -> Result
             .map(|v| format!("{}", v))
             .collect::<Vec<_>>();
         error_messages.push(
-            "If this is intentional, use the \
-	     --with-unpublished-dependencies flag to skip this check."
+            "If this is intentional, you may use the \
+	     --with-unpublished-dependencies flag to \
+	     continue publishing these packages as part \
+	     of your package (they won't be linked to \
+	     existing packages on-chain)."
                 .into(),
         );
         return Err(SuiError::ModulePublishFailure {
