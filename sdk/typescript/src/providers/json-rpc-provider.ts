@@ -515,18 +515,16 @@ export class JsonRpcProvider extends Provider {
     options?: SuiObjectDataOptions,
   ): Promise<SuiObjectResponse[]> {
     try {
-      const requests = objectIds.map((id) => {
+      objectIds.map((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
-        return {
-          method: 'sui_getObject',
-          args: [id, options],
-        };
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        SuiObjectResponse,
+
+      return await this.client.requestWithType(
+        'sui_multiGetObjects',
+        [objectIds, options],
+        array(SuiObjectResponse),
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -647,18 +645,16 @@ export class JsonRpcProvider extends Provider {
     options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse[]> {
     try {
-      const requests = digests.map((d) => {
+      digests.map((d) => {
         if (!isValidTransactionDigest(d)) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
-        return {
-          method: 'sui_getTransaction',
-          args: [d, options],
-        };
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        SuiTransactionResponse,
+
+      return await this.client.requestWithType(
+        'sui_multiGetTransactions',
+        [digests, options],
+        array(SuiTransactionResponse),
         this.options.skipDataValidation,
       );
     } catch (err) {
