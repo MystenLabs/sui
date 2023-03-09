@@ -18,7 +18,6 @@ mod execution_driver;
 pub mod metrics;
 pub mod module_cache_metrics;
 pub mod narwhal_manager;
-mod notify_once;
 pub mod quorum_driver;
 pub mod safe_client;
 mod stake_aggregator;
