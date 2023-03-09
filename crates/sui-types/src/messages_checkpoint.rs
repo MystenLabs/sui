@@ -605,6 +605,11 @@ mod tests {
             .into_iter()
             .map(|v| v.into_sig())
             .collect();
-        assert!(CertifiedCheckpointSummary::new(summary, sign_infos, &committee).is_err())
+        assert!(
+            CertifiedCheckpointSummary::new(summary, sign_infos, &committee)
+                .unwrap()
+                .verify_signature(&committee)
+                .is_err()
+        )
     }
 }
