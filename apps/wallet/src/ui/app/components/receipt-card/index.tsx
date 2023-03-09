@@ -160,16 +160,10 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                     ) : (
                         <>
                             {objectId && (
-                                <div className="py-3.5 first:pt-0 flex gap-2 flex-col">
-                                    <Text
-                                        variant="body"
-                                        weight="medium"
-                                        color="steel-darker"
-                                    >
-                                        {nftObjectLabel}
-                                    </Text>
-                                    <TxnImage id={objectId} />
-                                </div>
+                                <TxnImage
+                                    id={objectId}
+                                    actionLabel={nftObjectLabel}
+                                />
                             )}
 
                             {transferAmount.length > 0
