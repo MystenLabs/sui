@@ -79,7 +79,7 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     let ExecutionResults {
         object_changes,
         user_events,
-    } = context.finish()?;
+    } = context.finish::<Mode>()?;
     state_view.apply_object_changes(object_changes);
     for (module_id, tag, contents) in user_events {
         state_view.log_event(Event::move_event(

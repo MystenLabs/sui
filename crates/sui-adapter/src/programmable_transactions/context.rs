@@ -379,7 +379,7 @@ where
     }
 
     /// Determine the object changes and collect all user events
-    pub fn finish(self) -> Result<ExecutionResults, ExecutionError> {
+    pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
         use sui_types::error::convert_vm_error;
         let Self {
             protocol_config,
@@ -436,6 +436,8 @@ where
                 } = result_value;
                 match value {
                     None => (),
+                    // disable this check for dev inspect
+                    Some(_) if Mode::allow_arbitrary_values() => (),
                     Some(Value::Object(_)) => {
                         return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
                             result_idx: i as u16,
