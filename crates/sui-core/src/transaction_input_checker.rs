@@ -73,7 +73,7 @@ pub async fn check_transaction_input(
     transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check(epoch_store.protocol_config())?;
     let input_objects = transaction.input_objects()?;
-    let objects = store.check_input_objects(&input_objects)?;
+    let objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
     let gas_status = get_gas_status(&objects, epoch_store, transaction).await?;
     let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
@@ -107,7 +107,7 @@ pub(crate) async fn check_dev_inspect_input(
         }
     }
     let mut input_objects = kind.input_objects()?;
-    let mut objects = store.check_input_objects(&input_objects)?;
+    let mut objects = store.check_input_objects(&input_objects, config)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
         if !object.is_immutable() {
@@ -149,7 +149,7 @@ pub async fn check_certificate_input(
     let input_object_data = if tx_data.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going
         // through sequencing, so we must bypass the sequence checks here.
-        store.check_input_objects(&input_object_kinds)?
+        store.check_input_objects(&input_object_kinds, epoch_store.protocol_config())?
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };

@@ -42,6 +42,10 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+#[path = "unit_tests/temporary_store_tests.rs"]
+mod temporary_store_tests;
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
@@ -53,29 +57,6 @@ pub struct InnerTemporaryStore {
 }
 
 impl InnerTemporaryStore {
-    pub fn reset_execution_changes(&mut self, gas_objects: &[ObjectRef]) {
-        let primary_gas = gas_objects[0];
-
-        let gas_item = self.written.remove(&primary_gas.0);
-
-        // Only the primary gas object should be written
-        debug_assert!(gas_item.is_some());
-        let gas_item = gas_item.unwrap();
-        self.written.clear();
-        self.written.insert(gas_item.0 .0, gas_item);
-
-        // Only the shmashed gas objects should be deleted
-        self.deleted = gas_objects[1..]
-            .iter()
-            .map(|q| (q.0, (q.1, DeleteKind::Normal)))
-            .collect();
-
-        // Only gas events should be kept
-        self.events.data.clear();
-
-        // TODO: Should we leave emit CoinBalanceChange events?
-    }
-
     /// Return the written object value with the given ID (if any)
     pub fn get_written_object(&self, id: &ObjectID) -> Option<&Object> {
         self.written.get(id).map(|o| &o.1)
@@ -700,6 +681,7 @@ impl<S> TemporaryStore<S> {
 
         let mut effects_check_error = Ok(());
 
+        // We might have to check the size of effects and rollback if too large
         if check_effects_size {
             // Check the effects size and reset if too large
             let size_check_status = match bcs::serialized_size(&effects) {
@@ -725,15 +707,11 @@ impl<S> TemporaryStore<S> {
             };
 
             // Rollback if size too large. Only gas smashed must remain in effects
+            // TODO (Ade): should we surcharge for the work required to rollback?
             if let Err(size_check_err) = size_check_status {
-                // Reset temp store, but exclude gas objects
+                // Reset temp store, but exclude gas objects, which must remain for charging
                 self.reset(gas.iter().map(|(q, _, _)| *q).collect());
-                // Smash the gas coins inot the first
-                let gas_object_id = match self.smash_gas(*sender, gas) {
-                    Ok(obj_ref) => obj_ref.0,
-                    Err(_) => gas[0].0, // this cannot fail, but we use gas[0] anyway
-                };
-                self.ensure_active_inputs_mutated(*sender, &gas_object_id);
+                self.ensure_active_inputs_mutated(*sender, &gas[0].0);
 
                 // We need to use a special execution error
                 let (status, command) = size_check_err.to_execution_status();
