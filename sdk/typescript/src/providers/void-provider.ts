@@ -31,9 +31,7 @@ import {
   Order,
   CoinMetadata,
   DevInspectResults,
-  SuiSystemState,
   DelegatedStake,
-  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
@@ -63,20 +61,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getReferenceGasPrice');
   }
 
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    throw this.newError('getSuiSystemState');
-  }
-
   async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
     throw this.newError('getLatestSuiSystemState');
   }
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
     throw this.newError('getDelegatedStakes');
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    throw this.newError('getValidators');
   }
 
   // Faucet
@@ -93,39 +83,27 @@ export class VoidProvider extends Provider {
   }
 
   // Coins
-  async getCoins(
-    _owner: SuiAddress,
-    _coinType: string | null,
-    _cursor: ObjectId | null,
-    _limit: number | null,
-  ): Promise<PaginatedCoins> {
+  async getCoins(): Promise<PaginatedCoins> {
     throw this.newError('getCoins');
   }
 
-  async getAllCoins(
-    _owner: SuiAddress,
-    _cursor: ObjectId | null,
-    _limit: number | null,
-  ): Promise<PaginatedCoins> {
+  async getAllCoins(): Promise<PaginatedCoins> {
     throw this.newError('getAllCoins');
   }
 
-  async getBalance(
-    _owner: string,
-    _coinType: string | null,
-  ): Promise<CoinBalance> {
+  async getBalance(): Promise<CoinBalance> {
     throw this.newError('getBalance');
   }
 
-  async getAllBalances(_owner: string): Promise<CoinBalance[]> {
+  async getAllBalances(): Promise<CoinBalance[]> {
     throw this.newError('getAllBalances');
   }
 
-  async getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
+  async getCoinMetadata(): Promise<CoinMetadata> {
     throw new Error('getCoinMetadata');
   }
 
-  async getTotalSupply(_coinType: string): Promise<CoinSupply> {
+  async getTotalSupply(): Promise<CoinSupply> {
     throw new Error('getTotalSupply');
   }
 
@@ -135,12 +113,6 @@ export class VoidProvider extends Provider {
     _typefilter?: string,
   ): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
-  }
-
-  async getGasObjectsOwnedByAddress(
-    _address: string,
-  ): Promise<SuiObjectInfo[]> {
-    throw this.newError('getGasObjectsOwnedByAddress');
   }
 
   async selectCoinsWithBalanceGreaterThanOrEqual(

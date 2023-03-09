@@ -3,6 +3,9 @@
 
 macro_rules! invariant_violation {
     ($msg:expr) => {{
+        if cfg!(debug_assertions) {
+            panic!("{}", $msg)
+        }
         return Err(sui_types::error::ExecutionError::new_with_source(
             sui_types::error::ExecutionErrorKind::InvariantViolation,
             $msg,

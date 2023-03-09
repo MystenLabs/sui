@@ -91,16 +91,12 @@ flowchart LR
     id5(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Anna):::object-b
     id6(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Tom):::object-b
     id7(Object A\nfa:fa-coins 6 SUI\n fa:fa-person John):::object-a
-
     id1-->|tx-1|id2
     id1-->|tx-1|id3
-
     id4-->|tx-2|id5
     id5-->|tx-3|id6
-
     id3-->|tx-4|id7
     id6-->|tx-4|id7
-
     classDef object-a fill:#f225
     classDef object-b fill:#ff43
 ```

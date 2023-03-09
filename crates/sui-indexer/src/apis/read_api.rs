@@ -14,7 +14,7 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, TransactionsPage,
+    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -44,13 +44,15 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok(total_tx_number as u64)
     }
 
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
-        digest: TransactionDigest,
+        digest: &TransactionDigest,
+        _options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
+        // TODO(chris): support options in indexer
         let txn_resp: SuiTransactionResponse = self
             .state
-            .get_transaction_by_digest(digest.to_string())?
+            .get_transaction_by_digest(&digest.base58_encode())?
             .try_into()?;
         Ok(txn_resp)
     }
@@ -245,30 +247,39 @@ where
         self.fullnode.get_transactions_in_range(start, end).await
     }
 
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
         if self
             .method_to_be_forwarded
             .contains(&"get_transaction".to_string())
         {
-            return self.fullnode.get_transaction(digest).await;
+            return self
+                .fullnode
+                .get_transaction_with_options(digest, options)
+                .await;
         }
-        self.get_transaction(digest).await
+        self.get_transaction_with_options(&digest, options).await
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
         if self
             .method_to_be_forwarded
             .contains(&"muti_get_transactions".to_string())
         {
-            return self.fullnode.multi_get_transactions(digests).await;
+            return self
+                .fullnode
+                .multi_get_transactions_with_options(digests, options)
+                .await;
         }
-        self.multi_get_transactions(digests).await
+        self.multi_get_transactions_with_options(digests, options)
+            .await
     }
 
     async fn get_normalized_move_modules_by_package(

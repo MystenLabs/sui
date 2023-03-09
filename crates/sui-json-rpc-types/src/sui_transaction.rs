@@ -10,7 +10,7 @@ use move_core_types::language_storage::TypeTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::serde_as;
+use serde_with::{serde_as, DisplayFromStr};
 
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -33,14 +33,90 @@ use sui_types::signature::GenericSignature;
 
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
+/// Type for de/serializing number to string
+pub struct BigInt(
+    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "String")]
+    u64,
+);
+
+impl From<BigInt> for u64 {
+    fn from(x: BigInt) -> u64 {
+        x.0
+    }
+}
+
+impl From<u64> for BigInt {
+    fn from(v: u64) -> BigInt {
+        BigInt(v)
+    }
+}
+
+impl Display for BigInt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
+#[serde(
+    rename_all = "camelCase",
+    rename = "TransactionResponseOptions",
+    default
+)]
+pub struct SuiTransactionResponseOptions {
+    /// Whether to show transaction input data. Default to be False
+    pub show_input: bool,
+    /// Whether to show transaction effects. Default to be False
+    pub show_effects: bool,
+    /// Whether to show transaction events. Default to be False
+    pub show_events: bool,
+}
+
+impl SuiTransactionResponseOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn full_content() -> Self {
+        Self {
+            show_effects: true,
+            show_input: true,
+            show_events: true,
+        }
+    }
+
+    pub fn with_input(mut self) -> Self {
+        self.show_input = true;
+        self
+    }
+
+    pub fn with_effects(mut self) -> Self {
+        self.show_effects = true;
+        self
+    }
+
+    pub fn with_events(mut self) -> Self {
+        self.show_events = true;
+        self
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
+#[serde(rename_all = "camelCase", rename = "TransactionResponse")]
 pub struct SuiTransactionResponse {
-    pub transaction: SuiTransaction,
-    pub effects: SuiTransactionEffects,
-    pub events: SuiTransactionEvents,
+    pub digest: TransactionDigest,
+    /// Transaction input data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<SuiTransaction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<SuiTransactionEffects>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<SuiTransactionEvents>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -49,6 +125,17 @@ pub struct SuiTransactionResponse {
     /// This is only returned in the read api, not in the transaction execution api.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSequenceNumber>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub errors: Vec<String>,
+}
+
+impl SuiTransactionResponse {
+    pub fn new(digest: TransactionDigest) -> Self {
+        Self {
+            digest,
+            ..Default::default()
+        }
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -518,7 +605,7 @@ pub struct DryRunTransactionResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionEffects", transparent)]
+#[serde(rename = "TransactionEvents", transparent)]
 pub struct SuiTransactionEvents {
     pub data: Vec<SuiEvent>,
 }
@@ -695,7 +782,7 @@ pub struct SuiPay {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
+    pub amounts: Vec<BigInt>,
 }
 
 impl From<Pay> for SuiPay {
@@ -704,7 +791,7 @@ impl From<Pay> for SuiPay {
         SuiPay {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts,
+            amounts: p.amounts.into_iter().map(|x| x.into()).collect(),
         }
     }
 }
@@ -727,7 +814,7 @@ pub struct SuiPaySui {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
+    pub amounts: Vec<BigInt>,
 }
 
 impl From<PaySui> for SuiPaySui {
@@ -736,7 +823,7 @@ impl From<PaySui> for SuiPaySui {
         SuiPaySui {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts,
+            amounts: p.amounts.into_iter().map(|x| x.into()).collect(),
         }
     }
 }
@@ -1088,7 +1175,7 @@ impl From<Command> for SuiCommand {
 }
 
 /// An argument to a programmable transaction command
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub enum SuiArgument {
     /// The gas coin. The gas coin can only be used by-ref, except for with
     /// `TransferObjects`, which can use it by-value.

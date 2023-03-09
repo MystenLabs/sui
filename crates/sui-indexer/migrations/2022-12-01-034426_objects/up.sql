@@ -1,5 +1,10 @@
 CREATE TYPE owner_type AS ENUM ('address_owner', 'object_owner', 'shared', 'immutable');
 CREATE TYPE object_status AS ENUM ('created', 'mutated', 'deleted', 'wrapped', 'unwrapped', 'unwrapped_then_deleted');
+CREATE TYPE bcs_bytes AS
+(
+    name TEXT,
+    data bytea
+);
 
 CREATE TABLE objects
 (
@@ -17,7 +22,8 @@ CREATE TABLE objects
     initial_shared_version BIGINT,
     previous_transaction   base58digest  NOT NULL,
     object_type            VARCHAR       NOT NULL,
-    object_status          object_status NOT NULL
+    object_status          object_status NOT NULL,
+    bcs                    bcs_bytes[]   NOT NULL
 );
 CREATE INDEX objects_owner_address ON objects (owner_type, owner_address);
 CREATE INDEX objects_tx_digest ON objects (previous_transaction);
@@ -35,6 +41,7 @@ CREATE TABLE objects_history
     previous_transaction   base58digest  NOT NULL,
     object_type            VARCHAR       NOT NULL,
     object_status          object_status NOT NULL,
+    bcs                    bcs_bytes[]   NOT NULL,
     CONSTRAINT objects_history_pk PRIMARY KEY (epoch, object_id, version)
 ) PARTITION BY RANGE (epoch);
 -- TODO: Add trigger to automatically create partitions at new epoch when we have Epoch Table
@@ -53,7 +60,7 @@ BEGIN
         VALUES (NEW.epoch, NEW.checkpoint, NEW.object_id, NEW.version, NEW.object_digest, NEW.owner_type,
                 NEW.owner_address,
                 NEW.initial_shared_version,
-                NEW.previous_transaction, NEW.object_type, NEW.object_status);
+                NEW.previous_transaction, NEW.object_type, NEW.object_status, NEW.bcs);
         RETURN NEW;
     ELSIF (TG_OP = 'DELETE') THEN
         -- object deleted from the main table, archive the history for that object

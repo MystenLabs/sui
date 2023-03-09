@@ -1,24 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Validator } from '@mysten/sui.js';
+import type { SuiValidatorSummary } from '@mysten/sui.js';
 
 import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
 
 // TODO: share code with `calculateAPY` for wallet?
-export function calculateAPY(validator: Validator, epoch: number) {
+export function calculateAPY(validator: SuiValidatorSummary, epoch: number) {
     let apy;
-    const { suiBalance, activationEpoch, poolTokenBalance } =
-        validator.stakingPool;
+    const {
+        stakingPoolSuiBalance,
+        stakingPoolActivationEpoch,
+        poolTokenBalance,
+    } = validator;
 
     // If the staking pool is active then we calculate its APY.
-    if (activationEpoch.vec.length > 0) {
-        const num_epochs_participated = +epoch - +activationEpoch.vec[0];
+    if (stakingPoolActivationEpoch) {
+        const num_epochs_participated = +epoch - +stakingPoolActivationEpoch;
         apy =
             Math.pow(
-                1 + (+suiBalance - +poolTokenBalance) / +poolTokenBalance,
+                1 +
+                    (+stakingPoolSuiBalance - +poolTokenBalance) /
+                        +poolTokenBalance,
                 365 / num_epochs_participated
             ) - 1;
     } else {

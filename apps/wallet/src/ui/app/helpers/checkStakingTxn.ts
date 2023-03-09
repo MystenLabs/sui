@@ -4,13 +4,13 @@
 import {
     getTransactionKindName,
     getMoveCallTransaction,
-    getTransactions,
+    getTransactionKinds,
 } from '@mysten/sui.js';
 
 import type { SuiTransactionResponse } from '@mysten/sui.js';
 
 export function checkStakingTxn(txn: SuiTransactionResponse) {
-    const [transaction] = getTransactions(txn);
+    const [transaction] = getTransactionKinds(txn)!;
     const txnKind = getTransactionKindName(transaction);
 
     if (txnKind !== 'Call') return null;

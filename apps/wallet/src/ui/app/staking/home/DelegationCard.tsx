@@ -11,7 +11,7 @@ import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { Validator, DelegatedStake } from '@mysten/sui.js';
+import type { SuiValidatorSummary, DelegatedStake } from '@mysten/sui.js';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',
@@ -21,7 +21,7 @@ export enum DelegationState {
 
 interface DelegationCardProps {
     delegationObject: DelegatedStake;
-    activeValidators: Validator[];
+    activeValidators: SuiValidatorSummary[];
     currentEpoch: number;
 }
 

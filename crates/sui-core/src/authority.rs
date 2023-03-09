@@ -8,7 +8,6 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
-use itertools::izip;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
@@ -24,12 +23,11 @@ use prometheus::{
     IntCounterVec, IntGauge, Registry,
 };
 use serde::de::DeserializeOwned;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
-use std::{collections::HashMap, pin::Pin};
-use sui_config::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
+use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
 use sui_types::intent::Intent;
@@ -57,7 +55,7 @@ use sui_json_rpc_types::{
     type_and_fields_from_move_struct, DevInspectResults, DryRunTransactionResponse, SuiEvent,
     SuiEventEnvelope, SuiMoveValue, SuiTransactionEvents,
 };
-use sui_macros::nondeterministic;
+use sui_macros::{fail_point, nondeterministic};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
@@ -183,7 +181,7 @@ pub struct AuthorityMetrics {
     internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
-    state_snapshot_checkpoint_latency: Histogram,
+    db_checkpoint_latency: Histogram,
 
     pub(crate) transaction_manager_num_enqueued_certificates: IntCounterVec,
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
@@ -321,9 +319,9 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            state_snapshot_checkpoint_latency: register_histogram_with_registry!(
-                "state_snapshot_checkpoint_latency",
-                "Latency of checkpointing perpetual db",
+            db_checkpoint_latency: register_histogram_with_registry!(
+                "db_checkpoint_latency",
+                "Latency of checkpointing dbs",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -448,8 +446,8 @@ pub struct AuthorityState {
     _objects_pruner: AuthorityStorePruner,
     _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
 
-    /// Take snapshot of the live object set at the end of epoch
-    enable_state_snapshot: bool,
+    /// Take db checkpoints af different dbs
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1161,9 +1159,11 @@ impl AuthorityState {
             cert.data()
                 .intent_message
                 .value
-                .legacy_move_calls()
-                .iter()
-                .map(|mc| (mc.package, mc.module.clone(), mc.function.clone())),
+                .move_calls()
+                .into_iter()
+                .map(|(package, module, function)| {
+                    (*package, module.to_owned(), function.to_owned())
+                }),
             changes,
             digest,
             timestamp_ms,
@@ -1480,7 +1480,7 @@ impl AuthorityState {
         let contents = match &summary {
             Some(s) => self
                 .checkpoint_store
-                .get_checkpoint_contents(&s.content_digest())?,
+                .get_checkpoint_contents(&s.content_digest)?,
             None => None,
         };
         Ok(CheckpointResponse {
@@ -1528,7 +1528,7 @@ impl AuthorityState {
         pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         epoch_duration_ms: u64,
-        state_snapshot_config: &StateSnapshotConfig,
+        db_checkpoint_config: &DBCheckpointConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -1555,7 +1555,6 @@ impl AuthorityState {
             pruning_config,
             epoch_duration_ms,
         );
-
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -1570,7 +1569,7 @@ impl AuthorityState {
             metrics,
             _objects_pruner,
             _authority_per_epoch_pruner,
-            enable_state_snapshot: state_snapshot_config.enabled,
+            db_checkpoint_config: db_checkpoint_config.clone(),
         });
 
         // Process tx recovery log first, so that checkpoint recovery (below)
@@ -1661,7 +1660,7 @@ impl AuthorityState {
             AuthorityStorePruningConfig::default(),
             genesis.objects(),
             10000,
-            &StateSnapshotConfig::default(),
+            &DBCheckpointConfig::default(),
         )
         .await;
 
@@ -1794,10 +1793,16 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
-        if self.enable_state_snapshot {
-            let _checkpointed_db_path = self.checkpoint_perpetual_db()?;
-            // TODO: Start a background task to persist live object set in
-            // checkpointed db to canonical storage format
+        if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
+            if self
+                .db_checkpoint_config
+                .perform_db_checkpoints_at_epoch_end
+            {
+                let current_epoch = cur_epoch_store.epoch();
+                let epoch_checkpoint_path =
+                    checkpoint_path.join(format!("epoch_{}", current_epoch));
+                self.checkpoint_all_dbs(&epoch_checkpoint_path, cur_epoch_store)?;
+            }
         }
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
@@ -1818,6 +1823,45 @@ impl AuthorityState {
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
         self.epoch_store_for_testing().epoch()
+    }
+
+    pub fn checkpoint_all_dbs(
+        &self,
+        checkpoint_path: &Path,
+        cur_epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult {
+        let _metrics_guard = self.metrics.db_checkpoint_latency.start_timer();
+        let current_epoch = cur_epoch_store.epoch();
+
+        if checkpoint_path.exists() {
+            info!("Skipping db checkpoint as it already exists for epoch: {current_epoch}");
+            return Ok(());
+        }
+
+        let checkpoint_path_tmp = checkpoint_path.with_extension("tmp");
+        let store_checkpoint_path_tmp = checkpoint_path_tmp.join("store");
+
+        if checkpoint_path_tmp.exists() {
+            fs::remove_dir_all(&checkpoint_path_tmp)
+                .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+        }
+
+        fs::create_dir_all(&checkpoint_path_tmp)
+            .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+        fs::create_dir(&store_checkpoint_path_tmp)
+            .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+
+        self.database
+            .perpetual_tables
+            .checkpoint_db(&store_checkpoint_path_tmp.join("perpetual"))?;
+        self.committee_store
+            .checkpoint_db(&checkpoint_path_tmp.join("epochs"))?;
+        self.checkpoint_store
+            .checkpoint_db(&checkpoint_path_tmp.join("checkpoints"))?;
+
+        fs::rename(checkpoint_path_tmp, checkpoint_path)
+            .map_err(|e| SuiError::FileIOError(e.to_string()))?;
+        Ok(())
     }
 
     /// Load the current epoch store. This can change during reconfiguration. To ensure that
@@ -1864,6 +1908,22 @@ impl AuthorityState {
     #[cfg(test)]
     pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
+    }
+
+    pub fn get_transaction_checkpoint_sequence(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+        self.database.get_transaction_checkpoint(digest)
+    }
+
+    pub fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> SuiResult<Option<VerifiedCheckpoint>> {
+        Ok(self
+            .checkpoint_store
+            .get_checkpoint_by_sequence_number(sequence_number)?)
     }
 
     pub fn get_transaction_checkpoint(
@@ -2126,44 +2186,57 @@ impl AuthorityState {
         }
     }
 
-    pub async fn multi_get_transactions(
+    pub async fn get_executed_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<VerifiedTransaction, anyhow::Error> {
+        let transaction = self.database.get_transaction(&digest)?;
+        transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
+    }
+
+    pub async fn get_executed_effects(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<TransactionEffects, anyhow::Error> {
+        let effects = self.database.get_executed_effects(&digest)?;
+        effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
+    }
+
+    pub async fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
-        let transactions = self.database.multi_get_transactions(digests)?;
-        let effects = self.database.multi_get_executed_effects(digests)?;
-        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+    ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
+        Ok(self.database.multi_get_transactions(digests)?)
+    }
 
-        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+    pub async fn multi_get_executed_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
+        Ok(self.database.multi_get_executed_effects(digests)?)
+    }
 
-        for effect in effects.iter() {
-            match effect {
-                Some(eff) => events_digests.push(*eff.events_digest().unwrap()),
-                _ => continue,
-            }
-        }
+    pub async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {
+        Ok(self.database.multi_get_transaction_checkpoint(digests)?)
+    }
 
-        let events = self.database.multi_get_events(events_digests.as_slice())?;
+    pub fn multi_get_events(
+        &self,
+        digests: &[TransactionEventsDigest],
+    ) -> Result<Vec<Option<TransactionEvents>>, anyhow::Error> {
+        Ok(self.database.multi_get_events(digests)?)
+    }
 
-        let mut missed_digests = vec![];
-        let mut response: VerifiedTransactionBatch = vec![];
-
-        for data in izip!(digests, transactions, effects, events, checkpoints) {
-            match data {
-                (_, Some(tx), Some(effect), Some(event), cp) => {
-                    response.push((tx, effect, event, cp))
-                }
-                (digest, _, _, _, _) => missed_digests.push(*digest),
-            }
-        }
-
-        if !missed_digests.is_empty() {
-            Err(anyhow!(SuiError::TransactionsNotFound {
-                digests: missed_digests
-            }))
-        } else {
-            Ok(response)
-        }
+    pub fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<VerifiedCheckpoint>>> {
+        Ok(self
+            .checkpoint_store
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)?)
     }
 
     pub async fn get_transaction_events(
@@ -2213,7 +2286,7 @@ impl AuthorityState {
             .get_checkpoint_store()
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
-            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().summary),
+            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
             None => Err(anyhow!(
                 "Verified checkpoint not found for sequence number {}",
                 sequence_number
@@ -2229,7 +2302,7 @@ impl AuthorityState {
             .get_checkpoint_store()
             .get_checkpoint_by_digest(&digest)?;
         match verified_checkpoint {
-            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().summary),
+            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().into_data()),
             None => Err(anyhow!(
                 "Verified checkpoint not found for digest: {}",
                 Base58::encode(digest)
@@ -2255,7 +2328,7 @@ impl AuthorityState {
             .get_checkpoint_by_sequence_number(sequence_number)?;
         match verified_checkpoint {
             Some(verified_checkpoint) => {
-                let content_digest = verified_checkpoint.into_inner().content_digest();
+                let content_digest = verified_checkpoint.into_inner().content_digest;
                 self.get_checkpoint_contents(content_digest)
             }
             None => Err(anyhow!(
@@ -3098,6 +3171,7 @@ impl AuthorityState {
         self.db()
             .set_epoch_start_configuration(&epoch_start_configuration)
             .await?;
+        fail_point!("before-open-new-epoch-store");
         let new_epoch_store = cur_epoch_store.new_at_next_epoch(
             self.name,
             new_committee,
@@ -3107,20 +3181,6 @@ impl AuthorityState {
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
         Ok(new_epoch_store)
-    }
-
-    pub fn checkpoint_perpetual_db(&self) -> SuiResult<PathBuf> {
-        let _metrics_guard = self.metrics.state_snapshot_checkpoint_latency.start_timer();
-        let checkpoint_path = PathBuf::from(format!(
-            "perpetual_store_snapshot_epoch_{}",
-            self.db().perpetual_tables.get_recovery_epoch_at_restart()?
-        ));
-        self.database
-            .perpetual_tables
-            .objects
-            .rocksdb
-            .checkpoint(&checkpoint_path)
-            .map_err(SuiError::StorageError)
     }
 
     #[cfg(test)]

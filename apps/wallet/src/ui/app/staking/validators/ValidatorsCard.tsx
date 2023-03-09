@@ -33,12 +33,12 @@ export function ValidatorsCard() {
 
     const { data: system } = useSystemState();
 
-    const activeValidators = system?.validators.activeValidators;
+    const activeValidators = system?.activeValidators;
     // Total earn token for all delegations
     const totalEarnToken = useMemo(() => {
         if (!delegations || !system) return 0;
 
-        const activeValidators = system.validators.activeValidators;
+        const activeValidators = system.activeValidators;
 
         return delegations.reduce(
             (acc, delegation) =>

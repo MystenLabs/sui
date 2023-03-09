@@ -3,13 +3,20 @@
 
 use crate::models::owners::OwnerType;
 use crate::schema::objects;
+use crate::schema::sql_types::BcsBytes;
+use diesel::deserialize::FromSql;
+use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
+use diesel::serialize::{Output, ToSql, WriteTuple};
+use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
+use diesel::SqlType;
 use diesel_derive_enum::DbEnum;
-use sui_json_rpc_types::{SuiObjectData, SuiObjectRef};
+use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
 use sui_types::base_types::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
+const OBJECT: &str = "object";
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone)]
 #[diesel(table_name = objects, primary_key(object_id))]
@@ -27,6 +34,23 @@ pub struct Object {
     pub previous_transaction: String,
     pub object_type: String,
     pub object_status: ObjectStatus,
+    pub bcs: Vec<NamedBcsBytes>,
+}
+#[derive(SqlType, Debug, Clone)]
+#[diesel(sql_type = crate::schema::sql_types::BcsBytes)]
+pub struct NamedBcsBytes(pub String, pub Vec<u8>);
+
+impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
+        WriteTuple::<(VarChar, Bytea)>::write_tuple(&(self.0.clone(), self.1.clone()), out)
+    }
+}
+
+impl FromSql<BcsBytes, Pg> for NamedBcsBytes {
+    fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
+        let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
+        Ok(NamedBcsBytes(name, data))
+    }
 }
 
 #[derive(Insertable, Debug, Identifiable, Clone)]
@@ -65,6 +89,16 @@ impl Object {
     ) -> Self {
         let (owner_type, owner_address, initial_shared_version) =
             owner_to_owner_info(&o.owner.expect("Expect the owner type to be non-empty"));
+
+        let bcs = match o.bcs.clone().expect("Expect BCS data to be non-empty") {
+            SuiRawData::MoveObject(o) => vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
+            SuiRawData::Package(p) => p
+                .module_map
+                .into_iter()
+                .map(|(k, v)| NamedBcsBytes(k, v))
+                .collect(),
+        };
+
         Object {
             epoch: *epoch as i64,
             checkpoint: *checkpoint as i64,
@@ -84,6 +118,7 @@ impl Object {
                 .expect("Expect the object type to be non-empty")
                 .to_string(),
             object_status: *status,
+            bcs,
         }
     }
 }

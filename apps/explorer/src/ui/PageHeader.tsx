@@ -18,6 +18,7 @@ import { ReactComponent as TransferSuiIcon } from './icons/transactions/transfer
 
 export type PageHeaderType =
     | TransactionKindName
+    | 'Checkpoint'
     | 'Address'
     | 'Checkpoint'
     | 'Object'
@@ -91,8 +92,6 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                     >
                         <span className="sr-only">Copy</span>
                         <CopyNew24 aria-hidden="true" />
-                        {/* <Copy12 aria-hidden="true" /> */}
-                        {/* <CopyIcon aria-hidden="true" /> */}
                     </button>
                 </div>
 

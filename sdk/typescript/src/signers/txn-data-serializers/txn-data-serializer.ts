@@ -44,7 +44,7 @@ export interface PayTransaction extends TransactionCommon {
    */
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
-  amounts: number[];
+  amounts: string[];
   gasPayment?: ObjectId;
   gasOwner?: SuiAddress;
 }
@@ -66,7 +66,7 @@ export interface PaySuiTransaction extends TransactionCommon {
    */
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
-  amounts: number[];
+  amounts: string[];
 }
 
 /// Send all SUI coins to one recipient.
@@ -190,8 +190,6 @@ export type SignableTransactionData = SignableTransaction['data'];
  *   { encoding: 'utf-8' }
  * ));
  *
- * // Include the following line if you are using `LocalTxnDataSerializer`, skip
- * // if you are using `RpcTxnDataSerializer`
  * // const modulesInBytes = modules.map((m) => Array.from(fromB64(m)));
  * // ... publish logic ...
  * ```

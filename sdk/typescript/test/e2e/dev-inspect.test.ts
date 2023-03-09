@@ -18,15 +18,12 @@ import {
 
 describe('Test dev inspect', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: string;
 
   beforeAll(async () => {
     toolbox = await setup();
-    //const version = await toolbox.provider.getRpcApiVersion();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   it('Dev inspect transaction with Pay', async () => {
@@ -37,7 +34,7 @@ describe('Test dev inspect', () => {
         BigInt(DEFAULT_GAS_BUDGET),
       );
 
-    const splitTxn = await signer.signAndExecuteTransaction({
+    const splitTxn = await toolbox.signer.signAndExecuteTransaction({
       kind: 'splitCoin',
       data: {
         coinObjectId: coins[0].coinObjectId,
@@ -51,13 +48,13 @@ describe('Test dev inspect', () => {
     );
 
     await validateDevInspectTransaction(
-      signer,
+      toolbox.signer,
       {
         kind: 'pay',
         data: {
           inputCoins: splitCoins,
           recipients: [DEFAULT_RECIPIENT],
-          amounts: [4000],
+          amounts: ['4000'],
           gasBudget: gasBudget,
         },
       },
@@ -66,9 +63,7 @@ describe('Test dev inspect', () => {
   });
 
   it('Move Call that returns struct', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
     const moveCall = {
       packageObjectId: packageId,
       module: 'serializer_tests',
@@ -79,7 +74,7 @@ describe('Test dev inspect', () => {
     };
 
     await validateDevInspectTransaction(
-      signer,
+      toolbox.signer,
       {
         kind: 'moveCall',
         data: moveCall,
@@ -99,7 +94,7 @@ describe('Test dev inspect', () => {
     };
 
     await validateDevInspectTransaction(
-      signer,
+      toolbox.signer,
       {
         kind: 'moveCall',
         data: moveCall,

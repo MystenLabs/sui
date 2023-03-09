@@ -47,8 +47,8 @@ export function DelegationDetailCard({
 
     const validatorData = useMemo(() => {
         if (!system) return null;
-        return system.validators.activeValidators.find(
-            (av) => av.metadata.suiAddress === validatorAddress
+        return system.activeValidators.find(
+            (av) => av.suiAddress === validatorAddress
         );
     }, [validatorAddress, system]);
 
@@ -64,10 +64,7 @@ export function DelegationDetailCard({
 
     const suiEarned = useMemo(() => {
         if (!system || !delegationData) return 0n;
-        return getStakingRewards(
-            system.validators.activeValidators,
-            delegationData
-        );
+        return getStakingRewards(system.activeValidators, delegationData);
     }, [delegationData, system]);
 
     const apy = useMemo(() => {

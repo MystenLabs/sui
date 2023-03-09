@@ -12,17 +12,16 @@ import { usePageView } from '_shared/utils';
 
 interface Props {
     disableNavigation?: boolean;
-    limitToPopUpSize?: boolean;
 }
 
-const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
+const HomePage = ({ disableNavigation }: Props) => {
     const initChecking = useInitializedGuard(true);
     const lockedChecking = useLockedGuard(false);
     const guardChecking = initChecking || lockedChecking;
 
     usePageView();
     return (
-        <PageLayout limitToPopUpSize={limitToPopUpSize}>
+        <PageLayout>
             <Loading loading={guardChecking}>
                 <PageMainLayout
                     bottomNavEnabled={!disableNavigation}

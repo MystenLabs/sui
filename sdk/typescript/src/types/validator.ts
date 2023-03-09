@@ -19,32 +19,7 @@ import { AuthorityName } from './transactions';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
-export const ValidatorMetaData = object({
-  suiAddress: SuiAddress,
-  protocolPubkeyBytes: array(number()),
-  networkPubkeyBytes: array(number()),
-  workerPubkeyBytes: array(number()),
-  proofOfPossessionBytes: array(number()),
-  name: string(),
-  description: string(),
-  imageUrl: string(),
-  projectUrl: string(),
-  p2pAddress: array(number()),
-  netAddress: array(number()),
-  primaryAddress: array(number()),
-  workerAddress: array(number()),
-  nextEpochProtocolPubkeyBytes: nullable(array(number())),
-  nextEpochProofOfPossession: nullable(array(number())),
-  nextEpochNetworkPubkeyBytes: nullable(array(number())),
-  nextEpochWorkerPubkeyBytes: nullable(array(number())),
-  nextEpochNetAddress: nullable(array(number())),
-  nextEpochP2pAddress: nullable(array(number())),
-  nextEpochPrimaryAddress: nullable(array(number())),
-  nextEpochWorkerAddress: nullable(array(number())),
-});
-
 export type DelegatedStake = Infer<typeof DelegatedStake>;
-export type ValidatorMetaData = Infer<typeof ValidatorMetaData>;
 export type CommitteeInfo = Infer<typeof CommitteeInfo>;
 
 // Staking
@@ -152,69 +127,6 @@ export const CommitteeInfo = object({
   validators: optional(array(tuple([AuthorityName, number()]))),
 });
 
-export const SystemParameters = object({
-  minValidatorStake: number(),
-  maxValidatorCount: number(),
-  governanceStartEpoch: number(),
-  storageGasPrice: optional(number()),
-});
-
-export const Validator = object({
-  metadata: ValidatorMetaData,
-  votingPower: number(),
-  gasPrice: number(),
-  stakingPool: DelegationStakingPoolFields,
-  commissionRate: number(),
-  nextEpochStake: number(),
-  nextEpochGasPrice: number(),
-  nextEpochCommissionRate: number(),
-});
-export type Validator = Infer<typeof Validator>;
-
-export const ValidatorPair = object({
-  from: SuiAddress,
-  to: SuiAddress,
-});
-
-export const ValidatorSet = object({
-  totalStake: number(),
-  activeValidators: array(Validator),
-  pendingActiveValidators: object({
-    contents: object({
-      id: string(),
-      size: number(),
-    }),
-  }),
-  pendingRemovals: array(number()),
-  stakingPoolMappings: object({
-    id: string(),
-    size: number(),
-  }),
-  inactivePools: object({
-    id: string(),
-    size: number(),
-  }),
-  validatorCandidates: object({
-    id: string(),
-    size: number(),
-  }),
-});
-
-export const SuiSystemState = object({
-  epoch: number(),
-  protocolVersion: number(),
-  validators: ValidatorSet,
-  storageFund: Balance,
-  parameters: SystemParameters,
-  referenceGasPrice: number(),
-  validatorReportRecords: object({ contents: array() }),
-  stakeSubsidy: StakeSubsidyFields,
-  safeMode: boolean(),
-  epochStartTimestampMs: optional(number()),
-});
-
-export type SuiSystemState = Infer<typeof SuiSystemState>;
-
 export const SuiValidatorSummary = object({
   suiAddress: SuiAddress,
   protocolPubkeyBytes: array(number()),
@@ -252,6 +164,8 @@ export const SuiValidatorSummary = object({
   pendingDelegation: number(),
   pendingPoolTokenWithdraw: number(),
   pendingTotalSuiWithdraw: number(),
+  exchangeRatesId: string(),
+  exchangeRatesSize: number(),
 });
 
 export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
@@ -264,13 +178,23 @@ export const SuiSystemStateSummary = object({
   safeMode: boolean(),
   epochStartTimestampMs: number(),
   minValidatorStake: number(),
-  maxValidatorCandidateCount: number(),
+  maxValidatorCount: number(),
   governanceStartEpoch: number(),
   stakeSubsidyEpochCounter: number(),
   stakeSubsidyBalance: number(),
   stakeSubsidyCurrentEpochAmount: number(),
   totalStake: number(),
   activeValidators: array(SuiValidatorSummary),
+  pendingActiveValidatorsId: string(),
+  pendingActiveValidatorsSize: number(),
+  pendingRemovals: array(number()),
+  stakingPoolMappingsId: string(),
+  stakingPoolMappingsSize: number(),
+  inactivePoolsId: string(),
+  inactivePoolsSize: number(),
+  validatorCandidatesId: string(),
+  validatorCandidatesSize: number(),
+  validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 
 export type SuiSystemStateSummary = Infer<typeof SuiSystemStateSummary>;

@@ -13,7 +13,8 @@ use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse, TransactionBytes,
+    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionBytes,
 };
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -141,7 +142,10 @@ impl TestContext {
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
-        assert!(matches!(resp.effects.status(), SuiExecutionStatus::Success));
+        assert!(matches!(
+            resp.effects.as_ref().unwrap().status(),
+            SuiExecutionStatus::Success
+        ));
         resp
     }
 
@@ -195,7 +199,7 @@ impl TestContext {
             .client
             .get_fullnode_client()
             .read_api()
-            .get_transaction(digest)
+            .get_transaction_with_options(digest, SuiTransactionResponseOptions::new())
             .await
         {
             Ok(_) => (true, digest, retry_times),

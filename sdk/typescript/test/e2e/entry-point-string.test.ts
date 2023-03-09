@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, RawSigner } from '../../src';
+import {
+  Commands,
+  getExecutionStatusType,
+  ObjectId,
+  Transaction,
+} from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -12,31 +17,28 @@ import {
 
 describe('Test Move call with strings', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: ObjectId;
 
   async function callWithString(str: string | string[], funcName: string) {
-    const txn = await signer.signAndExecuteTransaction({
-      kind: 'moveCall',
-      data: {
-        packageObjectId: packageId,
-        module: 'entry_point_string',
-        function: funcName,
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::entry_point_string::${funcName}`,
         typeArguments: [],
-        arguments: [str],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
-    expect(getExecutionStatusType(txn)).toEqual('success');
+        arguments: [tx.input(str)],
+      }),
+    );
+    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    expect(getExecutionStatusType(result)).toEqual('success');
   }
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   it('Test ascii', async () => {

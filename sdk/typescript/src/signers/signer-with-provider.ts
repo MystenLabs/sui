@@ -5,7 +5,6 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { builder, Transaction } from '../builder';
 import { convertToTransactionBuilder } from '../builder/legacy';
 import { SerializedSignature } from '../cryptography/signature';
-import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
@@ -22,9 +21,8 @@ import {
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
-import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
+import { LocalTxnDataSerializer } from './txn-data-serializers/local-txn-data-serializer';
 import {
-  TxnDataSerializer,
   SignableTransaction,
   UnserializedSignableTransaction,
   SignedTransaction,
@@ -35,7 +33,6 @@ import {
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
   readonly provider: Provider;
-  readonly serializer: TxnDataSerializer;
 
   ///////////////////
   // Sub-classes MUST implement these
@@ -69,16 +66,8 @@ export abstract class SignerWithProvider implements Signer {
     );
   }
 
-  constructor(provider?: Provider, serializer?: TxnDataSerializer) {
+  constructor(provider?: Provider) {
     this.provider = provider || new VoidProvider();
-    let endpoint = '';
-    let skipDataValidation = false;
-    if (this.provider instanceof JsonRpcProvider) {
-      endpoint = this.provider.connection.fullnode;
-      skipDataValidation = this.provider.options.skipDataValidation!;
-    }
-    this.serializer =
-      serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
   /**
@@ -120,11 +109,6 @@ export abstract class SignerWithProvider implements Signer {
       transactionBytes =
         transaction instanceof Uint8Array ? transaction : transaction.data;
     } else {
-      // transactionBytes = await this.serializer.serializeToBytes(
-      //   await this.getAddress(),
-      //   transaction,
-      //   'Commit',
-      // );
       transactionBytes = await convertToTransactionBuilder(
         await this.getAddress(),
         transaction,
@@ -187,11 +171,6 @@ export abstract class SignerWithProvider implements Signer {
         tx,
         this.provider,
       );
-      // txBytes = await this.serializer.serializeToBytes(
-      //   await this.getAddress(),
-      //   tx,
-      //   'DevInspect',
-      // );
     }
 
     // TODO: Why do we deserialize, then immedietly re-serialize the transaction data here?
@@ -242,10 +221,11 @@ export abstract class SignerWithProvider implements Signer {
           dryRunTxBytes = tx.data;
           break;
         default:
+          const serializer = new LocalTxnDataSerializer(this.provider);
           // dryRunTxBytes = await convertToTransactionBuilder(tx).build({
           //   provider: this.provider,
           // });
-          dryRunTxBytes = await this.serializer.serializeToBytes(
+          dryRunTxBytes = await serializer.serializeToBytes(
             await this.getAddress(),
             tx,
             'Commit',

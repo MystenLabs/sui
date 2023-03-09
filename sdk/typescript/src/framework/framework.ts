@@ -109,25 +109,6 @@ export class Coin {
   }
 
   /**
-   * Convenience method for select an arbitrary coin object that has a balance greater than or
-   * equal to `amount`
-   *
-   * @param amount coin balance
-   * @param exclude object ids of the coins to exclude
-   * @return an arbitrary coin with balance greater than or equal to `amount
-   */
-  static selectCoinWithBalanceGreaterThanOrEqual(
-    coins: CoinStruct[],
-    amount: bigint,
-    exclude: ObjectId[] = [],
-  ): CoinStruct | undefined {
-    return coins.find(
-      ({ coinObjectId, balance }) =>
-        !exclude.includes(coinObjectId) && BigInt(balance) >= amount,
-    );
-  }
-
-  /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
    * or equal to `amount`. The output can be used for `PayTransaction`
    *
@@ -204,10 +185,6 @@ export class Coin {
     }
     const balance = getObjectFields(data)?.balance;
     return BigInt(balance);
-  }
-
-  static getZero(): bigint {
-    return BigInt(0);
   }
 
   private static getType(data: ObjectData): string | undefined {

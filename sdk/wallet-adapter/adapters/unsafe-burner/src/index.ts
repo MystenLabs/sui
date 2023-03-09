@@ -4,7 +4,6 @@
 import {
   Ed25519Keypair,
   JsonRpcProvider,
-  LocalTxnDataSerializer,
   RawSigner,
   Connection,
   devnetConnection,
@@ -37,11 +36,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
       features: ["sui:signAndExecuteTransaction", "sui:signTransaction"],
       publicKey: this.#keypair.getPublicKey().toBytes(),
     });
-    this.#signer = new RawSigner(
-      this.#keypair,
-      this.#provider,
-      new LocalTxnDataSerializer(this.#provider)
-    );
+    this.#signer = new RawSigner(this.#keypair, this.#provider);
     this.connecting = false;
     this.connected = false;
 
