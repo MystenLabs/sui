@@ -15,11 +15,10 @@ use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, Balance, CoinPage, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata,
-    SuiCoinMetadata, SuiEvent, SuiEvent, SuiExecutionStatus, SuiExecutionStatus,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponse, SuiTBlsSignObjectCommitmentType,
-    SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponse, TransactionBytes, TransactionBytes,
+    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTBlsSignObjectCommitmentType,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
+    TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
