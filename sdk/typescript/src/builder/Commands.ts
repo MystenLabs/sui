@@ -119,7 +119,7 @@ export function getTransactionCommandType(data: unknown) {
 // deconstructed interface:
 type MoveCallInput = (
   | {
-      target: string;
+      target: `${string}::${string}::${string}`;
       package?: never;
       module?: never;
       function?: never;
