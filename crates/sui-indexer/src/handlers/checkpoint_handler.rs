@@ -311,7 +311,12 @@ where
         let move_calls: Vec<MoveCall> = transactions
             .iter()
             .map(|t| {
-                let tx = t.transaction.data.transaction();
+                let tx = t
+                    .transaction
+                    .as_ref()
+                    .expect("transaction should not be empty")
+                    .data
+                    .transaction();
                 (
                     tx.clone(),
                     t.digest,

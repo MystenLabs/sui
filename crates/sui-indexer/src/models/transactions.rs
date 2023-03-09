@@ -113,10 +113,6 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
         // based on the transaction digests in the checkpoint, thus the checkpoint sequence number
         // is always Some. This is also confirmed by the sui-core team.
         let checkpoint_seq_number = tx_resp.checkpoint.unwrap() as i64;
-        let txn_kind_iter = transaction_data
-            .transactions()
-            .iter()
-            .map(|k| k.to_string());
         let tx_kind = transaction_data.transaction().to_string();
 
         let recipients: Vec<String> = effects

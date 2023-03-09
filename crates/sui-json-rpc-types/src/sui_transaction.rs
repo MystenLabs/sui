@@ -9,7 +9,6 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::TypeTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::{serde_as, DisplayFromStr};
 
 use sui_json::SuiJsonValue;

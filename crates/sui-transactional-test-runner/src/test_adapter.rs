@@ -39,7 +39,6 @@ use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -60,6 +59,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
+use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 
 pub(crate) type FakeID = u64;
