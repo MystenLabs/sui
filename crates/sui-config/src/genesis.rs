@@ -135,25 +135,22 @@ impl Genesis {
             .active_validators
             .iter()
             .map(|validator| {
-                let metadata = validator
-                    .metadata
-                    .verify()
-                    .expect("Genesis validator metadata must be valid");
+                let metadata = validator.verified_metadata();
                 ValidatorInfo {
-                    name: metadata.name,
+                    name: metadata.name.clone(),
                     account_key: AccountsPublicKey::Ed25519(metadata.network_pubkey.clone()), //TODO this is wrong and we shouldn't have this here
-                    protocol_key: (&metadata.protocol_pubkey).into(),
-                    worker_key: metadata.worker_pubkey,
-                    network_key: metadata.network_pubkey,
+                    protocol_key: metadata.sui_pubkey_bytes(),
+                    worker_key: metadata.worker_pubkey.clone(),
+                    network_key: metadata.network_pubkey.clone(),
                     gas_price: validator.gas_price,
                     commission_rate: validator.commission_rate,
-                    network_address: metadata.net_address,
-                    p2p_address: metadata.p2p_address,
-                    narwhal_primary_address: metadata.primary_address,
-                    narwhal_worker_address: metadata.worker_address,
-                    description: metadata.description,
-                    image_url: metadata.image_url,
-                    project_url: metadata.project_url,
+                    network_address: metadata.net_address.clone(),
+                    p2p_address: metadata.p2p_address.clone(),
+                    narwhal_primary_address: metadata.primary_address.clone(),
+                    narwhal_worker_address: metadata.worker_address.clone(),
+                    description: metadata.description.clone(),
+                    image_url: metadata.image_url.clone(),
+                    project_url: metadata.project_url.clone(),
                 }
             })
             .collect()
@@ -544,19 +541,11 @@ impl Builder {
             .map(|genesis_info| &genesis_info.info)
             .zip(system_object.validators.active_validators.iter())
         {
-            assert_eq!(
-                validator.sui_address().to_vec(),
-                onchain_validator.metadata.sui_address.to_vec(),
-            );
-            assert_eq!(
-                validator.protocol_key().as_ref().to_vec(),
-                onchain_validator.metadata.protocol_pubkey_bytes,
-            );
-            assert_eq!(validator.name(), onchain_validator.metadata.name);
-            assert_eq!(
-                validator.network_address().to_vec(),
-                onchain_validator.metadata.net_address
-            );
+            let metadata = onchain_validator.verified_metadata();
+            assert_eq!(validator.sui_address(), metadata.sui_address);
+            assert_eq!(validator.protocol_key(), metadata.sui_pubkey_bytes());
+            assert_eq!(validator.name(), &metadata.name);
+            assert_eq!(validator.network_address(), &metadata.net_address);
         }
 
         genesis
