@@ -8650,6 +8650,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap 3.2.23",
+ "criterion",
  "dashmap",
  "either",
  "expect-test",

@@ -1247,3 +1247,79 @@ fn test_unique_input_objects() {
         input_objects
     );
 }
+
+#[test]
+fn test_certificate_digest() {
+    let (committee, key_pairs) = Committee::new_simple_test_committee();
+
+    let (receiver, _): (_, AccountKeyPair) = get_key_pair();
+    let (sender1, sender1_sec): (_, AccountKeyPair) = get_key_pair();
+    let (sender2, sender2_sec): (_, AccountKeyPair) = get_key_pair();
+
+    let make_tx = |sender, sender_sec| {
+        Transaction::from_data_and_signer(
+            TransactionData::new_transfer_with_dummy_gas_price(
+                receiver,
+                random_object_ref(),
+                sender,
+                random_object_ref(),
+                10000,
+            ),
+            Intent::default(),
+            vec![&sender_sec],
+        )
+        .verify()
+        .unwrap()
+    };
+
+    let t1 = make_tx(sender1, sender1_sec);
+    let t2 = make_tx(sender2, sender2_sec);
+
+    let make_cert = |transaction: &VerifiedTransaction| {
+        let sigs: Vec<_> = key_pairs
+            .iter()
+            .take(3)
+            .map(|key_pair| {
+                SignedTransaction::new(
+                    committee.epoch(),
+                    transaction.clone().into_message(),
+                    key_pair,
+                    AuthorityPublicKeyBytes::from(key_pair.public()),
+                )
+                .auth_sig()
+                .clone()
+            })
+            .collect();
+
+        let cert = CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee)
+            .unwrap();
+        cert.verify_signature(&committee).unwrap();
+        cert
+    };
+
+    let other_cert = make_cert(&t2);
+
+    let mut cert = make_cert(&t1);
+    let orig = cert.clone();
+
+    let digest = cert.certificate_digest();
+
+    // mutating a tx sig changes the digest.
+    cert.data_mut_for_testing().tx_signatures[0] = t2.tx_signatures[0].clone();
+    assert_ne!(digest, cert.certificate_digest());
+
+    // mutating intent changes the digest
+    cert = orig.clone();
+    cert.data_mut_for_testing().intent_message.intent.scope = IntentScope::TransactionEffects;
+    assert_ne!(digest, cert.certificate_digest());
+
+    // mutating signature epoch changes digest
+    cert = orig.clone();
+    cert.auth_sig_mut_for_testing().epoch = 42;
+    assert_ne!(digest, cert.certificate_digest());
+
+    // mutating signature changes digest
+    cert = orig.clone();
+    *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
+    assert_ne!(digest, cert.certificate_digest());
+}

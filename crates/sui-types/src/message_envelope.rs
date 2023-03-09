@@ -78,6 +78,10 @@ impl<T: Message, S> Envelope<T, S> {
         &self.auth_signature
     }
 
+    pub fn auth_sig_mut_for_testing(&mut self) -> &mut S {
+        &mut self.auth_signature
+    }
+
     pub fn digest(&self) -> &T::DigestType {
         self.digest.get_or_init(|| self.data.digest())
     }
