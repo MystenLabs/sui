@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
 import TxForID from '../../../components/transaction-card/TxForID';
@@ -7,11 +8,11 @@ import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
-import styles from './ObjectView.module.css';
-
+import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
 function PkgView({ data }: { data: DataType }) {
     const viewedData = {
@@ -29,70 +30,54 @@ function PkgView({ data }: { data: DataType }) {
         .filter(([_, value]) => checkIsPropertyType(value));
 
     return (
-        <div>
-            <div>
-                <TabGroup size="lg">
-                    <TabList>
-                        <Tab>Details</Tab>
-                    </TabList>
-                    <TabPanels>
-                        <TabPanel>
-                            <table
-                                className={styles.description}
-                                id="descriptionResults"
-                            >
-                                <tbody>
-                                    <tr>
-                                        <td>Object ID</td>
-                                        <td
-                                            id="objectID"
-                                            className={styles.objectid}
-                                        >
-                                            <ObjectLink
-                                                objectId={viewedData.id}
-                                                noTruncate
-                                            />
-                                        </td>
-                                    </tr>
+        <div className="flex flex-col gap-14">
+            <TabGroup size="lg">
+                <TabList>
+                    <Tab>Details</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <DescriptionList>
+                            <DescriptionItem title="Object ID">
+                                <ObjectLink objectId={viewedData.id} />
+                            </DescriptionItem>
+                            <DescriptionItem title="Object Version">
+                                <Text color="steel-darker" variant="p1/medium">
+                                    {viewedData.version}
+                                </Text>
+                            </DescriptionItem>
+                            {/* todo: enable this when we have package version history
+                            <DescriptionItem title="All Package Versions">
+                                <VersionsDisclosure />
+                            </DescriptionItem> */}
+                            {viewedData?.publisherAddress && (
+                                <DescriptionItem title="Publisher">
+                                    <AddressLink
+                                        address={viewedData.publisherAddress}
+                                        noTruncate
+                                    />
+                                </DescriptionItem>
+                            )}
+                        </DescriptionList>
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
 
-                                    <tr>
-                                        <td>Version</td>
-                                        <td>{viewedData.version}</td>
-                                    </tr>
-
-                                    {viewedData?.publisherAddress && (
-                                        <tr>
-                                            <td>Publisher</td>
-                                            <td id="lasttxID">
-                                                <AddressLink
-                                                    address={
-                                                        viewedData.publisherAddress
-                                                    }
-                                                    noTruncate
-                                                />
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </TabPanel>
-                    </TabPanels>
-                </TabGroup>
-
-                <div className="mb-3">
-                    <Heading as="h2" variant="heading4/semibold">
-                        Modules
-                    </Heading>
-                </div>
+            <div className="flex flex-col gap-2">
+                <Heading color="steel-darker" variant="heading4/semibold">
+                    Modules
+                </Heading>
                 <ErrorBoundary>
                     <PkgModulesWrapper id={data.id} modules={properties} />
                 </ErrorBoundary>
-                <div className={styles.txsection}>
-                    <h2 className={styles.header}>Transactions</h2>
-                    <ErrorBoundary>
-                        <TxForID id={viewedData.id} category="object" />
-                    </ErrorBoundary>
-                </div>
+            </div>
+            <div className="flex flex-col gap-2">
+                <Heading variant="heading2/semibold" color="steel-darker">
+                    Transactions
+                </Heading>
+                <ErrorBoundary>
+                    <TxForID id={viewedData.id} category="object" />
+                </ErrorBoundary>
             </div>
         </div>
     );
