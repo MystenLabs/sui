@@ -19,6 +19,7 @@ tower-http = { version = "0.3.4", features = ["full"] }
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
+move-package.workspace = true
 prometheus = "0.13.3"
 anyhow = "1.0.64"
 tracing = "0.1.36"

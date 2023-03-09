@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+move-package.workspace = true
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }
 sui-types = { path = "../sui-types" }
