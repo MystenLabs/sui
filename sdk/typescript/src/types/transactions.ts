@@ -165,6 +165,7 @@ export const SuiTransactionData = object({
   messageVersion: literal('v1'),
   transactions: array(SuiTransactionKind),
   sender: SuiAddress,
+  gasData: SuiGasData,
 });
 export type SuiTransactionData = Infer<typeof SuiTransactionData>;
 
