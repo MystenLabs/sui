@@ -21,8 +21,8 @@ use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     Argument, Command, ExecutionStatus, GenesisObject, InputObjectKind, ProgrammableMoveCall,
-    ProgrammableTransaction, SenderSignedData, SingleTransactionKind, TransactionData,
-    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    TransactionEffects, TransactionEffectsAPI, TransactionEvents, TransactionKind,
     VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -197,29 +197,29 @@ impl Display for SuiTransactionKind {
     }
 }
 
-impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
+impl TryFrom<TransactionKind> for SuiTransactionKind {
     type Error = anyhow::Error;
 
-    fn try_from(tx: SingleTransactionKind) -> Result<Self, Self::Error> {
+    fn try_from(tx: TransactionKind) -> Result<Self, Self::Error> {
         Ok(match tx {
-            SingleTransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
+            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
                 epoch: e.epoch,
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
                 storage_rebate: e.storage_rebate,
                 epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
             }),
-            SingleTransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
+            TransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
                 objects: g.objects.iter().map(GenesisObject::id).collect(),
             }),
-            SingleTransactionKind::ConsensusCommitPrologue(p) => {
+            TransactionKind::ConsensusCommitPrologue(p) => {
                 Self::ConsensusCommitPrologue(SuiConsensusCommitPrologue {
                     epoch: p.epoch,
                     round: p.round,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
-            SingleTransactionKind::ProgrammableTransaction(p) => {
+            TransactionKind::ProgrammableTransaction(p) => {
                 Self::ProgrammableTransaction(p.try_into()?)
             }
         })

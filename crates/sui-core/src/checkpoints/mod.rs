@@ -35,8 +35,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    ConsensusTransactionKey, SingleTransactionKind, TransactionDataAPI, TransactionEffects,
-    TransactionEffectsAPI,
+    ConsensusTransactionKey, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
+    TransactionKind,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -632,7 +632,7 @@ impl CheckpointBuilder {
             // ConsensusCommitPrologue is guaranteed to be processed before we reach here
             if !matches!(
                 transaction.inner().transaction_data().kind(),
-                SingleTransactionKind::ConsensusCommitPrologue(_)
+                TransactionKind::ConsensusCommitPrologue(_)
             ) {
                 // todo - use NotifyRead::register_all might be faster
                 self.epoch_store

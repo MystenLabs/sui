@@ -25,7 +25,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::intent::Intent;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, InputObjectKind, ObjectArg, ProgrammableTransaction,
-    SingleTransactionKind, Transaction, TransactionData, TransactionDataAPI, DUMMY_GAS_PRICE,
+    Transaction, TransactionData, TransactionDataAPI, TransactionKind, DUMMY_GAS_PRICE,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -197,7 +197,7 @@ async fn test_split_coin() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        SingleTransactionKind::ProgrammableTransaction(pt) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -219,7 +219,7 @@ async fn test_merge_coin() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        SingleTransactionKind::ProgrammableTransaction(pt) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -419,7 +419,7 @@ async fn test_delegate_sui() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        SingleTransactionKind::ProgrammableTransaction(pt) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -455,7 +455,7 @@ async fn test_delegate_sui_with_none_amount() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        SingleTransactionKind::ProgrammableTransaction(pt) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -598,7 +598,7 @@ async fn test_transaction(
     };
 
     let data = TransactionData::new_with_gas_coins(
-        SingleTransactionKind::programmable(tx.clone()),
+        TransactionKind::programmable(tx.clone()),
         sender,
         gas,
         budget,

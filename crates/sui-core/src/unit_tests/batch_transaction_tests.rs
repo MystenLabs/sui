@@ -124,7 +124,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         )
         .unwrap();
     let data = TransactionData::new_with_dummy_gas_price(
-        SingleTransactionKind::programmable(builder.finish()),
+        TransactionKind::programmable(builder.finish()),
         sender,
         authority_state
             .get_object(&all_ids[N])
@@ -180,7 +180,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
             .unwrap();
     }
     let data = TransactionData::new_with_dummy_gas_price(
-        SingleTransactionKind::programmable(builder.finish()),
+        TransactionKind::programmable(builder.finish()),
         sender,
         gas_object.compute_object_reference(),
         100000,

@@ -182,7 +182,7 @@ async fn test_transfer_sui_insufficient_gas() {
         builder.transfer_sui(recipient, None);
         builder.finish()
     };
-    let kind = SingleTransactionKind::ProgrammableTransaction(pt);
+    let kind = TransactionKind::ProgrammableTransaction(pt);
     let data = TransactionData::new(kind, sender, gas_object_ref, 110, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
@@ -298,7 +298,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     let genesis_objects = create_genesis_module_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response.0.data().intent_message.value.kind() {
-        SingleTransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
+        TransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
             Command::Publish(modules) => modules,
             _ => unreachable!(),
         },
@@ -612,7 +612,7 @@ async fn execute_transfer_with_price(
         builder.transfer_object(recipient, object.compute_object_reference());
         builder.finish()
     };
-    let kind = SingleTransactionKind::ProgrammableTransaction(pt);
+    let kind = TransactionKind::ProgrammableTransaction(pt);
     let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, gas_price);
     let tx = to_sender_signed_transaction(data, &sender_key);
 

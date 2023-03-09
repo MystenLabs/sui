@@ -28,7 +28,7 @@ use sui_types::event::Event;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse, GasData,
-    QuorumDriverResponse, SingleTransactionKind, TransactionData,
+    QuorumDriverResponse, TransactionData, TransactionKind,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -130,7 +130,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
         builder.transfer_object(another_addr, object_ref);
         builder.finish()
     };
-    let kind = SingleTransactionKind::programmable(pt);
+    let kind = TransactionKind::programmable(pt);
     let tx_data = TransactionData::new_with_gas_data(
         kind,
         sender,

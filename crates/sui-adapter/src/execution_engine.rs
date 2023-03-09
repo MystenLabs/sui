@@ -17,7 +17,7 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, SingleTransactionKind,
+    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
 };
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, ParentSync, WriteKind};
@@ -49,7 +49,7 @@ pub fn execute_transaction_to_effects<
 >(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
-    transaction_kind: SingleTransactionKind,
+    transaction_kind: TransactionKind,
     transaction_signer: SuiAddress,
     gas: &[ObjectRef],
     transaction_digest: TransactionDigest,
@@ -128,7 +128,7 @@ fn execute_transaction<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_kind: SingleTransactionKind,
+    transaction_kind: TransactionKind,
     gas: &[ObjectRef],
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -187,7 +187,7 @@ fn execution_loop<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_kind: SingleTransactionKind,
+    transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -195,7 +195,7 @@ fn execution_loop<
     protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     match transaction_kind {
-        SingleTransactionKind::ChangeEpoch(change_epoch) => {
+        TransactionKind::ChangeEpoch(change_epoch) => {
             advance_epoch(
                 change_epoch,
                 temporary_store,
@@ -206,7 +206,7 @@ fn execution_loop<
             )?;
             Ok(Mode::empty_results())
         }
-        SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
+        TransactionKind::Genesis(GenesisTransaction { objects }) => {
             if tx_ctx.epoch() != 0 {
                 panic!("BUG: Genesis Transactions can only be executed in epoch 0");
             }
@@ -230,7 +230,7 @@ fn execution_loop<
             }
             Ok(Mode::empty_results())
         }
-        SingleTransactionKind::ConsensusCommitPrologue(prologue) => {
+        TransactionKind::ConsensusCommitPrologue(prologue) => {
             setup_consensus_commit(
                 prologue,
                 temporary_store,
@@ -241,7 +241,7 @@ fn execution_loop<
             )?;
             Ok(Mode::empty_results())
         }
-        SingleTransactionKind::ProgrammableTransaction(pt) => {
+        TransactionKind::ProgrammableTransaction(pt) => {
             programmable_transactions::execution::execute::<_, _, Mode>(
                 protocol_config,
                 move_vm,

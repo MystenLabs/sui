@@ -9,7 +9,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas::SuiCostTable;
 use sui_types::messages::{
-    SingleTransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
+    TransactionKind, VerifiedExecutableTransaction, VersionedProtocolMessage,
 };
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
@@ -67,16 +67,16 @@ pub async fn check_transaction_input(
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
     config: &ProtocolConfig,
-    kind: &SingleTransactionKind,
+    kind: &TransactionKind,
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
     kind.validity_check(config)?;
     match kind {
-        SingleTransactionKind::ProgrammableTransaction(_) => (),
-        SingleTransactionKind::ChangeEpoch(_)
-        | SingleTransactionKind::Genesis(_)
-        | SingleTransactionKind::ConsensusCommitPrologue(_) => {
+        TransactionKind::ProgrammableTransaction(_) => (),
+        TransactionKind::ChangeEpoch(_)
+        | TransactionKind::Genesis(_)
+        | TransactionKind::ConsensusCommitPrologue(_) => {
             anyhow::bail!("Transaction kind {} is not supported in dev-inspect", kind)
         }
     }
@@ -143,7 +143,7 @@ async fn check_gas(
     gas_payment: &ObjectRef,
     gas_budget: u64,
     computation_gas_price: u64,
-    tx_kind: &SingleTransactionKind,
+    tx_kind: &TransactionKind,
     more_gas_object_refs: Vec<ObjectRef>,
 ) -> SuiResult<SuiGasStatus<'static>> {
     if tx_kind.is_system_tx() {
@@ -209,13 +209,6 @@ pub fn check_objects(
     objects: Vec<Object>,
 ) -> UserInputResult<InputObjects> {
     // We require that mutable objects cannot show up more than once.
-    // In [`SingleTransactionKind::input_objects`] we checked that there is no
-    // duplicate objects in the same SingleTransactionKind. However for a Batch
-    // Transaction, we still need to make sure that the same mutable object don't show
-    // up in more than one SingleTransactionKind.
-    // TODO: We should be able to allow the same shared object to show up
-    // in more than one SingleTransactionKind. We need to ensure that their
-    // version number only increases once at the end of the Batch execution.
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in objects.iter() {
         if !object.is_immutable() {

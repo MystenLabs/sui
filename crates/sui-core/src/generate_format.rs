@@ -18,8 +18,7 @@ use sui_types::{
     },
     messages::{
         Argument, CallArg, Command, EntryArgumentErrorKind, EntryTypeArgumentErrorKind,
-        ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind,
-        SingleTransactionKind,
+        ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind, TransactionKind,
     },
     object::{Data, Owner},
     storage::DeleteKind,
@@ -84,7 +83,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TypeTag>(&samples)?;
     tracer.trace_type::<TypedStoreError>(&samples)?;
     tracer.trace_type::<ObjectInfoRequestKind>(&samples)?;
-    tracer.trace_type::<SingleTransactionKind>(&samples)?;
+    tracer.trace_type::<TransactionKind>(&samples)?;
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;

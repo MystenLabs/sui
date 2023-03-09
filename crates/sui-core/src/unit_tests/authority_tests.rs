@@ -535,7 +535,7 @@ async fn test_dev_inspect_dynamic_field() {
             arguments: vec![Argument::Input(0), Argument::Input(1)],
         }))],
     };
-    let kind = SingleTransactionKind::programmable(pt);
+    let kind = TransactionKind::programmable(pt);
     let DevInspectResults { results, .. } = fullnode
         .dev_inspect_transaction(sender, kind, Some(1))
         .await
@@ -753,7 +753,7 @@ async fn test_dev_inspect_uses_unbound_object() {
             .unwrap();
         builder.finish()
     };
-    let kind = SingleTransactionKind::programmable(pt);
+    let kind = TransactionKind::programmable(pt);
 
     let result = fullnode
         .dev_inspect_transaction(sender, kind, Some(1))
@@ -1133,7 +1133,7 @@ async fn test_handle_sponsored_transaction() {
         builder.transfer_object(recipient, object.compute_object_reference());
         builder.finish()
     };
-    let tx_kind = SingleTransactionKind::programmable(pt);
+    let tx_kind = TransactionKind::programmable(pt);
 
     let data = TransactionData::new_with_gas_data(
         tx_kind.clone(),
@@ -2869,7 +2869,7 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
 
     let gas_ref = gas_object.compute_object_reference();
     let tx_data = TransactionData::new_with_dummy_gas_price(
-        SingleTransactionKind::ConsensusCommitPrologue(ConsensusCommitPrologue {
+        TransactionKind::ConsensusCommitPrologue(ConsensusCommitPrologue {
             epoch: 0,
             round: 0,
             commit_timestamp_ms: 42,
@@ -4498,7 +4498,7 @@ pub async fn call_dev_inspect(
             .unwrap();
         builder.finish()
     };
-    let kind = SingleTransactionKind::programmable(pt);
+    let kind = TransactionKind::programmable(pt);
     authority
         .dev_inspect_transaction(*sender, kind, Some(1))
         .await
