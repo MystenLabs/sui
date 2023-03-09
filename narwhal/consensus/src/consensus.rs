@@ -193,7 +193,8 @@ impl ConsensusState {
         // TODO(metrics): Set certificate_commit_latency to `certificate.metadata.created_at.elapsed().as_secs_f64()`
         gauge!(
             snarkos_metrics::consensus::CERTIFICATE_COMMIT_LATENCY,
-            certificate.metadata.created_at.elapsed().as_secs_f64()
+            certificate.metadata.created_at.elapsed().as_secs_f64(),
+            "certificate_round" => certificate.round()
         );
 
         // NOTE: This log entry is used to compute performance.
