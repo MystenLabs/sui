@@ -65,7 +65,6 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
-use sui_types::collection_types::Table;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};

@@ -70,9 +70,6 @@ pub trait SuiSystemStateTrait {
     fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadataV1>;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
-    fn staking_pool_mappings(&self) -> &Table;
-    fn active_validators(&self) -> &Vec<Validator>;
-    fn inactive_pools(&self) -> &Table;
 }
 
 /// SuiSystemState provides an abstraction over multiple versions of the inner SuiSystemStateInner object.
