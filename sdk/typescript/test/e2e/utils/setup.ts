@@ -112,9 +112,17 @@ export async function publishPackage(
   );
   const tx = new Transaction();
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
-  tx.add(
+  const cap = tx.add(
     Commands.Publish(compiledModules.map((m: any) => Array.from(fromB64(m)))),
   );
+  tx.add(
+    Commands.MoveCall({
+      target: '0x2::package::make_immutable',
+      typeArguments: [],
+      arguments: [cap],
+    }),
+  );
+
   const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx);
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
