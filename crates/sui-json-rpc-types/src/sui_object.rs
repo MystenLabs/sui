@@ -434,7 +434,7 @@ impl TryInto<Object> for SuiObjectData {
                 let struct_tag = parse_sui_struct_tag(o.type_())?;
                 Data::Move(unsafe {
                     MoveObject::new_from_execution(
-                        struct_tag,
+                        struct_tag.into(),
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
@@ -664,7 +664,7 @@ impl SuiMoveObject for SuiParsedMoveObject {
                 }
             } else {
                 SuiParsedMoveObject {
-                    type_: object.type_.to_string(),
+                    type_: object.type_().to_string(),
                     has_public_transfer: object.has_public_transfer(),
                     fields: move_struct,
                 }
@@ -703,7 +703,7 @@ pub struct SuiRawMoveObject {
 impl From<MoveObject> for SuiRawMoveObject {
     fn from(o: MoveObject) -> Self {
         Self {
-            type_: o.type_.to_string(),
+            type_: o.type_().to_string(),
             has_public_transfer: o.has_public_transfer(),
             version: o.version(),
             bcs_bytes: o.into_contents(),
@@ -717,7 +717,7 @@ impl SuiMoveObject for SuiRawMoveObject {
         _layout: MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            type_: object.type_.to_string(),
+            type_: object.type_().to_string(),
             has_public_transfer: object.has_public_transfer(),
             version: object.version(),
             bcs_bytes: object.into_contents(),

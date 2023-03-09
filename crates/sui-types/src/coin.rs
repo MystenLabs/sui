@@ -9,7 +9,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::SequenceNumber;
+use crate::base_types::{MoveObjectType, SequenceNumber};
 use crate::committee::EpochId;
 use crate::object::{MoveObject, Owner};
 use crate::storage::{DeleteKind, SingleTxContext, WriteKind};
@@ -55,12 +55,12 @@ impl Coin {
         }
     }
 
-    pub fn type_(type_param: StructTag) -> StructTag {
+    pub fn type_(type_param: TypeTag) -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             name: COIN_STRUCT_NAME.to_owned(),
             module: COIN_MODULE_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(Box::new(type_param))],
+            type_params: vec![type_param],
         }
     }
 
@@ -87,7 +87,7 @@ impl Coin {
     pub fn extract_balance_if_coin(object: &Object) -> Result<Option<u64>, ExecutionError> {
         match &object.data {
             Data::Move(move_obj) => {
-                if !Self::is_coin(&move_obj.type_) {
+                if !move_obj.is_coin() {
                     return Ok(None);
                 }
 
@@ -110,7 +110,7 @@ impl Coin {
         bcs::to_bytes(&self).unwrap()
     }
 
-    pub fn layout(type_param: StructTag) -> MoveStructLayout {
+    pub fn layout(type_param: TypeTag) -> MoveStructLayout {
         MoveStructLayout::WithTypes {
             type_: Self::type_(type_param.clone()),
             fields: vec![
@@ -163,8 +163,8 @@ impl Coin {
 
 pub fn check_coins(
     coin_objects: &[Object],
-    mut coin_type: Option<StructTag>,
-) -> Result<(Vec<Coin>, StructTag), ExecutionError> {
+    mut coin_type: Option<MoveObjectType>,
+) -> Result<(Vec<Coin>, MoveObjectType), ExecutionError> {
     if coin_objects.is_empty() {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::EmptyInputCoins,
@@ -175,21 +175,21 @@ pub fn check_coins(
     for coin_obj in coin_objects {
         match &coin_obj.data {
             Data::Move(move_obj) => {
-                if !Coin::is_coin(&move_obj.type_) {
+                if !move_obj.is_coin() {
                     return Err(ExecutionError::new_with_source(
                         ExecutionErrorKind::InvalidCoinObject,
                         "Provided non-Coin<T> object as input to pay/pay_sui/pay_all_sui transaction".to_string(),
                     ));
                 }
                 if let Some(typ) = &coin_type {
-                    if typ != &move_obj.type_ {
+                    if move_obj.type_() != typ {
                         return Err(ExecutionError::new_with_source(
                             ExecutionErrorKind::CoinTypeMismatch,
-                            format!("Coin type check failed in pay/pay_sui/pay_all_sui transaction, expected: {:?}, found: {:}", typ, move_obj.type_),
+                            format!("Coin type check failed in pay/pay_sui/pay_all_sui transaction, expected: {:?}, found: {:}", typ, move_obj.type_()),
                         ));
                     }
                 } else {
-                    coin_type = Some(move_obj.type_.clone())
+                    coin_type = Some(move_obj.type_().clone())
                 }
 
                 let coin = Coin::from_bcs_bytes(move_obj.contents())
@@ -238,7 +238,7 @@ pub fn transfer_coin<S>(
     temporary_store: &mut TemporaryStore<S>,
     coin: &Coin,
     recipient: SuiAddress,
-    coin_type: StructTag,
+    coin_type: MoveObjectType,
     previous_transaction: TransactionDigest,
 ) {
     let new_coin = Object::new_move(
@@ -332,7 +332,7 @@ impl TryFrom<&Object> for CoinMetadata {
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         match &object.data {
             Data::Move(o) => {
-                if CoinMetadata::is_coin_metadata(&o.type_) {
+                if o.type_().is_coin_metadata() {
                     return CoinMetadata::from_bcs_bytes(o.contents());
                 }
             }

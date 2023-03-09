@@ -13,7 +13,7 @@ use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::language_storage::ModuleId;
 use move_core_types::parser::parse_struct_tag;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
@@ -1321,7 +1321,7 @@ impl AuthorityState {
             return Ok(None);
         };
         // We only index dynamic field objects
-        if !DynamicFieldInfo::is_dynamic_field(&move_object.type_) {
+        if !move_object.type_().is_dynamic_field() {
             return Ok(None);
         }
         let move_struct = move_object.to_move_struct_with_resolver(
@@ -1332,7 +1332,7 @@ impl AuthorityState {
         let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
 
-        let name_type = DynamicFieldInfo::try_extract_field_name(&move_object.type_, &type_)?;
+        let name_type = move_object.type_().try_extract_field_name(&type_)?;
 
         let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
             SuiError::ObjectSerializationError {
@@ -1372,7 +1372,7 @@ impl AuthorityState {
                 name,
                 bcs_name,
                 type_,
-                object_type: move_object.type_.type_params[1].to_string(),
+                object_type: move_object.into_type().into_type_params()[1].to_string(),
                 object_id: o.id(),
                 version: o.version(),
                 digest: o.digest(),
@@ -2172,14 +2172,17 @@ impl AuthorityState {
     pub async fn get_move_objects<T>(
         &self,
         owner: SuiAddress,
-        type_: &StructTag,
+        type_: MoveObjectType,
     ) -> SuiResult<Vec<T>>
     where
         T: DeserializeOwned,
     {
         let object_ids = self
             .get_owner_objects_iterator(owner)?
-            .filter(move |o| Self::matches_type(&ObjectType::Struct(type_.clone()), &o.type_))
+            .filter(|o| match &o.type_ {
+                ObjectType::Struct(s) => Self::matches_type_fuzzy_generics(&type_, s),
+                ObjectType::Package => false,
+            })
             .map(|info| info.object_id);
         let mut move_objects = vec![];
         for id in object_ids {
@@ -2188,17 +2191,14 @@ impl AuthorityState {
         Ok(move_objects)
     }
 
-    fn matches_type(type_: &ObjectType, other_type: &ObjectType) -> bool {
-        match (type_, other_type) {
-            (ObjectType::Package, ObjectType::Package) => true,
-            (ObjectType::Struct(type_), ObjectType::Struct(other_type)) => {
-                type_.address == other_type.address
-                    && type_.module == other_type.module
-                    && type_.name == other_type.name
-                    && (type_.type_params.is_empty() || type_.type_params == other_type.type_params)
-            }
-            _ => false,
-        }
+    // TODO: should be in impl MoveType
+    fn matches_type_fuzzy_generics(type_: &MoveObjectType, other_type: &MoveObjectType) -> bool {
+        type_.address() == other_type.address()
+                    && type_.module() == other_type.module()
+                    && type_.name() == other_type.name()
+                    // TODO: is_empty() looks like a bug here. I think the intention is to support "fuzzy matching" where `get_move_objects`
+                    // leaves type_params unspecified, but I don't actually see any call sites taking advantage of this
+                    && (type_.type_params().is_empty() || type_.type_params() == other_type.type_params())
     }
 
     pub fn get_dynamic_fields(

@@ -28,13 +28,19 @@ impl Balance {
         Self { value }
     }
 
-    pub fn type_(type_param: StructTag) -> StructTag {
+    pub fn type_(type_param: TypeTag) -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: BALANCE_MODULE_NAME.to_owned(),
             name: BALANCE_STRUCT_NAME.to_owned(),
-            type_params: vec![TypeTag::Struct(Box::new(type_param))],
+            type_params: vec![type_param],
         }
+    }
+
+    pub fn is_balance(s: &StructTag) -> bool {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == BALANCE_MODULE_NAME
+            && s.name.as_ident_str() == BALANCE_STRUCT_NAME
     }
 
     pub fn withdraw(&mut self, amount: u64) -> Result<(), ExecutionError> {
@@ -57,7 +63,7 @@ impl Balance {
         bcs::to_bytes(&self).unwrap()
     }
 
-    pub fn layout(type_param: StructTag) -> MoveStructLayout {
+    pub fn layout(type_param: TypeTag) -> MoveStructLayout {
         MoveStructLayout::WithTypes {
             type_: Self::type_(type_param),
             fields: vec![MoveFieldLayout::new(

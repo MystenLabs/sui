@@ -47,6 +47,13 @@ impl StakedSui {
         }
     }
 
+    pub fn is_staked_sui(s: &StructTag) -> bool {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == STAKING_POOL_MODULE_NAME
+            && s.name.as_ident_str() == STAKED_SUI_STRUCT_NAME
+            && s.type_params.is_empty()
+    }
+
     pub fn id(&self) -> ObjectID {
         self.id.id.bytes
     }
@@ -77,7 +84,7 @@ impl TryFrom<&Object> for StakedSui {
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         match &object.data {
             Data::Move(o) => {
-                if o.type_ == StakedSui::type_() {
+                if o.type_().is_staked_sui() {
                     return bcs::from_bytes(o.contents()).map_err(|err| SuiError::TypeError {
                         error: format!("Unable to deserialize StakedSui object: {:?}", err),
                     });

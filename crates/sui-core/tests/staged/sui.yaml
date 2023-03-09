@@ -384,11 +384,25 @@ MoveLocation:
 MoveObject:
   STRUCT:
     - type_:
-        TYPENAME: StructTag
+        TYPENAME: MoveObjectType
     - has_public_transfer: BOOL
     - version:
         TYPENAME: SequenceNumber
     - contents: BYTES
+MoveObjectType:
+  ENUM:
+    0:
+      Other:
+        NEWTYPE:
+          TYPENAME: StructTag
+    1:
+      GasCoin: UNIT
+    2:
+      StakedSui: UNIT
+    3:
+      Coin:
+        NEWTYPE:
+          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:

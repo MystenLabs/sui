@@ -16,12 +16,10 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::balance::Balance;
-use crate::base_types::ObjectIDParseError;
+use crate::base_types::{MoveObjectType, ObjectIDParseError};
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
-use crate::gas_coin::GAS;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -38,11 +36,15 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
-    pub type_: StructTag,
-    /// Determines if it is usable with the TransferObject
+    /// The type of this object. Immutable
+    type_: MoveObjectType,
+    /// Determines if it is usable with the TransferObject command
     /// Derived from the type_
     has_public_transfer: bool,
+    /// Number that increases each time a tx takes this object as a mutable input
+    /// This is a lamport timestamp, not a sequentially increasing version
     version: SequenceNumber,
+    /// BCS bytes of a Move struct value
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
@@ -80,7 +82,7 @@ impl MoveObject {
     /// Yes, this is a bit of an abuse of the `unsafe` marker, but bad things will happen if this
     /// is inconsistent
     pub unsafe fn new_from_execution(
-        type_: StructTag,
+        type_: MoveObjectType,
         has_public_transfer: bool,
         version: SequenceNumber,
         contents: Vec<u8>,
@@ -98,7 +100,7 @@ impl MoveObject {
     /// # Safety
     /// This function should ONLY be called if has_public_transfer has been determined by the type_
     pub unsafe fn new_from_execution_with_limit(
-        type_: StructTag,
+        type_: MoveObjectType,
         has_public_transfer: bool,
         version: SequenceNumber,
         contents: Vec<u8>,
@@ -106,7 +108,8 @@ impl MoveObject {
     ) -> Result<Self, ExecutionError> {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
-        debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
+        // TODO: think this can be generalized to is_coin
+        debug_assert!(!type_.is_gas_coin() || has_public_transfer);
         if contents.len() as u64 > max_move_object_size {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
@@ -127,7 +130,7 @@ impl MoveObject {
         // unwrap safe because coins are always smaller than the max object size
         unsafe {
             Self::new_from_execution_with_limit(
-                GasCoin::type_(),
+                GasCoin::type_().into(),
                 true,
                 version,
                 GasCoin::new(id, value).to_bcs_bytes(),
@@ -138,7 +141,7 @@ impl MoveObject {
     }
 
     pub fn new_coin(
-        coin_type: StructTag,
+        coin_type: MoveObjectType,
         version: SequenceNumber,
         id: ObjectID,
         value: u64,
@@ -156,6 +159,14 @@ impl MoveObject {
         }
     }
 
+    pub fn type_(&self) -> &MoveObjectType {
+        &self.type_
+    }
+
+    pub fn is_type(&self, s: &StructTag) -> bool {
+        self.type_.is(s)
+    }
+
     pub fn has_public_transfer(&self) -> bool {
         self.has_public_transfer
     }
@@ -166,6 +177,10 @@ impl MoveObject {
     pub fn id_opt(contents: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
         // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
         ObjectID::try_from(&contents[0..ID_END_INDEX])
+    }
+
+    pub fn is_coin(&self) -> bool {
+        self.type_.is_coin()
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -238,6 +253,14 @@ impl MoveObject {
         self.contents
     }
 
+    pub fn into_type(self) -> MoveObjectType {
+        self.type_
+    }
+
+    pub fn into_inner(self) -> (MoveObjectType, Vec<u8>) {
+        (self.type_, self.contents)
+    }
+
     /// Get a `MoveStructLayout` for `self`.
     /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
@@ -246,7 +269,7 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        Self::get_layout_from_struct_tag(self.type_.clone(), format, resolver)
+        Self::get_layout_from_struct_tag(self.type_().clone().into(), format, resolver)
     }
 
     pub fn get_layout_from_struct_tag(
@@ -312,7 +335,7 @@ impl MoveObject {
     fn get_total_sui_(s: &MoveStruct, acc: u64) -> u64 {
         match s {
             MoveStruct::WithTypes { type_, fields } => {
-                if type_ == &Balance::type_(GAS::type_()) {
+                if GasCoin::is_gas_balance(type_) {
                     match fields[0].1 {
                         MoveValue::U64(n) => acc + n,
                         _ => unreachable!(), // a Balance<SUI> object should have exactly one field, of type int
@@ -372,10 +395,18 @@ impl Data {
         }
     }
 
-    pub fn type_(&self) -> Option<&StructTag> {
+    pub fn type_(&self) -> Option<&MoveObjectType> {
         use Data::*;
         match self {
-            Move(m) => Some(&m.type_),
+            Move(m) => Some(m.type_()),
+            Package(_) => None,
+        }
+    }
+
+    pub fn struct_tag(&self) -> Option<StructTag> {
+        use Data::*;
+        match self {
+            Move(m) => Some(m.type_().clone().into()),
             Package(_) => None,
         }
     }
@@ -602,8 +633,12 @@ impl Object {
         }
     }
 
-    pub fn type_(&self) -> Option<&StructTag> {
+    pub fn type_(&self) -> Option<&MoveObjectType> {
         self.data.type_()
+    }
+
+    pub fn struct_tag(&self) -> Option<StructTag> {
+        self.data.struct_tag()
     }
 
     pub fn digest(&self) -> ObjectDigest {
@@ -646,7 +681,7 @@ impl Object {
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
     pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.type_().ok_or_else(|| SuiError::TypeError {
+        let move_struct = self.data.struct_tag().ok_or_else(|| SuiError::TypeError {
             error: "Object must be a Move object".to_owned(),
         })?;
         fp_ensure!(
@@ -688,7 +723,7 @@ impl Object {
 
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
+            type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
@@ -717,7 +752,7 @@ impl Object {
 
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
         let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
+            type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
@@ -732,7 +767,7 @@ impl Object {
 
     pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
+            type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
@@ -756,7 +791,7 @@ impl Object {
         owner: SuiAddress,
     ) -> Self {
         let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
+            type_: GasCoin::type_().into(),
             has_public_transfer: true,
             version,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),

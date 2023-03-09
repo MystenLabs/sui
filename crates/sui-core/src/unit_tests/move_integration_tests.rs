@@ -493,9 +493,8 @@ async fn test_object_owning_another_object() {
         vec![]
     };
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 7);
-    // TODO: figure out why an extra event is emitted.
-    // assert_eq!(events.len(), 6);
+
+    assert_eq!(events.len(), 6);
     let num_transfers = events
         .iter()
         .filter(|e| matches!(e.event_type(), EventType::TransferObject { .. }))
@@ -802,9 +801,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     assert!(effects.status().is_ok());
     assert_eq!(effects.created().len(), 1);
     assert_eq!(effects.wrapped().len(), 1);
-    // assert_eq!(events.len(), 4);
-    // TODO: figure out why an extra event is being emitted here.
-    assert_eq!(events.len(), 5);
+    assert_eq!(events.len(), 4);
 
     // Delete the parent and child altogether.
     let effects = call_move(

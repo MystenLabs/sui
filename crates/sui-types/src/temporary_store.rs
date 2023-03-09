@@ -14,10 +14,10 @@ use serde_with::serde_as;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use tracing::trace;
 
+use crate::base_types::MoveObjectType;
 use crate::coin::{check_coins, update_input_coins, Coin};
 use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
-use crate::gas_coin::GasCoin;
 use crate::messages::TransactionEvents;
 use crate::storage::{ObjectStore, SingleTxContext};
 use crate::sui_system_state::{
@@ -203,7 +203,7 @@ impl<S> TemporaryStore<S> {
                     gas.owner,
                     coin_id,
                     gas.version(),
-                    gas.type_().unwrap(),
+                    &gas.struct_tag().unwrap(),
                     gas_charged.net_gas_usage().neg() as i128,
                 ));
                 (Some(coin_id), gas_charged.net_gas_usage() as i128)
@@ -264,7 +264,7 @@ impl<S> TemporaryStore<S> {
                         deleted_obj.owner,
                         id,
                         deleted_obj.version(),
-                        deleted_obj.type_().unwrap(),
+                        &deleted_obj.struct_tag().unwrap(),
                         balance.neg(),
                     )
                 }
@@ -317,7 +317,7 @@ impl<S> TemporaryStore<S> {
                         obj.owner,
                         obj.id(),
                         obj.version(),
-                        obj.type_().unwrap(),
+                        &obj.struct_tag().unwrap(),
                         balance as i128,
                     )]
                 } else {
@@ -354,7 +354,7 @@ impl<S> TemporaryStore<S> {
                             &ctx,
                             obj.owner,
                             // Safe to unwrap, package case handled above
-                            obj.data.type_().unwrap().to_string(),
+                            obj.data.struct_tag().unwrap().to_string(),
                             obj.id(),
                             obj.version(),
                         ));
@@ -365,7 +365,7 @@ impl<S> TemporaryStore<S> {
                             package_id: ctx.package_id,
                             transaction_module: ctx.transaction_module,
                             sender: ctx.sender,
-                            object_type: obj.data.type_().unwrap().to_string(),
+                            object_type: obj.data.struct_tag().unwrap().to_string(),
                             object_id: obj.id(),
                             version: obj.version(),
                         });
@@ -386,7 +386,7 @@ impl<S> TemporaryStore<S> {
                     Event::new_object(
                         &ctx,
                         obj.owner,
-                        obj.type_().unwrap().to_string(),
+                        obj.struct_tag().unwrap().to_string(),
                         id,
                         obj.version(),
                     )
@@ -404,7 +404,7 @@ impl<S> TemporaryStore<S> {
         gas_charged: i128,
     ) -> Vec<Event> {
         // We know this is a coin, safe to unwrap.
-        let coin_object_type = coin.type_().unwrap();
+        let coin_object_type = coin.struct_tag().unwrap();
         let mut events = vec![];
 
         let old_balance = Coin::extract_balance_if_coin(old_coin);
@@ -430,7 +430,7 @@ impl<S> TemporaryStore<S> {
                     old_coin.owner,
                     old_coin.id(),
                     old_coin.version(),
-                    coin_object_type,
+                    &coin_object_type,
                     balance - old_balance,
                 )),
                 // Same owner, balance increased.
@@ -440,7 +440,7 @@ impl<S> TemporaryStore<S> {
                     coin.owner,
                     coin.id(),
                     coin.version(),
-                    coin_object_type,
+                    &coin_object_type,
                     balance - old_balance,
                 )),
                 // ownership changed, add an event for spending and one for receiving.
@@ -451,7 +451,7 @@ impl<S> TemporaryStore<S> {
                         old_coin.owner,
                         coin.id(),
                         old_coin.version(),
-                        coin_object_type,
+                        &coin_object_type,
                         // negative amount indicate spend.
                         old_balance.neg(),
                     ));
@@ -461,7 +461,7 @@ impl<S> TemporaryStore<S> {
                         coin.owner,
                         coin.id(),
                         coin.version(),
-                        coin_object_type,
+                        &coin_object_type,
                         balance,
                     ));
                 }
@@ -801,7 +801,7 @@ impl<S> TemporaryStore<S> {
                 .map(|obj_ref| self.objects().get(&obj_ref.0).unwrap().clone())
                 .collect();
             // this should not fail as we checked gas coins are correct already
-            let (mut coins, _) = check_coins(&gas_coins, Some(GasCoin::type_()))?;
+            let (mut coins, _) = check_coins(&gas_coins, Some(MoveObjectType::GasCoin))?;
             let mut merged_coin = coins.swap_remove(0);
             merged_coin.merge_coins(&mut coins)?;
             let ctx = SingleTxContext::gas(sender);
@@ -1005,8 +1005,8 @@ impl<S> ResourceResolver for TemporaryStore<S> {
 
         match &object.data {
             Data::Move(m) => {
-                assert_eq!(
-                    struct_tag, &m.type_,
+                assert!(
+                    m.is_type(struct_tag),
                     "Invariant violation: ill-typed object in storage \
                 or bad object request from caller"
                 );

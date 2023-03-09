@@ -17,7 +17,7 @@ use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, Run
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
@@ -74,7 +74,7 @@ struct AdditionalWrite {
     /// The new owner of the object
     recipient: Owner,
     /// the type of the object,
-    type_: StructTag,
+    type_: MoveObjectType,
     /// if the object has public transfer or not, i.e. if it has store
     has_public_transfer: bool,
     /// contents of the object
@@ -560,13 +560,13 @@ where
             !gas_status.is_unmetered(),
             protocol_config,
         );
-        for (id, (write_kind, recipient, ty, tag, value)) in writes {
+        for (id, (write_kind, recipient, ty, move_type, value)) in writes {
             let abilities = tmp_session
                 .get_type_abilities(&ty)
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let has_public_transfer = abilities.has_store();
             let layout = tmp_session
-                .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
+                .get_type_layout(&move_type.clone().into())
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
@@ -576,7 +576,7 @@ where
                     &input_object_metadata,
                     &loaded_child_objects,
                     id,
-                    tag,
+                    move_type,
                     has_public_transfer,
                     bytes,
                     write_kind,
@@ -819,7 +819,7 @@ unsafe fn create_written_object(
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     id: ObjectID,
-    tag: StructTag,
+    type_: MoveObjectType,
     has_public_transfer: bool,
     contents: Vec<u8>,
     write_kind: WriteKind,
@@ -845,7 +845,7 @@ unsafe fn create_written_object(
     );
 
     MoveObject::new_from_execution(
-        tag,
+        type_,
         has_public_transfer,
         old_obj_ver.unwrap_or_else(SequenceNumber::new),
         contents,
