@@ -129,16 +129,26 @@ impl JsonRpcServerBuilder {
             .ok()
             .and_then(|v| bool::from_str(&v).ok())
             .unwrap_or_default();
+        // TODO(chris): remove this once this has worked well in production
+        let enable_positional_params = env::var("ENABLE_POSITIONAL_PARAMS")
+            .ok()
+            .and_then(|v| bool::from_str(&v).ok())
+            .unwrap_or_default();
         info!(
-            "Compatibility method routing {}.",
+            "Compatibility method routing {}. Positional params {}.",
             if disable_routing {
                 "disabled"
             } else {
                 "enabled"
+            },
+            if enable_positional_params {
+                "enabled"
+            } else {
+                "disabled"
             }
         );
         // We need to use the routing layer to block access to the old methods when routing is disabled.
-        let routing_layer = RoutingLayer::new(routing, disable_routing);
+        let routing_layer = RoutingLayer::new(routing, disable_routing, enable_positional_params);
 
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)

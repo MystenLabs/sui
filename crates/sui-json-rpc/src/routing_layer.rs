@@ -3,7 +3,7 @@
 
 use crate::{CLIENT_TARGET_API_VERSION_HEADER, MAX_REQUEST_SIZE};
 use hyper::{http, Body, Method, Request, Response};
-use jsonrpsee::core::__reexports::serde_json;
+use jsonrpsee::core::__reexports::serde_json::{self, Value};
 use jsonrpsee::core::error::GenericTransportError;
 use jsonrpsee::core::http_helpers::read_body;
 use jsonrpsee::types::Request as RpcRequest;
@@ -19,13 +19,19 @@ use tower::{Layer, Service};
 pub struct RoutingLayer {
     routes: HashMap<String, MethodRouting>,
     disable_routing: bool,
+    enable_positional_params: bool,
 }
 
 impl RoutingLayer {
-    pub fn new(routes: HashMap<String, MethodRouting>, disable_routing: bool) -> Self {
+    pub fn new(
+        routes: HashMap<String, MethodRouting>,
+        disable_routing: bool,
+        enable_positional_params: bool,
+    ) -> Self {
         Self {
             routes,
             disable_routing,
+            enable_positional_params,
         }
     }
 }
@@ -34,7 +40,12 @@ impl<S> Layer<S> for RoutingLayer {
     type Service = RpcRoutingService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        RpcRoutingService::new(inner, self.routes.clone(), self.disable_routing)
+        RpcRoutingService::new(
+            inner,
+            self.routes.clone(),
+            self.disable_routing,
+            self.enable_positional_params,
+        )
     }
 }
 
@@ -44,16 +55,23 @@ pub struct RpcRoutingService<S> {
     routes: HashMap<String, MethodRouting>,
     route_to_methods: HashSet<String>,
     disable_routing: bool,
+    enable_positional_params: bool,
 }
 
 impl<S> RpcRoutingService<S> {
-    pub fn new(inner: S, routes: HashMap<String, MethodRouting>, disable_routing: bool) -> Self {
+    pub fn new(
+        inner: S,
+        routes: HashMap<String, MethodRouting>,
+        disable_routing: bool,
+        enable_positional_params: bool,
+    ) -> Self {
         let route_to_methods = routes.values().map(|v| v.route_to.clone()).collect();
         Self {
             inner,
             routes,
             route_to_methods,
             disable_routing,
+            enable_positional_params,
         }
     }
 }
@@ -80,6 +98,7 @@ where
         let routes = self.routes.clone();
         let route_to_methods = self.route_to_methods.clone();
         let disable_routing = self.disable_routing;
+        let enable_positional_params = self.enable_positional_params;
         // take the service that was ready
         // https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
         let mut inner = std::mem::replace(&mut self.inner, clone);
@@ -113,6 +132,7 @@ where
                         &routes,
                         &route_to_methods,
                         disable_routing,
+                        enable_positional_params,
                     )
                 } else {
                     process_batched_requests(
@@ -121,6 +141,7 @@ where
                         &routes,
                         &route_to_methods,
                         disable_routing,
+                        enable_positional_params,
                     )
                 };
                 Request::from_parts(parts, Body::from(body))
@@ -139,14 +160,21 @@ fn process_batched_requests(
     routes: &HashMap<String, MethodRouting>,
     route_to_methods: &HashSet<String>,
     disable_routing: bool,
+    enable_positional_params: bool,
 ) -> Vec<u8> {
     let Ok(requests) = serde_json::from_slice::<Vec<&[u8]>>(body) else{
         return body.to_vec();
     };
     let mut processed_reqs = Vec::new();
     for request in requests {
-        let req =
-            process_single_request(request, version, routes, route_to_methods, disable_routing);
+        let req = process_single_request(
+            request,
+            version,
+            routes,
+            route_to_methods,
+            disable_routing,
+            enable_positional_params,
+        );
         processed_reqs.push(req);
     }
     if let Ok(request) = serde_json::to_vec(&processed_reqs) {
@@ -163,12 +191,23 @@ fn process_single_request(
     routes: &HashMap<String, MethodRouting>,
     route_to_methods: &HashSet<String>,
     disable_routing: bool,
+    enable_positional_params: bool,
 ) -> Vec<u8> {
     let Ok(mut request) = serde_json::from_slice::<RpcRequest>(body) else{
         return body.to_vec();
     };
 
     let mut modified = false;
+
+    if !enable_positional_params && request.params.is_some() {
+        let params = request.params.unwrap();
+        if let Ok(parsed_value) = serde_json::from_str::<Value>(params.get()) {
+            if parsed_value.is_array() {
+                request.method = "INVALID_ROUTING".into();
+                modified = true;
+            }
+        }
+    }
 
     // Reject direct access to the old methods
     if route_to_methods.contains(request.method.as_ref()) {
