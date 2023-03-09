@@ -173,6 +173,7 @@ impl AuthorityPerpetualTables {
             .epoch_start_configuration
             .get(&())?
             .expect("Must have current epoch.")
+            .epoch_start_state()
             .epoch())
     }
 

@@ -220,7 +220,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
-            EpochStartConfiguration::new(system_state, Default::default()),
+            EpochStartConfiguration::new_v1(system_state, Default::default()),
         )
         .await
         .unwrap();

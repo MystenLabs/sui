@@ -8,9 +8,7 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata,
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
-use crate::sui_system_state::epoch_start_sui_system_state::{
-    EpochStartSystemState, EpochStartValidatorInfo,
-};
+use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
@@ -18,6 +16,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
 use super::SuiSystemStateTrait;
 
@@ -472,19 +471,18 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
     }
 
     fn into_epoch_start_state(self) -> EpochStartSystemState {
-        EpochStartSystemState {
-            epoch: self.epoch,
-            protocol_version: self.protocol_version,
-            reference_gas_price: self.reference_gas_price,
-            safe_mode: self.safe_mode,
-            epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
-            active_validators: self
-                .validators
+        EpochStartSystemState::new_v1(
+            self.epoch,
+            self.protocol_version,
+            self.reference_gas_price,
+            self.safe_mode,
+            self.epoch_start_timestamp_ms,
+            self.validators
                 .active_validators
                 .iter()
                 .map(|validator| {
                     let metadata = validator.verified_metadata();
-                    EpochStartValidatorInfo {
+                    EpochStartValidatorInfoV1 {
                         sui_address: metadata.sui_address,
                         protocol_pubkey: metadata.protocol_pubkey.clone(),
                         narwhal_network_pubkey: metadata.network_pubkey.clone(),
@@ -497,7 +495,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     }
                 })
                 .collect(),
-        }
+        )
     }
 
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary {

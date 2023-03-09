@@ -8696,6 +8696,7 @@ dependencies = [
  "criterion",
  "dashmap",
  "either",
+ "enum_dispatch",
  "expect-test",
  "eyre",
  "fastcrypto",

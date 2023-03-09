@@ -67,12 +67,16 @@ use sui_types::messages_checkpoint::{
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use sui_types::sui_system_state::epoch_start_sui_system_state::{
+    EpochStartSystemState, EpochStartSystemStateTrait,
+};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
+
+use super::epoch_start_configuration::EpochStartConfigTrait;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -354,14 +358,19 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
-        assert_eq!(epoch_start_configuration.epoch(), epoch_id);
+        assert_eq!(
+            epoch_start_configuration.epoch_start_state().epoch(),
+            epoch_id
+        );
         let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
-        let protocol_version = epoch_start_configuration.protocol_version();
+        let protocol_version = epoch_start_configuration
+            .epoch_start_state()
+            .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
         Arc::new(Self {
@@ -393,7 +402,7 @@ impl AuthorityPerEpochStore {
 
     /// Returns `&Arc<EpochStartConfiguration>`
     /// User can treat this `Arc` as `&EpochStartConfiguration`, or clone the Arc to pass as owned object
-    pub fn epoch_start_configuration(&self) -> &Arc<EpochStartConfiguration> {
+    pub fn epoch_start_config(&self) -> &Arc<EpochStartConfiguration> {
         &self.epoch_start_configuration
     }
 
@@ -466,16 +475,12 @@ impl AuthorityPerEpochStore {
             .insert(checkpoint, accumulator)?)
     }
 
-    pub fn epoch_start_config(&self) -> &EpochStartConfiguration {
-        &self.epoch_start_configuration
-    }
-
     pub fn reference_gas_price(&self) -> u64 {
-        self.epoch_start_config().reference_gas_price()
+        self.epoch_start_state().reference_gas_price()
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {
-        self.epoch_start_config().protocol_version()
+        self.epoch_start_state().protocol_version()
     }
 
     pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
