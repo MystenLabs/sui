@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Button from '_app/shared/button';
-import CardLayout from '_app/shared/card-layout';
+import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Alert from '_components/alert';

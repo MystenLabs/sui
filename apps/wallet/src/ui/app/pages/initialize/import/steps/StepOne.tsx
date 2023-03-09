@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowLeft16, ArrowRight16 } from '@mysten/icons';
+import { ArrowRight16 } from '@mysten/icons';
 import { Formik, Form } from 'formik';
-import { useNavigate } from 'react-router-dom';
 import * as Yup from 'yup';
 
 import { Button } from '_app/shared/ButtonUI';
@@ -20,7 +19,6 @@ const validationSchema = Yup.object({
 });
 
 export default function StepOne({ next, data, mode }: StepProps) {
-    const navigate = useNavigate();
     return (
         <Formik
             initialValues={data}
@@ -108,25 +106,12 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                 );
                             })}
                         </div>
+                    </FieldLabel>
+                    <div className="bg-sui-lightest flex flex-col flex-nowrap items-stretch gap-2.5 sticky -bottom-7.5 px-7.5 pb-7.5 pt-4.5 -mx-7.5 -mb-7.5">
                         {touched.mnemonic &&
                             typeof errors.mnemonic === 'string' && (
                                 <Alert>{errors.mnemonic}</Alert>
                             )}
-                    </FieldLabel>
-                    <div className="flex flex-nowrap items-center mt-5 gap-2.5">
-                        {mode === 'forgot' ? (
-                            <Button
-                                type="button"
-                                disabled={isSubmitting}
-                                variant="outline"
-                                size="tall"
-                                onClick={() => {
-                                    navigate(-1);
-                                }}
-                                before={<ArrowLeft16 />}
-                                text="Back"
-                            />
-                        ) : null}
                         <Button
                             type="submit"
                             disabled={isSubmitting || !isValid}
