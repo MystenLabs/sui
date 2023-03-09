@@ -38,20 +38,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
 RUN cargo build --release \
-    --bin sui-node \
-    --bin sui \
-    --bin sui-faucet \
-    --bin stress \
-    --bin sui-cluster-test
+    --bin sui-indexer
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR sui
-COPY --from=builder /sui/target/release/sui-node /usr/local/bin
-COPY --from=builder /sui/target/release/sui /usr/local/bin
-COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
-COPY --from=builder /sui/target/release/stress /usr/local/bin
-COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
+COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
+# sui-indexer needs postgres libpq5 and ca-certificates
+RUN apt update && apt install -y libpq5 ca-certificates
 
 ARG BUILD_DATE
 ARG GIT_REVISION
