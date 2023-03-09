@@ -63,6 +63,6 @@ describe('Transaction Reading API', () => {
       { showInput: true },
     );
     const [txKind] = getTransactionKinds(resp)!;
-    expect('Genesis' in txKind).toBe(true);
+    expect(txKind.kind === 'Genesis').toBe(true);
   });
 });

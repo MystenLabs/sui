@@ -150,7 +150,7 @@ impl PartialEq for SuiTransactionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename = "TransactionKind")]
+#[serde(rename = "TransactionKind", tag = "kind")]
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(SuiTransferObject),

@@ -10,6 +10,7 @@ import {
     getTransactionSender,
     getTransactionKinds,
     SUI_TYPE_ARG,
+    getCoinBalanceChangeEvent,
 } from '@mysten/sui.js';
 
 import type {
@@ -113,12 +114,12 @@ function getTxnAmountFromCoinBalanceEvent(
 
     events.forEach((event) => {
         if (
-            'coinBalanceChange' in event &&
-            event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
-            event?.coinBalanceChange?.transactionModule !== 'gas'
+            event.type === 'coinBalanceChange' &&
+            event?.content?.changeType &&
+            ['Receive', 'Pay'].includes(event?.content?.changeType) &&
+            event?.content?.transactionModule !== 'gas'
         ) {
-            const { coinBalanceChange } = event;
+            const coinBalanceChange = getCoinBalanceChangeEvent(event)!;
             const { coinType, amount, owner, sender } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
             if (AddressOwner === address || address === sender) {

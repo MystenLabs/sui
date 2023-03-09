@@ -1,16 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useRpcClient } from '@mysten/core';
+import {
+    getEventSender,
+    getEventPackage,
+    isEventType,
+    type SuiEventEnvelope,
+    type PaginatedEvents,
+    type SuiEvents,
+} from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { TxTimeType } from '../tx-time/TxTimeType';
-
-import type {
-    SuiEventEnvelope,
-    PaginatedEvents,
-    SuiEvents,
-} from '@mysten/sui.js';
 
 import { Banner } from '~/ui/Banner';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
@@ -52,11 +54,11 @@ const transformTable = (events: SuiEvents) => ({
             timestamp,
             txDigest,
         }: SuiEventEnvelope): PackageTableData => {
-            if (!('publish' in event)) return {};
+            if (!isEventType(event, 'publish')) return {};
             return {
                 time: <TxTimeType timestamp={timestamp} />,
-                sender: <AddressLink address={event.publish.sender} />,
-                packageId: <ObjectLink objectId={event.publish.packageId} />,
+                sender: <AddressLink address={getEventSender(event)!} />,
+                packageId: <ObjectLink objectId={getEventPackage(event)!} />,
                 txnDigest: <TransactionLink digest={txDigest} />,
             };
         }
