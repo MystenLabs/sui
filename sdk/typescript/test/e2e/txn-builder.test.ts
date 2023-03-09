@@ -80,7 +80,7 @@ describe('Transaction Builders', () => {
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
           tx.input(coins[2].objectId),
-          tx.input(validator_address),
+          tx.input(validatorAddress),
         ],
       }),
     );
