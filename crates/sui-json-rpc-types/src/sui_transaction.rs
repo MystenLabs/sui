@@ -10,7 +10,7 @@ use move_core_types::language_storage::TypeTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::serde_as;
+use serde_with::{serde_as, DisplayFromStr};
 
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -32,6 +32,33 @@ use sui_types::parse_sui_type_tag;
 use sui_types::signature::GenericSignature;
 
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
+/// Type for de/serializing number to string
+pub struct BigInt(
+    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "String")]
+    u64,
+);
+
+impl From<BigInt> for u64 {
+    fn from(x: BigInt) -> u64 {
+        x.0
+    }
+}
+
+impl From<u64> for BigInt {
+    fn from(v: u64) -> BigInt {
+        BigInt(v)
+    }
+}
+
+impl Display for BigInt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
@@ -755,7 +782,7 @@ pub struct SuiPay {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
+    pub amounts: Vec<BigInt>,
 }
 
 impl From<Pay> for SuiPay {
@@ -764,7 +791,7 @@ impl From<Pay> for SuiPay {
         SuiPay {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts,
+            amounts: p.amounts.into_iter().map(|x| x.into()).collect(),
         }
     }
 }
@@ -787,7 +814,7 @@ pub struct SuiPaySui {
     pub recipients: Vec<SuiAddress>,
     /// The amounts each recipient will receive.
     /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
+    pub amounts: Vec<BigInt>,
 }
 
 impl From<PaySui> for SuiPaySui {
@@ -796,7 +823,7 @@ impl From<PaySui> for SuiPaySui {
         SuiPaySui {
             coins,
             recipients: p.recipients,
-            amounts: p.amounts,
+            amounts: p.amounts.into_iter().map(|x| x.into()).collect(),
         }
     }
 }

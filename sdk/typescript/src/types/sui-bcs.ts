@@ -53,7 +53,7 @@ export type PayTx = {
   Pay: {
     coins: SuiObjectRef[];
     recipients: string[];
-    amounts: number[];
+    amounts: string[];
   };
 };
 
@@ -61,7 +61,7 @@ export type PaySuiTx = {
   PaySui: {
     coins: SuiObjectRef[];
     recipients: string[];
-    amounts: number[];
+    amounts: string[];
   };
 };
 
