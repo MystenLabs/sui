@@ -67,9 +67,8 @@ pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_types::TransactionsClient;
 use sui_config::node::DBCheckpointConfig;
-use sui_core::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, EpochStartConfiguration,
-};
+use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,

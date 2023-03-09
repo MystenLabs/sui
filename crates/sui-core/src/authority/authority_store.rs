@@ -7,6 +7,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObjectPair,
 };
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use either::Either;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
