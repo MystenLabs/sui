@@ -26,7 +26,10 @@ use sui_types::{
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
 };
 
-use crate::adapter::{missing_unwrapped_msg, new_session};
+use crate::{
+    adapter::{missing_unwrapped_msg, new_session},
+    execution_mode::ExecutionMode,
+};
 
 use super::types::*;
 
@@ -89,7 +92,7 @@ where
         state_view: &'state S,
         tx_context: &'a mut TxContext,
         gas_status: &'a mut SuiGasStatus<'b>,
-        gas_coin: ObjectID,
+        gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
         let mut object_owner_map = BTreeMap::new();
@@ -97,26 +100,39 @@ where
             .into_iter()
             .map(|call_arg| load_call_arg(state_view, &mut object_owner_map, call_arg))
             .collect::<Result<_, ExecutionError>>()?;
-        let mut gas = load_object(
-            state_view,
-            &mut object_owner_map,
-            /* imm override */ false,
-            gas_coin,
-        )?;
-        // subtract the max gas budget. This amount is off limits in the programmable transaction,
-        // so to mimic this "off limits" behavior, we act as if the coin has less balance than
-        // it really does
-        let Some(Value::Object(ObjectValue {
-            contents: ObjectContents::Coin(coin),
-            ..
-        })) = &mut gas.inner.value else {
-            invariant_violation!("Gas object should be a populated coin")
+        let gas = if let Some(gas_coin) = gas_coin_opt {
+            let mut gas = load_object(
+                state_view,
+                &mut object_owner_map,
+                /* imm override */ false,
+                gas_coin,
+            )?;
+            // subtract the max gas budget. This amount is off limits in the programmable transaction,
+            // so to mimic this "off limits" behavior, we act as if the coin has less balance than
+            // it really does
+            let Some(Value::Object(ObjectValue {
+                contents: ObjectContents::Coin(coin),
+                ..
+            })) = &mut gas.inner.value else {
+                invariant_violation!("Gas object should be a populated coin")
+            };
+            let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
+            let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
+                invariant_violation!(
+                    "Transaction input checker should check that there is enough gas"
+                );
+            };
+            coin.balance = Balance::new(new_balance);
+            gas
+        } else {
+            InputValue {
+                object_metadata: None,
+                inner: ResultValue {
+                    last_usage_kind: None,
+                    value: None,
+                },
+            }
         };
-        let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
-        let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
-            invariant_violation!("Transaction input checker should check that there is enough gas");
-        };
-        coin.balance = Balance::new(new_balance);
         let session = new_session(
             vm,
             state_view,
@@ -296,7 +312,13 @@ where
     }
 
     /// Restore an argument after being mutably borrowed
-    pub fn restore_arg(&mut self, arg: Argument, value: Value) -> Result<(), ExecutionError> {
+    pub fn restore_arg<Mode: ExecutionMode>(
+        &mut self,
+        updates: &mut Mode::ArgumentUpdates,
+        arg: Argument,
+        value: Value,
+    ) -> Result<(), ExecutionError> {
+        Mode::add_argument_update(self, updates, arg, &value)?;
         let was_mut_opt = self.borrowed.remove(&arg);
         assert_invariant!(
             was_mut_opt.is_some() && was_mut_opt.unwrap(),
@@ -400,7 +422,7 @@ where
                 add_additional_write(&mut additional_writes, owner, object_value);
             }
         };
-        let gas_id = gas.object_metadata.as_ref().unwrap().id;
+        let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
         add_input_object_write(gas);
         for input in inputs {
             add_input_object_write(input)
@@ -452,7 +474,9 @@ where
             add_additional_write(&mut additional_writes, owner, object_value)
         }
         // Refund unused gas
-        refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
+        if let Some(gas_id) = gas_id_opt {
+            refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
+        }
 
         let (change_set, events, mut native_context_extensions) = session
             .finish_with_extensions()

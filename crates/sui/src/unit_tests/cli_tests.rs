@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
@@ -185,6 +184,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_create_example_nft_command() {
+    use std::str::FromStr;
     let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;

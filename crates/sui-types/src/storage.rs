@@ -53,12 +53,13 @@ pub enum DeleteKind {
     Wrap,
 }
 
+#[derive(Debug)]
 pub enum ObjectChange {
     Write(SingleTxContext, Object, WriteKind),
     Delete(SingleTxContext, SequenceNumber, DeleteKind),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SingleTxContext {
     pub package_id: ObjectID,
     pub transaction_module: Identifier,

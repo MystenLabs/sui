@@ -9,14 +9,13 @@ use fastcrypto::hash::{HashFunction, Sha3_256};
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
-use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
-use sui_adapter::{adapter, execution_mode};
+use sui_adapter::{adapter, execution_mode, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -32,12 +31,13 @@ use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+    CallArg, Command, InputObjects, Transaction, TransactionEffects, TransactionEvents,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
@@ -947,23 +947,29 @@ fn process_package(
         ctx.digest(),
         protocol_config,
     );
-    let package_id = ObjectID::from(*modules[0].self_id().address());
     let mut gas_status = SuiGasStatus::new_unmetered();
-    adapter::verify_and_link(
-        vm,
-        &temporary_store,
-        &modules,
-        package_id,
-        gas_status.create_move_gas_status(),
+    let module_bytes = modules
+        .into_iter()
+        .map(|m| {
+            let mut buf = vec![];
+            m.serialize(&mut buf).unwrap();
+            buf
+        })
+        .collect();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // executing in Genesis mode does not create a package upgrade
+        builder.command(Command::Publish(module_bytes));
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
         protocol_config,
-    )?;
-    adapter::store_package_and_init_modules(
+        vm,
         &mut temporary_store,
-        vm,
-        modules,
         ctx,
-        gas_status.create_move_gas_status(),
-        protocol_config,
+        &mut gas_status,
+        None,
+        pt,
     )?;
 
     let InnerTemporaryStore {
@@ -1030,38 +1036,51 @@ pub fn generate_genesis_system_object(
         commission_rates.push(validator.commission_rate());
     }
 
-    adapter::execute::<execution_mode::Normal, _, _>(
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("genesis").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![
+                    CallArg::Pure(
+                        bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap(),
+                    ),
+                    CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&descriptions).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&image_url).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
+                ],
+            )
+            .unwrap();
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+        &protocol_config,
         move_vm,
         &mut temporary_store,
-        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
-        &ident_str!("create").to_owned(),
-        vec![],
-        vec![
-            CallArg::Pure(bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&descriptions).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&image_url).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
-        ],
-        SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
-        &protocol_config,
+        &mut SuiGasStatus::new_unmetered(),
+        None,
+        pt,
     )?;
 
     let InnerTemporaryStore {

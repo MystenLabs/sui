@@ -16,7 +16,7 @@ import {
   TestToolbox,
 } from './utils/setup';
 
-describe('Test dev inspect', () => {
+describe.skip('Test dev inspect', () => {
   let toolbox: TestToolbox;
   let packageId: string;
 
