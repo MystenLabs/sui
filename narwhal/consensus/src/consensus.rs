@@ -194,7 +194,8 @@ impl ConsensusState {
         gauge!(
             snarkos_metrics::consensus::CERTIFICATE_COMMIT_LATENCY,
             certificate.metadata.created_at.elapsed().as_secs_f64(),
-            "certificate_round" => certificate.round()
+            "certificate_round" => certificate.round().to_string(),
+            "certificate_epoch" => certificate.epoch().to_string(),
         );
 
         // NOTE: This log entry is used to compute performance.
