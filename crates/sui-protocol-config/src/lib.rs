@@ -686,7 +686,7 @@ impl ProtocolConfig {
 
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
-                max_serialized_tx_effects_size: Some(64 * 1024),
+                max_serialized_tx_effects_size: Some(512 * 1024),
                 max_gas_payment_objects: Some(32),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),

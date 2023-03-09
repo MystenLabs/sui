@@ -76,6 +76,7 @@ pub fn execute_transaction_to_effects<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
+    let metered = !gas_status.is_unmetered();
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -113,7 +114,7 @@ pub fn execute_transaction_to_effects<
         status,
         gas,
         epoch_data.epoch_id(),
-        true, /* Check the size of effects */
+        metered, /* Check the size of effects for metered transactions only */
         protocol_config,
         &tx_ctx.sender(),
     );
@@ -181,7 +182,7 @@ fn execute_transaction<
         );
         if execution_result.is_err() {
             // Roll back the temporary store if execution failed.
-            temporary_store.reset();
+            temporary_store.reset(BTreeSet::new());
             // re-smash so temporary store is again aware of smashing
             gas_object_ref = match temporary_store.smash_gas(sender, gas) {
                 Ok(obj_ref) => obj_ref,
@@ -432,7 +433,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
             change_epoch,
         );
-        temporary_store.reset();
+        temporary_store.reset(BTreeSet::new());
         let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
         adapter::execute::<execution_mode::Normal, _, _>(
             move_vm,
