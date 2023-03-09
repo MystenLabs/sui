@@ -1302,7 +1302,7 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
             let authority =
                 committee
                     .authority_by_index(authority_index)
-                    .ok_or(SuiError::UnknownSigner {
+                    .ok_or_else(|| SuiError::UnknownSigner {
                         signer: None,
                         index: Some(authority_index),
                         committee: Box::new(committee.clone()),
