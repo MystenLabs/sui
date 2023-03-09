@@ -21,9 +21,7 @@ use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::{GasCoin, GAS};
-use sui_types::governance::{
-    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
-};
+use sui_types::governance::{ADD_STAKE_LOCKED_COIN_FUN_NAME, ADD_STAKE_MUL_COIN_FUN_NAME};
 use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -352,8 +350,8 @@ impl Operations {
     fn is_delegation_call(tx: &SuiProgrammableMoveCall) -> bool {
         tx.package == SUI_FRAMEWORK_OBJECT_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
-            && (tx.function == ADD_DELEGATION_LOCKED_COIN_FUN_NAME.as_str()
-                || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())
+            && (tx.function == ADD_STAKE_LOCKED_COIN_FUN_NAME.as_str()
+                || tx.function == ADD_STAKE_MUL_COIN_FUN_NAME.as_str())
     }
 
     fn get_balance_operation_from_events(

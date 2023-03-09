@@ -396,7 +396,7 @@ pub fn make_counter_increment_transaction(
     to_sender_signed_transaction(data, keypair)
 }
 
-pub fn make_delegation_transaction(
+pub fn make_staking_transaction(
     gas_object: ObjectRef,
     coin: ObjectRef,
     validator: SuiAddress,
@@ -408,7 +408,7 @@ pub fn make_delegation_transaction(
         sender,
         SUI_FRAMEWORK_OBJECT_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
-        "request_add_delegation".parse().unwrap(),
+        "request_add_stake".parse().unwrap(),
         vec![],
         gas_object,
         vec![

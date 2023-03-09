@@ -21,8 +21,8 @@ describe('Governance API', () => {
     signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
-  it('test requestAddDelegation', async () => {
-    const result = await addDelegation(signer);
+  it('test requestAddStake', async () => {
+    const result = await addStake(signer);
     expect(getExecutionStatusType(result)).toEqual('success');
   });
 
@@ -31,11 +31,7 @@ describe('Governance API', () => {
     expect(stakes.length).greaterThan(0);
   });
 
-  it('test requestWithdrawDelegation', async () => {
-    // TODO: implement this
-  });
-
-  it('test requestSwitchDelegation', async () => {
+  it('test requestWithdrawStake', async () => {
     // TODO: implement this
   });
 
@@ -49,7 +45,7 @@ describe('Governance API', () => {
   });
 });
 
-async function addDelegation(signer: RawSigner) {
+async function addStake(signer: RawSigner) {
   const coins = await signer.provider.getCoins({
     owner: await signer.getAddress(),
     coinType: SUI_TYPE_ARG,
@@ -58,7 +54,7 @@ async function addDelegation(signer: RawSigner) {
   const system = await signer.provider.getLatestSuiSystemState();
   const validators = system.activeValidators;
 
-  const tx = await SuiSystemStateUtil.newRequestAddDelegationTxn(
+  const tx = await SuiSystemStateUtil.newRequestAddStakeTxn(
     signer.provider,
     [coins.data[0].coinObjectId],
     BigInt(DEFAULT_STAKED_AMOUNT),

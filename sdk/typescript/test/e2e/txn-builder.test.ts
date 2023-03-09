@@ -74,7 +74,7 @@ describe('Transaction Builders', () => {
     const tx = new Transaction();
     tx.add(
       Commands.MoveCall({
-        target: '0x2::sui_system::request_add_delegation',
+        target: '0x2::sui_system::request_add_stake',
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
           tx.input(coins[2].objectId),

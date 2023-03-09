@@ -242,7 +242,7 @@ pub async fn metadata(
             let data = context
                 .client
                 .transaction_builder()
-                .request_add_delegation(
+                .request_add_stake(
                     *sender,
                     coins.iter().map(|coin| coin.0).collect(),
                     Some(*amount as u64),
