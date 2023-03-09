@@ -13,7 +13,7 @@ use anyhow::{anyhow, ensure};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
-use sui_adapter::adapter::resolve_and_type_check;
+use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
@@ -25,7 +25,9 @@ use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{CallArg, InputObjectKind, ObjectArg, TransactionData, TransactionKind};
+use sui_types::messages::{
+    Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
+};
 
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
@@ -322,10 +324,15 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args(package, &module, &function, &type_args, call_args)
+            .resolve_and_checks_json_args(
+                builder, package, &module, &function, &type_args, call_args,
+            )
             .await?;
 
-        builder.move_call(package, module, function, type_args, call_args)
+        builder.command(Command::move_call(
+            package, module, function, type_args, call_args,
+        ));
+        Ok(())
     }
 
     async fn get_object_arg(
@@ -359,12 +366,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
 
     async fn resolve_and_checks_json_args(
         &self,
+        builder: &mut ProgrammableTransactionBuilder,
         package_id: ObjectID,
         module: &Identifier,
         function: &Identifier,
         type_args: &[TypeTag],
         json_args: Vec<SuiJsonValue>,
-    ) -> Result<Vec<CallArg>, anyhow::Error> {
+    ) -> Result<Vec<Argument>, anyhow::Error> {
         let object = self
             .0
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
@@ -391,20 +399,20 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             json_args,
             Mode::allow_arbitrary_function_calls(),
         )?;
-        let mut args = Vec::new();
+        let mut check_args = Vec::new();
         let mut objects = BTreeMap::new();
         for arg in json_args {
-            args.push(match arg {
+            check_args.push(match arg {
                 SuiJsonCallArg::Object(id) => {
-                    CallArg::Object(self.get_object_arg(id, &mut objects).await?)
+                    CheckCallArg::Object(self.get_object_arg(id, &mut objects).await?)
                 }
-                SuiJsonCallArg::Pure(p) => CallArg::Pure(p),
+                SuiJsonCallArg::Pure(p) => CheckCallArg::Pure(p),
                 SuiJsonCallArg::ObjVec(v) => {
                     let mut object_ids = vec![];
                     for id in v {
                         object_ids.push(self.get_object_arg(id, &mut objects).await?);
                     }
-                    CallArg::ObjVec(object_ids)
+                    CheckCallArg::ObjVec(object_ids)
                 }
             })
         }
@@ -416,10 +424,17 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             &compiled_module,
             function,
             type_args,
-            args.clone(),
+            check_args.clone(),
             false,
         )?;
-
+        let args = check_args
+            .into_iter()
+            .map(|check_arg| match check_arg {
+                CheckCallArg::Pure(bytes) => builder.input(CallArg::Pure(bytes)).unwrap(),
+                CheckCallArg::Object(obj) => builder.input(CallArg::Object(obj)).unwrap(),
+                CheckCallArg::ObjVec(objs) => builder.make_obj_vec(objs),
+            })
+            .collect();
         Ok(args)
     }
 
@@ -666,26 +681,40 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         }
         .to_owned();
 
-        TransactionData::new_move_call(
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let arguments = vec![
+                builder
+                    .input(CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_SYSTEM_STATE_OBJECT_ID,
+                        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                        mutable: true,
+                    }))
+                    .unwrap(),
+                builder.make_obj_vec(obj_vec),
+                builder
+                    .input(CallArg::Pure(bcs::to_bytes(&amount)?))
+                    .unwrap(),
+                builder
+                    .input(CallArg::Pure(bcs::to_bytes(&validator)?))
+                    .unwrap(),
+            ];
+            builder.command(Command::move_call(
+                SUI_FRAMEWORK_OBJECT_ID,
+                SUI_SYSTEM_MODULE_NAME.to_owned(),
+                function,
+                vec![],
+                arguments,
+            ));
+            builder.finish()
+        };
+        Ok(TransactionData::new_programmable(
             signer,
-            SUI_FRAMEWORK_OBJECT_ID,
-            SUI_SYSTEM_MODULE_NAME.to_owned(),
-            function,
-            vec![],
-            gas,
-            vec![
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: SUI_SYSTEM_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }),
-                CallArg::ObjVec(obj_vec),
-                CallArg::Pure(bcs::to_bytes(&amount)?),
-                CallArg::Pure(bcs::to_bytes(&validator)?),
-            ],
+            vec![gas],
+            pt,
             gas_budget,
             gas_price,
-        )
+        ))
     }
 
     pub async fn request_withdraw_delegation(

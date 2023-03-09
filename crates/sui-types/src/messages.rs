@@ -72,8 +72,6 @@ pub enum CallArg {
     Pure(Vec<u8>),
     // an object
     Object(ObjectArg),
-    // a vector of objects
-    ObjVec(Vec<ObjectArg>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -438,28 +436,6 @@ impl CallArg {
                     mutable,
                 }]
             }
-            CallArg::ObjVec(vec) => vec
-                .iter()
-                .map(|obj_arg| match obj_arg {
-                    ObjectArg::ImmOrOwnedObject(object_ref) => {
-                        InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
-                    }
-                    ObjectArg::SharedObject {
-                        id,
-                        initial_shared_version,
-                        mutable,
-                    } => {
-                        let id = *id;
-                        let initial_shared_version = *initial_shared_version;
-                        let mutable = *mutable;
-                        InputObjectKind::SharedMoveObject {
-                            id,
-                            initial_shared_version,
-                            mutable,
-                        }
-                    }
-                })
-                .collect(),
         }
     }
 
@@ -475,15 +451,6 @@ impl CallArg {
                 );
             }
             CallArg::Object(_) => (),
-            CallArg::ObjVec(v) => {
-                fp_ensure!(
-                    v.len() < config.max_object_vec_argument_size() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum object vector argument size".to_string(),
-                        value: config.max_object_vec_argument_size().to_string()
-                    }
-                );
-            }
         }
         Ok(())
     }
@@ -619,6 +586,22 @@ impl ProgrammableMoveCall {
 }
 
 impl Command {
+    pub fn move_call(
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        arguments: Vec<Argument>,
+    ) -> Self {
+        Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        }))
+    }
+
     fn publish_command_input_objects(modules: &[Vec<u8>]) -> Vec<InputObjectKind> {
         // For module publishing, all the dependent packages are implicit input objects
         // because they must all be on-chain in order for the package to publish.
@@ -805,12 +788,6 @@ impl ProgrammableTransaction {
                     initial_shared_version: *initial_shared_version,
                     mutable: *mutable,
                 }]),
-                CallArg::ObjVec(_) => {
-                    panic!(
-                        "not supported in programmable transactions, \
-                        should be unreachable if the input checker was run"
-                    )
-                }
             })
             .flatten()
     }

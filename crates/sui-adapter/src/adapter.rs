@@ -42,7 +42,7 @@ use sui_types::{
     base_types::*,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
-    messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
+    messages::{EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, Object, Owner},
     storage::ChildObjectResolver,
 };
@@ -156,6 +156,18 @@ pub struct TypeCheckSuccess {
     pub tx_ctx_kind: TxContextKind,
 }
 
+/// Small enum used to type check function calls for external tools. ObjVec does not exist
+/// for Programmable Transactions, but it effectively does via the command MakeMoveVec
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckCallArg {
+    /// contains no structs or objects
+    Pure(Vec<u8>),
+    /// an object
+    Object(ObjectArg),
+    /// a vector of objects
+    ObjVec(Vec<ObjectArg>),
+}
+
 /// - Check that `package_object`, `module` and `function` are valid
 /// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
 /// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
@@ -165,7 +177,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     module: &CompiledModule,
     function: &Identifier,
     type_args: &[TypeTag],
-    args: Vec<CallArg>,
+    args: Vec<CheckCallArg>,
     is_genesis: bool,
 ) -> Result<TypeCheckSuccess, ExecutionError> {
     // Resolve the function we are calling
@@ -257,8 +269,8 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
             let object_arg = match arg {
                 // dev-inspect does not make state changes and just a developer aid, so let through
                 // any BCS bytes (they will be checked later by the VM)
-                CallArg::Pure(arg) if Mode::allow_arbitrary_values() => return Ok(arg),
-                CallArg::Pure(arg) => {
+                CheckCallArg::Pure(arg) if Mode::allow_arbitrary_values() => return Ok(arg),
+                CheckCallArg::Pure(arg) => {
                     let (is_primitive, type_layout_opt) =
                         primitive_type(view, type_args, param_type);
                     if !is_primitive {
@@ -278,7 +290,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     validate_primitive_arg(view, &arg, idx, param_type, type_layout_opt)?;
                     return Ok(arg);
                 }
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
+                CheckCallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
                     let (o, arg_type, param_type) = serialize_object(
                         InputObjectKind::ImmOrOwnedMoveObject(ref_),
                         idx,
@@ -292,7 +304,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     type_check_struct(view, type_args, idx, arg_type, param_type)?;
                     o
                 }
-                CallArg::Object(ObjectArg::SharedObject {
+                CheckCallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
                     mutable,
@@ -314,7 +326,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     type_check_struct(view, type_args, idx, arg_type, param_type)?;
                     o
                 }
-                CallArg::ObjVec(vec) => {
+                CheckCallArg::ObjVec(vec) => {
                     if vec.is_empty() {
                         // bcs representation of the empty vector
                         return Ok(vec![0]);

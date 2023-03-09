@@ -1075,20 +1075,36 @@ fn test_move_input_objects() {
     let t2 = mk_st(p2, vec![mk_st(p3, vec![]), mk_st(p4, vec![])]);
     let t3 = TypeTag::Vector(Box::new(mk_st(p5, vec![])));
     let type_args = vec![t1, t2, t3];
+    let mut builder = ProgrammableTransactionBuilder::new();
     let args = vec![
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)),
-        CallArg::ObjVec(vec![
+        builder
+            .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
+            .unwrap(),
+        builder.make_obj_vec(vec![
             ObjectArg::ImmOrOwnedObject(o2),
             ObjectArg::ImmOrOwnedObject(o3),
         ]),
-        CallArg::Object(ObjectArg::SharedObject {
-            id: shared.0,
-            initial_shared_version: shared.1,
-            mutable: true,
-        }),
+        builder
+            .input(CallArg::Object(ObjectArg::SharedObject {
+                id: shared.0,
+                initial_shared_version: shared.1,
+                mutable: true,
+            }))
+            .unwrap(),
     ];
-
-    let data = dummy_move_call(package, "foo", "bar", type_args, gas_object_ref, args);
+    builder.command(Command::move_call(
+        package,
+        Identifier::new("foo").unwrap(),
+        Identifier::new("bar").unwrap(),
+        type_args,
+        args,
+    ));
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
+        SuiAddress::random_for_testing_only(),
+        vec![gas_object_ref],
+        builder.finish(),
+        MAX_GAS,
+    );
     let mut input_objects = data.input_objects().unwrap();
     macro_rules! rem {
         ($exp:expr) => {{
@@ -1120,27 +1136,6 @@ fn test_move_input_objects() {
     assert!(input_objects.is_empty());
 }
 
-fn dummy_move_call(
-    package: ObjectID,
-    module: &str,
-    function: &str,
-    type_args: Vec<TypeTag>,
-    gas_object_ref: ObjectRef,
-    args: Vec<CallArg>,
-) -> TransactionData {
-    TransactionData::new_move_call_with_dummy_gas_price(
-        SuiAddress::random_for_testing_only(),
-        package,
-        Identifier::new(module).unwrap(),
-        Identifier::new(function).unwrap(),
-        type_args,
-        gas_object_ref,
-        args,
-        MAX_GAS,
-    )
-    .unwrap()
-}
-
 #[test]
 fn test_unique_input_objects() {
     let package = ObjectID::random();
@@ -1166,18 +1161,23 @@ fn test_unique_input_objects() {
     let t2 = mk_st(p2, vec![mk_st(p3, vec![]), mk_st(p4, vec![])]);
     let t3 = TypeTag::Vector(Box::new(mk_st(p5, vec![])));
     let type_args = vec![t1, t2, t3];
+    let mut builder = ProgrammableTransactionBuilder::new();
     let args_1 = vec![
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)),
-        CallArg::ObjVec(vec![
+        builder
+            .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
+            .unwrap(),
+        builder.make_obj_vec(vec![
             ObjectArg::ImmOrOwnedObject(o2),
             ObjectArg::ImmOrOwnedObject(o3),
         ]),
     ];
-    let args_2 = vec![CallArg::Object(ObjectArg::SharedObject {
-        id: shared.0,
-        initial_shared_version: shared.1,
-        mutable: true,
-    })];
+    let args_2 = vec![builder
+        .input(CallArg::Object(ObjectArg::SharedObject {
+            id: shared.0,
+            initial_shared_version: shared.1,
+            mutable: true,
+        }))
+        .unwrap()];
 
     let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sender = (&sender_kp.public()).into();
@@ -1190,28 +1190,21 @@ fn test_unique_input_objects() {
         budget: 10000,
     };
 
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                package,
-                Identifier::new("test_module").unwrap(),
-                Identifier::new("test_function").unwrap(),
-                type_args.clone(),
-                args_1,
-            )
-            .unwrap();
-        builder
-            .move_call(
-                package,
-                Identifier::new("test_module").unwrap(),
-                Identifier::new("test_function").unwrap(),
-                type_args,
-                args_2,
-            )
-            .unwrap();
-        builder.finish()
-    };
+    builder.command(Command::move_call(
+        package,
+        Identifier::new("test_module").unwrap(),
+        Identifier::new("test_function").unwrap(),
+        type_args.clone(),
+        args_1,
+    ));
+    builder.command(Command::move_call(
+        package,
+        Identifier::new("test_module").unwrap(),
+        Identifier::new("test_function").unwrap(),
+        type_args,
+        args_2,
+    ));
+    let pt = builder.finish();
     let kind = TransactionKind::programmable(pt);
     let transaction_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
 

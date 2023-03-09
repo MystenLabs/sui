@@ -48,18 +48,7 @@ impl ProgrammableTransactionBuilder {
     }
 
     pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
-        match call_arg {
-            call_arg @ (CallArg::Pure(_) | CallArg::Object(_)) => {
-                Ok(Argument::Input(self.inputs.insert_full(call_arg).0 as u16))
-            }
-            CallArg::ObjVec(objs) if objs.is_empty() => {
-                anyhow::bail!(
-                    "Empty ObjVec is not supported in programmable transactions \
-                        without a type annotation"
-                )
-            }
-            CallArg::ObjVec(objs) => Ok(self.make_obj_vec(objs)),
-        }
+        Ok(Argument::Input(self.inputs.insert_full(call_arg).0 as u16))
     }
 
     pub fn make_obj_vec(&mut self, objs: impl IntoIterator<Item = ObjectArg>) -> Argument {
@@ -86,13 +75,13 @@ impl ProgrammableTransactionBuilder {
             .into_iter()
             .map(|a| self.input(a))
             .collect::<Result<_, _>>()?;
-        self.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        self.command(Command::move_call(
             package,
             module,
             function,
             type_arguments,
             arguments,
-        })));
+        ));
         Ok(())
     }
 

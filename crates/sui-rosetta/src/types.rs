@@ -27,7 +27,7 @@ use sui_types::crypto::SignatureScheme;
 use sui_types::governance::{
     ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
 };
-use sui_types::messages::{CallArg, ObjectArg, TransactionData};
+use sui_types::messages::{CallArg, Command, ObjectArg, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
@@ -901,24 +901,29 @@ impl InternalOperation {
                     ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
                 };
                 let mut builder = ProgrammableTransactionBuilder::new();
-                builder.move_call(
+                let arguments = vec![
+                    builder
+                        .input(CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_SYSTEM_STATE_OBJECT_ID,
+                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                            mutable: true,
+                        }))
+                        .unwrap(),
+                    builder.make_obj_vec(coins.into_iter().map(ObjectArg::ImmOrOwnedObject)),
+                    builder
+                        .input(CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?))
+                        .unwrap(),
+                    builder
+                        .input(CallArg::Pure(bcs::to_bytes(&validator)?))
+                        .unwrap(),
+                ];
+                builder.command(Command::move_call(
                     SUI_FRAMEWORK_OBJECT_ID,
                     SUI_SYSTEM_MODULE_NAME.to_owned(),
                     function,
                     vec![],
-                    vec![
-                        CallArg::Object(ObjectArg::SharedObject {
-                            id: SUI_SYSTEM_STATE_OBJECT_ID,
-                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                            mutable: true,
-                        }),
-                        CallArg::ObjVec(
-                            coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
-                        ),
-                        CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
-                        CallArg::Pure(bcs::to_bytes(&validator)?),
-                    ],
-                )?;
+                    arguments,
+                ));
                 builder.finish()
             }
             (op, metadata) => {

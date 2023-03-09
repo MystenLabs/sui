@@ -329,14 +329,6 @@ impl TryFrom<CallArg> for SuiJsonValue {
             | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
                 SuiJsonValue::new(Value::String(Hex::encode(id)))
             }
-            CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
-                vec.iter()
-                    .map(|obj_arg| match obj_arg {
-                        ObjectArg::ImmOrOwnedObject((id, _, _))
-                        | ObjectArg::SharedObject { id, .. } => Value::String(Hex::encode(id)),
-                    })
-                    .collect(),
-            )),
         }
     }
 }
