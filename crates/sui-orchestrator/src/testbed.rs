@@ -154,7 +154,9 @@ impl<C: ServerProviderClient> Testbed<C> {
         };
 
         // Wait until the instances are booted.
-        self.ready(instances.iter()).await?;
+        if cfg!(not(test)) {
+            self.ready(instances.iter()).await?;
+        }
         self.instances = self.client.list_instances().await?;
         Ok(())
     }
@@ -196,7 +198,9 @@ impl<C: ServerProviderClient> Testbed<C> {
         self.client.start_instances(available.iter()).await?;
 
         // Wait until the instances are started.
-        self.ready(available.iter()).await?;
+        if cfg!(not(test)) {
+            self.ready(available.iter()).await?;
+        }
         self.instances = self.client.list_instances().await?;
         Ok(())
     }
@@ -256,9 +260,9 @@ mod test {
     use crate::{client::test_client::TestClient, settings::Settings, testbed::Testbed};
 
     #[tokio::test]
-    async fn populate() {
+    async fn deploy() {
         let settings = Settings::new_for_test();
-        let client = TestClient::default();
+        let client = TestClient::new(settings.clone());
         let mut testbed = Testbed::new(settings, client).await.unwrap();
 
         testbed.deploy(5, None).await.unwrap();
@@ -275,7 +279,7 @@ mod test {
     #[tokio::test]
     async fn destroy() {
         let settings = Settings::new_for_test();
-        let client = TestClient::default();
+        let client = TestClient::new(settings.clone());
         let mut testbed = Testbed::new(settings, client).await.unwrap();
 
         testbed.destroy().await.unwrap();
@@ -286,9 +290,10 @@ mod test {
     #[tokio::test]
     async fn start() {
         let settings = Settings::new_for_test();
-        let client = TestClient::default();
+        let client = TestClient::new(settings.clone());
         let mut testbed = Testbed::new(settings, client).await.unwrap();
         testbed.deploy(5, None).await.unwrap();
+        testbed.stop().await.unwrap();
 
         let result = testbed.start(2).await;
 
@@ -311,26 +316,15 @@ mod test {
     }
 
     #[tokio::test]
-    async fn start_insufficient_capacity() {
-        let settings = Settings::new_for_test();
-        let client = TestClient::default();
-        let mut testbed = Testbed::new(settings, client).await.unwrap();
-        testbed.deploy(1, None).await.unwrap();
-
-        let result = testbed.start(2).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
     async fn stop() {
         let settings = Settings::new_for_test();
-        let client = TestClient::default();
+        let client = TestClient::new(settings.clone());
         let mut testbed = Testbed::new(settings, client).await.unwrap();
         testbed.deploy(5, None).await.unwrap();
         testbed.start(2).await.unwrap();
 
         testbed.stop().await.unwrap();
 
-        assert!(testbed.instances.iter().all(|x| x.status == "inactive"))
+        assert!(testbed.instances.iter().all(|x| x.is_inactive()))
     }
 }

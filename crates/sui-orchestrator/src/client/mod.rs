@@ -89,13 +89,22 @@ pub mod test_client {
 
     use serde::Serialize;
 
-    use crate::error::CloudProviderResult;
+    use crate::{error::CloudProviderResult, settings::Settings};
 
     use super::{Instance, ServerProviderClient};
 
-    #[derive(Default)]
     pub struct TestClient {
+        settings: Settings,
         instances: Mutex<Vec<Instance>>,
+    }
+
+    impl TestClient {
+        pub fn new(settings: Settings) -> Self {
+            Self {
+                settings,
+                instances: Mutex::new(Vec::new()),
+            }
+        }
     }
 
     impl Display for TestClient {
@@ -148,7 +157,7 @@ pub mod test_client {
                 region: region.into(),
                 main_ip: format!("0.0.0.{id}").parse().unwrap(),
                 tags: Vec::new(),
-                specs: "".into(),
+                specs: self.settings.specs.clone(),
                 status: "running".into(),
             };
             guard.push(instance.clone());

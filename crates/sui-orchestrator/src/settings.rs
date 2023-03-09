@@ -145,12 +145,19 @@ impl Settings {
     /// Test settings for unit tests.
     #[cfg(test)]
     pub fn new_for_test() -> Self {
+        // Create a temporary public key file.
+        let mut path = tempfile::tempdir().unwrap().into_path();
+        path.push("test_public_key.pub");
+        let public_key = "This is a fake public key for tests";
+        fs::write(&path, public_key).unwrap();
+
+        // Return set settings.
         Self {
             testbed_id: "testbed".into(),
             cloud_provider: CloudProvider::Aws,
             token_file: "/path/to/token/file".into(),
             ssh_private_key_file: "/path/to/private/key/file".into(),
-            ssh_public_key_file: None,
+            ssh_public_key_file: Some(path),
             regions: vec!["London".into(), "New York".into()],
             specs: "small".into(),
             repository: Repository {

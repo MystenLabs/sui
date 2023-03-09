@@ -36,6 +36,9 @@ sui-keys = { path = "../sui-keys" }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+[dev-dependencies]
+tempfile = "3.4.0"
+
 [[bin]]
 name = "orchestrator"
 path = "src/main.rs"

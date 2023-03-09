@@ -321,7 +321,7 @@ mod test {
     }
 
     #[test]
-    fn collect() {
+    fn prometheus_parse() {
         let report = r#"
             # HELP benchmark_duration Duration of the benchmark
             # TYPE benchmark_duration counter
@@ -388,9 +388,9 @@ mod test {
             .cloned()
             .collect()
         );
-        assert_eq!(data.sum, Duration::from_secs(1265));
+        assert_eq!(data.sum.as_secs(), 1265);
         assert_eq!(data.count, 1860);
-        assert_eq!(data.timestamp, Duration::from_secs(30));
-        assert_eq!(data.squared_sum, Duration::from_secs(952));
+        assert_eq!(data.timestamp.as_secs(), 30);
+        assert_eq!(data.squared_sum.as_secs(), 952);
     }
 }

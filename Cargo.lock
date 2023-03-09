@@ -9937,6 +9937,7 @@ dependencies = [
  "sui-config",
  "sui-keys",
  "sui-types",
+ "tempfile",
  "thiserror",
  "tokio",
  "workspace-hack",
