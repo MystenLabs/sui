@@ -231,12 +231,14 @@ importers:
       '@growthbook/growthbook': ^0.20.1
       '@growthbook/growthbook-react': ^0.10.1
       '@headlessui/react': ^1.7.7
-      '@ledgerhq/hw-transport': ^6.27.10
+      '@ledgerhq/errors': ^6.12.3
+      '@ledgerhq/hw-transport': ^6.27.11
       '@ledgerhq/hw-transport-webhid': ^6.27.11
       '@ledgerhq/hw-transport-webusb': ^6.27.11
       '@metamask/browser-passworder': ^4.0.2
       '@mysten/core': workspace:*
       '@mysten/icons': workspace:*
+      '@mysten/ledgerjs-hw-app-sui': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-standard': workspace:*
       '@noble/hashes': ^1.1.5
@@ -344,12 +346,14 @@ importers:
       '@growthbook/growthbook': 0.20.1
       '@growthbook/growthbook-react': 0.10.1_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
+      '@ledgerhq/errors': 6.12.3
       '@ledgerhq/hw-transport': 6.28.1
       '@ledgerhq/hw-transport-webhid': 6.27.12
       '@ledgerhq/hw-transport-webusb': 6.27.12
       '@metamask/browser-passworder': 4.0.2
       '@mysten/core': link:../core
       '@mysten/icons': link:../icons
+      '@mysten/ledgerjs-hw-app-sui': link:../../sdk/ledgerjs-hw-app-sui
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-standard': link:../../sdk/wallet-adapter/wallet-standard
       '@noble/hashes': 1.1.5
@@ -8716,7 +8720,7 @@ packages:
   /axios/0.25.0_debug@4.3.4:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1_debug@4.3.4
+      follow-redirects: 1.15.1
     transitivePeerDependencies:
       - debug
     dev: true
@@ -12645,18 +12649,6 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
-    dev: true
-
-  /follow-redirects/1.15.1_debug@4.3.4:
-    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
-    dependencies:
-      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:

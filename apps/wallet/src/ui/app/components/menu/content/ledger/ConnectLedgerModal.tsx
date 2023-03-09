@@ -1,22 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import WebHIDTransport from '@ledgerhq/hw-transport-webhid';
-import WebUSBTransport from '@ledgerhq/hw-transport-webusb';
+import { LockedDeviceError } from '@ledgerhq/errors';
+import { TransportStatusError } from '@ledgerhq/hw-transport';
 import { useState } from 'react';
 
 import ExternalLink from '_components/external-link';
+import { getSuiLedgerClient } from '_src/ui/app/helpers/SuiLedgerClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
-
-import type Transport from '@ledgerhq/hw-transport';
 
 type ConnectLedgerModalProps = {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
-    onError: (error: any) => void;
+    onError: (errorMessage: string) => void;
 };
 
 export function ConnectLedgerModal({
@@ -25,9 +24,26 @@ export function ConnectLedgerModal({
     onConfirm,
     onError,
 }: ConnectLedgerModalProps) {
-    const [ledgerTransport, setLedgerTransport] = useState<Transport>();
-    const [isLedgerTransportLoading, setLedgerTransportLoading] =
-        useState(false);
+    const [isConnectingToLedger, setConnectingToLedger] = useState(false);
+    const onContinueClick = async () => {
+        try {
+            setConnectingToLedger(true);
+
+            // We'll try to establish a connection to the user's Ledger device,
+            // and then we'll test that the Sui application is actually open
+            // on the user's device by making a call to getVersion
+            // (See https://github.com/LedgerHQ/ledgerjs/issues/122)
+            const suiLedgerClient = await getSuiLedgerClient();
+            await suiLedgerClient.getVersion();
+
+            onConfirm();
+        } catch (error) {
+            const errorMessage = getErrorMessageForFailedConnection(error);
+            onError(errorMessage);
+        } finally {
+            setConnectingToLedger(false);
+        }
+    };
 
     return (
         <ModalDialog
@@ -70,32 +86,24 @@ export function ConnectLedgerModal({
                     <Button
                         variant="outline"
                         text="Continue"
-                        onClick={async () => {
-                            try {
-                                setLedgerTransportLoading(true);
-
-                                console.log(
-                                    await WebHIDTransport.isSupported()
-                                );
-                                const transport =
-                                    await WebHIDTransport.request();
-                                console.log(transport.deviceModel);
-
-                                onConfirm();
-                            } catch (e) {
-                                console.log(e);
-                                onError('Ledger connection failed.');
-                            } finally {
-                                setLedgerTransportLoading(false);
-                            }
-                            onConfirm();
-                        }}
-                        loading={isLedgerTransportLoading}
+                        onClick={onContinueClick}
+                        loading={isConnectingToLedger}
                     />
                 </div>
             }
         />
     );
+}
+
+function getErrorMessageForFailedConnection(error: unknown) {
+    if (error instanceof LockedDeviceError) {
+        return 'Your device is locked. Un-lock it and try again.';
+    } else if (error instanceof TransportStatusError) {
+        return 'Something went wrong. Try again.';
+    } else if (error instanceof Error) {
+        return error.message;
+    }
+    return 'Something went wrong. Try again.';
 }
 
 // TODO: We should probably use a loader like @svgr/webpack so that we can provide SVG files

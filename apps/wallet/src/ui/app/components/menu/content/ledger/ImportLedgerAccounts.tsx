@@ -10,6 +10,7 @@ import { useNextMenuUrl } from '../../hooks';
 import { LedgerAccount } from './LedgerAccount';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
+import { getSuiLedgerClient } from '_src/ui/app/helpers/SuiLedgerClient';
 
 const mockAccounts = [
     {

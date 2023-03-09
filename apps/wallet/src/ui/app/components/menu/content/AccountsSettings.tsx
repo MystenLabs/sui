@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import Transport from '@ledgerhq/hw-transport';
 import { LockLocked16 as LockedLockIcon } from '@mysten/icons';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { Account } from './Account';
@@ -15,7 +15,6 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { useDeriveNextAccountMutation } from '_src/ui/app/hooks/useDeriveNextAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
-import toast from 'react-hot-toast';
 
 export function AccountsSettings() {
     const backUrl = useNextMenuUrl(true, '/');
