@@ -16,9 +16,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
-    SuiObjectDataOptions, SuiObjectResponse,
-    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
-    TransactionBytes,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
