@@ -4,4 +4,5 @@ This folder enlists full implementations of example Sui dapps, including smart c
 (i.e. game server, ticketing engine etc).
 
 * [2-player Optimistic Satoshi Coin-Flip](https://github.com/MystenLabs/satoshi-coin-flip)
+* [Frenemies](https://github.com/MystenLabs/sui/tree/main/dapps/frenemies)
 * Add more...
