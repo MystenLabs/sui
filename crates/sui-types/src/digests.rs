@@ -288,6 +288,16 @@ impl CertificateDigest {
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Sha3Digest::new(digest))
     }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
+    }
+}
+
+impl fmt::Debug for CertificateDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("CertificateDigest").field(&self.0).finish()
+    }
 }
 
 /// A transaction will have a (unique) digest.
