@@ -30,10 +30,10 @@ use sui_move::build::resolve_lock_file_path;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 
+use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::{
     build_from_resolution_graph, ensure_published_dependencies, BuildConfig,
 };
-use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,

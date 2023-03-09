@@ -12,7 +12,7 @@ use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::intent::IntentScope;
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages::TransactionEffectsAPI;
 use crate::signature::GenericSignature;
 use crate::storage::ReadStore;
@@ -20,7 +20,7 @@ use crate::{base_types::AuthorityName, committee::Committee, crypto::sha3_hash, 
 use anyhow::Result;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::IntentScope;
 
 pub use crate::digests::CheckpointContentsDigest;
 pub use crate::digests::CheckpointDigest;

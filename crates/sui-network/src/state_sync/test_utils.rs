@@ -3,9 +3,6 @@
 
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::HashMap;
-use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
-use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},

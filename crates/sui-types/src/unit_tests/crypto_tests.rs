@@ -54,7 +54,7 @@ fn public_key_equality() {
 #[test]
 fn test_proof_of_possession() {
     let address =
-        SuiAddress::from_str("0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a")
+        SuiAddress::from_str("0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357")
             .unwrap();
     let kp: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let pop = generate_proof_of_possession(&kp, address);

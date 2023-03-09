@@ -106,6 +106,7 @@ pub fn verify_proof_of_possession(
     protocol_pubkey: &narwhal_crypto::PublicKey,
     sui_address: SuiAddress,
 ) -> Result<(), SuiError> {
+    protocol_pubkey.validate()?;
     let mut msg = protocol_pubkey.as_bytes().to_vec();
     msg.extend_from_slice(sui_address.as_ref());
     pop.verify_secure(

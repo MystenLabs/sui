@@ -146,14 +146,19 @@ impl ValidatorMetadataV1 {
             )),
         }?;
         // Verify proof of possession for the next epoch protocol key
-        if let Some(next_epoch_pop) = next_epoch_pop {
-            if let Some(ref next_epoch_protocol_pubkey) = next_epoch_protocol_pubkey {
-                verify_proof_of_possession(
-                    &next_epoch_pop,
-                    next_epoch_protocol_pubkey,
-                    self.sui_address,
-                )
-                .map_err(|_| E_METADATA_INVALID_POP)?;
+        if let Some(ref next_epoch_protocol_pubkey) = next_epoch_protocol_pubkey {
+            match next_epoch_pop {
+                Some(next_epoch_pop) => {
+                    verify_proof_of_possession(
+                        &next_epoch_pop,
+                        next_epoch_protocol_pubkey,
+                        self.sui_address,
+                    )
+                    .map_err(|_| E_METADATA_INVALID_POP)?;
+                }
+                None => {
+                    return Err(E_METADATA_INVALID_POP);
+                }
             }
         }
 

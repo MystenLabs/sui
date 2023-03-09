@@ -24,8 +24,8 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::path::{Path, PathBuf};
-use shared_crypto::intent::{Intent,IntentScope};
 use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
