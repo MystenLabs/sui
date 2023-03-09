@@ -12,11 +12,11 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
-use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
+use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    StoreData, StoreMoveObject, StoreObject, StoreObjectPair,
+    ObjectContentDigest, StoreData, StoreMoveObject, StoreObject, StoreObjectPair,
 };
 use typed_store_derive::DBMapUtils;
 
@@ -40,7 +40,7 @@ pub struct AuthorityPerpetualTables {
     pub(crate) objects: DBMap<ObjectKey, StoreObject>,
 
     #[default_options_override_fn = "indirect_move_objects_table_default_config"]
-    pub(crate) indirect_move_objects: DBMap<ObjectDigest, StoreMoveObject>,
+    pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObject>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -96,6 +96,9 @@ pub struct AuthorityPerpetualTables {
 
     /// Parameters of the system fixed at the epoch start
     pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+
+    /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
+    pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 }
 
 impl AuthorityPerpetualTables {
@@ -180,6 +183,18 @@ impl AuthorityPerpetualTables {
         )?;
         wb.write()?;
         Ok(())
+    }
+
+    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        Ok(self.pruned_checkpoint.get(&())?.unwrap_or_default())
+    }
+
+    pub fn set_highest_pruned_checkpoint(
+        &self,
+        wb: DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult<DBBatch> {
+        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {

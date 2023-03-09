@@ -5,12 +5,13 @@ use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
-use std::convert::{From, TryFrom};
 use sui_types::base_types::{ObjectDigest, SequenceNumber, TransactionDigest};
 use sui_types::crypto::{sha3_hash, Signable};
 use sui_types::error::SuiError;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, Owner};
+
+pub type ObjectContentDigest = ObjectDigest;
 
 /// Forked version of [`sui_types::object::Object`]
 /// Used for efficient storing of move objects in the database
@@ -35,7 +36,7 @@ pub enum StoreData {
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct IndirectObjectMetadata {
     version: SequenceNumber,
-    pub digest: ObjectDigest,
+    pub digest: ObjectContentDigest,
 }
 
 /// Separately stored move object
@@ -62,47 +63,51 @@ where
 }
 
 impl StoreMoveObject {
-    pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(sha3_hash(self))
+    pub fn digest(&self) -> ObjectContentDigest {
+        // expected to be called on constructed object with default ref count 1
+        assert_eq!(self.ref_count, 1);
+        ObjectContentDigest::new(sha3_hash(self))
     }
 }
 
 pub struct StoreObjectPair(pub StoreObject, pub Option<StoreMoveObject>);
 
-impl From<Object> for StoreObjectPair {
-    fn from(object: Object) -> Self {
-        let mut indirect_object = None;
+pub(crate) fn get_store_object_pair(
+    object: Object,
+    indirect_objects_threshold: usize,
+) -> StoreObjectPair {
+    let mut indirect_object = None;
 
-        let data = match object.data {
-            Data::Package(package) => StoreData::Package(package),
-            Data::Move(move_obj) => {
-                // TODO: add real heuristic to decide if object needs to be stored indirectly
-                if cfg!(test) {
-                    let move_object = StoreMoveObject {
-                        type_: move_obj.type_.clone(),
-                        has_public_transfer: move_obj.has_public_transfer(),
-                        contents: move_obj.contents().to_vec(),
-                        ref_count: 1,
-                    };
-                    let digest = move_object.digest();
-                    indirect_object = Some(move_object);
-                    StoreData::IndirectObject(IndirectObjectMetadata {
-                        version: move_obj.version(),
-                        digest,
-                    })
-                } else {
-                    StoreData::Move(move_obj)
-                }
+    let data = match object.data {
+        Data::Package(package) => StoreData::Package(package),
+        Data::Move(move_obj) => {
+            if indirect_objects_threshold > 0
+                && move_obj.contents().len() >= indirect_objects_threshold
+            {
+                let move_object = StoreMoveObject {
+                    type_: move_obj.type_.clone(),
+                    has_public_transfer: move_obj.has_public_transfer(),
+                    contents: move_obj.contents().to_vec(),
+                    ref_count: 1,
+                };
+                let digest = move_object.digest();
+                indirect_object = Some(move_object);
+                StoreData::IndirectObject(IndirectObjectMetadata {
+                    version: move_obj.version(),
+                    digest,
+                })
+            } else {
+                StoreData::Move(move_obj)
             }
-        };
-        let store_object = StoreObject {
-            data,
-            owner: object.owner,
-            previous_transaction: object.previous_transaction,
-            storage_rebate: object.storage_rebate,
-        };
-        Self(store_object, indirect_object)
-    }
+        }
+    };
+    let store_object = StoreObject {
+        data,
+        owner: object.owner,
+        previous_transaction: object.previous_transaction,
+        storage_rebate: object.storage_rebate,
+    };
+    StoreObjectPair(store_object, indirect_object)
 }
 
 impl TryFrom<StoreObjectPair> for Object {

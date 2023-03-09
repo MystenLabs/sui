@@ -10,23 +10,74 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::{Mutex, RwLock};
+use async_trait::async_trait;
+use tokio::sync::{
+    Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock, TryLockError,
+};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
 
-type InnerLockTable<K> = HashMap<K, Arc<Mutex<()>>>;
+#[async_trait]
+pub trait Lock: Send + Sync + Default {
+    type Guard;
+    type ReadGuard;
+    async fn lock_owned(self: Arc<Self>) -> Self::Guard;
+    fn try_lock_owned(self: Arc<Self>) -> Result<Self::Guard, TryLockError>;
+    async fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard;
+}
+
+#[async_trait::async_trait]
+impl Lock for Mutex<()> {
+    type Guard = OwnedMutexGuard<()>;
+    type ReadGuard = Self::Guard;
+
+    async fn lock_owned(self: Arc<Self>) -> Self::Guard {
+        self.lock_owned().await
+    }
+
+    fn try_lock_owned(self: Arc<Self>) -> Result<Self::Guard, TryLockError> {
+        self.try_lock_owned()
+    }
+
+    async fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard {
+        self.lock_owned().await
+    }
+}
+
+#[async_trait::async_trait]
+impl Lock for RwLock<()> {
+    type Guard = OwnedRwLockWriteGuard<()>;
+    type ReadGuard = OwnedRwLockReadGuard<()>;
+
+    async fn lock_owned(self: Arc<Self>) -> Self::Guard {
+        self.write_owned().await
+    }
+
+    fn try_lock_owned(self: Arc<Self>) -> Result<Self::Guard, TryLockError> {
+        self.try_write_owned()
+    }
+
+    async fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard {
+        self.read_owned().await
+    }
+}
+
+type InnerLockTable<K, L> = HashMap<K, Arc<L>>;
 // MutexTable supports mutual exclusion on keys such as TransactionDigest or ObjectDigest
-pub struct MutexTable<K: Hash> {
+pub struct LockTable<K: Hash, L: Lock> {
     random_state: RandomState,
-    lock_table: Arc<Vec<RwLock<InnerLockTable<K>>>>,
+    lock_table: Arc<Vec<RwLock<InnerLockTable<K, L>>>>,
     _k: std::marker::PhantomData<K>,
     _cleaner: JoinHandle<()>,
     stop: Arc<AtomicBool>,
     size: Arc<AtomicUsize>,
 }
+
+pub type MutexTable<K> = LockTable<K, Mutex<()>>;
+pub type RwLockTable<K> = LockTable<K, RwLock<()>>;
 
 #[derive(Debug)]
 pub enum TryAcquireLockError {
@@ -41,10 +92,10 @@ impl fmt::Display for TryAcquireLockError {
 }
 
 impl Error for TryAcquireLockError {}
-// Opaque struct to hide tokio::sync::MutexGuard.
-pub struct LockGuard(tokio::sync::OwnedMutexGuard<()>);
+pub type MutexGuard = tokio::sync::OwnedMutexGuard<()>;
+pub type RwLockGuard = tokio::sync::OwnedRwLockReadGuard<()>;
 
-impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
+impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
     pub fn new_with_cleanup(
         num_shards: usize,
         shard_size: usize,
@@ -52,7 +103,7 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
         cleanup_initial_delay: Duration,
         cleanup_entries_threshold: usize,
     ) -> Self {
-        let lock_table: Arc<Vec<RwLock<InnerLockTable<K>>>> = Arc::new(
+        let lock_table: Arc<Vec<RwLock<InnerLockTable<K, L>>>> = Arc::new(
             (0..num_shards)
                 .into_iter()
                 .map(|_| RwLock::new(HashMap::with_capacity(shard_size)))
@@ -101,7 +152,7 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
         self.size.load(Ordering::SeqCst)
     }
 
-    pub fn cleanup(lock_table: Arc<Vec<RwLock<InnerLockTable<K>>>>) -> usize {
+    pub fn cleanup(lock_table: Arc<Vec<RwLock<InnerLockTable<K, L>>>>) -> usize {
         let mut num_removed: usize = 0;
         for shard in lock_table.iter() {
             let map = shard.try_write();
@@ -113,13 +164,8 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
                 // This check ensures that we only drop entry from the map if this is the only mutex copy
                 // This check is also likely sufficient e.g. you don't even need try_lock below, but keeping it just in case
                 if Arc::strong_count(v) == 1 {
-                    let mutex_guard = v.try_lock();
-                    if mutex_guard.is_ok() {
-                        num_removed += 1;
-                        false
-                    } else {
-                        true
-                    }
+                    num_removed += 1;
+                    false
                 } else {
                     true
                 }
@@ -142,7 +188,7 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
         hash % self.lock_table.len()
     }
 
-    pub async fn acquire_locks<I>(&self, object_iter: I) -> Vec<LockGuard>
+    pub async fn acquire_locks<I>(&self, object_iter: I) -> Vec<L::Guard>
     where
         I: Iterator<Item = K>,
         K: Ord,
@@ -158,14 +204,27 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
         guards
     }
 
-    pub async fn acquire_lock(&self, k: K) -> LockGuard {
+    pub async fn acquire_read_locks(&self, mut objects: Vec<K>) -> Vec<L::ReadGuard>
+    where
+        K: Ord,
+    {
+        objects.sort_unstable();
+        objects.dedup();
+        let mut guards = Vec::with_capacity(objects.len());
+        for object in objects.into_iter() {
+            guards.push(self.get_lock(object).await.read_lock_owned().await);
+        }
+        guards
+    }
+
+    pub async fn get_lock(&self, k: K) -> Arc<L> {
         let lock_idx = self.get_lock_idx(&k);
         let element = {
             let map = self.lock_table[lock_idx].read().await;
             map.get(&k).cloned()
         };
         if let Some(element) = element {
-            LockGuard(element.lock_owned().await)
+            element
         } else {
             // element doesn't exist
             let element = {
@@ -173,15 +232,19 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
                 map.entry(k)
                     .or_insert_with(|| {
                         self.size.fetch_add(1, Ordering::SeqCst);
-                        Arc::new(Mutex::new(()))
+                        Arc::new(L::default())
                     })
                     .clone()
             };
-            LockGuard(element.lock_owned().await)
+            element
         }
     }
 
-    pub fn try_acquire_lock(&self, k: K) -> Result<LockGuard, TryAcquireLockError> {
+    pub async fn acquire_lock(&self, k: K) -> L::Guard {
+        self.get_lock(k).await.lock_owned().await
+    }
+
+    pub fn try_acquire_lock(&self, k: K) -> Result<L::Guard, TryAcquireLockError> {
         let lock_idx = self.get_lock_idx(&k);
         let element = {
             let map = self.lock_table[lock_idx]
@@ -191,9 +254,7 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
         };
         if let Some(element) = element {
             let lock = element.try_lock_owned();
-            Ok(LockGuard(
-                lock.map_err(|_| TryAcquireLockError::LockEntryLocked)?,
-            ))
+            Ok(lock.map_err(|_| TryAcquireLockError::LockEntryLocked)?)
         } else {
             // element doesn't exist
             let element = {
@@ -203,18 +264,17 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
                 map.entry(k)
                     .or_insert_with(|| {
                         self.size.fetch_add(1, Ordering::SeqCst);
-                        Arc::new(Mutex::new(()))
+                        Arc::new(L::default())
                     })
                     .clone()
             };
             let lock = element.try_lock_owned();
-            lock.map(LockGuard)
-                .map_err(|_| TryAcquireLockError::LockEntryLocked)
+            lock.map_err(|_| TryAcquireLockError::LockEntryLocked)
         }
     }
 }
 
-impl<K: Hash> Drop for MutexTable<K> {
+impl<K: Hash, L: Lock> Drop for LockTable<K, L> {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
     }
@@ -288,6 +348,24 @@ async fn test_mutex_table() {
     let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert!(map.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_read_locks() {
+    let mutex_table = RwLockTable::<String>::new_with_cleanup(
+        1,
+        128,
+        Duration::from_secs(10),
+        Duration::MAX,
+        1000,
+    );
+    let lock = "lock".to_string();
+    let locks1 = mutex_table.acquire_read_locks(vec![lock.clone()]).await;
+    assert!(mutex_table.try_acquire_lock(lock.clone()).is_err());
+    let locks2 = mutex_table.acquire_read_locks(vec![lock.clone()]).await;
+    drop(locks1);
+    drop(locks2);
+    assert!(mutex_table.try_acquire_lock(lock.clone()).is_ok());
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]

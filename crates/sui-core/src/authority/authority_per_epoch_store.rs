@@ -15,7 +15,6 @@ use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_storage::default_db_options;
-use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
@@ -57,6 +56,7 @@ use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_storage::mutex_table::MutexGuard;
 use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
@@ -78,7 +78,7 @@ const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
-pub struct CertLockGuard(LockGuard);
+pub struct CertLockGuard(MutexGuard);
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {

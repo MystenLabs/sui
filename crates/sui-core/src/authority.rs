@@ -1552,6 +1552,7 @@ impl AuthorityState {
         let _objects_pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
+            store.objects_lock_table.clone(),
             pruning_config,
             epoch_duration_ms,
         );
@@ -1620,6 +1621,7 @@ impl AuthorityState {
                 None,
                 &genesis_committee,
                 genesis,
+                0,
             )
             .await
             .unwrap(),
