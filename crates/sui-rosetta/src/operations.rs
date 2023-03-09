@@ -175,13 +175,13 @@ impl Operations {
         tx: SuiTransactionKind,
         sender: SuiAddress,
         status: Option<OperationStatus>,
-    ) -> Result<Self, Error> {
-        Ok(Self(match tx {
+    ) -> Result<Vec<Operation>, Error> {
+        Ok(match tx {
             SuiTransactionKind::ProgrammableTransaction(pt) => {
                 Self::parse_programmable_transaction(sender, status, pt)?
             }
             _ => vec![Operation::generic_op(status, sender, tx)],
-        }))
+        })
     }
 
     fn parse_programmable_transaction(
@@ -411,7 +411,11 @@ impl TryFrom<SuiTransactionData> for Operations {
     type Error = Error;
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
         let sender = *data.sender();
-        Self::from_transaction(data.transaction().clone(), sender, None)
+        Ok(Self::new(Self::from_transaction(
+            data.transaction().clone(),
+            sender,
+            None,
+        )?))
     }
 }
 
