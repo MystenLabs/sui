@@ -7,6 +7,7 @@ use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
+use mysten_common::notify_once::NotifyOnce;
 use mysten_metrics::spawn_monitored_task;
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
@@ -33,7 +34,7 @@ use tokio::{
 use tracing::{debug, error, trace, warn};
 use types::{
     ensure,
-    error::{new_accept_notification, AcceptNotification, DagError, DagResult},
+    error::{AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
     BatchDigest, Certificate, CertificateDigest, Header, PrimaryToPrimaryClient,
     PrimaryToWorkerClient, Round, SendCertificateRequest, SendCertificateResponse,
@@ -113,12 +114,15 @@ impl Inner {
         lock: &MutexGuard<'_, State>,
         suspended: SuspendedCertificate,
     ) -> DagResult<()> {
-        self.accept_certificate_internal(lock, suspended.certificate)
+        self.accept_certificate_internal(lock, suspended.certificate.clone())
             .await?;
         // Notify waiters that the certificate is no longer suspended.
         // Must be after certificate acceptance.
         // It is ok if there is no longer any waiter.
-        let _ = suspended.notify.send(());
+        suspended
+            .notify
+            .notify()
+            .expect("Suspended certificate should be notified once.");
         Ok(())
     }
 
@@ -384,12 +388,8 @@ impl Synchronizer {
             .await
         {
             Err(DagError::Suspended(notify)) => {
-                let notify = notify.lock().unwrap().take();
-                notify
-                    .unwrap()
-                    .recv()
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
+                notify.wait().await;
+                Ok(())
             }
             result => result,
         }
@@ -910,7 +910,14 @@ impl Synchronizer {
 struct SuspendedCertificate {
     certificate: Certificate,
     missing_parents: HashSet<CertificateDigest>,
-    notify: broadcast::Sender<()>,
+    notify: AcceptNotification,
+}
+
+impl Drop for SuspendedCertificate {
+    fn drop(&mut self) {
+        // Make sure waiters are notified on shutdown.
+        let _ = self.notify.notify();
+    }
 }
 
 /// Keeps track of suspended certificates and their missing parents.
@@ -941,7 +948,7 @@ impl State {
     fn check_suspended(&self, digest: &CertificateDigest) -> Option<AcceptNotification> {
         self.suspended
             .get(digest)
-            .map(|suspended_cert| new_accept_notification(suspended_cert.notify.subscribe()))
+            .map(|suspended_cert| suspended_cert.notify.clone())
     }
 
     /// Inserts a certificate with its missing parents into the suspended state.
@@ -964,10 +971,10 @@ impl State {
                     "Inconsistent missing parents! {:?} vs {:?}",
                     suspended_cert.missing_parents, missing_parents_map
                 );
-                return new_accept_notification(suspended_cert.notify.subscribe());
+                return suspended_cert.notify.clone();
             }
         }
-        let (tx, rx) = broadcast::channel(1);
+        let notify = Arc::new(NotifyOnce::new());
         assert!(self
             .suspended
             .insert(
@@ -975,7 +982,7 @@ impl State {
                 SuspendedCertificate {
                     certificate,
                     missing_parents: missing_parents_map,
-                    notify: tx,
+                    notify: notify.clone(),
                 }
             )
             .is_none());
@@ -986,7 +993,7 @@ impl State {
                 .or_default()
                 .insert(digest));
         }
-        new_accept_notification(rx)
+        notify
     }
 
     /// Examines children of a certificate that has been accepted, and returns the children that
@@ -1052,7 +1059,10 @@ impl State {
         }
         // Notify waiters on GC'ed certificates.
         for suspended in gc_certificates {
-            let _ = suspended.notify.send(());
+            suspended
+                .notify
+                .notify()
+                .expect("Suspended certificate should be notified once.");
         }
         // All certificates at gc round + 1 can be accepted.
         let mut to_accept = Vec::new();
