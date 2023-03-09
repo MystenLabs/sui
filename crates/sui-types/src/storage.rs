@@ -544,6 +544,7 @@ impl ReadStore for SharedInMemoryStore {
                 FullCheckpointContents::from_checkpoint_contents(&self, contents.to_owned())
             })
             .transpose()
+            .map(|contents| contents.flatten())
     }
 
     fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
