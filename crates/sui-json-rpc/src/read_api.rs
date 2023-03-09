@@ -3,44 +3,51 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee::RpcModule;
+use linked_hash_map::LinkedHashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use tap::TapFallible;
+use tracing::debug;
+
+use fastcrypto::encoding::Base64;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use sui_types::collection_types::VecMap;
-use sui_types::display::{DisplayCreatedEvent, DisplayObject};
-use sui_types::error::UserInputError;
-use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
-use tap::TapFallible;
 
-use crate::api::ReadApiServer;
-use fastcrypto::encoding::Base64;
-use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
     SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse, TransactionsPage,
+    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
+use sui_types::collection_types::VecMap;
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::{TransactionData, TransactionEffectsAPI};
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::digests::TransactionEventsDigest;
+use sui_types::display::{DisplayCreatedEvent, DisplayObject};
+use sui_types::dynamic_field::DynamicFieldName;
+use sui_types::error::UserInputError;
+use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
+use sui_types::messages::{
+    TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+    VerifiedTransaction,
+};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 
-use sui_types::dynamic_field::DynamicFieldName;
-use tracing::debug;
-
 use crate::api::cap_page_limit;
+use crate::api::ReadApiServer;
 use crate::error::Error;
 use crate::SuiRpcModule;
 
@@ -52,6 +59,29 @@ const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 // Fullnodes.
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,
+}
+
+// Internal data structure to make it easy to work with data returned from
+// authority store and also enable code sharing between get_transaction_with_options,
+// multi_get_transaction_with_options, etc.
+#[derive(Default)]
+struct IntermediateTransactionResponse {
+    digest: TransactionDigest,
+    transaction: Option<VerifiedTransaction>,
+    effects: Option<TransactionEffects>,
+    events: Option<SuiTransactionEvents>,
+    checkpoint_seq: Option<CheckpointSequenceNumber>,
+    timestamp: Option<CheckpointTimestamp>,
+    errors: Vec<String>,
+}
+
+impl IntermediateTransactionResponse {
+    pub fn new(digest: TransactionDigest) -> Self {
+        Self {
+            digest,
+            ..Default::default()
+        }
+    }
 }
 
 impl ReadApi {
@@ -209,102 +239,228 @@ impl ReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
+        opts: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
-        let (transaction, effects) = self
-            .state
-            .get_executed_transaction_and_effects(digest)
-            .await
-            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
-        let checkpoint = self
-            .state
-            .get_transaction_checkpoint(&digest)
-            .map_err(|e| anyhow!("{e}"))?;
-        let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
+        let opts = opts.unwrap_or_default();
+        let mut temp_response = IntermediateTransactionResponse::new(digest);
 
-        let events = if let Some(digest) = effects.events_digest() {
-            let events = self
+        if opts.show_input {
+            temp_response.transaction =
+                Some(self.state.get_executed_transaction(digest).await.tap_err(
+                    |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
+                )?);
+        }
+
+        // Fetch effects when `show_events` is true because events relies on effects
+        if opts.show_effects || opts.show_events {
+            temp_response.effects =
+                Some(self.state.get_executed_effects(digest).await.tap_err(
+                    |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),
+                )?);
+        }
+
+        if let Some((_, seq)) = self
+            .state
+            .get_transaction_checkpoint_sequence(&digest)
+            .map_err(|e| anyhow!("{e}"))?
+        {
+            temp_response.checkpoint_seq = Some(seq);
+        }
+
+        if temp_response.checkpoint_seq.is_some() {
+            let checkpoint = self
                 .state
-                .get_transaction_events(*digest)
-                .await
-                .map_err(Error::from)?;
-            SuiTransactionEvents::try_from(
-                events,
-                // threading the epoch_store through this API does not
-                // seem possible, so we just read it from the state and fetch
-                // the module cache out of it.
-                // Notice that no matter what module cache we get things
-                // should work
-                self.state
-                    .load_epoch_store_one_call_per_task()
-                    .module_cache()
-                    .as_ref(),
-            )?
-        } else {
-            SuiTransactionEvents::default()
-        };
+                // safe to unwrap because we have checked `is_some` above
+                .get_checkpoint_by_sequence_number(temp_response.checkpoint_seq.unwrap())
+                .map_err(|e| anyhow!("{e}"))?;
+            // TODO(chris): we don't need to fetch the whole checkpoint summary
+            temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
+        }
 
-        Ok(SuiTransactionResponse {
-            transaction: transaction.into_message().try_into()?,
-            effects: effects.try_into()?,
-            events,
-            timestamp_ms: checkpoint_timestamp,
-            confirmed_local_execution: None,
-            checkpoint: checkpoint.map(|c| c.sequence_number),
-        })
+        if opts.show_events && temp_response.effects.is_some() {
+            // safe to unwrap because we have checked is_some
+            if let Some(digest) = temp_response.effects.as_ref().unwrap().events_digest() {
+                let events = self
+                    .state
+                    .get_transaction_events(*digest)
+                    .await
+                    .map_err(Error::from)?;
+                match to_sui_transaction_events(self, events) {
+                    Ok(e) => temp_response.events = Some(e),
+                    Err(e) => temp_response.errors.push(e.to_string()),
+                };
+            } else {
+                // events field will be Some if and only if `show_events` is true and
+                // there is no error in converting fetching events
+                temp_response.events = Some(SuiTransactionEvents::default());
+            }
+        }
+
+        Ok(convert_to_response(temp_response, &opts))
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
+        opts: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
-        if digests.len() <= QUERY_MAX_RESULT_LIMIT {
-            let mut tx_digests: Vec<TransactionDigest> = digests
-                .iter()
-                .take(QUERY_MAX_RESULT_LIMIT)
-                .copied()
-                .collect();
-            tx_digests.dedup();
-
-            let txn_batch = self
-                .state
-                .multi_get_transactions(&tx_digests)
-                .await
-                .tap_err(|err| debug!(txs_digests=?tx_digests, "Failed to get batch: {:?}", err))?;
-
-            let mut responses: Vec<SuiTransactionResponse> = Vec::new();
-            for (txn, digest) in txn_batch.into_iter().zip(tx_digests.iter()) {
-                let (transaction, effects, events, checkpoint) = txn;
-                responses.push(SuiTransactionResponse {
-                    transaction: transaction.into_message().try_into()?,
-                    effects: effects.try_into()?,
-                    events: SuiTransactionEvents::try_from(
-                        events,
-                        // threading the epoch_store through this API does not
-                        // seem possible, so we just read it from the state and fetch
-                        // the module cache out of it.
-                        // Notice that no matter what module cache we get things
-                        // should work
-                        self.state
-                            .load_epoch_store_one_call_per_task()
-                            .module_cache()
-                            .as_ref(),
-                    )?,
-                    timestamp_ms: self.state.get_timestamp_ms(digest).await?,
-                    confirmed_local_execution: None,
-                    checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
-                })
-            }
-            Ok(responses)
-        } else {
-            Err(anyhow!(UserInputError::SizeLimitExceeded {
-                limit: "input limit".to_string(),
+        let num_digests = digests.len();
+        if num_digests > QUERY_MAX_RESULT_LIMIT {
+            return Err(anyhow!(UserInputError::SizeLimitExceeded {
+                limit: "multi get transaction input limit".to_string(),
                 value: QUERY_MAX_RESULT_LIMIT.to_string()
             })
-            .into())
+            .into());
         }
+        // use LinkedHashMap to dedup and can iterate in insertion order.
+        let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
+            LinkedHashMap::from_iter(
+                digests
+                    .iter()
+                    .map(|k| (k, IntermediateTransactionResponse::new(*k))),
+            );
+        if temp_response.len() < num_digests {
+            return Err(anyhow!("The list of digests in the input contain duplicates").into());
+        }
+
+        let opts = opts.unwrap_or_default();
+
+        if opts.show_input {
+            let transactions = self
+                .state
+                .multi_get_executed_transactions(&digests)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests, "Failed to multi get transaction: {:?}", err),
+                )?;
+
+            for ((_digest, cache_entry), txn) in
+                temp_response.iter_mut().zip(transactions.into_iter())
+            {
+                cache_entry.transaction = txn;
+            }
+        }
+
+        // Fetch effects when `show_events` is true because events relies on effects
+        if opts.show_effects || opts.show_events {
+            let effects_list = self
+                .state
+                .multi_get_executed_effects(&digests)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests, "Failed to multi get effects: {:?}", err),
+                )?;
+            for ((_digest, cache_entry), e) in
+                temp_response.iter_mut().zip(effects_list.into_iter())
+            {
+                cache_entry.effects = e;
+            }
+        }
+
+        let checkpoint_seq_list = self
+                .state
+                .multi_get_transaction_checkpoint(&digests)
+                .await
+                .tap_err(
+                    |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
+        for ((_digest, cache_entry), seq) in temp_response
+            .iter_mut()
+            .zip(checkpoint_seq_list.into_iter())
+        {
+            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
+        }
+
+        let unique_checkpoint_numbers = temp_response
+            .values()
+            .filter_map(|cache_entry| cache_entry.checkpoint_seq)
+            // It's likely that many transactions have the same checkpoint, so we don't
+            // need to over-fetch
+            .unique()
+            .collect::<Vec<CheckpointSequenceNumber>>();
+
+        // fetch timestamp from the DB
+        let timestamps = self
+            .state
+            .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
+            .map_err(|e| anyhow!("{e}"))?
+            .into_iter()
+            .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
+
+        // construct a hashmap of checkpoint -> timestamp for fast lookup
+        let checkpoint_to_timestamp = unique_checkpoint_numbers
+            .into_iter()
+            .zip(timestamps)
+            .collect::<HashMap<_, _>>();
+
+        // fill cache with the timestamp
+        for (_, cache_entry) in temp_response.iter_mut() {
+            if cache_entry.checkpoint_seq.is_some() {
+                // safe to unwrap because is_some is checked
+                cache_entry.timestamp = *checkpoint_to_timestamp
+                    .get(cache_entry.checkpoint_seq.as_ref().unwrap())
+                    // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
+                    .unwrap();
+            }
+        }
+
+        if opts.show_events {
+            let event_digests_list = temp_response
+                .values()
+                .filter_map(|cache_entry| match &cache_entry.effects {
+                    Some(eff) => eff.events_digest().cloned(),
+                    None => None,
+                })
+                .collect::<Vec<TransactionEventsDigest>>();
+
+            // fetch events from the DB
+            let events = self
+                .state
+                .multi_get_events(&event_digests_list)
+                .map_err(|e| anyhow!("{e}"))?
+                .into_iter();
+
+            // construct a hashmap of event digests -> events for fast lookup
+            let mut event_digest_to_events = event_digests_list
+                .into_iter()
+                .zip(events)
+                .collect::<HashMap<_, _>>();
+
+            // fill cache with the events
+            for (_, cache_entry) in temp_response.iter_mut() {
+                let event_digest: Option<Option<TransactionEventsDigest>> = cache_entry
+                    .effects
+                    .as_ref()
+                    .map(|e| e.events_digest().cloned());
+                let event_digest = event_digest.flatten();
+                if event_digest.is_some() {
+                    // safe to unwrap because `is_some` is checked
+                    let events: Option<RpcResult<SuiTransactionEvents>> = event_digest_to_events
+                        .remove(event_digest.as_ref().unwrap())
+                        .expect("This can only happen if there are two or more transaction digests sharing the same event digests, which should never happen")
+                        .map(|e| to_sui_transaction_events(self, e));
+                    match events {
+                        Some(Ok(e)) => cache_entry.events = Some(e),
+                        Some(Err(e)) => cache_entry.errors.push(e.to_string()),
+                        None => cache_entry.errors.push(format!(
+                            "Failed to fetch events with event digest {:?}",
+                            event_digest.unwrap()
+                        )),
+                    }
+                } else {
+                    // events field will be Some if and only if `show_events` is true and
+                    // there is no error in converting fetching events
+                    cache_entry.events = Some(SuiTransactionEvents::default());
+                }
+            }
+        }
+
+        Ok(temp_response
+            .into_iter()
+            .map(|c| convert_to_response(c.1, &opts))
+            .collect::<Vec<_>>())
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -457,6 +613,25 @@ impl SuiRpcModule for ReadApi {
     fn rpc_doc_module() -> Module {
         crate::api::ReadApiOpenRpc::module_doc()
     }
+}
+
+fn to_sui_transaction_events(
+    fullnode_api: &ReadApi,
+    events: TransactionEvents,
+) -> RpcResult<SuiTransactionEvents> {
+    Ok(SuiTransactionEvents::try_from(
+        events,
+        // threading the epoch_store through this API does not
+        // seem possible, so we just read it from the state and fetch
+        // the module cache out of it.
+        // Notice that no matter what module cache we get things
+        // should work
+        fullnode_api
+            .state
+            .load_epoch_store_one_call_per_task()
+            .module_cache()
+            .as_ref(),
+    )?)
 }
 
 async fn get_display_fields(
@@ -703,4 +878,43 @@ fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> Rp
 
         _ => Ok(current_value.to_string()),
     }
+}
+
+fn convert_to_response(
+    cache: IntermediateTransactionResponse,
+    opts: &SuiTransactionResponseOptions,
+) -> SuiTransactionResponse {
+    let mut response = SuiTransactionResponse::new(cache.digest);
+    response.errors = cache.errors;
+
+    if opts.show_input && cache.transaction.is_some() {
+        match cache.transaction.unwrap().into_message().try_into() {
+            Ok(t) => {
+                response.transaction = Some(t);
+            }
+            Err(e) => {
+                response.errors.push(e.to_string());
+            }
+        }
+    }
+
+    if opts.show_effects && cache.effects.is_some() {
+        match cache.effects.unwrap().try_into() {
+            Ok(effects) => {
+                response.effects = Some(effects);
+            }
+            Err(e) => {
+                response.errors.push(e.to_string());
+            }
+        }
+    }
+
+    response.checkpoint = cache.checkpoint_seq;
+    response.timestamp_ms = cache.timestamp;
+
+    if opts.show_events {
+        response.events = cache.events;
+    }
+
+    response
 }

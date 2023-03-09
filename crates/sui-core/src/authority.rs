@@ -8,7 +8,6 @@ use chrono::prelude::*;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
-use itertools::izip;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
@@ -1911,6 +1910,22 @@ impl AuthorityState {
         self.database.get_sui_system_state_object()
     }
 
+    pub fn get_transaction_checkpoint_sequence(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+        self.database.get_transaction_checkpoint(digest)
+    }
+
+    pub fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> SuiResult<Option<VerifiedCheckpoint>> {
+        Ok(self
+            .checkpoint_store
+            .get_checkpoint_by_sequence_number(sequence_number)?)
+    }
+
     pub fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -2171,44 +2186,57 @@ impl AuthorityState {
         }
     }
 
-    pub async fn multi_get_transactions(
+    pub async fn get_executed_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<VerifiedTransaction, anyhow::Error> {
+        let transaction = self.database.get_transaction(&digest)?;
+        transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
+    }
+
+    pub async fn get_executed_effects(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<TransactionEffects, anyhow::Error> {
+        let effects = self.database.get_executed_effects(&digest)?;
+        effects.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
+    }
+
+    pub async fn multi_get_executed_transactions(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<VerifiedTransactionBatch, anyhow::Error> {
-        let transactions = self.database.multi_get_transactions(digests)?;
-        let effects = self.database.multi_get_executed_effects(digests)?;
-        let checkpoints = self.database.multi_get_transaction_checkpoint(digests)?;
+    ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
+        Ok(self.database.multi_get_transactions(digests)?)
+    }
 
-        let mut events_digests: Vec<TransactionEventsDigest> = vec![];
+    pub async fn multi_get_executed_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<TransactionEffects>>, anyhow::Error> {
+        Ok(self.database.multi_get_executed_effects(digests)?)
+    }
 
-        for effect in effects.iter() {
-            match effect {
-                Some(eff) => events_digests.push(*eff.events_digest().unwrap()),
-                _ => continue,
-            }
-        }
+    pub async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<(EpochId, CheckpointSequenceNumber)>>, anyhow::Error> {
+        Ok(self.database.multi_get_transaction_checkpoint(digests)?)
+    }
 
-        let events = self.database.multi_get_events(events_digests.as_slice())?;
+    pub fn multi_get_events(
+        &self,
+        digests: &[TransactionEventsDigest],
+    ) -> Result<Vec<Option<TransactionEvents>>, anyhow::Error> {
+        Ok(self.database.multi_get_events(digests)?)
+    }
 
-        let mut missed_digests = vec![];
-        let mut response: VerifiedTransactionBatch = vec![];
-
-        for data in izip!(digests, transactions, effects, events, checkpoints) {
-            match data {
-                (_, Some(tx), Some(effect), Some(event), cp) => {
-                    response.push((tx, effect, event, cp))
-                }
-                (digest, _, _, _, _) => missed_digests.push(*digest),
-            }
-        }
-
-        if !missed_digests.is_empty() {
-            Err(anyhow!(SuiError::TransactionsNotFound {
-                digests: missed_digests
-            }))
-        } else {
-            Ok(response)
-        }
+    pub fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> SuiResult<Vec<Option<VerifiedCheckpoint>>> {
+        Ok(self
+            .checkpoint_store
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)?)
     }
 
     pub async fn get_transaction_events(

@@ -421,8 +421,22 @@ impl TryFrom<SuiTransactionData> for Operations {
 impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let status = Some(response.effects.into_status().into());
-        let ops: Operations = response.transaction.data.try_into()?;
+        let status = Some(
+            response
+                .effects
+                .ok_or_else(|| {
+                    Error::InternalError(anyhow!("Response effects should not be empty"))
+                })?
+                .into_status()
+                .into(),
+        );
+        let ops: Operations = response
+            .transaction
+            .ok_or_else(|| {
+                Error::InternalError(anyhow!("Response transaction should not be empty"))
+            })?
+            .data
+            .try_into()?;
         let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the operation amounts from the actual balance
@@ -443,7 +457,12 @@ impl TryFrom<SuiTransactionResponse> for Operations {
 
         // Extract coin change operations from events
         let coin_change_operations = Self::get_balance_operation_from_events(
-            &response.events.data,
+            &response
+                .events
+                .ok_or_else(|| {
+                    Error::InternalError(anyhow!("Response events should not be empty"))
+                })?
+                .data,
             status,
             accounted_balances,
         );

@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::Parser;
 use rand::Rng;
 use sui_indexer::new_rpc_client;
-use sui_json_rpc_types::CheckpointId;
+use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
 use tracing::info;
 
 #[tokio::main]
@@ -58,13 +58,14 @@ async fn main() -> Result<()> {
         );
 
         if let (Some(fn_txn_digest), Some(idx_txn_digest)) = (fn_txn_digest, idx_txn_digest) {
+            let fetch_options = SuiTransactionResponseOptions::full_content();
             let fn_sui_txn_response = fn_rpc_client
                 .read_api()
-                .get_transaction(fn_txn_digest)
+                .get_transaction_with_options(fn_txn_digest, fetch_options.clone())
                 .await?;
             let indexer_sui_txn_response = indexer_rpc_client
                 .read_api()
-                .get_transaction(idx_txn_digest)
+                .get_transaction_with_options(idx_txn_digest, fetch_options)
                 .await?;
             assert_eq!(
                 fn_sui_txn_response, indexer_sui_txn_response,

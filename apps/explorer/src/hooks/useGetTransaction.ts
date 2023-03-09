@@ -8,7 +8,12 @@ export function useGetTransaction(transactionId: string) {
     const rpc = useRpcClient();
     return useQuery(
         ['transactions-by-id', transactionId],
-        async () => rpc.getTransactionWithEffects(transactionId),
+        async () =>
+            rpc.getTransactionResponse(transactionId, {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            }),
         { enabled: !!transactionId }
     );
 }

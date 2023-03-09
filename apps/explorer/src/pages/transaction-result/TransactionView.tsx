@@ -6,7 +6,7 @@ import {
     getMoveCallTransaction,
     getPublishTransaction,
     getTransactionKindName,
-    getTransactions,
+    getTransactionKinds,
     getTransactionSender,
     getTransferObjectTransaction,
     getTransactionSignature,
@@ -70,19 +70,19 @@ const MAX_RECIPIENTS_PER_PAGE = 10;
 
 function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
-        ...(tx.effects.mutated?.length
+        ...(tx.effects!.mutated?.length
             ? [
                   {
                       label: 'Updated',
-                      links: tx.effects.mutated.map((item) => item.reference),
+                      links: tx.effects!.mutated.map((item) => item.reference),
                   },
               ]
             : []),
-        ...(tx.effects.created?.length
+        ...(tx.effects!.created?.length
             ? [
                   {
                       label: 'Created',
-                      links: tx.effects.created?.map((item) => item.reference),
+                      links: tx.effects!.created?.map((item) => item.reference),
                   },
               ]
             : []),
@@ -308,10 +308,10 @@ function TransactionView({
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const [txnDetails] = getTransactions(transaction);
+    const [txnDetails] = getTransactionKinds(transaction)!;
     const txKindName = getTransactionKindName(txnDetails);
-    const sender = getTransactionSender(transaction);
-    const gasUsed = transaction?.effects.gasUsed;
+    const sender = getTransactionSender(transaction)!;
+    const gasUsed = transaction?.effects!.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
@@ -422,20 +422,20 @@ function TransactionView({
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasData = getGasData(transaction);
+    const gasData = getGasData(transaction)!;
     const gasPrice = gasData.price || 1;
     const gasPayment = gasData.payment;
     const gasBudget = gasData.budget;
     const gasOwner = gasData.owner;
     const isSponsoredTransaction = gasOwner !== sender;
 
-    const transactionSignatures = getTransactionSignature(transaction);
+    const transactionSignatures = getTransactionSignature(transaction)!;
     const deserializedTransactionSignatures = transactionSignatures.map(
         (signature) => fromSerializedSignature(signature)
     );
     const accountSignature = getSignatureFromAddress(
         deserializedTransactionSignatures,
-        sender
+        sender!
     );
     const sponsorSignature = isSponsoredTransaction
         ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)

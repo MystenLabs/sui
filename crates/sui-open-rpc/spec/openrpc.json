@@ -269,7 +269,7 @@
         "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionResponse"
+          "$ref": "#/components/schemas/TransactionResponse"
         }
       },
       "examples": [
@@ -292,6 +292,7 @@
           "result": {
             "name": "Result",
             "value": {
+              "digest": "RimyyhH99Bs6p7DJP6UwEbWYzb19NSczqARBzqi4GGC",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -441,7 +442,7 @@
         "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionResponse"
+          "$ref": "#/components/schemas/TransactionResponse"
         }
       },
       "deprecated": true
@@ -869,13 +870,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "Ad5j6WvYopSS1Pac2uEByRjX7aobPHXXt8XYYMVnhDRR"
+                "Transaction": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "Ad5j6WvYopSS1Pac2uEByRjX7aobPHXXt8XYYMVnhDRR",
+                "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
                 "eventSeq": 10
               }
             },
@@ -1160,7 +1161,7 @@
           "name": "options",
           "description": "options for specifying the content to be returned",
           "schema": {
-            "$ref": "#/components/schemas/ObjectContentOptions"
+            "$ref": "#/components/schemas/ObjectDataOptions"
           }
         }
       ],
@@ -1398,13 +1399,20 @@
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
           }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseOptions"
+          }
         }
       ],
       "result": {
         "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionResponse"
+          "$ref": "#/components/schemas/TransactionResponse"
         }
       },
       "examples": [
@@ -1413,12 +1421,21 @@
           "params": [
             {
               "name": "digest",
-              "value": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
+              "value": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y"
+            },
+            {
+              "name": "options",
+              "value": {
+                "showInput": true,
+                "showEffects": true,
+                "showEvents": true
+              }
             }
           ],
           "result": {
             "name": "Result",
             "value": {
+              "digest": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -1556,7 +1573,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -1818,15 +1835,24 @@
           "name": "Read API"
         }
       ],
+      "description": "Returns an ordered list of transaction responses The method will throw an error if the input contains any duplicate or the input size exceeds QUERY_MAX_RESULT_LIMIT",
       "params": [
         {
           "name": "digests",
+          "description": "A list of transaction digests.",
           "required": true,
           "schema": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TransactionDigest"
             }
+          }
+        },
+        {
+          "name": "options",
+          "description": "config options to control which fields to fetch",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseOptions"
           }
         }
       ],
@@ -1836,7 +1862,7 @@
         "schema": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/SuiTransactionResponse"
+            "$ref": "#/components/schemas/TransactionResponse"
           }
         }
       }
@@ -2394,7 +2420,7 @@
         "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionResponse"
+          "$ref": "#/components/schemas/TransactionResponse"
         }
       },
       "examples": [
@@ -2419,6 +2445,7 @@
           "result": {
             "name": "Result",
             "value": {
+              "digest": "7DLsgW7cpwga58b8jHPFSR2j7eXx4y7eBdvSd36y3YoQ",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -2745,7 +2772,7 @@
           "name": "options",
           "description": "options for specifying the content to be returned",
           "schema": {
-            "$ref": "#/components/schemas/ObjectContentOptions"
+            "$ref": "#/components/schemas/ObjectDataOptions"
           }
         }
       ],
@@ -4655,46 +4682,6 @@
           }
         }
       },
-      "ObjectContentOptions": {
-        "type": "object",
-        "properties": {
-          "showBcs": {
-            "description": "Whether to show the content in BCS format. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showContent": {
-            "description": "Whether to show the content(i.e., package content or Move struct content) of the object. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showDisplay": {
-            "description": "Whether to show the Display metadata of the object for frontend rendering. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showOwner": {
-            "description": "Whether to show the owner of the object. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showPreviousTransaction": {
-            "description": "Whether to show the previous transaction digest of the object. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showStorageRebate": {
-            "description": "Whether to show the storage rebate of the object. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showType": {
-            "description": "Whether to show the type of the object. Default to be False",
-            "default": false,
-            "type": "boolean"
-          }
-        }
-      },
       "ObjectData": {
         "type": "object",
         "required": [
@@ -4791,6 +4778,46 @@
                 "$ref": "#/components/schemas/SequenceNumber"
               }
             ]
+          }
+        }
+      },
+      "ObjectDataOptions": {
+        "type": "object",
+        "properties": {
+          "showBcs": {
+            "description": "Whether to show the content in BCS format. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showContent": {
+            "description": "Whether to show the content(i.e., package content or Move struct content) of the object. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showDisplay": {
+            "description": "Whether to show the Display metadata of the object for frontend rendering. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showOwner": {
+            "description": "Whether to show the owner of the object. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showPreviousTransaction": {
+            "description": "Whether to show the previous transaction digest of the object. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showStorageRebate": {
+            "description": "Whether to show the storage rebate of the object. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showType": {
+            "description": "Whether to show the type of the object. Default to be False",
+            "default": false,
+            "type": "boolean"
           }
         }
       },
@@ -6476,51 +6503,6 @@
           }
         ]
       },
-      "SuiTransactionResponse": {
-        "type": "object",
-        "required": [
-          "effects",
-          "events",
-          "transaction"
-        ],
-        "properties": {
-          "checkpoint": {
-            "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "confirmedLocalExecution": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
-          },
-          "events": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            }
-          },
-          "timestampMs": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/Transaction"
-          }
-        }
-      },
       "SuiValidatorSummary": {
         "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures to top-level fields so that they are decoupled from the internal definitions.",
         "type": "object",
@@ -7306,6 +7288,96 @@
             "additionalProperties": false
           }
         ]
+      },
+      "TransactionResponse": {
+        "type": "object",
+        "required": [
+          "digest"
+        ],
+        "properties": {
+          "checkpoint": {
+            "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "confirmedLocalExecution": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "digest": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "effects": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionEffects"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "events": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "timestampMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "transaction": {
+            "description": "Transaction input data",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Transaction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "TransactionResponseOptions": {
+        "type": "object",
+        "properties": {
+          "showEffects": {
+            "description": "Whether to show transaction effects. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showEvents": {
+            "description": "Whether to show transaction events. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showInput": {
+            "description": "Whether to show transaction input data. Default to be False",
+            "default": false,
+            "type": "boolean"
+          }
+        }
       },
       "TransferObject": {
         "type": "object",
