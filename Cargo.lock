@@ -8880,6 +8880,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-proc-macros",
+ "move-core-types",
  "mysten-metrics",
  "narwhal-network",
  "prometheus",
