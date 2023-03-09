@@ -6,7 +6,7 @@ import { TransportStatusError } from '@ledgerhq/hw-transport';
 import { useState } from 'react';
 
 import ExternalLink from '_components/external-link';
-import { attemptConnectionAndGetSuiLedgerClient } from '_src/ui/app/helpers/SuiLedgerClient';
+import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
@@ -25,16 +25,17 @@ export function ConnectLedgerModal({
     onError,
 }: ConnectLedgerModalProps) {
     const [isConnectingToLedger, setConnectingToLedger] = useState(false);
+    const [, connectToLedger] = useSuiLedgerClient();
+
     const onContinueClick = async () => {
         try {
             setConnectingToLedger(true);
 
-            // We'll try to establish a connection to the user's Ledger device,
-            // and then we'll test that the Sui application is actually open
-            // on the user's device by making a call to getVersion
+            // Let's make sure that the user has the Sui application open
+            // by making a call to getVersion. We can probably abstract this
+            // away at the SDK level in some follow-up work
             // (See https://github.com/LedgerHQ/ledgerjs/issues/122)
-            const suiLedgerClient =
-                await attemptConnectionAndGetSuiLedgerClient();
+            const suiLedgerClient = await connectToLedger();
             await suiLedgerClient.getVersion();
 
             onConfirm();

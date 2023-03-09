@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { LockUnlocked16 as UnlockedLockIcon } from '@mysten/icons';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
-import { SummaryCard } from '../../../SummaryCard';
-import Overlay from '../../../overlay';
-import { useNextMenuUrl } from '../../hooks';
+import { SummaryCard } from '../SummaryCard';
+import { useNextMenuUrl } from '../menu/hooks';
+import Overlay from '../overlay';
 import { LedgerAccount } from './LedgerAccount';
+import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
-import { getSuiLedgerClient } from '_src/ui/app/helpers/SuiLedgerClient';
 
 const mockAccounts = [
     {
@@ -30,6 +30,13 @@ const mockAccounts = [
 export function ImportLedgerAccounts() {
     const accountsUrl = useNextMenuUrl(true, `/accounts`);
     const navigate = useNavigate();
+    const [suiLedgerClient] = useSuiLedgerClient();
+
+    if (!suiLedgerClient) {
+        // TODO (future improvement): We should detect when a user's Ledger device has disconnected so that
+        // we can redirect them away from this route if they were to pull out their Ledger device mid-flow
+        return <Navigate to={accountsUrl} replace />;
+    }
 
     return (
         <Overlay
