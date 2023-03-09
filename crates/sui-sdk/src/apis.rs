@@ -16,8 +16,7 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
     EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
     SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiSystemStateRpc, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    TransactionsPage,
+    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -27,13 +26,13 @@ use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::ValidatorMetadata;
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
 use sui_types::governance::DelegatedStake;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[derive(Debug)]
 pub struct ReadApi {
@@ -139,14 +138,6 @@ impl ReadApi {
         Ok(self.api.http.get_checkpoint(id).await?)
     }
 
-    /// Return a checkpoint summary based on a checkpoint sequence number
-    pub async fn get_checkpoint_summary(
-        &self,
-        seq_number: CheckpointSequenceNumber,
-    ) -> SuiRpcResult<CheckpointSummary> {
-        Ok(self.api.http.get_checkpoint_summary(seq_number).await?)
-    }
-
     /// Return the sequence number of the latest checkpoint that has been executed
     pub async fn get_latest_checkpoint_sequence_number(
         &self,
@@ -194,10 +185,6 @@ impl ReadApi {
             .http
             .get_normalized_move_modules_by_package(package)
             .await?)
-    }
-
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
-        Ok(self.api.http.get_sui_system_state().await?)
     }
 
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
@@ -489,19 +476,19 @@ impl GovernanceApi {
         Ok(self.api.http.get_delegated_stakes(owner).await?)
     }
 
-    /// Return all validators available for stake delegation.
-    pub async fn get_validators(&self) -> SuiRpcResult<Vec<ValidatorMetadata>> {
-        Ok(self.api.http.get_validators().await?)
-    }
-
     /// Return the committee information for the asked `epoch`.
     /// `epoch`: The epoch of interest. If None, default to the latest epoch
     pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    /// Return [SuiSystemStateRpc]
-    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateRpc> {
-        Ok(self.api.http.get_sui_system_state().await?)
+    /// Return the latest SUI system state object on-chain.
+    pub async fn get_latest_sui_system_state(&self) -> SuiRpcResult<SuiSystemStateSummary> {
+        Ok(self.api.http.get_latest_sui_system_state().await?)
+    }
+
+    /// Return the reference gas price for the network
+    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_reference_gas_price().await?)
     }
 }

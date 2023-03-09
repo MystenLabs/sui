@@ -1,6 +1,8 @@
-DROP TABLE owner_changes;
-DROP TABLE owner_index;
+DROP TABLE IF EXISTS owner;
+DROP TABLE IF EXISTS owner_history;
 
-DROP TYPE owner_change_type;
+DROP FUNCTION IF EXISTS object_owned_at_checkpoint(BIGINT, owner_type, address);
+DROP FUNCTION IF EXISTS owner_history_func();
 
-
+DROP TRIGGER IF EXISTS owner ON objects;
+DROP FUNCTION IF EXISTS owner_modified_func();

@@ -19,6 +19,7 @@ use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -41,7 +42,9 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use tokio::sync::broadcast::Receiver;
 use tracing::debug;
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
@@ -63,8 +66,8 @@ pub mod admin;
 mod handle;
 pub mod metrics;
 pub use handle::SuiNodeHandle;
-use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
+use sui_config::node::DBCheckpointConfig;
 use sui_core::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
 };
@@ -87,6 +90,7 @@ use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{AuthorityCapabilities, ConsensusTransaction};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
@@ -101,7 +105,6 @@ pub struct ValidatorComponents {
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
-use sui_types::sui_system_state::SuiSystemState;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -118,7 +121,7 @@ pub struct SuiNode {
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the committee and protocol version for the next epoch.
-    end_of_epoch_channel: broadcast::Sender<(Committee, ProtocolVersion)>,
+    end_of_epoch_channel: broadcast::Sender<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -181,14 +184,9 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        let epoch_start_configuration = if cur_epoch == genesis.epoch() {
-            Some(EpochStartConfiguration {
-                system_state: SuiSystemState::new_genesis(genesis.sui_system_object()),
-                epoch_digest: genesis.checkpoint().digest(),
-            })
-        } else {
-            None
-        };
+        let epoch_start_configuration = store
+            .get_epoch_start_configuration()?
+            .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -235,11 +233,29 @@ impl SuiNode {
             None
         };
 
-        // Create network
-        let (p2p_network, discovery_handle, state_sync_handle) =
-            Self::create_p2p_network(&config, state_sync_store, &prometheus_registry)?;
+        let (end_of_epoch_channel, end_of_epoch_receiver) =
+            broadcast::channel::<(CommitteeWithNetworkMetadata, ProtocolVersion)>(
+                config.end_of_epoch_broadcast_channel_capacity,
+            );
 
-        // Create Authority State
+        // Create network
+        let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
+            &config,
+            epoch_store.epoch_start_state(),
+            state_sync_store,
+            end_of_epoch_channel.subscribe(),
+            &prometheus_registry,
+        )?;
+
+        let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
+            DBCheckpointConfig {
+                checkpoint_path: Some(config.db_checkpoint_path()),
+                ..config.db_checkpoint_config
+            }
+        } else {
+            config.db_checkpoint_config.clone()
+        };
+
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
@@ -254,10 +270,9 @@ impl SuiNode {
             config.authority_store_pruning_config,
             genesis.objects(),
             config.epoch_duration_ms,
-            &config.state_snapshot_config,
+            &db_checkpoint_config,
         )
         .await;
-
         // ensure genesis txn was executed
         if epoch_store.epoch() == 0 {
             let txn = &genesis.transaction();
@@ -275,16 +290,12 @@ impl SuiNode {
                 .unwrap();
         }
 
-        let (end_of_epoch_channel, receiver) = broadcast::channel::<(Committee, ProtocolVersion)>(
-            config.end_of_epoch_broadcast_channel_capacity,
-        );
-
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
-                    receiver,
-                    config.db_path(),
+                    end_of_epoch_receiver,
+                    &config.db_path(),
                     &prometheus_registry,
                 )
                 .await?,
@@ -305,8 +316,8 @@ impl SuiNode {
 
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_configuration()
-            .system_state
-            .get_current_epoch_authority_names_to_peer_ids();
+            .epoch_start_state()
+            .get_authority_names_to_peer_ids();
 
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
@@ -374,12 +385,18 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<(Committee, ProtocolVersion)> {
+    pub fn subscribe_to_epoch_change(
+        &self,
+    ) -> broadcast::Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)> {
         self.end_of_epoch_channel.subscribe()
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
         self.state.current_epoch_for_testing()
+    }
+
+    pub fn db_checkpoint_path(&self) -> PathBuf {
+        self.config.db_checkpoint_path()
     }
 
     // Init reconfig process by starting to reject user certs
@@ -413,7 +430,9 @@ impl SuiNode {
 
     fn create_p2p_network(
         config: &NodeConfig,
+        sui_system: &EpochStartSystemState,
         state_sync_store: RocksDbStore,
+        reconfig_channel: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
@@ -427,18 +446,22 @@ impl SuiNode {
         let mut p2p_config = config.p2p_config.clone();
         let network_kp = config.network_key_pair();
         let our_network_public_key = network_kp.public();
-        let other_validators = config
-            .genesis()?
-            .validator_set()
+        let other_validators = sui_system
+            .get_sui_committee()
+            .network_metadata
             .into_iter()
-            .filter(|validator| &validator.network_key != our_network_public_key)
-            .map(|validator| sui_config::p2p::SeedPeer {
-                peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
-                address: validator.p2p_address,
+            .filter(|(_name, network_metadata)| {
+                &network_metadata.network_pubkey != our_network_public_key
+            })
+            .map(|(_name, network_metadata)| sui_config::p2p::SeedPeer {
+                peer_id: Some(anemo::PeerId(network_metadata.network_pubkey.0.to_bytes())),
+                address: network_metadata.p2p_address,
             });
         p2p_config.seed_peers.extend(other_validators);
 
-        let (discovery, discovery_server) = discovery::Builder::new().config(p2p_config).build();
+        let (discovery, discovery_server) = discovery::Builder::new(reconfig_channel)
+            .config(p2p_config)
+            .build();
 
         let p2p_network = {
             let routes = anemo::Router::new()
@@ -586,20 +609,20 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        let system_state = epoch_store.system_state_object();
-        let committee = system_state.get_current_epoch_narwhal_committee();
+        let new_epoch_start_state = epoch_store.epoch_start_config().epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
 
         let transactions_addr = &config
             .consensus_config
             .as_ref()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
             .address;
-        let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+        let worker_cache = new_epoch_start_state.get_narwhal_worker_cache(transactions_addr);
 
         narwhal_manager
             .start(
                 committee.clone(),
-                SharedWorkerCache::from(worker_cache),
+                worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
                     epoch_store,
@@ -653,6 +676,7 @@ impl SuiNode {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
         let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
+        let max_checkpoint_size = epoch_store.protocol_config().max_checkpoint_size();
 
         CheckpointService::spawn(
             state.clone(),
@@ -664,6 +688,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             checkpoint_metrics,
             max_tx_per_checkpoint,
+            max_checkpoint_size,
         )
     }
 
@@ -821,17 +846,17 @@ impl SuiNode {
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let system_state = self
+            let new_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
-            let next_epoch_committee = system_state.get_current_epoch_committee().committee;
+            let next_epoch_committee = new_system_state.get_current_epoch_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
             // If we eventually add tests that exercise safe mode, we will need a configurable way of
             // guarding against unexpected safe_mode.
-            debug_assert!(!system_state.safe_mode());
+            debug_assert!(!new_system_state.safe_mode());
 
             info!(
                 next_epoch,
@@ -842,16 +867,17 @@ impl SuiNode {
             // so that we don't need to restart the connection monitor every epoch.
             //  Update the mappings that will be used by the consensus adapter if it exists or is
             // about to be created.
-            let authority_names_to_peer_ids =
-                system_state.get_current_epoch_authority_names_to_peer_ids();
+            let new_system_state = new_system_state.into_epoch_start_state();
+            let authority_names_to_peer_ids = new_system_state.get_authority_names_to_peer_ids();
             self.connection_monitor_status
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
             let _ = self.end_of_epoch_channel.send((
                 next_epoch_committee.clone(),
-                ProtocolVersion::new(system_state.protocol_version()),
+                ProtocolVersion::new(new_system_state.protocol_version),
             ));
+            let next_epoch_committee = next_epoch_committee.committee;
 
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
@@ -873,7 +899,7 @@ impl SuiNode {
                 narwhal_manager.shutdown().await;
 
                 let new_epoch_store = self
-                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, new_system_state)
                     .await;
 
                 narwhal_epoch_data_remover
@@ -905,7 +931,7 @@ impl SuiNode {
                 }
             } else {
                 let new_epoch_store = self
-                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, system_state)
+                    .reconfigure_state(&cur_epoch_store, next_epoch_committee, new_system_state)
                     .await;
 
                 if self.state.is_validator(&new_epoch_store) {
@@ -937,7 +963,7 @@ impl SuiNode {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
-        system_state: SuiSystemState,
+        next_epoch_start_system_state: EpochStartSystemState,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 
@@ -946,10 +972,8 @@ impl SuiNode {
             .get_epoch_last_checkpoint(cur_epoch_store.epoch())
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
-        let epoch_start_configuration = EpochStartConfiguration {
-            system_state,
-            epoch_digest: last_checkpoint.digest(),
-        };
+        let epoch_start_configuration =
+            EpochStartConfiguration::new(next_epoch_start_system_state, *last_checkpoint.digest());
 
         let new_epoch_store = self
             .state

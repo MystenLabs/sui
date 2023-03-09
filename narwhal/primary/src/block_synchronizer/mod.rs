@@ -9,7 +9,7 @@ use crate::{
 };
 use anemo::PeerId;
 use anyhow::anyhow;
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::traits::ToFromBytes;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash;
@@ -153,7 +153,7 @@ pub struct BlockSynchronizer {
     committee: Committee,
 
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
 
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
@@ -188,7 +188,7 @@ impl BlockSynchronizer {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
         network: anemo::Network,
@@ -642,7 +642,6 @@ impl BlockSynchronizer {
         for (worker_id, batch_ids) in batches_by_worker {
             let worker_name = self
                 .worker_cache
-                .load()
                 .worker(&self.name, &worker_id)
                 .expect("Worker id not found")
                 .name;
@@ -703,7 +702,7 @@ impl BlockSynchronizer {
         targets: Vec<NetworkPublicKey>,
         timeout: Duration,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         digests: Vec<CertificateDigest>,
     ) -> State {
         let request = GetCertificatesRequest {
@@ -768,7 +767,7 @@ impl BlockSynchronizer {
             let certificates = &response.body().certificates;
             let mut found_invalid_certificate = false;
             for certificate in certificates {
-                if let Err(err) = certificate.verify(&committee, worker_cache.clone()) {
+                if let Err(err) = certificate.verify(&committee, &worker_cache) {
                     error!(
                         "Ignoring certificates from peer {response_peer:?}: certificate verification failed for digest {} with error {err:?}",
                         certificate.digest(),

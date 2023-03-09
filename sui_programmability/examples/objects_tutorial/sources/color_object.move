@@ -73,11 +73,10 @@ module tutorial::color_object {
 }
 
 #[test_only]
-module tutorial::color_objectTests {
+module tutorial::color_object_tests {
     use sui::test_scenario;
     use tutorial::color_object::{Self, ColorObject};
     use sui::object;
-    use sui::transfer;
     use sui::tx_context;
 
     // == Tests covered in Chapter 1 ==
@@ -188,7 +187,7 @@ module tutorial::color_objectTests {
         test_scenario::next_tx(scenario, owner);
         {
             let object = test_scenario::take_from_sender<ColorObject>(scenario);
-            transfer::transfer(object, recipient);
+            color_object::transfer(object, recipient);
         };
         // Check that owner no longer owns the object.
         test_scenario::next_tx(scenario, owner);

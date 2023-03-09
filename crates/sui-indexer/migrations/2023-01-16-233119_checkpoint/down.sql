@@ -1,1 +1,1 @@
-DROP TABLE checkpoints;
+DROP TABLE IF EXISTS checkpoints;

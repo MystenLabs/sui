@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
+// allowed, no object is being made with the UID
 module 0x0.m {
     import 0x2.object;
 

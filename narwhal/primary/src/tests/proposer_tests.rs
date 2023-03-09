@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use fastcrypto::traits::KeyPair;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use test_utils::{fixture_payload, CommitteeFixture};
@@ -13,10 +12,9 @@ use types::PreSubscribedBroadcastSender;
 async fn propose_empty() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
-    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
@@ -31,7 +29,6 @@ async fn propose_empty() {
     let _proposer_handle = Proposer::spawn(
         name,
         committee.clone(),
-        signature_service,
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 32,
         /* max_header_num_of_batches */ 100,
@@ -52,18 +49,17 @@ async fn propose_empty() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
     assert!(header.payload.is_empty());
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 }
 
 #[tokio::test]
 async fn propose_payload_and_repropose_after_n_seconds() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let header_resend_delay = Duration::from_secs(3);
-    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
@@ -80,7 +76,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let _proposer_handle = Proposer::spawn(
         name.clone(),
         committee.clone(),
-        signature_service,
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ max_num_of_batches,
@@ -124,7 +119,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         header.payload.get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // WHEN available batches are more than the maximum ones
     let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> =
@@ -185,10 +180,9 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 async fn equivocation_protection() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
-    let signature_service = SignatureService::new(primary.keypair().copy());
     let proposer_store = ProposerStore::new_for_tests();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -203,7 +197,6 @@ async fn equivocation_protection() {
     let proposer_handle = Proposer::spawn(
         name.clone(),
         committee.clone(),
-        signature_service.clone(),
         proposer_store.clone(),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
@@ -258,7 +251,7 @@ async fn equivocation_protection() {
         header.payload.get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // restart the proposer.
     tx_shutdown.send().unwrap();
@@ -275,7 +268,6 @@ async fn equivocation_protection() {
     let _proposer_handle = Proposer::spawn(
         name.clone(),
         committee.clone(),
-        signature_service,
         proposer_store,
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,

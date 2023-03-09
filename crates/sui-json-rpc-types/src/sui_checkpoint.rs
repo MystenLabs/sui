@@ -7,9 +7,10 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
-    EndOfEpochData,
+    CheckpointCommitment, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointTimestamp, EndOfEpochData,
 };
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
@@ -37,6 +38,9 @@ pub struct Checkpoint {
     pub end_of_epoch_data: Option<EndOfEpochData>,
     /// Transaction digests
     pub transactions: Vec<TransactionDigest>,
+
+    /// Commitments to checkpoint state
+    pub checkpoint_commitments: Vec<CheckpointCommitment>,
 }
 
 impl From<(CheckpointSummary, CheckpointContents)> for Checkpoint {
@@ -63,6 +67,10 @@ impl From<(CheckpointSummary, CheckpointContents)> for Checkpoint {
             timestamp_ms,
             end_of_epoch_data,
             transactions: contents.iter().map(|digest| digest.transaction).collect(),
+            // TODO: populate commitment for rpc clients. Most likely, rpc clients don't need this
+            // info (if they need it, they need to get signed BCS data anyway in order to trust
+            // it).
+            checkpoint_commitments: Default::default(),
         }
     }
 }

@@ -3,17 +3,19 @@ source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur)"
 ---
 version: 1
+feature_flags: {}
 max_tx_size: 65536
 max_tx_in_batch: 10
+max_gas_payment_objects: 32
 max_modules_in_publish: 128
-max_arguments: 128
+max_arguments: 512
 max_type_arguments: 16
 max_type_argument_depth: 16
 max_pure_argument_size: 16384
 max_object_vec_argument_size: 128
 max_coins: 1024
 max_pay_recipients: 1024
-max_programmable_tx_commands: 128
+max_programmable_tx_commands: 1024
 move_binary_format_version: 6
 max_move_object_size: 256000
 max_move_package_size: 102400
@@ -33,7 +35,10 @@ max_num_event_emit: 256
 max_num_new_move_object_ids: 2048
 max_num_deleted_move_object_ids: 2048
 max_num_transfered_move_object_ids: 2048
-max_event_emit_size: 262144
+max_event_emit_size: 256000
+max_move_vector_len: 262144
+object_runtime_max_num_cached_objects: 1000
+object_runtime_max_num_store_entries: 1000
 base_tx_cost_fixed: 110000
 package_publish_cost_fixed: 1000
 base_tx_cost_per_byte: 0
@@ -49,6 +54,7 @@ storage_fund_reinvest_rate: 500
 reward_slashing_rate: 5000
 storage_gas_price: 1
 max_transactions_per_checkpoint: 1000
+max_checkpoint_size: 31457280
 buffer_stake_for_protocol_upgrade_bps: 7500
 copy_bytes_to_address_cost_per_byte: 10
 address_to_vec_cost_per_byte: 10

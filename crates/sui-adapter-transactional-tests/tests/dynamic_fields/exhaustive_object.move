@@ -23,8 +23,8 @@ struct Counter has key, store {
     count: u64,
 }
 
-fun new(id: UID): Counter {
-    Counter { id, count: 0 }
+fun new(ctx: &mut TxContext): Counter {
+    Counter { id: object::new(ctx), count: 0 }
 }
 
 fun count(counter: &Counter): u64 {
@@ -49,9 +49,9 @@ entry fun t0(ctx: &mut TxContext) {
 
 entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {
     let id = &mut obj.id;
-    add(id, 0, new(object::new(ctx)));
-    add(id, b"", new(object::new(ctx)));
-    add(id, false, new(object::new(ctx)));
+    add(id, 0, new(ctx));
+    add(id, b"", new(ctx));
+    add(id, false, new(ctx));
 }
 
 entry fun t2(obj: &Obj) {

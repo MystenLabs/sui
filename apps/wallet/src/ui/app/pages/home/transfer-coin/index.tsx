@@ -3,9 +3,13 @@
 
 import { useCoinDecimals } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
-import { getTransactionDigest, SUI_TYPE_ARG, Coin } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    SUI_TYPE_ARG,
+    Transaction,
+} from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -36,6 +40,7 @@ function TransferCoinPage() {
     const [coinDecimals] = useCoinDecimals(coinType);
 
     const signer = useSigner();
+    const queryClient = useQueryClient();
     const executeTransfer = useMutation({
         mutationFn: async () => {
             if (coinType === null || !signer || !formData) {
@@ -50,26 +55,73 @@ function TransferCoinPage() {
                     props: { coinType },
                 });
 
-                // Use payAllSui if sendMax is true and the token type is SUI
+                const tx = new Transaction();
+                tx.setGasBudget(formData.gasBudget);
+
                 if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
-                    return signer.payAllSui({
-                        recipient: formData.to,
-                        gasBudget: formData.gasBudget,
-                        inputCoins: formData.coinIds,
-                    });
+                    tx.add(
+                        Transaction.Commands.TransferObjects(
+                            [tx.gas],
+                            tx.input(formData.to)
+                        )
+                    );
+                    tx.setGasPayment(
+                        formData.coins
+                            .filter((coin) => coin.coinType === coinType)
+                            .map((coin) => ({
+                                objectId: coin.coinObjectId,
+                                digest: coin.digest,
+                                version: coin.version,
+                            }))
+                    );
+
+                    return signer.signAndExecuteTransaction(tx);
                 }
 
                 const bigIntAmount = parseAmount(formData.amount, coinDecimals);
-
-                return signer.signAndExecuteTransaction(
-                    await Coin.newPayTransaction(
-                        formData.coins,
-                        coinType,
-                        bigIntAmount,
-                        formData.to,
-                        formData.gasBudget
-                    )
+                const [primaryCoin, ...coins] = formData.coins.filter(
+                    (coin) => coin.coinType === coinType
                 );
+
+                if (coinType === SUI_TYPE_ARG) {
+                    const coin = tx.add(
+                        Transaction.Commands.SplitCoin(
+                            tx.gas,
+                            tx.input(bigIntAmount)
+                        )
+                    );
+                    tx.add(
+                        Transaction.Commands.TransferObjects(
+                            [coin],
+                            tx.input(formData.to)
+                        )
+                    );
+                } else {
+                    const primaryCoinInput = tx.input(primaryCoin);
+                    if (coins.length) {
+                        // TODO: This could just merge a subset of coins that meet the balance requirements instead of all of them.
+                        tx.add(
+                            Transaction.Commands.MergeCoins(
+                                primaryCoinInput,
+                                coins.map((coin) => tx.input(coin.coinObjectId))
+                            )
+                        );
+                    }
+                    const coin = tx.add(
+                        Transaction.Commands.SplitCoin(
+                            primaryCoinInput,
+                            tx.input(bigIntAmount)
+                        )
+                    );
+                    tx.add(
+                        Transaction.Commands.TransferObjects(
+                            [coin],
+                            tx.input(formData.to)
+                        )
+                    );
+                }
+
+                return signer.signAndExecuteTransaction(tx);
             } catch (error) {
                 transaction.setTag('failure', true);
                 throw error;
@@ -78,20 +130,19 @@ function TransferCoinPage() {
             }
         },
         onSuccess: (response) => {
-            const txDigest = getTransactionDigest(response);
+            queryClient.invalidateQueries(['get-coins']);
+            queryClient.invalidateQueries(['coin-balance']);
             const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                txDigest
+                getTransactionDigest(response)
             )}&from=transactions`;
             return navigate(receiptUrl);
         },
         onError: (error) => {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
-                    {error instanceof Error ? (
-                        <small className="text-ellipsis overflow-hidden">
-                            {error.message}
-                        </small>
-                    ) : null}
+                    <small className="text-ellipsis overflow-hidden">
+                        {(error as Error).message || 'Something went wrong'}
+                    </small>
                 </div>
             );
         },

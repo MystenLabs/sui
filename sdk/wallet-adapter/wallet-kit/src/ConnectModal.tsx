@@ -105,11 +105,6 @@ const ConnectionText = styled("div", {
   },
 });
 
-export interface ConnectModalProps {
-  open: boolean;
-  onClose(): void;
-}
-
 const MobileInfoButton = styled("button", {
   background: "$backgroundAccent",
   textAlign: "center",

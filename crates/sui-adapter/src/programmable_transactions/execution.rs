@@ -30,8 +30,7 @@ use sui_types::{
     gas::SuiGasStatus,
     id::UID,
     messages::{
-        Argument, Command, CommandArgumentError, EntryArgumentErrorKind, ProgrammableMoveCall,
-        ProgrammableTransaction,
+        Argument, Command, CommandArgumentError, ProgrammableMoveCall, ProgrammableTransaction,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -102,22 +101,25 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
-            let ty = context
+            let elem_ty = context
                 .session
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
+            let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
                 .session
                 .get_type_abilities(&ty)
                 .map_err(|e| context.convert_vm_error(e))?;
-            let type_ = RawValueType::Loaded {
-                ty,
-                abilities,
-                used_in_non_entry_move_call: false,
-            };
             // BCS layout for any empty vector should be the same
             let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
-            vec![Value::Raw(type_, bytes)]
+            vec![Value::Raw(
+                RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call: false,
+                },
+                bytes,
+            )]
         }
         Command::MakeMoveVec(tag_opt, args) => {
             let mut res = vec![];
@@ -364,6 +366,9 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
     );
+    context
+        .gas_status
+        .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
     let modules = publish_and_verify_modules(context, module_bytes)?;
     let modules_to_init = modules
         .iter()
@@ -771,9 +776,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
     let has_tx_context = tx_ctx_kind != TxContextKind::None;
     let num_args = args.len() + (has_one_time_witness as usize) + (has_tx_context as usize);
     if num_args != parameters.len() {
-        let idx = std::cmp::min(parameters.len(), num_args) as LocalIndex;
         return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::ArityMismatch),
+            ExecutionErrorKind::ArityMismatch,
             format!(
                 "Expected {:?} argument{} calling function '{}', but found {:?}",
                 parameters.len(),
@@ -920,7 +924,29 @@ fn is_string_arg<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
 ) -> Result<Option<StringInfo>, ExecutionError> {
-    let Type::Struct(idx) = param_ty else { return Ok(None) };
+    let idx = match param_ty {
+        Type::Bool
+        | Type::U8
+        | Type::U16
+        | Type::U32
+        | Type::U64
+        | Type::U128
+        | Type::U256
+        | Type::Address
+        | Type::Signer
+        | Type::Reference(_)
+        | Type::MutableReference(_)
+        | Type::TyParam(_) => return Ok(None),
+        // TODO should we support Option of string?
+        Type::StructInstantiation(_, _) => return Ok(None),
+        Type::Vector(inner) => {
+            let info_opt = is_string_arg(context, inner)?;
+            return Ok(info_opt.map(|(string_name, layout)| {
+                (string_name, MoveTypeLayout::Vector(Box::new(layout)))
+            }));
+        }
+        Type::Struct(idx) => idx,
+    };
     let Some(s) = context.session.get_struct_type(*idx) else {
         invariant_violation!("Loaded struct not found")
     };

@@ -34,8 +34,8 @@ expression: common_costs_actual
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {
-    "computation_cost": 157,
-    "storage_cost": 63,
+    "computation_cost": 139,
+    "storage_cost": 42,
     "storage_rebate": 0
   },
   "TransferWholeCoin": {
@@ -44,8 +44,8 @@ expression: common_costs_actual
     "storage_rebate": 0
   },
   "TransferWholeSuiCoin": {
-    "computation_cost": 148,
-    "storage_cost": 42,
+    "computation_cost": 131,
+    "storage_cost": 21,
     "storage_rebate": 0
   }
 }

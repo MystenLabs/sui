@@ -31,25 +31,24 @@ import {
   Order,
   CoinMetadata,
   DevInspectResults,
-  SuiSystemState,
   DelegatedStake,
-  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
-  CheckpointSummary,
-  CheckpointContents,
   CheckpointDigest,
-  CheckPointContentsDigest,
   CommitteeInfo,
   Checkpoint,
   DryRunTransactionResponse,
   SuiTransactionResponse,
+  SuiObjectDataOptions,
+  SuiSystemStateSummary,
+  CoinStruct,
 } from '../types';
 import { Provider } from './provider';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import { SerializedSignature } from '../cryptography/signature';
+import { Transaction } from '../builder';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -62,16 +61,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getReferenceGasPrice');
   }
 
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    throw this.newError('getSuiSystemState');
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
+    throw this.newError('getLatestSuiSystemState');
   }
 
   async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
     throw this.newError('getDelegatedStakes');
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    throw this.newError('getValidators');
   }
 
   // Faucet
@@ -88,39 +83,27 @@ export class VoidProvider extends Provider {
   }
 
   // Coins
-  async getCoins(
-    _owner: SuiAddress,
-    _coinType: string | null,
-    _cursor: ObjectId | null,
-    _limit: number | null,
-  ): Promise<PaginatedCoins> {
+  async getCoins(): Promise<PaginatedCoins> {
     throw this.newError('getCoins');
   }
 
-  async getAllCoins(
-    _owner: SuiAddress,
-    _cursor: ObjectId | null,
-    _limit: number | null,
-  ): Promise<PaginatedCoins> {
+  async getAllCoins(): Promise<PaginatedCoins> {
     throw this.newError('getAllCoins');
   }
 
-  async getBalance(
-    _owner: string,
-    _coinType: string | null,
-  ): Promise<CoinBalance> {
+  async getBalance(): Promise<CoinBalance> {
     throw this.newError('getBalance');
   }
 
-  async getAllBalances(_owner: string): Promise<CoinBalance[]> {
+  async getAllBalances(): Promise<CoinBalance[]> {
     throw this.newError('getAllBalances');
   }
 
-  async getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
+  async getCoinMetadata(): Promise<CoinMetadata> {
     throw new Error('getCoinMetadata');
   }
 
-  async getTotalSupply(_coinType: string): Promise<CoinSupply> {
+  async getTotalSupply(): Promise<CoinSupply> {
     throw new Error('getTotalSupply');
   }
 
@@ -132,18 +115,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectsOwnedByAddress');
   }
 
-  async getGasObjectsOwnedByAddress(
-    _address: string,
-  ): Promise<SuiObjectInfo[]> {
-    throw this.newError('getGasObjectsOwnedByAddress');
-  }
-
   async selectCoinsWithBalanceGreaterThanOrEqual(
     _address: string,
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -152,7 +129,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<SuiObjectResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
@@ -162,6 +139,13 @@ export class VoidProvider extends Provider {
 
   async getObjectRef(_objectId: string): Promise<SuiObjectRef | undefined> {
     throw this.newError('getObjectRef');
+  }
+
+  async getObjectBatch(
+    _objectIds: ObjectId[],
+    _options?: SuiObjectDataOptions,
+  ): Promise<SuiObjectResponse[]> {
+    throw this.newError('getObjectBatch');
   }
 
   // Transactions
@@ -181,7 +165,7 @@ export class VoidProvider extends Provider {
 
   devInspectTransaction(
     _sender: SuiAddress,
-    _txn: UnserializedSignableTransaction | string | Uint8Array,
+    _txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
     _gasPrice: number | null = null,
     _epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -297,32 +281,8 @@ export class VoidProvider extends Provider {
     throw this.newError('getLatestCheckpointSequenceNumber');
   }
 
-  async getCheckpointSummary(
-    _sequenceNumber: number,
-  ): Promise<CheckpointSummary> {
-    throw this.newError('getCheckpointSummary');
-  }
-
-  async getCheckpointSummaryByDigest(
-    _digest: CheckpointDigest,
-  ): Promise<CheckpointSummary> {
-    throw this.newError('getCheckpointSummaryByDigest');
-  }
-
   async getCheckpoint(_id: CheckpointDigest | number): Promise<Checkpoint> {
     throw this.newError('getCheckpoint');
-  }
-
-  async getCheckpointContents(
-    _sequenceNumber: number,
-  ): Promise<CheckpointContents> {
-    throw this.newError('getCheckpointContents');
-  }
-
-  async getCheckpointContentsByDigest(
-    _digest: CheckPointContentsDigest,
-  ): Promise<CheckpointContents> {
-    throw this.newError('getCheckpointContentsByDigest');
   }
 
   async getCommitteeInfo(_epoch?: number): Promise<CommitteeInfo> {

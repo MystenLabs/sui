@@ -11,11 +11,18 @@ module sui::delegation_tests {
     use sui::validator_set;
     use std::vector;
 
-
     use sui::governance_test_utils::{
         Self,
+        add_validator,
+        add_validator_candidate,
+        advance_epoch,
+        advance_epoch_safe_mode,
+        advance_epoch_with_reward_amounts,
         create_validator_for_testing,
         create_sui_system_state_for_testing,
+        delegate_to,
+        remove_validator,
+        remove_validator_candidate,
         total_sui_balance,
         undelegate,
     };
@@ -25,6 +32,11 @@ module sui::delegation_tests {
 
     const DELEGATOR_ADDR_1: address = @0x42;
     const DELEGATOR_ADDR_2: address = @0x43;
+    const DELEGATOR_ADDR_3: address = @0x44;
+
+    const NEW_VALIDATOR_ADDR: address = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
+    const NEW_VALIDATOR_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    const NEW_VALIDATOR_POP: vector<u8> = x"8080980b89554e7f03b625ba4104d05d19b523a737e2d09a69d4498a1bcac154fcb29f6334b7e8b99b8f3aa95153232d";
 
     #[test]
     fun test_split_join_staked_sui() {
@@ -47,10 +59,10 @@ module sui::delegation_tests {
         {
             let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
             assert!(vector::length(&staked_sui_ids) == 2, 101); // staked sui split to 2 coins
-            
+
             let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
             let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
-                
+
             let amount1 = staking_pool::staked_sui_amount(&part1);
             let amount2 = staking_pool::staked_sui_amount(&part2);
             assert!(amount1 == 20 || amount1 == 40, 102);
@@ -249,6 +261,58 @@ module sui::delegation_tests {
     }
 
     #[test]
+    fun test_earns_rewards_at_last_epoch() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
+
+        advance_epoch(scenario);
+
+        remove_validator(VALIDATOR_ADDR_1, scenario);
+
+        // Add some rewards after the validator requests to leave. Since the validator is still active
+        // this epoch, they should get the rewards from this epoch.
+        advance_epoch_with_reward_amounts(0, 40, scenario);
+
+        // Each 100 MIST of stake gets 10 MIST and validators shares the 10 MIST from the storage fund
+        // so validator gets another 5 MIST.
+        let reward_amt = 10;
+        let validator_reward_amt = 5;
+
+        // Make sure delegation withdrawal happens
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state_mut_ref = &mut system_state;
+
+            let staked_sui = test_scenario::take_from_sender<StakedSui>(scenario);
+            assert_eq(staking_pool::staked_sui_amount(&staked_sui), 100);
+
+            // Undelegate from VALIDATOR_ADDR_1
+            assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 0);
+            let ctx = test_scenario::ctx(scenario);
+            sui_system::request_withdraw_delegation(system_state_mut_ref, staked_sui, ctx);
+
+            // Make sure they have all of their stake.
+            assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100 + reward_amt);
+
+            test_scenario::return_shared(system_state);
+        };
+
+        // Validator undelegates now.
+        assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 0);
+        undelegate(VALIDATOR_ADDR_1, 0, scenario);
+        undelegate(VALIDATOR_ADDR_1, 0, scenario);
+
+        // Make sure have all of their stake. NB there is no epoch change. This is immediate.
+        assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 100 + reward_amt + validator_reward_amt);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     #[expected_failure(abort_code = validator_set::ENotAValidator)]
     fun test_add_delegation_post_active_flow() {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
@@ -279,6 +343,170 @@ module sui::delegation_tests {
 
         // Now try and delegate to the old validator/staking pool. This should fail!
         governance_test_utils::delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_preactive_remove_preactive() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        governance_test_utils::add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+
+        // Delegate 100 MIST to the preactive validator
+        governance_test_utils::delegate_to(DELEGATOR_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+
+        // Advance epoch twice with some rewards
+        advance_epoch_with_reward_amounts(0, 400, scenario);
+        advance_epoch_with_reward_amounts(0, 900, scenario);
+
+        // Undelegate from the preactive validator. There should be no rewards earned.
+        governance_test_utils::undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = validator_set::ENotAValidator)]
+    fun test_add_preactive_remove_pending_failure() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        governance_test_utils::add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+
+        governance_test_utils::add_validator(NEW_VALIDATOR_ADDR, scenario);
+
+        // Delegate 100 MIST to the pending validator. This should fail because pending active validators don't accept
+        // new delegations or withdraws.
+        governance_test_utils::delegate_to(DELEGATOR_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_preactive_remove_active() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+
+        // Delegate 100 MIST to the preactive validator
+        delegate_to(DELEGATOR_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+        advance_epoch_with_reward_amounts(0, 70, scenario);
+        delegate_to(DELEGATOR_ADDR_2, NEW_VALIDATOR_ADDR, 300, scenario);
+        delegate_to(DELEGATOR_ADDR_3, NEW_VALIDATOR_ADDR, 100, scenario);
+
+        // Now the preactive becomes active
+        add_validator(NEW_VALIDATOR_ADDR, scenario);
+        advance_epoch(scenario);
+
+        advance_epoch_with_reward_amounts(0, 80, scenario);
+
+        // delegator 1 and 3 undelegate from the validator and earns 9 MIST.
+        // Although they delegate in different epochs, they earn the same rewards as long as they undelegate
+        // in the same epoch because the validator was preactive when they delegated.
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 109);
+        undelegate(DELEGATOR_ADDR_3, 0, scenario);
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_3, scenario), 109);
+
+        advance_epoch_with_reward_amounts(0, 100, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
+        // delegator 2 earns about 27 MIST from the previous epoch and 5/8 of the 100 MIST.
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_2, scenario), 300 + 27 + 59);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_preactive_remove_post_active() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+
+        // Delegate 100 MIST to the preactive validator
+        delegate_to(DELEGATOR_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+
+        // Now the preactive becomes active
+        add_validator(NEW_VALIDATOR_ADDR, scenario);
+        advance_epoch(scenario);
+
+        advance_epoch_with_reward_amounts(0, 80, scenario); // delegator 1 earns 20 MIST here.
+
+        // And now the validator leaves the validator set.
+        remove_validator(NEW_VALIDATOR_ADDR, scenario);
+
+        advance_epoch(scenario);
+
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100 + 20);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_preactive_candidate_drop_out() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+
+        // Delegate 100 MIST to the preactive validator
+        delegate_to(DELEGATOR_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+
+        // Advance epoch and give out some rewards. The candidate should get nothing, of course.
+        advance_epoch_with_reward_amounts(0, 800, scenario);
+
+        // Now the candidate leaves.
+        remove_validator_candidate(NEW_VALIDATOR_ADDR, scenario);
+
+        // Advance epoch a few times.
+        advance_epoch(scenario);
+        advance_epoch(scenario);
+        advance_epoch(scenario);
+
+        // Undelegate now and the delegator should get no rewards.
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 100);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_delegation_during_safe_mode() {
+        // test that delegation and undelegation can work during safe mode too.
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
+        advance_epoch(scenario);
+        // The first delegation gets 10 MIST here.
+        advance_epoch_with_reward_amounts(0, 40, scenario);
+        advance_epoch_safe_mode(scenario);
+
+        delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 100, scenario);
+
+        advance_epoch_safe_mode(scenario);
+        advance_epoch(scenario);
+        // The first delegation gets 10 MIST and the second one gets 8 here.
+        advance_epoch_with_reward_amounts(0, 50, scenario);
+        advance_epoch_safe_mode(scenario);
+
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        // 100 principal + 20 rewards
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_1, scenario), 120);
+
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
+        // 100 principal + 8 rewards
+        assert_eq(total_sui_balance(DELEGATOR_ADDR_2, scenario), 108);
 
         test_scenario::end(scenario_val);
     }

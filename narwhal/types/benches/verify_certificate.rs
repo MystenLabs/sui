@@ -37,9 +37,9 @@ pub fn verify_certificates(c: &mut Criterion) {
             BenchmarkId::new("with_committee_size", committee_size),
             &certificate,
             |b, cert| {
+                let worker_cache = fixture.worker_cache();
                 b.iter(|| {
-                    let worker_cache = fixture.shared_worker_cache();
-                    let _ = cert.verify(&committee, worker_cache);
+                    let _ = cert.verify(&committee, &worker_cache);
                 })
             },
         );

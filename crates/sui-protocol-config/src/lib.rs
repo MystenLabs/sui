@@ -12,6 +12,10 @@ use tracing::{info, warn};
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 1;
 
+// Record history of protocol version allocations here:
+//
+// Version 1: Original version.
+
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
 )]
@@ -31,13 +35,13 @@ impl ProtocolVersion {
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
-    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+    pub const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
         Self(v)
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 
@@ -45,6 +49,12 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+}
+
+impl From<u64> for ProtocolVersion {
+    fn from(v: u64) -> Self {
+        Self::new(v)
     }
 }
 
@@ -67,8 +77,8 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// to be able to inject arbitrary versions into SuiNode.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SupportedProtocolVersions {
-    min: ProtocolVersion,
-    max: ProtocolVersion,
+    pub min: ProtocolVersion,
+    pub max: ProtocolVersion,
 }
 
 impl SupportedProtocolVersions {
@@ -86,14 +96,23 @@ impl SupportedProtocolVersions {
     }
 
     pub fn new_for_testing(min: u64, max: u64) -> Self {
-        let min = ProtocolVersion::new(min);
-        let max = ProtocolVersion::new(max);
+        let min = min.into();
+        let max = max.into();
         Self { min, max }
     }
 
     pub fn is_version_supported(&self, v: ProtocolVersion) -> bool {
         v.0 >= self.min.0 && v.0 <= self.max.0
     }
+}
+
+pub struct Error(pub String);
+
+/// Records on/off feature flags that may vary at each protocol version.
+#[derive(Default, Clone, Serialize)]
+struct FeatureFlags {
+    // Add feature flags here, e.g.:
+    // new_protocol_feature: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -118,12 +137,17 @@ impl SupportedProtocolVersions {
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
+    feature_flags: FeatureFlags,
+
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
     max_tx_size: Option<usize>,
 
     /// Maximum number of individual transactions in a Batch transaction.
     max_tx_in_batch: Option<u32>,
+
+    /// Maximum number of gas payment objets for a transaction.
+    max_gas_payment_objects: Option<u32>,
 
     /// Maximum number of modules in a Publish transaction.
     max_modules_in_publish: Option<u32>,
@@ -216,6 +240,16 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
 
+    /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
+    max_move_vector_len: Option<u64>,
+
+    // === Object runtime internal operation limits ====
+    /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_cached_objects: Option<u64>,
+
+    /// Maximum number of stored objects accessed by object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_store_entries: Option<u64>,
+
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
     /// Base cost for any Sui transaction
@@ -283,8 +317,14 @@ pub struct ProtocolConfig {
     /// === Core Protocol ===
 
     /// Max number of transactions per checkpoint.
-    /// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
+    /// Note that this is a protocol constant and not a config as validators must have this set to
+    /// the same value, otherwise they *will* fork.
     max_transactions_per_checkpoint: Option<usize>,
+
+    /// Max size of a checkpoint in bytes.
+    /// Note that this is a protocol constant and not a config as validators must have this set to
+    /// the same value, otherwise they *will* fork.
+    max_checkpoint_size: Option<usize>,
 
     /// A protocol upgrade always requires 2f+1 stake to agree. We support a buffer of additional
     /// stake (as a fraction of f, expressed in basis points) that is required before an upgrade
@@ -315,6 +355,21 @@ pub struct ProtocolConfig {
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
 
+// feature flags
+impl ProtocolConfig {
+    // Add checks for feature flag support here, e.g.:
+    // pub fn check_new_protocol_feature_supported(&self) -> Result<(), Error> {
+    //     if self.feature_flags.new_protocol_feature_supported {
+    //         Ok(())
+    //     } else {
+    //         Err(Error(format!(
+    //             "new_protocol_feature is not supported at {:?}",
+    //             self.version
+    //         )))
+    //     }
+    // }
+}
+
 // getters
 impl ProtocolConfig {
     pub fn max_tx_size(&self) -> usize {
@@ -322,6 +377,9 @@ impl ProtocolConfig {
     }
     pub fn max_tx_in_batch(&self) -> u32 {
         self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_gas_payment_objects(&self) -> u32 {
+        self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_modules_in_publish(&self) -> u32 {
         self.max_modules_in_publish.expect(CONSTANT_ERR_MSG)
@@ -413,6 +471,17 @@ impl ProtocolConfig {
     pub fn max_event_emit_size(&self) -> u64 {
         self.max_event_emit_size.expect(CONSTANT_ERR_MSG)
     }
+    pub fn max_move_vector_len(&self) -> u64 {
+        self.max_move_vector_len.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_cached_objects(&self) -> u64 {
+        self.object_runtime_max_num_cached_objects
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_store_entries(&self) -> u64 {
+        self.object_runtime_max_num_store_entries
+            .expect(CONSTANT_ERR_MSG)
+    }
     pub fn base_tx_cost_fixed(&self) -> u64 {
         self.base_tx_cost_fixed.expect(CONSTANT_ERR_MSG)
     }
@@ -462,6 +531,9 @@ impl ProtocolConfig {
     pub fn max_transactions_per_checkpoint(&self) -> usize {
         self.max_transactions_per_checkpoint
             .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_checkpoint_size(&self) -> usize {
+        self.max_checkpoint_size.expect(CONSTANT_ERR_MSG)
     }
     pub fn buffer_stake_for_protocol_upgrade_bps(&self) -> u64 {
         self.buffer_stake_for_protocol_upgrade_bps
@@ -601,18 +673,24 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
-                version, // will be overwitten before being returned
+                // will be overwitten before being returned
+                version,
+
+                // All flags are disabled in V1
+                feature_flags: Default::default(),
+
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
+                max_gas_payment_objects: Some(32),
                 max_modules_in_publish: Some(128),
-                max_arguments: Some(128),
+                max_arguments: Some(512),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
                 max_pure_argument_size: Some(16 * 1024),
                 max_object_vec_argument_size: Some(128),
                 max_coins: Some(1024),
                 max_pay_recipients: Some(1024),
-                max_programmable_tx_commands: Some(128),
+                max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
@@ -632,7 +710,10 @@ impl ProtocolConfig {
                 max_num_new_move_object_ids: Some(2048),
                 max_num_deleted_move_object_ids: Some(2048),
                 max_num_transfered_move_object_ids: Some(2048),
-                max_event_emit_size: Some(256 * 1024),
+                max_event_emit_size: Some(250 * 1024),
+                max_move_vector_len: Some(256 * 1024),
+                object_runtime_max_num_cached_objects: Some(1000),
+                object_runtime_max_num_store_entries: Some(1000),
                 base_tx_cost_fixed: Some(110_000),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
@@ -648,6 +729,7 @@ impl ProtocolConfig {
                 reward_slashing_rate: Some(5000),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
+                max_checkpoint_size: Some(30 * 1024 * 1024),
                 // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
                 // TODO: tune based on experience in testnet
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),
@@ -692,7 +774,7 @@ impl ProtocolConfig {
             //
             //     // Pull in everything else from the previous version to avoid unintentional
             //     // changes.
-            //     ..get_for_version_impl(version - 1)
+            //     ..Self::get_for_version_impl(version - 1)
             // },
             _ => panic!("unsupported version {:?}", version),
         }

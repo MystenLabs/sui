@@ -29,7 +29,8 @@ export type PayloadType =
     | 'get-features'
     | 'features-response'
     | 'get-network'
-    | 'set-network';
+    | 'set-network'
+    | 'sign-message-request';
 
 export interface BasePayload {
     type: PayloadType;

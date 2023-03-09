@@ -24,7 +24,7 @@ use sui_types::clock::Clock;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
+    SuiAuthoritySignature, ToFromBytes,
 };
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
@@ -76,10 +76,10 @@ pub struct GenesisTuple(
 // Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
 impl PartialEq for Genesis {
     fn eq(&self, other: &Self) -> bool {
-        self.checkpoint.summary() == other.checkpoint.summary()
+        self.checkpoint.data() == other.checkpoint.data()
             && {
-                let this = &self.checkpoint.auth_signature;
-                let other = &other.checkpoint.auth_signature;
+                let this = self.checkpoint.auth_sig();
+                let other = other.checkpoint.auth_sig();
 
                 this.epoch == other.epoch
                     && this.signature.as_ref() == other.signature.as_ref()
@@ -115,7 +115,10 @@ impl Genesis {
     }
 
     pub fn checkpoint(&self) -> VerifiedCheckpoint {
-        VerifiedCheckpoint::new(self.checkpoint.clone(), &self.committee().unwrap()).unwrap()
+        self.checkpoint
+            .clone()
+            .verify(&self.committee().unwrap())
+            .unwrap()
     }
 
     pub fn checkpoint_contents(&self) -> &CheckpointContents {
@@ -127,29 +130,33 @@ impl Genesis {
     }
 
     pub fn validator_set(&self) -> Vec<ValidatorInfo> {
-        let mut infos = Vec::new();
-        for validator in &self.sui_system_object().validators.active_validators {
-            let info = ValidatorInfo {
-                name: validator.metadata.name.clone(),
-                account_key: AccountsPublicKey::Ed25519(validator.metadata.network_key()), //TODO this is wrong and we shouldn't have this here
-                protocol_key: validator.metadata.protocol_key(),
-                worker_key: validator.metadata.worker_key(),
-                network_key: validator.metadata.network_key(),
-                gas_price: validator.gas_price,
-                commission_rate: validator.commission_rate,
-                network_address: validator.metadata.network_address().unwrap(),
-                p2p_address: validator.metadata.p2p_address().unwrap(),
-                narwhal_primary_address: validator.metadata.narwhal_primary_address().unwrap(),
-                narwhal_worker_address: validator.metadata.narwhal_worker_address().unwrap(),
-                description: validator.metadata.description.clone(),
-                image_url: validator.metadata.image_url.clone(),
-                project_url: validator.metadata.project_url.clone(),
-            };
-
-            infos.push(info);
-        }
-
-        infos
+        self.sui_system_object()
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let metadata = validator
+                    .metadata
+                    .verify()
+                    .expect("Genesis validator metadata must be valid");
+                ValidatorInfo {
+                    name: metadata.name,
+                    account_key: AccountsPublicKey::Ed25519(metadata.network_pubkey.clone()), //TODO this is wrong and we shouldn't have this here
+                    protocol_key: (&metadata.protocol_pubkey).into(),
+                    worker_key: metadata.worker_pubkey,
+                    network_key: metadata.network_pubkey,
+                    gas_price: validator.gas_price,
+                    commission_rate: validator.commission_rate,
+                    network_address: metadata.net_address,
+                    p2p_address: metadata.p2p_address,
+                    narwhal_primary_address: metadata.primary_address,
+                    narwhal_worker_address: metadata.worker_address,
+                    description: metadata.description,
+                    image_url: metadata.image_url,
+                    project_url: metadata.project_url,
+                }
+            })
+            .collect()
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
@@ -511,19 +518,13 @@ impl Builder {
                 .map(|(_, s)| s)
                 .collect();
 
-            CertifiedCheckpointSummary {
-                summary: checkpoint,
-                auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
-                    signatures, &committee,
-                )
-                .unwrap(),
-            }
+            CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
         let validators = self.validators.into_values().collect::<Vec<_>>();
 
         // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
+        assert_eq!(checkpoint.auth_sig().len(), validators.len() as u64);
 
         let genesis = Genesis {
             checkpoint,
@@ -769,6 +770,7 @@ fn create_genesis_checkpoint(
         end_of_epoch_data: None,
         timestamp_ms: parameters.timestamp_ms,
         version_specific_data: Vec::new(),
+        checkpoint_commitments: Default::default(),
     };
 
     (checkpoint, contents)

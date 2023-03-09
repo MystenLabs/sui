@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{Network, Request};
-use config::{Committee, Epoch, SharedWorkerCache, WorkerId};
+use config::{Committee, Epoch, WorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
@@ -22,7 +22,7 @@ use std::{
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::{
-    sync::{broadcast, oneshot, watch},
+    sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
     time::timeout,
 };
@@ -47,7 +47,7 @@ struct Inner {
     /// Committee of the current epoch.
     committee: Committee,
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// Highest round that has been GC'ed.
@@ -103,8 +103,12 @@ impl Inner {
             .map_err(|_| DagError::ShuttingDown)
     }
 
-    async fn accept_suspended_certificate(&self, suspended: SuspendedCertificate) -> DagResult<()> {
-        self.accept_certificate_internal(suspended.certificate)
+    async fn accept_suspended_certificate(
+        &self,
+        lock: &MutexGuard<'_, State>,
+        suspended: SuspendedCertificate,
+    ) -> DagResult<()> {
+        self.accept_certificate_internal(lock, suspended.certificate)
             .await?;
         // Notify waiters that the certificate is no longer suspended.
         // Must be after certificate acceptance.
@@ -113,7 +117,12 @@ impl Inner {
         Ok(())
     }
 
-    async fn accept_certificate_internal(&self, certificate: Certificate) -> DagResult<()> {
+    // State lock must be held when calling this function.
+    async fn accept_certificate_internal(
+        &self,
+        _lock: &MutexGuard<'_, State>,
+        certificate: Certificate,
+    ) -> DagResult<()> {
         let digest = certificate.digest();
 
         // Store the certificate. After this, the certificate must be sent to consensus
@@ -184,7 +193,7 @@ impl Synchronizer {
     pub fn new(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         gc_depth: Round,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -275,7 +284,7 @@ impl Synchronizer {
                     );
                     // Iteration must be in causal order.
                     for suspended in iter::once(suspended_cert).chain(suspended_certs.into_iter()) {
-                        match inner.accept_suspended_certificate(suspended).await {
+                        match inner.accept_suspended_certificate(&state, suspended).await {
                             Ok(()) => {}
                             Err(DagError::ShuttingDown) => return,
                             Err(e) => {
@@ -452,7 +461,7 @@ impl Synchronizer {
         );
         // Verify the certificate (and the embedded header).
         certificate
-            .verify(&self.inner.committee, self.inner.worker_cache.clone())
+            .verify(&self.inner.committee, &self.inner.worker_cache)
             .map_err(DagError::from)
     }
 
@@ -583,9 +592,13 @@ impl Synchronizer {
 
         let suspended_certs = state.accept_children(certificate.round(), certificate.digest());
         // Accept in causal order.
-        self.inner.accept_certificate_internal(certificate).await?;
+        self.inner
+            .accept_certificate_internal(&state, certificate)
+            .await?;
         for suspended in suspended_certs {
-            self.inner.accept_suspended_certificate(suspended).await?;
+            self.inner
+                .accept_suspended_certificate(&state, suspended)
+                .await?;
         }
 
         self.inner
@@ -746,7 +759,6 @@ impl Synchronizer {
             let inner = inner.clone();
             let worker_name = inner
                 .worker_cache
-                .load()
                 .worker(&inner.name, &worker_id)
                 .expect("Author of valid header is not in the worker cache")
                 .name;

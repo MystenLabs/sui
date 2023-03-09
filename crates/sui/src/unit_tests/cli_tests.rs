@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
@@ -25,7 +26,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectType, SuiAddress};
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
@@ -204,7 +205,10 @@ async fn test_create_example_nft_command() {
             assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
             assert_eq!(
                 obj.type_.clone().unwrap(),
-                sui_framework_address_concat_string("::devnet_nft::DevNetNFT")
+                ObjectType::from_str(&sui_framework_address_concat_string(
+                    "::devnet_nft::DevNetNFT"
+                ))
+                .unwrap()
             );
             Ok(obj)
         }
@@ -1202,8 +1206,12 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
         .data;
 
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-    let validator_addrs = client.governance_api().get_validators().await?;
-    let validator_addr = validator_addrs.first().unwrap().sui_address;
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
 
     test_with_sui_binary(&[
         "client",
@@ -1253,8 +1261,12 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
         .data;
 
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-    let validator_addrs = client.governance_api().get_validators().await?;
-    let validator_addr = validator_addrs.first().unwrap().sui_address;
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
 
     test_with_sui_binary(&[
         "client",

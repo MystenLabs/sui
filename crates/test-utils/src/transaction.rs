@@ -384,7 +384,8 @@ pub async fn delete_devnet_nft(
         gas,
         vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let signature = context
         .config

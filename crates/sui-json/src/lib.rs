@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 use std::fmt::{self, Debug, Formatter};
 use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
@@ -123,6 +124,10 @@ impl SuiJsonValue {
 
     pub fn to_json_value(&self) -> JsonValue {
         self.0.clone()
+    }
+
+    pub fn to_sui_address(&self) -> anyhow::Result<SuiAddress> {
+        json_value_to_sui_address(&self.0)
     }
 
     fn handle_inner_struct_layout(
@@ -243,13 +248,9 @@ impl SuiJsonValue {
                 )
             }
 
-            (JsonValue::String(s), MoveTypeLayout::Address) => {
-                let s = s.trim().to_lowercase();
-                if !s.starts_with(HEX_PREFIX) {
-                    bail!("Address hex string must start with 0x.",);
-                }
-                let r = SuiAddress::from_str(&s)?;
-                MoveValue::Address(r.into())
+            (v, MoveTypeLayout::Address) => {
+                let addr = json_value_to_sui_address(v)?;
+                MoveValue::Address(addr.into())
             }
             _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })
@@ -259,6 +260,19 @@ impl SuiJsonValue {
 impl Debug for SuiJsonValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
+    match value {
+        JsonValue::String(s) => {
+            let s = s.trim().to_lowercase();
+            if !s.starts_with(HEX_PREFIX) {
+                bail!("Address hex string must start with 0x.",);
+            }
+            Ok(SuiAddress::from_str(&s)?)
+        }
+        v => bail!("Unexpected arg {v} for expected type address"),
     }
 }
 
@@ -301,6 +315,29 @@ impl std::str::FromStr for SuiJsonValue {
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
         // Wrap input with json! if serde_json fails, the failure usually cause by missing quote escapes.
         SuiJsonValue::new(serde_json::from_str(s).or_else(|_| serde_json::from_value(json!(s)))?)
+    }
+}
+
+impl TryFrom<CallArg> for SuiJsonValue {
+    type Error = anyhow::Error;
+
+    fn try_from(value: CallArg) -> Result<Self, Self::Error> {
+        use serde_json::Value;
+        match value {
+            CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
+            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                SuiJsonValue::new(Value::String(Hex::encode(id)))
+            }
+            CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
+                vec.iter()
+                    .map(|obj_arg| match obj_arg {
+                        ObjectArg::ImmOrOwnedObject((id, _, _))
+                        | ObjectArg::SharedObject { id, .. } => Value::String(Hex::encode(id)),
+                    })
+                    .collect(),
+            )),
+        }
     }
 }
 

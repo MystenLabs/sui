@@ -26,8 +26,6 @@ async fn server_push_checkpoint() {
     store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -45,7 +43,7 @@ async fn server_push_checkpoint() {
     peer_heights.write().unwrap().peers.insert(
         peer_id,
         PeerStateSyncInfo {
-            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            genesis_checkpoint_digest: *ordered_checkpoints[0].digest(),
             on_same_chain_as_us: true,
             height: 0,
         },
@@ -58,7 +56,7 @@ async fn server_push_checkpoint() {
     assert_eq!(
         peer_heights.read().unwrap().peers.get(&peer_id),
         Some(&PeerStateSyncInfo {
-            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            genesis_checkpoint_digest: *ordered_checkpoints[0].digest(),
             on_same_chain_as_us: true,
             height: 1,
         })
@@ -68,10 +66,10 @@ async fn server_push_checkpoint() {
             .read()
             .unwrap()
             .unprocessed_checkpoints
-            .get(&checkpoint.digest())
+            .get(checkpoint.digest())
             .unwrap()
-            .summary,
-        checkpoint.summary,
+            .data(),
+        checkpoint.data(),
     );
     assert_eq!(
         peer_heights
@@ -79,8 +77,8 @@ async fn server_push_checkpoint() {
             .unwrap()
             .highest_known_checkpoint()
             .unwrap()
-            .summary,
-        checkpoint.summary,
+            .data(),
+        checkpoint.data(),
     );
     assert!(matches!(
         mailbox.try_recv().unwrap(),
@@ -101,8 +99,6 @@ async fn server_get_checkpoint() {
     builder.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -113,8 +109,8 @@ async fn server_get_checkpoint() {
         .unwrap()
         .into_inner();
     assert_eq!(
-        response.unwrap().summary,
-        ordered_checkpoints.first().unwrap().summary,
+        response.unwrap().data(),
+        ordered_checkpoints.first().unwrap().data(),
     );
 
     // Requests for checkpoints that aren't in the server's store
@@ -148,20 +144,20 @@ async fn server_get_checkpoint() {
         .unwrap()
         .into_inner()
         .unwrap();
-    assert_eq!(response.summary, latest.summary);
+    assert_eq!(response.data(), latest.data());
 
     for checkpoint in ordered_checkpoints {
-        let request = Request::new(GetCheckpointSummaryRequest::ByDigest(checkpoint.digest()));
+        let request = Request::new(GetCheckpointSummaryRequest::ByDigest(*checkpoint.digest()));
         let response = server
             .get_checkpoint_summary(request)
             .await
             .unwrap()
             .into_inner()
             .unwrap();
-        assert_eq!(response.summary, checkpoint.summary);
+        assert_eq!(response.data(), checkpoint.data());
 
         let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(
-            checkpoint.sequence_number(),
+            *checkpoint.sequence_number(),
         ));
         let response = server
             .get_checkpoint_summary(request)
@@ -169,7 +165,7 @@ async fn server_get_checkpoint() {
             .unwrap()
             .into_inner()
             .unwrap();
-        assert_eq!(response.summary, checkpoint.summary);
+        assert_eq!(response.data(), checkpoint.data());
     }
 }
 
@@ -193,15 +189,11 @@ async fn isolated_sync_job() {
     event_loop_1.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
     event_loop_2.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -217,9 +209,9 @@ async fn isolated_sync_job() {
     event_loop_1.peer_heights.write().unwrap().peers.insert(
         network_2.peer_id(),
         PeerStateSyncInfo {
-            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            genesis_checkpoint_digest: *ordered_checkpoints[0].digest(),
             on_same_chain_as_us: true,
-            height: ordered_checkpoints.last().unwrap().sequence_number(),
+            height: *ordered_checkpoints.last().unwrap().sequence_number(),
         },
     );
     event_loop_1
@@ -232,13 +224,13 @@ async fn isolated_sync_job() {
     event_loop_1.maybe_start_checkpoint_summary_sync_task();
     event_loop_1.tasks.join_next().await.unwrap().unwrap();
     assert_eq!(
-        ordered_checkpoints.last().map(|x| &x.summary),
+        ordered_checkpoints.last().map(|x| x.data()),
         Some(
-            &event_loop_1
+            event_loop_1
                 .store
                 .get_highest_verified_checkpoint()
                 .unwrap()
-                .summary
+                .data()
         )
     );
 
@@ -246,12 +238,12 @@ async fn isolated_sync_job() {
         let store = event_loop_1.store.inner();
         let expected = checkpoints
             .iter()
-            .map(|(key, value)| (key, &value.summary))
+            .map(|(key, value)| (key, value.data()))
             .collect::<HashMap<_, _>>();
         let actual = store
             .checkpoints()
             .iter()
-            .map(|(key, value)| (key, &value.summary))
+            .map(|(key, value)| (key, value.data()))
             .collect::<HashMap<_, _>>();
         assert_eq!(actual, expected);
         assert_eq!(
@@ -282,15 +274,11 @@ async fn sync_with_checkpoints_being_inserted() {
     event_loop_1.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
     event_loop_2.store.inner_mut().insert_genesis_state(
         ordered_checkpoints.first().cloned().unwrap(),
         empty_contents(),
-        vec![],
-        vec![],
         committee.committee().to_owned(),
     );
 
@@ -301,7 +289,7 @@ async fn sync_with_checkpoints_being_inserted() {
     event_loop_1.peer_heights.write().unwrap().peers.insert(
         network_2.peer_id(),
         PeerStateSyncInfo {
-            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            genesis_checkpoint_digest: *ordered_checkpoints[0].digest(),
             on_same_chain_as_us: true,
             height: 0,
         },
@@ -324,12 +312,12 @@ async fn sync_with_checkpoints_being_inserted() {
 
     timeout(Duration::from_secs(1), async {
         assert_eq!(
-            subscriber_1.recv().await.unwrap().summary(),
-            ordered_checkpoints[1].summary(),
+            subscriber_1.recv().await.unwrap().data(),
+            ordered_checkpoints[1].data(),
         );
         assert_eq!(
-            subscriber_2.recv().await.unwrap().summary(),
-            ordered_checkpoints[1].summary()
+            subscriber_2.recv().await.unwrap().data(),
+            ordered_checkpoints[1].data()
         );
     })
     .await
@@ -342,14 +330,8 @@ async fn sync_with_checkpoints_being_inserted() {
 
     timeout(Duration::from_secs(1), async {
         for checkpoint in &ordered_checkpoints[2..] {
-            assert_eq!(
-                subscriber_1.recv().await.unwrap().summary(),
-                checkpoint.summary()
-            );
-            assert_eq!(
-                subscriber_2.recv().await.unwrap().summary(),
-                checkpoint.summary()
-            );
+            assert_eq!(subscriber_1.recv().await.unwrap().data(), checkpoint.data());
+            assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
         }
     })
     .await
@@ -374,12 +356,12 @@ async fn sync_with_checkpoints_being_inserted() {
 
     let expected = checkpoints
         .iter()
-        .map(|(key, value)| (key, &value.summary))
+        .map(|(key, value)| (key, value.data()))
         .collect::<HashMap<_, _>>();
     let actual_1 = store_1
         .checkpoints()
         .iter()
-        .map(|(key, value)| (key, &value.summary))
+        .map(|(key, value)| (key, value.data()))
         .collect::<HashMap<_, _>>();
     assert_eq!(actual_1, expected);
     assert_eq!(
@@ -390,7 +372,7 @@ async fn sync_with_checkpoints_being_inserted() {
     let actual_2 = store_2
         .checkpoints()
         .iter()
-        .map(|(key, value)| (key, &value.summary))
+        .map(|(key, value)| (key, value.data()))
         .collect::<HashMap<_, _>>();
     assert_eq!(actual_2, expected);
     assert_eq!(

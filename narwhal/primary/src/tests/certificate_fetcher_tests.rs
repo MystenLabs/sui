@@ -7,7 +7,7 @@ use crate::{
 use anemo::async_trait;
 use anyhow::Result;
 use config::{Epoch, WorkerId};
-use crypto::{PublicKey, Signature};
+use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -133,14 +133,13 @@ struct BadHeader {
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
-    pub signature: Signature,
     pub metadata: Metadata,
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_basic() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let fake_primary = fixture.authorities().nth(1).unwrap();

@@ -53,7 +53,7 @@ async fn get_network_peers_from_admin_server() {
     };
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let authority_1 = fixture.authorities().next().unwrap();
     let name_1 = authority_1.public_key();
     let signer_1 = authority_1.keypair().copy();
@@ -300,7 +300,7 @@ async fn test_request_vote_send_missing_parents() {
     let author = fixture.authorities().nth(2).unwrap();
     let target_name = target.public_key();
     let author_name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(target.network_keypair(), target.address());
@@ -363,7 +363,7 @@ async fn test_request_vote_send_missing_parents() {
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     // Write some certificates from round 2 into the store, and leave out the rest to test
@@ -443,7 +443,7 @@ async fn test_request_vote_accept_missing_parents() {
     let author = fixture.authorities().nth(2).unwrap();
     let target_name = target.public_key();
     let author_name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(target.network_keypair(), target.address());
@@ -507,7 +507,7 @@ async fn test_request_vote_accept_missing_parents() {
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     // Populate all round 1 certificates and some round 2 certificates into the storage.
@@ -575,7 +575,7 @@ async fn test_request_vote_missing_batches() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -626,7 +626,7 @@ async fn test_request_vote_missing_batches() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -643,7 +643,7 @@ async fn test_request_vote_missing_batches() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let test_digests: HashSet<_> = test_header
         .payload
@@ -699,7 +699,7 @@ async fn test_request_vote_already_voted() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -750,7 +750,7 @@ async fn test_request_vote_already_voted() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -786,7 +786,7 @@ async fn test_request_vote_already_voted() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -829,7 +829,7 @@ async fn test_request_vote_already_voted() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -859,7 +859,7 @@ async fn test_fetch_certificates_handler() {
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
     let name = fixture.authorities().next().unwrap().public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -1026,7 +1026,7 @@ async fn test_process_payload_availability_success() {
         .build();
     let author = fixture.authorities().next().unwrap();
     let name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -1076,7 +1076,7 @@ async fn test_process_payload_availability_success() {
         let header = author
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1176,7 +1176,7 @@ async fn test_process_payload_availability_when_failures() {
     let committee = fixture.committee();
     let author = fixture.authorities().next().unwrap();
     let name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -1224,7 +1224,7 @@ async fn test_process_payload_availability_when_failures() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1271,7 +1271,7 @@ async fn test_request_vote_created_at_in_future() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -1322,7 +1322,7 @@ async fn test_request_vote_created_at_in_future() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1363,7 +1363,7 @@ async fn test_request_vote_created_at_in_future() {
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
@@ -1393,7 +1393,7 @@ async fn test_request_vote_created_at_in_future() {
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {

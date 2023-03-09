@@ -113,6 +113,7 @@ export interface RawMoveCall {
   arguments: SuiJsonValue[];
 }
 
+/** @deprecated Use `Transaction` class. */
 export type UnserializedSignableTransaction =
   | {
       kind: 'moveCall';
@@ -161,7 +162,10 @@ export type SignedMessage = {
   signature: SerializedSignature;
 };
 
-/** A type that represents the possible transactions that can be signed: */
+/**
+ * A type that represents the possible transactions that can be signed:
+ * @deprecated Use `Transaction` instead.
+ */
 export type SignableTransaction =
   | UnserializedSignableTransaction
   | {
@@ -186,8 +190,6 @@ export type SignableTransactionData = SignableTransaction['data'];
  *   { encoding: 'utf-8' }
  * ));
  *
- * // Include the following line if you are using `LocalTxnDataSerializer`, skip
- * // if you are using `RpcTxnDataSerializer`
  * // const modulesInBytes = modules.map((m) => Array.from(fromB64(m)));
  * // ... publish logic ...
  * ```

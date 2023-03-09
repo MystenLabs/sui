@@ -9,4 +9,5 @@ pub mod move_calls;
 pub mod objects;
 pub mod owners;
 pub mod packages;
+pub mod recipients;
 pub mod transactions;

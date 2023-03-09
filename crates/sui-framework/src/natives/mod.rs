@@ -287,6 +287,11 @@ pub fn all_natives(
             make_native!(validator::validate_metadata_bcs),
         ),
         ("test_utils", "destroy", make_native!(test_utils::destroy)),
+        (
+            "test_utils",
+            "create_one_time_witness",
+            make_native!(test_utils::create_one_time_witness),
+        ),
     ];
     sui_natives
         .iter()

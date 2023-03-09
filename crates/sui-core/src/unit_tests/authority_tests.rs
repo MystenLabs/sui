@@ -36,6 +36,7 @@ use sui_json_rpc_types::{
     SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary, SuiTransactionEffectsAPI,
 };
 use sui_types::error::UserInputError;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
     to_sender_signed_transaction_with_multi_signers,
@@ -53,6 +54,7 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::object::Data;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::{SuiSystemStateWrapper, SUI_SYSTEM_STATE_TESTING_VERSION1};
 use sui_types::{
     base_types::dbg_addr,
@@ -61,7 +63,6 @@ use sui_types::{
     messages::TransactionExpiration,
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-    sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::info;
@@ -196,7 +197,8 @@ async fn construct_shared_object_transaction_with_sequence_number(
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
         ],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     (
         validator,
         fullnode,
@@ -1117,10 +1119,12 @@ async fn test_handle_sponsored_transaction() {
         .unwrap()
         .unwrap();
 
-    let tx_kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-        recipient,
-        object_ref: object.compute_object_reference(),
-    }));
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(recipient, object.compute_object_reference());
+        builder.finish()
+    };
+    let tx_kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
 
     let data = TransactionData::new_with_gas_data(
         tx_kind.clone(),
@@ -1563,7 +1567,7 @@ async fn test_package_size_limit() {
                 object_size: package_size,
                 max_object_size: max_move_package_size
             },
-            command: None,
+            command: Some(0),
         }
     )
 }
@@ -1750,7 +1754,6 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1764,14 +1767,20 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         200,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = authority_state
-        .handle_transaction(&epoch_store, transaction)
-        .await;
+    let result = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap()
+        .1
+        .into_data();
 
-    assert!(matches!(
-        UserInputError::try_from(result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget { .. }
-    ));
+    let ExecutionStatus::Failure { error, command } = result.status() else {
+        panic!("expected transaction to fail")
+    };
+    assert_eq!(command, &Some(0));
+    assert_eq!(
+        error,
+        &ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance
+    )
 }
 
 #[tokio::test]
@@ -1786,17 +1795,14 @@ async fn test_transaction_expiration() {
         .committee()
         .to_owned();
     committee.epoch = 1;
-    let system_state = SuiSystemState::new_for_testing(1);
+    let system_state = EpochStartSystemState::new_for_testing_with_epoch(1);
 
     authority_state
         .reconfigure(
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             committee,
-            EpochStartConfiguration {
-                system_state,
-                ..Default::default()
-            },
+            EpochStartConfiguration::new(system_state, Default::default()),
         )
         .await
         .unwrap();
@@ -1858,7 +1864,8 @@ async fn test_missing_package() {
         gas_object_ref,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -1902,7 +1909,8 @@ async fn test_type_argument_dependencies() {
         gas1,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &s1_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -1925,7 +1933,8 @@ async fn test_type_argument_dependencies() {
         gas2,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &s2_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -1948,7 +1957,8 @@ async fn test_type_argument_dependencies() {
         gas3,
         vec![],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     let transaction = to_sender_signed_transaction(data, &s3_key);
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -2716,7 +2726,7 @@ async fn test_authority_persist() {
             &epoch_store_path,
             None,
             EpochMetrics::new(&registry),
-            Some(Default::default()),
+            EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
         );
@@ -2739,7 +2749,7 @@ async fn test_authority_persist() {
             AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
             10000,
-            &StateSnapshotConfig::default(),
+            &DBCheckpointConfig::default(),
         )
         .await
     }
@@ -2897,7 +2907,8 @@ async fn test_invalid_mutable_clock_parameter() {
             mutable: true,
         })],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
 
@@ -2937,7 +2948,8 @@ async fn test_valid_immutable_clock_parameter() {
             mutable: false,
         })],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     authority_state
@@ -3214,7 +3226,8 @@ async fn test_store_revert_wrap_move_call() {
             create_effects.gas_object().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_v0))],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3299,7 +3312,8 @@ async fn test_store_revert_unwrap_move_call() {
             wrap_effects.gas_object().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(wrapper_v0))],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3398,7 +3412,8 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
             ],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3540,7 +3555,8 @@ async fn test_store_revert_add_ofield() {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
             ],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -3650,7 +3666,8 @@ async fn test_store_revert_remove_ofield() {
             add_effects.gas_object().0,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v1))],
             MAX_GAS,
-        ),
+        )
+        .unwrap(),
         &sender_key,
     );
 
@@ -4233,6 +4250,52 @@ pub async fn call_move_(
         gas_object_ref,
         args,
         MAX_GAS,
+    )
+    .unwrap();
+
+    let transaction = to_sender_signed_transaction(data, sender_key);
+    let signed_effects =
+        send_and_confirm_transaction_(authority, fullnode, transaction, with_shared)
+            .await?
+            .1;
+    Ok(signed_effects.into_data())
+}
+
+pub async fn execute_programmable_transaction(
+    authority: &AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+) -> SuiResult<TransactionEffects> {
+    execute_programmable_transaction_(
+        authority,
+        None,
+        gas_object_id,
+        sender,
+        sender_key,
+        pt,
+        /* with_shared */ false,
+    )
+    .await
+}
+
+pub async fn execute_programmable_transaction_(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+    with_shared: bool, // Move call includes shared objects
+) -> SuiResult<TransactionEffects> {
+    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
+        *sender,
+        vec![gas_object_ref],
+        pt,
+        MAX_GAS,
     );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
@@ -4277,7 +4340,8 @@ pub async fn call_move_with_gas_coins(
         args,
         gas_budget,
         DUMMY_GAS_PRICE,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(data, sender_key);
     let signed_effects =
@@ -4444,7 +4508,8 @@ async fn make_test_transaction(
             CallArg::Pure(arg_value.to_le_bytes().to_vec()),
         ],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 
@@ -4716,7 +4781,7 @@ async fn test_tallying_rule_score_updates() {
         &path,
         None,
         metrics.clone(),
-        Some(Default::default()),
+        EpochStartConfiguration::new_for_testing(),
         store,
         cache_metrics,
     );

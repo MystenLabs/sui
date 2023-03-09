@@ -11,9 +11,11 @@ use std::{
     time::Duration,
 };
 use sui_config::p2p::{DiscoveryConfig, P2pConfig, SeedPeer};
+use sui_types::committee::{CommitteeWithNetworkMetadata, ProtocolVersion};
 use tap::{Pipe, TapFallible};
+use tokio::sync::broadcast::error::RecvError;
 use tokio::{
-    sync::oneshot,
+    sync::{broadcast::Receiver, oneshot},
     task::{AbortHandle, JoinSet},
 };
 use tracing::{debug, info, trace};
@@ -35,6 +37,7 @@ pub use generated::{
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponse;
+use sui_types::sui_system_state::multiaddr_to_anemo_address;
 
 /// The internal discovery state shared between the main event loop and the request handler
 struct State {
@@ -67,6 +70,7 @@ struct DiscoveryEventLoop {
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
+    reconfig_receiver: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
 }
 
 impl DiscoveryEventLoop {
@@ -91,10 +95,12 @@ impl DiscoveryEventLoop {
                 peer_event = peer_events.recv() => {
                     self.handle_peer_event(peer_event);
                 },
+                reconfig_event = self.reconfig_receiver.recv() => {
+                    self.handle_reconfig_event(reconfig_event);
+                }
                 Some(task_result) = self.tasks.join_next() => {
                     task_result.unwrap();
                 },
-
                 // Once the shutdown notification resolves we can terminate the event loop
                 _ = &mut self.shutdown_handle => {
                     break;
@@ -133,6 +139,7 @@ impl DiscoveryEventLoop {
             };
 
             let Some(address) = multiaddr_to_anemo_address(address) else {
+                debug!(p2p_address=?address, "Can't convert p2p address to anemo address");
                 continue;
             };
 
@@ -146,18 +153,53 @@ impl DiscoveryEventLoop {
         }
     }
 
+    /// Upsert new epoch validators into as high affinity peers.
+    fn upsert_preferred_peers_from_new_committee(
+        &mut self,
+        committee: CommitteeWithNetworkMetadata,
+    ) {
+        for (name, metadata) in committee.network_metadata {
+            let Some(address) = multiaddr_to_anemo_address(&metadata.p2p_address) else {
+                debug!(p2p_address=?metadata.p2p_address, "Can't convert p2p address to anemo address.");
+                continue;
+            };
+            let peer_info = anemo::types::PeerInfo {
+                peer_id: PeerId(metadata.network_pubkey.0.to_bytes()),
+                affinity: anemo::types::PeerAffinity::High,
+                address: vec![address],
+            };
+            debug!(?peer_info, ?name, "Add committee member as preferred peer.");
+            self.network.known_peers().insert(peer_info);
+        }
+    }
+
     fn update_our_info_timestamp(&mut self, now_unix: u64) {
         if let Some(our_info) = &mut self.state.write().unwrap().our_info {
             our_info.timestamp_ms = now_unix;
         }
     }
 
-    fn handle_peer_event(
+    // TODO: we don't boot out old committee member yets, however we may want to do this
+    // in the future along with other network management work.
+    fn handle_reconfig_event(
         &mut self,
-        peer_event: Result<PeerEvent, tokio::sync::broadcast::error::RecvError>,
+        reconfig_event: Result<(CommitteeWithNetworkMetadata, ProtocolVersion), RecvError>,
     ) {
-        use tokio::sync::broadcast::error::RecvError;
+        match reconfig_event {
+            Ok((new_committee, _)) => {
+                self.upsert_preferred_peers_from_new_committee(new_committee);
+            }
+            Err(RecvError::Closed) => {
+                panic!("Reconfig channel shouldn't be able to be closed");
+            }
+            Err(RecvError::Lagged(_)) => {
+                // This is OK, we only care about the latest committee.
+                debug!("State-Sync fell behind processing reconfig events");
+            }
+        }
+    }
 
+    fn handle_peer_event(&mut self, peer_event: Result<PeerEvent, RecvError>) {
         match peer_event {
             Ok(PeerEvent::NewPeer(peer_id)) => {
                 if let Some(peer) = self.network.peer(peer_id) {
@@ -408,27 +450,6 @@ fn update_known_peers(state: Arc<RwLock<State>>, found_peers: Vec<NodeInfo>) {
             Entry::Vacant(v) => {
                 v.insert(peer);
             }
-        }
-    }
-}
-
-pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
-            Some((hostname.as_ref(), port).into())
-        }
-        _ => {
-            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
-            None
         }
     }
 }

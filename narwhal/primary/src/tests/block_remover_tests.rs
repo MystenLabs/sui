@@ -26,7 +26,7 @@ async fn test_successful_blocks_delete() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -74,7 +74,7 @@ async fn test_successful_blocks_delete() {
             .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0, 0)
             .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -201,7 +201,7 @@ async fn test_failed_blocks_delete() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -247,7 +247,7 @@ async fn test_failed_blocks_delete() {
             .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0, 0)
             .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);

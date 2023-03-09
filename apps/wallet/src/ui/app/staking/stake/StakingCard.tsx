@@ -14,7 +14,6 @@ import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Alert from '../../components/alert';
-import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
@@ -23,6 +22,7 @@ import StakeForm from './StakeForm';
 import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createValidationSchema } from './validation';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -33,8 +33,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
-import { useSigner, useAppSelector, useGetCoinBalance } from '_hooks';
-import { createCoinsForTypeSelector } from '_redux/slices/account';
+import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
@@ -50,7 +49,7 @@ export type FormValues = typeof initialValues;
 
 function StakingCard() {
     const coinType = SUI_TYPE_ARG;
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const { data: suiBalance, isLoading: loadingSuiBalances } =
         useGetCoinBalance(coinType, accountAddress);
     const coinBalance = BigInt(suiBalance?.totalBalance || 0);
@@ -96,10 +95,7 @@ function StakingCard() {
 
     const suiEarned = useMemo(() => {
         if (!system || !delegationData) return 0;
-        return getStakingRewards(
-            system.validators.active_validators,
-            delegationData
-        );
+        return getStakingRewards(system.active_validators, delegationData);
     }, [delegationData, system]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
@@ -122,14 +118,9 @@ function StakingCard() {
         return delegationData.delegation_status.Active.id.id;
     }, [delegationData]);
 
-    const gasPrice = useReferenceGasPrice();
     const navigate = useNavigate();
     const signer = useSigner();
-    const allSuiCoinsSelector = useMemo(
-        () => createCoinsForTypeSelector(SUI_TYPE_ARG),
-        []
-    );
-    const allSuiCoins = useAppSelector(allSuiCoinsSelector);
+
     const stakeToken = useMutation({
         mutationFn: async ({
             tokenTypeArg,
@@ -148,10 +139,8 @@ function StakingCard() {
             });
             const response = await Coin.stakeCoin(
                 signer,
-                allSuiCoins,
                 amount,
-                validatorAddress,
-                gasPrice.data!
+                validatorAddress
             );
             return response;
         },
@@ -262,21 +251,14 @@ function StakingCard() {
             stakeToken,
         ]
     );
-    const loadingBalance = useAppSelector(
-        ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
-    );
+
     if (!coinType || !validatorAddress || (!validatorsIsloading && !system)) {
         return <Navigate to="/" replace={true} />;
     }
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
-                loading={
-                    loadingBalance ||
-                    isLoading ||
-                    validatorsIsloading ||
-                    loadingSuiBalances
-                }
+                loading={isLoading || validatorsIsloading || loadingSuiBalances}
             >
                 <Formik
                     initialValues={initialValues}
@@ -380,8 +362,7 @@ function StakingCard() {
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
-                                        (unstake && !delegationId) ||
-                                        gasPrice.isLoading
+                                        (unstake && !delegationId)
                                     }
                                 >
                                     {isSubmitting ? (

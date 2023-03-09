@@ -4,6 +4,7 @@
 use fastcrypto::traits::KeyPair as KeypairTraits;
 
 use crate::crypto::Signer;
+use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
@@ -15,7 +16,7 @@ use crate::{
     intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
     messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, SignedCheckpointSummary,
+        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
     },
     object::Object,
 };
@@ -55,11 +56,15 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
-        recipient,
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(recipient, None);
+        builder.finish()
+    };
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
         sender,
-        None,
-        object.compute_object_reference(),
+        vec![object.compute_object_reference()],
+        pt,
         10000,
     );
     to_sender_signed_transaction(data, &sender_key)
@@ -93,24 +98,24 @@ pub fn mock_certified_checkpoint<'a>(
         [ExecutionDigests::random()].into_iter(),
     );
 
-    let signed_checkpoints: Vec<_> = keys
+    let summary = CheckpointSummary::new(
+        committee.epoch,
+        seq_num,
+        0,
+        &contents,
+        None,
+        GasCostSummary::default(),
+        None,
+        0,
+    );
+
+    let sign_infos: Vec<_> = keys
         .map(|k| {
             let name = k.public().into();
 
-            SignedCheckpointSummary::new(
-                committee.epoch,
-                seq_num,
-                0,
-                name,
-                k,
-                &contents,
-                None,
-                GasCostSummary::default(),
-                None,
-                0,
-            )
+            SignedCheckpointSummary::sign(committee.epoch, &summary, k, name)
         })
         .collect();
 
-    CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).expect("Cert is OK")
+    CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK")
 }

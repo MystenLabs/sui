@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
-    CallArg, EntryArgumentError, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus,
-    ObjectArg, ObjectInfoRequest, TransactionEffectsAPI,
+    CallArg, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
+    ObjectInfoRequest, TransactionEffectsAPI,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
@@ -193,16 +193,16 @@ async fn call_shared_object_contract() {
         .await
         .unwrap();
     // Transaction fails
-    assert!(matches!(
+    assert_eq!(
         effects.status(),
-        ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::EntryArgumentError(EntryArgumentError {
-                kind: EntryArgumentErrorKind::ObjectMutabilityMismatch,
-                ..
-            }),
-            ..
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidObjectByMutRef,
+            },
+            command: Some(0),
         }
-    ));
+    );
     assert_eq!(effects.dependencies().len(), 2);
     assert!(effects
         .dependencies()
@@ -282,7 +282,7 @@ async fn access_clock_object_test() {
 
         // Timestamp that we have read in a smart contract
         // should match timestamp of the checkpoint where transaction is included
-        assert_eq!(checkpoint.summary.timestamp_ms, event.timestamp_ms);
+        assert_eq!(checkpoint.timestamp_ms, event.timestamp_ms);
         break;
     }
 }

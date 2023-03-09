@@ -1,19 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    formatAddress,
-    type SuiObjectData as SuiObjectType,
-} from '@mysten/sui.js';
-import { cva } from 'class-variance-authority';
-import cl from 'classnames';
+import { formatAddress } from '@mysten/sui.js';
+import { cva, cx } from 'class-variance-authority';
 
-import { NftImage, type NftImageProps } from './NftImage';
-import { useNFTBasicData, useOriginbyteNft } from '_hooks';
+import { Heading } from '_app/shared/heading';
+import Loading from '_components/loading';
+import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
+import { useGetNFTMeta, useFileExtensionType, useOriginbyteNft } from '_hooks';
 
 import type { VariantProps } from 'class-variance-authority';
 
-const nftDisplayCardStyles = cva('flex flex-nowrap items-center', {
+const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full', {
     variants: {
         animateHover: {
             true: 'group',
@@ -29,70 +27,79 @@ const nftDisplayCardStyles = cva('flex flex-nowrap items-center', {
 });
 
 export interface NFTsProps extends VariantProps<typeof nftDisplayCardStyles> {
-    nftobj: SuiObjectType;
-    showlabel?: boolean;
+    objectId: string;
+    showLabel?: boolean;
     size: NftImageProps['size'];
     borderRadius?: NftImageProps['borderRadius'];
 }
 
-function NFTDisplayCard({
-    nftobj,
-    showlabel,
+export function NFTDisplayCard({
+    objectId,
+    showLabel,
     size,
     wideView,
     animateHover,
     borderRadius = 'md',
 }: NFTsProps) {
-    const { filePath, nftObjectID, nftFields, fileExtensionType, objType } =
-        useNFTBasicData(nftobj);
+    const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
+    const { data: originByteNft, isLoading: originByteLoading } =
+        useOriginbyteNft(objectId);
+    const nftName =
+        typeof nftMeta?.name === 'string'
+            ? nftMeta?.name
+            : formatAddress(objectId);
 
-    const { data: originByteNft } = useOriginbyteNft(nftObjectID);
-
-    const name = nftFields?.name || nftFields?.metadata?.fields?.name;
-
-    const displayTitle =
-        originByteNft?.fields.name ||
-        (typeof name === 'string' ? name : formatAddress(nftObjectID || ''));
+    // display title is the either originByteNft field name or default nft name or fall back to it the object id
+    const displayTitle = originByteNft?.fields.name || nftName;
+    const nftUrl = nftMeta?.url;
+    const fileExtensionType = useFileExtensionType(nftUrl || '');
 
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
-            <NftImage
-                src={originByteNft?.fields.url || filePath}
-                name={originByteNft?.fields.name || fileExtensionType.name}
-                title={originByteNft?.fields.description || objType || ''}
-                showLabel={!wideView}
-                animateHover={animateHover}
-                borderRadius={borderRadius}
-                size={size}
-            />
-            {wideView ? (
-                <div className="flex flex-col gap-1 flex-1 min-w-0">
-                    <div className="capitalize text-gray-100 truncate font-semibold text-base ws-nowrap">
+            <Loading loading={isLoading || originByteLoading}>
+                <NftImage
+                    name={originByteNft?.fields.name || nftName!}
+                    src={originByteNft?.fields.url || nftUrl}
+                    title={
+                        originByteNft?.fields.description ||
+                        nftMeta?.description ||
+                        ''
+                    }
+                    animateHover={true}
+                    showLabel={!wideView}
+                    borderRadius={borderRadius}
+                    size={size}
+                />
+                {wideView && (
+                    <div className="flex flex-col gap-1 flex-1 min-w-0 ml-1">
+                        <Heading variant="heading6" color="gray-90" truncate>
+                            {displayTitle}
+                        </Heading>
+
+                        <div className="text-gray-75 text-body font-medium">
+                            {nftUrl ? (
+                                `${fileExtensionType.name} ${fileExtensionType.type}`
+                            ) : (
+                                <span className="uppercase font-normal text-bodySmall">
+                                    NO MEDIA
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                )}
+                {showLabel && !wideView && (
+                    <div
+                        className={cx(
+                            'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
+                            animateHover
+                                ? 'group-hover:text-black duration-200 ease-ease-in-out-cubic'
+                                : ''
+                        )}
+                    >
                         {displayTitle}
                     </div>
-                    <div className="text-gray-75 text-body font-medium">
-                        {filePath ? (
-                            `${fileExtensionType.name} ${fileExtensionType.type}`
-                        ) : (
-                            <span className="uppercase font-normal text-bodySmall">
-                                NO MEDIA
-                            </span>
-                        )}
-                    </div>
-                </div>
-            ) : showlabel && displayTitle ? (
-                <div
-                    className={cl(
-                        'flex-1 mt-2 text-steel-dark truncate overflow-hidden max-w-full',
-                        animateHover &&
-                            'group-hover:text-black duration-200 ease-ease-in-out-cubic'
-                    )}
-                >
-                    {displayTitle}
-                </div>
-            ) : null}
+                )}
+            </Loading>
         </div>
     );
 }
-
-export default NFTDisplayCard;

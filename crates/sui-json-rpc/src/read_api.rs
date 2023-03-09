@@ -32,10 +32,7 @@ use sui_types::base_types::{
 };
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::{TransactionData, TransactionEffectsAPI};
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSummary,
-};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -225,7 +222,7 @@ impl ReadApiServer for ReadApi {
             .state
             .get_transaction_checkpoint(&digest)
             .map_err(|e| anyhow!("{e}"))?;
-        let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.summary.timestamp_ms);
+        let checkpoint_timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
 
         let events = if let Some(digest) = effects.events_digest() {
             let events = self
@@ -255,7 +252,7 @@ impl ReadApiServer for ReadApi {
             events,
             timestamp_ms: checkpoint_timestamp,
             confirmed_local_execution: None,
-            checkpoint: checkpoint.map(|c| c.summary.sequence_number),
+            checkpoint: checkpoint.map(|c| c.sequence_number),
         })
     }
 
@@ -449,49 +446,6 @@ impl ReadApiServer for ReadApi {
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
         Ok(self.get_checkpoint_internal(id)?)
-    }
-
-    async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> RpcResult<CheckpointSummary> {
-        Ok(self
-            .state
-            .get_checkpoint_summary_by_digest(digest)
-            .map_err(|e| {
-                anyhow!(
-                    "Checkpoint summary based on digest: {digest:?} were not found with error: {e}"
-                )
-            })?)
-    }
-
-    async fn get_checkpoint_summary(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointSummary> {
-        Ok(self.state.get_checkpoint_summary_by_sequence_number(sequence_number)
-            .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
-    }
-
-    async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> RpcResult<CheckpointContents> {
-        Ok(self.state.get_checkpoint_contents(digest).map_err(|e| {
-            anyhow!(
-                "Checkpoint contents based on digest: {digest:?} were not found with error: {e}"
-            )
-        })?)
-    }
-
-    async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointContents> {
-        Ok(self
-            .state
-            .get_checkpoint_contents_by_sequence_number(sequence_number)
-            .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
     }
 }
 
