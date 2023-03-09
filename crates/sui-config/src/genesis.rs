@@ -31,7 +31,7 @@ use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+    CallArg, Command, InputObjects, Transaction, TransactionEffects, TransactionEvents,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
@@ -958,7 +958,8 @@ fn process_package(
         .collect();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish(module_bytes);
+        // executing in Genesis mode does not create a package upgrade
+        builder.command(Command::Publish(module_bytes));
         builder.finish()
     };
     programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(

@@ -423,14 +423,15 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
 
     let values = if Mode::packages_are_predefined() {
+        // no upgrade cap for genesis modules
+        vec![]
+    } else {
         vec![Value::Object(ObjectValue::new(
             UpgradeCap::type_(),
             /* has_public_transfer */ true,
             /* used_in_non_entry_move_call */ false,
             &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
         )?)]
-    } else {
-        vec![]
     };
     Ok(values)
 }

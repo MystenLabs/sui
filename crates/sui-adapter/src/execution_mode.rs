@@ -106,7 +106,7 @@ impl ExecutionMode for Genesis {
     }
 
     fn packages_are_predefined() -> bool {
-        false
+        true
     }
 
     fn empty_arguments() -> Self::ArgumentUpdates {}
