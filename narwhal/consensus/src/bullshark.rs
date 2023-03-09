@@ -5,9 +5,12 @@ use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusError, Outcome,
 };
-use config::{AuthorityIdentifier, Committee, Stake};
-use fastcrypto::hash::Hash;
-use std::sync::Arc;
+use config::{Committee, Stake};
+use crypto::PublicKey;
+use fastcrypto::traits::EncodeDecodeBase64;
+use metrics::counter;
+use snarkos_metrics::increment_counter;
+use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, error_span};
 use types::{
@@ -199,6 +202,7 @@ impl ConsensusProtocol for Bullshark {
         self.last_successful_leader_election_timestamp = Instant::now();
 
         // TODO(metrics): Increment leader_election_elected
+        increment_counter!(snarkos_metrics::consensus::LEADERS_ELECTED);
 
         // The total leader_commits are expected to grow the same amount on validators,
         // but strong vs weak counts are not expected to be the same across validators.
@@ -224,6 +228,10 @@ impl ConsensusProtocol for Bullshark {
         );
 
         // TODO(metrics): Set committed_certificates to `total_committed_certificates as f64`
+        counter!(
+            snarkos_metrics::consensus::COMMITTED_CERTIFICATES,
+            total_committed_certificates as u64
+        );
 
         Ok((Outcome::Commit, committed_sub_dags))
     }

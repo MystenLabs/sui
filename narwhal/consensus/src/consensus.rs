@@ -8,6 +8,8 @@ use crate::{ConsensusError, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
+use metrics::gauge;
+use snarkos_metrics::counter;
 use std::{
     cmp::{max, Ordering},
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -181,10 +183,18 @@ impl ConsensusState {
         self.last_round = self.last_round.update(certificate.round(), self.gc_depth);
 
         // TODO(metrics): Set last_committed_round to `self.last_committed_round as i64`
+        counter!(
+            snarkos_metrics::consensus::LAST_COMMITTED_ROUND,
+            self.last_committed_round
+        );
 
         let elapsed = certificate.metadata.created_at.elapsed().as_secs_f64();
 
         // TODO(metrics): Set certificate_commit_latency to `certificate.metadata.created_at.elapsed().as_secs_f64()`
+        gauge!(
+            snarkos_metrics::consensus::CERTIFICATE_COMMIT_LATENCY,
+            certificate.metadata.created_at.elapsed().as_secs_f64()
+        );
 
         // NOTE: This log entry is used to compute performance.
         tracing::debug!(

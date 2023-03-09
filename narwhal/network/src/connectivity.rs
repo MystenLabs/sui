@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::PeerId;
+use metrics::{histogram, gauge};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,74 +63,43 @@ impl ConnectionMonitor {
         // TODO(metrics): Set `network_peers` to `connected_peers.len() as i64`
 
         // now report the connected peers
-        for peer_id in connected_peers.iter() {
-            self.handle_peer_status_change(*peer_id, ConnectionStatus::Connected)
-                .await;
+        let mut peer_count: usize = connected_peers.len();
+        histogram!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
+        for peer_id in connected_peers {
+            self.handle_peer_connect(peer_id);
         }
 
-        let mut connection_stat_collection_interval =
-            time::interval(CONNECTION_STAT_COLLECTION_INTERVAL);
-
-        async fn wait_for_shutdown(
-            rx_shutdown: &mut Option<ConditionalBroadcastReceiver>,
-        ) -> Result<(), tokio::sync::broadcast::error::RecvError> {
-            if let Some(rx) = rx_shutdown.as_mut() {
-                rx.receiver.recv().await
-            } else {
-                // If no shutdown receiver is provided, wait forever.
-                let future = future::pending();
-                #[allow(clippy::let_unit_value)]
-                let () = future.await;
-                Ok(())
-            }
-        }
-
-        loop {
-            tokio::select! {
-                _ = connection_stat_collection_interval.tick() => {
-                    if let Some(network) = self.network.upgrade() {
-                        for peer_id in known_peers.iter() {
-                            if let Some(connection) = network.peer(*peer_id) {
-                                let stats = connection.connection_stats();
-                                self.update_quinn_metrics_for_peer(&format!("{peer_id}"), &stats);
-                            }
-                        }
-                    } else {
-                        continue;
-                    }
+        while let Ok(event) = subscriber.recv().await {
+            match event {
+                anemo::types::PeerEvent::NewPeer(peer_id) => {
+                    peer_count += 1;
+                    histogram!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
+                    self.handle_peer_connect(peer_id);
                 }
-                Ok(event) = subscriber.recv() => {
-                    match event {
-                        PeerEvent::NewPeer(peer_id) => {
-                            self.handle_peer_status_change(peer_id, ConnectionStatus::Connected).await;
-                        }
-                        PeerEvent::LostPeer(peer_id, _) => {
-                            self.handle_peer_status_change(peer_id, ConnectionStatus::Disconnected).await;
-                        }
-                    }
-                }
-                _ = wait_for_shutdown(&mut self.rx_shutdown) => {
-                    return;
+                anemo::types::PeerEvent::LostPeer(peer_id, _) => {
+                    peer_count = peer_count.saturating_sub(1);
+                    histogram!(snarkos_metrics::network::NETWORK_PEERS, peer_count as f64);
+                    self.handle_peer_disconnect(peer_id);
                 }
             }
         }
     }
 
     fn handle_peer_connect(&self, peer_id: PeerId) {
-        // TODO(metrics): Increment `network_peers` by 1
+        use snarkos_metrics::network::labels::PEER_ID;
 
-        if let Some(_ty) = self.peer_id_types.get(&peer_id) {
-            // TODO(metrics): Set `network_peer_connected` to 1
+        if let Some(ty) = self.peer_id_types.get(&peer_id) {
+            gauge!(snarkos_metrics::network::NETWORK_PEER_CONNECTED, 1.0, PEER_ID => ty.to_string());
         }
 
         self.connection_statuses.insert(peer_id, connection_status);
     }
 
     fn handle_peer_disconnect(&self, peer_id: PeerId) {
-        // TODO(metrics): Decrement `network_peers` by 1
-
-        if let Some(_ty) = self.peer_id_types.get(&peer_id) {
-            // TODO(metrics): Set `network_peer_connected` to 0
+        use snarkos_metrics::network::labels::PEER_ID;
+        
+        if let Some(ty) = self.peer_id_types.get(&peer_id) {
+            gauge!(snarkos_metrics::network::NETWORK_PEER_CONNECTED, 0.0, PEER_ID => ty.to_string());
         }
     }
 }

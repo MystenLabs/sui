@@ -2098,7 +2098,7 @@ dependencies = [
  "no-std-compat",
  "nonzero_ext",
  "parking_lot",
- "quanta",
+ "quanta 0.9.3",
  "rand",
  "smallvec",
 ]
@@ -2815,24 +2815,61 @@ dependencies = [
 ]
 
 [[package]]
-name = "migrations_internals"
-version = "2.0.0"
+name = "metrics"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c493c09323068c01e54c685f7da41a9ccf9219735c3766fbfd6099806ea08fbc"
+checksum = "7b9b8653cec6897f73b519a43fba5ee3d50f62fe9af80b428accdcc093b4a849"
 dependencies = [
- "serde 1.0.152",
- "toml",
+ "ahash 0.7.6",
+ "metrics-macros",
+ "portable-atomic",
 ]
 
 [[package]]
-name = "migrations_macros"
-version = "2.0.0"
+name = "metrics-exporter-prometheus"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a8ff27a350511de30cdabb77147501c36ef02e0451d957abea2f30caffb2b58"
+checksum = "8603921e1f54ef386189335f288441af761e0fc61bcb552168d9cedfe63ebc70"
 dependencies = [
- "migrations_internals",
- "proc-macro2 1.0.54",
- "quote 1.0.26",
+ "hyper",
+ "indexmap",
+ "ipnet",
+ "metrics",
+ "metrics-util",
+ "parking_lot",
+ "portable-atomic",
+ "quanta 0.10.1",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "metrics-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "731f8ecebd9f3a4aa847dfe75455e4757a45da40a7793d2f0b1f9b6ed18b23f3"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "metrics-util"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7d24dc2dbae22bff6f1f9326ffce828c9f07ef9cc1e8002e5279f845432a30a"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "hashbrown",
+ "metrics",
+ "num_cpus",
+ "parking_lot",
+ "portable-atomic",
+ "quanta 0.10.1",
+ "sketches-ddsketch",
 ]
 
 [[package]]
@@ -3035,6 +3072,7 @@ dependencies = [
  "futures",
  "indexmap",
  "match_opt",
+ "metrics",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
@@ -3046,6 +3084,7 @@ dependencies = [
  "pprof",
  "rand",
  "serde",
+ "snarkos-node-metrics",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
@@ -3147,12 +3186,14 @@ dependencies = [
  "fail",
  "fastcrypto",
  "futures",
+ "metrics",
  "multiaddr",
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
  "rand",
  "serde",
+ "snarkos-node-metrics",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -3928,6 +3969,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
+
+[[package]]
 name = "pprof"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4168,6 +4215,22 @@ name = "quanta"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20afe714292d5e879d8b12740aa223c6a88f118af41870e8b6196e39a02238a8"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "mach",
+ "once_cell",
+ "raw-cpuid",
+ "wasi 0.10.2+wasi-snapshot-preview1",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
+name = "quanta"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7e31331286705f455e56cca62e0e717158474ff02b7936c1fa596d983f4ae27"
 dependencies = [
  "crossbeam-utils",
  "libc",
@@ -5029,6 +5092,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "420acb44afdae038210c99e69aae24109f32f15500aa708e81d46c9f29d55fcf"
 
 [[package]]
+name = "sketches-ddsketch"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceb945e54128e09c43d8e4f1277851bd5044c6fc540bbaa2ad888f60b3da9ae7"
+
+[[package]]
 name = "slab"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5042,6 +5111,16 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "snarkos-node-metrics"
+version = "2.0.2"
+source = "git+https://github.com/eqlabs/snarkos?branch=bft_testnet3_rebased_metrics#b5083ebbdb97648fca33b926d60b745fa7e4be8b"
+dependencies = [
+ "metrics",
+ "metrics-exporter-prometheus",
+ "tokio",
+]
 
 [[package]]
 name = "socket2"

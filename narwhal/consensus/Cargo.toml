@@ -7,23 +7,30 @@ edition = "2021"
 publish = false
 
 [dependencies]
+# workspace dependencies
+metrics.workspace = true
+snarkos-metrics.workspace = true
+
+# crates.io dependencies
 arc-swap = { version = "1.5.1", features = ["serde"] }
-bcs = "0.1.4"
+bincode = "1.3.3"
+bytes = "1.3.0"
+cfg-if = "1.0.0"
 match_opt = "0.1.2"
 rand = { version = "0.8.5", optional = true }
 thiserror = "1.0.35"
 tokio = { version = "1", features = ["sync"] }
 tracing = "0.1.36"
 
+# internal dependencies
 config = { path = "../config", package = "narwhal-config" }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-storage = { path = "../storage", package = "narwhal-storage" }
 dag = { path = "../dag", package = "narwhal-dag" }
-types = { path = "../types", package = "narwhal-types" }
-cfg-if = "1.0.0"
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 mysten-util-mem = { path = "../../crates/mysten-util-mem" }
+storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
+types = { path = "../types", package = "narwhal-types" }
 
 [dev-dependencies]
 bincode = "1.3.3"
