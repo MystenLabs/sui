@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use tokio::time::{self, sleep, Instant};
+use tokio::time::{self, Instant};
 
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkParametersGenerator},
@@ -20,7 +20,7 @@ use crate::{
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
     settings::Settings,
-    ssh::{SshCommand, SshConnectionManager},
+    ssh::{CommandStatus, SshCommand, SshConnectionManager},
 };
 
 /// An orchestrator to run benchmarks on a testbed.
@@ -113,55 +113,6 @@ impl Orchestrator {
         Ok(instances)
     }
 
-    /// Wait until a command running in the background terminated.
-    pub async fn wait_for_command<'a, I>(&self, instances: I, command_id: &str) -> TestbedResult<()>
-    where
-        I: Iterator<Item = &'a Instance> + Clone,
-    {
-        loop {
-            sleep(Duration::from_secs(5)).await;
-
-            let ssh_command = SshCommand::new(move |_| "(tmux ls || true)".into());
-            let result = self
-                .ssh_manager
-                .execute(instances.clone(), ssh_command)
-                .await?;
-
-            if result
-                .iter()
-                .all(|(stdout, _)| !stdout.contains(command_id))
-            {
-                break;
-            }
-        }
-        Ok(())
-    }
-
-    /// Wait until a command started to run in the background.
-    pub async fn wait_until_command<'a, I>(
-        &self,
-        instances: I,
-        command_id: &str,
-    ) -> TestbedResult<()>
-    where
-        I: Iterator<Item = &'a Instance> + Clone,
-    {
-        loop {
-            sleep(Duration::from_secs(5)).await;
-
-            let ssh_command = SshCommand::new(move |_| "(tmux ls || true)".into());
-            let result = self
-                .ssh_manager
-                .execute(instances.clone(), ssh_command)
-                .await?;
-
-            if result.iter().all(|(stdout, _)| stdout.contains(command_id)) {
-                break;
-            }
-        }
-        Ok(())
-    }
-
     /// Install the codebase and its dependencies on the testbed.
     pub async fn install(&self) -> TestbedResult<()> {
         display::action("Installing dependencies on all machines");
@@ -197,7 +148,7 @@ impl Orchestrator {
 
         let instances = self.instances.iter().filter(|x| x.is_active());
         let ssh_command = SshCommand::new(move |_| command.clone());
-        self.ssh_manager.execute(instances, ssh_command).await?;
+        self.ssh_manager.execute(instances, &ssh_command).await?;
 
         display::done();
         Ok(())
@@ -211,6 +162,9 @@ impl Orchestrator {
             self.instances.len()
         ));
 
+        // Update all active instances. This requires compiling the codebase in release (which
+        // may take a long time) so we run the command in the background to avoid keeping alive
+        // many ssh connections for too long.
         let command = [
             "git fetch -f",
             &format!("git checkout -f {commit}"),
@@ -227,10 +181,13 @@ impl Orchestrator {
             .run_background(id.into())
             .with_execute_from_path(repo_name.into());
         self.ssh_manager
-            .execute(instances.clone(), ssh_command)
+            .execute(instances.clone(), &ssh_command)
             .await?;
 
-        self.wait_for_command(instances, "update").await?;
+        // Wait until the command finished running.
+        self.ssh_manager
+            .wait_for_command(instances, &ssh_command, CommandStatus::Terminated)
+            .await?;
 
         display::done();
         Ok(())
@@ -296,7 +253,7 @@ impl Orchestrator {
         // Execute the deletion on all machines.
         let instances = self.instances.iter().filter(|x| x.is_active());
         let ssh_command = SshCommand::new(move |_| command.clone());
-        self.ssh_manager.execute(instances, ssh_command).await?;
+        self.ssh_manager.execute(instances, &ssh_command).await?;
 
         display::done();
         Ok(())
@@ -319,7 +276,6 @@ impl Orchestrator {
             );
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
-        println!("{}", command(0));
 
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
@@ -327,7 +283,12 @@ impl Orchestrator {
             .with_log_file("~/node.log".into())
             .with_execute_from_path(repo.into());
         self.ssh_manager
-            .execute(instances.iter(), ssh_command)
+            .execute(instances.iter(), &ssh_command)
+            .await?;
+
+        // For the nodes to boot.
+        self.ssh_manager
+            .wait_for_command(instances.iter(), &ssh_command, CommandStatus::Running)
             .await?;
 
         display::done();
@@ -340,9 +301,6 @@ impl Orchestrator {
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
-
-        // For the nodes to boot.
-        self.wait_until_command(instances.iter(), "node").await?;
 
         // Deploy the load generators.
         let committee_size = instances.len();
@@ -367,7 +325,6 @@ impl Orchestrator {
             .join(" ");
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
-        println!("{}", command(0));
 
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
@@ -375,7 +332,7 @@ impl Orchestrator {
             .with_log_file("~/client.log".into())
             .with_execute_from_path(repo.into());
         self.ssh_manager
-            .execute(instances.iter(), ssh_command)
+            .execute(instances.iter(), &ssh_command)
             .await?;
 
         display::done();
@@ -408,14 +365,12 @@ impl Orchestrator {
             let now = interval.tick().await;
             match self
                 .ssh_manager
-                .execute(instances.iter(), ssh_command.clone())
+                .execute(instances.iter(), &ssh_command)
                 .await
             {
                 Ok(stdio) => {
-                    display::status(format!(
-                        "{}s",
-                        now.duration_since(start).as_secs_f64().ceil() as u64
-                    ));
+                    let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
+                    display::status(format!("{elapsed}s",));
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
                         let measurement = Measurement::from_prometheus(stdout);
                         aggregator.add(i, measurement);
@@ -429,7 +384,7 @@ impl Orchestrator {
         }
         aggregator.save(&self.settings.results_directory);
 
-        println!();
+        display::done();
         Ok(aggregator)
     }
 
@@ -536,7 +491,6 @@ impl Orchestrator {
                 error_counter.print_summary();
             }
 
-            println!();
             i += 1;
         }
 

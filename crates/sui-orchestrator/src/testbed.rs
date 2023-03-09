@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use futures::future::try_join_all;
 use prettytable::{row, Table};
-use tokio::time::sleep;
+use tokio::time::{self, Instant};
 
 use crate::{
     client::ServerProviderClient, display, error::TestbedResult, settings::Settings,
@@ -207,13 +207,14 @@ impl<C: ServerProviderClient> Testbed<C> {
     where
         I: Iterator<Item = &'a Instance> + Clone,
     {
-        let mut total_time = 0;
-        loop {
-            let duration = Duration::from_secs(5);
-            sleep(duration).await;
+        let mut interval = time::interval(Duration::from_secs(5));
+        interval.tick().await; // The first tick returns immediately.
 
-            total_time += duration.as_secs();
-            display::status(format!("{}s", total_time));
+        let start = Instant::now();
+        loop {
+            let now = interval.tick().await;
+            let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
+            display::status(format!("{elapsed}s"));
 
             let futures = instances.clone().map(|instance| {
                 let private_key_file = self.settings.ssh_private_key_file.clone();

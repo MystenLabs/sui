@@ -10,13 +10,20 @@ use std::{
 
 use futures::future::try_join_all;
 use ssh2::{Channel, Session};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, time::sleep};
 
 use crate::{
     client::Instance,
     ensure,
     error::{SshError, SshResult},
 };
+
+#[derive(PartialEq, Eq)]
+/// The status of a ssh command running in the background.
+pub enum CommandStatus {
+    Running,
+    Terminated,
+}
 
 /// The command to execute on all specified remote machines.
 #[derive(Clone)]
@@ -75,6 +82,15 @@ impl<C: Fn(usize) -> String> SshCommand<C> {
         }
         str
     }
+
+    /// Return whether a background command is still running. Returns `Terminated` if the
+    /// command is not running in the background.
+    pub fn status(&self, context: &str) -> CommandStatus {
+        match &self.background {
+            Some(id) if context.contains(id) => CommandStatus::Running,
+            _ => CommandStatus::Terminated,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -90,6 +106,9 @@ pub struct SshConnectionManager {
 }
 
 impl SshConnectionManager {
+    /// Delay before re-attempting an ssh execution.
+    const RETRY_DELAY: Duration = Duration::from_secs(5);
+
     /// Create a new ssh manager from the instances username and private keys.
     pub fn new(username: String, private_key_file: PathBuf) -> Self {
         Self {
@@ -123,7 +142,7 @@ impl SshConnectionManager {
     pub async fn execute<'a, I, C>(
         &self,
         instances: I,
-        command: SshCommand<C>,
+        command: &SshCommand<C>,
     ) -> SshResult<Vec<(String, String)>>
     where
         I: Iterator<Item = &'a Instance>,
@@ -151,6 +170,7 @@ impl SshConnectionManager {
                             r @ Ok(..) => return r,
                             Err(e) => error = Some(e),
                         }
+                        sleep(Self::RETRY_DELAY).await;
                     }
                     Err(error.unwrap())
                 })
@@ -162,6 +182,32 @@ impl SshConnectionManager {
             .unwrap()
             .into_iter()
             .collect::<SshResult<_>>()
+    }
+
+    pub async fn wait_for_command<'a, I, C>(
+        &self,
+        instances: I,
+        command: &SshCommand<C>,
+        status: CommandStatus,
+    ) -> SshResult<()>
+    where
+        I: Iterator<Item = &'a Instance> + Clone,
+        C: Fn(usize) -> String,
+    {
+        loop {
+            sleep(Self::RETRY_DELAY).await;
+
+            let check_command = SshCommand::new(move |_| "(tmux ls || true)".into());
+            let result = self.execute(instances.clone(), &check_command).await?;
+
+            if result
+                .iter()
+                .all(|(stdout, _)| command.status(stdout) == status)
+            {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
