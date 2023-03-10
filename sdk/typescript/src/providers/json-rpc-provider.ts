@@ -748,7 +748,7 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error in getDelegatedStake: ${err}`);
+      throw new Error(`Error in getDelegatedStakes: ${err}`);
     }
   }
 

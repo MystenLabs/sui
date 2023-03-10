@@ -199,7 +199,6 @@ eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", features = ["copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
@@ -278,6 +277,7 @@ indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
 indicatif = { version = "0.17" }
 inout = { version = "0.1", default-features = false, features = ["std"] }
+inquire = { version = "0.6" }
 insta = { version = "1", features = ["json", "redactions", "yaml"] }
 instant = { version = "0.1", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
@@ -359,6 +359,7 @@ multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
+newline-converter = { version = "0.2", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
@@ -863,7 +864,6 @@ fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = 
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", features = ["copy_key"] }
 fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
@@ -951,6 +951,7 @@ indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
 indicatif = { version = "0.17" }
 inout = { version = "0.1", default-features = false, features = ["std"] }
+inquire = { version = "0.6" }
 insta = { version = "1", features = ["json", "redactions", "yaml"] }
 instant = { version = "0.1", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
@@ -1040,6 +1041,7 @@ multihash-derive = { version = "0.8", default-features = false, features = ["std
 multimap = { version = "0.8", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
+newline-converter = { version = "0.2", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }

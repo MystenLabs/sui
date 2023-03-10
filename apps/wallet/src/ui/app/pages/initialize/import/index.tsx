@@ -6,14 +6,14 @@ import { useNavigate } from 'react-router-dom';
 
 import StepOne from './steps/StepOne';
 import StepTwo from './steps/StepTwo';
-import CardLayout from '_app/shared/card-layout';
+import { CardLayout } from '_app/shared/card-layout';
 import { useAppDispatch } from '_hooks';
 import { createVault, logout } from '_redux/slices/account';
 import { MAIN_UI_URL } from '_shared/utils';
 import { entropyToSerialized, mnemonicToEntropy } from '_shared/utils/bip39';
 
 const initialValues = {
-    mnemonic: '',
+    mnemonic: Array.from({ length: 12 }, () => ''),
     password: '',
     confirmPassword: '',
 };
@@ -24,7 +24,7 @@ export type ImportValuesType = typeof initialValues;
 export type ImportPageProps = {
     mode?: 'import' | 'forgot';
 };
-const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
+export function ImportPage({ mode = 'import' }: ImportPageProps) {
     const [data, setData] = useState<ImportValuesType>(initialValues);
     const [step, setStep] = useState(0);
     const dispatch = useAppDispatch();
@@ -39,7 +39,7 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
                 await dispatch(
                     createVault({
                         importedEntropy: entropyToSerialized(
-                            mnemonicToEntropy(mnemonic)
+                            mnemonicToEntropy(mnemonic.join(' ').trim())
                         ),
                         password,
                     })
@@ -66,7 +66,6 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
                     ? 'Import an Existing Wallet'
                     : 'Reset Password for This Wallet'
             }
-            mode={mode === 'import' ? 'box' : 'plain'}
         >
             {StepForm ? (
                 <div className="mt-7.5 flex flex-col flex-nowrap items-stretch flex-1 flex-grow w-full">
@@ -89,6 +88,4 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
             ) : null}
         </CardLayout>
     );
-};
-
-export default ImportPage;
+}

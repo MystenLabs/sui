@@ -38,7 +38,6 @@ pub mod gas_coin;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
-pub mod intent;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;

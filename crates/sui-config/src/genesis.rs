@@ -11,6 +11,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
@@ -28,7 +29,6 @@ use sui_types::crypto::{
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, Command, InputObjects, Transaction, TransactionEffects, TransactionEvents,
@@ -38,6 +38,8 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
+use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
@@ -152,6 +154,19 @@ impl Genesis {
                     image_url: metadata.image_url.clone(),
                     project_url: metadata.project_url.clone(),
                 }
+            })
+            .collect()
+    }
+
+    pub fn validator_summary_set(&self) -> Vec<(SuiValidatorSummary, VerifiedValidatorMetadataV1)> {
+        self.sui_system_object()
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let summary = validator.clone().into_sui_validator_summary();
+                let metadata = validator.verified_metadata().clone();
+                (summary, metadata)
             })
             .collect()
     }

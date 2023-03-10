@@ -24,10 +24,8 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, Tra
 use sui_types::committee::EpochId;
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::governance::{
-    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
-};
-use sui_types::messages::{CallArg, ObjectArg, TransactionData};
+use sui_types::governance::{ADD_STAKE_LOCKED_COIN_FUN_NAME, ADD_STAKE_MUL_COIN_FUN_NAME};
+use sui_types::messages::{CallArg, Command, ObjectArg, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
@@ -399,12 +397,6 @@ pub enum OperationType {
     WithdrawDelegation,
     SwitchDelegation,
     // All other Sui transaction types, readonly
-    TransferSUI,
-    Pay,
-    PayAllSui,
-    TransferObject,
-    Publish,
-    MoveCall,
     EpochChange,
     Genesis,
     ConsensusCommitPrologue,
@@ -414,13 +406,6 @@ pub enum OperationType {
 impl From<&SuiTransactionKind> for OperationType {
     fn from(tx: &SuiTransactionKind) -> Self {
         match tx {
-            SuiTransactionKind::TransferObject(_) => OperationType::TransferObject,
-            SuiTransactionKind::Pay(_) => OperationType::Pay,
-            SuiTransactionKind::PaySui(_) => OperationType::PaySui,
-            SuiTransactionKind::PayAllSui(_) => OperationType::PayAllSui,
-            SuiTransactionKind::Publish(_) => OperationType::Publish,
-            SuiTransactionKind::Call(_) => OperationType::MoveCall,
-            SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
             SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionKind::Genesis(_) => OperationType::Genesis,
             SuiTransactionKind::ConsensusCommitPrologue(_) => {
@@ -909,29 +894,34 @@ impl InternalOperation {
                 TransactionMetadata::Delegation { coins, .. },
             ) => {
                 let function = if locked_until_epoch.is_some() {
-                    ADD_DELEGATION_LOCKED_COIN_FUN_NAME.to_owned()
+                    ADD_STAKE_LOCKED_COIN_FUN_NAME.to_owned()
                 } else {
-                    ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
+                    ADD_STAKE_MUL_COIN_FUN_NAME.to_owned()
                 };
                 let mut builder = ProgrammableTransactionBuilder::new();
-                builder.move_call(
+                let arguments = vec![
+                    builder
+                        .input(CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_SYSTEM_STATE_OBJECT_ID,
+                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                            mutable: true,
+                        }))
+                        .unwrap(),
+                    builder.make_obj_vec(coins.into_iter().map(ObjectArg::ImmOrOwnedObject)),
+                    builder
+                        .input(CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?))
+                        .unwrap(),
+                    builder
+                        .input(CallArg::Pure(bcs::to_bytes(&validator)?))
+                        .unwrap(),
+                ];
+                builder.command(Command::move_call(
                     SUI_FRAMEWORK_OBJECT_ID,
                     SUI_SYSTEM_MODULE_NAME.to_owned(),
                     function,
                     vec![],
-                    vec![
-                        CallArg::Object(ObjectArg::SharedObject {
-                            id: SUI_SYSTEM_STATE_OBJECT_ID,
-                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                            mutable: true,
-                        }),
-                        CallArg::ObjVec(
-                            coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
-                        ),
-                        CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
-                        CallArg::Pure(bcs::to_bytes(&validator)?),
-                    ],
-                )?;
+                    arguments,
+                ));
                 builder.finish()
             }
             (op, metadata) => {

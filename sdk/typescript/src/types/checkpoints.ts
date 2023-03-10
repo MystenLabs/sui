@@ -15,9 +15,9 @@ import {
 import { TransactionDigest, TransactionEffectsDigest } from './common';
 
 export const GasCostSummary = object({
-  computation_cost: number(),
-  storage_cost: number(),
-  storage_rebate: number(),
+  computationCost: number(),
+  storageCost: number(),
+  storageRebate: number(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -36,9 +36,9 @@ export const CheckpointCommitment = union([ECMHLiveObjectSetDigest]);
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
 
 export const EndOfEpochData = object({
-  next_epoch_committee: array(tuple([string(), number()])),
-  next_epoch_protocol_version: number(),
-  checkpoint_commitments: array(CheckpointCommitment),
+  nextEpochCommittee: array(tuple([string(), number()])),
+  nextEpochProtocolVersion: number(),
+  checkpointCommitments: array(CheckpointCommitment),
 });
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 

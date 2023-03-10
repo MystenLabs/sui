@@ -11,6 +11,7 @@ use fastcrypto::traits::ToFromBytes;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use mysten_metrics::spawn_monitored_task;
+use shared_crypto::intent::Intent;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
@@ -20,7 +21,6 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
-use sui_types::intent::Intent;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionKind,
 };

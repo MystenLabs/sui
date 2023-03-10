@@ -141,10 +141,10 @@ module frenemies::frenemies_tests {
             let scorecard = ts::take_from_sender<Scorecard>(scenario);
             let system_state = ts::take_shared<SuiSystemState>(scenario);
             // stake 100 with 1, 50 with 2, nothing with 3
-            sui_system::request_add_delegation(
+            sui_system::request_add_stake(
                 &mut system_state, coin::mint_for_testing(100, ts::ctx(scenario)), @0x1, ts::ctx(scenario)
             );
-            sui_system::request_add_delegation(
+            sui_system::request_add_stake(
                 &mut system_state, coin::mint_for_testing(50, ts::ctx(scenario)), @0x2, ts::ctx(scenario)
             );
             ts::return_to_sender(scenario, scorecard);
@@ -166,7 +166,7 @@ module frenemies::frenemies_tests {
             );
             // hardcode assignment to 3, stake 200 with 3
             frenemies::set_assignment_for_testing(&mut scorecard, @0x3, FRIEND, tx_context::epoch(ts::ctx(scenario)));
-            sui_system::request_add_delegation(
+            sui_system::request_add_stake(
                 &mut system_state, coin::mint_for_testing(200, ts::ctx(scenario)), @0x3, ts::ctx(scenario)
             );
 
@@ -218,7 +218,7 @@ module frenemies::frenemies_tests {
         {
             let system_state = ts::take_shared<SuiSystemState>(scenario);
             // stake 100 with 1 to get a win
-            sui_system::request_add_delegation(
+            sui_system::request_add_stake(
                 &mut system_state, coin::mint_for_testing(100, ts::ctx(scenario)), @0x1, ts::ctx(scenario)
             );
             ts::return_shared(system_state)
@@ -238,7 +238,7 @@ module frenemies::frenemies_tests {
                 0
             );
             // validator 1 is no longer in the lead
-            sui_system::request_add_delegation(
+            sui_system::request_add_stake(
                 &mut system_state, coin::mint_for_testing(200, ts::ctx(scenario)), @0x2, ts::ctx(scenario)
             );
             ts::return_to_sender(scenario, scorecard);
@@ -293,7 +293,7 @@ module frenemies::frenemies_tests {
             let scorecard = ts::take_from_sender<Scorecard>(scenario);
             let system_state = ts::take_shared<SuiSystemState>(scenario);
             let coin = coin::mint_for_testing(10, ts::ctx(scenario));
-            sui_system::request_add_delegation(
+            sui_system::request_add_stake(
                 &mut system_state, coin, frenemies::validator(&scorecard), ts::ctx(scenario)
             );
             ts::return_to_sender(scenario, scorecard);

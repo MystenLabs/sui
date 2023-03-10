@@ -1,11 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
+    "crates/shared-crypto",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
@@ -129,7 +131,6 @@ move-symbol-pool = { git = "https://github.com/move-language/move", rev = "8729c
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", package = "fastcrypto-zkp" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", package = "fastcrypto-tbls" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff" }
@@ -140,8 +141,9 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6c
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
 
+mysten-common = { path = "crates/mysten-common" }
 mysten-network = { path = "crates/mysten-network" }
-telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }
+telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }

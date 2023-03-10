@@ -643,7 +643,7 @@ struct PrimaryReceiverHandler {
     worker_cache: WorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+    signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -773,6 +773,9 @@ impl PrimaryReceiverHandler {
         }
 
         // Ensure we have the parents. If any are missing, the requester should provide them on retry.
+        // This check is necessary for correctness, because it is possible that the list of missing
+        // parents in the request is incomplete, or wait_notifications get notified on shut down
+        // without actually having the parents available.
         let (parents, missing) = self.synchronizer.get_parents(header)?;
         if !missing.is_empty() {
             return Ok(RequestVoteResponse {

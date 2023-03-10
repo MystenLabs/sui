@@ -30,7 +30,7 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
         data: {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
           module: "sui_system",
-          function: "request_withdraw_delegation",
+          function: "request_withdraw_stake",
           gasBudget: Number(GAS_BUDGET),
           typeArguments: [],
           arguments: [

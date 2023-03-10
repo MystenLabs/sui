@@ -11,10 +11,6 @@ import { ReactComponent as ImageIcon } from './icons/image.svg';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
 import { ReactComponent as ChangeEpochIcon } from './icons/transactions/changeEpoch.svg';
-import { ReactComponent as PayIcon } from './icons/transactions/pay.svg';
-import { ReactComponent as PublishIcon } from './icons/transactions/publish.svg';
-import { ReactComponent as TransferObjectIcon } from './icons/transactions/transferObject.svg';
-import { ReactComponent as TransferSuiIcon } from './icons/transactions/transferSui.svg';
 
 export type PageHeaderType =
     | TransactionKindName
@@ -32,16 +28,9 @@ export interface PageHeaderProps {
 }
 
 const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
-    Call: CallIcon,
+    ProgrammableTransaction: CallIcon,
     ChangeEpoch: ChangeEpochIcon,
     Checkpoint: Flag16,
-    Pay: PayIcon,
-    // TODO: replace with SUI specific icon if needed
-    PaySui: PayIcon,
-    PayAllSui: PayIcon,
-    Publish: PublishIcon,
-    TransferObject: TransferObjectIcon,
-    TransferSui: TransferSuiIcon,
     Object: ImageIcon,
     Package: CallIcon,
     Address: () => (

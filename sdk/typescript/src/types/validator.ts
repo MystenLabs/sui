@@ -45,17 +45,6 @@ export const DelegatedStake = object({
   stakes: array(StakeObject),
 });
 
-export const ParametersFields = object({
-  max_validator_count: string(),
-  min_validator_stake: string(),
-  storage_gas_price: optional(string()),
-});
-
-export const Parameters = object({
-  type: string(),
-  fields: ParametersFields,
-});
-
 export const StakeSubsidyFields = object({
   balance: object({ value: number() }),
   currentEpochAmount: number(),
@@ -94,12 +83,12 @@ export const DelegationStakingPoolFields = object({
     size: number(),
   }),
   id: string(),
-  pendingDelegation: number(),
+  pendingStake: number(),
   pendingPoolTokenWithdraw: number(),
   pendingTotalSuiWithdraw: number(),
   poolTokenBalance: number(),
   rewardsPool: object({ value: number() }),
-  startingEpoch: number(),
+  activationEpoch: object({ vec: array() }),
   deactivationEpoch: object({ vec: array() }),
   suiBalance: number(),
 });
@@ -150,7 +139,7 @@ export const SuiValidatorSummary = object({
   stakingPoolSuiBalance: number(),
   rewardsPool: number(),
   poolTokenBalance: number(),
-  pendingDelegation: number(),
+  pendingStake: number(),
   pendingPoolTokenWithdraw: number(),
   pendingTotalSuiWithdraw: number(),
   exchangeRatesId: string(),
@@ -166,8 +155,6 @@ export const SuiSystemStateSummary = object({
   referenceGasPrice: number(),
   safeMode: boolean(),
   epochStartTimestampMs: number(),
-  minValidatorStake: number(),
-  maxValidatorCount: number(),
   governanceStartEpoch: number(),
   stakeSubsidyEpochCounter: number(),
   stakeSubsidyBalance: number(),

@@ -23,6 +23,8 @@ bip32 = "0.4.0"
 prettytable-rs = "0.10.0"
 git-version = "0.3.5"
 const-str = "0.5.3"
+rand = "0.8.5"
+inquire = "0.6.0"
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
@@ -37,8 +39,10 @@ sui-keys = { path = "../sui-keys" }
 sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-protocol-config = { path = "../sui-protocol-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
+move-bytecode-utils.workspace = true
 
 rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
@@ -91,3 +95,9 @@ assert_cmd = "2.0.6"
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
+
+
+[[example]]
+name = "generate-genesis-checkpoint"
+path = "src/generate_genesis_checkpoint.rs"
+test = false

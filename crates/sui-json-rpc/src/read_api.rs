@@ -18,7 +18,7 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
-
+use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
@@ -37,7 +37,6 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::{DisplayCreatedEvent, DisplayObject};
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::error::UserInputError;
-use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_types::messages::{
     TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
     VerifiedTransaction,

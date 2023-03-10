@@ -108,7 +108,7 @@ function CheckpointDetail() {
                                 <Text variant="p1/medium" color="steel-darker">
                                     {
                                         data.epochRollingGasCostSummary
-                                            .computation_cost
+                                            .computationCost
                                     }
                                 </Text>
                             </DescriptionItem>
@@ -116,7 +116,7 @@ function CheckpointDetail() {
                                 <Text variant="p1/medium" color="steel-darker">
                                     {
                                         data.epochRollingGasCostSummary
-                                            .storage_cost
+                                            .storageCost
                                     }
                                 </Text>
                             </DescriptionItem>
@@ -124,7 +124,7 @@ function CheckpointDetail() {
                                 <Text variant="p1/medium" color="steel-darker">
                                     {
                                         data.epochRollingGasCostSummary
-                                            .storage_rebate
+                                            .storageRebate
                                     }
                                 </Text>
                             </DescriptionItem>

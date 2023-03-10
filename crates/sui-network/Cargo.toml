@@ -16,6 +16,7 @@ tonic = "0.8"
 
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 mysten-network.workspace = true
 

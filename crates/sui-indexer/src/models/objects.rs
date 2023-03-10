@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::errors::IndexerError;
 use crate::models::owners::OwnerType;
 use crate::schema::objects;
 use crate::schema::sql_types::BcsBytes;
@@ -11,11 +12,15 @@ use diesel::serialize::{Output, ToSql, WriteTuple};
 use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
 use diesel::SqlType;
 use diesel_derive_enum::DbEnum;
+use move_bytecode_utils::module_cache::GetModule;
+use std::str::FromStr;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
+use sui_types::move_package::MovePackage;
+use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
+
 const OBJECT: &str = "object";
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone)]
@@ -34,6 +39,8 @@ pub struct Object {
     pub previous_transaction: String,
     pub object_type: String,
     pub object_status: ObjectStatus,
+    pub has_public_transfer: bool,
+    pub storage_rebate: i64,
     pub bcs: Vec<NamedBcsBytes>,
 }
 #[derive(SqlType, Debug, Clone)]
@@ -46,7 +53,7 @@ impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
     }
 }
 
-impl FromSql<BcsBytes, Pg> for NamedBcsBytes {
+impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
     fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
         let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
         Ok(NamedBcsBytes(name, data))
@@ -67,6 +74,7 @@ pub struct DeletedObject {
     pub previous_transaction: String,
     pub object_type: String,
     pub object_status: ObjectStatus,
+    pub has_public_transfer: bool,
 }
 
 #[derive(DbEnum, Debug, Clone, Copy)]
@@ -90,14 +98,20 @@ impl Object {
         let (owner_type, owner_address, initial_shared_version) =
             owner_to_owner_info(&o.owner.expect("Expect the owner type to be non-empty"));
 
-        let bcs = match o.bcs.clone().expect("Expect BCS data to be non-empty") {
-            SuiRawData::MoveObject(o) => vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
-            SuiRawData::Package(p) => p
-                .module_map
-                .into_iter()
-                .map(|(k, v)| NamedBcsBytes(k, v))
-                .collect(),
-        };
+        let (has_public_transfer, bcs) =
+            match o.bcs.clone().expect("Expect BCS data to be non-empty") {
+                SuiRawData::MoveObject(o) => (
+                    o.has_public_transfer,
+                    vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
+                ),
+                SuiRawData::Package(p) => (
+                    false,
+                    p.module_map
+                        .into_iter()
+                        .map(|(k, v)| NamedBcsBytes(k, v))
+                        .collect(),
+                ),
+            };
 
         Object {
             epoch: *epoch as i64,
@@ -118,8 +132,107 @@ impl Object {
                 .expect("Expect the object type to be non-empty")
                 .to_string(),
             object_status: *status,
+            has_public_transfer,
+            storage_rebate: o.storage_rebate.unwrap_or_default() as i64,
             bcs,
         }
+    }
+
+    pub fn try_into_object_read(
+        self,
+        module_cache: &impl GetModule,
+    ) -> Result<ObjectRead, IndexerError> {
+        Ok(match self.object_status {
+            ObjectStatus::Deleted | ObjectStatus::UnwrappedThenDeleted => {
+                ObjectRead::Deleted(self.get_object_ref()?)
+            }
+            _ => {
+                let oref = self.get_object_ref()?;
+                let object: sui_types::object::Object = self.try_into()?;
+                let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
+                ObjectRead::Exists(oref, object, layout)
+            }
+        })
+    }
+
+    pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
+        let object_id = self.object_id.parse()?;
+        let digest = self.object_digest.parse().map_err(|e| {
+            IndexerError::SerdeError(format!(
+                "Failed to parse object digest: {}, error: {}",
+                self.object_digest, e
+            ))
+        })?;
+        Ok((object_id, (self.version as u64).into(), digest))
+    }
+}
+
+impl TryFrom<Object> for sui_types::object::Object {
+    type Error = IndexerError;
+
+    fn try_from(o: Object) -> Result<Self, Self::Error> {
+        let object_type = ObjectType::from_str(&o.object_type)?;
+        let object_id = ObjectID::from_str(&o.object_id)?;
+        let version = SequenceNumber::from_u64(o.version as u64);
+        let owner = match o.owner_type {
+            OwnerType::AddressOwner => Owner::AddressOwner(SuiAddress::from_str(
+                &o.owner_address.expect("Owner address should not be empty."),
+            )?),
+            OwnerType::ObjectOwner => Owner::ObjectOwner(SuiAddress::from_str(
+                &o.owner_address.expect("Owner address should not be empty."),
+            )?),
+            OwnerType::Shared => Owner::Shared {
+                initial_shared_version: SequenceNumber::from_u64(
+                    o.initial_shared_version
+                        .expect("Shared version should not be empty.") as u64,
+                ),
+            },
+            OwnerType::Immutable => Owner::Immutable,
+        };
+        let previous_transaction = TransactionDigest::from_str(&o.previous_transaction)?;
+
+        Ok(match object_type {
+            ObjectType::Package => {
+                let modules = o
+                    .bcs
+                    .into_iter()
+                    .map(|NamedBcsBytes(name, bytes)| (name, bytes))
+                    .collect();
+                // Ok to unwrap, package size is safe guarded by the full node, we are not limiting size when reading back from DB.
+                let package = MovePackage::new(object_id, version, &modules, u64::MAX).unwrap();
+                sui_types::object::Object {
+                    data: Data::Package(package),
+                    owner,
+                    previous_transaction,
+                    storage_rebate: o.storage_rebate as u64,
+                }
+            }
+            // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
+            ObjectType::Struct(object_type) => unsafe {
+                let content = o
+                    .bcs
+                    .first()
+                    .expect("BCS content should not be empty")
+                    .1
+                    .clone();
+                // Ok to unwrap, object size is safe guarded by the full node, we are not limiting size when reading back from DB.
+                let object = MoveObject::new_from_execution_with_limit(
+                    object_type,
+                    o.has_public_transfer,
+                    version,
+                    content,
+                    u64::MAX,
+                )
+                .unwrap();
+
+                sui_types::object::Object {
+                    data: Data::Move(object),
+                    owner,
+                    previous_transaction,
+                    storage_rebate: o.storage_rebate as u64,
+                }
+            },
+        })
     }
 }
 
@@ -143,6 +256,7 @@ impl DeletedObject {
             previous_transaction: previous_tx.base58_encode(),
             object_type: "DELETED".to_string(),
             object_status: status,
+            has_public_transfer: false,
         }
     }
 }

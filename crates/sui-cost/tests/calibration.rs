@@ -45,7 +45,7 @@ fn disassemble_test_module(name: String) -> anyhow::Result<String> {
 
     let rerooted_path = reroot_path(Some(path))?;
 
-    let package = config.compile_package(&rerooted_path, &mut Vec::new())?;
+    let package = config.compile_package(&rerooted_path, &mut std::io::sink())?;
     let needle_package = package_name
         .as_deref()
         .unwrap_or(package.compiled_package_info.package_name.as_str());

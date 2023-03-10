@@ -185,7 +185,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
             .await
     }
 
-    async fn request_add_delegation(
+    async fn request_add_stake(
         &self,
         signer: SuiAddress,
         coins: Vec<ObjectID>,
@@ -195,11 +195,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
-            .request_add_delegation(signer, coins, amount, validator, gas, gas_budget)
+            .request_add_stake(signer, coins, amount, validator, gas, gas_budget)
             .await
     }
 
-    async fn request_withdraw_delegation(
+    async fn request_withdraw_stake(
         &self,
         signer: SuiAddress,
         delegation: ObjectID,
@@ -208,7 +208,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
-            .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
+            .request_withdraw_stake(signer, delegation, staked_sui, gas, gas_budget)
             .await
     }
 }

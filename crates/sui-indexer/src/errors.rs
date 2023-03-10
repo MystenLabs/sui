@@ -3,6 +3,8 @@
 
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use sui_types::base_types::ObjectIDParseError;
+use sui_types::error::SuiError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -37,11 +39,26 @@ pub enum IndexerError {
     #[error("Indexer failed to commit changes to PostgresDB with error: `{0}`")]
     PostgresWriteError(String),
 
+    #[error(transparent)]
+    PostgresError(#[from] diesel::result::Error),
+
     #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
     RpcClientInitError(String),
 
-    #[error("Indexer failed to serialize/deserialize JSON with error: `{0}`")]
-    JsonSerdeError(String),
+    #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
+    SerdeError(String),
+
+    #[error("Indexer does not support the feature yet with error: `{0}`")]
+    NotImplementedError(String),
+
+    #[error(transparent)]
+    UncategorizedError(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    ObjectIdParseError(#[from] ObjectIDParseError),
+
+    #[error(transparent)]
+    SuiError(#[from] SuiError),
 }
 
 impl IndexerError {
@@ -58,7 +75,12 @@ impl IndexerError {
             IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
             IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
             IndexerError::JsonRpcServerError(_) => "JsonRpcServerError".into(),
-            IndexerError::JsonSerdeError(_) => "JsonSerdeError".into(),
+            IndexerError::SerdeError(_) => "SerdeError".into(),
+            IndexerError::NotImplementedError(_) => "NotImplementedError".into(),
+            IndexerError::PostgresError(_) => "PostgresError".into(),
+            IndexerError::UncategorizedError(_) => "UncategorizedError".into(),
+            IndexerError::ObjectIdParseError(_) => "ObjectIdParseError".into(),
+            IndexerError::SuiError(_) => "SuiError".into(),
         }
     }
 }

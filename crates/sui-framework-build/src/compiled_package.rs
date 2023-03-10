@@ -5,7 +5,7 @@ use core::fmt;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -130,25 +130,28 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        let resolution_graph = if self.print_diags_to_stderr {
-            self.config
-                .resolution_graph_for_package(&path, &mut std::io::stderr())
-                .map_err(|err| SuiError::ModuleBuildFailure {
-                    error: format!("{:?}", err),
-                })?
-        } else {
-            self.config
-                .resolution_graph_for_package(&path, &mut Vec::new())
-                .map_err(|err| SuiError::ModuleBuildFailure {
-                    error: format!("{:?}", err),
-                })?
-        };
+        let print_diags_to_stderr = self.print_diags_to_stderr;
+        let run_bytecode_verifier = self.run_bytecode_verifier;
+        let resolution_graph = self.resolution_graph(&path)?;
         build_from_resolution_graph(
             path,
             resolution_graph,
-            self.run_bytecode_verifier,
-            self.print_diags_to_stderr,
+            run_bytecode_verifier,
+            print_diags_to_stderr,
         )
+    }
+
+    pub fn resolution_graph(self, path: &Path) -> SuiResult<ResolvedGraph> {
+        if self.print_diags_to_stderr {
+            self.config
+                .resolution_graph_for_package(path, &mut std::io::stderr())
+        } else {
+            self.config
+                .resolution_graph_for_package(path, &mut std::io::sink())
+        }
+        .map_err(|err| SuiError::ModuleBuildFailure {
+            error: format!("{:?}", err),
+        })
     }
 }
 
@@ -161,7 +164,7 @@ pub fn build_from_resolution_graph(
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, &mut Vec::new())
+        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.

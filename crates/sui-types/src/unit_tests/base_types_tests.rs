@@ -15,9 +15,9 @@ use crate::crypto::{
     get_key_pair, get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
     Signature, SuiAuthoritySignature, SuiSignature,
 };
-use crate::intent::{Intent, IntentMessage};
 use crate::OBJECT_START_VERSION;
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_protocol_config::ProtocolConfig;
 
 use super::*;
@@ -27,22 +27,33 @@ fn test_signatures() {
     let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let foo = Foo("hello".into());
-    let foox = Foo("hellox".into());
-    let bar = Bar("hello".into());
+    let foo = IntentMessage::new(Intent::default(), Foo("hello".into()));
+    let foox = IntentMessage::new(Intent::default(), Foo("hellox".into()));
+    let bar = IntentMessage::new(Intent::default(), Bar("hello".into()));
 
-    let s = Signature::new(&foo, &sec1);
-    assert!(s.verify(&foo, addr1).is_ok());
-    assert!(s.verify(&foo, addr2).is_err());
-    assert!(s.verify(&foox, addr1).is_err());
-    assert!(s.verify(&bar, addr1).is_err());
+    let s = Signature::new_secure(&foo, &sec1);
+    assert!(s.verify_secure(&foo, addr1).is_ok());
+    assert!(s.verify_secure(&foo, addr2).is_err());
+    assert!(s.verify_secure(&foox, addr1).is_err());
+    assert!(s
+        .verify_secure(
+            &IntentMessage::new(
+                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                Foo("hello".into())
+            ),
+            addr1
+        )
+        .is_err());
+
+    // The struct type is different, but the serialization is the same.
+    assert!(s.verify_secure(&bar, addr1).is_ok());
 }
 
 #[test]
 fn test_signatures_serde() {
     let (_, sec1): (_, AccountKeyPair) = get_key_pair();
     let foo = Foo("hello".into());
-    let s = Signature::new(&foo, &sec1);
+    let s = Signature::new_secure(&IntentMessage::new(Intent::default(), foo), &sec1);
 
     let serialized = bcs::to_bytes(&s).unwrap();
     println!("{:?}", serialized);
