@@ -42,7 +42,7 @@ describe('Normalized modules API', () => {
       DEFAULT_PACKAGE,
       DEFAULT_MODULE,
     );
-    expect(Object.keys(normalized.exposed_functions)).toContain(
+    expect(Object.keys(normalized.exposedFunctions)).toContain(
       DEFAULT_FUNCTION,
     );
   });
@@ -53,7 +53,7 @@ describe('Normalized modules API', () => {
       DEFAULT_MODULE,
       DEFAULT_FUNCTION,
     );
-    expect(normalized.is_entry).toEqual(false);
+    expect(normalized.isEntry).toEqual(false);
   });
 
   it('Get Normalized Move Struct ', async () => {

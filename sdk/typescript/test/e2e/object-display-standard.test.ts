@@ -12,15 +12,10 @@ describe('Test Object Display Standard', () => {
   beforeAll(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/display_test';
-    ({ packageId } = await publishPackage(packagePath));
-    console.log('Package ID: ', packageId);
+    ({ packageId } = await publishPackage(packagePath, toolbox));
   });
 
   it('Test getting Display fields', async () => {
-    const owned = await toolbox.provider.getObjectsOwnedByAddress(
-      toolbox.address(),
-    );
-    console.log(owned);
     const boarId = (
       await toolbox.provider.getObjectsOwnedByAddress(
         toolbox.address(),

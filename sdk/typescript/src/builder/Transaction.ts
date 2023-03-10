@@ -456,7 +456,7 @@ export class Transaction {
         );
       }
 
-      objectsToResolve.forEach(({ id, input, normalizedType }, i) => {
+      objectsToResolve.forEach(({ id, input, normalizedType }) => {
         const object = objectsById.get(id)!;
         const initialSharedVersion = getSharedObjectInitialVersion(object);
 

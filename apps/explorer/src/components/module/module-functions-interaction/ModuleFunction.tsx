@@ -54,7 +54,7 @@ export function ModuleFunction({
     const { isValidating, isValid, isSubmitting } = formState;
 
     const typeArguments = useFunctionTypeArguments(
-        functionDetails.type_parameters
+        functionDetails.typeParameters
     );
     const formTypeInputs = useWatch({ control, name: 'types' });
     const resolvedTypeArguments = useMemo(
