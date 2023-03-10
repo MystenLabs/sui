@@ -48,7 +48,7 @@ export function normalizedFunctionParameterTypeToString(
     }
     if ('Struct' in param) {
         const theType = param.Struct;
-        const theTypeArgs = theType.type_arguments;
+        const theTypeArgs = theType.typeArguments;
         const theTypeArgsStr = theTypeArgs
             .map((aTypeArg) =>
                 normalizedFunctionParameterTypeToString(

@@ -29,8 +29,8 @@ export function ModuleFunctionsInteraction({
         if (!normalizedModule) {
             return [];
         }
-        return Object.entries(normalizedModule.exposed_functions)
-            .filter(([_, anFn]) => anFn.is_entry)
+        return Object.entries(normalizedModule.exposedFunctions)
+            .filter(([_, anFn]) => anFn.isEntry)
             .map(([fnName, details]) => ({ name: fnName, details }));
     }, [normalizedModule]);
     const isEmpty = !isLoading && !executableFunctions.length && !error;
