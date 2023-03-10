@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{ObjectDigest, SuiAddress};
+use crate::crypto::InternalHash;
 use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
 use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
 use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base58;
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::HashFunction;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
 use schemars::JsonSchema;
@@ -216,7 +217,7 @@ where
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
 
     // hash(parent || key || key_type_tag)
-    let mut hasher = Sha3_256::default();
+    let mut hasher = InternalHash::default();
     hasher.update(parent.into());
     hasher.update(key_bytes.len().to_le_bytes());
     hasher.update(key_bytes);
