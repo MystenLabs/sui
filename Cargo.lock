@@ -9142,6 +9142,7 @@ dependencies = [
  "sui-telemetry",
  "sui-tls",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tokio",
  "tower",
