@@ -142,11 +142,9 @@ export class TransactionDataBuilder {
     });
 
     const kind = {
-      Single: {
-        ProgrammableTransaction: {
-          inputs,
-          commands: this.commands,
-        },
+      ProgrammableTransaction: {
+        inputs,
+        commands: this.commands,
       },
     };
 
