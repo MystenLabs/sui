@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LockUnlocked16 as UnlockedLockIcon } from '@mysten/icons';
+import {
+    LockUnlocked16 as UnlockedLockIcon,
+    Spinner16 as SpinnerIcon,
+    ThumbUpStroke32 as ThumbUpIcon,
+} from '@mysten/icons';
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { SummaryCard } from '../SummaryCard';
-import Loading from '../loading';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
 import { type LedgerAccount } from './LedgerAccountItem';
@@ -25,7 +28,7 @@ export function ImportLedgerAccounts() {
 
     const onDeriveError = useCallback(() => {
         navigate(accountsUrl, { replace: true });
-        toast.error('There was an issue importing your accounts.');
+        toast.error('Make sure you have the Sui application open.');
     }, [accountsUrl, navigate]);
 
     const [ledgerAccounts, setLedgerAccounts, areLedgerAccountsLoading] =
@@ -78,6 +81,34 @@ export function ImportLedgerAccounts() {
     const isSelectAllButtonDisabled =
         areAllAccountsSelected || areAllAccountsImported;
 
+    let summaryCardBody: JSX.Element | undefined;
+    if (areLedgerAccountsLoading) {
+        summaryCardBody = (
+            <div className="w-full h-full flex flex-col justify-center items-center gap-3">
+                <SpinnerIcon className="animate-spin text-steel w-4 h-4" />
+                <Text variant="p2" color="steel-darker">
+                    Looking for accounts
+                </Text>
+            </div>
+        );
+    } else if (areAllAccountsImported) {
+        summaryCardBody = (
+            <div className="w-full h-full flex flex-col justify-center items-center gap-2">
+                <ThumbUpIcon className="text-steel w-8 h-8" />
+                <Text variant="p2" color="steel-darker">
+                    All Ledger accounts have been imported.
+                </Text>
+            </div>
+        );
+    } else {
+        summaryCardBody = (
+            <SelectLedgerAccountsList
+                accounts={filteredLedgerAccounts}
+                onSelect={onSelectAccount}
+            />
+        );
+    }
+
     return (
         <Overlay
             showModal
@@ -89,20 +120,12 @@ export function ImportLedgerAccounts() {
             <div className="w-full flex flex-col">
                 <SummaryCard
                     minimalPadding
-                    header="Connect Ledger Accounts"
-                    body={
-                        <Loading loading={areLedgerAccountsLoading}>
-                            {/* TODO: This is just placeholder UI until we have finalized designs */}
-                            {areAllAccountsImported ? (
-                                <Text>All accounts are already imported</Text>
-                            ) : (
-                                <SelectLedgerAccountsList
-                                    accounts={filteredLedgerAccounts}
-                                    onSelect={onSelectAccount}
-                                />
-                            )}
-                        </Loading>
+                    header={
+                        areAllAccountsImported
+                            ? 'Ledger Accounts '
+                            : 'Connect Ledger Accounts'
                     }
+                    body={<div className="h-[272px]">{summaryCardBody}</div>}
                     footer={
                         <div className="rounded-b-2xl text-center">
                             <Link
