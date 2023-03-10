@@ -468,14 +468,17 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let build_config =
-                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+                let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+                let run_bytecode_verifier = true;
+                let print_diags_to_stderr = true;
 
-                let resolution_graph = build_config
-                    .resolution_graph_for_package(&package_path, &mut std::io::stderr())
-                    .map_err(|err| SuiError::ModuleBuildFailure {
-                        error: format!("{:?}", err),
-                    })?;
+                let config = BuildConfig {
+                    config,
+                    run_bytecode_verifier,
+                    print_diags_to_stderr,
+                };
+
+                let resolution_graph = config.resolution_graph(&package_path)?;
 
                 if !with_unpublished_dependencies {
                     ensure_published_dependencies(&resolution_graph)?;
@@ -484,8 +487,8 @@ impl SuiClientCommands {
                 let compiled_package = build_from_resolution_graph(
                     package_path,
                     resolution_graph,
-                    /* run_bytecode_verifier */ true,
-                    /* print_diags_to_stderr */ true,
+                    run_bytecode_verifier,
+                    print_diags_to_stderr,
                 )?;
 
                 if !compiled_package.is_framework() {
