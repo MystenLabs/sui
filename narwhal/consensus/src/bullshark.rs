@@ -18,6 +18,10 @@ use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Rou
 #[path = "tests/bullshark_tests.rs"]
 pub mod bullshark_tests;
 
+#[cfg(test)]
+#[path = "tests/randomized_tests.rs"]
+pub mod randomized_tests;
+
 /// LastRound is a helper struct to keep necessary info
 /// around the leader election on the last election round.
 /// When both the leader_found = true & leader_has_support = true

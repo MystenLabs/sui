@@ -748,6 +748,11 @@ impl Committee {
         (total_votes + 2) / 3
     }
 
+    /// Returns the total stake (3f+1)
+    pub fn total_stake(&self) -> Stake {
+        self.authorities.values().map(|x| x.stake).sum()
+    }
+
     /// Returns a leader node as a weighted choice seeded by the provided integer
     pub fn leader(&self, seed: u64) -> PublicKey {
         let mut seed_bytes = [0u8; 32];
