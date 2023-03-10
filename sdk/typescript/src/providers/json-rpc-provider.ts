@@ -515,7 +515,7 @@ export class JsonRpcProvider extends Provider {
     options?: SuiObjectDataOptions,
   ): Promise<SuiObjectResponse[]> {
     try {
-      objectIds.map((id) => {
+      objectIds.forEach((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
@@ -645,7 +645,7 @@ export class JsonRpcProvider extends Provider {
     options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse[]> {
     try {
-      digests.map((d) => {
+      digests.forEach((d) => {
         if (!isValidTransactionDigest(d)) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
