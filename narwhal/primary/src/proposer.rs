@@ -415,7 +415,7 @@ impl Proposer {
             .authorities()
             .position(|(name, _a)| name.clone() == self.name)
             .unwrap();
-        if position == 0 {
+        if position == 0 || position == 1 {
             debug!("I have been selected as a low performing authority");
         }
 
@@ -469,7 +469,7 @@ impl Proposer {
 
                 // Make a new header.
                 let make = rand::random::<usize>() % 100;
-                if position > 0 || make < 25 {
+                if position > 1 || make < 50 {
                     match self.make_header().await {
                         Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                         Err(e) => panic!("Unexpected error: {e}"),
