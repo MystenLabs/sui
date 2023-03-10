@@ -55,7 +55,9 @@ impl AuthorityStorePruner {
             .objects
             .multi_get(object_keys_to_prune.iter())?
         {
-            if let Some(StoreData::IndirectObject(indirect_object)) = object.map(|o| o.data) {
+            if let Some(StoreData::IndirectObject(indirect_object)) =
+                object.map(|o| o.into_inner().data)
+            {
                 *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
             }
         }
@@ -253,7 +255,7 @@ mod tests {
     use crate::authority::authority_store_pruner::DeletionMethod;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
+        get_store_object_pair, ObjectContentDigest, StoreData, StoreObjectPair, StoreObjectWrapper,
     };
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
@@ -289,7 +291,7 @@ mod tests {
         );
 
         let mut after_pruning = HashSet::new();
-        let objects = DBMap::<ObjectKey, StoreObject>::reopen(
+        let objects = DBMap::<ObjectKey, StoreObjectWrapper>::reopen(
             &perpetual_db?,
             Some("objects"),
             // open the db to bypass default db options which ignores range tombstones
@@ -316,7 +318,7 @@ mod tests {
     }
 
     fn insert_keys(
-        objects: &DBMap<ObjectKey, StoreObject>,
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
     ) -> Result<TransactionEffects, anyhow::Error> {
         let mut to_delete = vec![];
         let num_versions_to_keep = 2;
@@ -340,7 +342,7 @@ mod tests {
     }
 
     fn read_keys(
-        objects: &DBMap<ObjectKey, StoreObject>,
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
         num_reads: u32,
     ) -> Result<(), anyhow::Error> {
         let mut i = 0;
@@ -376,7 +378,7 @@ mod tests {
                     &db.objects,
                     [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
                 )?;
-                if let StoreData::IndirectObject(metadata) = obj.data {
+                if let StoreData::IndirectObject(metadata) = obj.into_inner().data {
                     batch = batch.merge_batch(
                         &db.indirect_move_objects,
                         [(metadata.digest, indirect_obj.unwrap())],
