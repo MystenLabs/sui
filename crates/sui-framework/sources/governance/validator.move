@@ -7,14 +7,12 @@ module sui::validator {
     use std::bcs;
 
     use sui::balance::{Self, Balance};
-    use sui::bcs::to_bytes;
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::validator_cap::{Self, ValidatorOperationCap};
     use sui::object::{Self, ID};
     use std::option::{Option, Self};
-    use sui::bls12381::bls12381_min_sig_verify_with_domain;
     use sui::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
     use std::string::{Self, String};
     use sui::url::Url;
@@ -143,25 +141,6 @@ module sui::validator {
         amount: u64,
     }
 
-    const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[107, 111, 115, 107];
-
-    fun verify_proof_of_possession(
-        proof_of_possession: vector<u8>,
-        sui_address: address,
-        protocol_pubkey_bytes: vector<u8>
-    ) {
-        // The proof of possession is the signature over ValidatorPK || AccountAddress.
-        // This proves that the account address is owned by the holder of ValidatorPK, and ensures
-        // that PK exists.
-        let signed_bytes = protocol_pubkey_bytes;
-        let address_bytes = to_bytes(&sui_address);
-        vector::append(&mut signed_bytes, address_bytes);
-        assert!(
-            bls12381_min_sig_verify_with_domain(&proof_of_possession, &protocol_pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
-            EInvalidProofOfPossession
-        );
-    }
-
     public(friend) fun new_metadata(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
@@ -234,11 +213,6 @@ module sui::validator {
             0
         );
         assert!(commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
-        verify_proof_of_possession(
-            proof_of_possession,
-            sui_address,
-            protocol_pubkey_bytes
-        );
 
         let metadata = new_metadata(
             sui_address,
@@ -577,8 +551,6 @@ module sui::validator {
 
     /// Update protocol public key of this validator, taking effects from next epoch
     public(friend) fun update_next_epoch_protocol_pubkey(self: &mut Validator, protocol_pubkey: vector<u8>, proof_of_possession: vector<u8>) {
-        // TODO move proof of possession verification to the native function
-        verify_proof_of_possession(proof_of_possession, self.metadata.sui_address, protocol_pubkey);
         self.metadata.next_epoch_protocol_pubkey_bytes = option::some(protocol_pubkey);
         self.metadata.next_epoch_proof_of_possession = option::some(proof_of_possession);
         validate_metadata(&self.metadata);
@@ -717,7 +689,10 @@ module sui::validator {
     }
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
-    // Creates a validator - bypassing the proof of possession check and other metadata validation in the process.
+    // Creates a validator - bypassing the proof of possession check and other metadata 
+    // validation in the process.
+    // Note: `proof_of_possession` MUST be a valid signature using sui_address and 
+    // protocol_pubkey_bytes. To produce a valid PoP, run [fn test_proof_of_possession]. 
     #[test_only]
     public(friend) fun new_for_testing(
         sui_address: address,

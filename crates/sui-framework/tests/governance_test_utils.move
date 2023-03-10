@@ -186,10 +186,9 @@ module sui::governance_test_utils {
         test_scenario::return_shared(system_state);
     }
 
-    public fun add_validator_full_flow(validator: address, init_stake_amount: u64, pop: vector<u8>, scenario: &mut Scenario) {
+    public fun add_validator_full_flow(validator: address, init_stake_amount: u64, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         // This is  equivalent to /ip4/127.0.0.1
         let addr = vector[4, 127, 0, 0, 1];
         let ctx = test_scenario::ctx(scenario);

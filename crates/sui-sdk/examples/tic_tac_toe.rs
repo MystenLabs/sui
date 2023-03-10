@@ -13,6 +13,7 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use shared_crypto::intent::Intent;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
@@ -25,7 +26,6 @@ use sui_sdk::{
     },
     SuiClient, SuiClientBuilder,
 };
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]

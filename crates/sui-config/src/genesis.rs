@@ -11,6 +11,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
@@ -28,7 +29,6 @@ use sui_types::crypto::{
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, Command, InputObjects, Transaction, TransactionEffects, TransactionEvents,

@@ -171,6 +171,8 @@ module sui::sui_system {
     /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_STAKE` amount of stake they
     /// can call `request_add_validator` to officially become an active validator at the next epoch.
     /// Aborts if the caller is already a pending or active validator, or a validator candidate.
+    /// Note: `proof_of_possession` MUST be a valid signature using sui_address and protocol_pubkey_bytes. 
+    /// To produce a valid PoP, run [fn test_proof_of_possession]. 
     public entry fun request_add_validator_candidate(
         wrapper: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
