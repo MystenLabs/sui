@@ -533,6 +533,8 @@ pub enum Command {
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
     MakeMoveVec(Option<TypeTag>, Vec<Argument>),
+    /// Upgrades a Move package
+    Upgrade(Argument, Vec<ObjectID>, Vec<Vec<u8>>),
 }
 
 /// An argument to a programmable transaction command
@@ -623,7 +625,9 @@ impl Command {
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
-            Command::Publish(modules) => Self::publish_command_input_objects(modules),
+            Command::Upgrade(_, _, modules) | Command::Publish(modules) => {
+                Self::publish_command_input_objects(modules)
+            }
             Command::MoveCall(c) => c.input_objects(),
             Command::MakeMoveVec(Some(t), _) => {
                 let mut packages = BTreeSet::new();
@@ -717,6 +721,17 @@ impl Command {
                 );
             }
             Command::SplitCoin(_, _) => (),
+            Command::Upgrade(_, _, modules) => {
+                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
+                fp_ensure!(
+                    modules.len() < config.max_modules_in_publish() as usize,
+                    UserInputError::SizeLimitExceeded {
+                        limit: "maximum modules in a programmable transaction upgrade command"
+                            .to_string(),
+                        value: config.max_modules_in_publish().to_string()
+                    }
+                );
+            }
         };
         Ok(())
     }
@@ -868,6 +883,12 @@ impl Display for Command {
                 write!(f, ")")
             }
             Command::Publish(_bytes) => write!(f, "Publish(_)"),
+            Command::Upgrade(ticket, deps, _bytes) => {
+                write!(f, "Upgrade({ticket},")?;
+                write_sep(f, deps, ",")?;
+                write!(f, ", _")?;
+                write!(f, ")")
+            }
         }
     }
 }
@@ -2340,6 +2361,11 @@ pub enum ExecutionFailureStatus {
     },
     ArityMismatch,
 
+    FeatureNotYetSupported,
+
+    // Package Upgrade Errors
+    PackageUpgradeError(PackageUpgradeError),
+
     //
     // Post-execution errors
     //
@@ -2350,6 +2376,13 @@ pub enum ExecutionFailureStatus {
     },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub enum PackageUpgradeError {
+    UnableToFetchPackage(ObjectID),
+    NotAPackage(ObjectID),
+    IncompatibleUpgrade,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
@@ -2679,6 +2712,12 @@ impl Display for ExecutionFailureStatus {
                     The number of arguments does not match the number of parameters"
                 )
             }
+            ExecutionFailureStatus::FeatureNotYetSupported => {
+                write!(f, "Attempted to used feature that is not supported yet")
+            }
+            ExecutionFailureStatus::PackageUpgradeError(pkg_error) => {
+                write!(f, "Invalid package upgrade. {pkg_error}")
+            }
             ExecutionFailureStatus::EffectsTooLarge {
                 current_size,
                 max_size,
@@ -2687,6 +2726,20 @@ impl Display for ExecutionFailureStatus {
                 "Effects of size {current_size} bytes too large. \
                 Limit is {max_size} bytes"
             ),
+        }
+    }
+}
+
+impl Display for PackageUpgradeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnableToFetchPackage(package_id) => {
+                write!(f, "Unable to fetch package at {package_id}")
+            }
+            Self::NotAPackage(object_id) => write!(f, "Object {object_id} is not a package"),
+            Self::IncompatibleUpgrade => {
+                write!(f, "New package is incompatible with previous version")
+            }
         }
     }
 }

@@ -93,6 +93,14 @@ Command:
               TYPENAME: TypeTag
           - SEQ:
               TYPENAME: Argument
+    6:
+      Upgrade:
+        TUPLE:
+          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: ObjectID
+          - SEQ:
+              SEQ: U8
 CommandArgumentError:
   ENUM:
     0:
@@ -311,6 +319,12 @@ ExecutionFailureStatus:
     40:
       ArityMismatch: UNIT
     41:
+      FeatureNotYetSupported: UNIT
+    42:
+      PackageUpgradeError:
+        NEWTYPE:
+          TYPENAME: PackageUpgradeError
+    43:
       EffectsTooLarge:
         STRUCT:
           - current_size: U64
@@ -486,6 +500,18 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
+PackageUpgradeError:
+  ENUM:
+    0:
+      UnableToFetchPackage:
+        NEWTYPE:
+          TYPENAME: ObjectID
+    1:
+      NotAPackage:
+        NEWTYPE:
+          TYPENAME: ObjectID
+    2:
+      IncompatibleUpgrade: UNIT
 ProgrammableMoveCall:
   STRUCT:
     - package:

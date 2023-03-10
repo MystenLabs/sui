@@ -271,6 +271,9 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         Command::Publish(modules) => {
             execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
         }
+        Command::Upgrade(upgrade_ticket, dep_ids, modules) => {
+            execute_move_upgrade::<_, _, Mode>(context, upgrade_ticket, dep_ids, modules)?
+        }
     };
 
     Mode::finish_command(context, mode_results, argument_updates, &results)?;
@@ -434,6 +437,22 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         )?)]
     };
     Ok(values)
+}
+
+/// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
+fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<E, S>,
+    _upgrade_ticket_arg: Argument,
+    _dep_ids: Vec<ObjectID>,
+    _module_bytes: Vec<Vec<u8>>,
+) -> Result<Vec<Value>, ExecutionError> {
+    // Check that package upgrades are supported.
+    context
+        .protocol_config
+        .check_package_upgrades_supported()
+        .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
+
+    invariant_violation!("Package upgrades are turned off. We should NEVER get here.")
 }
 
 /***************************************************************************************************

@@ -23,7 +23,10 @@ use sui_types::{
     object::{Data, Owner},
     storage::DeleteKind,
 };
-use sui_types::{crypto::Signer, messages::CommandArgumentError};
+use sui_types::{
+    crypto::Signer,
+    messages::{CommandArgumentError, PackageUpgradeError},
+};
 use typed_store::rocks::TypedStoreError;
 
 fn get_registry() -> Result<Registry> {
@@ -91,6 +94,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Argument>(&samples)?;
     tracer.trace_type::<Command>(&samples)?;
     tracer.trace_type::<CommandArgumentError>(&samples)?;
+    tracer.trace_type::<PackageUpgradeError>(&samples)?;
 
     tracer.registry()
 }
