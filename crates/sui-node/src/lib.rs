@@ -31,7 +31,7 @@ use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::{
-    authority::{AuthorityState, AuthorityStore},
+    authority::{AuthorityState, AuthorityStore, VerifiedCertificateCacheMetrics},
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::event_api::EventReadApi;
@@ -191,6 +191,8 @@ impl SuiNode {
             .get_epoch_start_configuration()?
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
+        let verified_cert_cache_metrics =
+            VerifiedCertificateCacheMetrics::new(&prometheus_registry);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
@@ -200,6 +202,7 @@ impl SuiNode {
             epoch_start_configuration,
             store.clone(),
             cache_metrics,
+            verified_cert_cache_metrics,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
