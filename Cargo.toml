@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-util-mem",
@@ -140,8 +141,9 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6c
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
 
+mysten-common = { path = "crates/mysten-common" }
 mysten-network = { path = "crates/mysten-network" }
-telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }
+telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }

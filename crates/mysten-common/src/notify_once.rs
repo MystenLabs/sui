@@ -18,6 +18,7 @@ use tokio::sync::Notify;
 ///
 /// NotifyOnce guarantees that wait() will return once notify() is called,
 /// regardless of whether wait() was called before or after notify().
+#[derive(Debug)]
 pub struct NotifyOnce {
     notify: Mutex<Option<Arc<Notify>>>,
 }

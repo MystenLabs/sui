@@ -55,6 +55,7 @@ move-core-types.workspace = true
 move-vm-runtime.workspace = true
 move-package.workspace = true
 
+mysten-common.workspace = true
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-consensus = { path = "../../narwhal/consensus" }

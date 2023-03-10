@@ -48,12 +48,12 @@ use crate::consensus_handler::{
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use crate::transaction_manager::TransactionManager;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
+use mysten_common::notify_once::NotifyOnce;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::cmp::Ordering as CmpOrdering;
