@@ -244,6 +244,16 @@ export class Transaction {
     return this.#transactionData.build({ onlyTransactionKind });
   }
 
+  /** Derive transaction digest */
+  async getDigest({
+    provider,
+  }: {
+    provider?: Provider;
+  } = {}): Promise<string> {
+    await this.#prepare(provider);
+    return this.#transactionData.getDigest();
+  }
+
   /**
    * Prepare the transaction by valdiating the transaction data and resolving all inputs
    * so that it can be built into bytes.

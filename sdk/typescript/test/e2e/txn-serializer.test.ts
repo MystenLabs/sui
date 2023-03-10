@@ -2,13 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  bcsForVersion,
-  Commands,
-  deserializeTransactionBytesToTransactionData,
-  SUI_SYSTEM_STATE_OBJECT_ID,
-  Transaction,
-} from '../../src';
+import { Commands, SUI_SYSTEM_STATE_OBJECT_ID, Transaction } from '../../src';
+import { TransactionDataBuilder } from '../../src/builder/TransactionData';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -25,54 +20,6 @@ describe('Transaction Serialization and deserialization', () => {
     const packagePath = __dirname + '/./data/serializer';
     packageId = await publishPackage(packagePath);
   });
-
-  //   async function serializeAndDeserialize(
-  //     moveCall: MoveCallTransaction,
-  //   ): Promise<MoveCallTransaction> {
-  //     const localTxnBytes = await localSerializer.serializeToBytes(
-  //       toolbox.address(),
-  //       { kind: 'moveCall', data: moveCall },
-  //     );
-
-  //     const deserialized =
-  //       (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-  //         localTxnBytes,
-  //       )) as UnserializedSignableTransaction;
-  //     expect(deserialized.kind).toEqual('moveCall');
-
-  //     const deserializedTxnData = deserializeTransactionBytesToTransactionData(
-  //       bcsForVersion(await toolbox.provider.getRpcApiVersion()),
-  //       localTxnBytes,
-  //     );
-  //     const reserialized = await localSerializer.serializeTransactionData(
-  //       deserializedTxnData,
-  //     );
-  //     expect(reserialized).toEqual(localTxnBytes);
-  //     if ('moveCall' === deserialized.kind) {
-  //       const normalized = {
-  //         ...deserialized.data,
-  //         gasBudget: Number(deserialized.data.gasBudget!.toString(10)),
-  //         gasPayment: '0x' + deserialized.data.gasPayment,
-  //         gasPrice: Number(deserialized.data.gasPrice!.toString(10)),
-  //       };
-  //       return normalized;
-  //     }
-
-  //     throw new Error('unreachable');
-  //   }
-
-  //   it('Move Call With Type Tags', async () => {
-  //     const coins = await toolbox.getGasObjectsOwnedByAddress();
-  //     const moveCall = {
-  //       packageObjectId: packageId,
-  //       module: 'serializer_tests',
-  //       function: 'list',
-  //       typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>', '0x2::sui::SUI'],
-  //       arguments: [coins[0].objectId],
-  //       gasBudget: DEFAULT_GAS_BUDGET,
-  //     };
-  //     await serializeAndDeserialize(moveCall);
-  //   });
 
   it('Move Shared Object Call', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
@@ -94,17 +41,9 @@ describe('Transaction Serialization and deserialization', () => {
     tx.setSender(await toolbox.address());
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const transactionBytes = await tx.build({ provider: toolbox.provider });
-    const deserializedTxnData = deserializeTransactionBytesToTransactionData(
-      bcsForVersion(await toolbox.provider.getRpcApiVersion()),
-      transactionBytes,
-    );
-    console.log(deserializedTxnData);
-
-    // const deserialized = await serializeAndDeserialize(moveCall);
-    // const normalized = {
-    //   ...deserialized,
-    //   arguments: deserialized.arguments.map((d) => '0x' + d),
-    // };
-    // expect(normalized).toEqual(moveCall);
+    const deserializedTxnBuilder =
+      TransactionDataBuilder.fromBytes(transactionBytes);
+    const reserializedTxnBytes = await deserializedTxnBuilder.build();
+    expect(reserializedTxnBytes).toEqual(transactionBytes);
   });
 });
