@@ -35,82 +35,82 @@ jobs:
 
       - name: Checkout sui repo
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "source ~/.cargo/env && cd ~/sui && git fetch origin && git rebase origin/main && cargo clean"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && git fetch origin && git rebase origin/main && /home/ubuntu/.cargo/bin/cargo clean"
 
       - name: Install simtest
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && ./scripts/simtest/install.sh"
 
       - name: Build simtest
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "source ~/.cargo/env && cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/cargo-simtest simtest build"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/cargo-simtest simtest build"
       
       - name: Run simtest
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "source ~/.cargo/env && cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/simtest-run.sh"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/simtest-run.sh"
 
-  # notify:
-  #   name: Notify
-  #   needs: [simtest]
-  #   runs-on: [self-hosted, self-hosted-arc]
-  #   if: always() # always notify
+  notify:
+    name: Notify
+    needs: [simtest]
+    runs-on: [self-hosted, self-hosted-arc]
+    if: always() # always notify
 
-  #   steps:
-  #   - uses: technote-space/workflow-conclusion-action@v3
+    steps:
+    - uses: technote-space/workflow-conclusion-action@v3
 
-  #   - name: Checkout sui repo main branch
-  #     uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
     
-  #   - name: Get sui commit
-  #     run: |
-  #       export sui_sha=$(git rev-parse HEAD)
-  #       echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+    - name: Get sui commit
+      run: |
+        export sui_sha=$(git rev-parse HEAD)
+        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
-  #   - name: Get link to logs
-  #     env:
-  #       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #     run: |
-  #       gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-  #       echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+    - name: Get link to logs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
 
-  #   - name: Post to slack
-  #     uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
-  #     env:
-  #       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-  #       SUI_SHA: ${{ env.sui_sha }}
-  #       GH_JOB_LINK: ${{ env.gh_job_link }}
-  #     with:
-  #       channel-id: 'simtest-nightly'
-  #       payload: |
-  #         {
-  #           "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
-  #           "blocks": [
-  #             {
-  #               "type": "section",
-  #               "text": {
-  #                 "type": "mrkdwn",
-  #                 "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
-  #               }
-  #             },
-  #             {
-  #               "type": "divider"
-  #             },
-  #             {
-  #               "type": "section",
-  #               "text": {
-  #                 "type": "mrkdwn",
-  #                 "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nLogs: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
-  #               }
-  #             },
-  #             {
-  #               "type": "divider"
-  #             },
-  #             {
-  #               "type": "section",
-  #               "text": {
-  #                 "type": "mrkdwn",
-  #                 "text": "To debug failures: `tsh ssh ubuntu@simtest` and look in `/home/ubuntu/simtest_logs/{date}` folder"
-  #               }
-  #             }
-  #           ]
-  #         }
+    # - name: Post to slack
+    #   uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+    #   env:
+    #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    #     SUI_SHA: ${{ env.sui_sha }}
+    #     GH_JOB_LINK: ${{ env.gh_job_link }}
+    #   with:
+    #     channel-id: 'simtest-nightly'
+    #     payload: |
+    #       {
+    #         "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+    #         "blocks": [
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "mrkdwn",
+    #               "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
+    #             }
+    #           },
+    #           {
+    #             "type": "divider"
+    #           },
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "mrkdwn",
+    #               "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nLogs: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+    #             }
+    #           },
+    #           {
+    #             "type": "divider"
+    #           },
+    #           {
+    #             "type": "section",
+    #             "text": {
+    #               "type": "mrkdwn",
+    #               "text": "To debug failures: `tsh ssh ubuntu@simtest` and look in `/home/ubuntu/simtest_logs/{date}` folder"
+    #             }
+    #           }
+    #         ]
+    #       }
