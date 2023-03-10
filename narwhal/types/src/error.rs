@@ -4,10 +4,10 @@
 use crate::{CertificateDigest, HeaderDigest, Round, TimestampMs, VoteDigest};
 use config::Epoch;
 use fastcrypto::hash::Digest;
-use std::sync::{Arc, Mutex};
+use mysten_common::notify_once::NotifyOnce;
+use std::sync::Arc;
 use store::StoreError;
 use thiserror::Error;
-use tokio::sync::broadcast;
 
 #[cfg(test)]
 #[path = "./tests/error_test.rs"]
@@ -32,8 +32,7 @@ macro_rules! ensure {
 pub type DagResult<T> = Result<T, DagError>;
 
 // Notification for certificate accepted.
-// TODO: use a lighter weight alternative to broadcast::channel.
-pub type AcceptNotification = Arc<Mutex<Option<broadcast::Receiver<()>>>>;
+pub type AcceptNotification = Arc<NotifyOnce>;
 
 #[derive(Clone, Debug, Error)]
 pub enum DagError {
@@ -138,8 +137,4 @@ impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
             tokio::sync::mpsc::error::TrySendError::Closed(_) => DagError::ShuttingDown,
         }
     }
-}
-
-pub fn new_accept_notification(receiver: broadcast::Receiver<()>) -> AcceptNotification {
-    Arc::new(std::sync::Mutex::new(Some(receiver)))
 }

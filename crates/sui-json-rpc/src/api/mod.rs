@@ -1,17 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod bls;
 mod coin;
 mod event;
 mod governance;
 mod read;
 mod transaction_builder;
 mod write;
-
-pub use bls::ThresholdBlsApiClient;
-pub use bls::ThresholdBlsApiOpenRpc;
-pub use bls::ThresholdBlsApiServer;
 
 pub use coin::CoinReadApiClient;
 pub use coin::CoinReadApiOpenRpc;

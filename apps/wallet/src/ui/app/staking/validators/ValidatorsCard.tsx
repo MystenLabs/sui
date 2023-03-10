@@ -7,9 +7,9 @@ import { useMemo } from 'react';
 import { getAllStakeSui } from '../getAllStakeSui';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
+import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
-import { DelegationCard } from './../home/DelegationCard';
 import BottomMenuLayout, {
     Menu,
     Content,
@@ -133,7 +133,7 @@ export function ValidatorsCard() {
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {system &&
                                 delegations?.map((delegation) => (
-                                    <DelegationCard
+                                    <StakeCard
                                         delegationObject={delegation}
                                         currentEpoch={+system.epoch}
                                         key={delegation.stakedSuiId}

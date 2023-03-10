@@ -2137,7 +2137,7 @@ async fn test_custom_property_ensure_published_at() {
 
     let resolution_graph = build_config
         .config
-        .resolution_graph_for_package(&path, &mut Vec::new())
+        .resolution_graph_for_package(&path, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
     let error_message = if let SuiError::ModulePublishFailure { error } =

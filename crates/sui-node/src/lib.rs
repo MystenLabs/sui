@@ -31,7 +31,7 @@ use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::{
-    authority::{AuthorityState, AuthorityStore},
+    authority::{AuthorityState, AuthorityStore, VerifiedCertificateCacheMetrics},
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::event_api::EventReadApi;
@@ -43,6 +43,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use tap::tap::TapFallible;
 use tracing::{debug, warn};
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
@@ -84,7 +85,6 @@ use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{AuthorityCapabilities, ConsensusTransaction};
@@ -191,6 +191,8 @@ impl SuiNode {
             .get_epoch_start_configuration()?
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
+        let verified_cert_cache_metrics =
+            VerifiedCertificateCacheMetrics::new(&prometheus_registry);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
@@ -200,6 +202,7 @@ impl SuiNode {
             epoch_start_configuration,
             store.clone(),
             cache_metrics,
+            verified_cert_cache_metrics,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -239,18 +242,21 @@ impl SuiNode {
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
-        let (trusted_peer_change_tx, trusted_peer_change_rx) =
-            watch::channel(TrustedPeerChangeEvent {
-                new_peers: epoch_store
-                    .epoch_start_state()
-                    .get_validator_as_p2p_peers(config.protocol_public_key()),
-            });
+        let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store,
             trusted_peer_change_rx,
             &prometheus_registry,
         )?;
+        // We must explicitly send this instead of relying on the initial value to trigger
+        // watch value change, so that state-sync is able to process it.
+        send_trusted_peer_change(
+            &config,
+            &trusted_peer_change_tx,
+            epoch_store.epoch_start_state(),
+        )
+        .expect("Initial trusted peers must be set");
 
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
@@ -867,15 +873,11 @@ impl SuiNode {
                 next_epoch_committee.clone(),
                 ProtocolVersion::new(new_epoch_start_state.protocol_version),
             ));
-            if let Err(err) = self.trusted_peer_change_tx.send(TrustedPeerChangeEvent {
-                new_peers: new_epoch_start_state
-                    .get_validator_as_p2p_peers(self.config.protocol_public_key()),
-            }) {
-                warn!(
-                    "Failed to send validator peer information to state sync: {:?}",
-                    err
-                );
-            }
+            let _ = send_trusted_peer_change(
+                &self.config,
+                &self.trusted_peer_change_tx,
+                &new_epoch_start_state,
+            );
 
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
@@ -997,6 +999,24 @@ impl SuiNode {
     }
 }
 
+/// Notify state-sync that a new list of trusted peers are now available.
+fn send_trusted_peer_change(
+    config: &NodeConfig,
+    sender: &watch::Sender<TrustedPeerChangeEvent>,
+    epoch_state_state: &EpochStartSystemState,
+) -> Result<(), watch::error::SendError<TrustedPeerChangeEvent>> {
+    sender
+        .send(TrustedPeerChangeEvent {
+            new_peers: epoch_state_state.get_validator_as_p2p_peers(config.protocol_public_key()),
+        })
+        .tap_err(|err| {
+            warn!(
+                "Failed to send validator peer information to state sync: {:?}",
+                err
+            );
+        })
+}
+
 pub async fn build_server(
     state: Arc<AuthorityState>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -1012,7 +1032,6 @@ pub async fn build_server(
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(CoinReadApi::new(state.clone()))?;
-    server.register_module(ThresholdBlsApi::new(state.clone()))?;
     server.register_module(TransactionBuilderApi::new(state.clone()))?;
     server.register_module(GovernanceReadApi::new(state.clone()))?;
 

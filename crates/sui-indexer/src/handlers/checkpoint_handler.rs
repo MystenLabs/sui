@@ -21,8 +21,8 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiRawData, SuiTransactionDataAPI,
-    SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
+    OwnedObjectRef, SuiCommand, SuiObjectData, SuiObjectDataOptions, SuiRawData,
+    SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
     SuiTransactionResponseOptions,
 };
 use sui_sdk::error::Error;
@@ -310,42 +310,49 @@ where
 
         let move_calls: Vec<MoveCall> = transactions
             .iter()
-            .flat_map(|t| {
-                t.transaction
+            .map(|t| {
+                let tx = t
+                    .transaction
                     .as_ref()
                     .expect("transaction should not be empty")
                     .data
-                    .transactions()
-                    .iter()
-                    .map(move |tx| {
-                        (
-                            tx.clone(),
-                            t.digest,
-                            checkpoint.sequence_number,
-                            checkpoint.epoch,
-                            t.transaction
-                                .as_ref()
-                                .expect("transaction should not be empty")
-                                .data
-                                .sender(),
-                        )
-                    })
+                    .transaction();
+                (
+                    tx.clone(),
+                    t.digest,
+                    checkpoint.sequence_number,
+                    checkpoint.epoch,
+                    t.transaction
+                        .as_ref()
+                        .expect("transaction should not be empty")
+                        .data
+                        .sender(),
+                )
             })
             .filter_map(
                 |(tx_kind, txn_digest, checkpoint_seq, epoch, sender)| match tx_kind {
-                    SuiTransactionKind::Call(sui_move_call) => Some(MoveCall {
-                        id: None,
-                        transaction_digest: txn_digest.to_string(),
-                        checkpoint_sequence_number: checkpoint_seq as i64,
-                        epoch: epoch as i64,
-                        sender: sender.to_string(),
-                        move_package: sui_move_call.package.to_string(),
-                        move_module: sui_move_call.module,
-                        move_function: sui_move_call.function,
-                    }),
+                    SuiTransactionKind::ProgrammableTransaction(pt) => Some(
+                        pt.commands
+                            .into_iter()
+                            .filter_map(move |command| match command {
+                                SuiCommand::MoveCall(m) => Some(MoveCall {
+                                    id: None,
+                                    transaction_digest: txn_digest.to_string(),
+                                    checkpoint_sequence_number: checkpoint_seq as i64,
+                                    epoch: epoch as i64,
+                                    sender: sender.to_string(),
+                                    move_package: m.package.to_string(),
+                                    move_module: m.module,
+                                    move_function: m.function,
+                                }),
+                                _ => None,
+                            }),
+                    ),
+
                     _ => None,
                 },
             )
+            .flatten()
             .collect();
 
         let recipients: Vec<Recipient> = transactions

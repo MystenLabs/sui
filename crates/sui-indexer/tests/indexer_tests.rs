@@ -11,6 +11,8 @@ use sui_indexer::models::transactions::Transaction;
 use sui_indexer::store::{IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
 use sui_indexer::Indexer;
 use sui_json_rpc_types::CheckpointId;
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::object::ObjectRead;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -164,6 +166,14 @@ impl IndexerStore for InMemoryIndexerStore {
         _limit: usize,
     ) -> Result<Vec<Transaction>, IndexerError> {
         todo!()
+    }
+
+    fn get_object(
+        &self,
+        _object_id: ObjectID,
+        _version: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, IndexerError> {
+        todo!();
     }
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {

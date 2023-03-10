@@ -2752,22 +2752,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fastcrypto-tbls"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
-dependencies = [
- "bincode",
- "digest 0.10.6",
- "fastcrypto",
- "fastcrypto-derive",
- "rand 0.8.5",
- "serde 1.0.152",
- "sha3 0.10.6",
- "typenum",
- "zeroize",
-]
-
-[[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
@@ -4220,6 +4204,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03f1160296536f10c833a82dca22267d5486734230d47bf00bf435885814ba1e"
+dependencies = [
+ "hashbrown 0.13.2",
+]
+
+[[package]]
 name = "lz4-sys"
 version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5222,6 +5215,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
+name = "mysten-common"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "parking_lot 0.12.1",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
@@ -5371,6 +5374,7 @@ name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
+ "bcs",
  "bincode",
  "criterion",
  "eyre",
@@ -5387,6 +5391,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with",
+ "shared-crypto",
  "tokio",
  "workspace-hack",
  "zeroize",
@@ -5581,6 +5586,7 @@ dependencies = [
  "itertools",
  "mockall",
  "multiaddr",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
@@ -5668,6 +5674,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
+ "shared-crypto",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",
@@ -5698,6 +5705,7 @@ dependencies = [
  "futures",
  "indexmap",
  "mockall",
+ "mysten-common",
  "mysten-network",
  "mysten-util-mem",
  "narwhal-config",
@@ -7991,6 +7999,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-crypto"
+version = "0.0.0"
+dependencies = [
+ "bcs",
+ "eyre",
+ "fastcrypto",
+ "serde 1.0.152",
+ "serde_repr",
+ "workspace-hack",
+]
+
+[[package]]
 name = "shell-words"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8439,6 +8459,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
+ "shared-crypto",
  "shell-words",
  "signature 1.6.4",
  "sui-config",
@@ -8576,6 +8597,7 @@ dependencies = [
  "reqwest",
  "serde 1.0.152",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-core",
@@ -8620,6 +8642,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_with",
  "serde_yaml",
+ "shared-crypto",
  "sui-adapter",
  "sui-framework",
  "sui-keys",
@@ -8643,6 +8666,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap 3.2.23",
+ "criterion",
  "dashmap",
  "either",
  "expect-test",
@@ -8651,6 +8675,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "itertools",
+ "lru",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
@@ -8658,6 +8683,7 @@ dependencies = [
  "move-package",
  "move-vm-runtime",
  "multiaddr",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
@@ -8681,6 +8707,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
+ "shared-crypto",
  "signature 1.6.4",
  "strum_macros",
  "sui-adapter",
@@ -8765,6 +8792,7 @@ dependencies = [
  "rocksdb",
  "scopeguard",
  "serde 1.0.152",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-json-rpc-types",
@@ -8798,7 +8826,6 @@ dependencies = [
  "curve25519-dalek-ng",
  "digest 0.10.6",
  "fastcrypto",
- "fastcrypto-tbls",
  "fastcrypto-zkp",
  "linked-hash-map",
  "move-binary-format",
@@ -8869,6 +8896,8 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-proc-macros",
+ "move-bytecode-utils",
+ "move-core-types",
  "mysten-metrics",
  "narwhal-network",
  "prometheus",
@@ -8923,7 +8952,6 @@ dependencies = [
  "async-trait",
  "bcs",
  "fastcrypto",
- "fastcrypto-tbls",
  "futures",
  "hyper",
  "itertools",
@@ -8940,6 +8968,7 @@ dependencies = [
  "reqwest",
  "scopeguard",
  "serde 1.0.152",
+ "shared-crypto",
  "signature 1.6.4",
  "sui-adapter",
  "sui-config",
@@ -8978,7 +9007,6 @@ dependencies = [
  "either",
  "enum_dispatch",
  "fastcrypto",
- "fastcrypto-tbls",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -9004,6 +9032,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
+ "shared-crypto",
  "signature 1.6.4",
  "slip10_ed25519",
  "sui-types",
@@ -9089,6 +9118,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
+ "shared-crypto",
  "sui-config",
  "sui-types",
  "tap",
@@ -9135,6 +9165,7 @@ dependencies = [
  "sui-telemetry",
  "sui-tls",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tokio",
  "tower",
@@ -9229,6 +9260,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_json",
  "serde_with",
+ "shared-crypto",
  "signature 1.6.4",
  "strum",
  "strum_macros",
@@ -9275,6 +9307,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-adapter",
  "sui-config",
@@ -9298,6 +9331,7 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "fastcrypto",
+ "lru",
  "move-package",
  "msim",
  "narwhal-network",
@@ -9576,6 +9610,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_with",
+ "shared-crypto",
  "signature 1.6.4",
  "static_assertions",
  "strum",
@@ -9876,6 +9911,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde_json",
+ "shared-crypto",
  "signature 1.6.4",
  "sui",
  "sui-adapter",
@@ -11329,7 +11365,6 @@ dependencies = [
  "fail 0.5.1",
  "fastcrypto",
  "fastcrypto-derive",
- "fastcrypto-tbls",
  "fastcrypto-zkp",
  "fastrand",
  "fd-lock",
@@ -11460,6 +11495,7 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
+ "lru",
  "lz4-sys",
  "mach",
  "match_opt",

@@ -51,6 +51,7 @@ narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
 sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-config = { path = "../sui-protocol-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 

@@ -7,10 +7,13 @@ use config::{
     utils::get_available_port, Authority, Committee, Epoch, Stake, WorkerCache, WorkerId,
     WorkerIndex, WorkerInfo,
 };
-use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use crypto::{
+    to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
+    PublicKey, Signature,
+};
 use fastcrypto::{
-    hash::{Digest, Hash as _},
-    traits::{AllowedRng, KeyPair as _, Signer as _},
+    hash::Hash as _,
+    traits::{AllowedRng, KeyPair as _},
 };
 use indexmap::IndexMap;
 use multiaddr::Multiaddr;
@@ -633,7 +636,7 @@ pub fn mock_signed_certificate(
     let mut votes = Vec::new();
     for signer in signers {
         let pk = signer.public();
-        let sig = signer.sign(Digest::from(cert.digest()).as_ref());
+        let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
         votes.push((pk.clone(), sig))
     }
     let cert = Certificate::new(committee, header, votes).unwrap();

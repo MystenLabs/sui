@@ -75,18 +75,24 @@ pub enum TestCallArg {
 }
 
 impl TestCallArg {
-    pub async fn to_call_arg(self, state: &AuthorityState) -> CallArg {
+    pub async fn to_call_arg(
+        self,
+        builder: &mut ProgrammableTransactionBuilder,
+        state: &AuthorityState,
+    ) -> Argument {
         match self {
-            Self::Pure(value) => CallArg::Pure(value),
-            Self::Object(object_id) => {
-                CallArg::Object(Self::call_arg_from_id(object_id, state).await)
-            }
+            Self::Pure(value) => builder.input(CallArg::Pure(value)).unwrap(),
+            Self::Object(object_id) => builder
+                .input(CallArg::Object(
+                    Self::call_arg_from_id(object_id, state).await,
+                ))
+                .unwrap(),
             Self::ObjVec(vec) => {
                 let mut refs = vec![];
                 for object_id in vec {
                     refs.push(Self::call_arg_from_id(object_id, state).await)
                 }
-                CallArg::ObjVec(refs)
+                builder.make_obj_vec(refs)
             }
         }
     }
@@ -239,6 +245,7 @@ async fn test_dry_run_transaction() {
         .await
         .unwrap();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    let gas_usage = response.effects.gas_used();
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode
@@ -255,6 +262,22 @@ async fn test_dry_run_transaction() {
         .unwrap()
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
+
+    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = TransactionData::new_with_gas_coins(
+        txn_data.kind().clone(),
+        txn_data.sender(),
+        vec![],
+        txn_data.gas_budget(),
+        txn_data.gas_price(),
+    );
+    let response = fullnode
+        .dry_exec_transaction(txn_data, transaction_digest)
+        .await
+        .unwrap();
+    let gas_usage_no_gas = response.effects.gas_used();
+    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    assert_eq!(gas_usage, gas_usage_no_gas);
 }
 
 #[tokio::test]
@@ -2729,6 +2752,7 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
+        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(committee),
@@ -2738,6 +2762,7 @@ async fn test_authority_persist() {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
+            verified_cert_cache_metrics,
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -2867,13 +2892,11 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
 
     let gas_ref = gas_object.compute_object_reference();
     let tx_data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(
-            ConsensusCommitPrologue {
-                epoch: 0,
-                round: 0,
-                commit_timestamp_ms: 42,
-            },
-        )),
+        TransactionKind::ConsensusCommitPrologue(ConsensusCommitPrologue {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 42,
+        }),
         sender,
         gas_ref,
         MAX_GAS,
@@ -4257,21 +4280,24 @@ pub async fn call_move_(
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let mut builder = ProgrammableTransactionBuilder::new();
     let mut args = vec![];
     for arg in test_args.into_iter() {
-        args.push(arg.to_call_arg(authority).await);
+        args.push(arg.to_call_arg(&mut builder, authority).await);
     }
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
-        *sender,
+    builder.command(Command::move_call(
         *package,
         Identifier::new(module).unwrap(),
         Identifier::new(function).unwrap(),
         type_args,
-        gas_object_ref,
         args,
+    ));
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
+        *sender,
+        vec![gas_object_ref],
+        builder.finish(),
         MAX_GAS,
-    )
-    .unwrap();
+    );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
     let signed_effects =
@@ -4346,22 +4372,25 @@ pub async fn call_move_with_gas_coins(
         let gas_ref = gas_object.unwrap().compute_object_reference();
         gas_object_refs.push(gas_ref);
     }
+    let mut builder = ProgrammableTransactionBuilder::new();
     let mut args = vec![];
     for arg in test_args.into_iter() {
-        args.push(arg.to_call_arg(authority).await);
+        args.push(arg.to_call_arg(&mut builder, authority).await);
     }
-    let data = TransactionData::new_move_call_with_gas_coins(
-        *sender,
+    builder.command(Command::move_call(
         *package,
         Identifier::new(module).unwrap(),
         Identifier::new(function).unwrap(),
         type_args,
-        gas_object_refs,
         args,
+    ));
+    let data = TransactionData::new_programmable(
+        *sender,
+        gas_object_refs,
+        builder.finish(),
         gas_budget,
         DUMMY_GAS_PRICE,
-    )
-    .unwrap();
+    );
 
     let transaction = to_sender_signed_transaction(data, sender_key);
     let signed_effects =
@@ -4480,25 +4509,20 @@ pub async fn call_dev_inspect(
     type_arguments: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
 ) -> Result<DevInspectResults, anyhow::Error> {
+    let mut builder = ProgrammableTransactionBuilder::new();
     let mut arguments = Vec::with_capacity(test_args.len());
     for a in test_args {
-        arguments.push(a.to_call_arg(authority).await)
+        arguments.push(a.to_call_arg(&mut builder, authority).await)
     }
 
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                *package,
-                Identifier::new(module).unwrap(),
-                Identifier::new(function).unwrap(),
-                type_arguments,
-                arguments,
-            )
-            .unwrap();
-        builder.finish()
-    };
-    let kind = TransactionKind::programmable(pt);
+    builder.command(Command::move_call(
+        *package,
+        Identifier::new(module).unwrap(),
+        Identifier::new(function).unwrap(),
+        type_arguments,
+        arguments,
+    ));
+    let kind = TransactionKind::programmable(builder.finish());
     authority
         .dev_inspect_transaction(*sender, kind, Some(1))
         .await
@@ -4802,6 +4826,7 @@ async fn test_tallying_rule_score_updates() {
     );
 
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
+    let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
     let epoch_store = AuthorityPerEpochStore::new(
         auth_0_name,
         Arc::new(committee.clone()),
@@ -4811,6 +4836,7 @@ async fn test_tallying_rule_score_updates() {
         EpochStartConfiguration::new_for_testing(),
         store,
         cache_metrics,
+        verified_cert_cache_metrics,
     );
 
     let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {

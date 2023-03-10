@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { builder, Transaction } from '../builder';
-import { convertToTransactionBuilder } from '../builder/legacy';
+import { Transaction } from '../builder';
+import { TransactionDataBuilder } from '../builder/TransactionData';
 import { SerializedSignature } from '../cryptography/signature';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
 import {
-  deserializeTransactionBytesToTransactionData,
   ExecuteTransactionRequestType,
   FaucetResponse,
-  generateTransactionDigest,
   getTotalGasUsedUpperBound,
   SuiAddress,
   DevInspectResults,
@@ -21,13 +19,7 @@ import {
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
-import { LocalTxnDataSerializer } from './txn-data-serializers/local-txn-data-serializer';
-import {
-  SignableTransaction,
-  UnserializedSignableTransaction,
-  SignedTransaction,
-  SignedMessage,
-} from './txn-data-serializers/txn-data-serializer';
+import { SignedTransaction, SignedMessage } from './types';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -84,36 +76,21 @@ export abstract class SignerWithProvider implements Signer {
     };
   }
 
-  /** @deprecated Instead of using `SignableTransaction`, pass a `Transaction` instance instead. */
-  async signTransaction(
-    transaction: SignableTransaction,
-  ): Promise<SignedTransaction>;
-  async signTransaction(
-    transaction: Uint8Array | Transaction,
-  ): Promise<SignedTransaction>;
   /**
    * Sign a transaction.
    */
   async signTransaction(
-    transaction: Uint8Array | SignableTransaction | Transaction,
+    transaction: Uint8Array | Transaction,
   ): Promise<SignedTransaction> {
     let transactionBytes;
 
     if (Transaction.is(transaction)) {
       transaction.setSender(await this.getAddress());
       transactionBytes = await transaction.build({ provider: this.provider });
-    } else if (
-      transaction instanceof Uint8Array ||
-      transaction.kind === 'bytes'
-    ) {
-      transactionBytes =
-        transaction instanceof Uint8Array ? transaction : transaction.data;
+    } else if (transaction instanceof Uint8Array) {
+      transactionBytes = transaction;
     } else {
-      transactionBytes = await convertToTransactionBuilder(
-        await this.getAddress(),
-        transaction,
-        this.provider,
-      );
+      throw new Error('Unknown transaction format');
     }
 
     const intentMessage = messageWithIntent(
@@ -128,25 +105,15 @@ export abstract class SignerWithProvider implements Signer {
     };
   }
 
-  /** @deprecated Instead of using `SignableTransaction`, pass a `Transaction` instance instead. */
-  async signAndExecuteTransaction(
-    transaction: SignableTransaction,
-    requestType?: ExecuteTransactionRequestType,
-  ): Promise<SuiTransactionResponse>;
-  async signAndExecuteTransaction(
-    transaction: Uint8Array | Transaction,
-    requestType?: ExecuteTransactionRequestType,
-  ): Promise<SuiTransactionResponse>;
   /**
    * Sign a transaction and submit to the Fullnode for execution.
    */
   async signAndExecuteTransaction(
-    transaction: Uint8Array | SignableTransaction | Transaction,
+    transaction: Uint8Array | Transaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiTransactionResponse> {
     const { transactionBytes, signature } = await this.signTransaction(
-      // TODO: Remove this refinement when the deprecated overload goes away
-      transaction as Uint8Array | Transaction,
+      transaction,
     );
 
     return await this.provider.executeTransaction(
@@ -156,27 +123,20 @@ export abstract class SignerWithProvider implements Signer {
     );
   }
 
-  async getTransactionDigest(
-    tx: Uint8Array | SignableTransaction | Transaction,
-  ): Promise<string> {
-    let txBytes: Uint8Array;
+  /**
+   * Derive transaction digest from
+   * @param tx BCS serialized transaction data or a `Transaction` object
+   * @returns transaction digest
+   */
+  async getTransactionDigest(tx: Uint8Array | Transaction): Promise<string> {
     if (Transaction.is(tx)) {
       tx.setSender(await this.getAddress());
-      txBytes = await tx.build({ provider: this.provider });
-    } else if (tx instanceof Uint8Array || tx.kind === 'bytes') {
-      txBytes = tx instanceof Uint8Array ? tx : tx.data;
+      return tx.getDigest({ provider: this.provider });
+    } else if (tx instanceof Uint8Array) {
+      return TransactionDataBuilder.getDigestFromBytes(tx);
     } else {
-      txBytes = await convertToTransactionBuilder(
-        await this.getAddress(),
-        tx,
-        this.provider,
-      );
+      throw new Error('Unknown transaction format.');
     }
-
-    // TODO: Why do we deserialize, then immedietly re-serialize the transaction data here?
-    // Probably can improve this with some `Transaction` helpers to build just transaction data.
-    const data = deserializeTransactionBytesToTransactionData(builder, txBytes);
-    return generateTransactionDigest(data, builder);
   }
 
   /**
@@ -191,7 +151,7 @@ export abstract class SignerWithProvider implements Signer {
    * in the Sui System State object
    */
   async devInspectTransaction(
-    tx: Transaction | UnserializedSignableTransaction | string | Uint8Array,
+    tx: Transaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -205,7 +165,7 @@ export abstract class SignerWithProvider implements Signer {
    * @returns The transaction effects
    */
   async dryRunTransaction(
-    tx: Transaction | SignableTransaction | string | Uint8Array,
+    tx: Transaction | string | Uint8Array,
   ): Promise<DryRunTransactionResponse> {
     let dryRunTxBytes: Uint8Array;
     if (Transaction.is(tx)) {
@@ -216,22 +176,7 @@ export abstract class SignerWithProvider implements Signer {
     } else if (tx instanceof Uint8Array) {
       dryRunTxBytes = tx;
     } else {
-      switch (tx.kind) {
-        case 'bytes':
-          dryRunTxBytes = tx.data;
-          break;
-        default:
-          const serializer = new LocalTxnDataSerializer(this.provider);
-          // dryRunTxBytes = await convertToTransactionBuilder(tx).build({
-          //   provider: this.provider,
-          // });
-          dryRunTxBytes = await serializer.serializeToBytes(
-            await this.getAddress(),
-            tx,
-            'Commit',
-          );
-          break;
-      }
+      throw new Error('Unknown transaction format');
     }
     return this.provider.dryRunTransaction(dryRunTxBytes);
   }

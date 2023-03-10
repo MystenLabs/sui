@@ -4,8 +4,8 @@
 use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use shared_crypto::intent::{Intent, IntentScope};
 use std::sync::Arc;
-use sui_types::intent::{Intent, IntentScope};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::transaction_manager::TransactionManager;
@@ -68,9 +68,19 @@ impl TransactionValidator for SuiTxValidator {
 
         // let mut owned_tx_certs = Vec::new();
         let mut obligation = VerificationObligation::default();
+        let mut verified_cert_digests = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
+                    let cert_digest = certificate.certificate_digest();
+                    if self
+                        .epoch_store
+                        .verified_cert_cache()
+                        .is_cert_verified(&cert_digest)
+                    {
+                        continue;
+                    }
+
                     self.metrics.certificate_signatures_verified.inc();
                     certificate.data().verify(None)?;
                     let idx = obligation.add_message(
@@ -83,6 +93,11 @@ impl TransactionValidator for SuiTxValidator {
                         &mut obligation,
                         idx,
                     )?;
+
+                    // The digest must not be added to the cache until:
+                    // - the user signature is verified (checked above)
+                    // - batch verification completes successfully.
+                    verified_cert_digests.push(cert_digest);
 
                     // if !certificate.contains_shared_object() {
                     //     // new_unchecked safety: we do not use the certs in this list until all
@@ -112,7 +127,14 @@ impl TransactionValidator for SuiTxValidator {
         obligation
             .verify_all()
             .tap_err(|e| warn!("batch verification error: {}", e))
-            .wrap_err("Malformed batch (failed to verify)")
+            .wrap_err("Malformed batch (failed to verify)")?;
+
+        // All the certs that we just batch verified can now be cached as verified.
+        self.epoch_store
+            .verified_cert_cache()
+            .cache_certs_verified(verified_cert_digests);
+
+        Ok(())
 
         // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
         // all certificates had valid signatures, schedule them for execution prior to sequencing

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { Field, Formik, Form, ErrorMessage } from 'formik';
+import { Formik, Form, ErrorMessage } from 'formik';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { object, string as YupString } from 'yup';
@@ -13,7 +13,7 @@ import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import FieldLabel from '_src/ui/app/shared/field-label';
 import { Heading } from '_src/ui/app/shared/heading';
-import PasswordInput from '_src/ui/app/shared/input/password';
+import { PasswordInputField } from '_src/ui/app/shared/input/password';
 import { Text } from '_src/ui/app/shared/text';
 
 const validation = object({
@@ -65,7 +65,7 @@ export function PasswordInputDialog({
                     </Heading>
                     <div className="self-stretch flex-1">
                         <FieldLabel txt="Enter Wallet Password to Continue">
-                            <Field name="password" component={PasswordInput} />
+                            <PasswordInputField name="password" />
                             <ErrorMessage
                                 render={(error) => <Alert>{error}</Alert>}
                                 name="password"

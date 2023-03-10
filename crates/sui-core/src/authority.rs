@@ -24,6 +24,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -31,8 +32,6 @@ use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
-use sui_types::intent::Intent;
-use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -75,7 +74,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{MoveObject, Owner, PastObjectRead};
+use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
@@ -94,6 +93,9 @@ use sui_types::{
 
 use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
+};
+pub use crate::authority::authority_per_epoch_store::{
+    VerifiedCertificateCache, VerifiedCertificateCacheMetrics,
 };
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
@@ -125,10 +127,6 @@ pub mod move_integration_tests;
 #[cfg(test)]
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
-
-#[cfg(test)]
-#[path = "unit_tests/tbls_tests.rs"]
-mod tbls_tests;
 
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
@@ -916,9 +914,14 @@ impl AuthorityState {
         self.metrics
             .num_shared_objects
             .observe(shared_object_count as f64);
-        self.metrics
-            .batch_size
-            .observe(certificate.data().intent_message.value.kind().batch_size() as f64);
+        self.metrics.batch_size.observe(
+            certificate
+                .data()
+                .intent_message
+                .value
+                .kind()
+                .num_commands() as f64,
+        );
 
         Ok(())
     }
@@ -997,15 +1000,39 @@ impl AuthorityState {
     ) -> Result<DryRunTransactionResponse, anyhow::Error> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(anyhow!("dry-exec is only support on fullnodes"));
+            return Err(anyhow!("dry-exec is only supported on fullnodes"));
         }
 
-        let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
-            &self.database,
-            epoch_store.as_ref(),
-            &transaction,
-        )
-        .await?;
+        // make a gas object if one was not provided
+        let mut gas_object_refs = transaction.gas().to_vec();
+        let (gas_status, input_objects) = if transaction.gas().is_empty() {
+            let sender = transaction.sender();
+            let protocol_config = epoch_store.protocol_config();
+            let max_tx_gas = protocol_config.max_tx_gas();
+            let gas_object_id = ObjectID::random();
+            let gas_object = Object::new_move(
+                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_tx_gas),
+                Owner::AddressOwner(sender),
+                TransactionDigest::genesis(),
+            );
+            let gas_object_ref = gas_object.compute_object_reference();
+            gas_object_refs = vec![gas_object_ref];
+            transaction_input_checker::check_transaction_input_with_given_gas(
+                &self.database,
+                epoch_store.as_ref(),
+                &transaction,
+                gas_object,
+            )
+            .await?
+        } else {
+            transaction_input_checker::check_transaction_input(
+                &self.database,
+                epoch_store.as_ref(),
+                &transaction,
+            )
+            .await?
+        };
+
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
@@ -1015,7 +1042,7 @@ impl AuthorityState {
             transaction_digest,
             epoch_store.protocol_config(),
         );
-        let (kind, signer, gas) = transaction.execution_parts();
+        let (kind, signer, _) = transaction.execution_parts();
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1029,7 +1056,7 @@ impl AuthorityState {
                 temporary_store,
                 kind,
                 signer,
-                &gas,
+                &gas_object_refs,
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -1648,6 +1675,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
+        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1657,6 +1685,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
+            verified_cert_cache_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(

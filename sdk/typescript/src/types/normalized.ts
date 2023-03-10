@@ -47,7 +47,7 @@ export type SuiMoveAbilitySet = Infer<typeof SuiMoveAbilitySet>;
 
 export const SuiMoveStructTypeParameter = object({
   constraints: SuiMoveAbilitySet,
-  is_phantom: boolean(),
+  isPhantom: boolean(),
 });
 export type SuiMoveStructTypeParameter = Infer<
   typeof SuiMoveStructTypeParameter
@@ -94,7 +94,7 @@ export type SuiMoveNormalizedStructType = {
     address: string;
     module: string;
     name: string;
-    type_arguments: SuiMoveNormalizedType[];
+    typeArguments: SuiMoveNormalizedType[];
   };
 };
 
@@ -112,8 +112,8 @@ function isSuiMoveNormalizedStructType(
     typeof structProperties.address !== 'string' ||
     typeof structProperties.module !== 'string' ||
     typeof structProperties.name !== 'string' ||
-    !Array.isArray(structProperties.type_arguments) ||
-    !structProperties.type_arguments.every((value) =>
+    !Array.isArray(structProperties.typeArguments) ||
+    !structProperties.typeArguments.every((value) =>
       isSuiMoveNormalizedType(value),
     )
   ) {
@@ -131,33 +131,33 @@ export const SuiMoveNormalizedStructType = define<SuiMoveNormalizedStructType>(
 
 export const SuiMoveNormalizedFunction = object({
   visibility: SuiMoveVisibility,
-  is_entry: boolean(),
-  type_parameters: array(SuiMoveAbilitySet),
+  isEntry: boolean(),
+  typeParameters: array(SuiMoveAbilitySet),
   parameters: array(SuiMoveNormalizedType),
-  return_: array(SuiMoveNormalizedType),
+  return: array(SuiMoveNormalizedType),
 });
 export type SuiMoveNormalizedFunction = Infer<typeof SuiMoveNormalizedFunction>;
 
 export const SuiMoveNormalizedField = object({
   name: string(),
-  type_: SuiMoveNormalizedType,
+  type: SuiMoveNormalizedType,
 });
 export type SuiMoveNormalizedField = Infer<typeof SuiMoveNormalizedField>;
 
 export const SuiMoveNormalizedStruct = object({
   abilities: SuiMoveAbilitySet,
-  type_parameters: array(SuiMoveStructTypeParameter),
+  typeParameters: array(SuiMoveStructTypeParameter),
   fields: array(SuiMoveNormalizedField),
 });
 export type SuiMoveNormalizedStruct = Infer<typeof SuiMoveNormalizedStruct>;
 
 export const SuiMoveNormalizedModule = object({
-  file_format_version: number(),
+  fileFormatVersion: number(),
   address: string(),
   name: string(),
   friends: array(SuiMoveModuleId),
   structs: record(string(), SuiMoveNormalizedStruct),
-  exposed_functions: record(string(), SuiMoveNormalizedFunction),
+  exposedFunctions: record(string(), SuiMoveNormalizedFunction),
 });
 export type SuiMoveNormalizedModule = Infer<typeof SuiMoveNormalizedModule>;
 

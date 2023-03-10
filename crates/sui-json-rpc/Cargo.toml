@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 fastcrypto.workspace = true
-fastcrypto-tbls.workspace = true
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 jsonrpsee-proc-macros = "0.16.2"
 hyper = "0.14"
@@ -45,6 +44,7 @@ sui-transaction-builder = { path = "../sui-transaction-builder" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 mysten-metrics = { path = "../mysten-metrics" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+shared-crypto = { path = "../shared-crypto" }
 
 [dev-dependencies]
 sui-config = { path = "../sui-config" }

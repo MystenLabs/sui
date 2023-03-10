@@ -9,11 +9,11 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
 use crate::error::SuiResult;
-use crate::intent::{Intent, IntentScope};
 use crate::messages::VersionedProtocolMessage;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use sui_protocol_config::ProtocolConfig;
@@ -76,6 +76,10 @@ impl<T: Message, S> Envelope<T, S> {
 
     pub fn auth_sig(&self) -> &S {
         &self.auth_signature
+    }
+
+    pub fn auth_sig_mut_for_testing(&mut self) -> &mut S {
+        &mut self.auth_signature
     }
 
     pub fn digest(&self) -> &T::DigestType {

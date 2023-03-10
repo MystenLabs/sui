@@ -4,7 +4,7 @@ title: Sui Breaking Changes in Release .28
 
 The next release of Sui, release 0.28, includes the breaking changes described in this topic. A breaking change is one that introduces new, or changed, Sui functionality that causes existing apps and implementations to stop functioning as expected. Updates to this topic for next week include information about how to resolve or update your project that might break as a result of these changes.
 
-New entries added 03/06.
+New entries added 03/09/23.
 
 **[Major breaking change]** The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request  explicitly specifies other data, such as `type`, `owner`, or `bcs`. To learn more, see [PR 8817](https://github.com/MystenLabs/sui/pull/8817)
 
@@ -50,6 +50,27 @@ New entries added 03/06.
 
 ---
 
+Added 3/9/23
+
+**[Major API breaking changes]** - `GetTransaction` API refactoring
+
+ * [RPC] `sui_getTransaction` and `sui_multiGetTransaction` now take in an additional optional parameter called `options` that specifies which fields to retrieve (such as  `transaction`, `effects`, `events`, etc). By default, these operations return only the transaction digest.
+ * [TS SDK] Renamed `provider.getTransactionWithEffects` to `provider.getTransactionResponse`. The new method takes in an additional parameter, `SuiTransactionResponseOptions`, to configure which fields to retrieve (such as `transaction`, `effects`, `events`, etc). By default, this method returns only the transaction digest.
+
+For more information, see [PR 8888](https://github.com/MystenLabs/sui/pull/8888).
+
+---
+
+Added 3/9/23
+
+**[Major API breaking changes] sui_executeTransaction refactoring**
+ * Removed `sui_executeTransactionSerializedSig` and `sui_submitTransaction` operations.
+ * The `sui_executeTransaction` operation now takes a vector of signatures instead of a single signature to support Sponsored Transactions.
+    
+To learn more, see [PR 9068](https://github.com/MystenLabs/sui/pull/9068).
+
+---
+
 **[API breaking change]** - This release replaces `SuiCertifiedTransaction` with `SuiTransaction` in `SuiTransactionResponse`. This is because validators can no longer guarantee to return a transaction certificate. This release also unifies `SuiTransactionResponse` and `SuiExecuteTransactionResponse` to simplify the API. See [PR 8369](https://github.com/MystenLabs/sui/pull/8369) for more information.
 
 ---
@@ -67,4 +88,3 @@ New entries added 03/06.
 ---
 
 **[API breaking change]** - The `StakedSui` object now includes the ID of the staking pool, `pool_id`. For more information, see [PR 8371](https://github.com/MystenLabs/sui/pull/8371).
-

@@ -20,6 +20,7 @@ narwhal-network = { path = "../../narwhal/network" }
 fastcrypto = { workspace = true, features = ["copy_key"] }
 telemetry-subscribers.workspace = true
 tower = "0.4.13"
+lru = "0.10"
 
 [target.'cfg(msim)'.dependencies]
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "888a9dc4331b0ed944bd6e37bac982bbcf0625d5", package = "msim" }

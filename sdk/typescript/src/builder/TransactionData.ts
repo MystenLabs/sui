@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB58 } from '@mysten/bcs';
 import {
   array,
   assert,
@@ -14,6 +15,7 @@ import {
   string,
   union,
 } from 'superstruct';
+import { sha256Hash } from '../cryptography/hash';
 import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
@@ -72,7 +74,7 @@ const TRANSACTION_DATA_MAX_SIZE = 64 * 1024;
 export class TransactionDataBuilder {
   static fromBytes(bytes: Uint8Array) {
     const data = builder.de('TransactionData', bytes);
-    const programmableTx = data?.V1?.kind?.Single?.ProgrammableTransaction;
+    const programmableTx = data?.V1?.kind?.ProgrammableTransaction;
     if (!programmableTx) {
       throw new Error('Unable to deserialize from bytes.');
     }
@@ -103,6 +105,17 @@ export class TransactionDataBuilder {
     return transactionData;
   }
 
+  /**
+   * Generate transaction digest.
+   *
+   * @param bytes BCS serialized transaction data
+   * @returns transaction digest.
+   */
+  static getDigestFromBytes(bytes: Uint8Array) {
+    const hash = sha256Hash('TransactionData', bytes);
+    return toB58(hash);
+  }
+
   version = 1 as const;
   sender?: string;
   expiration?: TransactionExpiration;
@@ -118,7 +131,7 @@ export class TransactionDataBuilder {
     this.commands = clone?.commands ?? [];
   }
 
-  build() {
+  build({ onlyTransactionKind }: { onlyTransactionKind?: boolean } = {}) {
     if (!this.gasConfig.budget) {
       throw new Error('Missing gas budget');
     }
@@ -141,6 +154,19 @@ export class TransactionDataBuilder {
       return input.value;
     });
 
+    const kind = {
+      ProgrammableTransaction: {
+        inputs,
+        commands: this.commands,
+      },
+    };
+
+    if (onlyTransactionKind) {
+      return builder
+        .ser('TransactionKind', kind, { maxSize: TRANSACTION_DATA_MAX_SIZE })
+        .toBytes();
+    }
+
     const transactionData = {
       sender: prepareSuiAddress(this.sender),
       expiration: this.expiration ? this.expiration : { None: true },
@@ -151,11 +177,9 @@ export class TransactionDataBuilder {
         budget: BigInt(this.gasConfig.budget),
       },
       kind: {
-        Single: {
-          ProgrammableTransaction: {
-            inputs,
-            commands: this.commands,
-          },
+        ProgrammableTransaction: {
+          inputs,
+          commands: this.commands,
         },
       },
     };
@@ -167,6 +191,11 @@ export class TransactionDataBuilder {
         { maxSize: TRANSACTION_DATA_MAX_SIZE },
       )
       .toBytes();
+  }
+
+  getDigest() {
+    const bytes = this.build({ onlyTransactionKind: false });
+    return TransactionDataBuilder.getDigestFromBytes(bytes);
   }
 
   snapshot(): SerializedTransactionDataBuilder {

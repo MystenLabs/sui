@@ -666,10 +666,12 @@ fn test_sponsored_transaction_message() {
     let sender = (&sender_kp.public()).into();
     let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sponsor = (&sponsor_kp.public()).into();
-    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-        recipient: get_new_address::<AccountKeyPair>(),
-        object_ref: random_object_ref(),
-    }));
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
     let gas_obj_ref = random_object_ref();
     let gas_data = GasData {
         payment: vec![gas_obj_ref],
@@ -778,16 +780,15 @@ fn test_sponsored_transaction_validity_check() {
         budget: 10000,
     };
 
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
-            recipient: get_new_address::<AccountKeyPair>(),
-            object_ref: random_object_ref(),
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
+        .validity_check(&ProtocolConfig::get_for_max_version())
+        .unwrap();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -809,89 +810,65 @@ fn test_sponsored_transaction_validity_check() {
         .validity_check(&ProtocolConfig::get_for_max_version())
         .unwrap();
 
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
-            modules: vec![vec![]],
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
-
-    TransactionData::new_with_gas_data(
-        TransactionKind::Single(SingleTransactionKind::Pay(Pay {
-            coins: vec![random_object_ref()],
-            recipients: vec![SuiAddress::random_for_testing_only()],
-            amounts: vec![100000],
-        })),
-        sender,
-        gas_data.clone(),
-    )
-    .validity_check(&ProtocolConfig::get_for_max_version())
-    .unwrap();
-
-    // TransferSui cannot be sponsored
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
-                recipient: SuiAddress::random_for_testing_only(),
-                amount: Some(50000),
-            })),
-            sender,
-            gas_data.clone(),
-        )
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish(vec![vec![]]);
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
 
-    // PaySui cannot be sponsored
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-                coins: gas_data.payment.clone(),
-                recipients: vec![],
-                amounts: vec![],
-            })),
-            sender,
-            gas_data.clone(),
-        )
+    // Pay
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .pay(
+                vec![random_object_ref()],
+                vec![SuiAddress::random_for_testing_only()],
+                vec![100000],
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
 
-    // PayAllSui cannot be sponsored
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-                coins: gas_data.payment.clone(),
-                recipient: SuiAddress::random_for_testing_only(),
-            })),
-            sender,
-            gas_data.clone(),
-        )
+    // TransferSui
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.transfer_sui(SuiAddress::random_for_testing_only(), Some(50000));
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
 
-    // Batch is non-sponsorable
-    assert_eq!(
-        TransactionData::new_with_gas_data(
-            TransactionKind::Batch(vec![SingleTransactionKind::Pay(Pay {
-                coins: vec![random_object_ref()],
-                recipients: vec![SuiAddress::random_for_testing_only()],
-                amounts: vec![100000],
-            })]),
-            sender,
-            gas_data,
-        )
+    // PaySui
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_sui(vec![], vec![]).unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data.clone())
         .validity_check(&ProtocolConfig::get_for_max_version())
-        .unwrap_err(),
-        UserInputError::UnsupportedSponsoredTransactionKind
-    );
+        .unwrap();
+
+    // PayAllSui
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_all_sui(SuiAddress::random_for_testing_only());
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    TransactionData::new_with_gas_data(kind, sender, gas_data)
+        .validity_check(&ProtocolConfig::get_for_max_version())
+        .unwrap();
 }
 
 #[test]
@@ -1098,20 +1075,36 @@ fn test_move_input_objects() {
     let t2 = mk_st(p2, vec![mk_st(p3, vec![]), mk_st(p4, vec![])]);
     let t3 = TypeTag::Vector(Box::new(mk_st(p5, vec![])));
     let type_args = vec![t1, t2, t3];
+    let mut builder = ProgrammableTransactionBuilder::new();
     let args = vec![
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)),
-        CallArg::ObjVec(vec![
+        builder
+            .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
+            .unwrap(),
+        builder.make_obj_vec(vec![
             ObjectArg::ImmOrOwnedObject(o2),
             ObjectArg::ImmOrOwnedObject(o3),
         ]),
-        CallArg::Object(ObjectArg::SharedObject {
-            id: shared.0,
-            initial_shared_version: shared.1,
-            mutable: true,
-        }),
+        builder
+            .input(CallArg::Object(ObjectArg::SharedObject {
+                id: shared.0,
+                initial_shared_version: shared.1,
+                mutable: true,
+            }))
+            .unwrap(),
     ];
-
-    let data = dummy_move_call(package, "foo", "bar", type_args, gas_object_ref, args);
+    builder.command(Command::move_call(
+        package,
+        Identifier::new("foo").unwrap(),
+        Identifier::new("bar").unwrap(),
+        type_args,
+        args,
+    ));
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
+        SuiAddress::random_for_testing_only(),
+        vec![gas_object_ref],
+        builder.finish(),
+        MAX_GAS,
+    );
     let mut input_objects = data.input_objects().unwrap();
     macro_rules! rem {
         ($exp:expr) => {{
@@ -1143,27 +1136,6 @@ fn test_move_input_objects() {
     assert!(input_objects.is_empty());
 }
 
-fn dummy_move_call(
-    package: ObjectID,
-    module: &str,
-    function: &str,
-    type_args: Vec<TypeTag>,
-    gas_object_ref: ObjectRef,
-    args: Vec<CallArg>,
-) -> TransactionData {
-    TransactionData::new_move_call_with_dummy_gas_price(
-        SuiAddress::random_for_testing_only(),
-        package,
-        Identifier::new(module).unwrap(),
-        Identifier::new(function).unwrap(),
-        type_args,
-        gas_object_ref,
-        args,
-        MAX_GAS,
-    )
-    .unwrap()
-}
-
 #[test]
 fn test_unique_input_objects() {
     let package = ObjectID::random();
@@ -1189,18 +1161,23 @@ fn test_unique_input_objects() {
     let t2 = mk_st(p2, vec![mk_st(p3, vec![]), mk_st(p4, vec![])]);
     let t3 = TypeTag::Vector(Box::new(mk_st(p5, vec![])));
     let type_args = vec![t1, t2, t3];
+    let mut builder = ProgrammableTransactionBuilder::new();
     let args_1 = vec![
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)),
-        CallArg::ObjVec(vec![
+        builder
+            .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
+            .unwrap(),
+        builder.make_obj_vec(vec![
             ObjectArg::ImmOrOwnedObject(o2),
             ObjectArg::ImmOrOwnedObject(o3),
         ]),
     ];
-    let args_2 = vec![CallArg::Object(ObjectArg::SharedObject {
-        id: shared.0,
-        initial_shared_version: shared.1,
-        mutable: true,
-    })];
+    let args_2 = vec![builder
+        .input(CallArg::Object(ObjectArg::SharedObject {
+            id: shared.0,
+            initial_shared_version: shared.1,
+            mutable: true,
+        }))
+        .unwrap()];
 
     let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
     let sender = (&sender_kp.public()).into();
@@ -1213,28 +1190,21 @@ fn test_unique_input_objects() {
         budget: 10000,
     };
 
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                package,
-                Identifier::new("test_module").unwrap(),
-                Identifier::new("test_function").unwrap(),
-                type_args.clone(),
-                args_1,
-            )
-            .unwrap();
-        builder
-            .move_call(
-                package,
-                Identifier::new("test_module").unwrap(),
-                Identifier::new("test_function").unwrap(),
-                type_args,
-                args_2,
-            )
-            .unwrap();
-        builder.finish()
-    };
+    builder.command(Command::move_call(
+        package,
+        Identifier::new("test_module").unwrap(),
+        Identifier::new("test_function").unwrap(),
+        type_args.clone(),
+        args_1,
+    ));
+    builder.command(Command::move_call(
+        package,
+        Identifier::new("test_module").unwrap(),
+        Identifier::new("test_function").unwrap(),
+        type_args,
+        args_2,
+    ));
+    let pt = builder.finish();
     let kind = TransactionKind::programmable(pt);
     let transaction_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
 
@@ -1246,4 +1216,80 @@ fn test_unique_input_objects() {
         "Duplicates in {:?}",
         input_objects
     );
+}
+
+#[test]
+fn test_certificate_digest() {
+    let (committee, key_pairs) = Committee::new_simple_test_committee();
+
+    let (receiver, _): (_, AccountKeyPair) = get_key_pair();
+    let (sender1, sender1_sec): (_, AccountKeyPair) = get_key_pair();
+    let (sender2, sender2_sec): (_, AccountKeyPair) = get_key_pair();
+
+    let make_tx = |sender, sender_sec| {
+        Transaction::from_data_and_signer(
+            TransactionData::new_transfer_with_dummy_gas_price(
+                receiver,
+                random_object_ref(),
+                sender,
+                random_object_ref(),
+                10000,
+            ),
+            Intent::default(),
+            vec![&sender_sec],
+        )
+        .verify()
+        .unwrap()
+    };
+
+    let t1 = make_tx(sender1, sender1_sec);
+    let t2 = make_tx(sender2, sender2_sec);
+
+    let make_cert = |transaction: &VerifiedTransaction| {
+        let sigs: Vec<_> = key_pairs
+            .iter()
+            .take(3)
+            .map(|key_pair| {
+                SignedTransaction::new(
+                    committee.epoch(),
+                    transaction.clone().into_message(),
+                    key_pair,
+                    AuthorityPublicKeyBytes::from(key_pair.public()),
+                )
+                .auth_sig()
+                .clone()
+            })
+            .collect();
+
+        let cert = CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee)
+            .unwrap();
+        cert.verify_signature(&committee).unwrap();
+        cert
+    };
+
+    let other_cert = make_cert(&t2);
+
+    let mut cert = make_cert(&t1);
+    let orig = cert.clone();
+
+    let digest = cert.certificate_digest();
+
+    // mutating a tx sig changes the digest.
+    cert.data_mut_for_testing().tx_signatures[0] = t2.tx_signatures[0].clone();
+    assert_ne!(digest, cert.certificate_digest());
+
+    // mutating intent changes the digest
+    cert = orig.clone();
+    cert.data_mut_for_testing().intent_message.intent.scope = IntentScope::TransactionEffects;
+    assert_ne!(digest, cert.certificate_digest());
+
+    // mutating signature epoch changes digest
+    cert = orig.clone();
+    cert.auth_sig_mut_for_testing().epoch = 42;
+    assert_ne!(digest, cert.certificate_digest());
+
+    // mutating signature changes digest
+    cert = orig;
+    *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
+    assert_ne!(digest, cert.certificate_digest());
 }

@@ -4,27 +4,33 @@
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
+use crate::models::objects::Object;
 use crate::models::transactions::Transaction;
-use crate::schema::addresses::account_address;
-use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
-use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
-use crate::schema::move_calls::dsl as move_calls_dsl;
-use crate::schema::recipients::dsl as recipients_dsl;
-use crate::schema::transactions::{dsl, transaction_digest};
-use crate::schema::{addresses, events, move_calls, objects, packages, recipients, transactions};
+
+use crate::schema::{
+    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, events, move_calls,
+    move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
+    packages, recipients, recipients::dsl as recipients_dsl, transactions,
+    transactions::dsl as transactions_dsl,
+};
 use crate::store::indexer_store::TemporaryCheckpointStore;
+use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
 use diesel::dsl::{count, max};
 use diesel::sql_types::VarChar;
 use diesel::upsert::excluded;
-use diesel::QueryableByName;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
+use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use sui_json_rpc_types::CheckpointId;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
+use sui_types::object::ObjectRead;
 use tracing::{error, info};
 
 const GET_PARTITION_SQL: &str = r#"
@@ -43,13 +49,16 @@ GROUP BY table_name;
 pub struct PgIndexerStore {
     cp: PgConnectionPool,
     partition_manager: PartitionManager,
+    pub module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
 
 impl PgIndexerStore {
     pub fn new(cp: PgConnectionPool) -> Self {
+        let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(cp.clone())));
         PgIndexerStore {
             cp: cp.clone(),
             partition_manager: PartitionManager::new(cp).unwrap(),
+            module_cache,
         }
     }
 }
@@ -62,8 +71,8 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
-                checkpoints_table
-                    .select(max(sequence_number))
+                checkpoints_dsl::checkpoints
+                    .select(max(checkpoints::sequence_number))
                     .first::<Option<i64>>(conn)
                     // -1 to differentiate between no checkpoints and the first checkpoint
                     .map(|o| o.unwrap_or(-1))
@@ -82,12 +91,12 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| match id {
-                CheckpointId::SequenceNumber(seq) => checkpoints_table
-                    .filter(sequence_number.eq(seq as i64))
+                CheckpointId::SequenceNumber(seq) => checkpoints_dsl::checkpoints
+                    .filter(checkpoints::sequence_number.eq(seq as i64))
                     .limit(1)
                     .first::<Checkpoint>(conn),
-                CheckpointId::Digest(digest) => checkpoints_table
-                    .filter(checkpoint_digest.eq(digest.base58_encode()))
+                CheckpointId::Digest(digest) => checkpoints_dsl::checkpoints
+                    .filter(checkpoints::checkpoint_digest.eq(digest.base58_encode()))
                     .limit(1)
                     .first::<Checkpoint>(conn),
             })
@@ -104,7 +113,11 @@ impl IndexerStore for PgIndexerStore {
         pg_pool_conn
             .build_transaction()
             .read_only()
-            .run(|conn| dsl::transactions.select(count(dsl::id)).first::<i64>(conn))
+            .run(|conn| {
+                transactions_dsl::transactions
+                    .select(count(transactions_dsl::id))
+                    .first::<i64>(conn)
+            })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
                     "Failed reading total transaction number with err: {:?}",
@@ -119,8 +132,8 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
-                dsl::transactions
-                    .filter(transaction_digest.eq(txn_digest))
+                transactions_dsl::transactions
+                    .filter(transactions_dsl::transaction_digest.eq(txn_digest))
                     .first::<Transaction>(conn)
             })
             .map_err(|e| {
@@ -143,14 +156,14 @@ impl IndexerStore for PgIndexerStore {
                     .build_transaction()
                     .read_only()
                     .run(|conn| {
-                        let mut boxed_query = dsl::transactions
-                            .filter(transaction_digest.eq(digest.clone()))
-                            .select(dsl::id)
+                        let mut boxed_query = transactions_dsl::transactions
+                            .filter(transactions_dsl::transaction_digest.eq(digest.clone()))
+                            .select(transactions_dsl::id)
                             .into_boxed();
                         if is_descending {
-                            boxed_query = boxed_query.order(dsl::id.desc());
+                            boxed_query = boxed_query.order(transactions_dsl::id.desc());
                         } else {
-                            boxed_query = boxed_query.order(dsl::id.asc());
+                            boxed_query = boxed_query.order(transactions_dsl::id.asc());
                         }
                         boxed_query.first::<i64>(conn)
                     })
@@ -162,6 +175,42 @@ impl IndexerStore for PgIndexerStore {
                     })
             })
             .transpose()
+    }
+
+    fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let object = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if let Some(version) = version {
+                    objects_history::dsl::objects_history
+                        .filter(objects_history::object_id.eq(object_id.to_string()))
+                        .filter(objects_history::version.eq(version.value() as i64))
+                        .get_result(conn)
+                        .optional()
+                } else {
+                    objects_dsl::objects
+                        .filter(objects_dsl::object_id.eq(object_id.to_string()))
+                        .first::<Object>(conn)
+                        .optional()
+                }
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading object with id {} and err: {:?}",
+                    object_id, e
+                ))
+            })?;
+
+        match object {
+            None => Ok(ObjectRead::NotExists(object_id)),
+            Some(o) => o.try_into_object_read(&self.module_cache),
+        }
     }
 
     fn get_move_call_sequence_by_digest(
@@ -239,24 +288,24 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
-                let mut boxed_query = dsl::transactions.into_boxed();
+                let mut boxed_query = transactions_dsl::transactions.into_boxed();
                 if is_descending {
-                    boxed_query = boxed_query.order(dsl::id.desc());
+                    boxed_query = boxed_query.order(transactions_dsl::id.desc());
                 } else {
-                    boxed_query = boxed_query.order(dsl::id.asc());
+                    boxed_query = boxed_query.order(transactions_dsl::id.asc());
                 }
 
                 if is_descending {
                     boxed_query
-                        .order(dsl::id.desc())
+                        .order(transactions_dsl::id.desc())
                         .limit((limit + 1) as i64)
-                        .select(transaction_digest)
+                        .select(transactions_dsl::transaction_digest)
                         .load::<String>(conn)
                 } else {
                     boxed_query
-                        .order(dsl::id.asc())
+                        .order(transactions_dsl::id.asc())
                         .limit((limit + 1) as i64)
-                        .select(transaction_digest)
+                        .select(transactions_dsl::transaction_digest)
                         .load::<String>(conn)
                 }
             }).map_err(|e| {
@@ -328,30 +377,29 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
-                let mut boxed_query = dsl::transactions
-                    .filter(dsl::mutated.contains(vec![Some(object_id.clone())]))
+                let mut boxed_query = transactions_dsl::transactions
+                    .filter(transactions_dsl::mutated.contains(vec![Some(object_id.clone())]))
                     .into_boxed();
                 if let Some(start_sequence) = start_sequence {
                     if is_descending {
                         boxed_query = boxed_query
-                            .filter(dsl::id.lt(start_sequence));
+                            .filter(transactions_dsl::id.lt(start_sequence));
                     } else {
                         boxed_query = boxed_query
-                            .filter(dsl::id.gt(start_sequence));
+                            .filter(transactions_dsl::id.gt(start_sequence));
                     }
                 }
-
                 if is_descending {
                     boxed_query
-                        .order(dsl::id.desc())
+                        .order(transactions_dsl::id.desc())
                         .limit(limit as i64)
-                        .select(transaction_digest)
+                        .select(transactions_dsl::transaction_digest)
                         .load::<String>(conn)
                 } else {
                     boxed_query
-                        .order(dsl::id.asc())
+                        .order(transactions_dsl::id.asc())
                         .limit(limit as i64)
-                        .select(transaction_digest)
+                        .select(transactions_dsl::transaction_digest)
                         .load::<String>(conn)
                 }
             }).map_err(|e| {
@@ -374,30 +422,30 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
-                    let mut boxed_query = dsl::transactions
-                        .filter(dsl::sender.eq(sender_address.clone()))
+                    let mut boxed_query = transactions_dsl::transactions
+                        .filter(transactions_dsl::sender.eq(sender_address.clone()))
                         .into_boxed();
                     if let Some(start_sequence) = start_sequence {
                         if is_descending {
                             boxed_query = boxed_query
-                                .filter(dsl::id.lt(start_sequence));
+                                .filter(transactions_dsl::id.lt(start_sequence));
                         } else {
                             boxed_query = boxed_query
-                                .filter(dsl::id.gt(start_sequence));
+                                .filter(transactions_dsl::id.gt(start_sequence));
                         }
                     }
 
                     if is_descending {
                         boxed_query
-                            .order(dsl::id.desc())
+                            .order(transactions_dsl::id.desc())
                             .limit(limit as i64)
-                            .select(transaction_digest)
+                            .select(transactions_dsl::transaction_digest)
                             .load::<String>(conn)
                     } else {
                         boxed_query
-                            .order(dsl::id.asc())
+                            .order(transactions_dsl::id.asc())
                             .limit(limit as i64)
-                            .select(transaction_digest)
+                            .select(transactions_dsl::transaction_digest)
                             .load::<String>(conn)
                     }
             }).map_err(|e| {
@@ -467,8 +515,8 @@ impl IndexerStore for PgIndexerStore {
             .build_transaction()
             .read_only()
             .run(|conn| {
-                dsl::transactions
-                    .filter(dsl::id.gt(last_processed_id))
+                transactions_dsl::transactions
+                    .filter(transactions_dsl::id.gt(last_processed_id))
                     .limit(limit as i64)
                     .load::<Transaction>(conn)
             })
@@ -500,7 +548,7 @@ impl IndexerStore for PgIndexerStore {
             .serializable()
             .read_write()
             .run(|conn| {
-                diesel::insert_into(checkpoints_table)
+                diesel::insert_into(checkpoints::table)
                     .values(checkpoint)
                     .execute(conn)?;
 
@@ -547,7 +595,7 @@ impl IndexerStore for PgIndexerStore {
                 // Only insert once for address, skip if conflict
                 diesel::insert_into(addresses::table)
                     .values(addresses)
-                    .on_conflict(account_address)
+                    .on_conflict(addresses::account_address)
                     .do_nothing()
                     .execute(conn)?;
 

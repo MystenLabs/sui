@@ -24,8 +24,8 @@ use crate::types::{
 use crate::{OnlineServerContext, SuiEnv};
 use axum::extract::State;
 use axum_extra::extract::WithRejection;
+use shared_crypto::intent::{Intent, IntentMessage};
 use sui_sdk::rpc_types::SuiExecutionStatus;
-use sui_types::intent::{Intent, IntentMessage};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
 

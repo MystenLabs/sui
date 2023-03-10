@@ -7,6 +7,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,7 +22,6 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::intent::{Intent, IntentScope};
 use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;

@@ -8,7 +8,7 @@ module sui::validator_tests {
     use sui::url;
     use std::string::Self;
     use sui::validator::{Self, Validator};
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
     use sui::balance::Balance;
     use std::option;
     use std::ascii;
@@ -18,15 +18,15 @@ module sui::validator_tests {
     use std::vector;
     use sui::test_utils;
 
-
-    const VALID_PUBKEY: vector<u8> = vector[153, 242, 94, 246, 31, 128, 50, 185, 20, 99, 100, 96, 152, 44, 92, 198, 241, 52, 239, 29, 218, 231, 102, 87, 242, 203, 254, 193, 235, 252, 141, 9, 115, 116, 8, 13, 246, 252, 240, 220, 184, 188, 75, 13, 142, 10, 245, 216, 14, 187, 255, 43, 76, 89, 159, 84, 244, 45, 99, 18, 223, 195, 20, 39, 96, 120, 193, 204, 52, 126, 187, 190, 197, 25, 139, 226, 88, 81, 63, 56, 107, 147, 13, 2, 194, 116, 154, 128, 62, 35, 48, 149, 94, 189, 26, 16];
-
     const VALID_NET_PUBKEY: vector<u8> = vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
 
     const VALID_WORKER_PUBKEY: vector<u8> = vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
 
-    // Proof of possesion generated from sui/crates/sui-types/src/unit_tests/crypto_tests.rs
-    const PROOF_OF_POSESSION: vector<u8> = vector[170, 123, 102, 14, 115, 218, 115, 118, 170, 89, 192, 247, 101, 58, 60, 31, 48, 30, 9, 47, 0, 59, 54, 9, 136, 148, 14, 159, 198, 205, 109, 33, 189, 144, 195, 122, 18, 111, 137, 207, 112, 77, 204, 241, 187, 152, 88, 238];
+    // A valid proof of posession must be generated using the same account address and protocol public key. 
+    // If either VALID_ADDRESS or VALID_PUBKEY changed, PoP must be regenerated using [fn test_proof_of_possession].
+    const VALID_ADDRESS: address = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+    const VALID_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    const PROOF_OF_POSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     /// These are equivalent to /ip4/127.0.0.1
     const VALID_NET_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
@@ -36,9 +36,8 @@ module sui::validator_tests {
 
     #[test_only]
     fun get_test_validator(ctx: &mut TxContext, init_stake: Balance<SUI>): Validator {
-        let sender = tx_context::sender(ctx);
         validator::new(
-            sender,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -62,7 +61,7 @@ module sui::validator_tests {
 
     #[test]
     fun test_validator_owner_flow() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         {
@@ -88,7 +87,7 @@ module sui::validator_tests {
 
     #[test]
     fun test_pending_validator_flow() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -141,7 +140,7 @@ module sui::validator_tests {
     #[test]
     fun test_metadata() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -163,7 +162,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidPubkey)]
     fun test_metadata_invalid_pubkey() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             vector[42],
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -185,7 +184,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidNetPubkey)]
     fun test_metadata_invalid_net_pubkey() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             vector[42],
             VALID_WORKER_PUBKEY,
@@ -207,7 +206,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
     fun test_metadata_invalid_worker_pubkey() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             vector[42],
@@ -229,7 +228,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidNetAddr)]
     fun test_metadata_invalid_net_addr() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -251,7 +250,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidP2pAddr)]
     fun test_metadata_invalid_p2p_addr() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -273,7 +272,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
     fun test_metadata_invalid_consensus_addr() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -295,7 +294,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = validator::EMetadataInvalidWorkerAddr)]
     fun test_metadata_invalid_worker_addr() {
         let metadata = validator::new_metadata(
-            @0x42,
+            VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
@@ -315,13 +314,13 @@ module sui::validator_tests {
 
     #[test]
     fun test_validator_update_metadata_ok() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;  
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
-        let new_protocol_pub_key = vector[143, 97, 231, 116, 194, 3, 239, 10, 180, 80, 18, 78, 135, 46, 201, 7, 72, 33, 52, 183, 108, 35, 55, 55, 38, 187, 187, 150, 233, 146, 117, 165, 157, 219, 220, 157, 150, 19, 224, 131, 23, 206, 189, 221, 55, 134, 90, 140, 21, 159, 246, 179, 108, 104, 152, 249, 176, 243, 55, 27, 154, 78, 142, 169, 64, 77, 159, 227, 43, 123, 35, 252, 28, 205, 209, 160, 249, 40, 110, 101, 55, 16, 176, 56, 56, 177, 123, 185, 58, 61, 63, 88, 239, 241, 95, 99];
-        let new_pop = vector[161, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36];
+        let new_protocol_pub_key = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
+        let new_pop = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
         let new_worker_pub_key = vector[115, 220, 238, 151, 134, 159, 173, 41, 80, 2, 66, 196, 61, 17, 191, 76, 103, 39, 246, 127, 171, 85, 19, 235, 210, 106, 97, 97, 116, 48, 244, 191];
         let new_network_pub_key = vector[149, 128, 161, 13, 11, 183, 96, 45, 89, 20, 188, 205, 26, 127, 147, 254, 184, 229, 184, 102, 64, 170, 104, 29, 191, 171, 91, 99, 58, 178, 41, 156];
 
@@ -399,7 +398,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EInvalidProofOfPossession)]
     #[test]
     fun test_validator_update_metadata_invalid_proof_of_possession() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -411,10 +410,9 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_protocol_pubkey(
                 &mut validator,
-                vector[143, 97, 231, 116, 194, 3, 239, 10, 180, 80, 18, 78, 135, 46, 201, 7, 72, 33, 52, 183, 108, 35, 55, 55, 38, 187, 187, 150, 233, 146, 117, 165, 157, 219, 220, 157, 150, 19, 224, 131, 23, 206, 189, 221, 55, 134, 90, 140, 21, 159, 246, 179, 108, 104, 152, 249, 176, 243, 55, 27, 154, 78, 142, 169, 64, 77, 159, 227, 43, 123, 35, 252, 28, 205, 209, 160, 249, 40, 110, 101, 55, 16, 176, 56, 56, 177, 123, 185, 58, 61, 63, 88, 239, 241, 95, 99],
+                x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c",
                 // This is an invalid proof of possession, so we abort
-                vector[111, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36],
-            );
+                x"8b9794dfd11b88e16ba8f6a4a2c1e7580738dce2d6910ee594bebd88297b22ae8c34d1ee3f5a081159d68e076ef5d300");
         };
 
         test_utils::destroy(validator);
@@ -424,7 +422,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EMetadataInvalidNetPubkey)]
     #[test]
     fun test_validator_update_metadata_invalid_network_key() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -448,7 +446,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerPubkey)]
     #[test]
     fun test_validator_update_metadata_invalid_worker_key() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -471,7 +469,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EMetadataInvalidNetAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_network_addr() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -494,7 +492,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EMetadataInvalidPrimaryAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_consensus_addr() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -517,7 +515,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_worker_addr() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -540,7 +538,7 @@ module sui::validator_tests {
     #[expected_failure(abort_code = sui::validator::EMetadataInvalidP2pAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_p2p_address() {
-        let sender = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);

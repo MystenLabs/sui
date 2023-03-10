@@ -368,8 +368,21 @@ impl ValidatorService {
             }
 
             let certificate = {
-                let _timer = metrics.cert_verification_latency.start_timer();
-                certificate.verify(epoch_store.committee())?
+                let cert_digest = certificate.certificate_digest();
+                if epoch_store
+                    .verified_cert_cache()
+                    .is_cert_verified(&cert_digest)
+                {
+                    VerifiedCertificate::new_unchecked(certificate)
+                } else {
+                    let _timer = metrics.cert_verification_latency.start_timer();
+                    // Note: verify verifies user sigs as well before caching cert.
+                    certificate.verify(epoch_store.committee()).tap_ok(|_| {
+                        epoch_store
+                            .verified_cert_cache()
+                            .cache_cert_verified(cert_digest)
+                    })?
+                }
             };
 
             // 3) All certificates are sent to consensus (at least by some authorities)

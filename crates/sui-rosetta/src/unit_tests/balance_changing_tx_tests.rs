@@ -12,6 +12,7 @@ use signature::rand_core::OsRng;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
+use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -22,11 +23,9 @@ use sui_sdk::rpc_types::{
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::intent::Intent;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, InputObjectKind, ObjectArg, ProgrammableTransaction,
-    SingleTransactionKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
-    DUMMY_GAS_PRICE,
+    Transaction, TransactionData, TransactionDataAPI, TransactionKind, DUMMY_GAS_PRICE,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -198,7 +197,7 @@ async fn test_split_coin() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -220,7 +219,7 @@ async fn test_merge_coin() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -420,7 +419,7 @@ async fn test_delegate_sui() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
@@ -456,7 +455,7 @@ async fn test_delegate_sui_with_none_amount() {
         .await
         .unwrap();
     let pt = match tx.into_kind() {
-        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        TransactionKind::ProgrammableTransaction(pt) => pt,
         _ => unreachable!(),
     };
     test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;

@@ -164,6 +164,7 @@ impl SuiClientBuilder {
     }
 }
 
+/// Use [SuiClientBuilder] to build a SuiClient
 #[derive(Clone)]
 pub struct SuiClient {
     api: Arc<RpcClient>,
@@ -198,22 +199,6 @@ struct ServerInfo {
 }
 
 impl SuiClient {
-    #[deprecated(since = "0.23.0", note = "Please use `SuiClientBuilder` instead.")]
-    pub async fn new(
-        http_url: &str,
-        ws_url: Option<&str>,
-        request_timeout: Option<Duration>,
-    ) -> Result<Self, Error> {
-        let mut builder = SuiClientBuilder::default();
-        if let Some(ws_url) = ws_url {
-            builder = builder.ws_url(ws_url);
-        }
-        if let Some(request_timeout) = request_timeout {
-            builder = builder.request_timeout(request_timeout);
-        }
-        builder.build(http_url).await
-    }
-
     pub fn available_rpc_methods(&self) -> &Vec<String> {
         &self.api.info.rpc_methods
     }

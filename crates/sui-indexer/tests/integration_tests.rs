@@ -17,15 +17,17 @@ mod pg_integration {
     use sui_types::digests::TransactionDigest;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::task::JoinHandle;
+
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
     use sui_json_rpc::api::ReadApiClient;
-    use sui_json_rpc_types::SuiTransactionResponseOptions;
+    use sui_json_rpc_types::{SuiMoveObject, SuiParsedMoveObject, SuiTransactionResponseOptions};
+    use sui_types::object::ObjectFormatOptions;
 
     #[tokio::test]
     async fn test_genesis_sync() {
         let (test_cluster, indexer_rpc_client, store, handle) = start_test_cluster().await;
         // Allow indexer to sync
-        wait_until_checkpoint(&store, 1).await;
+        wait_until_next_checkpoint(&store).await;
 
         let checkpoint = store.get_checkpoint(0.into()).unwrap();
 
@@ -52,6 +54,47 @@ mod pg_integration {
         drop(handle);
     }
 
+    #[tokio::test]
+    async fn test_module_cache() {
+        let (test_cluster, _, store, handle) = start_test_cluster().await;
+        let coins = test_cluster
+            .sui_client()
+            .coin_read_api()
+            .get_coins(test_cluster.get_address_0(), None, None, None)
+            .await
+            .unwrap()
+            .data;
+        // Allow indexer to sync
+        wait_until_next_checkpoint(&store).await;
+
+        let coin_object = store
+            .get_object(coins[0].coin_object_id, Some(coins[0].version))
+            .unwrap()
+            .into_object()
+            .unwrap();
+
+        let layout = coin_object
+            .get_layout(ObjectFormatOptions::default(), &store.module_cache)
+            .unwrap();
+
+        assert!(layout.is_some());
+
+        let layout = layout.unwrap();
+
+        let parsed_coin = SuiParsedMoveObject::try_from_layout(
+            coin_object.data.try_as_move().unwrap().clone(),
+            layout,
+        )
+        .unwrap();
+
+        assert_eq!(
+            "0x2::coin::Coin<0x2::sui::SUI>".to_string(),
+            parsed_coin.type_
+        );
+
+        drop(handle);
+    }
+
     async fn start_test_cluster() -> (
         TestCluster,
         HttpClient,
@@ -59,7 +102,7 @@ mod pg_integration {
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
-        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "5432".into());
+        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32771".into());
         let db_url = format!("postgres://postgres:postgrespw@{pg_host}:{pg_port}");
         let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
 
@@ -83,9 +126,10 @@ mod pg_integration {
         (test_cluster, http_client, store, handle)
     }
 
-    async fn wait_until_checkpoint(store: &PgIndexerStore, until_checkpoint: i64) {
+    async fn wait_until_next_checkpoint(store: &PgIndexerStore) {
         let mut cp = store.get_latest_checkpoint_sequence_number().unwrap();
-        while cp < until_checkpoint {
+        let target = cp + 1;
+        while cp < target {
             tokio::task::yield_now().await;
             cp = store.get_latest_checkpoint_sequence_number().unwrap();
         }

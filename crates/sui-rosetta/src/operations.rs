@@ -411,10 +411,11 @@ impl TryFrom<SuiTransactionData> for Operations {
     type Error = Error;
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
         let sender = *data.sender();
-        data.transactions()
-            .iter()
-            .map(|tx| Self::from_transaction(tx.clone(), sender, None))
-            .collect()
+        Ok(Self::new(Self::from_transaction(
+            data.transaction().clone(),
+            sender,
+            None,
+        )?))
     }
 }
 

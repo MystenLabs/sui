@@ -4,12 +4,10 @@
 import {
     getExecutionStatusError,
     getExecutionStatusType,
-    getMoveCallTransaction,
     getTransactionDigest,
     getTransactionKindName,
-    getTransactionKinds,
+    getTransactionKind,
     getTransactionSender,
-    getTransferObjectTransaction,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
@@ -21,19 +19,17 @@ import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { checkStakingTxn, notEmpty } from '_helpers';
+import { notEmpty } from '_helpers';
 import { useGetTransferAmount, useGetTxnRecipientAddress } from '_hooks';
 
 import type {
     SuiAddress,
     SuiEvent,
     SuiTransactionResponse,
-    TransactionEffects,
     TransactionEvents,
 } from '@mysten/sui.js';
 
 export const getTxnEffectsEventID = (
-    txEffects: TransactionEffects,
     events: TransactionEvents,
     address: string
 ): string[] => {
@@ -54,17 +50,13 @@ export function TransactionCard({
     txn: SuiTransactionResponse;
     address: SuiAddress;
 }) {
-    const [transaction] = getTransactionKinds(txn)!;
+    const transaction = getTransactionKind(txn)!;
     const executionStatus = getExecutionStatusType(txn);
-    const txnKind = getTransactionKindName(transaction);
+    getTransactionKindName(transaction);
 
     const objectId = useMemo(() => {
-        const transferId =
-            getTransferObjectTransaction(transaction)?.objectRef?.objectId;
-        return transferId
-            ? transferId
-            : getTxnEffectsEventID(txn.effects!, txn.events!, address)[0];
-    }, [address, transaction, txn.effects, txn.events]);
+        return getTxnEffectsEventID(txn.events!, address)[0];
+    }, [address, txn.events]);
 
     const transfer = useGetTransferAmount({
         txn,
@@ -99,48 +91,19 @@ export function TransactionCard({
 
     const isSender = address === getTransactionSender(txn);
 
-    const moveCallTxn = getMoveCallTransaction(transaction);
-
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
-
-    const isSuiTransfer =
-        txnKind === 'PaySui' ||
-        txnKind === 'TransferSui' ||
-        txnKind === 'PayAllSui';
-
-    const isTransfer =
-        isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
-
-    const moveCallLabel = useMemo(() => {
-        if (txnKind !== 'Call') return null;
-        return checkStakingTxn(txn) || txnKind;
-    }, [txn, txnKind]);
-
-    // display the transaction icon - depending on the transaction type and amount and label
-    const txnIcon = useMemo(() => {
-        if (txnKind === 'ChangeEpoch') return 'Rewards';
-        if (moveCallLabel && moveCallLabel !== 'Call') return moveCallLabel;
-        return isSender ? 'Send' : 'Received';
-    }, [isSender, moveCallLabel, txnKind]);
 
     // Transition label - depending on the transaction type and amount
     // Epoch change without amount is delegation object
     // Special case for staking and unstaking move call transaction,
     // For other transaction show Sent or Received
     const txnLabel = useMemo(() => {
-        if (txnKind === 'ChangeEpoch')
-            return transferAmount.amount
-                ? 'Received Staking Rewards'
-                : 'Received Delegation Object';
-        if (moveCallLabel) return moveCallLabel;
         return isSender ? 'Sent' : 'Received';
-    }, [txnKind, transferAmount.amount, moveCallLabel, isSender]);
+    }, [/*txnKind,transferAmount.amount,*/ isSender]);
 
+    // TODO: Support programmable tx:
     // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
-    const showSuiSymbol =
-        (transferAmount.coinType === SUI_TYPE_ARG && isSuiTransfer) ||
-        moveCallLabel === 'Staked' ||
-        moveCallLabel === 'Unstaked';
+    const showSuiSymbol = false;
 
     const transferAmountComponent = transferAmount.coinType &&
         transferAmount.amount && (
@@ -163,7 +126,8 @@ export function TransactionCard({
                 <div className="w-7.5">
                     <TxnIcon
                         txnFailed={executionStatus !== 'success' || !!error}
-                        variant={txnIcon}
+                        // TODO: Support programmable transactions variable icons here:
+                        variant="Send"
                     />
                 </div>
                 <div className="flex flex-col w-full gap-1.5">
@@ -187,7 +151,7 @@ export function TransactionCard({
                             {transferAmountComponent}
                         </div>
                     ) : (
-                        <div className="flex w-full justify-between flex-col ">
+                        <>
                             <div className="flex w-full justify-between">
                                 <div className="flex gap-1 align-middle items-baseline">
                                     <Text color="gray-90" weight="semibold">
@@ -205,16 +169,15 @@ export function TransactionCard({
                                 </div>
                                 {transferAmountComponent}
                             </div>
-                            <div className="flex flex-col w-full gap-1.5">
-                                <TxnTypeLabel
-                                    address={recipientAddress!}
-                                    moveCallFnName={moveCallTxn?.function}
-                                    isSender={isSender}
-                                    isTransfer={isTransfer}
-                                />
-                                {objectId && <TxnImage id={objectId} />}
-                            </div>
-                        </div>
+
+                            {/* TODO: Support programmable tx: */}
+                            <TxnTypeLabel
+                                address={recipientAddress!}
+                                isSender={isSender}
+                                isTransfer={false}
+                            />
+                            {objectId && <TxnImage id={objectId} />}
+                        </>
                     )}
 
                     {timestamp && <DateCard timestamp={timestamp} size="sm" />}

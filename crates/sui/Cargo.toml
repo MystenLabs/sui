@@ -37,6 +37,7 @@ sui-keys = { path = "../sui-keys" }
 sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-protocol-config = { path = "../sui-protocol-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
 

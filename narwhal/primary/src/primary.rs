@@ -643,7 +643,7 @@ struct PrimaryReceiverHandler {
     worker_cache: WorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+    signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -736,35 +736,15 @@ impl PrimaryReceiverHandler {
         self.metrics
             .certificates_in_votes
             .inc_by(request.body().parents.len() as u64);
+        let wait_network = network.clone();
         let mut wait_notifications: FuturesUnordered<_> = request
             .body()
             .parents
             .clone()
             .into_iter()
             .map(|cert| {
-                let synchronizer = self.synchronizer.clone();
-                let wait_network = network.clone();
-                async move {
-                    // Finish accepting certificate regardless of client cancellation by spawning
-                    // another task.
-                    // TODO: add simtest for cancellations.
-                    let result = spawn_monitored_task!(
-                        synchronizer.try_accept_certificate(cert, &wait_network)
-                    )
-                    .await
-                    .map_err(|_| DagError::Canceled)?;
-                    match result {
-                        Err(DagError::Suspended(notify)) => {
-                            let notify = notify.lock().unwrap().take();
-                            notify
-                                .unwrap()
-                                .recv()
-                                .await
-                                .map_err(|_| DagError::ShuttingDown)
-                        }
-                        r => r,
-                    }
-                }
+                self.synchronizer
+                    .wait_to_accept_certificate(cert, &wait_network)
             })
             .collect();
         loop {
@@ -793,6 +773,9 @@ impl PrimaryReceiverHandler {
         }
 
         // Ensure we have the parents. If any are missing, the requester should provide them on retry.
+        // This check is necessary for correctness, because it is possible that the list of missing
+        // parents in the request is incomplete, or wait_notifications get notified on shut down
+        // without actually having the parents available.
         let (parents, missing) = self.synchronizer.get_parents(header)?;
         if !missing.is_empty() {
             return Ok(RequestVoteResponse {
@@ -944,18 +927,11 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                     "Unable to access network to send child RPCs".to_owned(),
                 )
             })?;
-        let synchronizer = self.synchronizer.clone();
         let certificate = request.into_body().certificate;
-        // Finish accepting certificate regardless of client cancellation by spawning another task.
-        // TODO: add simtest for cancellations.
-        let _ = spawn_monitored_task!(async move {
-            synchronizer
-                .try_accept_certificate(certificate, &network)
-                .await
-        })
-        .await
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        self.synchronizer
+            .try_accept_certificate(certificate, &network)
+            .await
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(SendCertificateResponse {}))
     }
 

@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use tracing::{debug, info};
 
+use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
@@ -21,7 +22,6 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
-use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,

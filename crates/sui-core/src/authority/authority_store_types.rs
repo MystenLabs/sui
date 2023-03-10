@@ -13,10 +13,77 @@ use sui_types::object::{Data, MoveObject, Object, Owner};
 
 pub type ObjectContentDigest = ObjectDigest;
 
+// Versioning process:
+//
+// Object storage versioning is done lazily (at read time) - therefore we must always preserve the
+// code for reading the very first storage version. For all versions, a migration function
+//
+//   f(V_n) -> V_(n+1)
+//
+// must be defined. This way we can iteratively migrate the very oldest version to the very newest
+// version at any point in the future.
+//
+// To change the format of the object table value types (StoreObject and StoreMoveObject), use the
+// following process:
+// - Add a new variant to the enum to store the new version type.
+// - Extend the `migrate` functions to migrate from the previous version to the new version.
+// - Change `From<Object> for StoreObjectPair` to create the newest version only.
+//
+// Additionally, the first time we version these formats, we will need to:
+// - Add a check in the `TryFrom<StoreObjectPair> for Object` to see if the object that was just
+//   read is the latest version.
+// - If it is not, use the migration function (as explained above) to migrate it to the next
+//   version.
+// - Repeat until we have arrive at the current version.
+
+/// Enum wrapper for versioning
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub enum StoreObjectWrapper {
+    V1(StoreObjectV1),
+}
+
+// always points to latest version.
+pub type StoreObject = StoreObjectV1;
+
+impl StoreObjectWrapper {
+    pub fn migrate(self) -> Self {
+        // TODO: when there are multiple versions, we must iteratively migrate from version N to
+        // N+1 until we arrive at the latest version
+        self
+    }
+
+    // Always returns the most recent version. Older versions are migrated to the latest version at
+    // read time, so there is never a need to access older versions.
+    pub fn inner(&self) -> &StoreObject {
+        match self {
+            Self::V1(v1) => v1,
+
+            // can remove #[allow] when there are multiple versions
+            #[allow(unreachable_patterns)]
+            _ => panic!("object should have been migrated to latest version at read time"),
+        }
+    }
+    pub fn into_inner(self) -> StoreObject {
+        match self {
+            Self::V1(v1) => v1,
+
+            // can remove #[allow] when there are multiple versions
+            #[allow(unreachable_patterns)]
+            _ => panic!("object should have been migrated to latest version at read time"),
+        }
+    }
+}
+
+impl From<StoreObject> for StoreObjectWrapper {
+    fn from(o: StoreObject) -> Self {
+        StoreObjectWrapper::V1(o)
+    }
+}
+
 /// Forked version of [`sui_types::object::Object`]
 /// Used for efficient storing of move objects in the database
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct StoreObject {
+pub struct StoreObjectV1 {
     pub data: StoreData,
     pub owner: Owner,
     pub previous_transaction: TransactionDigest,
@@ -39,10 +106,54 @@ pub struct IndirectObjectMetadata {
     pub digest: ObjectContentDigest,
 }
 
+/// Enum wrapper for versioning
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub enum StoreMoveObjectWrapper {
+    V1(StoreMoveObjectV1),
+}
+
+// Always points to latest version.
+pub type StoreMoveObject = StoreMoveObjectV1;
+
+impl StoreMoveObjectWrapper {
+    pub fn migrate(self) -> Self {
+        // TODO: when there are multiple versions, we must iteratively migrate from version N to
+        // N+1 until we arrive at the latest version
+        self
+    }
+
+    // Always returns the most recent version. Older versions are migrated to the latest version at
+    // read time, so there is never a need to access older versions.
+    pub fn inner(&self) -> &StoreMoveObject {
+        match self {
+            Self::V1(v1) => v1,
+
+            // can remove #[allow] when there are multiple versions
+            #[allow(unreachable_patterns)]
+            _ => panic!("object should have been migrated to latest version at read time"),
+        }
+    }
+    pub fn into_inner(self) -> StoreMoveObject {
+        match self {
+            Self::V1(v1) => v1,
+
+            // can remove #[allow] when there are multiple versions
+            #[allow(unreachable_patterns)]
+            _ => panic!("object should have been migrated to latest version at read time"),
+        }
+    }
+}
+
+impl From<StoreMoveObject> for StoreMoveObjectWrapper {
+    fn from(o: StoreMoveObject) -> Self {
+        StoreMoveObjectWrapper::V1(o)
+    }
+}
+
 /// Separately stored move object
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct StoreMoveObject {
+pub struct StoreMoveObjectV1 {
     pub type_: StructTag,
     has_public_transfer: bool,
     #[serde_as(as = "Bytes")]
@@ -70,7 +181,7 @@ impl StoreMoveObject {
     }
 }
 
-pub struct StoreObjectPair(pub StoreObject, pub Option<StoreMoveObject>);
+pub struct StoreObjectPair(pub StoreObjectWrapper, pub Option<StoreMoveObjectWrapper>);
 
 pub(crate) fn get_store_object_pair(
     object: Object,
@@ -107,14 +218,15 @@ pub(crate) fn get_store_object_pair(
         previous_transaction: object.previous_transaction,
         storage_rebate: object.storage_rebate,
     };
-    StoreObjectPair(store_object, indirect_object)
+    StoreObjectPair(store_object.into(), indirect_object.map(|i| i.into()))
 }
 
-impl TryFrom<StoreObjectPair> for Object {
+pub struct MigratedStoreObjectPair(pub StoreObject, pub Option<StoreMoveObject>);
+impl TryFrom<MigratedStoreObjectPair> for Object {
     type Error = SuiError;
 
-    fn try_from(object: StoreObjectPair) -> Result<Self, Self::Error> {
-        let StoreObjectPair(store_object, indirect_object) = object;
+    fn try_from(object: MigratedStoreObjectPair) -> Result<Self, Self::Error> {
+        let MigratedStoreObjectPair(store_object, indirect_object) = object;
 
         let data = match (store_object.data, indirect_object) {
             (StoreData::Move(object), None) => Data::Move(object),

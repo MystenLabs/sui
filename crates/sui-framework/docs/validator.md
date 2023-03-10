@@ -9,7 +9,6 @@
 -  [Struct `Validator`](#0x2_validator_Validator)
 -  [Struct `DelegationRequestEvent`](#0x2_validator_DelegationRequestEvent)
 -  [Constants](#@Constants_0)
--  [Function `verify_proof_of_possession`](#0x2_validator_verify_proof_of_possession)
 -  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
 -  [Function `deactivate`](#0x2_validator_deactivate)
@@ -80,10 +79,7 @@
 <b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
-<b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="bcs.md#0x2_bcs">0x2::bcs</a>;
-<b>use</b> <a href="bls12381.md#0x2_bls12381">0x2::bls12381</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -509,52 +505,6 @@ New Capability is not created by the validator itself
 
 
 
-<a name="0x2_validator_PROOF_OF_POSSESSION_DOMAIN"></a>
-
-
-
-<pre><code><b>const</b> <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>: <a href="">vector</a>&lt;u8&gt; = [107, 111, 115, 107];
-</code></pre>
-
-
-
-<a name="0x2_validator_verify_proof_of_possession"></a>
-
-## Function `verify_proof_of_possession`
-
-
-
-<pre><code><b>fun</b> <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(proof_of_possession: <a href="">vector</a>&lt;u8&gt;, sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(
-    proof_of_possession: <a href="">vector</a>&lt;u8&gt;,
-    sui_address: <b>address</b>,
-    protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;
-) {
-    // The proof of possession is the signature over ValidatorPK || AccountAddress.
-    // This proves that the account <b>address</b> is owned by the holder of ValidatorPK, and <b>ensures</b>
-    // that PK <b>exists</b>.
-    <b>let</b> signed_bytes = protocol_pubkey_bytes;
-    <b>let</b> address_bytes = to_bytes(&sui_address);
-    <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, address_bytes);
-    <b>assert</b>!(
-        bls12381_min_sig_verify_with_domain(&proof_of_possession, &protocol_pubkey_bytes, signed_bytes, <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>) == <b>true</b>,
-        <a href="validator.md#0x2_validator_EInvalidProofOfPossession">EInvalidProofOfPossession</a>
-    );
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_new_metadata"></a>
 
 ## Function `new_metadata`
@@ -662,11 +612,6 @@ New Capability is not created by the validator itself
         0
     );
     <b>assert</b>!(<a href="validator.md#0x2_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x2_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
-    <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(
-        proof_of_possession,
-        sui_address,
-        protocol_pubkey_bytes
-    );
 
     <b>let</b> metadata = <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(
         sui_address,
@@ -2129,8 +2074,6 @@ Update protocol public key of this validator, taking effects from next epoch
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_protocol_pubkey">update_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, protocol_pubkey: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;) {
-    // TODO <b>move</b> proof of possession verification <b>to</b> the <b>native</b> function
-    <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(proof_of_possession, self.metadata.sui_address, protocol_pubkey);
     self.metadata.next_epoch_protocol_pubkey_bytes = <a href="_some">option::some</a>(protocol_pubkey);
     self.metadata.next_epoch_proof_of_possession = <a href="_some">option::some</a>(proof_of_possession);
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
