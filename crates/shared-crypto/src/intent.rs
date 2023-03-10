@@ -8,9 +8,7 @@ use serde_repr::Deserialize_repr;
 use serde_repr::Serialize_repr;
 use std::str::FromStr;
 
-#[cfg(test)]
-#[path = "unit_tests/intent_tests.rs"]
-mod intent_tests;
+pub const INTENT_PREFIX_LENGTH: usize = 3;
 
 /// The version here is to distinguish between signing different versions of the struct
 /// or enum. Serialized output between two different versions of the same struct/enum
@@ -39,6 +37,7 @@ impl TryFrom<u8> for IntentVersion {
 #[repr(u8)]
 pub enum AppId {
     Sui = 0,
+    Narwhal = 1,
 }
 
 // TODO(joyqvq): Use num_derive
@@ -58,15 +57,19 @@ impl Default for AppId {
     }
 }
 
+/// This enums specifies the intent scope. Two intents for different scope should
+/// never collide, so no signature provided for one intent scope can be used for
+/// another, even when the serialized data itself may be the same.
 #[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentScope {
-    TransactionData = 0,
-    TransactionEffects = 1,
-    CheckpointSummary = 2,
-    PersonalMessage = 3,
-    SenderSignedTransaction = 4,
-    ProofOfPossession = 5,
+    TransactionData = 0,         // Used for a user signature on a transaction data.
+    TransactionEffects = 1,      // Used for an authority signature on transaction effects.
+    CheckpointSummary = 2,       // Used for an authority signature on a checkpoint summary.
+    PersonalMessage = 3,         // Used for a user signature on a personal message.
+    SenderSignedTransaction = 4, // Used for an authority signature on a user signed transaction.
+    ProofOfPossession = 5, // Used as a signature representing an authority's proof of possesion of its authority protocol key.
+    HeaderDigest = 6,      // Used for narwhal authority signature on header digest.
 }
 
 impl TryFrom<u8> for IntentScope {

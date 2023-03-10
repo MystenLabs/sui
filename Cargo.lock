@@ -3735,6 +3735,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "inquire"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd079157ad94a32f7511b2e13037f3ae417ad80a6a9b0de29154d48b86f5d6c8"
+dependencies = [
+ "bitflags",
+ "crossterm 0.25.0",
+ "dyn-clone",
+ "lazy_static 1.4.0",
+ "newline-converter",
+ "thiserror",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "insta"
 version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5374,6 +5390,7 @@ name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
+ "bcs",
  "bincode",
  "criterion",
  "eyre",
@@ -5390,6 +5407,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with",
+ "shared-crypto",
  "tokio",
  "workspace-hack",
  "zeroize",
@@ -5672,6 +5690,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
+ "shared-crypto",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",
@@ -5784,6 +5803,15 @@ name = "nested"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
+
+[[package]]
+name = "newline-converter"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f71d09d5c87634207f894c6b31b6a2b2c64ea3bdcf71bd5599fdbbe1600c00f"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "nexlint"
@@ -7996,6 +8024,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-crypto"
+version = "0.0.0"
+dependencies = [
+ "bcs",
+ "eyre",
+ "fastcrypto",
+ "serde 1.0.152",
+ "serde_repr",
+ "workspace-hack",
+]
+
+[[package]]
 name = "shell-words"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8419,9 +8459,11 @@ dependencies = [
  "fastcrypto",
  "futures",
  "git-version",
+ "inquire",
  "jemalloc-ctl",
  "jsonrpsee",
  "move-binary-format",
+ "move-bytecode-utils",
  "move-cli",
  "move-core-types",
  "move-package",
@@ -8444,6 +8486,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
+ "shared-crypto",
  "shell-words",
  "signature 1.6.4",
  "sui-config",
@@ -8581,6 +8624,7 @@ dependencies = [
  "reqwest",
  "serde 1.0.152",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-core",
@@ -8625,6 +8669,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_with",
  "serde_yaml",
+ "shared-crypto",
  "sui-adapter",
  "sui-framework",
  "sui-keys",
@@ -8689,6 +8734,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
+ "shared-crypto",
  "signature 1.6.4",
  "strum_macros",
  "sui-adapter",
@@ -8773,6 +8819,7 @@ dependencies = [
  "rocksdb",
  "scopeguard",
  "serde 1.0.152",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-json-rpc-types",
@@ -8948,6 +8995,7 @@ dependencies = [
  "reqwest",
  "scopeguard",
  "serde 1.0.152",
+ "shared-crypto",
  "signature 1.6.4",
  "sui-adapter",
  "sui-config",
@@ -9011,6 +9059,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
+ "shared-crypto",
  "signature 1.6.4",
  "slip10_ed25519",
  "sui-types",
@@ -9096,6 +9145,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
+ "shared-crypto",
  "sui-config",
  "sui-types",
  "tap",
@@ -9142,6 +9192,7 @@ dependencies = [
  "sui-telemetry",
  "sui-tls",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tokio",
  "tower",
@@ -9236,6 +9287,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_json",
  "serde_with",
+ "shared-crypto",
  "signature 1.6.4",
  "strum",
  "strum_macros",
@@ -9282,6 +9334,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-adapter",
  "sui-config",
@@ -9557,6 +9610,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "criterion",
+ "derivative",
  "derive_more",
  "enum_dispatch",
  "eyre",
@@ -9585,6 +9639,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_with",
+ "shared-crypto",
  "signature 1.6.4",
  "static_assertions",
  "strum",
@@ -9885,6 +9940,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde_json",
+ "shared-crypto",
  "signature 1.6.4",
  "sui",
  "sui-adapter",
@@ -11427,6 +11483,7 @@ dependencies = [
  "indicatif",
  "inferno",
  "inout",
+ "inquire",
  "insta",
  "instant",
  "internment",
@@ -11523,6 +11580,7 @@ dependencies = [
  "multimap",
  "named-lock",
  "nested",
+ "newline-converter",
  "nexlint",
  "nexlint-lints",
  "nibble_vec",

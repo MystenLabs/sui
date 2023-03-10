@@ -9,7 +9,7 @@ pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
 pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
-pub use verifier::{ValidatorAllowlist, ValidatorCertVerifier};
+pub use verifier::{AllowAll, Allower, CertVerifier, HashSetAllow, ValidatorAllowlist};
 
 pub use rustls;
 
@@ -21,7 +21,38 @@ mod tests {
     use rustls::server::ClientCertVerifier;
 
     #[test]
-    fn verify() {
+    fn verify_allowall() {
+        let mut rng = rand::thread_rng();
+        let allowed = Ed25519KeyPair::generate(&mut rng);
+        let disallowed = Ed25519KeyPair::generate(&mut rng);
+        let random_cert_bob =
+            SelfSignedCertificate::new(allowed.private(), SUI_VALIDATOR_SERVER_NAME);
+        let random_cert_alice =
+            SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
+
+        let verifier = CertVerifier::new(AllowAll);
+
+        // The bob passes validation
+        verifier
+            .verify_client_cert(
+                &random_cert_bob.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
+            .unwrap();
+
+        // The alice passes validation
+        verifier
+            .verify_client_cert(
+                &random_cert_alice.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn verify_hashset() {
         let mut rng = rand::thread_rng();
         let allowed = Ed25519KeyPair::generate(&mut rng);
         let disallowed = Ed25519KeyPair::generate(&mut rng);
@@ -32,9 +63,15 @@ mod tests {
         let disallowed_cert =
             SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
-        let (verifier, allowlist) = ValidatorCertVerifier::new();
+        let mut allowlist = HashSetAllow::new();
+        let verifier = CertVerifier::new(allowlist.clone());
 
-        allowlist.write().unwrap().insert(allowed_public_key);
+        // Add our public key to the allower
+        allowlist
+            .inner_mut()
+            .write()
+            .unwrap()
+            .insert(allowed_public_key);
 
         // The allowed cert passes validation
         verifier
@@ -55,7 +92,7 @@ mod tests {
             .unwrap_err();
 
         // After removing the allowed public key from the set it now fails validation
-        allowlist.write().unwrap().clear();
+        allowlist.inner_mut().write().unwrap().clear();
         verifier
             .verify_client_cert(
                 &allowed_cert.rustls_certificate(),
@@ -72,9 +109,11 @@ mod tests {
         let public_key = keypair.public().to_owned();
         let cert = SelfSignedCertificate::new(keypair.private(), "not-sui");
 
-        let (verifier, allowlist) = ValidatorCertVerifier::new();
+        let mut allowlist = HashSetAllow::new();
+        let verifier = CertVerifier::new(allowlist.clone());
 
-        allowlist.write().unwrap().insert(public_key);
+        // Add our public key to the allower
+        allowlist.inner_mut().write().unwrap().insert(public_key);
 
         // Allowed public key but the server-name in the cert is not the required "sui"
         verifier
@@ -106,11 +145,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let (tls_config, allowlist) = ValidatorCertVerifier::rustls_server_config(
-            vec![server_certificate.rustls_certificate()],
-            server_certificate.rustls_private_key(),
-        )
-        .unwrap();
+        let mut allowlist = HashSetAllow::new();
+        let tls_config = CertVerifier::new(allowlist.clone())
+            .rustls_server_config(
+                vec![server_certificate.rustls_certificate()],
+                server_certificate.rustls_private_key(),
+            )
+            .unwrap();
 
         async fn handler(tls_info: axum::Extension<TlsConnectionInfo>) -> String {
             tls_info.public_key().unwrap().to_string()
@@ -133,7 +174,11 @@ mod tests {
         client.get(&server_url).send().await.unwrap_err();
 
         // Insert the client's public key into the allowlist and verify the request is successful
-        allowlist.write().unwrap().insert(client_public_key.clone());
+        allowlist
+            .inner_mut()
+            .write()
+            .unwrap()
+            .insert(client_public_key.clone());
 
         let res = client.get(&server_url).send().await.unwrap();
         let body = res.text().await.unwrap();

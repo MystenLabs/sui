@@ -17,11 +17,11 @@
 -  [Function `request_remove_validator`](#0x2_sui_system_request_remove_validator)
 -  [Function `request_set_gas_price`](#0x2_sui_system_request_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_sui_system_request_set_commission_rate)
--  [Function `request_add_delegation`](#0x2_sui_system_request_add_delegation)
--  [Function `request_add_delegation_mul_coin`](#0x2_sui_system_request_add_delegation_mul_coin)
--  [Function `request_add_delegation_with_locked_coin`](#0x2_sui_system_request_add_delegation_with_locked_coin)
--  [Function `request_add_delegation_mul_locked_coin`](#0x2_sui_system_request_add_delegation_mul_locked_coin)
--  [Function `request_withdraw_delegation`](#0x2_sui_system_request_withdraw_delegation)
+-  [Function `request_add_stake`](#0x2_sui_system_request_add_stake)
+-  [Function `request_add_stake_mul_coin`](#0x2_sui_system_request_add_stake_mul_coin)
+-  [Function `request_add_stake_with_locked_coin`](#0x2_sui_system_request_add_stake_with_locked_coin)
+-  [Function `request_add_stake_mul_locked_coin`](#0x2_sui_system_request_add_stake_mul_locked_coin)
+-  [Function `request_withdraw_stake`](#0x2_sui_system_request_withdraw_stake)
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `report_validator_impl`](#0x2_sui_system_report_validator_impl)
@@ -102,19 +102,6 @@ A list of system config parameters.
 
 
 <dl>
-<dt>
-<code>min_validator_stake: u64</code>
-</dt>
-<dd>
- Lower-bound on the amount of stake required to become a validator.
-</dd>
-<dt>
-<code>max_validator_count: u64</code>
-</dt>
-<dd>
- Maximum number of active validators at any moment.
- We do not allow the number of validators in any epoch to go above this.
-</dd>
 <dt>
 <code>governance_start_epoch: u64</code>
 </dt>
@@ -433,6 +420,27 @@ the epoch advancement transaction.
 
 
 
+<a name="0x2_sui_system_MAX_VALIDATOR_COUNT"></a>
+
+Maximum number of active validators at any moment.
+We do not allow the number of validators in any epoch to go above this.
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>: u64 = 150;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_MIN_VALIDATOR_STAKE"></a>
+
+Lower-bound on the amount of stake required to become a validator.
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>: u64 = 25000000000000000;
+</code></pre>
+
+
+
 <a name="0x2_sui_system_create"></a>
 
 ## Function `create`
@@ -441,7 +449,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_count: u64, min_validator_stake: u64, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -454,8 +462,6 @@ This function will be called only once in genesis.
     validators: <a href="">vector</a>&lt;Validator&gt;,
     stake_subsidy_fund: Balance&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
-    max_validator_count: u64,
-    min_validator_stake: u64,
     governance_start_epoch: u64,
     initial_stake_subsidy_amount: u64,
     protocol_version: u64,
@@ -471,8 +477,6 @@ This function will be called only once in genesis.
         validators,
         storage_fund,
         parameters: <a href="sui_system.md#0x2_sui_system_SystemParameters">SystemParameters</a> {
-            min_validator_stake,
-            max_validator_count,
             governance_start_epoch,
         },
         reference_gas_price,
@@ -499,10 +503,12 @@ This function will be called only once in genesis.
 
 ## Function `request_add_validator_candidate`
 
-Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
-stakes in their staking pool. Once they have at least <code>min_validator_stake</code> amount of stake they
+Can be called by anyone who wishes to become a validator candidate and starts accuring
+stakes in their staking pool. Once they have at least <code><a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a></code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
+Note: <code>proof_of_possession</code> MUST be a valid signature using sui_address and protocol_pubkey_bytes.
+To produce a valid PoP, run [fn test_proof_of_possession].
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_validator_candidate">request_add_validator_candidate</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -618,11 +624,11 @@ epoch has already reached the maximum.
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <b>assert</b>!(
-        <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_count,
+        <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; <a href="sui_system.md#0x2_sui_system_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>,
         <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
     );
 
-    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, self.parameters.min_validator_stake, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>, ctx);
 }
 </code></pre>
 
@@ -736,14 +742,14 @@ A validator can call this entry function to set a new commission rate, updated a
 
 </details>
 
-<a name="0x2_sui_system_request_add_delegation"></a>
+<a name="0x2_sui_system_request_add_stake"></a>
 
-## Function `request_add_delegation`
+## Function `request_add_stake`
 
-Add delegated stake to a validator's staking pool.
+Add stake to a validator's staking pool.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation">request_add_delegation</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, delegate_stake: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake">request_add_stake</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stake: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -752,17 +758,17 @@ Add delegated stake to a validator's staking pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation">request_add_delegation</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake">request_add_stake</a>(
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    delegate_stake: Coin&lt;SUI&gt;,
+    stake: Coin&lt;SUI&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <a href="validator_set.md#0x2_validator_set_request_add_delegation">validator_set::request_add_delegation</a>(
+    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(
         &<b>mut</b> self.validators,
         validator_address,
-        <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(delegate_stake),
+        <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(stake),
         <a href="_none">option::none</a>(),
         ctx,
     );
@@ -773,14 +779,14 @@ Add delegated stake to a validator's staking pool.
 
 </details>
 
-<a name="0x2_sui_system_request_add_delegation_mul_coin"></a>
+<a name="0x2_sui_system_request_add_stake_mul_coin"></a>
 
-## Function `request_add_delegation_mul_coin`
+## Function `request_add_stake_mul_coin`
 
-Add delegated stake to a validator's staking pool using multiple coins.
+Add stake to a validator's staking pool using multiple coins.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation_mul_coin">request_add_delegation_mul_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, delegate_stakes: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_coin">request_add_stake_mul_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stakes: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -789,16 +795,16 @@ Add delegated stake to a validator's staking pool using multiple coins.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation_mul_coin">request_add_delegation_mul_coin</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_coin">request_add_stake_mul_coin</a>(
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    delegate_stakes: <a href="">vector</a>&lt;Coin&lt;SUI&gt;&gt;,
+    stakes: <a href="">vector</a>&lt;Coin&lt;SUI&gt;&gt;,
     stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="sui_system.md#0x2_sui_system_extract_coin_balance">extract_coin_balance</a>(delegate_stakes, stake_amount, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_delegation">validator_set::request_add_delegation</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_none">option::none</a>(), ctx);
+    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="sui_system.md#0x2_sui_system_extract_coin_balance">extract_coin_balance</a>(stakes, stake_amount, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_none">option::none</a>(), ctx);
 }
 </code></pre>
 
@@ -806,14 +812,14 @@ Add delegated stake to a validator's staking pool using multiple coins.
 
 </details>
 
-<a name="0x2_sui_system_request_add_delegation_with_locked_coin"></a>
+<a name="0x2_sui_system_request_add_stake_with_locked_coin"></a>
 
-## Function `request_add_delegation_with_locked_coin`
+## Function `request_add_stake_with_locked_coin`
 
-Add delegated stake to a validator's staking pool using a locked SUI coin.
+Add stake to a validator's staking pool using a locked SUI coin.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation_with_locked_coin">request_add_delegation_with_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, delegate_stake: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin">request_add_stake_with_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stake: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -822,15 +828,15 @@ Add delegated stake to a validator's staking pool using a locked SUI coin.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation_with_locked_coin">request_add_delegation_with_locked_coin</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin">request_add_stake_with_locked_coin</a>(
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    delegate_stake: LockedCoin&lt;SUI&gt;,
+    stake: LockedCoin&lt;SUI&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(delegate_stake);
-    <a href="validator_set.md#0x2_validator_set_request_add_delegation">validator_set::request_add_delegation</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_some">option::some</a>(lock), ctx);
+    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(stake);
+    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_some">option::some</a>(lock), ctx);
 }
 </code></pre>
 
@@ -838,14 +844,14 @@ Add delegated stake to a validator's staking pool using a locked SUI coin.
 
 </details>
 
-<a name="0x2_sui_system_request_add_delegation_mul_locked_coin"></a>
+<a name="0x2_sui_system_request_add_stake_mul_locked_coin"></a>
 
-## Function `request_add_delegation_mul_locked_coin`
+## Function `request_add_stake_mul_locked_coin`
 
-Add delegated stake to a validator's staking pool using multiple locked SUI coins.
+Add stake to a validator's staking pool using multiple locked SUI coins.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation_mul_locked_coin">request_add_delegation_mul_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, delegate_stakes: <a href="">vector</a>&lt;<a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_locked_coin">request_add_stake_mul_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stakes: <a href="">vector</a>&lt;<a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -854,16 +860,16 @@ Add delegated stake to a validator's staking pool using multiple locked SUI coin
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_delegation_mul_locked_coin">request_add_delegation_mul_locked_coin</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_locked_coin">request_add_stake_mul_locked_coin</a>(
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    delegate_stakes: <a href="">vector</a>&lt;LockedCoin&lt;SUI&gt;&gt;,
+    stakes: <a href="">vector</a>&lt;LockedCoin&lt;SUI&gt;&gt;,
     stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(delegate_stakes, stake_amount, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_delegation">validator_set::request_add_delegation</a>(
+    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(stakes, stake_amount, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(
         &<b>mut</b> self.validators,
         validator_address,
         <a href="balance.md#0x2_balance">balance</a>,
@@ -877,14 +883,14 @@ Add delegated stake to a validator's staking pool using multiple locked SUI coin
 
 </details>
 
-<a name="0x2_sui_system_request_withdraw_delegation"></a>
+<a name="0x2_sui_system_request_withdraw_stake"></a>
 
-## Function `request_withdraw_delegation`
+## Function `request_withdraw_stake`
 
-Withdraw some portion of a delegation from a validator's staking pool.
+Withdraw some portion of a stake from a validator's staking pool.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_withdraw_delegation">request_withdraw_delegation</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_withdraw_stake">request_withdraw_stake</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -893,14 +899,14 @@ Withdraw some portion of a delegation from a validator's staking pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_withdraw_delegation">request_withdraw_delegation</a>(
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_withdraw_stake">request_withdraw_stake</a>(
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>assert</b>!(delegation_activation_epoch(&staked_sui) &lt;= <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx), 0);
-    <a href="validator_set.md#0x2_validator_set_request_withdraw_delegation">validator_set::request_withdraw_delegation</a>(
+    <b>assert</b>!(stake_activation_epoch(&staked_sui) &lt;= <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx), 0);
+    <a href="validator_set.md#0x2_validator_set_request_withdraw_stake">validator_set::request_withdraw_stake</a>(
         &<b>mut</b> self.validators, staked_sui, ctx,
     );
 }
@@ -1447,7 +1453,7 @@ It does the following things:
 1. Add storage charge to the storage fund.
 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
 gas coins.
-3. Distribute computation charge to validator stake and delegation stake.
+3. Distribute computation charge to validator stake.
 4. Update all validators.
 
 
@@ -1496,7 +1502,7 @@ gas coins.
     <b>let</b> storage_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(storage_charge);
     <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
 
-    // Include stake subsidy in the rewards given out <b>to</b> validators and delegators.
+    // Include stake subsidy in the rewards given out <b>to</b> validators and stakers.
     // Delay distributing any stake subsidies until after `governance_start_epoch`.
     <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <b>if</b> (<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) &gt;= self.parameters.governance_start_epoch) {
         <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>)

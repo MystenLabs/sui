@@ -24,13 +24,13 @@ use tracing::instrument;
 
 async fn get_gas_status(
     objects: &[Object],
+    gas: &[ObjectRef],
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
     // Get the first coin (possibly the only one) and make it "the gas coin", then
     // keep track of all others that can contribute to gas (gas smashing and special
     // pay transactions).
-    let gas = transaction.gas();
     let gas_object_ref = gas.get(0).unwrap();
     // all other gas coins
     let more_gas_object_refs = gas[1..].to_vec();
@@ -57,7 +57,27 @@ pub async fn check_transaction_input(
     transaction.validity_check(epoch_store.protocol_config())?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
-    let gas_status = get_gas_status(&objects, epoch_store, transaction).await?;
+    let gas_status = get_gas_status(&objects, transaction.gas(), epoch_store, transaction).await?;
+    let input_objects = check_objects(transaction, input_objects, objects)?;
+    Ok((gas_status, input_objects))
+}
+
+pub async fn check_transaction_input_with_given_gas(
+    store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
+    transaction: &TransactionData,
+    gas_object: Object,
+) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+    transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
+
+    let mut input_objects = transaction.input_objects()?;
+    let mut objects = store.check_input_objects(&input_objects)?;
+
+    let gas_object_ref = gas_object.compute_object_reference();
+    input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
+    objects.push(gas_object);
+
+    let gas_status = get_gas_status(&objects, &[gas_object_ref], epoch_store, transaction).await?;
     let input_objects = check_objects(transaction, input_objects, objects)?;
     Ok((gas_status, input_objects))
 }
@@ -127,7 +147,8 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let gas_status = get_gas_status(&input_object_data, epoch_store, tx_data).await?;
+    let gas_status =
+        get_gas_status(&input_object_data, tx_data.gas(), epoch_store, tx_data).await?;
     let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
     Ok((gas_status, input_objects))
 }

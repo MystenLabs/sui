@@ -5,6 +5,7 @@ use crate::balance::Balance;
 use crate::base_types::{ObjectID, SuiAddress};
 use crate::collection_types::{Table, TableVec, VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion};
+use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
 use crate::sui_system_state::epoch_start_sui_system_state::{
@@ -20,6 +21,7 @@ use std::collections::BTreeMap;
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
 use super::SuiSystemStateTrait;
 
+const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
 const E_METADATA_INVALID_NET_PUBKEY: u64 = 2;
 const E_METADATA_INVALID_WORKER_PUBKEY: u64 = 3;
@@ -33,8 +35,6 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
-    pub min_validator_stake: u64,
-    pub max_validator_count: u64,
     pub governance_start_epoch: u64,
 }
 
@@ -65,12 +65,14 @@ pub struct ValidatorMetadataV1 {
     pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(derivative::Derivative, Clone, Eq, PartialEq)]
+#[derivative(Debug)]
 pub struct VerifiedValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    #[derivative(Debug = "ignore")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
@@ -99,11 +101,16 @@ impl VerifiedValidatorMetadataV1 {
 impl ValidatorMetadataV1 {
     /// Verify validator metadata and return a verified version (on success) or error code (on failure)
     pub fn verify(&self) -> Result<VerifiedValidatorMetadataV1, u64> {
-        // TODO: move the proof of possession verification here
-
         let protocol_pubkey =
             narwhal_crypto::PublicKey::from_bytes(self.protocol_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_PUBKEY)?;
+
+        // Verify proof of possession for the protocol key
+        let pop = narwhal_crypto::Signature::from_bytes(self.proof_of_possession_bytes.as_ref())
+            .map_err(|_| E_METADATA_INVALID_POP)?;
+        verify_proof_of_possession(&pop, &protocol_pubkey, self.sui_address)
+            .map_err(|_| E_METADATA_INVALID_POP)?;
+
         let network_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.network_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_NET_PUBKEY)?;
@@ -130,6 +137,30 @@ impl ValidatorMetadataV1 {
                     .map_err(|_| E_METADATA_INVALID_PUBKEY)?,
             )),
         }?;
+
+        let next_epoch_pop = match self.next_epoch_proof_of_possession.clone() {
+            None => Ok::<Option<narwhal_crypto::Signature>, u64>(None),
+            Some(bytes) => Ok(Some(
+                narwhal_crypto::Signature::from_bytes(bytes.as_ref())
+                    .map_err(|_| E_METADATA_INVALID_POP)?,
+            )),
+        }?;
+        // Verify proof of possession for the next epoch protocol key
+        if let Some(ref next_epoch_protocol_pubkey) = next_epoch_protocol_pubkey {
+            match next_epoch_pop {
+                Some(next_epoch_pop) => {
+                    verify_proof_of_possession(
+                        &next_epoch_pop,
+                        next_epoch_protocol_pubkey,
+                        self.sui_address,
+                    )
+                    .map_err(|_| E_METADATA_INVALID_POP)?;
+                }
+                None => {
+                    return Err(E_METADATA_INVALID_POP);
+                }
+            }
+        }
 
         let next_epoch_network_pubkey = match self.next_epoch_network_pubkey_bytes.clone() {
             None => Ok::<Option<narwhal_crypto::NetworkPublicKey>, u64>(None),
@@ -273,7 +304,7 @@ impl ValidatorV1 {
                             id: exchange_rates_id,
                             size: exchange_rates_size,
                         },
-                    pending_delegation,
+                    pending_stake,
                     pending_total_sui_withdraw,
                     pending_pool_token_withdraw,
                 },
@@ -315,7 +346,7 @@ impl ValidatorV1 {
             pool_token_balance,
             exchange_rates_id,
             exchange_rates_size,
-            pending_delegation,
+            pending_stake,
             pending_total_sui_withdraw,
             pending_pool_token_withdraw,
             commission_rate,
@@ -338,7 +369,7 @@ pub struct StakingPoolV1 {
     pub rewards_pool: Balance,
     pub pool_token_balance: u64,
     pub exchange_rates: Table,
-    pub pending_delegation: u64,
+    pub pending_stake: u64,
     pub pending_total_sui_withdraw: u64,
     pub pending_pool_token_withdraw: u64,
 }
@@ -506,12 +537,9 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         },
                 },
             storage_fund,
-            parameters:
-                SystemParametersV1 {
-                    min_validator_stake,
-                    max_validator_count,
-                    governance_start_epoch,
-                },
+            parameters: SystemParametersV1 {
+                governance_start_epoch,
+            },
             reference_gas_price,
             validator_report_records:
                 VecMap {
@@ -533,8 +561,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             reference_gas_price,
             safe_mode,
             epoch_start_timestamp_ms,
-            min_validator_stake,
-            max_validator_count,
             governance_start_epoch,
             stake_subsidy_epoch_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
@@ -579,8 +605,6 @@ impl Default for SuiSystemStateInnerV1 {
             validators: validator_set,
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {
-                min_validator_stake: 1,
-                max_validator_count: 100,
                 governance_start_epoch: 0,
             },
             reference_gas_price: 1,

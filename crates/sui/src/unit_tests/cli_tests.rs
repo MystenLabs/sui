@@ -1221,7 +1221,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
+async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -1251,7 +1251,7 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
         "--module",
         "sui_system",
         "--function",
-        "request_add_delegation_mul_coin",
+        "request_add_stake_mul_coin",
         "--args",
         "0x5",
         &format!("[{}]", coins.first().unwrap().coin_object_id),
@@ -1276,7 +1276,7 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
+async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
@@ -1306,7 +1306,7 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
         "--module",
         "sui_system",
         "--function",
-        "request_add_delegation_mul_coin",
+        "request_add_stake_mul_coin",
         "--args",
         "0x5",
         &format!("[{}]", coins.first().unwrap().coin_object_id),

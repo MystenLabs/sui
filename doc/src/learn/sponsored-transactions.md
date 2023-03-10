@@ -3,10 +3,10 @@ title: Sui Sponsored Transactions
 ---
 
 A Sui Sponsored transaction is one where a Sui address (the sponsor’s) pays the gas fees for a transaction initialized by another address (the user’s). You can use Sponsored transactions to cover the fees for users on your site or app so that they do not get charged for them. This removes a significant obstacle that web2 users encounter when entering web3, as they often have to purchase tokens to perform a transaction on chain. For example, you could increase conversion rates for gamers by sponsoring their early transactions.
+
 Sponsored transactions also facilitate asset management as you don’t need to maintain multiple accounts with SUI tokens to transfer funds.
 
 You can use Sui Sponsored transactions to:
-
  * Sponsor (pay gas fees for) a transaction initiated by a user.
  * Sponsor transactions you initiate as the sponsor.
  * Provide a wildcard GasData object to users. The object covers the gas fees for a user transaction. The GasData object covers any fee amount determined for the transaction as long as the budget is sufficient.
@@ -20,7 +20,6 @@ In a sponsored transaction, the sponsor’s gas object covers fees for the trans
  * [PayAllSui](https://docs.sui.io/sui-jsonrpc#sui_payAllSui)
 
  Also note that you can’t use Sponsored Transaction with `BatchTransaction`, which will be deprecated in a future release.
-
 
 ## Potential Risks Using Sponsored Transactions
 
@@ -115,7 +114,7 @@ pub fn submit_sole_signed_transaction(sole_signed_data: SenderSignedData) -> Res
 Alternatively, use the API endpoint to return a GasData object.
 
 ```rust
-pub fn request_gas(/*perhaps some requirement data*/) -> Result<GasData, Error>;
+pub fn request_gas(/*requirement data*/) -> Result<GasData, Error>;
 ```
 
 ### User and Sponsor-initiated transaction.

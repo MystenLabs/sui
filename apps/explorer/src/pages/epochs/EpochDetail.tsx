@@ -51,8 +51,7 @@ function EpochDetail() {
     const validatorsTable = validatorsTableData(
         data.activeValidators,
         data.epoch,
-        validatorEvents?.data,
-        data.minValidatorStake
+        validatorEvents?.data
     );
 
     return (

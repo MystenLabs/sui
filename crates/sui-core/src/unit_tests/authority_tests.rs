@@ -32,7 +32,6 @@ use std::fs;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use sui_adapter::programmable_transactions;
 use sui_json_rpc_types::{
     SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary, SuiTransactionEffectsAPI,
 };
@@ -42,10 +41,7 @@ use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
     to_sender_signed_transaction_with_multi_signers,
 };
-use sui_types::{
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-};
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use move_core_types::parser::parse_type_tag;
@@ -56,7 +52,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::object::Data;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::sui_system_state::{SuiSystemStateWrapper, SUI_SYSTEM_STATE_TESTING_VERSION1};
+use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -245,6 +241,7 @@ async fn test_dry_run_transaction() {
         .await
         .unwrap();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    let gas_usage = response.effects.gas_used();
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode
@@ -261,6 +258,22 @@ async fn test_dry_run_transaction() {
         .unwrap()
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
+
+    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = TransactionData::new_with_gas_coins(
+        txn_data.kind().clone(),
+        txn_data.sender(),
+        vec![],
+        txn_data.gas_budget(),
+        txn_data.gas_price(),
+    );
+    let response = fullnode
+        .dry_exec_transaction(txn_data, transaction_digest)
+        .await
+        .unwrap();
+    let gas_usage_no_gas = response.effects.gas_used();
+    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    assert_eq!(gas_usage, gas_usage_no_gas);
 }
 
 #[tokio::test]
@@ -997,6 +1010,38 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .await
         .unwrap()
         .is_none());
+}
+
+#[tokio::test]
+async fn test_upgrade_module_is_feature_gated() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 10000);
+    let authority_state = init_state().await;
+    authority_state.insert_genesis_object(gas_object).await;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Data doesn't matter here. We hit the feature flag before checking it.
+        let arg = builder.pure(1).unwrap();
+        builder.upgrade(arg, vec![], vec![vec![]]);
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = execute_programmable_transaction(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        pt,
+    )
+    .await
+    .unwrap();
+    let (failure_status, _) = effects.status.unwrap_err();
+    assert_eq!(
+        failure_status,
+        ExecutionFailureStatus::FeatureNotYetSupported
+    );
 }
 
 /* FIXME: This tests the submission of out of transaction certs, but modifies object sequence numbers manually
@@ -2998,8 +3043,13 @@ async fn test_genesis_sui_system_state_object() {
     );
 }
 
+#[cfg(msim)]
 #[sim_test]
 async fn test_sui_system_state_nop_upgrade() {
+    use sui_adapter::programmable_transactions;
+    use sui_types::sui_system_state::SUI_SYSTEM_STATE_TESTING_VERSION1;
+    use sui_types::{MOVE_STDLIB_ADDRESS, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+
     let authority_state = init_state().await;
 
     let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MIN);
@@ -5115,48 +5165,30 @@ async fn test_gas_smashing() {
     }
 
     // run an object creation transaction with the given amount of gas and coins
-    async fn run_and_check_ok(reference_gas_used: u64, coin_num: u64, budget: u64) -> u64 {
+    async fn run_and_check(
+        reference_gas_used: u64,
+        coin_num: u64,
+        budget: u64,
+        success: bool,
+    ) -> u64 {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
         let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
         let (state, effects) = create_obj(sender, sender_key, gas_coins, budget).await;
-        // transaction is good
-        assert!(effects.status().is_ok());
-        // gas object in effects is first coin in vector of coins
-        assert_eq!(gas_coin_ids[0], effects.gas_object().0 .0);
-        // object is created and gas at position 0 mutated
-        assert_eq!((effects.created().len(), effects.mutated().len()), (1, 1));
-        // extra coin are deleted
-        assert_eq!(effects.deleted().len() as u64, coin_num - 1);
-        for gas_coin_id in &gas_coin_ids[1..] {
-            assert!(effects
-                .deleted()
-                .iter()
-                .any(|deleted| deleted.0 == *gas_coin_id));
+        // check transaction
+        if success {
+            assert!(effects.status().is_ok());
+        } else {
+            assert!(effects.status().is_err());
         }
-        // balance on first coin is correct
-        let balance = sui_types::gas::get_gas_balance(
-            &state.get_object(&gas_coin_ids[0]).await.unwrap().unwrap(),
-        )
-        .unwrap();
-        let gas_used = effects.gas_cost_summary().gas_used();
-        assert!(reference_gas_used > balance);
-        assert_eq!(reference_gas_used, balance + gas_used);
-        gas_used
-    }
-
-    // run an object creation transaction with the given amount of gas and coins, failure case
-    async fn run_and_check_err(reference_gas_used: u64, coin_num: u64, budget: u64) -> u64 {
-        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-        let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
-        let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
-        let (state, effects) = create_obj(sender, sender_key, gas_coins, budget).await;
-        // transaction is good
-        assert!(effects.status().is_err());
         // gas object in effects is first coin in vector of coins
         assert_eq!(gas_coin_ids[0], effects.gas_object().0 .0);
-        // object is created and gas at position 0 mutated
-        assert_eq!((effects.created().len(), effects.mutated().len()), (0, 1));
+        // object is created on success and gas at position 0 mutated
+        let created = usize::from(success);
+        assert_eq!(
+            (effects.created().len(), effects.mutated().len()),
+            (created, 1)
+        );
         // extra coin are deleted
         assert_eq!(effects.deleted().len() as u64, coin_num - 1);
         for gas_coin_id in &gas_coin_ids[1..] {
@@ -5178,17 +5210,17 @@ async fn test_gas_smashing() {
 
     // 1. get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
-    let gas_used = run_and_check_ok(100_000, 1, 100_000).await;
+    let gas_used = run_and_check(100_000, 1, 100_000, true).await;
 
     // add something to the gas used to account for multiple gas coins being charged for
     let reference_gas_used = gas_used + 1_000;
-    let three_coin_gas = run_and_check_ok(reference_gas_used, 3, reference_gas_used).await;
-    run_and_check_ok(reference_gas_used, 10, reference_gas_used - 100).await;
+    let three_coin_gas = run_and_check(reference_gas_used, 3, reference_gas_used, true).await;
+    run_and_check(reference_gas_used, 10, reference_gas_used - 100, true).await;
 
     // make less then required to succeed
     let reference_gas_used = gas_used - 10;
-    run_and_check_err(reference_gas_used, 2, reference_gas_used - 10).await;
-    run_and_check_err(reference_gas_used, 30, reference_gas_used).await;
+    run_and_check(reference_gas_used, 2, reference_gas_used - 10, false).await;
+    run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
     // use a small amount less than what 3 coins above reported (with success)
-    run_and_check_err(three_coin_gas, 3, three_coin_gas - 1).await;
+    run_and_check(three_coin_gas, 3, three_coin_gas - 1, false).await;
 }

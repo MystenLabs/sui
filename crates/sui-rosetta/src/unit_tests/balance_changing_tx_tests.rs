@@ -12,6 +12,7 @@ use signature::rand_core::OsRng;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
+use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -22,7 +23,6 @@ use sui_sdk::rpc_types::{
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::intent::Intent;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, InputObjectKind, ObjectArg, ProgrammableTransaction,
     Transaction, TransactionData, TransactionDataAPI, TransactionKind, DUMMY_GAS_PRICE,
@@ -390,7 +390,7 @@ async fn test_failed_pay_sui() {
 }
 
 #[tokio::test]
-async fn test_delegate_sui() {
+async fn test_stake_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
@@ -408,7 +408,7 @@ async fn test_delegate_sui() {
         .sui_address;
     let tx = client
         .transaction_builder()
-        .request_add_delegation(
+        .request_add_stake(
             sender,
             vec![coin1.0, coin2.0],
             Some(1000000),
@@ -426,12 +426,12 @@ async fn test_delegate_sui() {
 }
 
 #[tokio::test]
-async fn test_delegate_sui_with_none_amount() {
+async fn test_stake_sui_with_none_amount() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let keystore = &network.wallet.config.keystore;
 
-    // Test Delegate Sui
+    // Test Staking Sui
     let sender = get_random_address(&network.accounts, vec![]);
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
@@ -444,7 +444,7 @@ async fn test_delegate_sui_with_none_amount() {
         .sui_address;
     let tx = client
         .transaction_builder()
-        .request_add_delegation(
+        .request_add_stake(
             sender,
             vec![coin1.0, coin2.0],
             None,
@@ -507,7 +507,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         .sui_address;
     let data = client
         .transaction_builder()
-        .request_add_delegation(
+        .request_add_stake(
             sender,
             vec![coin1.0, coin2.0],
             Some(100000),

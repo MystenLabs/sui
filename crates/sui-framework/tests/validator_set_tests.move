@@ -48,7 +48,7 @@ module sui::validator_set_tests {
         test_scenario::next_tx(scenario, @0x1);
         {
             let ctx1 = test_scenario::ctx(scenario);
-            validator_set::request_add_delegation(
+            validator_set::request_add_stake(
                 &mut validator_set,
                 @0x1,
                 coin::into_balance(coin::mint_for_testing(500, ctx1)),
@@ -67,7 +67,7 @@ module sui::validator_set_tests {
         );
 
         advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
-        // Total stake for these should be the starting stake + the 500 delegated to validator 1 in addition to the starting stake.
+        // Total stake for these should be the starting stake + the 500 staked with validator 1 in addition to the starting stake.
         assert!(validator_set::total_stake(&validator_set) == 1500, 0);
 
         test_scenario::next_tx(scenario, @0x1);
@@ -83,7 +83,7 @@ module sui::validator_set_tests {
         // Total validator candidate count changes, but total stake remains during epoch.
         assert!(validator_set::total_stake(&validator_set) == 1500, 0);
         advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
-        // Validator1 is gone. This removes its stake (100) + the stake delegated to it (500).
+        // Validator1 is gone. This removes its stake (100) + the 500 staked with it.
         assert!(validator_set::total_stake(&validator_set) == 900, 0);
 
         test_utils::destroy(validator_set);
@@ -163,7 +163,7 @@ module sui::validator_set_tests {
         test_scenario::next_tx(scenario, @0x42);
         {
             let ctx = test_scenario::ctx(scenario);
-            validator_set::request_add_delegation(
+            validator_set::request_add_stake(
                 &mut validator_set,
                 @0x2,
                 balance::create_for_testing(500),
@@ -201,7 +201,7 @@ module sui::validator_set_tests {
         test_scenario::next_tx(scenario, @0x42);
         {
             let ctx = test_scenario::ctx(scenario);
-            validator_set::request_add_delegation(
+            validator_set::request_add_stake(
                 &mut validator_set,
                 @0x2,
                 balance::create_for_testing(500),

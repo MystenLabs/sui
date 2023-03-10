@@ -32,8 +32,7 @@ use sui_types::messages::{
 use move_binary_format::file_format::SignatureToken;
 
 use sui_types::governance::{
-    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
-    WITHDRAW_DELEGATION_FUN_NAME,
+    ADD_STAKE_LOCKED_COIN_FUN_NAME, ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -641,7 +640,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         ))
     }
 
-    pub async fn request_add_delegation(
+    pub async fn request_add_stake(
         &self,
         signer: SuiAddress,
         mut coins: Vec<ObjectID>,
@@ -680,9 +679,9 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
 
         let function = if Coin::is_coin(type_) {
-            ADD_DELEGATION_MUL_COIN_FUN_NAME
+            ADD_STAKE_MUL_COIN_FUN_NAME
         } else {
-            ADD_DELEGATION_LOCKED_COIN_FUN_NAME
+            ADD_STAKE_LOCKED_COIN_FUN_NAME
         }
         .to_owned();
 
@@ -722,10 +721,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         ))
     }
 
-    pub async fn request_withdraw_delegation(
+    pub async fn request_withdraw_stake(
         &self,
         signer: SuiAddress,
-        _delegation: ObjectID,
+        _stake: ObjectID,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
@@ -739,7 +738,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
-            WITHDRAW_DELEGATION_FUN_NAME.to_owned(),
+            WITHDRAW_STAKE_FUN_NAME.to_owned(),
             vec![],
             gas,
             vec![

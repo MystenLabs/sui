@@ -2,7 +2,7 @@
 title: Sui Exchange Integration Guide
 ---
 
-This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking and delegation on the Sui network.
+This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking on the Sui network.
 
 ## Requirements to configure a SUI integration
 
@@ -27,11 +27,11 @@ Run the command in this section using the same branch of the repository for each
  1. Install dependencies for Linux:
     ```bash
     apt update \
-    && apt install -y --no-install-recommends \ 
-    tzdata \ 
-    ca-certificates \ 
-    build-essential \ 
-    pkg-config \ 
+    && apt install -y --no-install-recommends \
+    tzdata \
+    ca-certificates \
+    build-essential \
+    pkg-config \
     cmake
     ```
  1. Download the docker-compose.yaml file:
@@ -126,7 +126,7 @@ The response is a JSON object that includes the totalBalance for the address:
      "coinObjectCount":40,
      "totalBalance":10000000000,
      "lockedBalance":{
-       
+
      }
   },
   "id":1
@@ -164,7 +164,7 @@ data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
-The response can include a large number of events. Add pagination to the response using the `nextCursor` key in the request. You can determine the corresponding `txDigest` and `eventSeq` from the `id` field of a transaction.  
+The response can include a large number of events. Add pagination to the response using the `nextCursor` key in the request. You can determine the corresponding `txDigest` and `eventSeq` from the `id` field of a transaction.
 
 You can add the `txDigest` value instead of the first `null` within the `params`. The second `null` is an integer that defines how many results (up to 1000) to return and the `true` means ascending order. You can use the `nextCursor` so the response starts from a desired point.
 
@@ -199,7 +199,7 @@ Sui Checkpoint API operations include:
 
 To transfer a specific amount of SUI between addresses, you need a SUI token object with that specific value. In Sui, everything is an object, including SUI tokens. The amount of SUI in each SUI token object varies. For example, an address could own 3 SUI tokens with different values: one of 0.1 SUI, a second of 1.0 SUI, and a third with 0.005 SUI. The total balance for the address equals the sum of the values of the individual SUI token objects, in this case, 1.105 SUI.
 
-You can merge and split SUI token objects to create token objects with specific values. To create a SUI token worth .6 SUI, split the token worth 1 SUI into two token objects worth .6 SUI and .4 SUI. 
+You can merge and split SUI token objects to create token objects with specific values. To create a SUI token worth .6 SUI, split the token worth 1 SUI into two token objects worth .6 SUI and .4 SUI.
 
 To transfer a specific amount of SUI, you need a SUI token worth that specific amount. To get a SUI token with that specific value, you might need to split or merge existing SUI tokens. Sui supports several methods to accomplish this, including some that do not require you to manually split or merge coins.
 
@@ -207,7 +207,7 @@ To transfer a specific amount of SUI, you need a SUI token worth that specific a
 
 Sui supports the following API operations related to transferring SUI between addresses:
 
- * [sui_transferObject](https://docs.sui.io/sui-jsonrpc#sui_transferObject) 
+ * [sui_transferObject](https://docs.sui.io/sui-jsonrpc#sui_transferObject)
    Because SUI tokens are objects, you can transfer SUI tokens just like any other object. This method requires a gas token, and is useful in niche cases only.
 
  * [sui_payAllSui](https://docs.sui.io/sui-jsonrpc#sui_payAllSui)
@@ -232,41 +232,41 @@ Sui supports the following API operations related to transferring SUI between ad
 
 ## SUI Staking and Delegation
 
-The Sui blockchain uses a delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to delegate their tokens to any validator of their choice. When someone delegates their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake and stake with a different validator between epochs.
+The Sui blockchain uses a Delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to stake their SUI tokens to any validator of their choice. When someone stakes their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake at any time, but new staking requests become active only at the start of the next epoch.
 
-SUI holders who delegate their tokens to validators earn rewards for helping secure the Sui network. Sui determines rewards for delegation based on stake rewards on the network, and distributes them at the end of each epoch.
+SUI holders who stake their tokens to validators earn rewards for helping secure the Sui network. Sui determines rewards for staking based on stake rewards on the network, and distributes them at the end of each epoch.
 
 The total voting power in the Sui Network is always 10,000. The voting power of each individual validator is similar to basis points. For example, a voting power of 101 = 1.01%. Sui's quorum threshold (number of votes needed to confirm a transaction) is 6,667 (which is greater than 2/3). The voting power for a single validator is capped at 1,000 (10%) regardless of how much stake the validator has.
 
-## Delegated staking functions
+## Staking functions
 
-Sui supports the following API operations related to staking and delegation. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
+Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
 
- * `request_add_delegation`
+ * `request_add_stake`
  Add delegated stake to a validator's staking pool.
 
 ```rust
-public entry fun request_add_delegation(
+public entry fun request_add_stake(
    self: &mut SuiSystemState,
-   delegate_stake: Coin<SUI>,
+   stake: Coin<SUI>,
    validator_address: address,
    ctx: &mut TxContext,
 ) {
-   validator_set::request_add_delegation(
+   validator_set::request_add_stake(
        &mut self.validators,
        validator_address,
-       coin::into_balance(delegate_stake),
+       coin::into_balance(stake),
        option::none(),
        ctx,
    );
 }
 ```
 
- * `request_add_delegation_mul_coin`
+ * `request_add_stake_mul_coin`
  Add delegated stake to a validator's staking pool using multiple coins.
 
 ```rust
-public entry fun request_add_delegation_mul_coin(
+public entry fun request_add_stake_mul_coin(
    self: &mut SuiSystemState,
    delegate_stakes: vector<Coin<SUI>>,
    stake_amount: option::Option<u64>,
@@ -274,37 +274,37 @@ public entry fun request_add_delegation_mul_coin(
    ctx: &mut TxContext,
 ) {
    let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
-   validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::none(), ctx);
+   validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
 }
 ```
 
- * `request_add_delegation_with_locked_coin`
+ * `request_add_stake_with_locked_coin`
  Add delegated stake to a validator's staking pool using a locked SUI coin.
 
 ```rust
-public entry fun request_add_delegation_with_locked_coin(
+public entry fun request_add_stake_with_locked_coin(
    self: &mut SuiSystemState,
-   delegate_stake: LockedCoin<SUI>,
+   stake: LockedCoin<SUI>,
    validator_address: address,
    ctx: &mut TxContext,
 ) {
-   let (balance, lock) = locked_coin::into_balance(delegate_stake);
-   validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::some(lock), ctx);
+   let (balance, lock) = locked_coin::into_balance(stake);
+   validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
 }
 ```
 
- * `request_withdraw_delegation`
+ * `request_withdraw_stake`
  Withdraw some portion of a delegation from a validator's staking pool.
 
 ```rust
-public entry fun request_withdraw_delegation(
+public entry fun request_withdraw_stake(
    self: &mut SuiSystemState,
    delegation: &mut Delegation,
    staked_sui: &mut StakedSui,
    principal_withdraw_amount: u64,
    ctx: &mut TxContext,
 ) {
-   validator_set::request_withdraw_delegation(
+   validator_set::request_withdraw_stake(
        &mut self.validators,
        delegation,
        staked_sui,
@@ -317,12 +317,12 @@ public entry fun request_withdraw_delegation(
 ## Sui Exchange Integration FAQs
 
 Get answers to common questions about Sui.
- 
+
 ### How to change the amount of an existing stake?
 
 During the staking period, you can add to or withdraw your stake from a validator. To modify your stake amount you can use the following functions:
- * Use the `request_add_delegation` and `request_add_delegation_with_locked_coin` methods to add to the staked amount.
- * Use the `request_withdraw_delegation` method to withdraw your delegation.
+ * Use the `request_add_stake` and `request_add_stake_with_locked_coin` methods to add to the staked amount.
+ * Use the `request_withdraw_stake` method to withdraw your delegation.
 
 ### How is a staking transaction different from a typical transaction regarding construction, signing, and broadcasting?
 
@@ -357,7 +357,7 @@ Yes, contracts are also stored in objects. You can use the sui_getObject to fetc
 **Note:** You can see only the deserialized bytecode (as opposed to Source code).
 
 ### Can I get the information in the contract, such as the total amount of the currency issued and the number of decimal places?
-    
+
 There's no contract-level storage in Sui. In general, this contract-level information is usually stored in an object or event. For example, we store decimals in this object [https://github.com/MystenLabs/sui/blob/1aca0465275496e40f02a674938def962126412b/crates/sui-framework/sources/coin.move#L36](https://github.com/MystenLabs/sui/blob/1aca0465275496e40f02a674938def962126412b/crates/sui-framework/sources/coin.move#L36). And in this case we provide an [RPC endpoint](https://github.com/MystenLabs/sui/blob/main/crates/sui-json-rpc/src/api/).
 
 ### Is the gas price dynamic? Is it available through JSON-RPC?
@@ -380,7 +380,7 @@ MIST is the smallest unit of a SUI Coin. 1 SUI equals 1 billion MIST, and 1 MIST
 
 ## Transactions FAQs
 
-Questions about transaction in Sui. 
+Questions about transaction in Sui.
 
 ### How can we subscribe to transaction events?
 
@@ -389,11 +389,11 @@ There are "Move events" that are emitted by Move code, and "transaction events" 
 ### Can I get the corresponding transaction serial number through TransactionDigest?
 
 As a best practice, don't rely on the transaction serial number because there's no total ordering of transactions on Sui. The transaction serial numbers differ between different Full nodes.
-    
+
 ### Is the paged transaction data obtained by different nodes the same?
 
 No, the ordering will be different on different nodes for now, while we are still working on checkpoints. After checkpoint process is complete, the ordering will be the same on all nodes
-    
+
 ### Is there a nonce or timestamp mechanism for transactions?
 
 There are no nonce or timestamps in our transaction data structure at the moment
@@ -426,9 +426,9 @@ Yes, if an address owns multiple coins, you can stake each coin with a different
 
 Yes, you can add to or withdraw your stake from a validator. Use the following methods to modify the stake amount:
 
-Use the [`request_add_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation) and [`request_add_delegation_with_locked_coin`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_delegation_with_locked_coin) methods to add to the staked amount.
+Use the [`request_add_stake`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_stake) and [`request_add_stake_with_locked_coin`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin) methods to add to the staked amount.
 
-Use the [`request_withdraw_delegation`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_delegation) method to withdraw all or part of the delegation.
+Use the [`request_withdraw_stake`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_stake) method to withdraw all or part of the delegation.
 
 ### Does Sui require a bonding / warm-up period?
 

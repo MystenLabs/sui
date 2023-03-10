@@ -59,13 +59,12 @@ fn test_proof_of_possession() {
     let kp: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let pop = generate_proof_of_possession(&kp, address);
     let mut msg = vec![];
-    msg.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
     msg.extend_from_slice(kp.public().as_bytes());
     msg.extend_from_slice(address.as_ref());
     println!("Address: {:?}", address);
     println!("Pubkey: {:?}", Hex::encode(kp.public().as_bytes()));
     println!("Proof of possession: {:?}", Hex::encode(&pop));
-    assert!(kp.public().verify(&msg, &pop).is_ok());
+    assert!(verify_proof_of_possession(&pop, kp.public(), address).is_ok());
 }
 
 proptest! {

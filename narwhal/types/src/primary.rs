@@ -8,7 +8,10 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
-use crypto::{AggregateSignature, PublicKey, Signature};
+use crypto::{
+    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
+    NarwhalAuthoritySignature, PublicKey, Signature,
+};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
@@ -314,18 +317,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
 
     fn digest(&self) -> HeaderDigest {
         let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(&self.author);
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(self.created_at.to_le_bytes());
-        for (x, (y, z)) in self.payload.iter() {
-            hasher.update(Digest::from(*x));
-            hasher.update(y.to_le_bytes());
-            hasher.update(z.to_le_bytes());
-        }
-        for x in self.parents.iter() {
-            hasher.update(Digest::from(*x))
-        }
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
         HeaderDigest(hasher.finalize().into())
     }
 }
@@ -378,7 +370,7 @@ impl Vote {
     pub async fn new(
         header: &Header,
         author: &PublicKey,
-        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     ) -> Self {
         let vote = Self {
             header_digest: header.digest(),
@@ -408,7 +400,7 @@ impl Vote {
         };
 
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = vote.digest().into();
-        let signature = signer.sign(vote_digest.as_ref());
+        let signature = Signature::new_secure(&to_intent_message(vote_digest), signer);
 
         Self { signature, ..vote }
     }
@@ -431,8 +423,8 @@ impl Vote {
 
         // Check the signature.
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
-        self.author
-            .verify(vote_digest.as_ref(), &self.signature)
+        self.signature
+            .verify_secure(&to_intent_message(vote_digest), &self.author)
             .map_err(|_| DagError::InvalidSignature)
     }
 }
@@ -444,6 +436,18 @@ pub struct VoteDigest([u8; crypto::DIGEST_LENGTH]);
 impl From<VoteDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: VoteDigest) -> Self {
         Digest::new(hd.0)
+    }
+}
+
+impl From<VoteDigest> for Digest<{ crypto::INTENT_MESSAGE_LENGTH }> {
+    fn from(digest: VoteDigest) -> Self {
+        let intent_message = to_intent_message(HeaderDigest(digest.0));
+        Digest {
+            digest: bcs::to_bytes(&intent_message)
+                .expect("Serialization message should not fail")
+                .try_into()
+                .expect("INTENT_MESSAGE_LENGTH is correct"),
+        }
     }
 }
 
@@ -666,7 +670,7 @@ impl Certificate {
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
-            .verify(&pks[..], certificate_digest.as_ref())
+            .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
 
         Ok(())
