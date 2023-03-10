@@ -358,12 +358,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                // todo(RWLocks) - do we want to parametrise this?
-                mutable: match expected_type {
-                    // Only set mutable reference types to true
-                    SignatureToken::MutableReference(_) => true,
-                    _ => false,
-                },
+                mutable: matches!(expected_type, SignatureToken::MutableReference(_)),
             },
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)

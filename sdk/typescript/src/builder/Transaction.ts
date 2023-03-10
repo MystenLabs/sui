@@ -184,7 +184,6 @@ export class Transaction {
    * For `Uint8Array` type automatically convert the input into a `Pure` CallArg, since this
    * is the format required for custom serialization.
    *
-   * For `
    */
   input(value?: unknown) {
     // For Uint8Array
@@ -386,8 +385,10 @@ export class Transaction {
           params.forEach((param, i) => {
             const arg = moveCall.arguments[i];
             if (arg.kind !== 'Input') return;
-            if (is(inputs[arg.index], BuilderCallArg)) return;
             const input = inputs[arg.index];
+            // Skip if the input is already resolved
+            if (is(input, BuilderCallArg)) return;
+
             const inputValue = input.value;
 
             const serType = getPureSerializationType(param, inputValue);
@@ -432,14 +433,31 @@ export class Transaction {
     }
 
     if (objectsToResolve.length) {
+      const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
       // TODO: Use multi-get objects when that API exists instead of batch:
       const objects = await expectProvider(provider).getObjectBatch(
-        objectsToResolve.map(({ id }) => id),
+        dedupedIds,
         { showOwner: true },
       );
+      let objectsById = new Map(
+        dedupedIds.map((id, index) => {
+          return [id, objects[index]];
+        }),
+      );
 
-      objects.forEach((object, i) => {
-        const { id, input, normalizedType } = objectsToResolve[i];
+      const invalidObjects = Array.from(objectsById)
+        .filter(([_, obj]) => obj.status !== 'Exists')
+        .map(([id, _]) => id);
+      if (invalidObjects.length) {
+        throw new Error(
+          `The following input objects are not invalid: ${invalidObjects.join(
+            ', ',
+          )}`,
+        );
+      }
+
+      objectsToResolve.forEach(({ id, input, normalizedType }, i) => {
+        const object = objectsById.get(id)!;
         const initialSharedVersion = getSharedObjectInitialVersion(object);
 
         if (initialSharedVersion) {

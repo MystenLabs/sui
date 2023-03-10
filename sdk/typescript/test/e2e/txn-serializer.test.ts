@@ -2,7 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { Commands, SUI_SYSTEM_STATE_OBJECT_ID, Transaction } from '../../src';
+import {
+  Commands,
+  getCreatedObjects,
+  getObjectId,
+  getSharedObjectInitialVersion,
+  isMutableSharedObjectInput,
+  isSharedObjectInput,
+  ObjectId,
+  SuiTransactionResponse,
+  SUI_SYSTEM_STATE_OBJECT_ID,
+  Transaction,
+} from '../../src';
 import { TransactionDataBuilder } from '../../src/builder/TransactionData';
 import {
   DEFAULT_GAS_BUDGET,
@@ -13,15 +24,36 @@ import {
 
 describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
-  let packageId: string;
+  let packageId: ObjectId;
+  let publishTxn: SuiTransactionResponse;
+  let sharedObjectId: ObjectId;
 
   beforeAll(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/serializer';
-    packageId = await publishPackage(packagePath);
+    ({ packageId, publishTxn } = await publishPackage(packagePath));
+    const sharedObject = getCreatedObjects(publishTxn)!.filter(
+      (o) => getSharedObjectInitialVersion(o.owner) !== undefined,
+    )[0];
+    sharedObjectId = getObjectId(sharedObject);
   });
 
-  it('Move Shared Object Call', async () => {
+  async function serializeAndDeserialize(tx: Transaction, mutable: boolean[]) {
+    tx.setSender(await toolbox.address());
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    const transactionBytes = await tx.build({ provider: toolbox.provider });
+    const deserializedTxnBuilder =
+      TransactionDataBuilder.fromBytes(transactionBytes);
+    expect(
+      deserializedTxnBuilder.inputs
+        .filter((i) => isSharedObjectInput(i.value))
+        .map((i) => isMutableSharedObjectInput(i.value)),
+    ).toStrictEqual(mutable);
+    const reserializedTxnBytes = await deserializedTxnBuilder.build();
+    expect(reserializedTxnBytes).toEqual(transactionBytes);
+  }
+
+  it('Move Shared Object Call with mutable reference', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const [{ suiAddress: validatorAddress }] =
@@ -38,12 +70,34 @@ describe('Transaction Serialization and deserialization', () => {
         ],
       }),
     );
-    tx.setSender(await toolbox.address());
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const transactionBytes = await tx.build({ provider: toolbox.provider });
-    const deserializedTxnBuilder =
-      TransactionDataBuilder.fromBytes(transactionBytes);
-    const reserializedTxnBytes = await deserializedTxnBuilder.build();
-    expect(reserializedTxnBytes).toEqual(transactionBytes);
+    await serializeAndDeserialize(tx, [true]);
+  });
+
+  it('Move Shared Object Call with immutable reference', async () => {
+    const tx = new Transaction();
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::serializer_tests::value`,
+        arguments: [tx.input(sharedObjectId)],
+      }),
+    );
+    await serializeAndDeserialize(tx, [false]);
+  });
+
+  it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
+    const tx = new Transaction();
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::serializer_tests::value`,
+        arguments: [tx.input(sharedObjectId)],
+      }),
+    );
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::serializer_tests::set_value`,
+        arguments: [tx.input(sharedObjectId)],
+      }),
+    );
+    await serializeAndDeserialize(tx, [false, true]);
   });
 });

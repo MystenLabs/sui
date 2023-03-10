@@ -133,5 +133,5 @@ export async function publishPackage(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );
 
-  return packageId;
+  return { packageId, publishTxn };
 }

@@ -37,7 +37,7 @@ describe('Test Move call with strings', () => {
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
-    packageId = await publishPackage(packagePath);
+    ({ packageId } = await publishPackage(packagePath));
   });
 
   it('Test ascii', async () => {

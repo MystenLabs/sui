@@ -155,7 +155,6 @@ export const ExecutionStatus = object({
 });
 export type ExecutionStatus = Infer<typeof ExecutionStatus>;
 
-// TODO: change the tuple to struct from the server end
 export const OwnedObjectRef = object({
   owner: ObjectOwner,
   reference: SuiObjectRef,

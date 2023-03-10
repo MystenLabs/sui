@@ -4,7 +4,19 @@
 module serializer::serializer_tests {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use sui::clock::{Self, Clock};
+    use sui::object::{Self, UID};
+
+    struct MutableShared has key {
+        id: UID,
+        value: u64,
+    }
+
+     fun init(ctx: &mut TxContext) {
+        transfer::share_object(MutableShared {
+            id: object::new(ctx),
+            value: 0,
+        })
+    }
 
     public entry fun list<T: key + store, C>(
         item: T,
@@ -19,8 +31,12 @@ module serializer::serializer_tests {
         item
     }
 
-    public entry fun timestamp_ms(clock: &Clock) {
-        clock::timestamp_ms(clock);
+    public entry fun value(clock: &MutableShared) {
+        assert!(clock.value > 0, 1);
+    }
+
+    public entry fun set_value(clock: &mut MutableShared) {
+        clock.value = 10;
     }
 
     public fun test_abort() {

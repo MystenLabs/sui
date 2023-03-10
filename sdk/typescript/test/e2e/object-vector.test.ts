@@ -57,7 +57,7 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_vector';
-    packageId = await publishPackage(packagePath);
+    ({ packageId } = await publishPackage(packagePath));
   });
 
   it('Test object vector', async () => {
