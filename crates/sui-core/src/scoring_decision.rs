@@ -42,7 +42,7 @@ const CUTOFF_VALUE: f64 = 2.4;
 /// mechanism will likely be helpful.
 pub fn update_low_scoring_authorities(
     low_scoring_authorities: &ArcSwap<HashMap<AuthorityName, u64>>,
-    committee: Committee,
+    committee: Arc<Committee>,
     reputation_scores: ReputationScores,
     metrics: &Arc<AuthorityMetrics>,
 ) {
@@ -148,7 +148,7 @@ pub fn test_update_low_scoring_authorities() {
     authorities.insert(a2, 1);
     authorities.insert(a3, 1);
     authorities.insert(a4, 1);
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Arc::new(Committee::new(0, authorities).unwrap());
 
     let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
 
@@ -274,7 +274,7 @@ pub fn test_update_low_scoring_authorities() {
         authorities.insert(a, 1);
     }
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Arc::new(Committee::new(0, authorities).unwrap());
     let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
     let mut scores = HashMap::new();
     // scores clustered between 100 - 110

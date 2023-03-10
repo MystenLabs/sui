@@ -44,7 +44,7 @@ pub struct ConsensusHandler<T> {
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
     /// The committee used to do stake computations for deciding set of low scoring authorities
-    committee: Committee,
+    committee: Arc<Committee>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -62,7 +62,7 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
         low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
-        committee: Committee,
+        committee: Arc<Committee>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());

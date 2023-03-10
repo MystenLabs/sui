@@ -313,8 +313,7 @@ impl ConsensusAdapter {
                 let delay_step = latency * 3 / 2;
                 const MAX_DELAY_MUL: usize = 10;
                 (
-                    // DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
-                    Duration::ZERO,
+                    DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
                     position,
                 )
             }
