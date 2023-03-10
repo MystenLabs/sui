@@ -57,10 +57,10 @@ module sui::validator {
     const EMetadataInvalidWorkerAddr: u64 = 7;
 
     /// Commission rate set by the validator is higher than the threshold
-    const ECommissionRateTooHigh: u64 = 9;
+    const ECommissionRateTooHigh: u64 = 8;
 
     /// No stake balance is provided but an epoch time lock for the stake is provided.
-    const EEmptyStakeWithNonEmptyTimeLock: u64 = 10;
+    const EEmptyStakeWithNonEmptyTimeLock: u64 = 9;
 
     /// New Capability is not created by the validator itself
     const ENewCapNotCreatedByValidatorItself: u64 = 100;

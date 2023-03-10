@@ -76,6 +76,9 @@ pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
+/// Default epoch used to sign PoP with.
+pub const DEFAULT_EPOCH_ID: EpochId = 0;
+
 /// Creates a proof of that the authority account address is owned by the
 /// holder of authority protocol key, and also ensures that the authority
 /// protocol public key exists. A proof of possession is an authority
@@ -94,7 +97,7 @@ pub fn generate_proof_of_possession(
             Intent::default().with_scope(IntentScope::ProofOfPossession),
             msg,
         ),
-        &0, // Default to use epoch 0
+        &DEFAULT_EPOCH_ID,
         keypair,
     )
 }
@@ -114,7 +117,7 @@ pub fn verify_proof_of_possession(
             Intent::default().with_scope(IntentScope::ProofOfPossession),
             msg,
         ),
-        0, // Default to use epoch 0
+        DEFAULT_EPOCH_ID,
         protocol_pubkey.into(),
     )
 }

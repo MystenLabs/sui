@@ -47,7 +47,7 @@ pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
 // Type alias selecting the default hash function for the code base.
 pub type DefaultHashFunction = Blake2b256;
 pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
-pub const INTENT_MESSAGE_LENGTH: usize = DIGEST_LENGTH + INTENT_PREFIX_LENGTH;
+pub const INTENT_MESSAGE_LENGTH: usize = INTENT_PREFIX_LENGTH + DIGEST_LENGTH;
 
 /// A trait for sign and verify over an intent message, instead of the message itself. See more at [struct IntentMessage].
 pub trait NarwhalAuthoritySignature {

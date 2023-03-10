@@ -381,7 +381,7 @@ Event emitted when a new delegation request is received.
 Commission rate set by the validator is higher than the threshold
 
 
-<pre><code><b>const</b> <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>: u64 = 9;
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>: u64 = 8;
 </code></pre>
 
 
@@ -391,7 +391,7 @@ Commission rate set by the validator is higher than the threshold
 No stake balance is provided but an epoch time lock for the stake is provided.
 
 
-<pre><code><b>const</b> <a href="validator.md#0x2_validator_EEmptyStakeWithNonEmptyTimeLock">EEmptyStakeWithNonEmptyTimeLock</a>: u64 = 10;
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EEmptyStakeWithNonEmptyTimeLock">EEmptyStakeWithNonEmptyTimeLock</a>: u64 = 9;
 </code></pre>
 
 
