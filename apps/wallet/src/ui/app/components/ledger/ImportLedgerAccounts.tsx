@@ -20,7 +20,7 @@ import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
 
-const numLedgerAccountsToDeriveByDefault = 10;
+const numLedgerAccountsToDeriveByDefault = 2;
 
 export function ImportLedgerAccounts() {
     const accountsUrl = useNextMenuUrl(true, `/accounts`);
