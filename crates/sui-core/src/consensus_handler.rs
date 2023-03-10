@@ -141,7 +141,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             &self.low_scoring_authorities,
             self.committee.clone(),
             consensus_output.sub_dag.reputation_score.clone(),
-            Some(&self.metrics),
+            &self.metrics,
         );
 
         for (cert, batches) in consensus_output.batches {

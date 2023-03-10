@@ -221,12 +221,6 @@ pub trait CheckConnection: Send + Sync {
     fn update_mapping_for_epoch(&self, authority_names_to_peer_ids: HashMap<AuthorityName, PeerId>);
 }
 
-pub trait CheckReputationScore: Send + Sync {
-    fn get_low_scoring_authorities(&self) -> DashMap<AuthorityName, u64>;
-
-    fn update_mapping_for_epoch(&self, low_scoring_authorities: Arc<DashMap<AuthorityName, u64>>);
-}
-
 pub struct ConnectionMonitorStatus {
     /// Current connection statuses forwarded from the connection monitor
     pub connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
@@ -388,7 +382,7 @@ impl ConsensusAdapter {
     }
 
     fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
-        matches!(self.low_scoring_authorities.load().get(authority), Some(_))
+        self.low_scoring_authorities.load().get(authority).is_some()
     }
 
     /// This method blocks until transaction is persisted in local database

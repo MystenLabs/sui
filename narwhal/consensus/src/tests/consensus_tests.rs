@@ -39,7 +39,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 10;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // AND Setup consensus
     let fixture = CommitteeFixture::builder().build();
