@@ -37,13 +37,13 @@ export function LedgerAccountItem({
             <Text
                 mono
                 variant="bodySmall"
-                weight="bold"
+                weight="semibold"
                 color={isSelected ? 'steel-darker' : 'steel-dark'}
             >
                 {formatAddress(address)}
             </Text>
             <div className="ml-auto">
-                <Text variant="bodySmall" color="steel" weight="bold" mono>
+                <Text variant="bodySmall" color="steel" weight="semibold" mono>
                     {totalAmount} {totalAmountSymbol}
                 </Text>
             </div>
