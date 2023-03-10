@@ -216,6 +216,60 @@ fn test_upgrade_upgrades_linkage() {
 }
 
 #[test]
+fn test_upgrade_linkage_digest_to_new_dep() {
+    let c_id1 = ObjectID::from_single_byte(0xc1);
+    let c_pkg = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("Cv1"),
+        u64::MAX,
+        [],
+    )
+    .unwrap();
+
+    let c_id2 = ObjectID::from_single_byte(0xc2);
+    let c_new = c_pkg
+        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .unwrap();
+
+    let b_pkg = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("B"),
+        u64::MAX,
+        [&c_pkg],
+    )
+    .unwrap();
+
+    let b_id2 = ObjectID::from_single_byte(0xb2);
+    let b_new = b_pkg
+        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_new])
+        .unwrap();
+
+    assert_eq!(
+        b_new.linkage_table(),
+        &linkage_table! {
+            c_id1 => (c_id2, c_new.version()),
+        },
+    );
+
+    // Make sure that we compute the package digest off of the update dependencies and not the old
+    // dependencies in the linkage table.
+    assert_eq!(
+        b_new.digest(),
+        MovePackage::compute_digest_for_modules_and_deps(
+            &build_test_modules("B")
+                .iter()
+                .map(|module| {
+                    let mut bytes = Vec::new();
+                    module.serialize(&mut bytes).unwrap();
+                    bytes
+                })
+                .collect::<Vec<_>>(),
+            [&c_id2]
+        )
+    )
+}
+
+#[test]
 fn test_upgrade_downngrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(

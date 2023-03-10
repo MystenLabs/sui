@@ -104,9 +104,7 @@ pub fn new_session<
 }
 
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
-/// If `is_framework` is true, then the modules can have arbitrary user-defined address,
-/// otherwise their addresses must be 0.
-/// Mutate each module's self ID to the appropriate fresh ID and update its module handle tables
+/// Mutate each module's self ID (which must be 0) to the appropriate fresh ID and update its module handle tables
 /// to reflect the new ID's of its dependencies.
 /// Returns the newly created package ID.
 pub fn generate_package_id(
@@ -114,7 +112,15 @@ pub fn generate_package_id(
     ctx: &mut TxContext,
 ) -> Result<ObjectID, ExecutionError> {
     let package_id = ctx.fresh_id();
-    let new_address = AccountAddress::from(package_id);
+    substitute_package_id(modules, package_id)?;
+    Ok(package_id)
+}
+
+pub fn substitute_package_id(
+    modules: &mut [CompiledModule],
+    object_id: ObjectID,
+) -> Result<(), ExecutionError> {
+    let new_address = AccountAddress::from(object_id);
 
     for module in modules.iter_mut() {
         let self_handle = module.self_handle().clone();
@@ -140,7 +146,7 @@ pub fn generate_package_id(
         *address_mut = new_address;
     }
 
-    Ok(package_id)
+    Ok(())
 }
 
 /// Small enum used to type check function calls for external tools. ObjVec does not exist

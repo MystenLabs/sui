@@ -248,7 +248,7 @@ module sui::package {
         UpgradeTicket {
             cap: object::id(cap),
             package,
-            policy: cap.policy,
+            policy,
             digest,
         }
     }
@@ -308,6 +308,16 @@ module sui::package {
         UpgradeReceipt {
             cap, package
         }
+    }
+
+    #[test_only]
+    public fun get_upgrade_policy(ticket: &UpgradeTicket): u8 {
+        ticket.policy
+    }
+
+    #[test_only]
+    public fun get_upgrade_digest(ticket: &UpgradeTicket): vector<u8> {
+        ticket.digest
     }
 
     fun restrict(cap: &mut UpgradeCap, policy: u8) {

@@ -918,7 +918,7 @@ for the upgrade to succeed.
     <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
         cap: <a href="object.md#0x2_object_id">object::id</a>(cap),
         <a href="package.md#0x2_package">package</a>,
-        policy: cap.policy,
+        policy,
         <a href="digest.md#0x2_digest">digest</a>,
     }
 }
