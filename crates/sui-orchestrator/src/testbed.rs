@@ -72,7 +72,8 @@ impl<C: ServerProviderClient> Testbed<C> {
         let mut table = Table::new();
         table.set_format(display::default_table_format());
 
-        table.set_titles(row![bH2->format!("Instances ({})",self.instances.len())]);
+        let active = self.instances.iter().filter(|x| x.is_active()).count();
+        table.set_titles(row![bH2->format!("Instances ({active})")]);
         for (i, (region, instances)) in sorted.iter().enumerate() {
             table.add_row(row![bH2->region.to_uppercase()]);
             let mut j = 0;

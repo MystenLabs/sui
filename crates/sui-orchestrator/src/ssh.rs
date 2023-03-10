@@ -133,9 +133,15 @@ impl SshConnectionManager {
 
     /// Create a new ssh connection with the provided host.
     pub async fn connect(&self, address: SocketAddr) -> SshResult<SshConnection> {
-        SshConnection::new(address, &self.username, self.private_key_file.clone())
-            .await
-            .map(|x| x.with_timeout(&self.timeout))
+        let mut error = None;
+        for _ in 0..self.retries + 1 {
+            match SshConnection::new(address, &self.username, self.private_key_file.clone()).await {
+                Ok(x) => return Ok(x.with_timeout(&self.timeout).with_retries(self.retries)),
+                Err(e) => error = Some(e),
+            }
+            sleep(Self::RETRY_DELAY).await;
+        }
+        Err(error.unwrap())
     }
 
     /// Execute the specified ssh command on all provided instances.
@@ -156,23 +162,10 @@ impl SshConnectionManager {
                 let command = command.clone();
 
                 tokio::spawn(async move {
-                    let mut error = None;
-                    for _ in 0..ssh_manager.retries {
-                        let connection = match ssh_manager.connect(instance.ssh_address()).await {
-                            Ok(x) => x,
-                            Err(e) => {
-                                error = Some(e);
-                                continue;
-                            }
-                        };
-
-                        match connection.execute(command.stringify(i)) {
-                            r @ Ok(..) => return r,
-                            Err(e) => error = Some(e),
-                        }
-                        sleep(Self::RETRY_DELAY).await;
-                    }
-                    Err(error.unwrap())
+                    ssh_manager
+                        .connect(instance.ssh_address())
+                        .await?
+                        .execute(command.stringify(i))
                 })
             })
             .collect::<Vec<_>>();
@@ -216,6 +209,8 @@ pub struct SshConnection {
     session: Session,
     /// The host address.
     address: SocketAddr,
+    /// The number of retries before giving up to execute the command.
+    retries: usize,
 }
 
 impl SshConnection {
@@ -243,7 +238,11 @@ impl SshConnection {
             .userauth_pubkey_file(username, None, private_key_file.as_ref(), None)
             .map_err(|error| SshError::SessionError { address, error })?;
 
-        Ok(Self { session, address })
+        Ok(Self {
+            session,
+            address,
+            retries: 0,
+        })
     }
 
     /// Set a timeout for the ssh connection. If no timeouts are specified, reset it to the
@@ -254,6 +253,12 @@ impl SshConnection {
             None => &Self::DEFAULT_TIMEOUT,
         };
         self.session.set_timeout(duration.as_millis() as u32);
+        self
+    }
+
+    /// Set the maximum number of times to retries to establish a connection and execute commands.
+    pub fn with_retries(mut self, retries: usize) -> Self {
+        self.retries = retries;
         self
     }
 
@@ -275,11 +280,21 @@ impl SshConnection {
 
     /// Execute a ssh command on the remote machine.
     pub fn execute(&self, command: String) -> SshResult<(String, String)> {
-        let channel = self
-            .session
-            .channel_session()
-            .map_err(|e| self.make_session_error(e))?;
-        self.execute_impl(channel, command)
+        let mut error = None;
+        for _ in 0..self.retries + 1 {
+            let channel = match self.session.channel_session() {
+                Ok(x) => x,
+                Err(e) => {
+                    error = Some(self.make_session_error(e));
+                    continue;
+                }
+            };
+            match self.execute_impl(channel, command.clone()) {
+                r @ Ok(..) => return r,
+                Err(e) => error = Some(e),
+            }
+        }
+        Err(error.unwrap())
     }
 
     /// Execute a ssh command from a given path.
@@ -289,12 +304,23 @@ impl SshConnection {
         command: String,
         path: P,
     ) -> SshResult<(String, String)> {
-        let channel = self
-            .session
-            .channel_session()
-            .map_err(|e| self.make_session_error(e))?;
-        let command = format!("(cd {} && {command})", path.as_ref().display());
-        self.execute_impl(channel, command)
+        let mut error = None;
+        for _ in 0..self.retries + 1 {
+            let channel = match self.session.channel_session() {
+                Ok(x) => x,
+                Err(e) => {
+                    error = Some(self.make_session_error(e));
+                    continue;
+                }
+            };
+
+            let command = format!("(cd {} && {command})", path.as_ref().display());
+            match self.execute_impl(channel, command) {
+                r @ Ok(..) => return r,
+                Err(e) => error = Some(e),
+            }
+        }
+        Err(error.unwrap())
     }
 
     /// Execute an ssh command on the remote machine and return both stdout and stderr.
@@ -338,28 +364,47 @@ impl SshConnection {
     /// Upload a file to the remote machines through scp.
     pub fn upload<P: AsRef<Path>>(&self, path: P, content: &[u8]) -> SshResult<()> {
         let size = content.len() as u64;
-        let mut channel = self
-            .session
-            .scp_send(path.as_ref(), 0o644, size, None)
-            .map_err(|e| self.make_session_error(e))?;
-
-        channel
-            .write_all(content)
-            .map_err(|e| self.make_connection_error(e))?;
-        Ok(())
+        let mut error = None;
+        for _ in 0..self.retries + 1 {
+            let mut channel = match self.session.scp_send(path.as_ref(), 0o644, size, None) {
+                Ok(x) => x,
+                Err(e) => {
+                    error = Some(self.make_session_error(e));
+                    continue;
+                }
+            };
+            match channel
+                .write_all(content)
+                .map_err(|e| self.make_connection_error(e))
+            {
+                r @ Ok(..) => return r,
+                Err(e) => error = Some(e),
+            }
+        }
+        Err(error.unwrap())
     }
 
     /// Download a file from the remote machines through scp.
     pub fn download<P: AsRef<Path>>(&self, path: P) -> SshResult<String> {
-        let (mut channel, _stats) = self
-            .session
-            .scp_recv(path.as_ref())
-            .map_err(|e| self.make_session_error(e))?;
+        let mut error = None;
+        for _ in 0..self.retries + 1 {
+            let (mut channel, _stats) = match self.session.scp_recv(path.as_ref()) {
+                Ok(x) => x,
+                Err(e) => {
+                    error = Some(self.make_session_error(e));
+                    continue;
+                }
+            };
 
-        let mut content = String::new();
-        channel
-            .read_to_string(&mut content)
-            .map_err(|e| self.make_connection_error(e))?;
-        Ok(content)
+            let mut content = String::new();
+            match channel
+                .read_to_string(&mut content)
+                .map_err(|e| self.make_connection_error(e))
+            {
+                Ok(..) => return Ok(content),
+                Err(e) => error = Some(e),
+            }
+        }
+        Err(error.unwrap())
     }
 }

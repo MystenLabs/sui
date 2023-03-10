@@ -97,7 +97,7 @@ pub enum Operation {
         #[clap(long, action, default_value = "false")]
         skip_logs_processing: bool,
 
-        /// The timeout duration for ssh commands.
+        /// The timeout duration for ssh commands (in seconds).
         #[clap(long, action, value_parser = parse_duration, default_value = "30")]
         timeout: Duration,
 

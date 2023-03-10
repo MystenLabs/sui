@@ -469,6 +469,7 @@ impl Orchestrator {
         let mut latest_comittee_size = 0;
         while let Some(parameters) = generator.next() {
             display::header(format!("Starting benchmark {i}"));
+            display::config("Load type", &parameters.shared_objects_ratio);
             display::config("Parameters", &parameters);
 
             // Cleanup the testbed (in case the previous run was not completed).

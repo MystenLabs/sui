@@ -52,8 +52,8 @@ impl Display for BenchmarkParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} nodes ({} faulty) - {} tx/s, {}% shared objects",
-            self.nodes, self.faults, self.load, self.shared_objects_ratio
+            "{} nodes ({} faulty) - {} tx/s",
+            self.nodes, self.faults, self.load
         )
     }
 }
@@ -202,9 +202,19 @@ impl BenchmarkParametersGenerator {
                     Some(loads.remove(0))
                 }
             }
-            LoadType::Search { max_iterations, .. } => {
-                if self.iterations >= *max_iterations {
+            LoadType::Search {
+                max_iterations,
+                starting_load,
+            } => {
+                // Make one search with a very high load to test the system's robustness.
+                if self.iterations == *max_iterations {
+                    Some(*starting_load * 100)
+
+                // Terminate the the search.
+                } else if self.iterations > *max_iterations {
                     None
+
+                // Search for the breaking point.
                 } else {
                     self.iterations += 1;
                     match (&mut self.lower_bound_result, &mut self.upper_bound_result) {
@@ -315,5 +325,24 @@ mod test {
             generator.upper_bound_result.unwrap().transaction_load(),
             200
         );
+    }
+
+    #[test]
+    fn max_iterations() {
+        let settings = Settings::new_for_test();
+        let shared_objects_ratio = 0;
+        let nodes = 4;
+        let load = LoadType::Search {
+            starting_load: 100,
+            max_iterations: 0,
+        };
+        let mut generator = BenchmarkParametersGenerator::new(shared_objects_ratio, nodes, load);
+        let parameters = generator.next().unwrap();
+
+        let collection = MeasurementsCollection::new(&settings, parameters);
+        generator.register_result(collection);
+
+        let next_parameters = generator.next();
+        assert!(next_parameters.is_none());
     }
 }
