@@ -11472,6 +11472,7 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
+ "lru",
  "lz4-sys",
  "mach",
  "match_opt",
