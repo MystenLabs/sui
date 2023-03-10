@@ -54,11 +54,11 @@ export function TransactionCard({
 }) {
     const transaction = getTransactionKind(txn)!;
     const executionStatus = getExecutionStatusType(txn);
-    const txnKind = getTransactionKindName(transaction);
+    getTransactionKindName(transaction);
 
     const objectId = useMemo(() => {
         return getTxnEffectsEventID(txn.effects!, txn.events!, address)[0];
-    }, [address, transaction, txn.effects, txn.events]);
+    }, [address, /*transaction,*/ txn.effects, txn.events]);
 
     const transfer = useGetTransferAmount({
         txn,
@@ -101,7 +101,7 @@ export function TransactionCard({
     // For other transaction show Sent or Received
     const txnLabel = useMemo(() => {
         return isSender ? 'Sent' : 'Received';
-    }, [txnKind, transferAmount.amount, isSender]);
+    }, [/*txnKind,transferAmount.amount,*/ isSender]);
 
     // TODO: Support programmable tx:
     // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
@@ -179,8 +179,7 @@ export function TransactionCard({
                                     isTransfer={false}
                                 />
                                 {objectId && <TxnImage id={objectId} />}
-                            </>
-                            <>
+                            </div>
                         </>
                     )}
 

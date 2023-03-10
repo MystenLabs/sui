@@ -53,7 +53,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
     const objectId = useMemo(() => {
         return getTxnEffectsEventID(effects!, events!, activeAddress)[0];
-    }, [transaction, effects, events, activeAddress]);
+    }, [/*transaction,*/ effects, events, activeAddress]);
 
     const transferAmount = useGetTransferAmount({
         txn,

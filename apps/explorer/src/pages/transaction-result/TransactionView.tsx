@@ -7,7 +7,6 @@ import {
     getTransactionKind,
     getTransactionSender,
     getTransactionSignature,
-    getMovePackageContent,
     SUI_TYPE_ARG,
     getExecutionStatusType,
     getTotalGasUsed,
@@ -23,13 +22,11 @@ import {
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
     eventToDisplay,
     getAddressesLinks,
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
-import ModulesWrapper from '../../components/module/ModulesWrapper';
 // TODO: (Jibz) Create a new pagination component
 import Pagination from '../../components/pagination/Pagination';
 import {
@@ -40,7 +37,6 @@ import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
 import type { Category } from './TransactionResultType';
-import type { TransactionKindName, SuiTransactionKind } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
@@ -87,16 +83,16 @@ function generateMutatedCreated(tx: SuiTransactionResponse) {
 }
 
 // TODO: Support programmable tx:
-function formatByTransactionKind(
-    kind: TransactionKindName | undefined,
-    _data: SuiTransactionKind,
-    _sender: string
-) {
-    switch (kind) {
-        default:
-            return {};
-    }
-}
+// function formatByTransactionKind(
+//     kind: TransactionKindName | undefined,
+//     _data: SuiTransactionKind,
+//     _sender: string
+// ) {
+//     switch (kind) {
+//         default:
+//             return {};
+//     }
+// }
 
 function getSignatureFromAddress(
     signatures: SignaturePubkeyPair[],
@@ -274,7 +270,7 @@ function TransactionView({
         coinTransfer?.[0]?.coinType
     );
 
-    const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
+    // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
     const txEventData = transaction.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];

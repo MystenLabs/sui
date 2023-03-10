@@ -57,7 +57,7 @@ function ReceiptPage() {
         }
 
         return 'Transaction Failed';
-    }, [activeAddress, data]);
+    }, [/*activeAddress,*/ data]);
 
     if (!transactionId || !activeAddress) {
         return <Navigate to="/transactions" replace={true} />;

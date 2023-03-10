@@ -12,26 +12,25 @@ import type {
     SuiTransactionKind,
     TransactionEffects,
     SuiTransactionResponse,
-    SuiEvent,
     TransactionEvents,
 } from '@mysten/sui.js';
 
-const getCoinType = (
-    events: TransactionEvents | null,
-    address: string
-): string | null => {
-    if (!events) return null;
+// const getCoinType = (
+//     events: TransactionEvents | null,
+//     address: string
+// ): string | null => {
+//     if (!events) return null;
 
-    const coinType = events
-        ?.map((event: SuiEvent) => {
-            const data = Object.values(event).find(
-                (itm) => itm?.owner?.AddressOwner === address
-            );
-            return data?.coinType;
-        })
-        .filter(Boolean);
-    return coinType?.[0] ? coinType[0] : null;
-};
+//     const coinType = events
+//         ?.map((event: SuiEvent) => {
+//             const data = Object.values(event).find(
+//                 (itm) => itm?.owner?.AddressOwner === address
+//             );
+//             return data?.coinType;
+//         })
+//         .filter(Boolean);
+//     return coinType?.[0] ? coinType[0] : null;
+// };
 
 type FormattedBalance = {
     amount?: number | null;
