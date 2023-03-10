@@ -827,6 +827,12 @@ module sui::sui_system {
         self.safe_mode = true;
     }
 
+    /// Temp entry point to cause framework upgrade
+    public entry fun get_safe_mode(wrapper: &SuiSystemState): bool {
+        let self = load_system_state_mut(wrapper);
+        self.safe_mode
+    }
+
     public entry fun consensus_commit_prologue(
         clock: &mut Clock,
         timestamp_ms: u64,

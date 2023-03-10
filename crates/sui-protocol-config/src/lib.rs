@@ -815,6 +815,9 @@ impl ProtocolConfig {
                 ..Self::get_for_version_impl(version - 1)
             },
 
+            // no config changes for this version, framework upgrade only.
+            3 => Self::get_for_version_impl(version - 1),
+
             // Use this template when making changes:
             //
             // NEW_VERSION => Self {
