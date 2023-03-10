@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-//#[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 mod pg_integration {
     use diesel::migration::MigrationSource;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
