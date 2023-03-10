@@ -5,7 +5,6 @@ use crate::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct FaucetResponse {
     pub transferred_gas_objects: Vec<CoinInfo>,
     pub error: Option<String>,
