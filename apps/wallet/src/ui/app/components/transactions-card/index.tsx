@@ -26,12 +26,10 @@ import type {
     SuiAddress,
     SuiEvent,
     SuiTransactionResponse,
-    TransactionEffects,
     TransactionEvents,
 } from '@mysten/sui.js';
 
 export const getTxnEffectsEventID = (
-    txEffects: TransactionEffects,
     events: TransactionEvents,
     address: string
 ): string[] => {
@@ -57,8 +55,8 @@ export function TransactionCard({
     getTransactionKindName(transaction);
 
     const objectId = useMemo(() => {
-        return getTxnEffectsEventID(txn.effects!, txn.events!, address)[0];
-    }, [address, /*transaction,*/ txn.effects, txn.events]);
+        return getTxnEffectsEventID(txn.events!, address)[0];
+    }, [address, txn.events]);
 
     const transfer = useGetTransferAmount({
         txn,
@@ -171,7 +169,7 @@ export function TransactionCard({
                                 </div>
                                 {transferAmountComponent}
                             </div>
-                            <div className="flex flex-col w-full gap-1.5">
+                            <>
                                 {/* TODO: Support programmable tx: */}
                                 <TxnTypeLabel
                                     address={recipientAddress!}
@@ -179,7 +177,7 @@ export function TransactionCard({
                                     isTransfer={false}
                                 />
                                 {objectId && <TxnImage id={objectId} />}
-                            </div>
+                            </>
                         </>
                     )}
 
