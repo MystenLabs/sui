@@ -93,6 +93,22 @@ module sui::sui_system_state_inner {
         epoch_start_timestamp_ms: u64,
     }
 
+    struct SuiSystemStateInnerV2 has store {
+        new_dummy_field: u64,
+        epoch: u64,
+        protocol_version: u64,
+        system_state_version: u64,
+        validators: ValidatorSet,
+        storage_fund: Balance<SUI>,
+        parameters: SystemParameters,
+        reference_gas_price: u64,
+        validator_report_records: VecMap<address, VecSet<address>>,
+        stake_subsidy: StakeSubsidy,
+        safe_mode: bool,
+        epoch_start_timestamp_ms: u64,
+    }
+
+
     /// Event containing system-level epoch information, emitted during
     /// the epoch advancement transaction.
     struct SystemEpochInfoEvent has copy, drop {
@@ -816,12 +832,37 @@ module sui::sui_system_state_inner {
         self: SuiSystemStateInner,
         new_system_state_version: u64,
         _ctx: &mut TxContext,
-    ): SuiSystemStateInner {
+    ): SuiSystemStateInnerV2 {
         // Whenever we upgrade the system state version, we will have to first
         // ship a framework upgrade that introduces a new system state type, and make this
         // function generate such type from the old state.
-        self.system_state_version = new_system_state_version;
-        self
+        let SuiSystemStateInner {
+            epoch: u64,
+            protocol_version,
+            system_state_version: _,
+            validators,
+            storage_fund,
+            parameters,
+            reference_gas_price,
+            validator_report_records,
+            stake_subsidy,
+            safe_mode,
+            epoch_start_timestamp_ms,
+        } = self;
+        SuiSystemStateInnerV2 {
+            new_dummy_field: 100,
+            epoch: u64,
+            protocol_version,
+            system_state_version: new_system_state_version,
+            validators,
+            storage_fund,
+            parameters,
+            reference_gas_price,
+            validator_report_records,
+            stake_subsidy,
+            safe_mode,
+            epoch_start_timestamp_ms,
+        }
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.

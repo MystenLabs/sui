@@ -7,6 +7,7 @@
 
 -  [Struct `SystemParameters`](#0x2_sui_system_state_inner_SystemParameters)
 -  [Struct `SuiSystemStateInner`](#0x2_sui_system_state_inner_SuiSystemStateInner)
+-  [Struct `SuiSystemStateInnerV2`](#0x2_sui_system_state_inner_SuiSystemStateInnerV2)
 -  [Struct `SystemEpochInfoEvent`](#0x2_sui_system_state_inner_SystemEpochInfoEvent)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0x2_sui_system_state_inner_create)
@@ -215,6 +216,99 @@ The top-level object containing all information of the Sui system.
 </dt>
 <dd>
  Unix timestamp of the current epoch start
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_sui_system_state_inner_SuiSystemStateInnerV2"></a>
+
+## Struct `SuiSystemStateInnerV2`
+
+
+
+<pre><code><b>struct</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> <b>has</b> store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>new_dummy_field: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>protocol_version: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>system_state_version: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validators: <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>parameters: <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SystemParameters">sui_system_state_inner::SystemParameters</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>reference_gas_price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>safe_mode: bool</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>epoch_start_timestamp_ms: u64</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -2047,7 +2141,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_system_state_version: u64, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_system_state_version: u64, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -2060,12 +2154,37 @@ Returns all the validators who are currently reporting <code>addr</code>
     self: <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>,
     new_system_state_version: u64,
     _ctx: &<b>mut</b> TxContext,
-): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
+): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
     // Whenever we upgrade the system state version, we will have <b>to</b> first
     // ship a framework upgrade that introduces a new system state type, and make this
     // function generate such type from the <b>old</b> state.
-    self.system_state_version = new_system_state_version;
-    self
+    <b>let</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
+        epoch: u64,
+        protocol_version,
+        system_state_version: _,
+        validators,
+        storage_fund,
+        parameters,
+        reference_gas_price,
+        validator_report_records,
+        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>,
+        safe_mode,
+        epoch_start_timestamp_ms,
+    } = self;
+    <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
+        new_dummy_field: 100,
+        epoch: u64,
+        protocol_version,
+        system_state_version: new_system_state_version,
+        validators,
+        storage_fund,
+        parameters,
+        reference_gas_price,
+        validator_report_records,
+        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>,
+        safe_mode,
+        epoch_start_timestamp_ms,
+    }
 }
 </code></pre>
 
