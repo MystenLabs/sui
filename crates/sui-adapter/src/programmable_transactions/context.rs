@@ -22,6 +22,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
+    move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
 };
@@ -350,19 +351,24 @@ where
 
     /// Create a new package
     pub fn new_package(
-        &mut self,
+        &self,
         modules: Vec<move_binary_format::CompiledModule>,
-    ) -> Result<ObjectID, ExecutionError> {
+        dependencies: &[MovePackage],
+        version: Option<SequenceNumber>,
+    ) -> Result<Object, ExecutionError> {
         // wrap the modules in an object, write it to the store
-        let package_object = Object::new_package(
+        Object::new_package(
             modules,
-            OBJECT_START_VERSION,
+            version.unwrap_or(OBJECT_START_VERSION),
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
-        )?;
-        let id = package_object.id();
-        self.new_packages.push(package_object);
-        Ok(id)
+            dependencies,
+        )
+    }
+
+    /// Add the package to the new package published
+    pub fn add_package(&mut self, package_obj: Object) {
+        self.new_packages.push(package_obj)
     }
 
     /// Finish a command: clearing the borrows and adding the results to the result vector

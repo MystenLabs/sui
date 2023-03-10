@@ -172,6 +172,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
+        dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -181,7 +182,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .builder
-            .publish(sender, compiled_modules, gas, gas_budget)
+            .publish(sender, compiled_modules, dependencies, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

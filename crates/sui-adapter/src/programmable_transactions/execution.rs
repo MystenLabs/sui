@@ -263,8 +263,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 /* is_init */ false,
             )?
         }
-        Command::Publish(modules) => {
-            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
+        Command::Publish(modules, dep_ids) => {
+            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules, dep_ids)?
         }
         Command::Upgrade(modules, dep_ids, upgrade_ticket) => {
             execute_move_upgrade::<_, _, Mode>(context, modules, dep_ids, upgrade_ticket)?
@@ -380,6 +380,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
 ) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
@@ -403,7 +404,29 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let package_id = context.new_package(modules)?;
+    let mut dependencies = vec![];
+    for id in dep_ids {
+        match context.state_view.get_package(&id) {
+            Ok(Some(package_dep)) => dependencies.push(package_dep),
+            Ok(None) => {
+                return Err(ExecutionError::new(
+                    ExecutionErrorKind::PublishUnresolvedPackageDependency { object: id },
+                    None,
+                ))
+            }
+            Err(e) => {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::PublishUnresolvedPackageDependency { object: id },
+                    e,
+                ))
+            }
+        }
+    }
+
+    // new_package also initializes type origin table in the package object
+    let package_object = context.new_package(modules, &dependencies, None)?;
+    let package_id = package_object.id();
+    context.add_package(package_object);
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, _, Mode>(
             context,

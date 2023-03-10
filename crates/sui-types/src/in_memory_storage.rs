@@ -23,7 +23,7 @@ pub struct InMemoryStorage {
 }
 
 impl BackingPackageStore for InMemoryStorage {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         Ok(self.persistent.get(package_id).cloned())
     }
 }
@@ -64,9 +64,6 @@ impl ModuleResolver for InMemoryStorage {
             .get_package(&ObjectID::from(*module_id.address()))?
             .and_then(|package| {
                 package
-                    .data
-                    .try_as_package()
-                    .unwrap()
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()

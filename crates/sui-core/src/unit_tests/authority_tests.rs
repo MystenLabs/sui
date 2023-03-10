@@ -13,6 +13,7 @@ use crate::{
 };
 use bcs;
 use futures::{stream::FuturesUnordered, StreamExt};
+use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -217,9 +218,11 @@ async fn construct_shared_object_transaction_with_sequence_number(
 pub fn create_genesis_module_packages() -> Vec<Object> {
     let sui_modules = sui_framework::get_sui_framework();
     let std_modules = sui_framework::get_move_stdlib();
+    let (std_move_pkg, _) = sui_framework::make_std_sui_move_pkgs();
     vec![
-        Object::new_package_for_testing(std_modules, TransactionDigest::genesis()).unwrap(),
-        Object::new_package_for_testing(sui_modules, TransactionDigest::genesis()).unwrap(),
+        Object::new_package_for_testing(std_modules, TransactionDigest::genesis(), &[]).unwrap(),
+        Object::new_package_for_testing(sui_modules, TransactionDigest::genesis(), [&std_move_pkg])
+            .unwrap(),
     ]
 }
 
@@ -1557,12 +1560,14 @@ async fn test_publish_dependent_module_ok() {
         dependent_module.serialize(&mut bytes).unwrap();
         bytes
     };
+
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
+        vec![ObjectID::from(*genesis_module.address())],
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -1601,10 +1606,12 @@ async fn test_publish_module_no_dependencies_ok() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
+    let dependencies = vec![]; // no dependencies
     let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_payment_object_ref,
         module_bytes,
+        dependencies,
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -1634,9 +1641,10 @@ async fn test_publish_non_existing_dependent_module() {
     // create a module that depends on a genesis module
     let mut dependent_module = make_dependent_module(&genesis_module);
     // Add another dependent module that points to a random address, hence does not exist on-chain.
+    let not_on_chain = ObjectID::random();
     dependent_module
         .address_identifiers
-        .push(AccountAddress::from(ObjectID::random()));
+        .push(AccountAddress::from(not_on_chain));
     dependent_module.module_handles.push(ModuleHandle {
         address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
         name: IdentifierIndex(0),
@@ -1653,6 +1661,7 @@ async fn test_publish_non_existing_dependent_module() {
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
+        vec![ObjectID::from(*genesis_module.address()), not_on_chain],
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -1703,6 +1712,7 @@ async fn test_package_size_limit() {
         sender,
         gas_payment_object_ref,
         package,
+        vec![],
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -4175,7 +4185,9 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest).unwrap();
+    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
+    let pkg =
+        Object::new_package_for_testing(modules, digest, [&std_move_pkg, &sui_move_pkg]).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
@@ -4207,7 +4219,9 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest).unwrap();
+    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
+    let pkg =
+        Object::new_package_for_testing(modules, digest, [&std_move_pkg, &sui_move_pkg]).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
     fullnode.insert_genesis_object(pkg).await;

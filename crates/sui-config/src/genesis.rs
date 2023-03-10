@@ -964,7 +964,7 @@ fn process_package(
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         // executing in Genesis mode does not create a package upgrade
-        builder.command(Command::Publish(module_bytes));
+        builder.command(Command::Publish(module_bytes, ids));
         builder.finish()
     };
     programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(

@@ -1378,7 +1378,7 @@ impl AuthorityStore {
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
         if let Some(obj) = &package {
             fp_ensure!(
@@ -1427,7 +1427,7 @@ impl ModuleResolver for AuthorityStore {
         // fetching from the store / re-deserializing them every time.
         // https://github.com/MystenLabs/sui/issues/809
         Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
+            .get_package_object(&ObjectID::from(*module_id.address()))?
             .and_then(|package| {
                 // unwrap safe since get_package() ensures it's a package object.
                 package
