@@ -17,7 +17,7 @@ use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, SuiObjectData, SuiObjectDataOptions,
     SuiObjectResponse, SuiTransactionResponse,
 };
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 
 #[async_trait]
 pub trait IndexerStore {
@@ -99,6 +99,12 @@ pub trait IndexerStore {
         last_processed_id: i64,
         limit: usize,
     ) -> Result<Vec<Transaction>, IndexerError>;
+
+    fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError>;
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<usize, IndexerError>;

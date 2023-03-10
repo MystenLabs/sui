@@ -8876,6 +8876,8 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-proc-macros",
+ "move-binary-format",
+ "move-bytecode-utils",
  "move-core-types",
  "mysten-metrics",
  "narwhal-network",

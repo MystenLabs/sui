@@ -4,10 +4,20 @@
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
+use crate::models::objects::Object;
 use crate::models::objects::{Object, ObjectStatus};
 use crate::models::transactions::Transaction;
+use crate::schema::addresses::account_address;
+use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
+use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
+use crate::schema::move_calls::dsl as move_calls_dsl;
+use crate::schema::recipients::dsl as recipients_dsl;
+use crate::schema::transactions::{dsl, transaction_digest};
 use crate::schema::{
     addresses, checkpoints, events, move_calls, objects, packages, recipients, transactions,
+};
+use crate::schema::{
+    addresses, events, move_calls, objects, objects_history, packages, recipients, transactions,
 };
 use crate::schema::{
     checkpoints::dsl as checkpoints_dsl, move_calls::dsl as move_calls_dsl,
@@ -15,6 +25,7 @@ use crate::schema::{
     transactions::dsl as transactions_dsl,
 };
 use crate::store::indexer_store::TemporaryCheckpointStore;
+use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
@@ -24,9 +35,12 @@ use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use sui_json_rpc_types::{CheckpointId, SuiObjectDataOptions, SuiObjectResponse};
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use tracing::{error, info};
 
@@ -46,13 +60,16 @@ GROUP BY table_name;
 pub struct PgIndexerStore {
     cp: PgConnectionPool,
     partition_manager: PartitionManager,
+    pub module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
 
 impl PgIndexerStore {
     pub fn new(cp: PgConnectionPool) -> Self {
+        let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(cp.clone())));
         PgIndexerStore {
             cp: cp.clone(),
             partition_manager: PartitionManager::new(cp).unwrap(),
+            module_cache,
         }
     }
 }
@@ -609,6 +626,24 @@ impl IndexerStore for PgIndexerStore {
                     transactions, e
                 ))
             })
+    }
+
+    fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError> {
+        let object_id = object_id.to_string();
+        let version = version.value() as i64;
+
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let object: Object = pg_pool_conn.build_transaction().read_only().run(|conn| {
+            objects_history::dsl::objects_history
+                .filter(objects_history::object_id.eq(object_id))
+                .filter(objects_history::version.eq(version))
+                .get_result(conn)
+        })?;
+        object.try_into()
     }
 
     fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<usize, IndexerError> {

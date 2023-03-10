@@ -12,6 +12,8 @@ use sui_indexer::store::{IndexerStore, TemporaryCheckpointStore, TemporaryEpochS
 use sui_indexer::Indexer;
 use sui_json_rpc_types::{CheckpointId, SuiObjectDataOptions, SuiObjectResponse};
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::object::MoveObject;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -195,6 +197,14 @@ impl IndexerStore for InMemoryIndexerStore {
     }
 
     fn log_errors(&self, _errors: Vec<IndexerError>) -> Result<(), IndexerError> {
+        todo!()
+    }
+
+    fn get_object(
+        &self,
+        _object_id: ObjectID,
+        _version: SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError> {
         todo!()
     }
 }

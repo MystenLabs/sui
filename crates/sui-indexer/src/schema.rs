@@ -99,6 +99,7 @@ diesel::table! {
         object_type -> Varchar,
         object_status -> ObjectStatus,
         has_public_transfer -> Bool,
+        storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
     }
 }
@@ -122,6 +123,7 @@ diesel::table! {
         object_type -> Varchar,
         object_status -> ObjectStatus,
         has_public_transfer -> Bool,
+        storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
     }
 }

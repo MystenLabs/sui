@@ -41,10 +41,12 @@ sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
 move-core-types.workspace = true
 telemetry-subscribers.workspace = true
 
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+move-binary-format.workspace = true
 [features]
 pg_integration = []
 

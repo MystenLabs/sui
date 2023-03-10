@@ -24,6 +24,7 @@ CREATE TABLE objects
     object_type            VARCHAR       NOT NULL,
     object_status          object_status NOT NULL,
     has_public_transfer    BOOLEAN       NOT NULL,
+    storage_rebate         BIGINT        NOT NULL,
     bcs                    bcs_bytes[]   NOT NULL
 );
 CREATE INDEX objects_owner_address ON objects (owner_type, owner_address);
@@ -43,6 +44,7 @@ CREATE TABLE objects_history
     object_type            VARCHAR       NOT NULL,
     object_status          object_status NOT NULL,
     has_public_transfer    BOOLEAN       NOT NULL,
+    storage_rebate         BIGINT        NOT NULL,
     bcs                    bcs_bytes[]   NOT NULL,
     CONSTRAINT objects_history_pk PRIMARY KEY (epoch, object_id, version)
 ) PARTITION BY RANGE (epoch);
@@ -62,7 +64,8 @@ BEGIN
         VALUES (NEW.epoch, NEW.checkpoint, NEW.object_id, NEW.version, NEW.object_digest, NEW.owner_type,
                 NEW.owner_address,
                 NEW.initial_shared_version,
-                NEW.previous_transaction, NEW.object_type, NEW.object_status, NEW.has_public_transfer, NEW.bcs);
+                NEW.previous_transaction, NEW.object_type, NEW.object_status, NEW.has_public_transfer,
+                NEW.storage_rebate, NEW.bcs);
         RETURN NEW;
     ELSIF (TG_OP = 'DELETE') THEN
         -- object deleted from the main table, archive the history for that object
