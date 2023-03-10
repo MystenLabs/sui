@@ -245,6 +245,7 @@ async fn test_dry_run_transaction() {
         .await
         .unwrap();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    let gas_usage = response.effects.gas_used();
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode
@@ -261,6 +262,22 @@ async fn test_dry_run_transaction() {
         .unwrap()
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
+
+    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = TransactionData::new_with_gas_coins(
+        txn_data.kind().clone(),
+        txn_data.sender(),
+        vec![],
+        txn_data.gas_budget(),
+        txn_data.gas_price(),
+    );
+    let response = fullnode
+        .dry_exec_transaction(txn_data, transaction_digest)
+        .await
+        .unwrap();
+    let gas_usage_no_gas = response.effects.gas_used();
+    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    assert_eq!(gas_usage, gas_usage_no_gas);
 }
 
 #[tokio::test]
