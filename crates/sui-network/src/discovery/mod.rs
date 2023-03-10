@@ -92,6 +92,10 @@ impl DiscoveryEventLoop {
             subscriber
         };
 
+        // Ensure the initial TrustedPeerChangeEvents are handled.
+        let event: TrustedPeerChangeEvent = self.trusted_peer_change_rx.borrow_and_update().clone();
+        self.handle_trusted_peer_change_event(event);
+
         loop {
             tokio::select! {
                 now = interval.tick() => {
