@@ -37,8 +37,9 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_framework::{make_std_sui_move_pkgs, DEFAULT_FRAMEWORK_PATH};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::clock::Clock;
 use sui_types::gas::SuiCostTable;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -53,12 +54,11 @@ use sui_types::{
         ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
         VerifiedTransaction,
     },
-    object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
+    object::{self, Data, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 
@@ -125,23 +125,13 @@ fn create_genesis_module_objects() -> Genesis {
     let sui_modules = sui_framework::get_sui_framework();
     let std_modules = sui_framework::get_move_stdlib();
     let objects = vec![create_clock()];
-    // SAFETY: unwraps safe because genesis packages should never exceed max size
-    let packages = vec![
-        Object::new_package(
-            std_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-        Object::new_package(
-            sui_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-    ];
+    let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
+    let std_pkg =
+        Object::new_package_from_data(Data::Package(std_move_pkg), TransactionDigest::genesis());
+    let sui_pkg =
+        Object::new_package_from_data(Data::Package(sui_move_pkg), TransactionDigest::genesis());
+
+    let packages = vec![std_pkg, sui_pkg];
     let modules = vec![std_modules, sui_modules];
     Genesis {
         objects,
@@ -303,6 +293,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiPublishArgs {
             sender,
             upgradeable,
+            dependencies: _,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -314,10 +305,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                let cap = builder.publish_upgradeable(vec![module_bytes], vec![]);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish_immutable(vec![module_bytes]);
+                builder.publish_immutable(vec![module_bytes], vec![]);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(

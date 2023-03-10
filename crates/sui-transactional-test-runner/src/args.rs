@@ -30,6 +30,8 @@ pub struct SuiPublishArgs {
     pub sender: Option<String>,
     #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
     pub upgradeable: bool,
+    #[clap(long = "dependencies")]
+    pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]

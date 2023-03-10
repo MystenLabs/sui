@@ -277,6 +277,22 @@ impl CompiledPackage {
         }
     }
 
+    /// Return the set of Object IDs corresponding to this package's transitive dependencies'
+    /// original package IDs.
+    pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
+        let ids: BTreeSet<_> = self
+            .package
+            .deps_compiled_units
+            .iter()
+            .map(|(_, m)| match &m.unit {
+                CompiledUnitEnum::Module(m) => ObjectID::from(*m.module.address()),
+                CompiledUnitEnum::Script(_) => unimplemented!("Scripts not supported in Sui Move"),
+            })
+            .collect();
+
+        ids.into_iter().collect()
+    }
+
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
     pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
         self.get_dependency_sorted_modules(with_unpublished_deps)

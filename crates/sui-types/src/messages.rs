@@ -139,6 +139,18 @@ fn type_tag_validity_check(
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct SuiMovePackageDependencies {
+    pub modules: Vec<ObjectRef>,
+}
+
+impl SuiMovePackageDependencies {
+    pub fn validity_check(&self, _config: &ProtocolConfig) -> UserInputResult {
+        // TODO fp_ensure!(...)
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
@@ -325,8 +337,9 @@ pub enum Command {
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
-    /// Publishes a Move package
-    Publish(Vec<Vec<u8>>),
+    /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    /// dependencies to link against on-chain.
+    Publish(Vec<Vec<u8>>, Vec<ObjectID>),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -436,7 +449,10 @@ impl Command {
         }))
     }
 
-    fn publish_command_input_objects(modules: &[Vec<u8>]) -> Vec<InputObjectKind> {
+    fn publish_command_input_objects(
+        modules: &[Vec<u8>],
+        _dep_ids: &[ObjectID],
+    ) -> Vec<InputObjectKind> {
         // For module publishing, all the dependent packages are implicit input objects
         // because they must all be on-chain in order for the package to publish.
         // All authorities must have the same view of those dependencies in order
@@ -462,7 +478,9 @@ impl Command {
                 .map(|id| InputObjectKind::MovePackage(*id))
                 .chain(Some(InputObjectKind::MovePackage(*package_id)))
                 .collect(),
-            Command::Publish(modules) => Self::publish_command_input_objects(modules),
+            Command::Publish(modules, dep_ids) => {
+                Self::publish_command_input_objects(modules, dep_ids)
+            }
             Command::MoveCall(c) => c.input_objects(),
             Command::MakeMoveVec(Some(t), _) => {
                 let mut packages = BTreeSet::new();
@@ -518,7 +536,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules) => {
+            Command::Publish(modules, _dep_ids) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -695,7 +713,11 @@ impl Display for Command {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Command::Publish(_bytes) => write!(f, "Publish(_)"),
+            Command::Publish(_bytes, deps) => {
+                write!(f, "Publish(_,")?;
+                write_sep(f, deps, ",")?;
+                write!(f, ")")
+            }
             Command::Upgrade(_bytes, deps, current_package_id, ticket) => {
                 write!(f, "Upgrade(_,")?;
                 write_sep(f, deps, ",")?;
@@ -1268,21 +1290,30 @@ impl TransactionData {
         sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas_budget: u64,
     ) -> Self {
-        Self::new_module(sender, gas_payment, modules, gas_budget, DUMMY_GAS_PRICE)
+        Self::new_module(
+            sender,
+            gas_payment,
+            modules,
+            dep_ids,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            let upgrade_cap = builder.publish_upgradeable(modules);
+            let upgrade_cap = builder.publish_upgradeable(modules, dep_ids);
             builder.transfer_arg(sender, upgrade_cap);
             builder.finish()
         };
@@ -2141,13 +2172,37 @@ pub enum ExecutionFailureStatus {
     CoinBalanceOverflow,
 
     //
-    // Publish errors
+    // Publish/Upgrade errors
     //
     #[error(
         "Publish Error, Non-zero Address. \
         The modules in the package must have their address set to zero."
     )]
     PublishErrorNonZeroAddress,
+    #[error(
+        "Publish/Upgrade Error, Missing immediate dependency. \
+         Immediate dependencies of a package published/upgraded must be present \
+         on a list provided on command line when publishing/upgrading a package."
+    )]
+    PublishUpgradeMissingImmediateDependency,
+
+    #[error(
+        "Publish/Upgrade Error, Missing indirect dependency. \
+         Indirect (transitive) dependencies of a package published/upgraded must be present \
+         on a list provided on command line when publishing/upgrading a package."
+    )]
+    PublishUpgradeMissingIndirectDependency,
+
+    #[error(
+        "Publish/Upgrade Error, Dependency downgrade. \
+         A version of dependency specified on command line when publishing/upgrading a package \
+         must be equal or greater than versions of all indirect dependencies of this package."
+    )]
+    PublishUpgradeDependencyDowngrade,
+
+    #[error("Could not resolve package dependency for {object}.")]
+    PublishUnresolvedPackageDependency { object: ObjectID },
+
     #[error(
         "Sui Move Bytecode Verification Error. \
         Please run the Sui Move Verifier for more information."

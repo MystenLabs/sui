@@ -146,6 +146,8 @@ pub trait TransactionBuilder {
         sender: SuiAddress,
         /// the compiled bytes of a move module, the
         compiled_modules: Vec<Base64>,
+        /// a list of transitive dependency addresses that this set of modules depends on.
+        dependencies: Vec<ObjectID>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget

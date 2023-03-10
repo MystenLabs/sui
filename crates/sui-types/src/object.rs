@@ -396,6 +396,14 @@ impl Data {
         }
     }
 
+    pub fn try_into_package(self) -> Option<MovePackage> {
+        use Data::*;
+        match self {
+            Move(_) => None,
+            Package(p) => Some(p),
+        }
+    }
+
     pub fn type_(&self) -> Option<&MoveObjectType> {
         use Data::*;
         match self {
@@ -545,39 +553,51 @@ impl Object {
             previous_transaction,
             // System objects are not subject to limits
             u64::MAX,
+            &[], // no external dependencies
         )?;
         assert!(ret.is_system_package());
         Ok(ret)
     }
 
+    pub fn new_package_from_data(data: Data, previous_transaction: TransactionDigest) -> Self {
+        Object {
+            data,
+            owner: Owner::Immutable,
+            previous_transaction,
+            storage_rebate: 0,
+        }
+    }
+
     // Note: this will panic if `modules` is empty
-    pub fn new_package(
+    pub fn new_package<'p>(
         modules: Vec<CompiledModule>,
         version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        Ok(Object {
-            data: Data::Package(MovePackage::from_module_iter(
+        Ok(Self::new_package_from_data(
+            Data::Package(MovePackage::new_initial(
                 version,
                 modules,
                 max_move_package_size,
+                dependencies,
             )?),
-            owner: Owner::Immutable,
             previous_transaction,
-            storage_rebate: 0,
-        })
+        ))
     }
 
-    pub fn new_package_for_testing(
+    pub fn new_package_for_testing<'p>(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
             OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
+            dependencies,
         )
     }
 

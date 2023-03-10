@@ -6,7 +6,7 @@ use move_core_types::gas_algebra::InternalGas;
 use once_cell::sync::Lazy;
 use std::path::Path;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
-use sui_types::error::SuiResult;
+use sui_types::{error::SuiResult, move_package::MovePackage, object::OBJECT_START_VERSION};
 
 pub mod natives;
 
@@ -108,4 +108,16 @@ pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<Compile
         pkg.verify_framework_version(get_sui_framework(), get_move_stdlib())?;
     }*/
     Ok(pkg)
+}
+
+pub fn make_std_sui_move_pkgs() -> (MovePackage, MovePackage) {
+    let sui_modules = get_sui_framework();
+    let std_modules = get_move_stdlib();
+
+    let std_pkg =
+        MovePackage::new_initial(OBJECT_START_VERSION, std_modules, u64::MAX, &[]).unwrap();
+
+    let sui_pkg =
+        MovePackage::new_initial(OBJECT_START_VERSION, sui_modules, u64::MAX, [&std_pkg]).unwrap();
+    (std_pkg, sui_pkg)
 }
