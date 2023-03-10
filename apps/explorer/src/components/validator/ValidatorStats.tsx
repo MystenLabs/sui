@@ -33,9 +33,9 @@ export function ValidatorStats({
         () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
-    const totalStake = +validatorData.staking_pool_sui_balance;
-    const commission = +validatorData.commission_rate / 100;
-    const rewardsPoolBalance = +validatorData.rewards_pool;
+    const totalStake = +validatorData.stakingPoolSuiBalance;
+    const commission = +validatorData.commissionRate / 100;
+    const rewardsPoolBalance = +validatorData.rewardsPool;
 
     return (
         <div className="flex flex-col items-stretch gap-5 md:flex-row">

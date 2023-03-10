@@ -3,6 +3,7 @@
 
 import {
   array,
+  boolean,
   Infer,
   literal,
   nullable,
@@ -29,6 +30,7 @@ export type CoinStruct = Infer<typeof CoinStruct>;
 export const PaginatedCoins = object({
   data: array(CoinStruct),
   nextCursor: union([ObjectId, literal(null)]),
+  hasNextPage: boolean(),
 });
 
 export type PaginatedCoins = Infer<typeof PaginatedCoins>;

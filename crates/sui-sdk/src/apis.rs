@@ -13,10 +13,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
+    DynamicFieldPage, EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
     SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse, TransactionsPage,
+    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -31,7 +32,6 @@ use sui_types::query::{EventQuery, TransactionQuery};
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
-use sui_types::governance::DelegatedStake;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[derive(Debug)]
@@ -101,18 +101,28 @@ impl ReadApi {
         Ok(self.api.http.get_transactions_in_range(start, end).await?)
     }
 
-    pub async fn get_transaction(
+    pub async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
+        options: SuiTransactionResponseOptions,
     ) -> SuiRpcResult<SuiTransactionResponse> {
-        Ok(self.api.http.get_transaction(digest).await?)
+        Ok(self
+            .api
+            .http
+            .get_transaction_with_options(digest, Some(options))
+            .await?)
     }
 
-    pub async fn multi_get_transactions(
+    pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
+        options: SuiTransactionResponseOptions,
     ) -> SuiRpcResult<Vec<SuiTransactionResponse>> {
-        Ok(self.api.http.multi_get_transactions(digests).await?)
+        Ok(self
+            .api
+            .http
+            .multi_get_transactions_with_options(digests, Some(options))
+            .await?)
     }
 
     pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiRpcResult<SuiCommittee> {
@@ -410,7 +420,7 @@ impl QuorumDriver {
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .submit_transaction(tx_bytes, signatures, request_type.clone())
+            .execute_transaction(tx_bytes, signatures, request_type.clone())
             .await?;
 
         Ok(match request_type {
@@ -420,7 +430,13 @@ impl QuorumDriver {
                     if !confirmed_local_execution {
                         Self::wait_until_fullnode_sees_tx(
                             &self.api,
-                            *response.effects.transaction_digest(),
+                            *response
+                                .effects
+                                .as_ref()
+                                .map(|e| e.transaction_digest())
+                                .ok_or_else(|| {
+                                    Error::DataError("Expect effects to be non-empty".to_string())
+                                })?,
                         )
                         .await?;
                     }
@@ -437,7 +453,12 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = ReadApiClient::get_transaction(&c.http, tx_digest).await;
+            let resp = ReadApiClient::get_transaction_with_options(
+                &c.http,
+                tx_digest,
+                Some(SuiTransactionResponseOptions::new()),
+            )
+            .await;
             if let Err(err) = resp {
                 if err.to_string().contains(TRANSACTION_NOT_FOUND_MSG_PREFIX) {
                     tokio::time::sleep(Duration::from_millis(300)).await;

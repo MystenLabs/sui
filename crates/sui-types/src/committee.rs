@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{
-    random_committee_key_pairs, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
-};
+use crate::crypto::{random_committee_key_pairs, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
@@ -351,9 +349,7 @@ pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkMetadata {
-    pub network_pubkey: NetworkPublicKey,
     pub network_address: Multiaddr,
-    pub p2p_address: Multiaddr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

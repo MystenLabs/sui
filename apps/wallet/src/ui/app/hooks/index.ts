@@ -14,7 +14,6 @@ export { default as useNFTBasicData } from './useNFTBasicData';
 export { useWaitForElement } from './useWaitForElement';
 export { useGetNFTMeta } from './useGetNFTMeta';
 export { useTransactionDryRun } from './useTransactionDryRun';
-export { useTransactionSummary } from './useTransactionSummary';
 export { useGetObject } from './useGetObject';
 export { useGetTxnRecipientAddress } from './useGetTxnRecipientAddress';
 export { useGetTransactionsByAddress } from './useGetTransactionsByAddress';

@@ -8,27 +8,18 @@ import {
 } from '@mysten/wallet-standard';
 
 import type {
-    MoveCallTransaction,
-    SignableTransaction,
     SignedTransaction,
     SuiAddress,
-    SuiMoveNormalizedFunction,
     SuiTransactionResponse,
-    UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 
-export type TransactionDataType =
-    | {
-          type: 'v2';
-          justSign?: boolean;
-          //   TODO: Support transaciton builder string
-          //   data: SignableTransaction | string;
-          data: SignableTransaction;
-          options?: SuiSignAndExecuteTransactionOptions;
-          account: SuiAddress;
-      }
-    | { type: 'move-call'; data: MoveCallTransaction; account: SuiAddress }
-    | { type: 'serialized-move-call'; data: string; account: SuiAddress };
+export type TransactionDataType = {
+    type: 'transaction';
+    data: string;
+    account: SuiAddress;
+    justSign?: boolean;
+    options?: SuiSignAndExecuteTransactionOptions;
+};
 
 export type SignMessageDataType = {
     type: 'sign-message';
@@ -45,10 +36,8 @@ export type ApprovalRequest = {
     txResult?: SuiTransactionResponse | SuiSignMessageOutput;
     txResultError?: string;
     txSigned?: SignedTransaction;
-    metadata?: SuiMoveNormalizedFunction;
     createdDate: string;
     tx: TransactionDataType | SignMessageDataType;
-    unSerializedTxn?: UnserializedSignableTransaction | null;
 };
 
 export interface SignMessageApprovalRequest

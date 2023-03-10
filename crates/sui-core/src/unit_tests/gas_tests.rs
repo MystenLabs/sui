@@ -182,7 +182,7 @@ async fn test_transfer_sui_insufficient_gas() {
         builder.transfer_sui(recipient, None);
         builder.finish()
     };
-    let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+    let kind = TransactionKind::ProgrammableTransaction(pt);
     let data = TransactionData::new(kind, sender, gas_object_ref, 110, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
@@ -297,17 +297,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // genesis objects are read during transaction since they are direct dependencies.
     let genesis_objects = create_genesis_module_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
-    let publish_bytes = match response
-        .0
-        .data()
-        .intent_message
-        .value
-        .kind()
-        .single_transactions()
-        .next()
-        .unwrap()
-    {
-        SingleTransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
+    let publish_bytes = match response.0.data().intent_message.value.kind() {
+        TransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
             Command::Publish(modules) => modules,
             _ => unreachable!(),
         },
@@ -341,7 +332,11 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         gas_object.object_size_for_gas_metering(),
         0.into(),
     )?;
-    assert_eq!(gas_cost, &gas_status.summary(true));
+    // Actual gas cost will be greater than the expected summary because of the cost to discard the
+    // `UpgradeCap`.
+    let gas_summary = gas_status.summary(true);
+    assert!(gas_cost.computation_cost >= gas_summary.computation_cost);
+    assert_eq!(gas_cost.storage_cost, gas_summary.storage_cost);
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.gas_used();
@@ -617,7 +612,7 @@ async fn execute_transfer_with_price(
         builder.transfer_object(recipient, object.compute_object_reference());
         builder.finish()
     };
-    let kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
+    let kind = TransactionKind::ProgrammableTransaction(pt);
     let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, gas_price);
     let tx = to_sender_signed_transaction(data, &sender_key);
 

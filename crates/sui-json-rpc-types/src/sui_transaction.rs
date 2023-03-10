@@ -4,13 +4,12 @@
 use std::fmt::{self, Display, Formatter, Write};
 
 use enum_dispatch::enum_dispatch;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::Base64;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::TypeTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use serde_with::serde_as;
+use serde_with::{serde_as, DisplayFromStr};
 
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -20,10 +19,10 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    Argument, CallArg, Command, ExecutionStatus, GenesisObject, InputObjectKind, ObjectArg, Pay,
-    PayAllSui, PaySui, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
-    SingleTransactionKind, TransactionData, TransactionDataAPI, TransactionEffects,
-    TransactionEffectsAPI, TransactionEvents, TransactionKind, VersionedProtocolMessage,
+    Argument, Command, ExecutionStatus, GenesisObject, InputObjectKind, ProgrammableMoveCall,
+    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    TransactionEffects, TransactionEffectsAPI, TransactionEvents, TransactionKind,
+    VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
@@ -33,14 +32,90 @@ use sui_types::signature::GenericSignature;
 
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
+/// Type for de/serializing number to string
+pub struct BigInt(
+    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "String")]
+    u64,
+);
+
+impl From<BigInt> for u64 {
+    fn from(x: BigInt) -> u64 {
+        x.0
+    }
+}
+
+impl From<u64> for BigInt {
+    fn from(v: u64) -> BigInt {
+        BigInt(v)
+    }
+}
+
+impl Display for BigInt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
+#[serde(
+    rename_all = "camelCase",
+    rename = "TransactionResponseOptions",
+    default
+)]
+pub struct SuiTransactionResponseOptions {
+    /// Whether to show transaction input data. Default to be False
+    pub show_input: bool,
+    /// Whether to show transaction effects. Default to be False
+    pub show_effects: bool,
+    /// Whether to show transaction events. Default to be False
+    pub show_events: bool,
+}
+
+impl SuiTransactionResponseOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn full_content() -> Self {
+        Self {
+            show_effects: true,
+            show_input: true,
+            show_events: true,
+        }
+    }
+
+    pub fn with_input(mut self) -> Self {
+        self.show_input = true;
+        self
+    }
+
+    pub fn with_effects(mut self) -> Self {
+        self.show_effects = true;
+        self
+    }
+
+    pub fn with_events(mut self) -> Self {
+        self.show_events = true;
+        self
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
+#[serde(rename_all = "camelCase", rename = "TransactionResponse")]
 pub struct SuiTransactionResponse {
-    pub transaction: SuiTransaction,
-    pub effects: SuiTransactionEffects,
-    pub events: SuiTransactionEvents,
+    pub digest: TransactionDigest,
+    /// Transaction input data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<SuiTransaction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<SuiTransactionEffects>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<SuiTransactionEvents>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -49,6 +124,17 @@ pub struct SuiTransactionResponse {
     /// This is only returned in the read api, not in the transaction execution api.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSequenceNumber>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub errors: Vec<String>,
+}
+
+impl SuiTransactionResponse {
+    pub fn new(digest: TransactionDigest) -> Self {
+        Self {
+            digest,
+            ..Default::default()
+        }
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -63,24 +149,8 @@ impl PartialEq for SuiTransactionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename = "TransactionKind")]
+#[serde(rename = "TransactionKind", tag = "kind")]
 pub enum SuiTransactionKind {
-    /// Initiate an object transfer between addresses
-    TransferObject(SuiTransferObject),
-    /// Pay one or more recipients from a set of input coins
-    Pay(SuiPay),
-    /// Pay one or more recipients from a set of Sui coins, the input coins
-    /// are also used to for gas payments.
-    PaySui(SuiPaySui),
-    /// Pay one or more recipients from a set of Sui coins, the input coins
-    /// are also used to for gas payments.
-    PayAllSui(SuiPayAllSui),
-    /// Publish a new Move module
-    Publish(SuiMovePackage),
-    /// Call a function in a published Move module
-    Call(SuiMoveCall),
-    /// Initiate a SUI coin transfer between addresses
-    TransferSui(SuiTransferSui),
     /// A system transaction that will update epoch information on-chain.
     ChangeEpoch(SuiChangeEpoch),
     /// A system transaction used for initializing the initial state of the chain.
@@ -98,76 +168,6 @@ impl Display for SuiTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::TransferObject(t) => {
-                writeln!(writer, "Transaction Kind : Transfer Object")?;
-                writeln!(writer, "Recipient : {}", t.recipient)?;
-                writeln!(writer, "Object ID : {}", t.object_ref.object_id)?;
-                writeln!(writer, "Version : {:?}", t.object_ref.version)?;
-                write!(
-                    writer,
-                    "Object Digest : {}",
-                    Base64::encode(t.object_ref.digest)
-                )?;
-            }
-            Self::TransferSui(t) => {
-                writeln!(writer, "Transaction Kind : Transfer SUI")?;
-                writeln!(writer, "Recipient : {}", t.recipient)?;
-                if let Some(amount) = t.amount {
-                    writeln!(writer, "Amount: {}", amount)?;
-                } else {
-                    writeln!(writer, "Amount: Full Balance")?;
-                }
-            }
-            Self::Pay(p) => {
-                writeln!(writer, "Transaction Kind : Pay")?;
-                writeln!(writer, "Coins:")?;
-                for obj_ref in &p.coins {
-                    writeln!(writer, "Object ID : {}", obj_ref.object_id)?;
-                }
-                writeln!(writer, "Recipients:")?;
-                for recipient in &p.recipients {
-                    writeln!(writer, "{}", recipient)?;
-                }
-                writeln!(writer, "Amounts:")?;
-                for amount in &p.amounts {
-                    writeln!(writer, "{}", amount)?
-                }
-            }
-            Self::PaySui(p) => {
-                writeln!(writer, "Transaction Kind : Pay SUI")?;
-                writeln!(writer, "Coins:")?;
-                for obj_ref in &p.coins {
-                    writeln!(writer, "Object ID : {}", obj_ref.object_id)?;
-                }
-                writeln!(writer, "Recipients:")?;
-                for recipient in &p.recipients {
-                    writeln!(writer, "{}", recipient)?;
-                }
-                writeln!(writer, "Amounts:")?;
-                for amount in &p.amounts {
-                    writeln!(writer, "{}", amount)?
-                }
-            }
-            Self::PayAllSui(p) => {
-                writeln!(writer, "Transaction Kind : Pay SUI")?;
-                writeln!(writer, "Coins:")?;
-                for obj_ref in &p.coins {
-                    writeln!(writer, "Object ID : {}", obj_ref.object_id)?;
-                }
-                writeln!(writer, "Recipient:")?;
-                writeln!(writer, "{}", &p.recipient)?;
-            }
-            Self::Publish(_p) => {
-                write!(writer, "Transaction Kind : Publish")?;
-            }
-            Self::Call(c) => {
-                writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Package ID : {}", c.package.to_hex_literal())?;
-                writeln!(writer, "Module : {}", c.module)?;
-                writeln!(writer, "Function : {}", c.function)?;
-                writeln!(writer, "Arguments : {:?}", c.arguments)?;
-                write!(writer, "Type Arguments : {:?}", c.type_arguments)?;
-            }
             Self::ChangeEpoch(e) => {
                 writeln!(writer, "Transaction Kind : Epoch Change")?;
                 writeln!(writer, "New epoch ID : {}", e.epoch)?;
@@ -196,84 +196,33 @@ impl Display for SuiTransactionKind {
     }
 }
 
-impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
+impl TryFrom<TransactionKind> for SuiTransactionKind {
     type Error = anyhow::Error;
 
-    fn try_from(tx: SingleTransactionKind) -> Result<Self, Self::Error> {
+    fn try_from(tx: TransactionKind) -> Result<Self, Self::Error> {
         Ok(match tx {
-            SingleTransactionKind::TransferObject(t) => Self::TransferObject(SuiTransferObject {
-                recipient: t.recipient,
-                object_ref: t.object_ref.into(),
-            }),
-            SingleTransactionKind::TransferSui(t) => Self::TransferSui(SuiTransferSui {
-                recipient: t.recipient,
-                amount: t.amount,
-            }),
-            SingleTransactionKind::Pay(p) => Self::Pay(p.into()),
-            SingleTransactionKind::PaySui(p) => Self::PaySui(p.into()),
-            SingleTransactionKind::PayAllSui(p) => Self::PayAllSui(p.into()),
-            SingleTransactionKind::Publish(p) => Self::Publish(p.into()),
-            SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
-                package: c.package,
-                module: c.module.to_string(),
-                function: c.function.to_string(),
-                type_arguments: c.type_arguments.iter().map(|ty| ty.to_string()).collect(),
-                arguments: c
-                    .arguments
-                    .into_iter()
-                    .map(|arg| match arg {
-                        CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
-                        CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-                        | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                            SuiJsonValue::new(Value::String(Hex::encode(id)))
-                        }
-                        CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
-                            vec.iter()
-                                .map(|obj_arg| match obj_arg {
-                                    ObjectArg::ImmOrOwnedObject((id, _, _))
-                                    | ObjectArg::SharedObject { id, .. } => {
-                                        Value::String(Hex::encode(id))
-                                    }
-                                })
-                                .collect(),
-                        )),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            }),
-            SingleTransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
+            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
                 epoch: e.epoch,
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
                 storage_rebate: e.storage_rebate,
                 epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
             }),
-            SingleTransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
+            TransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
                 objects: g.objects.iter().map(GenesisObject::id).collect(),
             }),
-            SingleTransactionKind::ConsensusCommitPrologue(p) => {
+            TransactionKind::ConsensusCommitPrologue(p) => {
                 Self::ConsensusCommitPrologue(SuiConsensusCommitPrologue {
                     epoch: p.epoch,
                     round: p.round,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
-            SingleTransactionKind::ProgrammableTransaction(p) => {
+            TransactionKind::ProgrammableTransaction(p) => {
                 Self::ProgrammableTransaction(p.try_into()?)
             }
         })
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename = "MoveCall", rename_all = "camelCase")]
-pub struct SuiMoveCall {
-    pub package: ObjectID,
-    pub module: String,
-    pub function: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub type_arguments: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub arguments: Vec<SuiJsonValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -518,7 +467,7 @@ pub struct DryRunTransactionResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionEffects", transparent)]
+#[serde(rename = "TransactionEvents", transparent)]
 pub struct SuiTransactionEvents {
     pub data: Vec<SuiEvent>,
 }
@@ -539,7 +488,7 @@ impl SuiTransactionEvents {
 }
 
 /// The response from processing a dev inspect transaction
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DevInspectResults", rename_all = "camelCase")]
 pub struct DevInspectResults {
     /// Summary of effects that likely would be generated if the transaction is actually run.
@@ -548,25 +497,24 @@ pub struct DevInspectResults {
     pub effects: SuiTransactionEffects,
     /// Events that likely would be generated if the transaction is actually run.
     pub events: SuiTransactionEvents,
-    /// Execution results (including return values) from executing the transactions
-    /// Currently contains only return values from Move calls
-    pub results: Result<Vec<(usize, SuiExecutionResult)>, String>,
+    /// Execution results (including return values) from executing the transaction commands
+    pub results: Result<Vec<SuiExecutionResult>, String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "SuiExecutionResult", rename_all = "camelCase")]
 pub struct SuiExecutionResult {
     /// The value of any arguments that were mutably borrowed.
     /// Non-mut borrowed values are not included
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mutable_reference_outputs: Vec<(/* local index */ u8, Vec<u8>, SuiTypeTag)>,
-    /// The return values from the function
+    pub mutable_reference_outputs: Vec<(/* argument */ SuiArgument, Vec<u8>, SuiTypeTag)>,
+    /// The return values from the command
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub return_values: Vec<(Vec<u8>, SuiTypeTag)>,
 }
 
 type ExecutionResult = (
-    /*  mutable_reference_outputs */ Vec<(u8, Vec<u8>, TypeTag)>,
+    /*  mutable_reference_outputs */ Vec<(Argument, Vec<u8>, TypeTag)>,
     /*  return_values */ Vec<(Vec<u8>, TypeTag)>,
 );
 
@@ -574,28 +522,27 @@ impl DevInspectResults {
     pub fn new(
         effects: TransactionEffects,
         events: TransactionEvents,
-        return_values: Result<Vec<(usize, ExecutionResult)>, ExecutionError>,
+        return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
         let results = match return_values {
             Err(e) => Err(format!("{}", e)),
             Ok(srvs) => Ok(srvs
                 .into_iter()
-                .map(|(idx, srv)| {
+                .map(|srv| {
                     let (mutable_reference_outputs, return_values) = srv;
                     let mutable_reference_outputs = mutable_reference_outputs
                         .into_iter()
-                        .map(|(i, bytes, tag)| (i, bytes, SuiTypeTag::from(tag)))
+                        .map(|(a, bytes, tag)| (a.into(), bytes, SuiTypeTag::from(tag)))
                         .collect();
                     let return_values = return_values
                         .into_iter()
                         .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
                         .collect();
-                    let res = SuiExecutionResult {
+                    SuiExecutionResult {
                         mutable_reference_outputs,
                         return_values,
-                    };
-                    (idx, res)
+                    }
                 })
                 .collect()),
         };
@@ -686,88 +633,6 @@ impl From<GasCostSummary> for SuiGasCostSummary {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "Pay")]
-pub struct SuiPay {
-    /// The coins to be used for payment
-    pub coins: Vec<SuiObjectRef>,
-    /// The addresses that will receive payment
-    pub recipients: Vec<SuiAddress>,
-    /// The amounts each recipient will receive.
-    /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
-}
-
-impl From<Pay> for SuiPay {
-    fn from(p: Pay) -> Self {
-        let coins = p.coins.into_iter().map(|c| c.into()).collect();
-        SuiPay {
-            coins,
-            recipients: p.recipients,
-            amounts: p.amounts,
-        }
-    }
-}
-
-/// Send SUI coins to a list of addresses, following a list of amounts.
-/// only for SUI coin and does not require a separate gas coin object.
-/// Specifically, what pay_sui does are:
-/// 1. debit each input_coin to create new coin following the order of
-/// amounts and assign it to the corresponding recipient.
-/// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
-/// input coin, then use the first input coin as the gas coin object.
-/// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
-/// 4. all other input coints other than the first one are deleted.
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "PaySui")]
-pub struct SuiPaySui {
-    /// The coins to be used for payment
-    pub coins: Vec<SuiObjectRef>,
-    /// The addresses that will receive payment
-    pub recipients: Vec<SuiAddress>,
-    /// The amounts each recipient will receive.
-    /// Must be the same length as amounts
-    pub amounts: Vec<u64>,
-}
-
-impl From<PaySui> for SuiPaySui {
-    fn from(p: PaySui) -> Self {
-        let coins = p.coins.into_iter().map(|c| c.into()).collect();
-        SuiPaySui {
-            coins,
-            recipients: p.recipients,
-            amounts: p.amounts,
-        }
-    }
-}
-
-/// Send all SUI coins to one recipient.
-/// only for SUI coin and does not require a separate gas coin object either.
-/// Specifically, what pay_all_sui does are:
-/// 1. accumulate all SUI from input coins and deposit all SUI to the first input coin
-/// 2. transfer the updated first coin to the recipient and also use this first coin as
-/// gas coin object.
-/// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
-/// 4. all other input coins other than the first are deleted.
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "PayAllSui")]
-pub struct SuiPayAllSui {
-    /// The coins to be used for payment
-    pub coins: Vec<SuiObjectRef>,
-    /// The addresses that will receive payment
-    pub recipient: SuiAddress,
-}
-
-impl From<PayAllSui> for SuiPayAllSui {
-    fn from(p: PayAllSui) -> Self {
-        let coins = p.coins.into_iter().map(|c| c.into()).collect();
-        SuiPayAllSui {
-            coins,
-            recipient: p.recipient,
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "GasData", rename_all = "camelCase")]
 pub struct SuiGasData {
@@ -790,7 +655,7 @@ pub enum SuiTransactionData {
 
 #[enum_dispatch]
 pub trait SuiTransactionDataAPI {
-    fn transactions(&self) -> &[SuiTransactionKind];
+    fn transaction(&self) -> &SuiTransactionKind;
     fn sender(&self) -> &SuiAddress;
     fn gas_data(&self) -> &SuiGasData;
 }
@@ -798,14 +663,14 @@ pub trait SuiTransactionDataAPI {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(rename = "TransactionDataV1", rename_all = "camelCase")]
 pub struct SuiTransactionDataV1 {
-    pub transactions: Vec<SuiTransactionKind>,
+    pub transaction: SuiTransactionKind,
     pub sender: SuiAddress,
     pub gas_data: SuiGasData,
 }
 
 impl SuiTransactionDataAPI for SuiTransactionDataV1 {
-    fn transactions(&self) -> &[SuiTransactionKind] {
-        &self.transactions
+    fn transaction(&self) -> &SuiTransactionKind {
+        &self.transaction
     }
     fn sender(&self) -> &SuiAddress {
         &self.sender
@@ -816,16 +681,19 @@ impl SuiTransactionDataAPI for SuiTransactionDataV1 {
 }
 
 impl SuiTransactionData {
-    pub fn move_calls(&self) -> Vec<&SuiMoveCall> {
+    pub fn move_calls(&self) -> Vec<&SuiProgrammableMoveCall> {
         match self {
-            Self::V1(data) => data
-                .transactions
-                .iter()
-                .filter_map(|tx| match tx {
-                    SuiTransactionKind::Call(call) => Some(call),
-                    _ => None,
-                })
-                .collect(),
+            Self::V1(data) => match &data.transaction {
+                SuiTransactionKind::ProgrammableTransaction(pt) => pt
+                    .commands
+                    .iter()
+                    .filter_map(|command| match command {
+                        SuiCommand::MoveCall(c) => Some(&**c),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            },
         }
     }
 }
@@ -834,26 +702,16 @@ impl Display for SuiTransactionData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::V1(data) => {
-                let mut writer = String::new();
-                if data.transactions.len() == 1 {
-                    writeln!(writer, "{}", data.transactions.first().unwrap())?;
-                } else {
-                    writeln!(writer, "Transaction Kind : Batch")?;
-                    writeln!(writer, "List of transactions in the batch:")?;
-                    for kind in &data.transactions {
-                        writeln!(writer, "{}", kind)?;
-                    }
-                }
-                writeln!(writer, "Sender: {}", data.sender)?;
-                write!(writer, "Gas Payment: ")?;
+                writeln!(f, "{}", data.transaction)?;
+                writeln!(f, "Sender: {}", data.sender)?;
+                write!(f, "Gas Payment: ")?;
                 for payment in &self.gas_data().payment {
-                    write!(writer, "{} ", payment)?;
+                    write!(f, "{} ", payment)?;
                 }
-                writeln!(writer)?;
-                writeln!(writer, "Gas Owner: {}", data.gas_data.owner)?;
-                writeln!(writer, "Gas Price: {}", data.gas_data.price)?;
-                writeln!(writer, "Gas Budget: {}", data.gas_data.budget)?;
-                write!(f, "{}", writer)
+                writeln!(f)?;
+                writeln!(f, "Gas Owner: {}", data.gas_data.owner)?;
+                writeln!(f, "Gas Price: {}", data.gas_data.price)?;
+                writeln!(f, "Gas Budget: {}", data.gas_data.budget)
             }
         }
     }
@@ -863,33 +721,26 @@ impl TryFrom<TransactionData> for SuiTransactionData {
     type Error = anyhow::Error;
 
     fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
-        let transactions = match data.kind().clone() {
-            TransactionKind::Single(tx) => {
-                vec![tx.try_into()?]
-            }
-            TransactionKind::Batch(txs) => txs
-                .into_iter()
-                .map(SuiTransactionKind::try_from)
-                .collect::<Result<Vec<_>, _>>()?,
-        };
         let message_version = data
             .message_version()
             .expect("TransactionData defines message_version()");
-
+        let sender = data.sender();
+        let gas_data = SuiGasData {
+            payment: data
+                .gas()
+                .iter()
+                .map(|obj_ref| SuiObjectRef::from(*obj_ref))
+                .collect(),
+            owner: data.gas_owner(),
+            price: data.gas_price(),
+            budget: data.gas_budget(),
+        };
+        let transaction = data.into_kind().try_into()?;
         match message_version {
             1 => Ok(SuiTransactionData::V1(SuiTransactionDataV1 {
-                transactions,
-                sender: data.sender(),
-                gas_data: SuiGasData {
-                    payment: data
-                        .gas()
-                        .iter()
-                        .map(|obj_ref| SuiObjectRef::from(*obj_ref))
-                        .collect(),
-                    owner: data.gas_owner(),
-                    price: data.gas_price(),
-                    budget: data.gas_budget(),
-                },
+                transaction,
+                sender,
+                gas_data,
             })),
             _ => Err(anyhow::anyhow!(
                 "Support for TransactionData version {} not implemented",
@@ -1220,7 +1071,7 @@ impl From<InputObjectKind> for SuiInputObjectKind {
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 

@@ -8,6 +8,8 @@ pub use msim::*;
 pub use anemo;
 pub use anemo_tower;
 pub use fastcrypto;
+pub use lru;
+pub use move_package;
 pub use narwhal_network;
 pub use sui_framework;
 pub use sui_framework_build;

@@ -48,7 +48,7 @@ class Transactions {
         const { txResultError, txResult, txSigned } =
             await this.requestApproval(
                 tx ?? {
-                    type: 'v2',
+                    type: 'transaction',
                     justSign: true,
                     data: sign.transaction,
                     account: sign.account,

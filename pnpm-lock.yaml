@@ -231,9 +231,14 @@ importers:
       '@growthbook/growthbook': ^0.20.1
       '@growthbook/growthbook-react': ^0.10.1
       '@headlessui/react': ^1.7.7
+      '@ledgerhq/errors': ^6.12.3
+      '@ledgerhq/hw-transport': ^6.27.11
+      '@ledgerhq/hw-transport-webhid': ^6.27.11
+      '@ledgerhq/hw-transport-webusb': ^6.27.11
       '@metamask/browser-passworder': ^4.0.2
       '@mysten/core': workspace:*
       '@mysten/icons': workspace:*
+      '@mysten/ledgerjs-hw-app-sui': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-standard': workspace:*
       '@noble/hashes': ^1.1.5
@@ -341,9 +346,14 @@ importers:
       '@growthbook/growthbook': 0.20.1
       '@growthbook/growthbook-react': 0.10.1_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
+      '@ledgerhq/errors': 6.12.3
+      '@ledgerhq/hw-transport': 6.28.1
+      '@ledgerhq/hw-transport-webhid': 6.27.12
+      '@ledgerhq/hw-transport-webusb': 6.27.12
       '@metamask/browser-passworder': 4.0.2
       '@mysten/core': link:../core
       '@mysten/icons': link:../icons
+      '@mysten/ledgerjs-hw-app-sui': link:../../sdk/ledgerjs-hw-app-sui
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-standard': link:../../sdk/wallet-adapter/wallet-standard
       '@noble/hashes': 1.1.5
@@ -627,6 +637,7 @@ importers:
 
   sdk/wallet-adapter/example:
     specifiers:
+      '@mysten/sui.js': workspace:*
       '@mysten/wallet-kit': workspace:*
       '@testing-library/jest-dom': ^5.16.4
       '@testing-library/react': ^13.4.0
@@ -640,6 +651,7 @@ importers:
       typescript: ^4.9.4
       vite: ^4.0.4
     dependencies:
+      '@mysten/sui.js': link:../../typescript
       '@mysten/wallet-kit': link:../wallet-kit
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 13.4.0_biqbaboplfbrettd7655fr4n2y
@@ -667,8 +679,8 @@ importers:
     dependencies:
       '@mysten/wallet-kit': link:../wallet-kit
       next: 13.2.3_biqbaboplfbrettd7655fr4n2y
-      nextra: 2.2.17_nvzgbose6yf6w7ijjprgspqefi
-      nextra-theme-docs: 2.2.17_sk5zsfkxizvi3trle4mkuwucem
+      nextra: 2.2.18_nvzgbose6yf6w7ijjprgspqefi
+      nextra-theme-docs: 2.2.18_eabglq5mx25htemwufj5jyllhe
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
     devDependencies:
@@ -4677,6 +4689,24 @@ packages:
       '@ledgerhq/hw-transport': 6.28.1
       '@ledgerhq/logs': 6.10.1
     dev: true
+
+  /@ledgerhq/hw-transport-webhid/6.27.12:
+    resolution: {integrity: sha512-Yhy5dOKeJIU24Dh9xQjrStc++NviPjRSGHsbc1PeyEjgPEGc8q8wtvm7WFBDzmymBwMhIA5eoNj3fGLk/voXQQ==}
+    dependencies:
+      '@ledgerhq/devices': 8.0.0
+      '@ledgerhq/errors': 6.12.3
+      '@ledgerhq/hw-transport': 6.28.1
+      '@ledgerhq/logs': 6.10.1
+    dev: false
+
+  /@ledgerhq/hw-transport-webusb/6.27.12:
+    resolution: {integrity: sha512-U96UWLZIurD9ifHlm77PAgBbvDCe99DAJk64O2SdR41WRF3WaRq/pjrzCq2UvvammdCd1p7nS4zbhlse0wZplg==}
+    dependencies:
+      '@ledgerhq/devices': 8.0.0
+      '@ledgerhq/errors': 6.12.3
+      '@ledgerhq/hw-transport': 6.28.1
+      '@ledgerhq/logs': 6.10.1
+    dev: false
 
   /@ledgerhq/hw-transport/6.28.1:
     resolution: {integrity: sha512-RaZe+abn0zBIz82cE9tp7Y7aZkHWWbEaE2yJpfxT8AhFz3fx+BU0kLYzuRN9fmA7vKueNJ1MTVUCY+Ex9/CHSQ==}
@@ -8692,7 +8722,7 @@ packages:
   /axios/0.25.0_debug@4.3.4:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1_debug@4.3.4
+      follow-redirects: 1.15.1
     transitivePeerDependencies:
       - debug
     dev: true
@@ -12623,18 +12653,6 @@ packages:
         optional: true
     dev: true
 
-  /follow-redirects/1.15.1_debug@4.3.4:
-    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
-    dependencies:
-      debug: 4.3.4
-    dev: true
-
   /for-each/0.3.3:
     resolution: {integrity: sha512-jqYfLp7mo9vIyQf8ykW2v7A+2N4QjeCeI5+Dz9XraiO1ign81wjiH7Fb9vSOWvQfNtmSa4H2RoQTrrXivdUZmw==}
     dependencies:
@@ -16293,11 +16311,11 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.2.17_sk5zsfkxizvi3trle4mkuwucem:
-    resolution: {integrity: sha512-GTTie4YtTjiBdh3PqSYX5xtOQaCcLWoHWrubR2ikmBMq0GYxM2AX26J6O3gZ/xzzJje+vWmZGOilop/bG2RCog==}
+  /nextra-theme-docs/2.2.18_eabglq5mx25htemwufj5jyllhe:
+    resolution: {integrity: sha512-gW9P2fOuV0w414vmHyJY9k1XSoPsFLOXIDWyW177v8xPJcNF3DrYCOIaVgZt7UwxlBNmZlBDg+glPPogXw1qHQ==}
     peerDependencies:
       next: '>=9.5.3'
-      nextra: 2.2.17
+      nextra: 2.2.18
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -16312,15 +16330,15 @@ packages:
       next: 13.2.3_biqbaboplfbrettd7655fr4n2y
       next-seo: 5.15.0_nvzgbose6yf6w7ijjprgspqefi
       next-themes: 0.2.1_nvzgbose6yf6w7ijjprgspqefi
-      nextra: 2.2.17_nvzgbose6yf6w7ijjprgspqefi
+      nextra: 2.2.18_nvzgbose6yf6w7ijjprgspqefi
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       scroll-into-view-if-needed: 3.0.6
       zod: 3.20.2
     dev: false
 
-  /nextra/2.2.17_nvzgbose6yf6w7ijjprgspqefi:
-    resolution: {integrity: sha512-IRfvDfUut6YgbivBVP8cG2DkxEBvODWQFiv7rqHD1tR9lBjiDKugyCi64zl1CiOlW5awc8xmbPDrzYak9l+A/w==}
+  /nextra/2.2.18_nvzgbose6yf6w7ijjprgspqefi:
+    resolution: {integrity: sha512-45fXVzSOOhjMs+bTcq/jsW4BT8bOeTZjceHEubDTFEdelqTv5rUtwVsHqt0iwzmj/braNdZWTITygY25rE65tA==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'

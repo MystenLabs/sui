@@ -14,8 +14,7 @@ use std::path::Path;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -460,14 +459,16 @@ impl SimpleFaucet {
         number_of_coins: usize,
         recipient: SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
-        let txns = res.transaction.data.transactions();
-        if txns.len() != 1 {
-            panic!(
-                "PaySui Transaction should create one and exactly one txn, but got {:?}",
-                txns
-            );
-        }
-        let created = res.effects.created().to_vec();
+        let created = res
+            .effects
+            .ok_or_else(|| {
+                FaucetError::ParseTransactionResponseError(format!(
+                    "effects field missing for txn {}",
+                    res.digest
+                ))
+            })?
+            .created()
+            .to_vec();
         if created.len() != number_of_coins {
             panic!(
                 "PaySui Transaction should create exact {:?} new coins, but got {:?}",
@@ -481,7 +482,7 @@ impl SimpleFaucet {
             .iter()
             .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
             .collect();
-        Ok((*res.effects.transaction_digest(), coin_ids))
+        Ok((res.digest, coin_ids))
     }
 
     #[cfg(test)]
@@ -673,7 +674,7 @@ mod tests {
 
         if let SuiClientCommandResult::PayAllSui(response) = res {
             assert!(matches!(
-                response.effects.status(),
+                response.effects.unwrap().status(),
                 SuiExecutionStatus::Success
             ));
         } else {
@@ -729,8 +730,13 @@ mod tests {
         .unwrap();
 
         let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res {
-            assert!(matches!(resp.effects.status(), SuiExecutionStatus::Success));
-            resp.effects.created()[0].reference.object_id
+            assert!(matches!(
+                resp.effects.as_ref().unwrap().status(),
+                SuiExecutionStatus::Success
+            ));
+            resp.effects.as_ref().unwrap().created()[0]
+                .reference
+                .object_id
         } else {
             panic!("split command did not return SuiClientCommandResult::SplitCoin");
         };

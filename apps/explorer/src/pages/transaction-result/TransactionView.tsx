@@ -3,14 +3,10 @@
 
 import { CoinFormat, useFormatCoin } from '@mysten/core';
 import {
-    getMoveCallTransaction,
-    getPublishTransaction,
     getTransactionKindName,
-    getTransactions,
+    getTransactionKind,
     getTransactionSender,
-    getTransferObjectTransaction,
     getTransactionSignature,
-    getMovePackageContent,
     SUI_TYPE_ARG,
     getExecutionStatusType,
     getTotalGasUsed,
@@ -26,13 +22,11 @@ import {
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
     eventToDisplay,
     getAddressesLinks,
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
-import ModulesWrapper from '../../components/module/ModulesWrapper';
 // TODO: (Jibz) Create a new pagination component
 import Pagination from '../../components/pagination/Pagination';
 import {
@@ -43,7 +37,6 @@ import { getAmount } from '../../utils/getAmount';
 import TxLinks from './TxLinks';
 
 import type { Category } from './TransactionResultType';
-import type { TransactionKindName, SuiTransactionKind } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
@@ -70,102 +63,36 @@ const MAX_RECIPIENTS_PER_PAGE = 10;
 
 function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
-        ...(tx.effects.mutated?.length
+        ...(tx.effects!.mutated?.length
             ? [
                   {
                       label: 'Updated',
-                      links: tx.effects.mutated.map((item) => item.reference),
+                      links: tx.effects!.mutated.map((item) => item.reference),
                   },
               ]
             : []),
-        ...(tx.effects.created?.length
+        ...(tx.effects!.created?.length
             ? [
                   {
                       label: 'Created',
-                      links: tx.effects.created?.map((item) => item.reference),
+                      links: tx.effects!.created?.map((item) => item.reference),
                   },
               ]
             : []),
     ];
 }
 
-function formatByTransactionKind(
-    kind: TransactionKindName | undefined,
-    data: SuiTransactionKind,
-    sender: string
-) {
-    switch (kind) {
-        case 'TransferObject':
-            const transfer = getTransferObjectTransaction(data)!;
-            return {
-                title: 'Transfer',
-                sender: {
-                    value: sender,
-                    link: true,
-                    category: 'address',
-                },
-                objectId: {
-                    value: transfer.objectRef.objectId,
-                    link: true,
-                    category: 'object',
-                },
-                recipient: {
-                    value: transfer.recipient,
-                    category: 'address',
-                    link: true,
-                },
-            };
-        case 'Call':
-            const moveCall = getMoveCallTransaction(data)!;
-            return {
-                title: 'Call',
-                sender: {
-                    value: sender,
-                    link: true,
-                    category: 'address',
-                },
-                package: {
-                    value: moveCall.package,
-                    link: true,
-                    category: 'object',
-                },
-                module: {
-                    value: moveCall.module,
-                },
-                function: {
-                    value: moveCall.function,
-                },
-                arguments: {
-                    value: moveCall.arguments,
-                    list: true,
-                },
-                typeArguments: {
-                    value: moveCall.typeArguments,
-                    list: true,
-                },
-            };
-        case 'Publish':
-            const publish = getPublishTransaction(data)!;
-            return {
-                title: 'publish',
-                module: {
-                    value: Object.entries(getMovePackageContent(publish)!),
-                },
-                ...(sender
-                    ? {
-                          sender: {
-                              value: sender,
-                              link: true,
-                              category: 'address',
-                          },
-                      }
-                    : {}),
-            };
-
-        default:
-            return {};
-    }
-}
+// TODO: Support programmable tx:
+// function formatByTransactionKind(
+//     kind: TransactionKindName | undefined,
+//     _data: SuiTransactionKind,
+//     _sender: string
+// ) {
+//     switch (kind) {
+//         default:
+//             return {};
+//     }
+// }
 
 function getSignatureFromAddress(
     signatures: SignaturePubkeyPair[],
@@ -308,10 +235,10 @@ function TransactionView({
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const [txnDetails] = getTransactions(transaction);
+    const txnDetails = getTransactionKind(transaction)!;
     const txKindName = getTransactionKindName(txnDetails);
-    const sender = getTransactionSender(transaction);
-    const gasUsed = transaction?.effects.gasUsed;
+    const sender = getTransactionSender(transaction)!;
+    const gasUsed = transaction?.effects!.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
@@ -343,7 +270,7 @@ function TransactionView({
         coinTransfer?.[0]?.coinType
     );
 
-    const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
+    // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
     const txEventData = transaction.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
@@ -368,74 +295,75 @@ function TransactionView({
 
     const createdMutateData = generateMutatedCreated(transaction);
 
-    const typearguments =
-        txKindData.title === 'Call' && txKindData.package
-            ? {
-                  title: 'Package Details',
-                  content: [
-                      {
-                          label: 'Package ID',
-                          monotypeClass: true,
-                          link: true,
-                          category: 'object',
-                          value: txKindData.package.value,
-                      },
-                      {
-                          label: 'Module',
-                          monotypeClass: true,
-                          value: txKindData.module.value,
-                          href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
-                      },
-                      {
-                          label: 'Function',
-                          monotypeClass: true,
-                          value: txKindData.function.value,
-                      },
-                      {
-                          label: 'Argument',
-                          monotypeClass: true,
-                          value: JSON.stringify(
-                              txKindData.arguments.value ?? []
-                          ),
-                      },
-                  ],
-              }
-            : false;
+    // TODO: Support programmable transactions:
+    // const typearguments =
+    //     txKindData.title === 'Call' && txKindData.package
+    //         ? {
+    //               title: 'Package Details',
+    //               content: [
+    //                   {
+    //                       label: 'Package ID',
+    //                       monotypeClass: true,
+    //                       link: true,
+    //                       category: 'object',
+    //                       value: txKindData.package.value,
+    //                   },
+    //                   {
+    //                       label: 'Module',
+    //                       monotypeClass: true,
+    //                       value: txKindData.module.value,
+    //                       href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
+    //                   },
+    //                   {
+    //                       label: 'Function',
+    //                       monotypeClass: true,
+    //                       value: txKindData.function.value,
+    //                   },
+    //                   {
+    //                       label: 'Argument',
+    //                       monotypeClass: true,
+    //                       value: JSON.stringify(
+    //                           txKindData.arguments.value ?? []
+    //                       ),
+    //                   },
+    //               ],
+    //           }
+    //         : false;
 
-    if (typearguments && txKindData.typeArguments?.value) {
-        typearguments.content.push({
-            label: 'Type Arguments',
-            monotypeClass: true,
-            value: JSON.stringify(txKindData.typeArguments.value),
-        });
-    }
+    // if (typearguments && txKindData.typeArguments?.value) {
+    //     typearguments.content.push({
+    //         label: 'Type Arguments',
+    //         monotypeClass: true,
+    //         value: JSON.stringify(txKindData.typeArguments.value),
+    //     });
+    // }
 
-    const modules =
-        txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
-            ? {
-                  title: 'Modules',
-                  content: txKindData?.module?.value,
-              }
-            : false;
+    // const modules =
+    //     txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
+    //         ? {
+    //               title: 'Modules',
+    //               content: txKindData?.module?.value,
+    //           }
+    //         : false;
 
     const hasEvents = txEventData && txEventData.length > 0;
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasData = getGasData(transaction);
+    const gasData = getGasData(transaction)!;
     const gasPrice = gasData.price || 1;
     const gasPayment = gasData.payment;
     const gasBudget = gasData.budget;
     const gasOwner = gasData.owner;
     const isSponsoredTransaction = gasOwner !== sender;
 
-    const transactionSignatures = getTransactionSignature(transaction);
+    const transactionSignatures = getTransactionSignature(transaction)!;
     const deserializedTransactionSignatures = transactionSignatures.map(
         (signature) => fromSerializedSignature(signature)
     );
     const accountSignature = getSignatureFromAddress(
         deserializedTransactionSignatures,
-        sender
+        sender!
     );
     const sponsorSignature = isSponsoredTransaction
         ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
@@ -470,7 +398,8 @@ function TransactionView({
                             // TODO: Change to test ID
                             id={getTransactionDigest(transaction)}
                         >
-                            {typearguments && (
+                            {/* TODO: Support programmable transactions: */}
+                            {/* {typearguments && (
                                 <section
                                     className={clsx([
                                         styles.txcomponent,
@@ -480,7 +409,7 @@ function TransactionView({
                                 >
                                     <ItemView data={typearguments} />
                                 </section>
-                            )}
+                            )} */}
                             <section
                                 className={clsx([
                                     styles.txcomponent,
@@ -553,7 +482,8 @@ function TransactionView({
                                 </div>
                             </section>
 
-                            {modules && (
+                            {/* TODO: Support programmable transactions: */}
+                            {/* {modules && (
                                 <section
                                     className={clsx([
                                         styles.txcomponent,
@@ -567,7 +497,7 @@ function TransactionView({
                                         />
                                     </ErrorBoundary>
                                 </section>
-                            )}
+                            )} */}
                         </div>
                         <div data-testid="gas-breakdown" className="mt-8">
                             <TableHeader

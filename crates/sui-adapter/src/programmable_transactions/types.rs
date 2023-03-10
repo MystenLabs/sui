@@ -255,7 +255,6 @@ impl TryFromValue for ObjectValue {
     fn try_from_value(value: Value) -> Result<Self, CommandArgumentError> {
         match value {
             Value::Object(o) => Ok(o),
-            // TODO support Any for dev inspect
             Value::Raw(RawValueType::Any, _) => Err(CommandArgumentError::TypeMismatch),
             Value::Raw(RawValueType::Loaded { .. }, _) => Err(CommandArgumentError::TypeMismatch),
         }

@@ -26,7 +26,7 @@ pub struct Transaction {
     pub recipients: Vec<Option<String>>,
     pub checkpoint_sequence_number: i64,
     pub transaction_time: Option<NaiveDateTime>,
-    pub transaction_kinds: Vec<Option<String>>,
+    pub transaction_kind: Option<String>,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -96,23 +96,25 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             ))
         })?;
 
+        let effects = tx_resp
+            .effects
+            .as_ref()
+            .expect("effects should not be empty");
+        let transaction_data = tx_resp
+            .transaction
+            .expect("Transaction field should not be empty")
+            .data;
         // canonical txn digest string is Base58 encoded
-        let tx_digest = tx_resp.effects.transaction_digest().base58_encode();
-        let gas_budget = tx_resp.transaction.data.gas_data().budget;
-        let gas_price = tx_resp.transaction.data.gas_data().price;
-        let sender = tx_resp.transaction.data.sender().to_string();
+        let tx_digest = effects.transaction_digest().base58_encode();
+        let gas_budget = transaction_data.gas_data().budget;
+        let gas_price = transaction_data.gas_data().price;
+        let sender = transaction_data.sender().to_string();
         // NOTE: unwrap is safe here because indexer fetches checkpoint first and then transactions
         // based on the transaction digests in the checkpoint, thus the checkpoint sequence number
         // is always Some. This is also confirmed by the sui-core team.
         let checkpoint_seq_number = tx_resp.checkpoint.unwrap() as i64;
-        let txn_kind_iter = tx_resp
-            .transaction
-            .data
-            .transactions()
-            .iter()
-            .map(|k| k.to_string());
+        let tx_kind = transaction_data.transaction().to_string();
 
-        let effects = tx_resp.effects.clone();
         let recipients: Vec<String> = effects
             .mutated()
             .iter()
@@ -143,10 +145,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             .iter()
             .map(obj_ref_to_obj_id_string)
             .collect();
-        let move_call_strs: Vec<String> = tx_resp
-            .transaction
-            .data
-            .clone()
+        let move_call_strs: Vec<String> = transaction_data
             .move_calls()
             .into_iter()
             .map(|move_call| {
@@ -172,13 +171,13 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             None => None,
         };
 
-        let gas_object_ref = tx_resp.effects.gas_object().reference.clone();
+        let gas_object_ref = effects.gas_object().reference.clone();
         let gas_object_id = gas_object_ref.object_id.to_string();
         let gas_object_seq = gas_object_ref.version;
         // canonical object digest is Base58 encoded
         let gas_object_digest = gas_object_ref.digest.base58_encode();
 
-        let gas_summary = tx_resp.effects.gas_used();
+        let gas_summary = effects.gas_used();
         let computation_cost = gas_summary.computation_cost;
         let storage_cost = gas_summary.storage_cost;
         let storage_rebate = gas_summary.storage_rebate;
@@ -189,7 +188,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             sender,
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
-            transaction_kinds: txn_kind_iter.map(Some).collect::<Vec<Option<String>>>(),
+            transaction_kind: Some(tx_kind),
             transaction_time: timestamp,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),
@@ -234,8 +233,14 @@ impl TryInto<SuiTransactionResponse> for Transaction {
         })?;
 
         Ok(SuiTransactionResponse {
-            transaction: txn,
-            effects: txn_effects,
+            digest: self.transaction_digest.parse().map_err(|e| {
+                IndexerError::InsertableParsingError(format!(
+                    "Failed to parse transaction digest {} : {:?}",
+                    self.transaction_digest, e
+                ))
+            })?,
+            transaction: Some(txn),
+            effects: Some(txn_effects),
             confirmed_local_execution: self.confirmed_local_execution,
             timestamp_ms: self
                 .transaction_time
@@ -243,6 +248,7 @@ impl TryInto<SuiTransactionResponse> for Transaction {
             checkpoint: Some(self.checkpoint_sequence_number as u64),
             // TODO: Indexer need to persist event properly.
             events: Default::default(),
+            errors: vec![],
         })
     }
 }

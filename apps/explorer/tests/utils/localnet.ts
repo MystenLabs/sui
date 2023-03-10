@@ -29,7 +29,6 @@ export async function mint(address: string) {
     tx.add(
         Transaction.Commands.MoveCall({
             target: '0x2::devnet_nft::mint',
-            typeArguments: [],
             arguments: [
                 tx.input('Example NFT'),
                 tx.input('An example NFT.'),

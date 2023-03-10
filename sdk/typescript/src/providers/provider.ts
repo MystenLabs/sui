@@ -4,7 +4,6 @@
 import { Transaction } from '../builder';
 import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
-import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   SuiObjectResponse,
   SuiObjectInfo,
@@ -226,13 +225,14 @@ export abstract class Provider {
   abstract getTotalTransactionNumber(): Promise<number>;
 
   /**
-   * This is under development endpoint on Fullnode that will eventually
-   * replace the other `executeTransaction` that's only available on the
-   * Gateway
+   * Submit the transaction to fullnode for execution
+   * @param txnBytes BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+   * @param signature A single signature or list of signatures(used for sponsored transactions)
+   * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`
    */
   abstract executeTransaction(
     txnBytes: Uint8Array | string,
-    signature: SerializedSignature,
+    signature: SerializedSignature | SerializedSignature[],
     requestType: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse>;
 
@@ -324,7 +324,7 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
+    txn: Transaction | string | Uint8Array,
     gasPrice: number | null,
     epoch: number | null,
   ): Promise<DevInspectResults>;

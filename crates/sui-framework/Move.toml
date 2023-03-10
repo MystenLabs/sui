@@ -1,6 +1,7 @@
 [package]
 name = "Sui"
 version = "0.0.1"
+published-at = "0x2"
 
 [dependencies]
 # Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in

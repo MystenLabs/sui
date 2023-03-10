@@ -68,6 +68,13 @@ Take everything down, removing the container and volume. Use this to start compl
 
 ```docker-compose down --volumes```
 
+### Stats (CPU/MEM USAGE %)
+
+```docker stats```
+
+This command will show you live data stream of your running containers (CPU/MEM USAGE %), consumption of your machine resources. Add prefix "docker stats -a" to display all containers.
+
+
 ### Inspect the state of a running fullnode
 
 Get the running container ID:

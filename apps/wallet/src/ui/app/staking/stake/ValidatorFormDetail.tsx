@@ -5,6 +5,8 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { calculateAPY } from '../calculateAPY';
+import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
+import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
@@ -44,32 +46,20 @@ export function ValidatorFormDetail({
 
     const validatorData = useMemo(() => {
         if (!system) return null;
-        return system.active_validators.find(
-            (av) => av.sui_address === validatorAddress
+        return system.activeValidators.find(
+            (av) => av.suiAddress === validatorAddress
         );
     }, [validatorAddress, system]);
 
-    const totalValidatorStake = validatorData?.staking_pool_sui_balance || 0;
+    //TODO: verify this is the correct validator stake balance
+    const totalValidatorStake = validatorData?.stakingPoolSuiBalance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;
-        let totalActiveStake = 0n;
-
-        if (stakeIdParams) {
-            const balance =
-                allDelegation.find(
-                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-                )?.staked_sui.principal.value || 0;
-            return BigInt(balance);
-        }
-
-        allDelegation.forEach((event) => {
-            if (event.staked_sui.validator_address === validatorAddress) {
-                totalActiveStake += BigInt(event.staked_sui.principal.value);
-            }
-        });
-        return totalActiveStake;
-    }, [allDelegation, validatorAddress, stakeIdParams]);
+        return stakeIdParams
+            ? getStakeSuiBySuiId(allDelegation, stakeIdParams)
+            : getTokenStakeSuiForValidator(allDelegation, validatorAddress);
+    }, [allDelegation, stakeIdParams, validatorAddress]);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;

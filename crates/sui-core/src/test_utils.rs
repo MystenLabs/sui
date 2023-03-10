@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::{
@@ -128,6 +128,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
 

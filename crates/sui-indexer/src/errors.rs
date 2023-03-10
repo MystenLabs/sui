@@ -40,8 +40,11 @@ pub enum IndexerError {
     #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
     RpcClientInitError(String),
 
-    #[error("Indexer failed to serialize/deserialize JSON with error: `{0}`")]
-    JsonSerdeError(String),
+    #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
+    SerdeError(String),
+
+    #[error("Indexer does not support the feature yet with error: `{0}`")]
+    NotImplementedError(String),
 }
 
 impl IndexerError {
@@ -58,7 +61,8 @@ impl IndexerError {
             IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
             IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
             IndexerError::JsonRpcServerError(_) => "JsonRpcServerError".into(),
-            IndexerError::JsonSerdeError(_) => "JsonSerdeError".into(),
+            IndexerError::SerdeError(_) => "SerdeError".into(),
+            IndexerError::NotImplementedError(_) => "NotImplementedError".into(),
         }
     }
 }

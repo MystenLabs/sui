@@ -39,11 +39,6 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
-    2:
-      ObjVec:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: ObjectArg
 ChangeEpoch:
   STRUCT:
     - epoch: U64
@@ -358,20 +353,6 @@ ModuleId:
         TYPENAME: AccountAddress
     - name:
         TYPENAME: Identifier
-MoveCall:
-  STRUCT:
-    - package:
-        TYPENAME: ObjectID
-    - module:
-        TYPENAME: Identifier
-    - function:
-        TYPENAME: Identifier
-    - type_arguments:
-        SEQ:
-          TYPENAME: TypeTag
-    - arguments:
-        SEQ:
-          TYPENAME: CallArg
 MoveFieldLayout:
   STRUCT:
     - name:
@@ -386,10 +367,6 @@ MoveLocation:
     - instruction: U16
     - function_name:
         OPTION: STR
-MoveModulePublish:
-  STRUCT:
-    - modules:
-        SEQ: BYTES
 MoveObject:
   STRUCT:
     - type_:
@@ -504,42 +481,6 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
-Pay:
-  STRUCT:
-    - coins:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - recipients:
-        SEQ:
-          TYPENAME: SuiAddress
-    - amounts:
-        SEQ: U64
-PayAllSui:
-  STRUCT:
-    - coins:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - recipient:
-        TYPENAME: SuiAddress
-PaySui:
-  STRUCT:
-    - coins:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - recipients:
-        SEQ:
-          TYPENAME: SuiAddress
-    - amounts:
-        SEQ: U64
 ProgrammableMoveCall:
   STRUCT:
     - package:
@@ -568,52 +509,6 @@ SequenceNumber:
   NEWTYPESTRUCT: U64
 Sha3Digest:
   NEWTYPESTRUCT: BYTES
-SingleTransactionKind:
-  ENUM:
-    0:
-      TransferObject:
-        NEWTYPE:
-          TYPENAME: TransferObject
-    1:
-      Publish:
-        NEWTYPE:
-          TYPENAME: MoveModulePublish
-    2:
-      Call:
-        NEWTYPE:
-          TYPENAME: MoveCall
-    3:
-      TransferSui:
-        NEWTYPE:
-          TYPENAME: TransferSui
-    4:
-      Pay:
-        NEWTYPE:
-          TYPENAME: Pay
-    5:
-      PaySui:
-        NEWTYPE:
-          TYPENAME: PaySui
-    6:
-      PayAllSui:
-        NEWTYPE:
-          TYPENAME: PayAllSui
-    7:
-      ChangeEpoch:
-        NEWTYPE:
-          TYPENAME: ChangeEpoch
-    8:
-      Genesis:
-        NEWTYPE:
-          TYPENAME: GenesisTransaction
-    9:
-      ConsensusCommitPrologue:
-        NEWTYPE:
-          TYPENAME: ConsensusCommitPrologue
-    10:
-      ProgrammableTransaction:
-        NEWTYPE:
-          TYPENAME: ProgrammableTransaction
 StructTag:
   STRUCT:
     - address:
@@ -639,29 +534,21 @@ TransactionEffectsDigest:
 TransactionKind:
   ENUM:
     0:
-      Single:
+      ChangeEpoch:
         NEWTYPE:
-          TYPENAME: SingleTransactionKind
+          TYPENAME: ChangeEpoch
     1:
-      Batch:
+      Genesis:
         NEWTYPE:
-          SEQ:
-            TYPENAME: SingleTransactionKind
-TransferObject:
-  STRUCT:
-    - recipient:
-        TYPENAME: SuiAddress
-    - object_ref:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
-TransferSui:
-  STRUCT:
-    - recipient:
-        TYPENAME: SuiAddress
-    - amount:
-        OPTION: U64
+          TYPENAME: GenesisTransaction
+    2:
+      ConsensusCommitPrologue:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologue
+    3:
+      ProgrammableTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
 TypeTag:
   ENUM:
     0:

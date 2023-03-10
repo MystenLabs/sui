@@ -51,14 +51,14 @@ describe('Object id/Address/Transaction digest validation', () => {
 
   it('Test all functions with invalid Transaction Digest', async () => {
     //empty digest
-    expect(toolbox.provider.getTransactionWithEffects('')).rejects.toThrowError(
+    expect(toolbox.provider.getTransactionResponse('')).rejects.toThrowError(
       /Invalid Transaction digest/,
     );
 
     //wrong batch request
     let digests = ['AQ7FA8JTGs368CvMkXj2iFz2WUWwzP6AAWgsLpPLxUmr', 'wrong'];
     expect(
-      toolbox.provider.getTransactionWithEffectsBatch(digests),
+      toolbox.provider.getTransactionResponseBatch(digests),
     ).rejects.toThrowError(/Invalid Transaction digest wrong/);
   });
 });

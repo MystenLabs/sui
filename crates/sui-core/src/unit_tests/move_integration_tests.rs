@@ -18,7 +18,7 @@ use move_core_types::{
     value::{MoveStruct, MoveValue},
 };
 use move_package::source_package::manifest_parser;
-use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
+use sui_framework_build::compiled_package::{ensure_published_dependencies, BuildConfig};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -2097,16 +2097,14 @@ async fn test_generate_lock_file() {
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
-async fn test_custom_property_published_at() {
+async fn test_custom_property_parse_published_at() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "custom_properties_in_manifest"]);
 
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
     sui_framework::build_move_package(&path, build_config).expect("Move package did not build");
-    let manifest =
-        manifest_parser::parse_move_manifest_from_file(&path.as_path().join("Move.toml"))
-            .expect("Could not parse Move.toml");
+    let manifest = manifest_parser::parse_move_manifest_from_file(path.as_path())
+        .expect("Could not parse Move.toml");
     let properties = manifest
         .package
         .custom_properties
@@ -2123,6 +2121,40 @@ async fn test_custom_property_published_at() {
         ]
     "#]];
     expected.assert_debug_eq(&properties)
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_custom_property_ensure_published_at() {
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend([
+        "src",
+        "unit_tests",
+        "data",
+        "custom_properties_in_manifest_ensure_published_at",
+    ]);
+
+    let resolution_graph = build_config
+        .config
+        .resolution_graph_for_package(&path, &mut Vec::new())
+        .expect("Could not build resolution graph.");
+
+    let error_message = if let SuiError::ModulePublishFailure { error } =
+        ensure_published_dependencies(&resolution_graph)
+            .err()
+            .unwrap()
+    {
+        error
+    } else {
+        "Expected ModulePublishFailure".into()
+    };
+
+    let expected = expect![[r#"
+        Package dependency "CustomPropertiesInManifestDependencyInvalidPublishedAt" does not specify a valid published address: could not parse value "mystery" for published-at field.
+        Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
+        If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
+    expected.assert_eq(&error_message)
 }
 
 pub async fn build_and_try_publish_test_package(

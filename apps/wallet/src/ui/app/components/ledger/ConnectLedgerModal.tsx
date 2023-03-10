@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useState } from 'react';
+
 import ExternalLink from '_components/external-link';
+import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
@@ -10,13 +13,40 @@ type ConnectLedgerModalProps = {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    onError: (error: unknown) => void;
 };
 
 export function ConnectLedgerModal({
     isOpen,
     onClose,
     onConfirm,
+    onError,
 }: ConnectLedgerModalProps) {
+    const [isConnectingToLedger, setConnectingToLedger] = useState(false);
+    const [, connectToLedger] = useSuiLedgerClient();
+
+    const onContinueClick = async () => {
+        try {
+            setConnectingToLedger(true);
+
+            await connectToLedger();
+
+            // Let's make sure that the user has the Sui application open
+            // by making a call to getVersion. We can probably abstract this
+            // away at the SDK level in some follow-up work
+            // (See https://github.com/LedgerHQ/ledgerjs/issues/122)
+            // TODO: I'll un-comment this out when I can actually load the
+            // Sui application onto my Ledger device.
+            // await suiLedgerClient.getVersion();
+
+            onConfirm();
+        } catch (error) {
+            onError(error);
+        } finally {
+            setConnectingToLedger(false);
+        }
+    };
+
     return (
         <ModalDialog
             isOpen={isOpen}
@@ -58,7 +88,8 @@ export function ConnectLedgerModal({
                     <Button
                         variant="outline"
                         text="Continue"
-                        onClick={onConfirm}
+                        onClick={onContinueClick}
+                        loading={isConnectingToLedger}
                     />
                 </div>
             }

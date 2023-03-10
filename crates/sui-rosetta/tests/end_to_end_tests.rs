@@ -6,6 +6,7 @@ mod rosetta_client;
 use crate::rosetta_client::RosettaEndpoint;
 use rosetta_client::{get_random_sui, start_rosetta_test_server};
 use serde_json::json;
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
@@ -245,13 +246,19 @@ async fn test_delegation() {
 
     let tx = client
         .read_api()
-        .get_transaction(response.transaction_identifier.hash)
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionResponseOptions::new().with_effects(),
+        )
         .await
         .unwrap();
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(SuiExecutionStatus::Success, *tx.effects.status())
+    assert_eq!(
+        SuiExecutionStatus::Success,
+        *tx.effects.as_ref().unwrap().status()
+    )
 }
 
 #[tokio::test]
@@ -278,11 +285,14 @@ async fn test_pay_sui() {
 
     let tx = client
         .read_api()
-        .get_transaction(response.transaction_identifier.hash)
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionResponseOptions::new().with_effects(),
+        )
         .await
         .unwrap();
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(SuiExecutionStatus::Success, *tx.effects.status())
+    assert_eq!(SuiExecutionStatus::Success, *tx.effects.unwrap().status())
 }

@@ -1299,14 +1299,13 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
             .ok_or(SuiError::InvalidAuthenticator)?;
 
         for authority_index in self.signers_map.iter() {
-            let authority =
-                committee
-                    .authority_by_index(authority_index)
-                    .ok_or(SuiError::UnknownSigner {
-                        signer: None,
-                        index: Some(authority_index),
-                        committee: Box::new(committee.clone()),
-                    })?;
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or_else(|| SuiError::UnknownSigner {
+                    signer: None,
+                    index: Some(authority_index),
+                    committee: Box::new(committee.clone()),
+                })?;
 
             // Update weight.
             let voting_rights = committee.weight(authority);

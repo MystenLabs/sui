@@ -26,7 +26,7 @@ use std::time::Duration;
 use sui_protocol_config::ProtocolVersion;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -62,7 +62,7 @@ pub struct TransactiondOrchestrator<A> {
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
     pub async fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
-        reconfig_channel: Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+        reconfig_channel: Receiver<(Committee, ProtocolVersion)>,
         parent_path: &Path,
         prometheus_registry: &Registry,
     ) -> anyhow::Result<Self> {

@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
     const guardsLoading = initGuardLoading || lockedGuardLoading;
     return (
         <Loading loading={guardsLoading}>
-            <PageLayout limitToPopUpSize={true}>
+            <PageLayout>
                 <PageMainLayout className={st.main}>
                     <ImportPage mode="forgot" />
                 </PageMainLayout>

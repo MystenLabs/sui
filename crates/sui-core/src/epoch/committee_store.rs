@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use rocksdb::Options;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use sui_storage::default_db_options;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
@@ -19,7 +20,7 @@ use sui_macros::nondeterministic;
 
 pub struct CommitteeStore {
     tables: CommitteeStoreTables,
-    cache: RwLock<HashMap<EpochId, Committee>>,
+    cache: RwLock<HashMap<EpochId, Arc<Committee>>>,
 }
 
 #[derive(DBMapUtils)]
@@ -63,32 +64,33 @@ impl CommitteeStore {
     pub fn init_genesis_committee(&self, genesis_committee: Committee) -> SuiResult {
         assert_eq!(genesis_committee.epoch, 0);
         self.tables.committee_map.insert(&0, &genesis_committee)?;
-        self.cache.write().insert(0, genesis_committee);
+        self.cache.write().insert(0, Arc::new(genesis_committee));
         Ok(())
     }
 
     pub fn insert_new_committee(&self, new_committee: &Committee) -> SuiResult {
         if let Some(old_committee) = self.get_committee(&new_committee.epoch)? {
             // If somehow we already have this committee in the store, they must be the same.
-            assert_eq!(&old_committee, new_committee);
+            assert_eq!(&*old_committee, new_committee);
         } else {
             self.tables
                 .committee_map
                 .insert(&new_committee.epoch, new_committee)?;
             self.cache
                 .write()
-                .insert(new_committee.epoch, new_committee.clone());
+                .insert(new_committee.epoch, Arc::new(new_committee.clone()));
         }
         Ok(())
     }
 
-    pub fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Option<Committee>> {
+    pub fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Option<Arc<Committee>>> {
         if let Some(committee) = self.cache.read().get(epoch_id) {
-            return Ok(Some(committee.clone())); // todo use Arc
+            return Ok(Some(committee.clone()));
         }
         let committee = self.tables.committee_map.get(epoch_id)?;
+        let committee = committee.map(Arc::new);
         if let Some(committee) = committee.as_ref() {
-            self.cache.write().insert(*epoch_id, committee.clone()); // todo use Arc
+            self.cache.write().insert(*epoch_id, committee.clone());
         }
         Ok(committee)
     }
@@ -111,7 +113,8 @@ impl CommitteeStore {
         Ok(match epoch {
             Some(epoch) => self
                 .get_committee(&epoch)?
-                .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))?,
+                .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))
+                .map(|c| Committee::clone(&*c))?,
             None => self.get_latest_committee(),
         })
     }
