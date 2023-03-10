@@ -434,12 +434,44 @@ We do not allow the number of validators in any epoch to go above this.
 
 
 
-<a name="0x2_sui_system_MIN_VALIDATOR_STAKE"></a>
+<a name="0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE"></a>
 
 Lower-bound on the amount of stake required to become a validator.
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>: u64 = 25000000000000000;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>: u64 = 30000000000000000;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD"></a>
+
+Validators with stake amount below <code><a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a></code> are considered to
+have low stake and will be escorted out of the validator set after being below this
+threshold for more than <code><a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a></code> number of epochs.
+And validators with stake below <code><a href="sui_system.md#0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a></code> will be removed
+immediately at epoch change, no grace period.
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>: u64 = 25000000000000000;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>: u64 = 20000000000000000;
 </code></pre>
 
 
@@ -507,8 +539,8 @@ This function will be called only once in genesis.
 
 ## Function `request_add_validator_candidate`
 
-Can be called by anyone who wishes to become a validator candidate and starts accuring
-stakes in their staking pool. Once they have at least <code><a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a></code> amount of stake they
+Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+stakes in their staking pool. Once they have at least <code><a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a></code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
 Note: <code>proof_of_possession</code> MUST be a valid signature using sui_address and protocol_pubkey_bytes.
@@ -631,7 +663,7 @@ epoch has already reached the maximum.
         <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
     );
 
-    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>, ctx);
 }
 </code></pre>
 
@@ -1471,6 +1503,10 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
+        self.parameters.governance_start_epoch,
+        <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>,
+        <a href="sui_system.md#0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>,
+        <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>,
         ctx,
     );
 

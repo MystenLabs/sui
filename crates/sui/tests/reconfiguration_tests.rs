@@ -356,7 +356,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let new_validator_address = new_node_config.sui_address();
     let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
     let stake = Object::new_gas_with_balance_and_owner_for_testing(
-        25_000_000_000_000_000,
+        30_000_000_000_000_000,
         new_validator_address,
     );
     let mut genesis_objects = gas_objects.clone();

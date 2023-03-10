@@ -19,6 +19,7 @@
 -  [Function `request_withdraw_stake`](#0x2_validator_set_request_withdraw_stake)
 -  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
+-  [Function `update_and_process_low_stake_departures`](#0x2_validator_set_update_and_process_low_stake_departures)
 -  [Function `effectuate_staged_metadata`](#0x2_validator_set_effectuate_staged_metadata)
 -  [Function `derive_reference_gas_price`](#0x2_validator_set_derive_reference_gas_price)
 -  [Function `total_stake`](#0x2_validator_set_total_stake)
@@ -44,6 +45,7 @@
 -  [Function `get_pending_validator_ref`](#0x2_validator_set_get_pending_validator_ref)
 -  [Function `verify_cap`](#0x2_validator_set_verify_cap)
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
+-  [Function `process_validator_departure`](#0x2_validator_set_process_validator_departure)
 -  [Function `clean_report_records_leaving_validator`](#0x2_validator_set_clean_report_records_leaving_validator)
 -  [Function `process_pending_validators`](#0x2_validator_set_process_pending_validators)
 -  [Function `sort_removal_list`](#0x2_validator_set_sort_removal_list)
@@ -148,6 +150,12 @@
  validator.
  When the candidate has met the min stake requirement, they can call <code>request_add_validator</code> to
  officially add them to the active validator set <code>active_validators</code> next epoch.
+</dd>
+<dt>
+<code>at_risk_validators: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;</code>
+</dt>
+<dd>
+ Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
 </dd>
 </dl>
 
@@ -308,6 +316,12 @@ The epoch value corresponds to the first epoch this change takes place.
 <dd>
 
 </dd>
+<dt>
+<code>is_voluntary: bool</code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -450,6 +464,7 @@ The epoch value corresponds to the first epoch this change takes place.
         staking_pool_mappings,
         inactive_validators: <a href="table.md#0x2_table_new">table::new</a>(ctx),
         validator_candidates: <a href="table.md#0x2_table_new">table::new</a>(ctx),
+        at_risk_validators: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
     };
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.active_validators);
     validators
@@ -740,7 +755,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, governance_start_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -755,6 +770,10 @@ It does the following things:
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     reward_slashing_rate: u64,
+    low_stake_threshold: u64,
+    very_low_stake_threshold: u64,
+    low_stake_grace_period: u64,
+    governance_start_epoch: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
@@ -827,6 +846,12 @@ It does the following things:
 
     <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self, validator_report_records, ctx);
 
+    // kick low stake validators out.
+    <b>if</b> (<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) &gt;= governance_start_epoch) {
+        <a href="validator_set.md#0x2_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
+            self, low_stake_threshold, very_low_stake_threshold, low_stake_grace_period, validator_report_records, ctx);
+    };
+
     self.total_stake = <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.active_validators);
 
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> self.active_validators);
@@ -834,6 +859,71 @@ It does the following things:
     // At this point, self.active_validators are updated for next epoch.
     // Now we process the staged <a href="validator.md#0x2_validator">validator</a> metadata.
     <a href="validator_set.md#0x2_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_update_and_process_low_stake_departures"></a>
+
+## Function `update_and_process_low_stake_departures`
+
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    low_stake_threshold: u64,
+    very_low_stake_threshold: u64,
+    low_stake_grace_period: u64,
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    ctx: &<b>mut</b> TxContext
+) {
+    // Iterate through all the active validators, record their low stake status, and kick them out <b>if</b> the condition is met.
+    <b>let</b> i = <a href="_length">vector::length</a>(&self.active_validators);
+    <b>while</b> (i &gt; 0) {
+        i = i - 1;
+        <b>let</b> validator_ref = <a href="_borrow">vector::borrow</a>(&self.active_validators, i);
+        <b>let</b> validator_address = <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(validator_ref);
+        <b>let</b> stake = <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(validator_ref);
+        <b>if</b> (stake &gt;= low_stake_threshold) {
+            // The <a href="validator.md#0x2_validator">validator</a> is <a href="safe.md#0x2_safe">safe</a>. We remove their entry from the at_risk map <b>if</b> there <b>exists</b> one.
+            <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.at_risk_validators, &validator_address)) {
+                <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.at_risk_validators, &validator_address);
+            }
+        } <b>else</b> <b>if</b> (stake &gt;= very_low_stake_threshold) {
+            // The stake is a bit below the threshold so we increment the entry of the <a href="validator.md#0x2_validator">validator</a> in the map.
+            <b>let</b> new_low_stake_period =
+                <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.at_risk_validators, &validator_address)) {
+                    <b>let</b> num_epochs = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.at_risk_validators, &validator_address);
+                    *num_epochs = *num_epochs + 1;
+                    *num_epochs
+                } <b>else</b> {
+                    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.at_risk_validators, validator_address, 1);
+                    1
+                };
+
+            // If the grace period <b>has</b> passed, the <a href="validator.md#0x2_validator">validator</a> <b>has</b> <b>to</b> leave us.
+            <b>if</b> (new_low_stake_period &gt; low_stake_grace_period) {
+                <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_remove">vector::remove</a>(&<b>mut</b> self.active_validators, i);
+                <a href="validator_set.md#0x2_validator_set_process_validator_departure">process_validator_departure</a>(self, <a href="validator.md#0x2_validator">validator</a>, validator_report_records, <b>false</b> /* the <a href="validator.md#0x2_validator">validator</a> is kicked out involuntarily */, ctx);
+            }
+        } <b>else</b> {
+            // The <a href="validator.md#0x2_validator">validator</a>'s stake is lower than the very low threshold so we kick them out immediately.
+            <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_remove">vector::remove</a>(&<b>mut</b> self.active_validators, i);
+            <a href="validator_set.md#0x2_validator_set_process_validator_departure">process_validator_departure</a>(self, <a href="validator.md#0x2_validator">validator</a>, validator_report_records, <b>false</b> /* the <a href="validator.md#0x2_validator">validator</a> is kicked out involuntarily */, ctx);
+        }
+    }
 }
 </code></pre>
 
@@ -1611,30 +1701,67 @@ is removed from <code>validators</code> and its staking pool is put into the <co
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
     <a href="validator_set.md#0x2_validator_set_sort_removal_list">sort_removal_list</a>(&<b>mut</b> self.pending_removals);
     <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&self.pending_removals)) {
         <b>let</b> index = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> self.pending_removals);
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_remove">vector::remove</a>(&<b>mut</b> self.active_validators, index);
-        <b>let</b> validator_pool_id = staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>);
-        <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.staking_pool_mappings, validator_pool_id);
-        self.total_stake = self.total_stake - <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(&<a href="validator.md#0x2_validator">validator</a>);
-
-        <a href="validator_set.md#0x2_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(
-            validator_report_records, <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>));
-
-        <a href="event.md#0x2_event_emit">event::emit</a>(
-            <a href="validator_set.md#0x2_validator_set_ValidatorLeaveEvent">ValidatorLeaveEvent</a> {
-                epoch: new_epoch,
-                validator_address: <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>),
-                staking_pool_id: staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>),
-            }
-        );
-
-        // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
-        <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
-        <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
+        <a href="validator_set.md#0x2_validator_set_process_validator_departure">process_validator_departure</a>(self, <a href="validator.md#0x2_validator">validator</a>, validator_report_records, <b>true</b> /* the <a href="validator.md#0x2_validator">validator</a> removes itself voluntarily */, ctx);
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_process_validator_departure"></a>
+
+## Function `process_validator_departure`
+
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_validator_departure">process_validator_departure</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, is_voluntary: bool, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_validator_departure">process_validator_departure</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    <a href="validator.md#0x2_validator">validator</a>: Validator,
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    is_voluntary: bool,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
+    <b>let</b> validator_address = <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(&<a href="validator.md#0x2_validator">validator</a>);
+    <b>let</b> validator_pool_id = staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>);
+
+    // Remove the <a href="validator.md#0x2_validator">validator</a> from our tables.
+    <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.staking_pool_mappings, validator_pool_id);
+    <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.at_risk_validators, &validator_address)) {
+        <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.at_risk_validators, &validator_address);
+    };
+
+    self.total_stake = self.total_stake - <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(&<a href="validator.md#0x2_validator">validator</a>);
+
+    <a href="validator_set.md#0x2_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(validator_report_records, validator_address);
+
+    <a href="event.md#0x2_event_emit">event::emit</a>(
+        <a href="validator_set.md#0x2_validator_set_ValidatorLeaveEvent">ValidatorLeaveEvent</a> {
+            epoch: new_epoch,
+            validator_address,
+            staking_pool_id: staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>),
+            is_voluntary,
+        }
+    );
+
+    // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
+    <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
+    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
 }
 </code></pre>
 
