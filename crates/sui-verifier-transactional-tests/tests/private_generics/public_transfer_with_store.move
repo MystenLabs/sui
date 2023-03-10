@@ -11,21 +11,21 @@ module a::m {
     struct S has key, store { id: sui::object::UID }
 }
 
-//# publish
+//# publish --dependencies a
 module t1::m {
     fun t(s: a::m::S) {
         sui::transfer::transfer(s, @100)
     }
 }
 
-//# publish
+//# publish --dependencies a
 module t3::m {
     fun t(s: a::m::S) {
         sui::transfer::freeze_object(s)
     }
 }
 
-//# publish
+//# publish --dependencies a
 module t4::m {
     fun t(s: a::m::S) {
         sui::transfer::share_object(s)

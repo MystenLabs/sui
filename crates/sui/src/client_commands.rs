@@ -528,7 +528,13 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .publish(sender, compiled_modules, gas, gas_budget)
+                    .publish(
+                        sender,
+                        compiled_modules,
+                        dependencies.published.into_values().collect(),
+                        gas,
+                        gas_budget,
+                    )
                     .await?;
                 let signature =
                     context

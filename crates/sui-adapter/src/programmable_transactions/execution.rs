@@ -34,7 +34,7 @@ use sui_types::{
     messages::{
         Argument, Command, CommandArgumentError, ProgrammableMoveCall, ProgrammableTransaction,
     },
-    move_package::UpgradeCap,
+    move_package::{MovePackage, UpgradeCap},
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
@@ -260,8 +260,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 /* is_init */ false,
             )?
         }
-        Command::Publish(modules) => {
-            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
+        Command::Publish(modules, dep_ids) => {
+            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules, dep_ids)?
         }
         Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
             execute_move_upgrade::<_, _, Mode>(
@@ -383,6 +383,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
 ) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
@@ -406,7 +407,12 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let package_id = context.new_package(modules)?;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+
+    // new_package also initializes type origin table in the package object
+    let package_object = context.new_package(modules, &dependencies, None)?;
+    let package_id = package_object.id();
+    context.add_package(package_object);
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, _, Mode>(
             context,
@@ -452,6 +458,51 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
 
     invariant_violation!("Package upgrades are turned off. We should NEVER get here.")
+}
+
+#[allow(dead_code)]
+fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
+    context: &'a ExecutionContext<E, S>,
+    package_id: &ObjectID,
+) -> Result<MovePackage, ExecutionError> {
+    let mut fetched_packages = fetch_packages(context, vec![package_id])?;
+    assert_invariant!(
+        fetched_packages.len() == 1,
+        "Number of fetched packages must match the number of package object IDs if successful."
+    );
+    match fetched_packages.pop() {
+        Some(pkg) => Ok(pkg),
+        None => invariant_violation!(
+            "We should always fetch a package for each object or return a dependency error."
+        ),
+    }
+}
+
+fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
+    context: &'a ExecutionContext<E, S>,
+    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+) -> Result<Vec<MovePackage>, ExecutionError> {
+    match context.state_view.get_packages(package_ids) {
+        Err(e) => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::PublishUpgradeMissingDependency,
+            e,
+        )),
+        Ok(Err(missing_deps)) => {
+            let msg = format!(
+                "Missing dependencies: {}",
+                missing_deps
+                    .into_iter()
+                    .map(|dep| format!("{}", dep))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishUpgradeMissingDependency,
+                msg,
+            ))
+        }
+        Ok(Ok(pkgs)) => Ok(pkgs),
+    }
 }
 
 /***************************************************************************************************

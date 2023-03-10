@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::storage::{get_module, get_module_by_id};
+use crate::storage::get_module_by_id;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
@@ -24,7 +24,7 @@ pub struct InMemoryStorage {
 }
 
 impl BackingPackageStore for InMemoryStorage {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         Ok(self.persistent.get(package_id).cloned())
     }
 }
@@ -60,7 +60,14 @@ impl ModuleResolver for InMemoryStorage {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        get_module(self, module_id)
+        Ok(self
+            .get_package(&ObjectID::from(*module_id.address()))?
+            .and_then(|package| {
+                package
+                    .serialized_module_map()
+                    .get(module_id.name().as_str())
+                    .cloned()
+            }))
     }
 }
 
