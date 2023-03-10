@@ -698,6 +698,7 @@ of the epoch.
 ) {
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address);
 <<<<<<< HEAD
+<<<<<<< HEAD
     <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, stake, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
 =======
 <<<<<<< HEAD
@@ -706,6 +707,9 @@ of the epoch.
     <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, delegated_stake, locking_period, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
 >>>>>>> 5271bb710 (Fixed tests)
 >>>>>>> 87b47eb1d (Fixed tests)
+=======
+    <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, stake, locking_period, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
+>>>>>>> e78e3b9d6 (Updated docs)
 }
 </code></pre>
 
@@ -744,11 +748,7 @@ the stake and any rewards corresponding to it will be immediately processed.
     <b>if</b> (<a href="table.md#0x2_table_contains">table::contains</a>(&self.staking_pool_mappings, staking_pool_id)) {
         <b>let</b> validator_address = *<a href="table.md#0x2_table_borrow">table::borrow</a>(&self.staking_pool_mappings, pool_id(&staked_sui));
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address);
-<<<<<<< HEAD
         <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
-=======
-        <a href="validator.md#0x2_validator_request_withdraw_delegation">validator::request_withdraw_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
->>>>>>> 5271bb710 (Fixed tests)
     } <b>else</b> { // This is an inactive pool.
         <b>assert</b>!(<a href="table.md#0x2_table_contains">table::contains</a>(&self.inactive_validators, staking_pool_id), <a href="validator_set.md#0x2_validator_set_ENoPoolFound">ENoPoolFound</a>);
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.inactive_validators, staking_pool_id);
