@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 2;
 
 // Record history of protocol version allocations here:
 //
@@ -807,6 +807,14 @@ impl ProtocolConfig {
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
+            },
+
+            2 => Self {
+                storage_gas_price: Some(2),
+
+                // Pull in everything else from the previous version to avoid unintentional
+                // changes.
+                ..Self::get_for_version_impl(version - 1)
             },
 
             // Use this template when making changes:
