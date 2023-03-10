@@ -17,7 +17,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
-use crate::crypto::{deterministic_random_account_key, sha3_hash};
+use crate::crypto::{deterministic_random_account_key, internal_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
@@ -643,7 +643,7 @@ impl Object {
     }
 
     pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(sha3_hash(self))
+        ObjectDigest::new(internal_hash(self))
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.

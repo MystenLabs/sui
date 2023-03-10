@@ -256,7 +256,7 @@ module sui::package {
         // hashing the existing package and cap ID.
         let data = object::id_to_bytes(&cap);
         std::vector::append(&mut data, object::id_to_bytes(&package));
-        let package = object::id_from_bytes(std::hash::sha3_256(data));
+        let package = object::id_from_bytes(sui::hash::blake2b256(&data));
 
         UpgradeReceipt {
             cap, package

@@ -6,7 +6,7 @@ use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    internal_hash, user_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
 use crate::digests::{CertificateDigest, TransactionEventsDigest};
@@ -1811,7 +1811,7 @@ impl Message for SenderSignedData {
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(sha3_hash(&self.intent_message.value))
+        TransactionDigest::new(user_hash(&self.intent_message.value))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
@@ -2905,7 +2905,7 @@ pub struct TransactionEvents {
 
 impl TransactionEvents {
     pub fn digest(&self) -> TransactionEventsDigest {
-        TransactionEventsDigest::new(sha3_hash(self))
+        TransactionEventsDigest::new(internal_hash(self))
     }
 }
 
@@ -2914,7 +2914,7 @@ impl Message for TransactionEffects {
     const SCOPE: IntentScope = IntentScope::TransactionEffects;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest::new(sha3_hash(self))
+        TransactionEffectsDigest::new(internal_hash(self))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
