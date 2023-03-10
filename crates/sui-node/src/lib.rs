@@ -43,6 +43,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use tap::tap::TapFallible;
 use tracing::{debug, warn};
 
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
@@ -241,18 +242,21 @@ impl SuiNode {
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
-        let (trusted_peer_change_tx, trusted_peer_change_rx) =
-            watch::channel(TrustedPeerChangeEvent {
-                new_peers: epoch_store
-                    .epoch_start_state()
-                    .get_validator_as_p2p_peers(config.protocol_public_key()),
-            });
+        let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store,
             trusted_peer_change_rx,
             &prometheus_registry,
         )?;
+        // We must explicitly send this instead of relying on the initial value to trigger
+        // watch value change, so that state-sync is able to process it.
+        send_trusted_peer_change(
+            &config,
+            &trusted_peer_change_tx,
+            epoch_store.epoch_start_state(),
+        )
+        .expect("Initial trusted peers must be set");
 
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
@@ -869,15 +873,11 @@ impl SuiNode {
                 next_epoch_committee.clone(),
                 ProtocolVersion::new(new_epoch_start_state.protocol_version),
             ));
-            if let Err(err) = self.trusted_peer_change_tx.send(TrustedPeerChangeEvent {
-                new_peers: new_epoch_start_state
-                    .get_validator_as_p2p_peers(self.config.protocol_public_key()),
-            }) {
-                warn!(
-                    "Failed to send validator peer information to state sync: {:?}",
-                    err
-                );
-            }
+            let _ = send_trusted_peer_change(
+                &self.config,
+                &self.trusted_peer_change_tx,
+                &new_epoch_start_state,
+            );
 
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
@@ -997,6 +997,24 @@ impl SuiNode {
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
     }
+}
+
+/// Notify state-sync that a new list of trusted peers are now available.
+fn send_trusted_peer_change(
+    config: &NodeConfig,
+    sender: &watch::Sender<TrustedPeerChangeEvent>,
+    epoch_state_state: &EpochStartSystemState,
+) -> Result<(), watch::error::SendError<TrustedPeerChangeEvent>> {
+    sender
+        .send(TrustedPeerChangeEvent {
+            new_peers: epoch_state_state.get_validator_as_p2p_peers(config.protocol_public_key()),
+        })
+        .tap_err(|err| {
+            warn!(
+                "Failed to send validator peer information to state sync: {:?}",
+                err
+            );
+        })
 }
 
 pub async fn build_server(
