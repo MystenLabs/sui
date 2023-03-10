@@ -1,8 +1,3 @@
--- SuiAddress and ObjectId type, 0x + 64 chars hex string
-CREATE DOMAIN address VARCHAR(66);
--- Max char length for base58 encoded digest
-CREATE DOMAIN base58digest VARCHAR(44);
-
 CREATE TABLE addresses
 (
     account_address       address PRIMARY KEY,

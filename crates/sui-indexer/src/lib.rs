@@ -109,7 +109,7 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
     })
 }
 
-pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static>(
+pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
     prometheus_registry: &Registry,
     state: S,
     fullnode_url: &str,
@@ -126,11 +126,11 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static>(
         .build(fullnode_url)
         .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
 
-    builder.register_module(ReadApi::new(state, http_client.clone()))?;
+    builder.register_module(ReadApi::new(state.clone(), http_client.clone()))?;
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
-    builder.register_module(EventReadApi::new(http_client.clone()))?;
+    builder.register_module(EventReadApi::new(state, http_client.clone()))?;
     builder.register_module(WriteApi::new(http_client))?;
     // TODO: placeholder, read from env or config file.
     let default_socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3030);
