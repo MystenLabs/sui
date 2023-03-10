@@ -2411,40 +2411,6 @@
       }
     },
     {
-      "name": "sui_tblsSignRandomnessObject",
-      "tags": [
-        {
-          "name": "Threshold BLS API"
-        }
-      ],
-      "description": "Sign an a Randomness object with threshold BLS. **Warning**: This API is a work in progress and uses insecure randomness. Please use it for testing purposes only.",
-      "params": [
-        {
-          "name": "object_id",
-          "description": "The object ID.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "commitment_type",
-          "description": "The way in which the commitment on the object creation should be verified.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiTBlsSignObjectCommitmentType"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiTBlsSignRandomnessObjectResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiTBlsSignRandomnessObjectResponse"
-        }
-      }
-    },
-    {
       "name": "sui_transferObject",
       "tags": [
         {
@@ -3173,48 +3139,6 @@
       },
       "Ed25519SuiSignature": {
         "$ref": "#/components/schemas/Base64"
-      },
-      "EffectsFinalityInfo": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "certified"
-            ],
-            "properties": {
-              "certified": {
-                "$ref": "#/components/schemas/SuiAuthorityStrongQuorumSignInfo"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "checkpointed"
-            ],
-            "properties": {
-              "checkpointed": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  },
-                  {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
       },
       "EndOfEpochData": {
         "type": "object",
@@ -4141,25 +4065,6 @@
             }
           }
         ]
-      },
-      "FinalizedEffects": {
-        "type": "object",
-        "required": [
-          "effects",
-          "finalityInfo",
-          "transactionEffectsDigest"
-        ],
-        "properties": {
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
-          },
-          "finalityInfo": {
-            "$ref": "#/components/schemas/EffectsFinalityInfo"
-          },
-          "transactionEffectsDigest": {
-            "$ref": "#/components/schemas/TransactionEffectsDigest"
-          }
-        }
       },
       "GasCostSummary": {
         "type": "object",
@@ -5367,27 +5272,6 @@
           }
         ]
       },
-      "SuiAuthorityStrongQuorumSignInfo": {
-        "type": "object",
-        "required": [
-          "epoch",
-          "signature",
-          "signers_map"
-        ],
-        "properties": {
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "signature": {
-            "$ref": "#/components/schemas/Base64"
-          },
-          "signers_map": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        }
-      },
       "SuiCoinMetadata": {
         "type": "object",
         "required": [
@@ -6146,41 +6030,6 @@
           }
         }
       },
-      "SuiTBlsSignObjectCommitmentType": {
-        "oneOf": [
-          {
-            "description": "Check that the object is committed by the consensus.",
-            "type": "string",
-            "enum": [
-              "ConsensusCommitted"
-            ]
-          },
-          {
-            "description": "Check that the object is committed using the effects certificate.",
-            "type": "object",
-            "required": [
-              "FastPathCommitted"
-            ],
-            "properties": {
-              "FastPathCommitted": {
-                "$ref": "#/components/schemas/FinalizedEffects"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "SuiTBlsSignRandomnessObjectResponse": {
-        "type": "object",
-        "required": [
-          "signature"
-        ],
-        "properties": {
-          "signature": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        }
-      },
       "SuiTransactionBuilderMode": {
         "oneOf": [
           {
@@ -6680,9 +6529,6 @@
             }
           }
         ]
-      },
-      "TransactionEffectsDigest": {
-        "$ref": "#/components/schemas/Sha3Digest"
       },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Sha3Digest"

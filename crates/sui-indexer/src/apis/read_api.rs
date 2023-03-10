@@ -162,8 +162,8 @@ impl<S: IndexerStore> ReadApi<S> {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> Result<SuiObjectResponse, IndexerError> {
-        self.state
-            .get_object_with_options(object_id, options.unwrap_or_default())
+        let read = self.state.get_object(object_id, None)?;
+        Ok((read, options.unwrap_or_default()).try_into()?)
     }
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, IndexerError> {

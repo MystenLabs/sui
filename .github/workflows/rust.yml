@@ -257,10 +257,10 @@ jobs:
     if: needs.diff.outputs.isMove == 'true'
     runs-on: [ubuntu-ghcloud]
 
-    steps:     
+    steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      
+
       - name: Prover Setup
         run: |
           crates/sui-move/scripts/prover_setup.sh
@@ -304,8 +304,9 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - name: integration-test-with-postgres
+        #We only have 1 instance of postgres DB, can only run test in single thread
         run: |
-          cargo test --package sui-indexer --test integration_tests --features pg_integration
+          cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432

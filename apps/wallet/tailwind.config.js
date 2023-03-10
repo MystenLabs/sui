@@ -17,7 +17,6 @@ module.exports = {
             colors: {
                 'gradient-blue-start': '#589AEA',
                 'gradient-blue-end': '#4C75A6',
-                'alice-blue': '#F1F8FD',
             },
             minHeight: {
                 8: '2rem',
