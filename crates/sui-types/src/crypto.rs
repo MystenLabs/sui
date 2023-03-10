@@ -1361,7 +1361,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             map.insert(
                 committee
                     .authority_index(pk)
-                    .ok_or(SuiError::UnknownSigner {
+                    .ok_or_else(SuiError::UnknownSigner {
                         signer: Some(pk.concise().to_string()),
                         index: None,
                         committee: Box::new(committee.clone()),
