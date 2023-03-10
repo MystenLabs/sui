@@ -18,6 +18,8 @@ use fastcrypto::{
 use indexmap::IndexMap;
 use mysten_network::Multiaddr;
 use once_cell::sync::OnceCell;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
 use rand::{
     rngs::{OsRng, StdRng},
     thread_rng, Rng, SeedableRng,
@@ -32,6 +34,7 @@ use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
 use store::{reopen, rocks, rocks::DBMap};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tonic::codegen::http::uri::Authority;
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, CommittedSubDagShell,
@@ -482,6 +485,8 @@ pub fn make_certificates_with_slow_nodes(
     names: &[AuthorityIdentifier],
     slow_nodes: &[(AuthorityIdentifier, f64)],
 ) -> (VecDeque<Certificate>, Vec<Certificate>) {
+    let mut rand = StdRng::seed_from_u64(1);
+
     // ensure provided slow nodes do not account > f
     let slow_nodes_stake: Stake = slow_nodes
         .iter()
@@ -497,8 +502,7 @@ pub fn make_certificates_with_slow_nodes(
     for round in range {
         next_parents.clear();
         for name in names {
-            let this_cert_parents =
-                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes);
+            let this_cert_parents = this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes, &mut rand);
             let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
@@ -514,10 +518,11 @@ pub fn make_certificates_with_slow_nodes(
 // If probability to use it is 0.0, then the parent node will NEVER be used.
 // If probability to use it is 1.0, then the parent node will ALWAYS be used.
 // We always make sure to include our "own" certificate, thus the `name` property is needed.
-fn this_cert_parents_with_slow_nodes(
+pub fn this_cert_parents_with_slow_nodes(
     authority_id: &AuthorityIdentifier,
     ancestors: Vec<Certificate>,
     slow_nodes: &[(AuthorityIdentifier, f64)],
+    rand: &mut StdRng,
 ) -> BTreeSet<CertificateDigest> {
     let mut parents = BTreeSet::new();
     for parent in ancestors {
@@ -527,11 +532,10 @@ fn this_cert_parents_with_slow_nodes(
             .iter()
             .find(|(id, _)| *id != *authority_id && *id == parent.header().author())
         {
-            let f: f64 = thread_rng().gen_range(0_f64..1_f64);
+            let b = Bernoulli::new(*inclusion_probability).unwrap();
+            let should_include = b.sample(rand);
 
-            // if we are within the probability to include the node,
-            // then we add it as parent.
-            if f < *inclusion_probability {
+            if should_include {
                 parents.insert(parent.digest());
             }
         } else {
