@@ -469,9 +469,7 @@ pub fn check_gas_balance(
     gas_object: &Object,
     gas_budget: u64,
     gas_price: u64,
-    extra_amount: u64,
     more_gas_objs: Vec<Object>,
-    extra_objs: Vec<Object>,
     cost_table: &SuiCostTable,
 ) -> UserInputResult {
     if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
@@ -504,12 +502,8 @@ pub fn check_gas_balance(
     }
     ok_or_gas_balance_error!(gas_balance, gas_budget_amount)?;
 
-    let mut total_balance = gas_balance;
-    for extra_obj in extra_objs {
-        total_balance += get_gas_balance(&extra_obj)? as u128;
-    }
-
-    let total_amount = (gas_budget as u128) + (extra_amount as u128);
+    let total_balance = gas_balance;
+    let total_amount = gas_budget as u128;
     ok_or_gas_balance_error!(total_balance, total_amount)
 }
 

@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::balance::Balance;
-use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
+use crate::base_types::{ObjectID, SuiAddress};
 use crate::collection_types::{Table, TableVec, VecMap, VecSet};
-use crate::committee::{
-    Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion, StakeUnit,
-};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion};
 use crate::crypto::AuthorityPublicKeyBytes;
+use crate::id::ID;
 use crate::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartValidatorInfo,
 };
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -65,7 +65,7 @@ pub struct ValidatorMetadataV1 {
     pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VerifiedValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
@@ -88,6 +88,12 @@ pub struct VerifiedValidatorMetadataV1 {
     pub next_epoch_p2p_address: Option<Multiaddr>,
     pub next_epoch_primary_address: Option<Multiaddr>,
     pub next_epoch_worker_address: Option<Multiaddr>,
+}
+
+impl VerifiedValidatorMetadataV1 {
+    pub fn sui_pubkey_bytes(&self) -> AuthorityPublicKeyBytes {
+        (&self.protocol_pubkey).into()
+    }
 }
 
 impl ValidatorMetadataV1 {
@@ -196,23 +202,17 @@ impl ValidatorMetadataV1 {
     }
 }
 
-impl ValidatorMetadataV1 {
-    pub fn network_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.net_address.clone()).map_err(Into::into)
-    }
-
-    pub fn p2p_address(&self) -> Result<Multiaddr> {
-        Multiaddr::try_from(self.p2p_address.clone()).map_err(Into::into)
-    }
-}
-
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "Validator")]
 pub struct ValidatorV1 {
-    pub metadata: ValidatorMetadataV1,
+    metadata: ValidatorMetadataV1,
+    #[serde(skip)]
+    verified_metadata: OnceCell<VerifiedValidatorMetadataV1>,
+
     pub voting_power: u64,
+    pub operation_cap_id: ID,
     pub gas_price: u64,
     pub staking_pool: StakingPoolV1,
     pub commission_rate: u64,
@@ -222,24 +222,12 @@ pub struct ValidatorV1 {
 }
 
 impl ValidatorV1 {
-    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, StakeUnit, NetworkMetadata) {
-        (
-            // TODO: Make sure we are actually verifying this on-chain.
-            AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
-                .expect("Validity of public key bytes should be verified on-chain"),
-            self.voting_power,
-            NetworkMetadata {
-                network_address: self
-                    .metadata
-                    .network_address()
-                    .expect("Validity of network address should be verified on-chain"),
-            },
-        )
-    }
-
-    pub fn authority_name(&self) -> AuthorityName {
-        AuthorityPublicKeyBytes::from_bytes(self.metadata.protocol_pubkey_bytes.as_ref())
-            .expect("Validity of public key bytes should be verified on-chain")
+    pub fn verified_metadata(&self) -> &VerifiedValidatorMetadataV1 {
+        self.verified_metadata.get_or_init(|| {
+            self.metadata
+                .verify()
+                .expect("Validity of metadata should be verified on-chain")
+        })
     }
 
     pub fn into_sui_validator_summary(self) -> SuiValidatorSummary {
@@ -268,7 +256,9 @@ impl ValidatorV1 {
                     next_epoch_primary_address,
                     next_epoch_worker_address,
                 },
+            verified_metadata: _,
             voting_power,
+            operation_cap_id,
             gas_price,
             staking_pool:
                 StakingPoolV1 {
@@ -315,6 +305,7 @@ impl ValidatorV1 {
             next_epoch_primary_address,
             next_epoch_worker_address,
             voting_power,
+            operation_cap_id,
             gas_price,
             staking_pool_id,
             staking_pool_activation_epoch,
@@ -350,6 +341,19 @@ pub struct StakingPoolV1 {
     pub pending_delegation: u64,
     pub pending_total_sui_withdraw: u64,
     pub pending_pool_token_withdraw: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct PoolTokenExchangeRate {
+    sui_amount: u64,
+    pool_token_amount: u64,
+}
+
+impl PoolTokenExchangeRate {
+    /// Rate of the staking pool, pool token amount : Sui amount
+    pub fn rate(&self) -> f64 {
+        self.pool_token_amount as f64 / self.sui_amount as f64
+    }
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
@@ -417,9 +421,15 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         let mut voting_rights = BTreeMap::new();
         let mut network_metadata = BTreeMap::new();
         for validator in &self.validators.active_validators {
-            let (name, voting_stake, metadata) = validator.to_stake_and_network_metadata();
-            voting_rights.insert(name, voting_stake);
-            network_metadata.insert(name, metadata);
+            let verified_metadata = validator.verified_metadata();
+            let name = verified_metadata.sui_pubkey_bytes();
+            voting_rights.insert(name, validator.voting_power);
+            network_metadata.insert(
+                name,
+                NetworkMetadata {
+                    network_address: verified_metadata.net_address.clone(),
+                },
+            );
         }
         CommitteeWithNetworkMetadata {
             committee: Committee::new(self.epoch, voting_rights)
@@ -428,14 +438,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .unwrap(),
             network_metadata,
         }
-    }
-
-    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadataV1> {
-        self.validators
-            .active_validators
-            .iter()
-            .map(|v| v.metadata.clone())
-            .collect()
     }
 
     fn into_epoch_start_state(self) -> EpochStartSystemState {
@@ -450,19 +452,16 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .active_validators
                 .iter()
                 .map(|validator| {
-                    let metadata = validator
-                        .metadata
-                        .verify()
-                        .expect("Validator metadata must have been verified on-chain");
+                    let metadata = validator.verified_metadata();
                     EpochStartValidatorInfo {
                         sui_address: metadata.sui_address,
-                        protocol_pubkey: metadata.protocol_pubkey,
-                        narwhal_network_pubkey: metadata.network_pubkey,
-                        narwhal_worker_pubkey: metadata.worker_pubkey,
-                        sui_net_address: metadata.net_address,
-                        p2p_address: metadata.p2p_address,
-                        narwhal_primary_address: metadata.primary_address,
-                        narwhal_worker_address: metadata.worker_address,
+                        protocol_pubkey: metadata.protocol_pubkey.clone(),
+                        narwhal_network_pubkey: metadata.network_pubkey.clone(),
+                        narwhal_worker_pubkey: metadata.worker_pubkey.clone(),
+                        sui_net_address: metadata.net_address.clone(),
+                        p2p_address: metadata.p2p_address.clone(),
+                        narwhal_primary_address: metadata.primary_address.clone(),
+                        narwhal_worker_address: metadata.worker_address.clone(),
                         voting_power: validator.voting_power,
                     }
                 })

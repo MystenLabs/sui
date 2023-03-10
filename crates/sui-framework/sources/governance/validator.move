@@ -11,6 +11,7 @@ module sui::validator {
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::EpochTimeLock;
+    use sui::validator_cap::{Self, ValidatorOperationCap};
     use sui::object::{Self, ID};
     use std::option::{Option, Self};
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
@@ -63,6 +64,12 @@ module sui::validator {
     /// No stake balance is provided but an epoch time lock for the stake is provided.
     const EEmptyStakeWithNonEmptyTimeLock: u64 = 9;
 
+    /// New Capability is not created by the validator itself
+    const ENewCapNotCreatedByValidatorItself: u64 = 100;
+
+    /// Capability code is not valid
+    const EInvalidCap: u64 = 101;
+
     const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
 
     struct ValidatorMetadata has store, drop, copy {
@@ -111,6 +118,8 @@ module sui::validator {
         /// The voting power of this validator, which might be different from its
         /// stake amount.
         voting_power: u64,
+        /// The ID of this validator's current valid `UnverifiedValidatorOperationCap`
+        operation_cap_id: ID,
         /// Gas price quote, updated only at end of epoch.
         gas_price: u64,
         /// Staking pool for the stakes delegated to this validator.
@@ -317,7 +326,14 @@ module sui::validator {
     }
 
     /// Request to set new gas price for the next epoch.
-    public(friend) fun request_set_gas_price(self: &mut Validator, new_price: u64) {
+    /// Need to present a `ValidatorOperationCap`.
+    public(friend) fun request_set_gas_price(
+        self: &mut Validator, 
+        verified_cap: ValidatorOperationCap,
+        new_price: u64,
+    ) {
+        let validator_address = *validator_cap::verified_operation_cap_address(&verified_cap);
+        assert!(validator_address == self.metadata.sui_address, EInvalidCap);
         self.next_epoch_gas_price = new_price;
     }
 
@@ -431,6 +447,14 @@ module sui::validator {
         &self.metadata.next_epoch_worker_pubkey_bytes
     }
 
+    public fun operation_cap_id(self: &Validator): &ID {
+        &self.operation_cap_id
+    }
+
+    public fun next_epoch_gas_price(self: &Validator): u64 {
+        self.next_epoch_gas_price
+    }
+
     // TODO: this and `delegate_amount` and `total_stake` all seem to return the same value?
     // two of the functions can probably be removed.
     public fun total_stake_amount(self: &Validator): u64 {
@@ -497,6 +521,15 @@ module sui::validator {
     }
 
     // ==== Validator Metadata Management Functions ====
+
+    /// Create a new `UnverifiedValidatorOperationCap`, transfer to the validator,
+    /// and registers it, thus revoking the previous cap's permission.
+    public(friend) fun new_unverified_validator_operation_cap_and_transfer(self: &mut Validator, ctx: &mut TxContext) {
+        let address = tx_context::sender(ctx);
+        assert!(address == self.metadata.sui_address, ENewCapNotCreatedByValidatorItself);
+        let new_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(address, ctx);
+        self.operation_cap_id = new_id;
+    }
 
     /// Update name of the validator.
     public(friend) fun update_name(self: &mut Validator, name: String) {
@@ -624,6 +657,7 @@ module sui::validator {
         &self.staking_pool
     }
 
+
     /// Create a new validator from the given `ValidatorMetadata`, called by both `new` and `new_for_testing`.
     fun new_from_metadata(
         metadata: ValidatorMetadata,
@@ -665,12 +699,14 @@ module sui::validator {
             option::destroy_none(initial_stake_option);
         };
 
+        let operation_cap_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(sui_address, ctx);
         Validator {
             metadata,
             // Initialize the voting power to be the same as the stake amount.
             // At the epoch change where this validator is actually added to the
             // active validator set, the voting power will be updated accordingly.
             voting_power: stake_amount,
+            operation_cap_id,
             gas_price,
             staking_pool,
             commission_rate,

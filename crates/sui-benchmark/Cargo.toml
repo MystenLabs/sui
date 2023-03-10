@@ -49,6 +49,7 @@ telemetry-subscribers.workspace = true
 roaring = "0.10.1"
 
 move-core-types.workspace = true
+move-package.workspace = true
 narwhal-node = { path = "../../narwhal/node" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-utils = { path = "../test-utils" }

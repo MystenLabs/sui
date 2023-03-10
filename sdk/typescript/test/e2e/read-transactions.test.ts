@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getTransactionDigest, getTransactionKinds } from '../../src';
+import { getTransactionDigest, getTransactionKind } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {
@@ -62,7 +62,7 @@ describe('Transaction Reading API', () => {
       allTransactions.data[0],
       { showInput: true },
     );
-    const [txKind] = getTransactionKinds(resp)!;
-    expect('Genesis' in txKind).toBe(true);
+    const txKind = getTransactionKind(resp)!;
+    expect(txKind.kind === 'Genesis').toBe(true);
   });
 });

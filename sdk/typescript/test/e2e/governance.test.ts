@@ -56,13 +56,13 @@ async function addDelegation(signer: RawSigner) {
   });
 
   const system = await signer.provider.getLatestSuiSystemState();
-  const validators = system.active_validators;
+  const validators = system.activeValidators;
 
   const tx = await SuiSystemStateUtil.newRequestAddDelegationTxn(
     signer.provider,
     [coins.data[0].coinObjectId],
     BigInt(DEFAULT_STAKED_AMOUNT),
-    validators[0].sui_address,
+    validators[0].suiAddress,
   );
 
   tx.setGasBudget(DEFAULT_GAS_BUDGET);

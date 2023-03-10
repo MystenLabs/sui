@@ -14,8 +14,7 @@ use std::path::Path;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -460,23 +459,6 @@ impl SimpleFaucet {
         number_of_coins: usize,
         recipient: SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
-        let txns = res
-            .transaction
-            .as_ref()
-            .ok_or_else(|| {
-                FaucetError::ParseTransactionResponseError(format!(
-                    "transaction field missing for txn {}",
-                    res.digest
-                ))
-            })?
-            .data
-            .transactions();
-        if txns.len() != 1 {
-            panic!(
-                "PaySui Transaction should create one and exactly one txn, but got {:?}",
-                txns
-            );
-        }
         let created = res
             .effects
             .ok_or_else(|| {

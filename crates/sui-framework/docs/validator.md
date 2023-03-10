@@ -44,6 +44,8 @@
 -  [Function `next_epoch_proof_of_possession`](#0x2_validator_next_epoch_proof_of_possession)
 -  [Function `next_epoch_network_pubkey_bytes`](#0x2_validator_next_epoch_network_pubkey_bytes)
 -  [Function `next_epoch_worker_pubkey_bytes`](#0x2_validator_next_epoch_worker_pubkey_bytes)
+-  [Function `operation_cap_id`](#0x2_validator_operation_cap_id)
+-  [Function `next_epoch_gas_price`](#0x2_validator_next_epoch_gas_price)
 -  [Function `total_stake_amount`](#0x2_validator_total_stake_amount)
 -  [Function `delegate_amount`](#0x2_validator_delegate_amount)
 -  [Function `total_stake`](#0x2_validator_total_stake)
@@ -56,6 +58,7 @@
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x2_validator_pool_token_exchange_rate_at_epoch)
 -  [Function `staking_pool_id`](#0x2_validator_staking_pool_id)
 -  [Function `is_duplicate`](#0x2_validator_is_duplicate)
+-  [Function `new_unverified_validator_operation_cap_and_transfer`](#0x2_validator_new_unverified_validator_operation_cap_and_transfer)
 -  [Function `update_name`](#0x2_validator_update_name)
 -  [Function `update_description`](#0x2_validator_update_description)
 -  [Function `update_image_url`](#0x2_validator_update_image_url)
@@ -88,6 +91,7 @@
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
+<b>use</b> <a href="validator_cap.md#0x2_validator_cap">0x2::validator_cap</a>;
 </code></pre>
 
 
@@ -273,6 +277,12 @@
  stake amount.
 </dd>
 <dt>
+<code>operation_cap_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ The ID of this validator's current valid <code>UnverifiedValidatorOperationCap</code>
+</dd>
+<dt>
 <code>gas_price: u64</code>
 </dt>
 <dd>
@@ -390,6 +400,16 @@ No stake balance is provided but an epoch time lock for the stake is provided.
 
 
 
+<a name="0x2_validator_EInvalidCap"></a>
+
+Capability code is not valid
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_EInvalidCap">EInvalidCap</a>: u64 = 101;
+</code></pre>
+
+
+
 <a name="0x2_validator_EInvalidProofOfPossession"></a>
 
 Invalid proof_of_possesion field in ValidatorMetadata
@@ -466,6 +486,16 @@ Invalid worker_pubkey_bytes field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerPubkey">EMetadataInvalidWorkerPubkey</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_validator_ENewCapNotCreatedByValidatorItself"></a>
+
+New Capability is not created by the validator itself
+
+
+<pre><code><b>const</b> <a href="validator.md#0x2_validator_ENewCapNotCreatedByValidatorItself">ENewCapNotCreatedByValidatorItself</a>: u64 = 100;
 </code></pre>
 
 
@@ -833,9 +863,10 @@ Request to withdraw delegation from the validator's staking pool, processed at t
 ## Function `request_set_gas_price`
 
 Request to set new gas price for the next epoch.
+Need to present a <code>ValidatorOperationCap</code>.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_gas_price">request_set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, new_price: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_gas_price">request_set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, verified_cap: <a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>, new_price: u64)
 </code></pre>
 
 
@@ -844,7 +875,13 @@ Request to set new gas price for the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_gas_price">request_set_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_price: u64) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_set_gas_price">request_set_gas_price</a>(
+    self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>,
+    verified_cap: ValidatorOperationCap,
+    new_price: u64,
+) {
+    <b>let</b> validator_address = *<a href="validator_cap.md#0x2_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(&verified_cap);
+    <b>assert</b>!(validator_address == self.metadata.sui_address, <a href="validator.md#0x2_validator_EInvalidCap">EInvalidCap</a>);
     self.next_epoch_gas_price = new_price;
 }
 </code></pre>
@@ -1483,6 +1520,54 @@ Returns true if the validator is preactive.
 
 </details>
 
+<a name="0x2_validator_operation_cap_id"></a>
+
+## Function `operation_cap_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_operation_cap_id">operation_cap_id</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_operation_cap_id">operation_cap_id</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &ID {
+    &self.operation_cap_id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_next_epoch_gas_price"></a>
+
+## Function `next_epoch_gas_price`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_gas_price">next_epoch_gas_price</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_gas_price">next_epoch_gas_price</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    self.next_epoch_gas_price
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_total_stake_amount"></a>
 
 ## Function `total_stake_amount`
@@ -1787,6 +1872,35 @@ Set the voting power of this validator, called only from validator_set.
         || self.metadata.net_address == other.metadata.net_address
         || self.metadata.p2p_address == other.metadata.p2p_address
         || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_new_unverified_validator_operation_cap_and_transfer"></a>
+
+## Function `new_unverified_validator_operation_cap_and_transfer`
+
+Create a new <code>UnverifiedValidatorOperationCap</code>, transfer to the validator,
+and registers it, thus revoking the previous cap's permission.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
+    <b>let</b> <b>address</b> = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>assert</b>!(<b>address</b> == self.metadata.sui_address, <a href="validator.md#0x2_validator_ENewCapNotCreatedByValidatorItself">ENewCapNotCreatedByValidatorItself</a>);
+    <b>let</b> new_id = <a href="validator_cap.md#0x2_validator_cap_new_unverified_validator_operation_cap_and_transfer">validator_cap::new_unverified_validator_operation_cap_and_transfer</a>(<b>address</b>, ctx);
+    self.operation_cap_id = new_id;
 }
 </code></pre>
 
@@ -2257,12 +2371,14 @@ Create a new validator from the given <code><a href="validator.md#0x2_validator_
         <a href="_destroy_none">option::destroy_none</a>(initial_stake_option);
     };
 
+    <b>let</b> operation_cap_id = <a href="validator_cap.md#0x2_validator_cap_new_unverified_validator_operation_cap_and_transfer">validator_cap::new_unverified_validator_operation_cap_and_transfer</a>(sui_address, ctx);
     <a href="validator.md#0x2_validator_Validator">Validator</a> {
         metadata,
         // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.
         // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
         // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
         <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
+        operation_cap_id,
         gas_price,
         <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
         commission_rate,

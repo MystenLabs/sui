@@ -35,8 +35,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    ConsensusTransactionKey, SingleTransactionKind, TransactionDataAPI, TransactionEffects,
-    TransactionEffectsAPI, TransactionKind,
+    ConsensusTransactionKey, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
+    TransactionKind,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -249,15 +249,6 @@ impl CheckpointStore {
         self.get_checkpoint_by_digest(&highest_executed.1)
     }
 
-    pub fn get_highest_pruned_checkpoint_seq_number(
-        &self,
-    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
-        self.watermarks
-            .get(&CheckpointWatermark::HighestPruned)?
-            .map(|(sequence_number, _)| Ok(sequence_number))
-            .transpose()
-    }
-
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
@@ -333,17 +324,6 @@ impl CheckpointStore {
         }
     }
 
-    pub fn update_highest_pruned_checkpoint(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-        digest: CheckpointDigest,
-    ) -> Result<(), TypedStoreError> {
-        self.watermarks.insert(
-            &CheckpointWatermark::HighestPruned,
-            &(sequence_number, digest),
-        )
-    }
-
     pub fn insert_checkpoint_contents(
         &self,
         contents: CheckpointContents,
@@ -403,7 +383,6 @@ pub enum CheckpointWatermark {
     HighestVerified,
     HighestSynced,
     HighestExecuted,
-    HighestPruned,
 }
 
 pub struct CheckpointBuilder {
@@ -653,7 +632,7 @@ impl CheckpointBuilder {
             // ConsensusCommitPrologue is guaranteed to be processed before we reach here
             if !matches!(
                 transaction.inner().transaction_data().kind(),
-                TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(..))
+                TransactionKind::ConsensusCommitPrologue(_)
             ) {
                 // todo - use NotifyRead::register_all might be faster
                 self.epoch_store

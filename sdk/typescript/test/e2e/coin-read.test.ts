@@ -34,13 +34,13 @@ describe('CoinRead API', () => {
       owner: toolbox.address(),
     });
     expect(allCoins.data.length).toEqual(5);
-    expect(allCoins.nextCursor).toBeNull();
+    expect(allCoins.hasNextPage).toEqual(false);
 
     const publisherAllCoins = await toolbox.provider.getAllCoins({
       owner: publishToolbox.address(),
     });
     expect(publisherAllCoins.data.length).toEqual(3);
-    expect(publisherAllCoins.nextCursor).toBeNull();
+    expect(publisherAllCoins.hasNextPage).toEqual(false);
 
     //test paging with limit
     const someSuiCoins = await toolbox.provider.getCoins({

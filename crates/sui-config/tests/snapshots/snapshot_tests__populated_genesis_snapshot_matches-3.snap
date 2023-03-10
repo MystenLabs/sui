@@ -238,6 +238,7 @@ validators:
         next_epoch_primary_address: ~
         next_epoch_worker_address: ~
       voting_power: 10000
+      operation_cap_id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec88875a8e573a5f72a85a15c1"
       gas_price: 1
       staking_pool:
         id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f65e4b0dea15829e3157962e1"
@@ -259,17 +260,17 @@ validators:
       next_epoch_commission_rate: 0
   pending_active_validators:
     contents:
-      id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d3429e057b377a9c499b9bb13"
+      id: "0x1ace65f54d65a96251b3f46bfa720ab65a7ebe0174caa9fa1dc0d65a56ae7872"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec88875a8e573a5f72a85a15c1"
+    id: "0x628ffd0e51e9a6ea32c13c2739a31a8f344b557d3429e057b377a9c499b9bb13"
     size: 1
   inactive_pools:
-    id: "0x1ace65f54d65a96251b3f46bfa720ab65a7ebe0174caa9fa1dc0d65a56ae7872"
+    id: "0x9dc97c4be6f1d0e61fbdf2cc9d78f9df04cdff7a473e2ec3a65853766dca1177"
     size: 0
   validator_candidates:
-    id: "0x9dc97c4be6f1d0e61fbdf2cc9d78f9df04cdff7a473e2ec3a65853766dca1177"
+    id: "0x6d3ffc5213ed4df6802cd4535d3c18f66d85bab5e9f004a7087a005e2f8dc455"
     size: 0
 storage_fund:
   value: 0

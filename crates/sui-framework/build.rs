@@ -10,12 +10,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 
 const FRAMEWORK_DOCS_DIR: &str = "docs";
 
 /// Save revision info to environment variable
 fn main() {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let sui_framework_path = Path::new(env!("CARGO_MANIFEST_DIR"));

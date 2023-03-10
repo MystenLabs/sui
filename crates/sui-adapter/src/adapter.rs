@@ -9,14 +9,12 @@ use std::{
 
 use anyhow::Result;
 use leb128;
-use linked_hash_map::LinkedHashMap;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    errors::{VMError, VMResult},
+    errors::VMError,
     file_format::{
-        AbilitySet, CompiledModule, FunctionHandleIndex, LocalIndex, SignatureToken,
-        StructHandleIndex, TypeParameterIndex,
+        CompiledModule, LocalIndex, SignatureToken, StructHandleIndex, TypeParameterIndex,
     },
 };
 use move_bytecode_verifier::VerifierConfig;
@@ -32,33 +30,25 @@ use move_vm_runtime::{
     config::{VMConfig, VMRuntimeLimitsConfig},
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
-    session::{SerializedReturnValues, Session},
+    session::Session,
 };
 
-use sui_cost_tables::bytecode_tables::GasStatus;
-use sui_framework::natives::{
-    object_runtime::{self, ObjectRuntime},
-    NativesCostTable,
-};
+use crate::execution_mode::ExecutionMode;
+use sui_framework::natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_json::primitive_type;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::error::convert_vm_error;
 use sui_types::{
     base_types::*,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
-    event::Event,
-    messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
-    object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX, OBJECT_START_VERSION},
-    storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
+    messages::{EntryArgumentErrorKind, InputObjectKind, ObjectArg},
+    object::{self, Data, Object, Owner},
+    storage::ChildObjectResolver,
 };
-use sui_types::{error::convert_vm_error, storage::SingleTxContext};
-use sui_verifier::{
-    entry_points_verifier::{is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
-    verifier, INIT_FN_NAME,
+use sui_verifier::entry_points_verifier::{
+    is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR,
 };
-use tracing::instrument;
-
-use crate::execution_mode::{self, ExecutionMode};
 
 pub fn new_move_vm(
     natives: NativeFunctionTable,
@@ -116,462 +106,6 @@ pub fn new_session<
     vm.new_session_with_extensions(state_view, extensions)
 }
 
-/// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
-/// Execution will read from/write to the store in `state_view`.
-/// IMPORTANT NOTES on the return value:
-/// The return value is a two-layer SuiResult. The outer layer indicates whether a system error
-/// has occurred (i.e. issues with the sui system, not with user transaction).
-/// As long as there are no system issues we return Ok(SuiResult).
-/// The inner SuiResult indicates the execution result. If execution failed, we return Ok(Err),
-/// otherwise we return Ok(Ok).
-/// TODO: Do we really need the two layers?
-#[allow(clippy::too_many_arguments)]
-#[instrument(name = "adapter_execute", level = "trace", skip_all)]
-pub fn execute<
-    Mode: ExecutionMode,
-    E: Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
-    vm: &MoveVM,
-    state_view: &mut S,
-    module_id: ModuleId,
-    function: &Identifier,
-    type_args: Vec<TypeTag>,
-    args: Vec<CallArg>,
-    gas_status: &mut GasStatus,
-    ctx: &mut TxContext,
-    protocol_config: &ProtocolConfig,
-) -> Result<Mode::ExecutionResult, ExecutionError> {
-    let mut objects: BTreeMap<ObjectID, &Object> = BTreeMap::new();
-    for arg in &args {
-        match arg {
-            CallArg::Pure(_) => continue,
-            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                let obj = state_view.read_object(id);
-                assert_invariant!(obj.is_some(), format!("Object {} does not exist yet", id));
-                objects.insert(*id, obj.unwrap());
-            }
-            CallArg::ObjVec(obj_args) => {
-                for obj_arg in obj_args {
-                    let (ObjectArg::ImmOrOwnedObject((id, _, _))
-                    | ObjectArg::SharedObject { id, .. }) = obj_arg;
-                    let obj = state_view.read_object(id);
-                    assert_invariant!(obj.is_some(), format!("Object {} does not exist yet", id));
-                    objects.insert(*id, obj.unwrap());
-                }
-            }
-        }
-    }
-
-    let module = vm
-        .load_module(&module_id, state_view)
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-    let is_genesis = ctx.digest() == TransactionDigest::genesis();
-    let TypeCheckSuccess {
-        module_id,
-        mut args,
-        object_data,
-        by_value_objects,
-        mutable_ref_objects,
-        tx_ctx_kind,
-    } = resolve_and_type_check::<Mode>(&objects, &module, function, &type_args, args, is_genesis)?;
-
-    if tx_ctx_kind != TxContextKind::None {
-        args.push(ctx.to_vec());
-    }
-    execute_internal::<Mode, _, _>(
-        vm,
-        state_view,
-        &module_id,
-        function,
-        type_args,
-        args,
-        tx_ctx_kind,
-        object_data,
-        by_value_objects,
-        mutable_ref_objects,
-        gas_status,
-        ctx,
-        protocol_config,
-    )
-}
-
-/// This function calls into Move VM to execute a Move function
-/// call.
-#[allow(clippy::too_many_arguments)]
-fn execute_internal<
-    Mode: ExecutionMode,
-    E: Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
-    vm: &MoveVM,
-    state_view: &mut S,
-    module_id: &ModuleId,
-    function: &Identifier,
-    type_args: Vec<TypeTag>,
-    args: Vec<Vec<u8>>,
-    tx_ctx_kind: TxContextKind,
-    object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
-    by_value_objects: BTreeSet<ObjectID>,
-    mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
-    gas_status: &mut GasStatus, // gas status for the current call operation
-    ctx: &mut TxContext,
-    protocol_config: &ProtocolConfig,
-) -> Result<Mode::ExecutionResult, ExecutionError> {
-    let input_objects = object_data
-        .iter()
-        .map(|(id, (owner, _))| (*id, *owner))
-        .collect();
-    let mut session = new_session(
-        vm,
-        state_view,
-        input_objects,
-        gas_status.is_metered(),
-        protocol_config,
-    );
-    // check type arguments separately for error conversion
-    for (idx, ty) in type_args.iter().enumerate() {
-        session
-            .load_type(ty)
-            .map_err(|e| convert_type_argument_error(idx, e, vm, state_view))?;
-    }
-    // script visibility checked manually for entry points
-    let result = session
-        .execute_function_bypass_visibility(
-            module_id,
-            function,
-            type_args.clone(),
-            args,
-            gas_status,
-        )
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-    let mode_result = Mode::make_result(&session, module_id, function, &type_args, &result)?;
-
-    let (change_set, events, mut native_context_extensions) = session
-        .finish_with_extensions()
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-    let SerializedReturnValues {
-        mut mutable_reference_outputs,
-        ..
-    } = result;
-    let object_runtime: ObjectRuntime = native_context_extensions.remove();
-    std::mem::drop(native_context_extensions);
-
-    // Sui Move programs should never touch global state, so ChangeSet should be empty
-    assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-    // Sui Move no longer uses Move's internal event system
-    assert_invariant!(events.is_empty(), "Events must be empty");
-
-    // When this function is used during publishing, it
-    // may be executed several times, with objects being
-    // created in the Move VM in each Move call. In such
-    // case, we need to update TxContext value so that it
-    // reflects what happened each time we call into the
-    // Move VM (e.g. to account for the number of created
-    // objects).
-    if tx_ctx_kind == TxContextKind::Mutable {
-        let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
-        let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
-        ctx.update_state(updated_ctx)?;
-    }
-
-    let mut mutable_refs = vec![];
-    for (local_idx, bytes, _layout) in mutable_reference_outputs {
-        let object_id = match mutable_ref_objects.remove(&local_idx) {
-            Some(id) => id,
-            None => {
-                assert_invariant!(
-                    Mode::allow_arbitrary_function_calls(),
-                    "Mutable references should be populated only by objects in normal execution"
-                );
-                continue;
-            }
-        };
-        assert_invariant!(
-            !by_value_objects.contains(&object_id),
-            "object used by-ref and by-value"
-        );
-        mutable_refs.push((object_id, bytes));
-    }
-    assert_invariant!(
-        mutable_ref_objects.is_empty(),
-        "All mutable references should have been marked as updated"
-    );
-    let by_value_object_map = object_data
-        .into_iter()
-        .filter(|(id, _obj)| by_value_objects.contains(id))
-        .collect();
-    let object_runtime::RuntimeResults {
-        writes,
-        deletions,
-        user_events,
-        loaded_child_objects,
-    } = object_runtime.finish(by_value_objects, BTreeSet::new())?;
-    let session = new_session(
-        vm,
-        &*state_view,
-        BTreeMap::new(),
-        gas_status.is_metered(),
-        protocol_config,
-    );
-    let writes = writes
-        .into_iter()
-        .map(|(id, (write_kind, owner, ty, tag, value))| {
-            let abilities = session.get_type_abilities(&ty)?;
-            let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
-            let bytes = value.simple_serialize(&layout).unwrap();
-            Ok((id, (write_kind, owner, tag, abilities, bytes)))
-        })
-        .collect::<VMResult<_>>()
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-    let user_events = user_events
-        .into_iter()
-        .map(|(tag, value)| {
-            let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
-            let bytes = value.simple_serialize(&layout).unwrap();
-            Ok((tag, bytes))
-        })
-        .collect::<VMResult<_>>()
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-    let (empty_changes, empty_events) = session
-        .finish()
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-    debug_assert!(empty_changes.into_inner().is_empty());
-    debug_assert!(empty_events.is_empty());
-    process_successful_execution(
-        state_view,
-        module_id,
-        &by_value_object_map,
-        &loaded_child_objects,
-        mutable_refs,
-        writes,
-        deletions,
-        user_events,
-        ctx,
-        protocol_config,
-    )?;
-    Ok(mode_result)
-}
-
-#[instrument(name = "adapter_publish", level = "trace", skip_all)]
-pub fn publish<
-    E: Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
-    state_view: &mut S,
-    vm: &MoveVM,
-    module_bytes: Vec<Vec<u8>>,
-    ctx: &mut TxContext,
-    gas_status: &mut GasStatus,
-    protocol_config: &ProtocolConfig,
-) -> Result<(), ExecutionError> {
-    let mut modules = module_bytes
-        .iter()
-        .map(|b| {
-            CompiledModule::deserialize(b)
-                .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
-        })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-
-    if modules.is_empty() {
-        return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
-    }
-
-    let package_id = generate_package_id(&mut modules, ctx)?;
-    verify_and_link(
-        vm,
-        state_view,
-        &modules,
-        package_id,
-        gas_status,
-        protocol_config,
-    )?;
-    store_package_and_init_modules(state_view, vm, modules, ctx, gas_status, protocol_config)
-}
-
-/// Store package in state_view and call module initializers
-pub fn store_package_and_init_modules<
-    E: Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
-    state_view: &mut S,
-    vm: &MoveVM,
-    modules: Vec<CompiledModule>,
-    ctx: &mut TxContext,
-    gas_status: &mut GasStatus,
-    protocol_config: &ProtocolConfig,
-) -> Result<(), ExecutionError> {
-    let modules_to_init = modules
-        .iter()
-        .filter_map(|module| {
-            for fdef in &module.function_defs {
-                let fhandle = module.function_handle_at(fdef.function);
-                let fname = module.identifier_at(fhandle.name);
-                if fname == INIT_FN_NAME {
-                    return Some((module.self_id(), fdef.function));
-                }
-            }
-            None
-        })
-        .collect();
-
-    // wrap the modules in an object, write it to the store
-    // The call to unwrap() will go away once we remove address owner from Immutable objects.
-    let package_object = Object::new_package(
-        modules,
-        OBJECT_START_VERSION,
-        ctx.digest(),
-        protocol_config.max_move_package_size(),
-    )?;
-    let id = package_object.id();
-    let changes = BTreeMap::from([(
-        id,
-        ObjectChange::Write(
-            SingleTxContext::publish(ctx.sender()),
-            package_object,
-            WriteKind::Create,
-        ),
-    )]);
-    state_view.apply_object_changes(changes);
-
-    init_modules(
-        state_view,
-        vm,
-        modules_to_init,
-        ctx,
-        gas_status,
-        protocol_config,
-    )
-}
-
-/// Modules in module_ids_to_init must have the init method defined
-fn init_modules<
-    E: Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + Storage
-        + ParentSync
-        + ChildObjectResolver,
->(
-    state_view: &mut S,
-    vm: &MoveVM,
-    module_ids_to_init: Vec<(ModuleId, FunctionHandleIndex)>,
-    ctx: &mut TxContext,
-    gas_status: &mut GasStatus,
-    protocol_config: &ProtocolConfig,
-) -> Result<(), ExecutionError> {
-    let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for (module_id, fhandle_idx) in module_ids_to_init {
-        let module = vm
-            .load_module(&module_id, state_view)
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
-        let view = &BinaryIndexedView::Module(&module);
-        let fhandle = module.function_handle_at(fhandle_idx);
-        let parameters = &module.signature_at(fhandle.parameters).0;
-        let tx_ctx_kind = parameters
-            .last()
-            .map(|t| is_tx_context(view, t))
-            .unwrap_or(TxContextKind::None);
-        let mut args = vec![];
-        // an init function can have one or two arguments, with the last one always being of type
-        // &mut TxContext and the additional (first) one representing a characteristic type (see
-        // char_type verifier pass for additional explanation)
-        if parameters.len() == 2 {
-            // characteristic type is a struct with a single bool filed which in bcs is encoded as
-            // 0x01
-            let bcs_char_type_value = vec![0x01];
-            args.push(bcs_char_type_value);
-        }
-        // init must have a txn ctx
-        args.push(ctx.to_vec());
-        execute_internal::<execution_mode::Normal, _, _>(
-            vm,
-            state_view,
-            &module_id,
-            &init_ident,
-            Vec::new(),
-            args,
-            tx_ctx_kind,
-            BTreeMap::new(),
-            BTreeSet::new(),
-            BTreeMap::new(),
-            gas_status,
-            ctx,
-            protocol_config,
-        )?;
-    }
-    Ok(())
-}
-
-/// Given a list of `modules`, links each module against its
-/// dependencies and runs each module with both the Move VM verifier
-/// and the Sui verifier.
-pub fn verify_and_link<
-    E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ChildObjectResolver,
->(
-    vm: &MoveVM,
-    state_view: &S,
-    modules: &[CompiledModule],
-    package_id: ObjectID,
-    gas_status: &mut GasStatus,
-    protocol_config: &ProtocolConfig,
-) -> Result<(), ExecutionError> {
-    // Run the Move bytecode verifier and linker.
-    // It is important to do this before running the Sui verifier, since the sui
-    // verifier may assume well-formedness conditions enforced by the Move verifier hold
-    let mut session = new_session(
-        vm,
-        state_view,
-        BTreeMap::new(),
-        gas_status.is_metered(),
-        protocol_config,
-    );
-    // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
-    let new_module_bytes: Vec<_> = modules
-        .iter()
-        .map(|m| {
-            let mut bytes = Vec::new();
-            m.serialize(&mut bytes).unwrap();
-            bytes
-        })
-        .collect();
-    session
-        .publish_module_bundle(
-            new_module_bytes,
-            AccountAddress::from(package_id),
-            // TODO: publish_module_bundle() currently doesn't charge gas.
-            // Do we want to charge there?
-            gas_status,
-        )
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
-
-    // run the Sui verifier
-    for module in modules.iter() {
-        // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
-        verifier::verify_module(module, &BTreeMap::new())?;
-    }
-    Ok(())
-}
-
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
 /// If `is_framework` is true, then the modules can have arbitrary user-defined address,
 /// otherwise their addresses must be 0.
@@ -612,150 +146,6 @@ pub fn generate_package_id(
     Ok(package_id)
 }
 
-/// Update `state_view` with the effects of successfully executing a transaction:
-/// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
-/// - Update objects passed via a mutable reference in `mutable_refs` to their new values
-/// - Process creation of new objects and user-emitted events in `events`
-#[allow(clippy::too_many_arguments)]
-fn process_successful_execution<S: Storage + ParentSync>(
-    state_view: &mut S,
-    module_id: &ModuleId,
-    by_value_objects: &BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
-    loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
-    mutable_refs: Vec<(ObjectID, Vec<u8>)>,
-    writes: LinkedHashMap<ObjectID, (WriteKind, Owner, StructTag, AbilitySet, Vec<u8>)>,
-    deletions: LinkedHashMap<ObjectID, DeleteKind>,
-    user_events: Vec<(StructTag, Vec<u8>)>,
-    ctx: &TxContext,
-    protocol_config: &ProtocolConfig,
-) -> Result<(), ExecutionError> {
-    let sender = ctx.sender();
-    let tx_ctx = SingleTxContext {
-        package_id: ObjectID::from(*module_id.address()),
-        transaction_module: Identifier::from(module_id.name()),
-        sender,
-    };
-    let mut changes = BTreeMap::new();
-    for (obj_id, new_contents) in mutable_refs {
-        // update contents and increment sequence number
-        let mut obj = state_view
-            .read_object(&obj_id)
-            .expect("We previously checked all input objects exist")
-            .clone();
-        obj.data
-            .try_as_move_mut()
-            .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents(new_contents, protocol_config)?;
-
-        changes.insert(
-            obj_id,
-            ObjectChange::Write(tx_ctx.clone(), obj, WriteKind::Mutate),
-        );
-    }
-    let tx_digest = ctx.digest();
-
-    for (id, (write_kind, recipient, tag, abilities, contents)) in writes {
-        let has_public_transfer = abilities.has_store();
-        debug_assert_eq!(
-            id,
-            ObjectID::from_bytes(contents.get(0..ID_END_INDEX).ok_or_else(|| {
-                ExecutionError::new_with_source(
-                    ExecutionErrorKind::InvariantViolation,
-                    "Cannot parse Object ID",
-                )
-            })?)
-            .expect("object contents should start with an id")
-        );
-        let old_object_opt = by_value_objects.get(&id);
-        let loaded_child_version_opt = loaded_child_objects.get(&id);
-        assert_invariant!(
-            old_object_opt.is_none() || loaded_child_version_opt.is_none(),
-            format!("Loaded {id} as a child, but that object was an input object")
-        );
-
-        let old_obj_ver = old_object_opt
-            .map(|(_, version)| *version)
-            .or_else(|| loaded_child_version_opt.copied());
-
-        debug_assert!((write_kind == WriteKind::Mutate) == old_obj_ver.is_some());
-
-        // safe because `has_public_transfer` was properly determined from the abilities
-        let move_obj = unsafe {
-            MoveObject::new_from_execution(
-                tag,
-                has_public_transfer,
-                old_obj_ver.unwrap_or_else(SequenceNumber::new),
-                contents,
-                protocol_config,
-            )?
-        };
-
-        #[cfg(debug_assertions)]
-        {
-            check_transferred_object_invariants(&move_obj, &old_obj_ver)
-        }
-
-        let obj = Object::new_move(move_obj, recipient, tx_digest);
-        if old_obj_ver.is_none() {
-            // Charge extra gas based on object size if we are creating a new object.
-            // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
-        }
-        changes.insert(id, ObjectChange::Write(tx_ctx.clone(), obj, write_kind));
-    }
-
-    for (id, delete_kind) in deletions {
-        let version = match by_value_objects.get(&id) {
-            Some((_, version)) => *version,
-            None => match state_view.get_latest_parent_entry_ref(id) {
-                Ok(Some((_, previous_version, _))) => previous_version,
-                Ok(None) => {
-                    // This object was not created this transaction but has never existed in
-                    // storage, skip it.
-                    continue;
-                }
-                _ => {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::InvariantViolation,
-                        missing_unwrapped_msg(&id),
-                    ))
-                }
-            },
-        };
-        changes.insert(
-            id,
-            ObjectChange::Delete(tx_ctx.clone(), version, delete_kind),
-        );
-    }
-
-    for (tag, contents) in user_events {
-        state_view.log_event(Event::move_event(
-            module_id.address(),
-            module_id.name(),
-            ctx.sender(),
-            tag,
-            contents,
-        ))
-    }
-
-    // apply object writes and object deletions
-    state_view.apply_object_changes(changes);
-
-    Ok(())
-}
-
-#[cfg(debug_assertions)]
-fn check_transferred_object_invariants(
-    new_object: &MoveObject,
-    old_object: &Option<SequenceNumber>,
-) {
-    if let Some(old_version) = old_object {
-        // check consistency between the transferred object `new_object` and the tx input `o`
-        // specifically, the object id, type, and version should be unchanged
-        // we can only check the version here
-        debug_assert_eq!(*old_version, new_object.version());
-    }
-}
-
 pub struct TypeCheckSuccess {
     pub module_id: ModuleId,
     pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
@@ -764,6 +154,18 @@ pub struct TypeCheckSuccess {
     pub args: Vec<Vec<u8>>,
     /// is TxContext included in the arguments? If so, is it mutable?
     pub tx_ctx_kind: TxContextKind,
+}
+
+/// Small enum used to type check function calls for external tools. ObjVec does not exist
+/// for Programmable Transactions, but it effectively does via the command MakeMoveVec
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckCallArg {
+    /// contains no structs or objects
+    Pure(Vec<u8>),
+    /// an object
+    Object(ObjectArg),
+    /// a vector of objects
+    ObjVec(Vec<ObjectArg>),
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -775,7 +177,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     module: &CompiledModule,
     function: &Identifier,
     type_args: &[TypeTag],
-    args: Vec<CallArg>,
+    args: Vec<CheckCallArg>,
     is_genesis: bool,
 ) -> Result<TypeCheckSuccess, ExecutionError> {
     // Resolve the function we are calling
@@ -867,8 +269,8 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
             let object_arg = match arg {
                 // dev-inspect does not make state changes and just a developer aid, so let through
                 // any BCS bytes (they will be checked later by the VM)
-                CallArg::Pure(arg) if Mode::allow_arbitrary_function_calls() => return Ok(arg),
-                CallArg::Pure(arg) => {
+                CheckCallArg::Pure(arg) if Mode::allow_arbitrary_values() => return Ok(arg),
+                CheckCallArg::Pure(arg) => {
                     let (is_primitive, type_layout_opt) =
                         primitive_type(view, type_args, param_type);
                     if !is_primitive {
@@ -888,7 +290,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     validate_primitive_arg(view, &arg, idx, param_type, type_layout_opt)?;
                     return Ok(arg);
                 }
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
+                CheckCallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
                     let (o, arg_type, param_type) = serialize_object(
                         InputObjectKind::ImmOrOwnedMoveObject(ref_),
                         idx,
@@ -902,7 +304,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     type_check_struct(view, type_args, idx, arg_type, param_type)?;
                     o
                 }
-                CallArg::Object(ObjectArg::SharedObject {
+                CheckCallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
                     mutable,
@@ -924,7 +326,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     type_check_struct(view, type_args, idx, arg_type, param_type)?;
                     o
                 }
-                CallArg::ObjVec(vec) => {
+                CheckCallArg::ObjVec(vec) => {
                     if vec.is_empty() {
                         // bcs representation of the empty vector
                         return Ok(vec![0]);

@@ -26,6 +26,7 @@ thiserror = "1.0.34"
 tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }
 
+fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 sui-config = { path = "../sui-config" }
@@ -39,10 +40,10 @@ sui-open-rpc = { path = "../sui-open-rpc" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
-telemetry-subscribers.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-fastcrypto = { workspace = true, features = ["copy_key"] }
+move-core-types.workspace = true
+telemetry-subscribers.workspace = true
 
 [features]
 pg_integration = []

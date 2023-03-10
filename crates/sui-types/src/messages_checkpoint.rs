@@ -373,20 +373,25 @@ impl FullCheckpointContents {
     pub fn from_checkpoint_contents<S>(
         store: S,
         contents: CheckpointContents,
-    ) -> Result<Self, <S as ReadStore>::Error>
+    ) -> Result<Option<Self>, <S as ReadStore>::Error>
     where
         S: ReadStore,
     {
         let mut transactions = Vec::with_capacity(contents.size());
         for tx in contents.transactions {
-            let t = store.get_transaction(&tx.transaction)?.unwrap();
-            let e = store.get_transaction_effects(&tx.effects)?.unwrap();
-            transactions.push(ExecutionData::new(t.into_inner(), e))
+            if let (Some(t), Some(e)) = (
+                store.get_transaction(&tx.transaction)?,
+                store.get_transaction_effects(&tx.effects)?,
+            ) {
+                transactions.push(ExecutionData::new(t.into_inner(), e))
+            } else {
+                return Ok(None);
+            }
         }
-        Ok(Self {
+        Ok(Some(Self {
             transactions,
             user_signatures: contents.user_signatures,
-        })
+        }))
     }
 
     pub fn iter(&self) -> Iter<'_, ExecutionData> {

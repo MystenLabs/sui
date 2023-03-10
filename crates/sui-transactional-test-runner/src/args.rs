@@ -8,8 +8,9 @@ use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToke
 use move_compiler::shared::parse_u128;
 use move_core_types::identifier::Identifier;
 use move_core_types::value::{MoveStruct, MoveValue};
-use sui_types::messages::{CallArg, ObjectArg};
+use sui_types::messages::{Argument, CallArg, ObjectArg};
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::test_adapter::SuiTestAdapter;
 
@@ -27,6 +28,8 @@ pub struct SuiRunArgs {
 pub struct SuiPublishArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
+    #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
+    pub upgradeable: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -136,16 +139,23 @@ impl SuiValue {
         }
     }
 
-    pub(crate) fn into_call_args(self, test_adapter: &SuiTestAdapter) -> anyhow::Result<CallArg> {
+    pub(crate) fn into_call_args(
+        self,
+        builder: &mut ProgrammableTransactionBuilder,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<Argument> {
         Ok(match self {
-            SuiValue::Object(fake_id) => CallArg::Object(Self::object_arg(fake_id, test_adapter)?),
-            SuiValue::ObjVec(vec) => CallArg::ObjVec(
+            SuiValue::Object(fake_id) => {
+                builder.input(CallArg::Object(Self::object_arg(fake_id, test_adapter)?))?
+            }
+            SuiValue::ObjVec(vec) => builder.make_obj_vec(
                 vec.iter()
                     .map(|fake_id| Self::object_arg(*fake_id, test_adapter))
                     .collect::<Result<Vec<ObjectArg>, _>>()?,
             ),
-
-            SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
+            SuiValue::MoveValue(v) => {
+                builder.input(CallArg::Pure(v.simple_serialize().unwrap()))?
+            }
         })
     }
 }

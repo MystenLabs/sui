@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use crate::errors::IndexerError;
 use crate::models::owners::OwnerType;
 use crate::schema::objects;
 use crate::schema::sql_types::BcsBytes;
@@ -11,12 +14,17 @@ use diesel::serialize::{Output, ToSql, WriteTuple};
 use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
 use diesel::SqlType;
 use diesel_derive_enum::DbEnum;
-use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
-use sui_types::base_types::EpochId;
+
+use move_core_types::language_storage::StructTag;
+use sui_json_rpc_types::{
+    SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiRawData,
+};
+use sui_types::base_types::{EpochId, ObjectType, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
+use sui_types::object::{MoveObject, Object as SuiBaseObject, Owner};
 const OBJECT: &str = "object";
+const PACKAGE: &str = "package";
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone)]
 #[diesel(table_name = objects, primary_key(object_id))]
@@ -34,6 +42,7 @@ pub struct Object {
     pub previous_transaction: String,
     pub object_type: String,
     pub object_status: ObjectStatus,
+    pub has_public_transfer: bool,
     pub bcs: Vec<NamedBcsBytes>,
 }
 #[derive(SqlType, Debug, Clone)]
@@ -46,7 +55,7 @@ impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
     }
 }
 
-impl FromSql<BcsBytes, Pg> for NamedBcsBytes {
+impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
     fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
         let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
         Ok(NamedBcsBytes(name, data))
@@ -67,6 +76,7 @@ pub struct DeletedObject {
     pub previous_transaction: String,
     pub object_type: String,
     pub object_status: ObjectStatus,
+    pub has_public_transfer: bool,
 }
 
 #[derive(DbEnum, Debug, Clone, Copy)]
@@ -99,6 +109,11 @@ impl Object {
                 .collect(),
         };
 
+        let has_public_transfer = match o.bcs.clone().expect("Expect BCS data to be non-empty") {
+            SuiRawData::MoveObject(o) => o.has_public_transfer,
+            SuiRawData::Package(_p) => false,
+        };
+
         Object {
             epoch: *epoch as i64,
             checkpoint: *checkpoint as i64,
@@ -118,7 +133,163 @@ impl Object {
                 .expect("Expect the object type to be non-empty")
                 .to_string(),
             object_status: *status,
+            has_public_transfer,
             bcs,
+        }
+    }
+
+    pub fn to_object_response(
+        self,
+        options: &SuiObjectDataOptions,
+    ) -> Result<SuiObjectResponse, IndexerError> {
+        if self.object_type.as_str() == PACKAGE {
+            Err(IndexerError::NotImplementedError(
+                "Move package read from objects table is not implemented yet.".into(),
+            ))
+        } else {
+            let object_id = self.object_id.parse().map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to parse object id: {}, error: {}",
+                    self.object_id, e
+                ))
+            })?;
+            let digest = self.object_digest.parse().map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to parse object digest: {}, error: {}",
+                    self.object_digest, e
+                ))
+            })?;
+            let previous_transaction = self.previous_transaction.parse().map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to parse previous transaction: {}, error: {}",
+                    self.previous_transaction, e
+                ))
+            })?;
+
+            // only one BCS for non-package object
+            let obj_bcs = self
+                .bcs
+                .first()
+                .cloned()
+                .ok_or_else(|| IndexerError::SerdeError("No BCS data found".into()))?
+                // bcs is the second element in the tuple (name, bcs)
+                .1;
+            let struct_tag = StructTag::from_str(&self.object_type).map_err(|e| {
+                IndexerError::SerdeError(format!("Failed to parse struct tag: {}", e))
+            })?;
+
+            let move_obj = unsafe {
+                MoveObject::new_from_execution_with_limit(
+                    struct_tag.clone(),
+                    self.has_public_transfer,
+                    SequenceNumber::from_u64(self.version as u64),
+                    obj_bcs,
+                    u64::MAX,
+                )
+                .map_err(|e| {
+                    IndexerError::SerdeError(format!("Failed to parse move object: {}", e))
+                })
+            }?;
+
+            let owner = self.get_owner()?;
+            let obj = SuiBaseObject::new_move(move_obj.clone(), owner, previous_transaction);
+            // TODO(gegaowp): today storage rebate is read from `Object` and is always shown, as a result,
+            // `Owner`, `MoveObject` etc. are always needed to be parsed. Optimizations can be done in the future
+            // to reduce parsings here.
+            let storage_rebate = obj.storage_rebate;
+
+            Ok(SuiObjectResponse::Exists(SuiObjectData {
+                object_id,
+                version: SequenceNumber::from_u64(self.version as u64),
+                digest,
+                type_: if options.show_type {
+                    Some(ObjectType::Struct(struct_tag))
+                } else {
+                    None
+                },
+                owner: if options.show_owner {
+                    Some(owner)
+                } else {
+                    None
+                },
+                previous_transaction: if options.show_previous_transaction {
+                    Some(previous_transaction)
+                } else {
+                    None
+                },
+                storage_rebate: Some(storage_rebate),
+                // TODO: need module cache for contents and display
+                display: None,
+                content: None,
+                bcs: if options.show_bcs {
+                    Some(SuiRawData::MoveObject(move_obj.into()))
+                } else {
+                    None
+                },
+            }))
+        }
+    }
+
+    pub fn get_object_ref(&self) -> Result<SuiObjectRef, IndexerError> {
+        let object_id = self.object_id.parse().map_err(|e| {
+            IndexerError::SerdeError(format!(
+                "Failed to parse object id: {}, error: {}",
+                self.object_id, e
+            ))
+        })?;
+        let digest = self.object_digest.parse().map_err(|e| {
+            IndexerError::SerdeError(format!(
+                "Failed to parse object digest: {}, error: {}",
+                self.object_digest, e
+            ))
+        })?;
+
+        Ok(SuiObjectRef {
+            object_id,
+            version: (self.version as u64).into(),
+            digest,
+        })
+    }
+
+    pub fn get_owner(&self) -> Result<Owner, IndexerError> {
+        match self.owner_type {
+            OwnerType::AddressOwner => {
+                let sui_addr_str = self.owner_address.clone().ok_or_else(|| {
+                    IndexerError::SerdeError(
+                        "Expect the owner address to be non-empty, when owner type is AddressOwner"
+                            .into(),
+                    )
+                })?;
+                let sui_addr = SuiAddress::from_str(sui_addr_str.as_str()).map_err(|e| {
+                    IndexerError::SerdeError(format!(
+                        "Failed to parse SUI address: {}, error: {}",
+                        sui_addr_str, e
+                    ))
+                })?;
+                Ok(Owner::AddressOwner(sui_addr))
+            }
+            OwnerType::ObjectOwner => {
+                let object_id = self.owner_address.clone().ok_or_else(|| {
+                    IndexerError::SerdeError(
+                        "Expect the owner address to be non-empty, when owner type is ObjectOwner"
+                            .into(),
+                    )
+                })?;
+                let object_id = SuiAddress::from_str(object_id.as_str()).map_err(|e| {
+                    IndexerError::SerdeError(format!(
+                        "Failed to parse object id: {}, error: {}",
+                        object_id, e
+                    ))
+                })?;
+                Ok(Owner::ObjectOwner(object_id))
+            }
+            OwnerType::Shared => {
+                let shared_version = self.initial_shared_version.expect("non-empty");
+                Ok(Owner::Shared {
+                    initial_shared_version: SequenceNumber::from_u64(shared_version as u64),
+                })
+            }
+            OwnerType::Immutable => Ok(Owner::Immutable),
         }
     }
 }
@@ -143,6 +314,7 @@ impl DeletedObject {
             previous_transaction: previous_tx.base58_encode(),
             object_type: "DELETED".to_string(),
             object_status: status,
+            has_public_transfer: false,
         }
     }
 }

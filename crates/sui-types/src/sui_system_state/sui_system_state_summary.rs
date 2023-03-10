@@ -1,19 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
+use crate::sui_serde::AsMultiaddr;
+use fastcrypto::encoding::Base58;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 
-use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
+use crate::id::ID;
 
 /// This is the JSON-RPC type for the SUI system state object.
 /// It flattens all fields to make them top-level fields such that it as minimum
 /// dependencies to the internal data structures of the SUI system state type.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiSystemStateSummary {
     /// The current epoch ID, starting from 0.
     pub epoch: u64,
@@ -98,34 +103,69 @@ impl SuiSystemStateSummary {
     }
 }
 
-/// This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures
+/// This is the JSON-RPC type for the SUI validator. It flattens all inner structures
 /// to top-level fields so that they are decoupled from the internal definitions.
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiValidatorSummary {
     // Metadata
     pub sui_address: SuiAddress,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Base58")]
     pub protocol_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Base58")]
     pub network_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Base58")]
     pub worker_pubkey_bytes: Vec<u8>,
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Base58")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
     pub image_url: String,
     pub project_url: String,
+    #[schemars(with = "String")]
+    #[serde_as(as = "AsMultiaddr")]
     pub net_address: Vec<u8>,
+    #[schemars(with = "String")]
+    #[serde_as(as = "AsMultiaddr")]
     pub p2p_address: Vec<u8>,
+    #[schemars(with = "String")]
+    #[serde_as(as = "AsMultiaddr")]
     pub primary_address: Vec<u8>,
+    #[schemars(with = "String")]
+    #[serde_as(as = "AsMultiaddr")]
     pub worker_address: Vec<u8>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Option<Base58>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Option<Base58>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Option<Base58>")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<Base58>")]
+    #[serde_as(as = "Option<Base58>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<AsMultiaddr>")]
     pub next_epoch_net_address: Option<Vec<u8>>,
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<AsMultiaddr>")]
     pub next_epoch_p2p_address: Option<Vec<u8>>,
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<AsMultiaddr>")]
     pub next_epoch_primary_address: Option<Vec<u8>>,
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<AsMultiaddr>")]
     pub next_epoch_worker_address: Option<Vec<u8>>,
 
     pub voting_power: u64,
+    pub operation_cap_id: ID,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,

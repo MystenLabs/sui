@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionEvents } from '@mysten/sui.js';
+import {
+    getCoinBalanceChangeEvent,
+    getTransferObjectEvent,
+    isEventType,
+    type TransactionEvents,
+} from '@mysten/sui.js';
 
 export type CoinsMetaProps = {
     amount: number;
@@ -26,12 +31,12 @@ export function getEventsSummary(
         // A net positive amount means the user received coins
         // A net negative amount means the user sent coins
         if (
-            'coinBalanceChange' in event &&
-            event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
-            event?.coinBalanceChange?.transactionModule !== 'gas'
+            event.type === 'coinBalanceChange' &&
+            event?.content?.changeType &&
+            ['Receive', 'Pay'].includes(event?.content?.changeType) &&
+            event?.content?.transactionModule !== 'gas'
         ) {
-            const { coinBalanceChange } = event;
+            const coinBalanceChange = getCoinBalanceChangeEvent(event)!;
             const { coinType, amount, owner, sender } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
 
@@ -48,8 +53,8 @@ export function getEventsSummary(
         }
 
         // return objectIDs of the transfer objects
-        if ('transferObject' in event) {
-            const { transferObject } = event;
+        if (isEventType(event, 'transferObject')) {
+            const transferObject = getTransferObjectEvent(event)!;
             const { AddressOwner } = transferObject.recipient as {
                 AddressOwner: string;
             };

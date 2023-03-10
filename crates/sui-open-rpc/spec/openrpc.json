@@ -123,7 +123,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AAECAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCmRldm5ldF9uZnQEbWludAADAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ALJLjsFo/kiW9bcMyxDxpwXgYdD9+hiWGNKLDUTv75LLZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dpsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
+              "txBytes": "AAMFAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ACCyS47BaP5IlvW3DMsQ8acF4GHQ/foYlhjSiw1E7++SywEAZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMBAAABAQABAgABAQEEAAEDAJsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
               "gas": [
                 {
                   "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
@@ -133,14 +133,14 @@
               ],
               "inputObjects": [
                 {
-                  "MovePackage": "0x0000000000000000000000000000000000000000000000000000000000000002"
-                },
-                {
                   "ImmOrOwnedMoveObject": {
                     "objectId": "0x672f0dbe129f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a8",
                     "version": 1,
                     "digest": "58WQqUhrsHbxjkMtiiGtkJfCpBwufnJCDVr88hExPwFs"
                   }
+                },
+                {
+                  "MovePackage": "0x0000000000000000000000000000000000000000000000000000000000000002"
                 },
                 {
                   "ImmOrOwnedMoveObject": {
@@ -249,11 +249,14 @@
           }
         },
         {
-          "name": "signature",
-          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.",
+          "name": "signatures",
+          "description": "A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Base64"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Base64"
+            }
           }
         },
         {
@@ -274,15 +277,17 @@
       },
       "examples": [
         {
-          "name": "Execute an transaction with serialized signature",
+          "name": "Execute an transaction with serialized signatures",
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AAAKAgAg4fwXyBRwidxDGP3UANtnNk7zUMlSZ22FfcN/rn2TKYoBABJFwxtCBojBaGy00TVtFxgN2C6TpIPFq18BopiHodleAgAAAAAAAAAgVX3EKq7+64wVTX3cRWuK6qMTLHQDUx3JjoP24ZjS19EBAQEBAQABAAC2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgFbVIthbaY7DOB9gW6J73uaOCF3tEIruqJ/fmJeoxmqCgIAAAAAAAAAIBhIZm/+0ika4ko/gXc1OgUiDXZcqcQho2gIPxj+Ry85tsQvvoHuwWA2oR4hJAeo21LD3nhYWwAWu7NkBXXeo74BAAAAAAAAAOgDAAAAAAAAAA=="
+              "value": "AAMCACDh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpigEAEkXDG0IGiMFobLTRNW0XGA3YLpOkg8WrXwGimIeh2V4CAAAAAAAAACBVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0QEBAQEBAAEAALbEL76B7sFgNqEeISQHqNtSw954WFsAFruzZAV13qO+AVtUi2FtpjsM4H2Bbonve5o4IXe0Qiu6on9+Yl6jGaoKAgAAAAAAAAAgGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzm2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgEAAAAAAAAA6AMAAAAAAAAA"
             },
             {
-              "name": "signature",
-              "value": "ABJgjRjAVl+CNx9WAq5c3dBdHw925j16zeaVsEqcO0JyEAD0KdY/HaDioE5q0r37hUit96WBHnKw0Vv4A8HmKAslVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+              "name": "signatures",
+              "value": [
+                "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+              ]
             },
             {
               "name": "request_type",
@@ -292,34 +297,31 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "RimyyhH99Bs6p7DJP6UwEbWYzb19NSczqARBzqi4GGC",
+              "digest": "63MjNcBWJW2e8vZFmwjQBN22ysW9s3tVRcKrCFtJGSqx",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
-                  "transactions": [
-                    {
-                      "ProgrammableTransaction": {
-                        "inputs": [
-                          "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
-                          "1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e"
-                        ],
-                        "commands": [
+                  "transaction": {
+                    "kind": "ProgrammableTransaction",
+                    "inputs": [
+                      "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
+                      "1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e"
+                    ],
+                    "commands": [
+                      {
+                        "TransferObjects": [
+                          [
+                            {
+                              "Input": 1
+                            }
+                          ],
                           {
-                            "TransferObjects": [
-                              [
-                                {
-                                  "Input": 1
-                                }
-                              ],
-                              {
-                                "Input": 0
-                              }
-                            ]
+                            "Input": 0
                           }
                         ]
                       }
-                    }
-                  ],
+                    ]
+                  },
                   "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
                   "gasData": {
                     "payment": [
@@ -335,7 +337,7 @@
                   }
                 },
                 "txSignatures": [
-                  "ABJgjRjAVl+CNx9WAq5c3dBdHw925j16zeaVsEqcO0JyEAD0KdY/HaDioE5q0r37hUit96WBHnKw0Vv4A8HmKAslVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                  "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
                 ]
               },
               "effects": {
@@ -386,7 +388,8 @@
               },
               "events": [
                 {
-                  "transferObject": {
+                  "type": "transferObject",
+                  "content": {
                     "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "transactionModule": "native",
                     "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
@@ -403,48 +406,6 @@
           }
         }
       ],
-      "deprecated": true
-    },
-    {
-      "name": "sui_executeTransactionSerializedSig",
-      "tags": [
-        {
-          "name": "Write API"
-        }
-      ],
-      "params": [
-        {
-          "name": "tx_bytes",
-          "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "signature",
-          "description": "`flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "request_type",
-          "description": "The request type",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ExecuteTransactionRequestType"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiTransactionResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
-        }
-      },
       "deprecated": true
     },
     {
@@ -590,9 +551,9 @@
             "value": {
               "epoch": 5000,
               "sequenceNumber": 1000,
-              "digest": "88sbZ6JronTqbQUL25HUPouw9wJJRiSKtUjry81YgPDS",
+              "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9",
               "networkTotalTransactions": 792385,
-              "previousDigest": "3yndxsmJNXFrRAUnuqKT6aekThhqmSDJ46opD7UjtL9N",
+              "previousDigest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt",
               "epochRollingGasCostSummary": {
                 "computationCost": 0,
                 "storageCost": 0,
@@ -601,7 +562,7 @@
               "timestampMs": 1676911928,
               "endOfEpochData": null,
               "transactions": [
-                "BhbWpBeESxuRWvmvLMyb2JNUuFa6j4aG1T4WUiPgKAHm"
+                "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
               ],
               "checkpointCommitments": []
             }
@@ -870,13 +831,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4"
+                "Transaction": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
+                "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
                 "eventSeq": 10
               }
             },
@@ -895,13 +856,14 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
+                  "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
                   "id": {
-                    "txDigest": "5kpR3M72QxJTb6ep8gSWKc7FF6itLaCHnngH5ph6osW4",
+                    "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
                     "eventSeq": 0
                   },
                   "event": {
-                    "transferObject": {
+                    "type": "transferObject",
+                    "content": {
                       "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                       "transactionModule": "native",
                       "sender": "0x9100ecbc36623d5703ab2951bbc49fb2f6d742b1f4dc4bc4d349c7217f4c90a0",
@@ -918,7 +880,8 @@
               "nextCursor": {
                 "txDigest": "11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX",
                 "eventSeq": 5
-              }
+              },
+              "hasNextPage": false
             }
           }
         }
@@ -1421,7 +1384,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y"
+              "value": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7"
             },
             {
               "name": "options",
@@ -1435,34 +1398,31 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "6f5UaLHeMtKgNE4mn8c7bfbPmAukvovXrSV994WJL69Y",
+              "digest": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
-                  "transactions": [
-                    {
-                      "ProgrammableTransaction": {
-                        "inputs": [
-                          "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653",
-                          "8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
-                        ],
-                        "commands": [
+                  "transaction": {
+                    "kind": "ProgrammableTransaction",
+                    "inputs": [
+                      "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653",
+                      "8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
+                    ],
+                    "commands": [
+                      {
+                        "TransferObjects": [
+                          [
+                            {
+                              "Input": 1
+                            }
+                          ],
                           {
-                            "TransferObjects": [
-                              [
-                                {
-                                  "Input": 1
-                                }
-                              ],
-                              {
-                                "Input": 0
-                              }
-                            ]
+                            "Input": 0
                           }
                         ]
                       }
-                    }
-                  ],
+                    ]
+                  },
                   "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
                   "gasData": {
                     "payment": [
@@ -1478,7 +1438,7 @@
                   }
                 },
                 "txSignatures": [
-                  "ANz4ZC5C0V79Q7BbAbkw2Py+jAz1GFdPFrpx1D973kltE+y68n7KRJnshM7o9rLcdPxfhzRAUC+9eMLAgwClPAdQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
+                  "AP2VCkYKve0kNoX49RpmfMqrxybOWJj6YoY2SVeX2mhKuVdktSb2W6lNI7dPMZ7VOmAOJQBS9BpkIZd4TVyotgFQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
                 ]
               },
               "effects": {
@@ -1529,7 +1489,8 @@
               },
               "events": [
                 {
-                  "transferObject": {
+                  "type": "transferObject",
+                  "content": {
                     "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "transactionModule": "native",
                     "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
@@ -1624,9 +1585,11 @@
               "data": [
                 "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
                 "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd",
-                "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD",
+                "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
               ],
-              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2",
+              "hasNextPage": false
             }
           }
         }
@@ -1825,6 +1788,45 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_multiGetObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the object data for a list of objects",
+      "params": [
+        {
+          "name": "object_ids",
+          "description": "the IDs of the queried objects",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectDataOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiObjectResponse>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectRead"
+          }
         }
       }
     },
@@ -2377,183 +2379,6 @@
       }
     },
     {
-      "name": "sui_submitTransaction",
-      "tags": [
-        {
-          "name": "Write API"
-        }
-      ],
-      "params": [
-        {
-          "name": "tx_bytes",
-          "description": "BCS serialized transaction data bytes without its type tag, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "signatures",
-          "description": "A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Base64"
-            }
-          }
-        },
-        {
-          "name": "request_type",
-          "description": "The request type",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ExecuteTransactionRequestType"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiTransactionResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
-        }
-      },
-      "examples": [
-        {
-          "name": "Execute an transaction with serialized signature",
-          "params": [
-            {
-              "name": "tx_bytes",
-              "value": "AAAKAgAgo9vZKoPvJtEouI/ma/JuDg0Jza9yfR2EzMqpegLMOpgBAAQWcOFgnbcU6YWMlunkaYVfHPO/35foZbEMAEbik8CMAgAAAAAAAAAgMvS/bD6KxC7vE4XgFAPkmkspatyyLqJ9PJLkziJWrGQBAQEBAQABAACPLqvygft/cUSQXoDZoUEqKxN7oOKTKRGEbKUUTLt7wwHsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/+VVpf+K3BMlQIAAAAAAAAAIECjhG6SmLddtyXB7jAnt4PqaJ4aOOtHbG78RO21zT3+jy6r8oH7f3FEkF6A2aFBKisTe6DikykRhGylFEy7e8MBAAAAAAAAAOgDAAAAAAAAAA=="
-            },
-            {
-              "name": "signatures",
-              "value": [
-                "ABUEpVIlKSxoeP9rAoSiIQPXAkxE1+qKl8pb5hIc2X+M7mduBamfU58wMyGHt6L4iwpH3uqL+00c39MYGdlroQ3tuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
-              ]
-            },
-            {
-              "name": "request_type",
-              "value": "WaitForLocalExecution"
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": {
-              "digest": "7DLsgW7cpwga58b8jHPFSR2j7eXx4y7eBdvSd36y3YoQ",
-              "transaction": {
-                "data": {
-                  "messageVersion": "v1",
-                  "transactions": [
-                    {
-                      "ProgrammableTransaction": {
-                        "inputs": [
-                          "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98",
-                          "041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c"
-                        ],
-                        "commands": [
-                          {
-                            "TransferObjects": [
-                              [
-                                {
-                                  "Input": 1
-                                }
-                              ],
-                              {
-                                "Input": 0
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  ],
-                  "sender": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
-                  "gasData": {
-                    "payment": [
-                      {
-                        "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                        "version": 2,
-                        "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                      }
-                    ],
-                    "owner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
-                    "price": 1,
-                    "budget": 1000
-                  }
-                },
-                "txSignatures": [
-                  "ABUEpVIlKSxoeP9rAoSiIQPXAkxE1+qKl8pb5hIc2X+M7mduBamfU58wMyGHt6L4iwpH3uqL+00c39MYGdlroQ3tuQRDnGhz4Cc2ybUGiC/e91XHYD8RKnE9a3Rnk6fI0g=="
-                ]
-              },
-              "effects": {
-                "messageVersion": "v1",
-                "status": {
-                  "status": "success"
-                },
-                "executedEpoch": 0,
-                "gasUsed": {
-                  "computationCost": 100,
-                  "storageCost": 100,
-                  "storageRebate": 10
-                },
-                "transactionDigest": "7EyfTiUYik55JWka5aGUkSFMCQeLzGnUM7wT8AYMh71b",
-                "mutated": [
-                  {
-                    "owner": {
-                      "AddressOwner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3"
-                    },
-                    "reference": {
-                      "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                      "version": 2,
-                      "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                    }
-                  },
-                  {
-                    "owner": {
-                      "AddressOwner": "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98"
-                    },
-                    "reference": {
-                      "objectId": "0x041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c",
-                      "version": 2,
-                      "digest": "4RuqnEzNdF4nKWjW1MhnKQ1E6sijZvSM5dUNgiPmjme3"
-                    }
-                  }
-                ],
-                "gasObject": {
-                  "owner": {
-                    "ObjectOwner": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3"
-                  },
-                  "reference": {
-                    "objectId": "0xec0f40783d9ac4bf4abb4d7f820647fd85d19183dee7c7ff955697fe2b704c95",
-                    "version": 2,
-                    "digest": "5MKi5NebY3q1VSz5G75bfLTbHRTVyVV64rBB7ufriYBf"
-                  }
-                },
-                "eventsDigest": "7z6qPvSvB629YJdVvCxF4nG35Lm1CQeFeU9GSMMc6wFr"
-              },
-              "events": [
-                {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x8f2eabf281fb7f7144905e80d9a1412a2b137ba0e2932911846ca5144cbb7bc3",
-                    "recipient": {
-                      "AddressOwner": "0xa3dbd92a83ef26d128b88fe66bf26e0e0d09cdaf727d1d84cccaa97a02cc3a98"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x041670e1609db714e9858c96e9e469855f1cf3bfdf97e865b10c0046e293c08c",
-                    "version": 2
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_subscribeEvent",
       "tags": [
         {
@@ -2582,40 +2407,6 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/EventEnvelope"
-        }
-      }
-    },
-    {
-      "name": "sui_tblsSignRandomnessObject",
-      "tags": [
-        {
-          "name": "Threshold BLS API"
-        }
-      ],
-      "description": "Sign an a Randomness object with threshold BLS. **Warning**: This API is a work in progress and uses insecure randomness. Please use it for testing purposes only.",
-      "params": [
-        {
-          "name": "object_id",
-          "description": "The object ID.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "commitment_type",
-          "description": "The way in which the commitment on the object creation should be verified.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiTBlsSignObjectCommitmentType"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiTBlsSignRandomnessObjectResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiTBlsSignRandomnessObjectResponse"
         }
       }
     },
@@ -2849,12 +2640,31 @@
       "Balance": {
         "type": "object",
         "required": [
-          "value"
+          "coinObjectCount",
+          "coinType",
+          "lockedBalance",
+          "totalBalance"
         ],
         "properties": {
-          "value": {
+          "coinObjectCount": {
             "type": "integer",
-            "format": "uint64",
+            "format": "uint",
+            "minimum": 0.0
+          },
+          "coinType": {
+            "type": "string"
+          },
+          "lockedBalance": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "uint128",
+              "minimum": 0.0
+            }
+          },
+          "totalBalance": {
+            "type": "integer",
+            "format": "uint128",
             "minimum": 0.0
           }
         }
@@ -3172,64 +2982,34 @@
       "DelegatedStake": {
         "type": "object",
         "required": [
-          "delegation_status",
-          "staked_sui"
+          "stakes",
+          "stakingPool",
+          "validatorAddress"
         ],
         "properties": {
-          "delegation_status": {
-            "$ref": "#/components/schemas/DelegationStatus"
+          "stakes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Stake"
+            }
           },
-          "staked_sui": {
-            "$ref": "#/components/schemas/StakedSui"
-          }
-        }
-      },
-      "Delegation": {
-        "type": "object",
-        "required": [
-          "id",
-          "pool_tokens",
-          "principal_sui_amount",
-          "staked_sui_id"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/UID"
-          },
-          "pool_tokens": {
-            "$ref": "#/components/schemas/Balance"
-          },
-          "principal_sui_amount": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "staked_sui_id": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      },
-      "DelegationStatus": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "Pending"
+          "stakingPool": {
+            "description": "Staking pool object id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
             ]
           },
-          {
-            "type": "object",
-            "required": [
-              "Active"
-            ],
-            "properties": {
-              "Active": {
-                "$ref": "#/components/schemas/Delegation"
+          "validatorAddress": {
+            "description": "Validator's Address.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuiAddress"
               }
-            },
-            "additionalProperties": false
+            ]
           }
-        ]
+        }
       },
       "DevInspectResults": {
         "description": "The response from processing a dev inspect transaction",
@@ -3256,10 +3036,10 @@
             }
           },
           "results": {
-            "description": "Execution results (including return values) from executing the transactions Currently contains only return values from Move calls",
+            "description": "Execution results (including return values) from executing the transaction commands",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String"
+                "$ref": "#/components/schemas/Result_of_Array_of_SuiExecutionResult_or_String"
               }
             ]
           }
@@ -3286,6 +3066,7 @@
       "DynamicFieldInfo": {
         "type": "object",
         "required": [
+          "bcsName",
           "digest",
           "name",
           "objectId",
@@ -3294,6 +3075,9 @@
           "version"
         ],
         "properties": {
+          "bcsName": {
+            "$ref": "#/components/schemas/Base58"
+          },
           "digest": {
             "$ref": "#/components/schemas/ObjectDigest"
           },
@@ -3356,48 +3140,6 @@
       "Ed25519SuiSignature": {
         "$ref": "#/components/schemas/Base64"
       },
-      "EffectsFinalityInfo": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "certified"
-            ],
-            "properties": {
-              "certified": {
-                "$ref": "#/components/schemas/SuiAuthorityStrongQuorumSignInfo"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "checkpointed"
-            ],
-            "properties": {
-              "checkpointed": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  },
-                  {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "EndOfEpochData": {
         "type": "object",
         "required": [
@@ -3448,10 +3190,11 @@
             "description": "Move-specific event",
             "type": "object",
             "required": [
-              "moveEvent"
+              "content",
+              "type"
             ],
             "properties": {
-              "moveEvent": {
+              "content": {
                 "type": "object",
                 "required": [
                   "bcs",
@@ -3487,18 +3230,24 @@
                     "type": "string"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "moveEvent"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Module published",
             "type": "object",
             "required": [
-              "publish"
+              "content",
+              "type"
             ],
             "properties": {
-              "publish": {
+              "content": {
                 "type": "object",
                 "required": [
                   "digest",
@@ -3520,18 +3269,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "publish"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Coin balance changing event",
             "type": "object",
             "required": [
-              "coinBalanceChange"
+              "content",
+              "type"
             ],
             "properties": {
-              "coinBalanceChange": {
+              "content": {
                 "type": "object",
                 "required": [
                   "amount",
@@ -3574,48 +3329,66 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "coinBalanceChange"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Epoch change",
             "type": "object",
             "required": [
-              "epochChange"
+              "content",
+              "type"
             ],
             "properties": {
-              "epochChange": {
+              "content": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "epochChange"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "New checkpoint",
             "type": "object",
             "required": [
-              "checkpoint"
+              "content",
+              "type"
             ],
             "properties": {
-              "checkpoint": {
+              "content": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "checkpoint"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Transfer objects to new address / wrap in another object / coin",
             "type": "object",
             "required": [
-              "transferObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "transferObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3649,18 +3422,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transferObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Object mutated.",
             "type": "object",
             "required": [
-              "mutateObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "mutateObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3690,18 +3469,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mutateObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Delete object",
             "type": "object",
             "required": [
-              "deleteObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "deleteObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3727,18 +3512,24 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "deleteObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "New object creation",
             "type": "object",
             "required": [
-              "newObject"
+              "content",
+              "type"
             ],
             "properties": {
-              "newObject": {
+              "content": {
                 "type": "object",
                 "required": [
                   "objectId",
@@ -3772,9 +3563,14 @@
                     "$ref": "#/components/schemas/SequenceNumber"
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "newObject"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
@@ -4270,25 +4066,6 @@
           }
         ]
       },
-      "FinalizedEffects": {
-        "type": "object",
-        "required": [
-          "effects",
-          "finalityInfo",
-          "transactionEffectsDigest"
-        ],
-        "properties": {
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
-          },
-          "finalityInfo": {
-            "$ref": "#/components/schemas/EffectsFinalityInfo"
-          },
-          "transactionEffectsDigest": {
-            "$ref": "#/components/schemas/TransactionEffectsDigest"
-          }
-        }
-      },
       "GasCostSummary": {
         "type": "object",
         "required": [
@@ -4432,37 +4209,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "MoveCall": {
-        "type": "object",
-        "required": [
-          "function",
-          "module",
-          "package"
-        ],
-        "properties": {
-          "arguments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiJsonValue"
-            }
-          },
-          "function": {
-            "type": "string"
-          },
-          "module": {
-            "type": "string"
-          },
-          "package": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "typeArguments": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
       },
       "MoveCallParams": {
         "type": "object",
@@ -5037,9 +4783,11 @@
         ]
       },
       "Page_for_Coin_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5047,6 +4795,9 @@
             "items": {
               "$ref": "#/components/schemas/Coin"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5061,9 +4812,11 @@
         }
       },
       "Page_for_DynamicFieldInfo_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5071,6 +4824,9 @@
             "items": {
               "$ref": "#/components/schemas/DynamicFieldInfo"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5085,9 +4841,11 @@
         }
       },
       "Page_for_EventEnvelope_and_EventID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5095,6 +4853,9 @@
             "items": {
               "$ref": "#/components/schemas/EventEnvelope"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5109,9 +4870,11 @@
         }
       },
       "Page_for_TransactionDigest_and_TransactionDigest": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "hasNextPage"
         ],
         "properties": {
           "data": {
@@ -5119,6 +4882,9 @@
             "items": {
               "$ref": "#/components/schemas/TransactionDigest"
             }
+          },
+          "hasNextPage": {
+            "type": "boolean"
           },
           "nextCursor": {
             "anyOf": [
@@ -5129,94 +4895,6 @@
                 "type": "null"
               }
             ]
-          }
-        }
-      },
-      "Pay": {
-        "type": "object",
-        "required": [
-          "amounts",
-          "coins",
-          "recipients"
-        ],
-        "properties": {
-          "amounts": {
-            "description": "The amounts each recipient will receive. Must be the same length as amounts",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BigInt"
-            }
-          },
-          "coins": {
-            "description": "The coins to be used for payment",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
-          },
-          "recipients": {
-            "description": "The addresses that will receive payment",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiAddress"
-            }
-          }
-        }
-      },
-      "PayAllSui": {
-        "description": "Send all SUI coins to one recipient. only for SUI coin and does not require a separate gas coin object either. Specifically, what pay_all_sui does are: 1. accumulate all SUI from input coins and deposit all SUI to the first input coin 2. transfer the updated first coin to the recipient and also use this first coin as gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost. 4. all other input coins other than the first are deleted.",
-        "type": "object",
-        "required": [
-          "coins",
-          "recipient"
-        ],
-        "properties": {
-          "coins": {
-            "description": "The coins to be used for payment",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
-          },
-          "recipient": {
-            "description": "The addresses that will receive payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            ]
-          }
-        }
-      },
-      "PaySui": {
-        "description": "Send SUI coins to a list of addresses, following a list of amounts. only for SUI coin and does not require a separate gas coin object. Specifically, what pay_sui does are: 1. debit each input_coin to create new coin following the order of amounts and assign it to the corresponding recipient. 2. accumulate all residual SUI from input coins left and deposit all SUI to the first input coin, then use the first input coin as the gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost 4. all other input coints other than the first one are deleted.",
-        "type": "object",
-        "required": [
-          "amounts",
-          "coins",
-          "recipients"
-        ],
-        "properties": {
-          "amounts": {
-            "description": "The amounts each recipient will receive. Must be the same length as amounts",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BigInt"
-            }
-          },
-          "coins": {
-            "description": "The coins to be used for payment",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
-          },
-          "recipients": {
-            "description": "The addresses that will receive payment",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiAddress"
-            }
           }
         }
       },
@@ -5356,7 +5034,7 @@
           }
         ]
       },
-      "Result_of_Array_of_Tuple_of_uint_and_SuiExecutionResult_or_String": {
+      "Result_of_Array_of_SuiExecutionResult_or_String": {
         "oneOf": [
           {
             "type": "object",
@@ -5367,19 +5045,7 @@
               "Ok": {
                 "type": "array",
                 "items": {
-                  "type": "array",
-                  "items": [
-                    {
-                      "type": "integer",
-                      "format": "uint",
-                      "minimum": 0.0
-                    },
-                    {
-                      "$ref": "#/components/schemas/SuiExecutionResult"
-                    }
-                  ],
-                  "maxItems": 2,
-                  "minItems": 2
+                  "$ref": "#/components/schemas/SuiExecutionResult"
                 }
               }
             }
@@ -5456,40 +5122,81 @@
           }
         ]
       },
-      "StakedSui": {
+      "Stake": {
         "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Pending"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "estimatedReward",
+              "status"
+            ],
+            "properties": {
+              "estimatedReward": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Active"
+                ]
+              }
+            }
+          }
+        ],
         "required": [
-          "delegation_request_epoch",
-          "id",
-          "pool_id",
           "principal",
-          "validator_address"
+          "stakeActiveEpoch",
+          "stakeRequestEpoch",
+          "stakedSuiId"
         ],
         "properties": {
-          "delegation_request_epoch": {
+          "principal": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "id": {
-            "$ref": "#/components/schemas/UID"
+          "stakeActiveEpoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
-          "pool_id": {
-            "$ref": "#/components/schemas/ObjectID"
+          "stakeRequestEpoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
-          "principal": {
-            "$ref": "#/components/schemas/Balance"
+          "stakedSuiId": {
+            "description": "ID of the StakedSui receipt object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
           },
-          "sui_token_lock": {
+          "tokenLock": {
             "type": [
               "integer",
               "null"
             ],
             "format": "uint64",
             "minimum": 0.0
-          },
-          "validator_address": {
-            "$ref": "#/components/schemas/SuiAddress"
           }
         }
       },
@@ -5564,64 +5271,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "SuiAuthorityStrongQuorumSignInfo": {
-        "type": "object",
-        "required": [
-          "epoch",
-          "signature",
-          "signers_map"
-        ],
-        "properties": {
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "signature": {
-            "$ref": "#/components/schemas/Base64"
-          },
-          "signers_map": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        }
-      },
-      "SuiChangeEpoch": {
-        "type": "object",
-        "required": [
-          "computation_charge",
-          "epoch",
-          "epoch_start_timestamp_ms",
-          "storage_charge",
-          "storage_rebate"
-        ],
-        "properties": {
-          "computation_charge": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch_start_timestamp_ms": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_charge": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_rebate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
       },
       "SuiCoinMetadata": {
         "type": "object",
@@ -5805,31 +5454,6 @@
           }
         ]
       },
-      "SuiConsensusCommitPrologue": {
-        "type": "object",
-        "required": [
-          "commit_timestamp_ms",
-          "epoch",
-          "round"
-        ],
-        "properties": {
-          "commit_timestamp_ms": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "round": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      },
       "SuiExecutionResult": {
         "type": "object",
         "properties": {
@@ -5840,9 +5464,7 @@
               "type": "array",
               "items": [
                 {
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
+                  "$ref": "#/components/schemas/SuiArgument"
                 },
                 {
                   "type": "array",
@@ -5861,7 +5483,7 @@
             }
           },
           "returnValues": {
-            "description": "The return values from the function",
+            "description": "The return values from the command",
             "type": "array",
             "items": {
               "type": "array",
@@ -5880,20 +5502,6 @@
               ],
               "maxItems": 2,
               "minItems": 2
-            }
-          }
-        }
-      },
-      "SuiGenesisTransaction": {
-        "type": "object",
-        "required": [
-          "objects"
-        ],
-        "properties": {
-          "objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectID"
             }
           }
         }
@@ -6222,61 +5830,37 @@
           }
         }
       },
-      "SuiProgrammableTransaction": {
-        "description": "A series of commands where the results of one command can be used in future commands",
-        "type": "object",
-        "required": [
-          "commands",
-          "inputs"
-        ],
-        "properties": {
-          "commands": {
-            "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiCommand"
-            }
-          },
-          "inputs": {
-            "description": "Input objects or primitive values",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiJsonValue"
-            }
-          }
-        }
-      },
       "SuiSystemStateSummary": {
         "description": "This is the JSON-RPC type for the SUI system state object. It flattens all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
         "type": "object",
         "required": [
-          "active_validators",
+          "activeValidators",
           "epoch",
-          "epoch_start_timestamp_ms",
-          "governance_start_epoch",
-          "inactive_pools_id",
-          "inactive_pools_size",
-          "max_validator_count",
-          "min_validator_stake",
-          "pending_active_validators_id",
-          "pending_active_validators_size",
-          "pending_removals",
-          "protocol_version",
-          "reference_gas_price",
-          "safe_mode",
-          "stake_subsidy_balance",
-          "stake_subsidy_current_epoch_amount",
-          "stake_subsidy_epoch_counter",
-          "staking_pool_mappings_id",
-          "staking_pool_mappings_size",
-          "storage_fund",
-          "total_stake",
-          "validator_candidates_id",
-          "validator_candidates_size",
-          "validator_report_records"
+          "epochStartTimestampMs",
+          "governanceStartEpoch",
+          "inactivePoolsId",
+          "inactivePoolsSize",
+          "maxValidatorCount",
+          "minValidatorStake",
+          "pendingActiveValidatorsId",
+          "pendingActiveValidatorsSize",
+          "pendingRemovals",
+          "protocolVersion",
+          "referenceGasPrice",
+          "safeMode",
+          "stakeSubsidyBalance",
+          "stakeSubsidyCurrentEpochAmount",
+          "stakeSubsidyEpochCounter",
+          "stakingPoolMappingsId",
+          "stakingPoolMappingsSize",
+          "storageFund",
+          "totalStake",
+          "validatorCandidatesId",
+          "validatorCandidatesSize",
+          "validatorReportRecords"
         ],
         "properties": {
-          "active_validators": {
+          "activeValidators": {
             "description": "The list of active validators in the current epoch.",
             "type": "array",
             "items": {
@@ -6289,19 +5873,19 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "epoch_start_timestamp_ms": {
+          "epochStartTimestampMs": {
             "description": "Unix timestamp of the current epoch start",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "governance_start_epoch": {
+          "governanceStartEpoch": {
             "description": "The starting epoch in which various on-chain governance features take effect.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "inactive_pools_id": {
+          "inactivePoolsId": {
             "description": "ID of the object that maps from a staking pool ID to the inactive validator that has that pool as its staking pool.",
             "allOf": [
               {
@@ -6309,25 +5893,25 @@
               }
             ]
           },
-          "inactive_pools_size": {
+          "inactivePoolsSize": {
             "description": "Number of inactive staking pools.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "max_validator_count": {
+          "maxValidatorCount": {
             "description": "Maximum number of active validators at any moment. We do not allow the number of validators in any epoch to go above this.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "min_validator_stake": {
+          "minValidatorStake": {
             "description": "Lower-bound on the amount of stake required to become a validator.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_active_validators_id": {
+          "pendingActiveValidatorsId": {
             "description": "ID of the object that contains the list of new validators that will join at the end of the epoch.",
             "allOf": [
               {
@@ -6335,13 +5919,13 @@
               }
             ]
           },
-          "pending_active_validators_size": {
+          "pendingActiveValidatorsSize": {
             "description": "Number of new validators that will join at the end of the epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_removals": {
+          "pendingRemovals": {
             "description": "Removal requests from the validators. Each element is an index pointing to `active_validators`.",
             "type": "array",
             "items": {
@@ -6350,41 +5934,41 @@
               "minimum": 0.0
             }
           },
-          "protocol_version": {
+          "protocolVersion": {
             "description": "The current protocol version, starting from 1.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "reference_gas_price": {
+          "referenceGasPrice": {
             "description": "The reference gas price for the current epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "safe_mode": {
+          "safeMode": {
             "description": "Whether the system is running in a downgraded safe mode due to a non-recoverable bug. This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode. It can be reset once we are able to successfully execute advance_epoch.",
             "type": "boolean"
           },
-          "stake_subsidy_balance": {
+          "stakeSubsidyBalance": {
             "description": "Balance of SUI set aside for stake subsidies that will be drawn down over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_subsidy_current_epoch_amount": {
+          "stakeSubsidyCurrentEpochAmount": {
             "description": "The amount of stake subsidy to be drawn down per epoch. This amount decays and decreases over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stake_subsidy_epoch_counter": {
+          "stakeSubsidyEpochCounter": {
             "description": "This counter may be different from the current epoch number if in some epochs we decide to skip the subsidy.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_mappings_id": {
+          "stakingPoolMappingsId": {
             "description": "ID of the object that maps from staking pool's ID to the sui address of a validator.",
             "allOf": [
               {
@@ -6392,25 +5976,25 @@
               }
             ]
           },
-          "staking_pool_mappings_size": {
+          "stakingPoolMappingsSize": {
             "description": "Number of staking pool mappings.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_fund": {
+          "storageFund": {
             "description": "The storage fund balance.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "total_stake": {
+          "totalStake": {
             "description": "Total amount of stake from all active validators at the beginning of the epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "validator_candidates_id": {
+          "validatorCandidatesId": {
             "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.",
             "allOf": [
               {
@@ -6418,13 +6002,13 @@
               }
             ]
           },
-          "validator_candidates_size": {
+          "validatorCandidatesSize": {
             "description": "Number of preactive validators.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "validator_report_records": {
+          "validatorReportRecords": {
             "description": "A map storing the records of validator reporting each other.",
             "type": "array",
             "items": {
@@ -6443,41 +6027,6 @@
               "maxItems": 2,
               "minItems": 2
             }
-          }
-        }
-      },
-      "SuiTBlsSignObjectCommitmentType": {
-        "oneOf": [
-          {
-            "description": "Check that the object is committed by the consensus.",
-            "type": "string",
-            "enum": [
-              "ConsensusCommitted"
-            ]
-          },
-          {
-            "description": "Check that the object is committed using the effects certificate.",
-            "type": "object",
-            "required": [
-              "FastPathCommitted"
-            ],
-            "properties": {
-              "FastPathCommitted": {
-                "$ref": "#/components/schemas/FinalizedEffects"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "SuiTBlsSignRandomnessObjectResponse": {
-        "type": "object",
-        "required": [
-          "signature"
-        ],
-        "properties": {
-          "signature": {
-            "$ref": "#/components/schemas/Base64"
           }
         }
       },
@@ -6500,40 +6049,41 @@
         ]
       },
       "SuiValidatorSummary": {
-        "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner strucutures to top-level fields so that they are decoupled from the internal definitions.",
+        "description": "This is the JSON-RPC type for the SUI validator. It flattens all inner structures to top-level fields so that they are decoupled from the internal definitions.",
         "type": "object",
         "required": [
-          "commission_rate",
+          "commissionRate",
           "description",
-          "exchange_rates_id",
-          "exchange_rates_size",
-          "gas_price",
-          "image_url",
+          "exchangeRatesId",
+          "exchangeRatesSize",
+          "gasPrice",
+          "imageUrl",
           "name",
-          "net_address",
-          "network_pubkey_bytes",
-          "next_epoch_commission_rate",
-          "next_epoch_gas_price",
-          "next_epoch_stake",
-          "p2p_address",
-          "pending_delegation",
-          "pending_pool_token_withdraw",
-          "pending_total_sui_withdraw",
-          "pool_token_balance",
-          "primary_address",
-          "project_url",
-          "proof_of_possession_bytes",
-          "protocol_pubkey_bytes",
-          "rewards_pool",
-          "staking_pool_id",
-          "staking_pool_sui_balance",
-          "sui_address",
-          "voting_power",
-          "worker_address",
-          "worker_pubkey_bytes"
+          "netAddress",
+          "networkPubkeyBytes",
+          "nextEpochCommissionRate",
+          "nextEpochGasPrice",
+          "nextEpochStake",
+          "operationCapId",
+          "p2pAddress",
+          "pendingDelegation",
+          "pendingPoolTokenWithdraw",
+          "pendingTotalSuiWithdraw",
+          "poolTokenBalance",
+          "primaryAddress",
+          "projectUrl",
+          "proofOfPossessionBytes",
+          "protocolPubkeyBytes",
+          "rewardsPool",
+          "stakingPoolId",
+          "stakingPoolSuiBalance",
+          "suiAddress",
+          "votingPower",
+          "workerAddress",
+          "workerPubkeyBytes"
         ],
         "properties": {
-          "commission_rate": {
+          "commissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6541,7 +6091,7 @@
           "description": {
             "type": "string"
           },
-          "exchange_rates_id": {
+          "exchangeRatesId": {
             "description": "ID of the exchange rate table object.",
             "allOf": [
               {
@@ -6549,208 +6099,165 @@
               }
             ]
           },
-          "exchange_rates_size": {
+          "exchangeRatesSize": {
             "description": "Number of exchange rates in the table.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "gas_price": {
+          "gasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "image_url": {
+          "imageUrl": {
             "type": "string"
           },
           "name": {
             "type": "string"
           },
-          "net_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "netAddress": {
+            "type": "string"
           },
-          "network_pubkey_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "networkPubkeyBytes": {
+            "$ref": "#/components/schemas/Base58"
           },
-          "next_epoch_commission_rate": {
+          "nextEpochCommissionRate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_gas_price": {
+          "nextEpochGasPrice": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_net_address": {
+          "nextEpochNetAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_network_pubkey_bytes": {
+          "nextEpochNetworkPubkeyBytes": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextEpochP2pAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_p2p_address": {
+          "nextEpochPrimaryAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_primary_address": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "nextEpochProofOfPossession": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "next_epoch_proof_of_possession": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "nextEpochProtocolPubkeyBytes": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "next_epoch_protocol_pubkey_bytes": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
-          "next_epoch_stake": {
+          "nextEpochStake": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "next_epoch_worker_address": {
+          "nextEpochWorkerAddress": {
+            "default": null,
             "type": [
-              "array",
+              "string",
               "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            ]
           },
-          "next_epoch_worker_pubkey_bytes": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "nextEpochWorkerPubkeyBytes": {
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Base58"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "p2p_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "operationCapId": {
+            "$ref": "#/components/schemas/ObjectID"
           },
-          "pending_delegation": {
+          "p2pAddress": {
+            "type": "string"
+          },
+          "pendingDelegation": {
             "description": "Pending delegation amount for this epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_pool_token_withdraw": {
+          "pendingPoolTokenWithdraw": {
             "description": "Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pending_total_sui_withdraw": {
+          "pendingTotalSuiWithdraw": {
             "description": "Pending delegation withdrawn during the current epoch, emptied at epoch boundaries.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "pool_token_balance": {
+          "poolTokenBalance": {
             "description": "Total number of pool tokens issued by the pool.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "primary_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          },
-          "project_url": {
+          "primaryAddress": {
             "type": "string"
           },
-          "proof_of_possession_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "projectUrl": {
+            "type": "string"
           },
-          "protocol_pubkey_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "proofOfPossessionBytes": {
+            "$ref": "#/components/schemas/Base58"
           },
-          "rewards_pool": {
+          "protocolPubkeyBytes": {
+            "$ref": "#/components/schemas/Base58"
+          },
+          "rewardsPool": {
             "description": "The epoch delegation rewards will be added here at the end of each epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_activation_epoch": {
+          "stakingPoolActivationEpoch": {
             "description": "The epoch at which this pool became active.",
             "type": [
               "integer",
@@ -6759,7 +6266,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_deactivation_epoch": {
+          "stakingPoolDeactivationEpoch": {
             "description": "The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},",
             "type": [
               "integer",
@@ -6768,7 +6275,7 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "staking_pool_id": {
+          "stakingPoolId": {
             "description": "ID of the staking pool object.",
             "allOf": [
               {
@@ -6776,35 +6283,25 @@
               }
             ]
           },
-          "staking_pool_sui_balance": {
+          "stakingPoolSuiBalance": {
             "description": "The total number of SUI tokens in this pool.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "sui_address": {
+          "suiAddress": {
             "$ref": "#/components/schemas/SuiAddress"
           },
-          "voting_power": {
+          "votingPower": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "worker_address": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "workerAddress": {
+            "type": "string"
           },
-          "worker_pubkey_bytes": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+          "workerPubkeyBytes": {
+            "$ref": "#/components/schemas/Base58"
           }
         }
       },
@@ -6879,7 +6376,7 @@
               "gasData",
               "messageVersion",
               "sender",
-              "transactions"
+              "transaction"
             ],
             "properties": {
               "gasData": {
@@ -6894,11 +6391,8 @@
               "sender": {
                 "$ref": "#/components/schemas/SuiAddress"
               },
-              "transactions": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/TransactionKind"
-                }
+              "transaction": {
+                "$ref": "#/components/schemas/TransactionKind"
               }
             }
           }
@@ -7036,156 +6530,141 @@
           }
         ]
       },
-      "TransactionEffectsDigest": {
-        "$ref": "#/components/schemas/Sha3Digest"
-      },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Sha3Digest"
       },
       "TransactionKind": {
         "oneOf": [
           {
-            "description": "Initiate an object transfer between addresses",
-            "type": "object",
-            "required": [
-              "TransferObject"
-            ],
-            "properties": {
-              "TransferObject": {
-                "$ref": "#/components/schemas/TransferObject"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Pay one or more recipients from a set of input coins",
-            "type": "object",
-            "required": [
-              "Pay"
-            ],
-            "properties": {
-              "Pay": {
-                "$ref": "#/components/schemas/Pay"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
-            "type": "object",
-            "required": [
-              "PaySui"
-            ],
-            "properties": {
-              "PaySui": {
-                "$ref": "#/components/schemas/PaySui"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
-            "type": "object",
-            "required": [
-              "PayAllSui"
-            ],
-            "properties": {
-              "PayAllSui": {
-                "$ref": "#/components/schemas/PayAllSui"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Publish a new Move module",
-            "type": "object",
-            "required": [
-              "Publish"
-            ],
-            "properties": {
-              "Publish": {
-                "$ref": "#/components/schemas/MovePackage"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Call a function in a published Move module",
-            "type": "object",
-            "required": [
-              "Call"
-            ],
-            "properties": {
-              "Call": {
-                "$ref": "#/components/schemas/MoveCall"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Initiate a SUI coin transfer between addresses",
-            "type": "object",
-            "required": [
-              "TransferSui"
-            ],
-            "properties": {
-              "TransferSui": {
-                "$ref": "#/components/schemas/TransferSui"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
             "description": "A system transaction that will update epoch information on-chain.",
             "type": "object",
             "required": [
-              "ChangeEpoch"
+              "computation_charge",
+              "epoch",
+              "epoch_start_timestamp_ms",
+              "kind",
+              "storage_charge",
+              "storage_rebate"
             ],
             "properties": {
-              "ChangeEpoch": {
-                "$ref": "#/components/schemas/SuiChangeEpoch"
+              "computation_charge": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch_start_timestamp_ms": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ChangeEpoch"
+                ]
+              },
+              "storage_charge": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "storage_rebate": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction used for initializing the initial state of the chain.",
             "type": "object",
             "required": [
-              "Genesis"
+              "kind",
+              "objects"
             ],
             "properties": {
-              "Genesis": {
-                "$ref": "#/components/schemas/SuiGenesisTransaction"
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "Genesis"
+                ]
+              },
+              "objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectID"
+                }
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
             "type": "object",
             "required": [
-              "ConsensusCommitPrologue"
+              "commit_timestamp_ms",
+              "epoch",
+              "kind",
+              "round"
             ],
             "properties": {
-              "ConsensusCommitPrologue": {
-                "$ref": "#/components/schemas/SuiConsensusCommitPrologue"
+              "commit_timestamp_ms": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologue"
+                ]
+              },
+              "round": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A series of commands where the results of one command can be used in future commands",
             "type": "object",
             "required": [
-              "ProgrammableTransaction"
+              "commands",
+              "inputs",
+              "kind"
             ],
             "properties": {
-              "ProgrammableTransaction": {
-                "$ref": "#/components/schemas/SuiProgrammableTransaction"
+              "commands": {
+                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiCommand"
+                }
+              },
+              "inputs": {
+                "description": "Input objects or primitive values",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiJsonValue"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ProgrammableTransaction"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
@@ -7375,21 +6854,6 @@
           }
         }
       },
-      "TransferObject": {
-        "type": "object",
-        "required": [
-          "objectRef",
-          "recipient"
-        ],
-        "properties": {
-          "objectRef": {
-            "$ref": "#/components/schemas/ObjectRef"
-          },
-          "recipient": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
       "TransferObjectParams": {
         "type": "object",
         "required": [
@@ -7405,39 +6869,8 @@
           }
         }
       },
-      "TransferSui": {
-        "type": "object",
-        "required": [
-          "recipient"
-        ],
-        "properties": {
-          "amount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "recipient": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
       "TypeTag": {
         "type": "string"
-      },
-      "UID": {
-        "description": "Rust version of the Move sui::object::Info type",
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
       }
     }
   }
