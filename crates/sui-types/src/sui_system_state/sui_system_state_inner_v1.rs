@@ -33,8 +33,6 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
 #[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
-    pub min_validator_stake: u64,
-    pub max_validator_count: u64,
     pub governance_start_epoch: u64,
 }
 
@@ -506,12 +504,9 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         },
                 },
             storage_fund,
-            parameters:
-                SystemParametersV1 {
-                    min_validator_stake,
-                    max_validator_count,
-                    governance_start_epoch,
-                },
+            parameters: SystemParametersV1 {
+                governance_start_epoch,
+            },
             reference_gas_price,
             validator_report_records:
                 VecMap {
@@ -533,8 +528,6 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             reference_gas_price,
             safe_mode,
             epoch_start_timestamp_ms,
-            min_validator_stake,
-            max_validator_count,
             governance_start_epoch,
             stake_subsidy_epoch_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
@@ -579,8 +572,6 @@ impl Default for SuiSystemStateInnerV1 {
             validators: validator_set,
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {
-                min_validator_stake: 1,
-                max_validator_count: 100,
                 governance_start_epoch: 0,
             },
             reference_gas_price: 1,

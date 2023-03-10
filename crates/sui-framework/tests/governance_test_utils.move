@@ -64,8 +64,6 @@ module sui::governance_test_utils {
             validators,
             balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
-            1024, // max_validator_candidate_count
-            0, // min_validator_stake
             0, // governance_start_epoch
             0, // stake subsidy
             1, // protocol version
@@ -215,7 +213,7 @@ module sui::governance_test_utils {
             ctx
         );
         sui_system::request_add_delegation(&mut system_state, coin::mint_for_testing<SUI>(init_stake_amount, ctx), validator, ctx);
-        sui_system::request_add_validator(&mut system_state, ctx);
+        sui_system::request_add_validator_for_testing(&mut system_state, 0, ctx);
         test_scenario::return_shared(system_state);
     }
 
@@ -264,8 +262,9 @@ module sui::governance_test_utils {
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::request_add_validator(
+        sui_system::request_add_validator_for_testing(
             &mut system_state,
+            0,
             ctx
         );
         test_scenario::return_shared(system_state);

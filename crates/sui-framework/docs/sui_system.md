@@ -103,19 +103,6 @@ A list of system config parameters.
 
 <dl>
 <dt>
-<code>min_validator_stake: u64</code>
-</dt>
-<dd>
- Lower-bound on the amount of stake required to become a validator.
-</dd>
-<dt>
-<code>max_validator_count: u64</code>
-</dt>
-<dd>
- Maximum number of active validators at any moment.
- We do not allow the number of validators in any epoch to go above this.
-</dd>
-<dt>
 <code>governance_start_epoch: u64</code>
 </dt>
 <dd>
@@ -433,6 +420,27 @@ the epoch advancement transaction.
 
 
 
+<a name="0x2_sui_system_MAX_VALIDATOR_COUNT"></a>
+
+Maximum number of active validators at any moment.
+We do not allow the number of validators in any epoch to go above this.
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>: u64 = 150;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_MIN_VALIDATOR_STAKE"></a>
+
+Lower-bound on the amount of stake required to become a validator.
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>: u64 = 25000000000000000;
+</code></pre>
+
+
+
 <a name="0x2_sui_system_create"></a>
 
 ## Function `create`
@@ -441,7 +449,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_count: u64, min_validator_stake: u64, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -454,8 +462,6 @@ This function will be called only once in genesis.
     validators: <a href="">vector</a>&lt;Validator&gt;,
     stake_subsidy_fund: Balance&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
-    max_validator_count: u64,
-    min_validator_stake: u64,
     governance_start_epoch: u64,
     initial_stake_subsidy_amount: u64,
     protocol_version: u64,
@@ -471,8 +477,6 @@ This function will be called only once in genesis.
         validators,
         storage_fund,
         parameters: <a href="sui_system.md#0x2_sui_system_SystemParameters">SystemParameters</a> {
-            min_validator_stake,
-            max_validator_count,
             governance_start_epoch,
         },
         reference_gas_price,
@@ -500,7 +504,7 @@ This function will be called only once in genesis.
 ## Function `request_add_validator_candidate`
 
 Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
-stakes in their staking pool. Once they have at least <code>min_validator_stake</code> amount of stake they
+stakes in their staking pool. Once they have at least <code><a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a></code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
 
@@ -618,11 +622,11 @@ epoch has already reached the maximum.
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <b>assert</b>!(
-        <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_count,
+        <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; <a href="sui_system.md#0x2_sui_system_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>,
         <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
     );
 
-    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, self.parameters.min_validator_stake, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>, ctx);
 }
 </code></pre>
 

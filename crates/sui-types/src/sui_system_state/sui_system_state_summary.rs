@@ -36,11 +36,6 @@ pub struct SuiSystemStateSummary {
     pub epoch_start_timestamp_ms: u64,
 
     // System parameters
-    /// Lower-bound on the amount of stake required to become a validator.
-    pub min_validator_stake: u64,
-    /// Maximum number of active validators at any moment.
-    /// We do not allow the number of validators in any epoch to go above this.
-    pub max_validator_count: u64,
     /// The starting epoch in which various on-chain governance features take effect.
     pub governance_start_epoch: u64,
 

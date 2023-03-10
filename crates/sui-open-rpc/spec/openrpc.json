@@ -5840,8 +5840,6 @@
           "governanceStartEpoch",
           "inactivePoolsId",
           "inactivePoolsSize",
-          "maxValidatorCount",
-          "minValidatorStake",
           "pendingActiveValidatorsId",
           "pendingActiveValidatorsSize",
           "pendingRemovals",
@@ -5895,18 +5893,6 @@
           },
           "inactivePoolsSize": {
             "description": "Number of inactive staking pools.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "maxValidatorCount": {
-            "description": "Maximum number of active validators at any moment. We do not allow the number of validators in any epoch to go above this.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "minValidatorStake": {
-            "description": "Lower-bound on the amount of stake required to become a validator.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
