@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB58 } from '@mysten/bcs';
 import {
   array,
   assert,
@@ -14,6 +15,7 @@ import {
   string,
   union,
 } from 'superstruct';
+import { sha256Hash } from '../cryptography/hash';
 import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
@@ -103,6 +105,17 @@ export class TransactionDataBuilder {
     return transactionData;
   }
 
+  /**
+   * Generate transaction digest.
+   *
+   * @param bytes BCS serialized transaction data
+   * @returns transaction digest.
+   */
+  static getDigestFromBytes(bytes: Uint8Array) {
+    const hash = sha256Hash('TransactionData', bytes);
+    return toB58(hash);
+  }
+
   version = 1 as const;
   sender?: string;
   expiration?: TransactionExpiration;
@@ -178,6 +191,11 @@ export class TransactionDataBuilder {
         { maxSize: TRANSACTION_DATA_MAX_SIZE },
       )
       .toBytes();
+  }
+
+  getDigest() {
+    const bytes = this.build({ onlyTransactionKind: false });
+    return TransactionDataBuilder.getDigestFromBytes(bytes);
   }
 
   snapshot(): SerializedTransactionDataBuilder {

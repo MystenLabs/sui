@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { builder, Transaction } from '../builder';
+import { Transaction } from '../builder';
+import { TransactionDataBuilder } from '../builder/TransactionData';
 import { SerializedSignature } from '../cryptography/signature';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
 import {
-  deserializeTransactionBytesToTransactionData,
   ExecuteTransactionRequestType,
   FaucetResponse,
-  generateTransactionDigest,
   getTotalGasUsedUpperBound,
   SuiAddress,
   DevInspectResults,
@@ -124,21 +123,20 @@ export abstract class SignerWithProvider implements Signer {
     );
   }
 
+  /**
+   * Derive transaction digest from
+   * @param tx BCS serialized transaction data or a `Transaction` object
+   * @returns transaction digest
+   */
   async getTransactionDigest(tx: Uint8Array | Transaction): Promise<string> {
-    let txBytes: Uint8Array;
     if (Transaction.is(tx)) {
       tx.setSender(await this.getAddress());
-      txBytes = await tx.build({ provider: this.provider });
+      return tx.getDigest({ provider: this.provider });
     } else if (tx instanceof Uint8Array) {
-      txBytes = tx;
+      return TransactionDataBuilder.getDigestFromBytes(tx);
     } else {
       throw new Error('Unknown transaction format.');
     }
-
-    // TODO: Why do we deserialize, then immedietly re-serialize the transaction data here?
-    // Probably can improve this with some `Transaction` helpers to build just transaction data.
-    const data = deserializeTransactionBytesToTransactionData(builder, txBytes);
-    return generateTransactionDigest(data, builder);
   }
 
   /**
