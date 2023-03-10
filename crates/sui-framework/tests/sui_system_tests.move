@@ -101,68 +101,6 @@ module sui::sui_system_tests {
 
         // New stakee could also set reference gas price on behalf of @0x1.
         set_gas_price_helper(new_stakee_address, 666, scenario);
-
-        // Add a pending validator
-        let new_validator_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
-        test_scenario::next_tx(scenario, new_validator_addr);
-        let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-        let pop = x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
-        add_validator_full_flow(new_validator_addr, 100, pubkey, pop, scenario);
-
-        test_scenario::next_tx(scenario, new_validator_addr);
-        // Pending validator could set reference price as well
-        set_gas_price_helper(new_validator_addr, 777, scenario);
-
-        test_scenario::next_tx(scenario, new_stakee_address);
-        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        let validator = sui_system::active_validator_by_address(&system_state, @0x1);
-        assert!(validator::next_epoch_gas_price(validator) == 666, 0);
-        let pending_validator = sui_system::pending_validator_by_address(&system_state, new_validator_addr);
-        assert!(validator::next_epoch_gas_price(pending_validator) == 777, 0);
-        test_scenario::return_shared(system_state);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
-    fun test_report_validator_by_stakee_revoked() {
-        let scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
-
-        // @0x1 transfers the cap object to stakee.
-        let stakee_address = @0xbeef;
-        test_scenario::next_tx(scenario, @0x1);
-        let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, stakee_address);
-
-        report_helper(stakee_address, @0x2, false, scenario);
-        assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
-
-        // @0x1 revokes stakee's permission by creating a new
-        // operation cap object.
-        rotate_operation_cap(@0x1, scenario);
-
-        // stakee no longer has permission to report validators, here it aborts.
-        report_helper(stakee_address, @0x2, true, scenario);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
-    fun test_set_reference_gas_price_by_stakee_revoked() {
-        let scenario_val = test_scenario::begin(@0x0);
-        let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
-
-        // @0x1 transfers the cap object to stakee.
-        let stakee_address = @0xbeef;
-        test_scenario::next_tx(scenario, @0x1);
-        let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, stakee_address);
-
         // With the cap object in hand, stakee could report validators on behalf of @0x1.
         set_gas_price_helper(stakee_address, 888, scenario);
 
@@ -288,7 +226,11 @@ module sui::sui_system_tests {
         test_scenario::return_shared(system_state);
     }
 
-    fun set_gas_price_helper(sender: address, new_gas_price: u64, scenario: &mut Scenario) {
+    fun set_gas_price_helper(
+        sender: address,
+        new_gas_price: u64,
+        scenario: &mut Scenario,
+    ) {
         test_scenario::next_tx(scenario, sender);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
@@ -322,30 +264,27 @@ module sui::sui_system_tests {
         pop: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
-        gas_price: u64,
         commission_rate: u64,
-
     ) {
         let ctx = test_scenario::ctx(scenario);
         sui_system::update_validator_name(system_state, name, ctx);
         sui_system::update_validator_description(system_state, b"new_desc", ctx);
         sui_system::update_validator_image_url(system_state, b"new_image_url", ctx);
         sui_system::update_validator_project_url(system_state, b"new_project_url", ctx);
-        sui_system::update_preactive_validator_network_address(system_state, network_address, ctx);
-        sui_system::update_preactive_validator_p2p_address(system_state, p2p_address, ctx);
-        sui_system::update_preactive_validator_primary_address(system_state, vector[4, 127, 0, 0, 1], ctx);
-        sui_system::update_preactive_validator_worker_address(system_state, vector[4, 127, 0, 0, 1], ctx);
-        sui_system::update_preactive_validator_protocol_pubkey(
+        sui_system::update_candidate_validator_network_address(system_state, network_address, ctx);
+        sui_system::update_candidate_validator_p2p_address(system_state, p2p_address, ctx);
+        sui_system::update_candidate_validator_primary_address(system_state, vector[4, 127, 0, 0, 1], ctx);
+        sui_system::update_candidate_validator_worker_address(system_state, vector[4, 127, 0, 0, 1], ctx);
+        sui_system::update_candidate_validator_protocol_pubkey(
             system_state,
             protocol_pub_key,
             pop,
             ctx
         );
-        sui_system::update_preactive_validator_worker_pubkey(system_state, vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25], ctx);
-        sui_system::update_preactive_validator_network_pubkey(system_state, vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62], ctx);
+        sui_system::update_candidate_validator_worker_pubkey(system_state, vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25], ctx);
+        sui_system::update_candidate_validator_network_pubkey(system_state, vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62], ctx);
 
-        sui_system::set_preactive_validator_gas_price(system_state, gas_price, ctx);
-        sui_system::set_preactive_validator_commission_rate(system_state, commission_rate, ctx);
+        sui_system::set_candidate_validator_commission_rate(system_state, commission_rate, ctx);
     }
 
 
@@ -356,7 +295,6 @@ module sui::sui_system_tests {
         pop: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
-        gas_price: u64,
         commission_rate: u64
 
     ) {
@@ -368,7 +306,6 @@ module sui::sui_system_tests {
             network_address,
             p2p_address
         );
-        assert!(validator::gas_price(validator) == gas_price, 0);
         assert!(validator::commission_rate(validator) == commission_rate, 0);
 
     }
@@ -718,11 +655,10 @@ module sui::sui_system_tests {
             vector[161, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36],
             vector[4, 42, 42, 42, 42],
             vector[4, 43, 43, 43, 43],
-            7,
             42,
         );
 
-        let validator = sui_system::preactive_validator_by_address(&system_state, validator_addr);
+        let validator = sui_system::candidate_validator_by_address(&system_state, validator_addr);
         verify_candidate(
             validator,
             b"validator_new_name",
@@ -730,7 +666,6 @@ module sui::sui_system_tests {
             vector[161, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36],
             vector[4, 42, 42, 42, 42],
             vector[4, 43, 43, 43, 43],
-            7,
             42
         );
 

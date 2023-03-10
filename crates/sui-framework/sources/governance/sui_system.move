@@ -31,8 +31,10 @@ module sui::sui_system {
     #[test_only]
     friend sui::governance_test_utils;
 
-    const ACTIVE_VALIDATOR_ONLY: bool = true;
-    const ACTIVE_OR_PENDING_VALIDATOR: bool = false;
+    // same as in validator_set
+    const ACTIVE_VALIDATOR_ONLY: u8 = 1;
+    const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
+    const ANY_VALIDATOR: u8 = 3;
 
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:
@@ -285,23 +287,23 @@ module sui::sui_system {
 
         // Verify the represented address is an active or pending validator, and the capability is still valid.
         let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_OR_PENDING_VALIDATOR);
-        let validator = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap);
+        let validator = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap, false /* include_candidate */);
 
         validator::request_set_gas_price(validator, verified_cap, new_gas_price);
     }
 
-    /// This entry function is used to set new gas price for preactive validators
-    public entry fun set_preactive_validator_gas_price(
+    /// This entry function is used to set new gas price for candidate validators
+    public entry fun set_candidate_validator_gas_price(
         wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
         new_gas_price: u64,
-        ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
-            &mut self.validators,
-            validator_address);
-        validator::set_gas_price(preactive, new_gas_price)
+
+        // Verify the represented address is an active or pending validator, and the capability is still valid.
+        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_OR_PENDING_VALIDATOR);
+        let candidate = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap, true /* include_candidate */);
+        validator::set_candidate_gas_price(candidate, verified_cap, new_gas_price)
     }
 
     /// A validator can call this entry function to set a new commission rate, updated at the end of
@@ -319,18 +321,15 @@ module sui::sui_system {
         )
     }
 
-    /// This entry function is used to set new commission rate for preactive validators
-    public entry fun set_preactive_validator_commission_rate(
+    /// This entry function is used to set new commission rate for candidate validators
+    public entry fun set_candidate_validator_commission_rate(
         wrapper: &mut SuiSystemState,
         new_commission_rate: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
-            &mut self.validators,
-            validator_address);
-        validator::set_commission_rate(preactive, new_commission_rate)
+        let candidate = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, true /* include_candidate */);
+        validator::set_candidate_commission_rate(candidate, new_commission_rate)
     }
 
     /// Add stake to a validator's staking pool.
@@ -453,7 +452,10 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, true /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx, true /* include_candidate */
+        );
         validator::new_unverified_validator_operation_cap_and_transfer(validator, ctx);
     }
 
@@ -464,7 +466,11 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, true /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            true /* include_candidate */
+        );
         validator::update_name(validator, string::from_ascii(ascii::string(name)));
     }
 
@@ -475,7 +481,11 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, true /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            true /* include_candidate */
+        );
         validator::update_description(validator, string::from_ascii(ascii::string(description)));
     }
 
@@ -486,7 +496,11 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, true /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            true /* include_candidate */
+        );
         validator::update_image_url(validator, url::new_unsafe_from_bytes(image_url));
     }
 
@@ -497,7 +511,11 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, true /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            true /* include_candidate */
+        );
         validator::update_project_url(validator, url::new_unsafe_from_bytes(project_url));
     }
 
@@ -509,22 +527,27 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_network_address(validator, network_address);
     }
 
-    /// Update preactive validator's network address.
-    public entry fun update_preactive_validator_network_address(
+    /// Update candidate validator's network address.
+    public entry fun update_candidate_validator_network_address(
         self: &mut SuiSystemState,
         network_address: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_network_address(preactive, network_address);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_network_address(candidate, network_address);
     }
 
     /// Update a validator's p2p address.
@@ -535,22 +558,27 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_p2p_address(validator, p2p_address);
     }
 
-    /// Update preactive validator's p2p address.
-    public entry fun update_preactive_validator_p2p_address(
+    /// Update candidate validator's p2p address.
+    public entry fun update_candidate_validator_p2p_address(
         self: &mut SuiSystemState,
         p2p_address: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_p2p_address(preactive, p2p_address);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_candidate_p2p_address(candidate, p2p_address);
     }
 
     /// Update a validator's narwhal primary address.
@@ -561,22 +589,27 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_primary_address(validator, primary_address);
     }
 
-    /// Update preactive validator's narwhal primary address.
-    public entry fun update_preactive_validator_primary_address(
+    /// Update candidate validator's narwhal primary address.
+    public entry fun update_candidate_validator_primary_address(
         self: &mut SuiSystemState,
         primary_address: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_primary_address(preactive, primary_address);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_candidate_primary_address(candidate, primary_address);
     }
 
     /// Update a validator's narwhal worker address.
@@ -587,22 +620,27 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_worker_address(validator, worker_address);
     }
 
-    /// Update preactive validator's narwhal worker address.
-    public entry fun update_preactive_validator_worker_address(
+    /// Update candidate validator's narwhal worker address.
+    public entry fun update_candidate_validator_worker_address(
         self: &mut SuiSystemState,
         worker_address: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_worker_address(preactive, worker_address);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_candidate_worker_address(candidate, worker_address);
     }
 
     /// Update a validator's public key of protocol key and proof of possession.
@@ -614,23 +652,28 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
     }
 
-    /// Update preactive validator's public key of protocol key and proof of possession.
-    public entry fun update_preactive_validator_protocol_pubkey(
+    /// Update candidate validator's public key of protocol key and proof of possession.
+    public entry fun update_candidate_validator_protocol_pubkey(
         self: &mut SuiSystemState,
         protocol_pubkey: vector<u8>,
         proof_of_possession: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_protocol_pubkey(preactive, protocol_pubkey, proof_of_possession);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_candidate_protocol_pubkey(candidate, protocol_pubkey, proof_of_possession);
     }
 
     /// Update a validator's public key of worker key.
@@ -641,22 +684,27 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
     }
 
-    /// Update preactive validator's public key of worker key.
-    public entry fun update_preactive_validator_worker_pubkey(
+    /// Update candidate validator's public key of worker key.
+    public entry fun update_candidate_validator_worker_pubkey(
         self: &mut SuiSystemState,
         worker_pubkey: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_worker_pubkey(preactive, worker_pubkey);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_candidate_worker_pubkey(candidate, worker_pubkey);
     }
 
     /// Update a validator's public key of network key.
@@ -667,22 +715,27 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx, false /* include_preactive */);
+        let validator = validator_set::get_validator_mut_with_ctx(
+            &mut self.validators,
+            ctx,
+            false /* include_candidate */
+        );
         validator::update_next_epoch_network_pubkey(validator, network_pubkey);
     }
 
-    /// Update preactive validator's public key of network key.
-    public entry fun update_preactive_validator_network_pubkey(
+    /// Update candidate validator's public key of network key.
+    public entry fun update_candidate_validator_network_pubkey(
         self: &mut SuiSystemState,
         network_pubkey: vector<u8>,
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator_address = tx_context::sender(ctx);
-        let preactive = validator_set::get_preactive_validator_mut(
+        let candidate = validator_set::get_validator_mut_with_ctx(
             &mut self.validators,
-            validator_address);
-        validator::update_network_pubkey(preactive, network_pubkey);
+            ctx,
+            true /* include_candidate */
+        );
+        validator::update_candidate_network_pubkey(candidate, network_pubkey);
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
@@ -951,9 +1004,9 @@ module sui::sui_system {
         validator_set::get_pending_validator_ref(validators(self), validator_address)
     }
 
-    /// Return the currently preactive validator by address
-    public fun preactive_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
-        validator_set::get_preactive_validator_ref(validators(self), validator_address)
+    /// Return the currently candidate validator by address
+    public fun candidate_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_candidate_validator_ref(validators(self), validator_address)
     }
 
     #[test_only]
@@ -1014,7 +1067,6 @@ module sui::sui_system {
             p2p_address,
             primary_address,
             worker_address,
-            option::none(),
             option::none(),
             gas_price,
             commission_rate,
