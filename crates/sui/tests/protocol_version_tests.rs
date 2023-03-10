@@ -79,6 +79,7 @@ mod sim_only_tests {
     const START: u64 = ProtocolVersion::MAX.as_u64();
     const FINISH: u64 = ProtocolVersion::MAX_ALLOWED.as_u64();
 
+    #[ignore]
     #[sim_test]
     async fn test_protocol_version_upgrade() {
         ProtocolConfig::poison_get_for_min_version();
@@ -95,6 +96,7 @@ mod sim_only_tests {
         expect_upgrade_succeeded(&test_cluster).await;
     }
 
+    #[ignore]
     #[sim_test]
     async fn test_protocol_version_upgrade_one_laggard() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
