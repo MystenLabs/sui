@@ -161,9 +161,10 @@ impl Orchestrator {
         // Update all active instances. This requires compiling the codebase in release (which
         // may take a long time) so we run the command in the background to avoid keeping alive
         // many ssh connections for too long.
+        let commit = &self.settings.repository.commit;
         let command = [
             "git fetch -f",
-            &format!("git checkout -f {}", &self.settings.repository.commit),
+            &format!("(git checkout -b {commit} {commit} || git checkout -f {commit})"),
             "git pull -f",
             "source $HOME/.cargo/env",
             "cargo build --release",
@@ -319,31 +320,6 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
-            let run = if i % 2 == 0 {
-                [
-                    "cargo run --release --bin stress --",
-                    "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
-                    &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
-                    &format!("--primary-gas-id {gas_id}"),
-                    "bench",
-                    &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
-                    &format!("--shared-counter 0 --transfer-object 100"),
-                    &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
-                ]
-                .join(" ")
-            } else {
-                [
-                    "cargo run --release --bin stress --",
-                    "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
-                    &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
-                    &format!("--primary-gas-id {gas_id}"),
-                    "bench",
-                    &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
-                    &format!("--shared-counter 100 --transfer-object 0"),
-                    &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
-                ]
-                .join(" ")
-            };
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
