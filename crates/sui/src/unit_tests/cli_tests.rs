@@ -817,6 +817,42 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
 }
 
 #[sim_test]
+async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(address, None, None, None, None)
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("module_publish_with_nonexistent_dependency");
+    let build_config = BuildConfig::new_for_testing().config;
+    let result = SuiClientCommands::Publish {
+        package_path,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: 20_000,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await;
+
+    assert!(&result
+        .unwrap_err()
+        .to_string()
+        .contains("DependentPackageNotFound"));
+    Ok(())
+}
+
+#[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();

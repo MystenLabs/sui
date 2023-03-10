@@ -2301,6 +2301,17 @@
           }
         },
         {
+          "name": "dependencies",
+          "description": "a list of transitive dependency addresses that this set of modules depends on.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
           "name": "gas",
           "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
           "schema": {
@@ -4837,7 +4848,9 @@
             "required": [
               "dataType",
               "id",
+              "linkageTable",
               "moduleMap",
+              "typeOriginTable",
               "version"
             ],
             "properties": {
@@ -4850,10 +4863,22 @@
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
               },
+              "linkageTable": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/UpgradeInfo"
+                }
+              },
               "moduleMap": {
                 "type": "object",
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Base64"
+                }
+              },
+              "typeOriginTable": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TypeOrigin"
                 }
               },
               "version": {
@@ -5195,14 +5220,27 @@
             "additionalProperties": false
           },
           {
-            "description": "Publishes a Move package",
+            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
             "type": "object",
             "required": [
               "Publish"
             ],
             "properties": {
               "Publish": {
-                "$ref": "#/components/schemas/MovePackage"
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
               }
             },
             "additionalProperties": false
@@ -6812,8 +6850,54 @@
           }
         }
       },
+      "TypeOrigin": {
+        "description": "Identifies a struct and the module it was defined in",
+        "type": "object",
+        "required": [
+          "module_name",
+          "package",
+          "struct_name"
+        ],
+        "properties": {
+          "module_name": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "struct_name": {
+            "type": "string"
+          }
+        }
+      },
       "TypeTag": {
         "type": "string"
+      },
+      "UpgradeInfo": {
+        "description": "Upgraded package info for the linkage table",
+        "type": "object",
+        "required": [
+          "upgraded_id",
+          "upgraded_version"
+        ],
+        "properties": {
+          "upgraded_id": {
+            "description": "ID of the upgraded packages",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "upgraded_version": {
+            "description": "Version of the upgraded package",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
       }
     }
   }

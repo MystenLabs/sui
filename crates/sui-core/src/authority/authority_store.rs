@@ -25,8 +25,7 @@ use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey,
-    ObjectStore,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -1395,7 +1394,7 @@ impl AuthorityStore {
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
         if let Some(obj) = &package {
             fp_ensure!(
@@ -1446,7 +1445,21 @@ impl ModuleResolver for AuthorityStore {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        get_module(self, module_id)
+        // TODO: We should cache the deserialized modules to avoid
+        // fetching from the store / re-deserializing them every time.
+        // https://github.com/MystenLabs/sui/issues/809
+        Ok(self
+            .get_package_object(&ObjectID::from(*module_id.address()))?
+            .and_then(|package| {
+                // unwrap safe since get_package() ensures it's a package object.
+                package
+                    .data
+                    .try_as_package()
+                    .unwrap()
+                    .serialized_module_map()
+                    .get(module_id.name().as_str())
+                    .cloned()
+            }))
     }
 }
 

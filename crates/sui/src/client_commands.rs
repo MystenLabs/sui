@@ -482,10 +482,10 @@ impl SuiClientCommands {
                 let resolution_graph = config.resolution_graph(&package_path)?;
                 let dependencies = gather_dependencies(&resolution_graph);
 
-                check_invalid_dependencies(dependencies.invalid)?;
+                check_invalid_dependencies(&dependencies.invalid)?;
 
                 if !with_unpublished_dependencies {
-                    check_unpublished_dependencies(dependencies.unpublished)?;
+                    check_unpublished_dependencies(&dependencies.unpublished)?;
                 };
 
                 let compiled_package = build_from_resolution_graph(
@@ -528,7 +528,13 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .publish(sender, compiled_modules, gas, gas_budget)
+                    .publish(
+                        sender,
+                        compiled_modules,
+                        dependencies.published.into_values().collect(),
+                        gas,
+                        gas_budget,
+                    )
                     .await?;
                 let signature =
                     context

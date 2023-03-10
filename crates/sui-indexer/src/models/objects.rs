@@ -13,7 +13,7 @@ use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
 use diesel::SqlType;
 use diesel_derive_enum::DbEnum;
 use move_bytecode_utils::module_cache::GetModule;
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
@@ -219,7 +219,19 @@ impl TryFrom<Object> for sui_types::object::Object {
                     .map(|NamedBcsBytes(name, bytes)| (name, bytes))
                     .collect();
                 // Ok to unwrap, package size is safe guarded by the full node, we are not limiting size when reading back from DB.
-                let package = MovePackage::new(object_id, version, &modules, u64::MAX).unwrap();
+                let package = MovePackage::new(
+                    object_id,
+                    version,
+                    modules,
+                    u64::MAX,
+                    // TODO: these represent internal data needed for Move code execution and as
+                    // long as this MovePackage does not find its way to the Move adapter (which is
+                    // the assumption here) they can remain uninitialized though we could consider
+                    // storing them in the database and properly initializing here for completeness
+                    Vec::new(),
+                    BTreeMap::new(),
+                )
+                .unwrap();
                 sui_types::object::Object {
                     data: Data::Package(package),
                     owner,
