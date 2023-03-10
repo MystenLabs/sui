@@ -27,7 +27,9 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::error::SuiError;
 use sui_types::messages::TransactionEvents;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
@@ -50,7 +52,6 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
@@ -124,7 +125,7 @@ impl ExecutionEffects {
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
 
-    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error>;
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
@@ -270,12 +271,12 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .await?)
     }
 
-    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
-        auth_agg
+        Ok(auth_agg
             .get_latest_system_state_object_for_testing()
-            .await
-            .map(SuiSystemState::new_for_benchmarking)
+            .await?
+            .into_sui_system_state_summary())
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
@@ -482,9 +483,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
         let system_state = self.get_latest_system_state_object().await?;
         Ok(system_state
-            .get_validator_metadata_vec()
-            .into_iter()
-            .map(|metadata| metadata.sui_address)
+            .active_validators
+            .iter()
+            .map(|v| v.sui_address)
             .collect())
     }
 }
@@ -530,13 +531,12 @@ impl ValidatorProxy for FullNodeProxy {
         }
     }
 
-    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
         Ok(self
             .sui_client
-            .read_api()
-            .get_sui_system_state()
-            .await?
-            .into())
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?)
     }
 
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
@@ -557,7 +557,9 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    let effects = ExecutionEffects::SuiTransactionEffects(resp.effects);
+                    let effects = ExecutionEffects::SuiTransactionEffects(
+                        resp.effects.expect("effects field should not be None"),
+                    );
                     return Ok(effects);
                 }
                 Err(err) => {
@@ -592,7 +594,12 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
-        let validators = self.sui_client.governance_api().get_validators().await?;
+        let validators = self
+            .sui_client
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?
+            .active_validators;
         Ok(validators.into_iter().map(|v| v.sui_address).collect())
     }
 }

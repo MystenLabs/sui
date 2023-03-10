@@ -44,7 +44,7 @@ export default function LockedPage() {
     const dispatch = useAppDispatch();
     return (
         <Loading loading={guardsLoading}>
-            <PageLayout limitToPopUpSize={true}>
+            <PageLayout>
                 <PageMainLayout className={st.main}>
                     <CardLayout
                         icon="sui"

@@ -140,12 +140,18 @@ import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 const txn = await provider.getObject(
   '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  // fetch the object content field
+  { showContent: true },
 );
 // You can also fetch multiple objects in one batch request
-const txns = await provider.getObjectBatch([
-  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
-  '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
-]);
+const txns = await provider.getObjectBatch(
+  [
+    '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+    '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  ],
+  // only fetch the object type
+  { showType: true },
+);
 ```
 
 Fetch transaction details from transaction digests:
@@ -153,14 +159,20 @@ Fetch transaction details from transaction digests:
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const txn = await provider.getTransactionWithEffects(
+const txn = await provider.getTransactionResponse(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
+  // only fetch the effects field
+  { showEffects: true },
 );
 // You can also fetch multiple transactions in one batch request
-const txns = await provider.getTransactionWithEffectsBatch([
-  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-  '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-]);
+const txns = await provider.getTransactionResponseBatch(
+  [
+    '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
+    '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
+  ],
+  // fetch both the input transaction data as well as effects
+  { showInput: true, showEffects: true },
+);
 ```
 
 Fetch transaction events from a transaction digest:
@@ -278,16 +290,13 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
+const packageObjectId = '0x...';
 const moveCallTxn = await signer.executeMoveCall({
-  packageObjectId: '0x2',
-  module: 'devnet_nft',
+  packageObjectId,
+  module: 'nft',
   function: 'mint',
   typeArguments: [],
-  arguments: [
-    'Example NFT',
-    'An NFT created by the wallet Command Line Tool',
-    'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-  ],
+  arguments: ['Example NFT'],
   gasBudget: 10000,
 });
 console.log('moveCallTxn', moveCallTxn);
@@ -313,17 +322,18 @@ const subscriptionId = await provider.subscribeEvent(
 const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
 ```
 
-Subscribe to all events created by the `devnet_nft` module
+Subscribe to all events created by a package's `nft` module
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 
+const packageObjectId = '0x...';
 const devnetNftFilter = {
   All: [
     { EventType: 'MoveEvent' },
-    { Package: '0x2' },
-    { Module: 'devnet_nft' },
+    { Package: packageObjectId },
+    { Module: 'nft' },
   ],
 };
 const devNftSub = await provider.subscribeEvent(

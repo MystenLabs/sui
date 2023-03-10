@@ -29,11 +29,7 @@ it('supports nested results through either array index or destructuring', () => 
   const tx = new Transaction();
   const registerResult = tx.add(
     Commands.MoveCall({
-      package: '0x2',
-      function: 'game',
-      module: 'register',
-      arguments: [],
-      typeArguments: [],
+      target: '0x2::game::register',
     }),
   );
 
@@ -87,26 +83,32 @@ describe('offline build', () => {
     );
     await tx.build();
   });
-});
 
-// describe('online building (TODO: move to e2e)', () => {
-//   it('builds', async () => {
-//     const tx = setup();
-//     const provider = new JsonRpcProvider(localnetConnection);
-//     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
-//     tx.add(
-//       Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
-//     );
-//     tx.add(
-//       Commands.MoveCall({
-//         target: '0x2::devnet_nft::mint',
-//         typeArguments: [],
-//         arguments: [tx.input('foo'), tx.input('bar'), tx.input('baz')],
-//       }),
-//     );
-//     await tx.build({ provider });
-//   });
-// });
+  it('builds a more complex interaction', async () => {
+    const tx = setup();
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+    tx.add(
+      Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
+    );
+    tx.add(
+      Commands.MoveCall({
+        target: '0x2::devnet_nft::mint',
+        typeArguments: [],
+        arguments: [
+          tx.input(Inputs.Pure('string', 'foo')),
+          tx.input(Inputs.Pure('string', 'bar')),
+          tx.input(Inputs.Pure('string', 'baz')),
+        ],
+      }),
+    );
+
+    const bytes = await tx.build();
+    const tx2 = Transaction.from(bytes);
+    const bytes2 = await tx2.build();
+
+    expect(bytes).toEqual(bytes2);
+  });
+});
 
 function ref(): { objectId: string; version: bigint; digest: string } {
   return {
@@ -123,8 +125,8 @@ function ref(): { objectId: string; version: bigint; digest: string } {
 function setup() {
   const tx = new Transaction();
   tx.setSender('0x2');
-  tx.setGasPrice(1);
-  tx.setGasBudget(1);
+  tx.setGasPrice(5);
+  tx.setGasBudget(100);
   tx.setGasPayment([ref()]);
   return tx;
 }

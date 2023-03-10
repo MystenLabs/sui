@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   Coin,
+  Commands,
   getCreatedObjects,
   getExecutionStatusType,
   ObjectId,
-  RawSigner,
   SUI_FRAMEWORK_ADDRESS,
+  Transaction,
 } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
@@ -17,49 +18,46 @@ import {
   TestToolbox,
 } from './utils/setup';
 
-describe.skip('Test Move call with a vector of objects as input (skipped due to move vector requirement)', () => {
+describe('Test Move call with a vector of objects as input (skipped due to move vector requirement)', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: ObjectId;
 
   async function mintObject(val: number) {
-    const txn = await signer.signAndExecuteTransaction({
-      kind: 'moveCall',
-      data: {
-        packageObjectId: packageId,
-        module: 'entry_point_vector',
-        function: 'mint',
-        typeArguments: [],
-        arguments: [val.toString()],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
-    expect(getExecutionStatusType(txn)).toEqual('success');
-    return getCreatedObjects(txn)![0].reference.objectId;
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::entry_point_vector::mint`,
+        arguments: [tx.input(String(val))],
+      }),
+    );
+    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    expect(getExecutionStatusType(result)).toEqual('success');
+    return getCreatedObjects(result)![0].reference.objectId;
   }
 
   async function destroyObjects(objects: ObjectId[]) {
-    const txn = await signer.signAndExecuteTransaction({
-      kind: 'moveCall',
-      data: {
-        packageObjectId: packageId,
-        module: 'entry_point_vector',
-        function: 'two_obj_vec_destroy',
-        typeArguments: [],
-        arguments: [objects],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
-    expect(getExecutionStatusType(txn)).toEqual('success');
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    const vec = tx.add(
+      Commands.MakeMoveVec({ objects: objects.map((id) => tx.input(id)) }),
+    );
+    tx.add(
+      Commands.MoveCall({
+        target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
+        arguments: [vec],
+      }),
+    );
+    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    expect(getExecutionStatusType(result)).toEqual('success');
   }
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_vector';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   it('Test object vector', async () => {
@@ -69,17 +67,22 @@ describe.skip('Test Move call with a vector of objects as input (skipped due to 
   it('Test regular arg mixed with object vector arg', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coinIDs = coins.map((coin) => Coin.getID(coin));
-    const txn = await signer.signAndExecuteTransaction({
-      kind: 'moveCall',
-      data: {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: 'pay',
-        function: 'join_vec',
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    const vec = tx.add(
+      Commands.MakeMoveVec({
+        objects: [tx.input(coinIDs[1]), tx.input(coinIDs[2])],
+      }),
+    );
+    tx.add(
+      Commands.MoveCall({
+        target: `${SUI_FRAMEWORK_ADDRESS}::pay::join_vec`,
         typeArguments: ['0x2::sui::SUI'],
-        arguments: [coinIDs[0], [coinIDs[1], coinIDs[2]]],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      },
-    });
-    expect(getExecutionStatusType(txn)).toEqual('success');
+        arguments: [tx.input(coinIDs[0]), vec],
+      }),
+    );
+    tx.setGasPayment([coins[3]]);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    expect(getExecutionStatusType(result)).toEqual('success');
   });
 });

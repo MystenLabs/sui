@@ -8,8 +8,8 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
-    TransactionBytes,
+    BigInt, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode,
+    SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -115,13 +115,20 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .pay(signer, input_coins, recipients, amounts, gas, gas_budget)
+            .pay(
+                signer,
+                input_coins,
+                recipients,
+                amounts.into_iter().map(|a| a.into()).collect(),
+                gas,
+                gas_budget,
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
@@ -131,12 +138,18 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
+            .pay_sui(
+                signer,
+                input_coins,
+                recipients,
+                amounts.into_iter().map(|a| a.into()).collect(),
+                gas_budget,
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

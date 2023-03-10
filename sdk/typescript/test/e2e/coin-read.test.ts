@@ -2,21 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RawSigner } from '../../src';
 
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('CoinRead API', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
+  let publishToolbox: TestToolbox;
   let packageId: string;
   let testType: string;
 
   beforeAll(async () => {
-    toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
+    [toolbox, publishToolbox] = await Promise.all([setup(), setup()]);
     const packagePath = __dirname + '/./data/coin_metadata';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath, publishToolbox);
     testType = packageId + '::test::TEST';
   });
 
@@ -27,7 +25,7 @@ describe('CoinRead API', () => {
     expect(suiCoins.data.length).toEqual(5);
 
     const testCoins = await toolbox.provider.getCoins({
-      owner: toolbox.address(),
+      owner: publishToolbox.address(),
       coinType: testType,
     });
     expect(testCoins.data.length).toEqual(2);
@@ -35,8 +33,14 @@ describe('CoinRead API', () => {
     const allCoins = await toolbox.provider.getAllCoins({
       owner: toolbox.address(),
     });
-    expect(allCoins.data.length).toEqual(7);
-    expect(allCoins.nextCursor).toBeNull();
+    expect(allCoins.data.length).toEqual(5);
+    expect(allCoins.hasNextPage).toEqual(false);
+
+    const publisherAllCoins = await toolbox.provider.getAllCoins({
+      owner: publishToolbox.address(),
+    });
+    expect(publisherAllCoins.data.length).toEqual(3);
+    expect(publisherAllCoins.hasNextPage).toEqual(false);
 
     //test paging with limit
     const someSuiCoins = await toolbox.provider.getCoins({
@@ -56,7 +60,7 @@ describe('CoinRead API', () => {
     expect(suiBalance.totalBalance).toBeGreaterThan(0);
 
     const testBalance = await toolbox.provider.getBalance({
-      owner: toolbox.address(),
+      owner: publishToolbox.address(),
       coinType: testType,
     });
     expect(testBalance.coinType).toEqual(testType);
@@ -64,7 +68,7 @@ describe('CoinRead API', () => {
     expect(testBalance.totalBalance).toEqual(11);
 
     const allBalances = await toolbox.provider.getAllBalances({
-      owner: toolbox.address(),
+      owner: publishToolbox.address(),
     });
     expect(allBalances.length).toEqual(2);
   });

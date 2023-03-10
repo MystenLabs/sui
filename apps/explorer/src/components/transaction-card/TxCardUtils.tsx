@@ -5,7 +5,7 @@ import { useFormatCoin } from '@mysten/core';
 import {
     getExecutionStatusType,
     getTotalGasUsed,
-    getTransactions,
+    getTransactionKinds,
     getTransactionDigest,
     getTransactionKindName,
     getTransferObjectTransaction,
@@ -172,54 +172,60 @@ export const getDataOnTxDigests = (
     rpc: JsonRpcProvider,
     transactions: GetTxnDigestsResponse
 ) =>
-    rpc.getTransactionWithEffectsBatch(dedupe(transactions)).then((txEffs) =>
-        txEffs
-            .map((txEff) => {
-                const digest = transactions.filter(
-                    (transactionId) =>
-                        transactionId === getTransactionDigest(txEff)
-                )[0];
-                // TODO: handle multiple transactions
-                const txns = getTransactions(txEff);
-                if (txns.length > 1) {
-                    console.error(
-                        'Handling multiple transactions is not yet supported',
-                        txEff
-                    );
-                    return null;
-                }
-                const txn = txns[0];
-                const txKind = getTransactionKindName(txn);
-                const recipient =
-                    getTransferObjectTransaction(txn)?.recipient ||
-                    getTransferSuiTransaction(txn)?.recipient;
+    rpc
+        .getTransactionResponseBatch(dedupe(transactions), {
+            showInput: true,
+            showEffects: true,
+            showEvents: true,
+        })
+        .then((txEffs) =>
+            txEffs
+                .map((txEff) => {
+                    const digest = transactions.filter(
+                        (transactionId) =>
+                            transactionId === getTransactionDigest(txEff)
+                    )[0];
+                    // TODO: handle multiple transactions
+                    const txns = getTransactionKinds(txEff)!;
+                    if (txns.length > 1) {
+                        console.error(
+                            'Handling multiple transactions is not yet supported',
+                            txEff
+                        );
+                        return null;
+                    }
+                    const txn = txns[0];
+                    const txKind = getTransactionKindName(txn);
+                    const recipient =
+                        getTransferObjectTransaction(txn)?.recipient ||
+                        getTransferSuiTransaction(txn)?.recipient;
 
-                const transfer = getAmount({
-                    txnData: txEff,
-                    suiCoinOnly: true,
-                })[0];
+                    const transfer = getAmount({
+                        txnData: txEff,
+                        suiCoinOnly: true,
+                    })[0];
 
-                // use only absolute value of sui amount
-                const suiAmount = transfer?.amount
-                    ? Math.abs(transfer.amount)
-                    : null;
+                    // use only absolute value of sui amount
+                    const suiAmount = transfer?.amount
+                        ? Math.abs(transfer.amount)
+                        : null;
 
-                return {
-                    txId: digest,
-                    status: getExecutionStatusType(txEff)!,
-                    txGas: getTotalGasUsed(txEff),
-                    suiAmount,
-                    coinType: transfer?.coinType || null,
-                    kind: txKind,
-                    From: getTransactionSender(txEff),
-                    timestamp_ms: txEff.timestampMs,
-                    ...(recipient
-                        ? {
-                              To: recipient,
-                          }
-                        : {}),
-                };
-            })
-            // Remove failed transactions
-            .filter((itm) => itm)
-    );
+                    return {
+                        txId: digest,
+                        status: getExecutionStatusType(txEff)!,
+                        txGas: getTotalGasUsed(txEff),
+                        suiAmount,
+                        coinType: transfer?.coinType || null,
+                        kind: txKind,
+                        From: getTransactionSender(txEff),
+                        timestamp_ms: txEff.timestampMs,
+                        ...(recipient
+                            ? {
+                                  To: recipient,
+                              }
+                            : {}),
+                    };
+                })
+                // Remove failed transactions
+                .filter((itm) => itm)
+        );

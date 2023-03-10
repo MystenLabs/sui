@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
+use std::sync::Arc;
 use tap::Pipe;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -53,12 +54,13 @@ pub enum DeleteKind {
     Wrap,
 }
 
+#[derive(Debug)]
 pub enum ObjectChange {
     Write(SingleTxContext, Object, WriteKind),
     Delete(SingleTxContext, SequenceNumber, DeleteKind),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SingleTxContext {
     pub package_id: ObjectID,
     pub transaction_module: Identifier,
@@ -214,7 +216,7 @@ pub trait ReadStore {
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error>;
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error>;
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error>;
 
     fn get_transaction(
         &self,
@@ -264,7 +266,7 @@ impl<T: ReadStore> ReadStore for &T {
         ReadStore::get_full_checkpoint_contents(*self, digest)
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
         ReadStore::get_committee(*self, epoch)
     }
 
@@ -402,10 +404,10 @@ impl InMemoryStore {
     }
 
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        let digest = checkpoint.digest();
-        let sequence_number = checkpoint.sequence_number();
+        let digest = *checkpoint.digest();
+        let sequence_number = *checkpoint.sequence_number();
 
-        if let Some(end_of_epoch_data) = &checkpoint.summary.end_of_epoch_data {
+        if let Some(end_of_epoch_data) = &checkpoint.data().end_of_epoch_data {
             let next_committee = end_of_epoch_data
                 .next_epoch_committee
                 .iter()
@@ -427,11 +429,12 @@ impl InMemoryStore {
     }
 
     pub fn update_highest_synced_checkpoint(&mut self, checkpoint: &VerifiedCheckpoint) {
-        if !self.checkpoints.contains_key(&checkpoint.digest()) {
+        if !self.checkpoints.contains_key(checkpoint.digest()) {
             panic!("store should already contain checkpoint");
         }
 
-        self.highest_synced_checkpoint = Some((checkpoint.sequence_number(), checkpoint.digest()));
+        self.highest_synced_checkpoint =
+            Some((*checkpoint.sequence_number(), *checkpoint.digest()));
     }
 
     pub fn checkpoints(&self) -> &HashMap<CheckpointDigest, VerifiedCheckpoint> {
@@ -543,10 +546,15 @@ impl ReadStore for SharedInMemoryStore {
                 FullCheckpointContents::from_checkpoint_contents(&self, contents.to_owned())
             })
             .transpose()
+            .map(|contents| contents.flatten())
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
-        self.inner().get_committee_by_epoch(epoch).cloned().pipe(Ok)
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
+        self.inner()
+            .get_committee_by_epoch(epoch)
+            .cloned()
+            .map(Arc::new)
+            .pipe(Ok)
     }
 
     fn get_transaction(

@@ -6,7 +6,6 @@ import {
   Commands,
   getExecutionStatusType,
   ObjectId,
-  RawSigner,
   Transaction,
 } from '../../src';
 import {
@@ -18,7 +17,6 @@ import {
 
 describe('Test Move call with strings', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
   let packageId: ObjectId;
 
   async function callWithString(str: string | string[], funcName: string) {
@@ -27,21 +25,19 @@ describe('Test Move call with strings', () => {
     tx.add(
       Commands.MoveCall({
         target: `${packageId}::entry_point_string::${funcName}`,
-        typeArguments: [],
         arguments: [tx.input(str)],
       }),
     );
-    const result = await signer.signAndExecuteTransaction(tx);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx);
     expect(getExecutionStatusType(result)).toEqual('success');
   }
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
-    packageId = await publishPackage(signer, packagePath);
+    packageId = await publishPackage(packagePath);
   });
 
   it('Test ascii', async () => {

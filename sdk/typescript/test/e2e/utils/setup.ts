@@ -2,17 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { expect } from 'vitest';
+import { execSync } from 'child_process';
+import tmp from 'tmp';
+
 import {
   Ed25519Keypair,
   getEvents,
   getExecutionStatusType,
   JsonRpcProvider,
-  ObjectId,
-  RawSigner,
   fromB64,
   localnetConnection,
   Connection,
   Coin,
+  Transaction,
+  Commands,
+  RawSigner,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -31,10 +35,15 @@ export const DEFAULT_RECIPIENT_2 =
 export const DEFAULT_GAS_BUDGET = 10000;
 
 export class TestToolbox {
-  constructor(
-    public keypair: Ed25519Keypair,
-    public provider: JsonRpcProvider,
-  ) {}
+  keypair: Ed25519Keypair;
+  provider: JsonRpcProvider;
+  signer: RawSigner;
+
+  constructor(keypair: Ed25519Keypair, provider: JsonRpcProvider) {
+    this.keypair = keypair;
+    this.provider = provider;
+    this.signer = new RawSigner(this.keypair, this.provider);
+  }
 
   address() {
     return this.keypair.getPublicKey().toSuiAddress();
@@ -49,7 +58,7 @@ export class TestToolbox {
   }
 
   public async getActiveValidators() {
-    return (await this.provider.getLatestSuiSystemState()).active_validators;
+    return (await this.provider.getLatestSuiSystemState()).activeValidators;
   }
 }
 
@@ -82,11 +91,14 @@ export async function setup() {
 }
 
 export async function publishPackage(
-  signer: RawSigner,
   packagePath: string,
-): Promise<ObjectId> {
-  const { execSync } = require('child_process');
-  const tmp = require('tmp');
+  toolbox?: TestToolbox,
+) {
+  // TODO: We create a unique publish address per publish, but we really could share one for all publishes.
+  if (!toolbox) {
+    toolbox = await setup();
+  }
+
   // remove all controlled temporary objects on process exit
   tmp.setGracefulCleanup();
 
@@ -98,21 +110,28 @@ export async function publishPackage(
       { encoding: 'utf-8' },
     ),
   );
-  const publishTxn = await signer.signAndExecuteTransaction({
-    kind: 'publish',
-    data: {
-      compiledModules: compiledModules.map((m: any) => Array.from(fromB64(m))),
-      gasBudget: DEFAULT_GAS_BUDGET,
-    },
-  });
+  const tx = new Transaction();
+  tx.setGasBudget(DEFAULT_GAS_BUDGET);
+  const cap = tx.add(
+    Commands.Publish(compiledModules.map((m: any) => Array.from(fromB64(m)))),
+  );
+  tx.add(
+    Commands.MoveCall({
+      target: '0x2::package::make_immutable',
+      arguments: [cap],
+    }),
+  );
+
+  const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx);
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => 'publish' in e);
+  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
 
   // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
-    `Published package ${packageId} from address ${await signer.getAddress()}}`,
+    `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );
+
   return packageId;
 }

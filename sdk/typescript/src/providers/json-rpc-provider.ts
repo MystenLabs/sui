@@ -54,6 +54,7 @@ import {
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   CoinStruct,
+  SuiTransactionResponseOptions,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -63,8 +64,6 @@ import {
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { any, is, number, array } from 'superstruct';
-import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
-import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
@@ -621,8 +620,9 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionWithEffects(
+  async getTransactionResponse(
     digest: TransactionDigest,
+    options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse> {
     try {
       if (!isValidTransactionDigest(digest)) {
@@ -630,7 +630,7 @@ export class JsonRpcProvider extends Provider {
       }
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
-        [digest],
+        [digest, options],
         SuiTransactionResponse,
         this.options.skipDataValidation,
       );
@@ -642,8 +642,9 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionWithEffectsBatch(
+  async getTransactionResponseBatch(
     digests: TransactionDigest[],
+    options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse[]> {
     try {
       const requests = digests.map((d) => {
@@ -652,7 +653,7 @@ export class JsonRpcProvider extends Provider {
         }
         return {
           method: 'sui_getTransaction',
-          args: [d],
+          args: [d, options],
         };
       });
       return await this.client.batchRequestWithType(
@@ -669,15 +670,15 @@ export class JsonRpcProvider extends Provider {
 
   async executeTransaction(
     txnBytes: Uint8Array | string,
-    signature: SerializedSignature,
+    signature: SerializedSignature | SerializedSignature[],
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiTransactionResponse> {
     try {
       return await this.client.requestWithType(
-        'sui_executeTransactionSerializedSig',
+        'sui_executeTransaction',
         [
           typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
-          signature,
+          Array.isArray(signature) ? signature : [signature],
           requestType,
         ],
         SuiTransactionResponse,
@@ -799,25 +800,26 @@ export class JsonRpcProvider extends Provider {
 
   async devInspectTransaction(
     sender: SuiAddress,
-    tx: Transaction | UnserializedSignableTransaction | string | Uint8Array,
+    tx: Transaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
     try {
       let devInspectTxBytes;
       if (Transaction.is(tx)) {
-        devInspectTxBytes = await tx.build({ provider: this });
+        tx.setSender(sender);
+        devInspectTxBytes = toB64(
+          await tx.build({
+            provider: this,
+            onlyTransactionKind: true,
+          }),
+        );
       } else if (typeof tx === 'string') {
         devInspectTxBytes = tx;
       } else if (tx instanceof Uint8Array) {
         devInspectTxBytes = toB64(tx);
       } else {
-        devInspectTxBytes = toB64(
-          await new LocalTxnDataSerializer(this).serializeToBytesWithoutGasInfo(
-            sender,
-            tx,
-          ),
-        );
+        throw new Error('Unknown transaction format.');
       }
 
       const resp = await this.client.requestWithType(

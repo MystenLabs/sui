@@ -70,7 +70,9 @@ function ObjectResultAPI({ objID }: { objID: string }) {
 
                 if (resp.objType === 'Move Package' && resp.data.tx_digest) {
                     return rpc
-                        .getTransactionWithEffects(resp.data.tx_digest)
+                        .getTransactionResponse(resp.data.tx_digest, {
+                            showInput: true,
+                        })
                         .then((txEff) => ({
                             ...resp,
                             publisherAddress: getTransactionSender(txEff),

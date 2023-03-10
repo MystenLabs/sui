@@ -89,9 +89,10 @@ impl ReadStore for RocksDbStore {
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
             .transpose()
+            .map(|contents| contents.flatten())
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
         Ok(self.committee_store.get_committee(&epoch).unwrap())
     }
 
@@ -122,7 +123,7 @@ impl WriteStore for RocksDbStore {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
-        }) = checkpoint.summary.end_of_epoch_data.as_ref()
+        }) = checkpoint.end_of_epoch_data.as_ref()
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
             let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)

@@ -45,7 +45,6 @@ const App = () => {
         (state) => state.app.appType === AppType.popup
     );
     useEffect(() => {
-        document.body.classList[isPopup ? 'add' : 'remove']('is-popup');
         document.body.classList.remove('app-initializing');
     }, [isPopup]);
     const location = useLocation();
@@ -78,12 +77,7 @@ const App = () => {
                 />
             </Route>
 
-            <Route
-                path="/dapp/*"
-                element={
-                    <HomePage disableNavigation limitToPopUpSize={false} />
-                }
-            >
+            <Route path="/dapp/*" element={<HomePage disableNavigation />}>
                 <Route
                     path="connect/:requestID"
                     element={<SiteConnectPage />}

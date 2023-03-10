@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::SuiAddress;
 use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
@@ -14,11 +13,11 @@ use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use move_vm_types::values::Value;
+use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use tracing::error;
 
-use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorMetadataV1};
+use self::sui_system_state_inner_v1::SuiSystemStateInnerV1;
 use self::sui_system_state_summary::SuiSystemStateSummary;
 
 pub mod epoch_start_sui_system_state;
@@ -68,8 +67,6 @@ pub trait SuiSystemStateTrait {
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
-    fn get_validator_metadata_vec(&self) -> Vec<ValidatorMetadataV1>;
-    fn get_staking_pool_info(&self) -> BTreeMap<SuiAddress, (Vec<u8>, u64)>;
     fn into_epoch_start_state(self) -> EpochStartSystemState;
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary;
 }
@@ -189,4 +186,25 @@ where
 
 pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
     INIT_SYSTEM_STATE_VERSION
+}
+
+pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
+    use multiaddr::Protocol;
+    let mut iter = multiaddr.iter();
+
+    match (iter.next(), iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
+            Some((ipaddr, port).into())
+        }
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
+            Some((ipaddr, port).into())
+        }
+        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
+            Some((hostname.as_ref(), port).into())
+        }
+        _ => {
+            tracing::debug!("unsupported p2p multiaddr: '{multiaddr}'");
+            None
+        }
+    }
 }

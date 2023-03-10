@@ -9,14 +9,13 @@ use fastcrypto::hash::{HashFunction, Sha3_256};
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
-use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
-use sui_adapter::{adapter, execution_mode};
+use sui_adapter::{adapter, execution_mode, programmable_transactions};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -24,7 +23,7 @@ use sui_types::clock::Clock;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
+    SuiAuthoritySignature, ToFromBytes,
 };
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
@@ -32,12 +31,13 @@ use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::intent::{Intent, IntentMessage, IntentScope};
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+    CallArg, Command, InputObjects, Transaction, TransactionEffects, TransactionEvents,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
@@ -76,10 +76,10 @@ pub struct GenesisTuple(
 // Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
 impl PartialEq for Genesis {
     fn eq(&self, other: &Self) -> bool {
-        self.checkpoint.summary() == other.checkpoint.summary()
+        self.checkpoint.data() == other.checkpoint.data()
             && {
-                let this = &self.checkpoint.auth_signature;
-                let other = &other.checkpoint.auth_signature;
+                let this = self.checkpoint.auth_sig();
+                let other = other.checkpoint.auth_sig();
 
                 this.epoch == other.epoch
                     && this.signature.as_ref() == other.signature.as_ref()
@@ -115,7 +115,10 @@ impl Genesis {
     }
 
     pub fn checkpoint(&self) -> VerifiedCheckpoint {
-        VerifiedCheckpoint::new(self.checkpoint.clone(), &self.committee().unwrap()).unwrap()
+        self.checkpoint
+            .clone()
+            .verify(&self.committee().unwrap())
+            .unwrap()
     }
 
     pub fn checkpoint_contents(&self) -> &CheckpointContents {
@@ -132,25 +135,22 @@ impl Genesis {
             .active_validators
             .iter()
             .map(|validator| {
-                let metadata = validator
-                    .metadata
-                    .verify()
-                    .expect("Genesis validator metadata must be valid");
+                let metadata = validator.verified_metadata();
                 ValidatorInfo {
-                    name: metadata.name,
+                    name: metadata.name.clone(),
                     account_key: AccountsPublicKey::Ed25519(metadata.network_pubkey.clone()), //TODO this is wrong and we shouldn't have this here
-                    protocol_key: (&metadata.protocol_pubkey).into(),
-                    worker_key: metadata.worker_pubkey,
-                    network_key: metadata.network_pubkey,
+                    protocol_key: metadata.sui_pubkey_bytes(),
+                    worker_key: metadata.worker_pubkey.clone(),
+                    network_key: metadata.network_pubkey.clone(),
                     gas_price: validator.gas_price,
                     commission_rate: validator.commission_rate,
-                    network_address: metadata.net_address,
-                    p2p_address: metadata.p2p_address,
-                    narwhal_primary_address: metadata.primary_address,
-                    narwhal_worker_address: metadata.worker_address,
-                    description: metadata.description,
-                    image_url: metadata.image_url,
-                    project_url: metadata.project_url,
+                    network_address: metadata.net_address.clone(),
+                    p2p_address: metadata.p2p_address.clone(),
+                    narwhal_primary_address: metadata.primary_address.clone(),
+                    narwhal_worker_address: metadata.worker_address.clone(),
+                    description: metadata.description.clone(),
+                    image_url: metadata.image_url.clone(),
+                    project_url: metadata.project_url.clone(),
                 }
             })
             .collect()
@@ -515,19 +515,13 @@ impl Builder {
                 .map(|(_, s)| s)
                 .collect();
 
-            CertifiedCheckpointSummary {
-                summary: checkpoint,
-                auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
-                    signatures, &committee,
-                )
-                .unwrap(),
-            }
+            CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
         let validators = self.validators.into_values().collect::<Vec<_>>();
 
         // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
+        assert_eq!(checkpoint.auth_sig().len(), validators.len() as u64);
 
         let genesis = Genesis {
             checkpoint,
@@ -547,19 +541,11 @@ impl Builder {
             .map(|genesis_info| &genesis_info.info)
             .zip(system_object.validators.active_validators.iter())
         {
-            assert_eq!(
-                validator.sui_address().to_vec(),
-                onchain_validator.metadata.sui_address.to_vec(),
-            );
-            assert_eq!(
-                validator.protocol_key().as_ref().to_vec(),
-                onchain_validator.metadata.protocol_pubkey_bytes,
-            );
-            assert_eq!(validator.name(), onchain_validator.metadata.name);
-            assert_eq!(
-                validator.network_address().to_vec(),
-                onchain_validator.metadata.net_address
-            );
+            let metadata = onchain_validator.verified_metadata();
+            assert_eq!(validator.sui_address(), metadata.sui_address);
+            assert_eq!(validator.protocol_key(), metadata.sui_pubkey_bytes());
+            assert_eq!(validator.name(), &metadata.name);
+            assert_eq!(validator.network_address(), &metadata.net_address);
         }
 
         genesis
@@ -950,23 +936,29 @@ fn process_package(
         ctx.digest(),
         protocol_config,
     );
-    let package_id = ObjectID::from(*modules[0].self_id().address());
     let mut gas_status = SuiGasStatus::new_unmetered();
-    adapter::verify_and_link(
-        vm,
-        &temporary_store,
-        &modules,
-        package_id,
-        gas_status.create_move_gas_status(),
+    let module_bytes = modules
+        .into_iter()
+        .map(|m| {
+            let mut buf = vec![];
+            m.serialize(&mut buf).unwrap();
+            buf
+        })
+        .collect();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // executing in Genesis mode does not create a package upgrade
+        builder.command(Command::Publish(module_bytes));
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
         protocol_config,
-    )?;
-    adapter::store_package_and_init_modules(
+        vm,
         &mut temporary_store,
-        vm,
-        modules,
         ctx,
-        gas_status.create_move_gas_status(),
-        protocol_config,
+        &mut gas_status,
+        None,
+        pt,
     )?;
 
     let InnerTemporaryStore {
@@ -1033,38 +1025,51 @@ pub fn generate_genesis_system_object(
         commission_rates.push(validator.commission_rate());
     }
 
-    adapter::execute::<execution_mode::Normal, _, _>(
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("genesis").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![
+                    CallArg::Pure(
+                        bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap(),
+                    ),
+                    CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&descriptions).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&image_url).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
+                ],
+            )
+            .unwrap();
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+        &protocol_config,
         move_vm,
         &mut temporary_store,
-        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
-        &ident_str!("create").to_owned(),
-        vec![],
-        vec![
-            CallArg::Pure(bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&descriptions).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&image_url).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
-        ],
-        SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
-        &protocol_config,
+        &mut SuiGasStatus::new_unmetered(),
+        None,
+        pt,
     )?;
 
     let InnerTemporaryStore {

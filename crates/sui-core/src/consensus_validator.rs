@@ -15,8 +15,9 @@ use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     messages::{ConsensusTransaction, ConsensusTransactionKind},
 };
+use tap::TapFallible;
 
-use tracing::info;
+use tracing::{info, warn};
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
@@ -67,11 +68,21 @@ impl TransactionValidator for SuiTxValidator {
 
         // let mut owned_tx_certs = Vec::new();
         let mut obligation = VerificationObligation::default();
+        let mut verified_cert_digests = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
+                    let cert_digest = certificate.certificate_digest();
+                    if self
+                        .epoch_store
+                        .verified_cert_cache()
+                        .is_cert_verified(&cert_digest)
+                    {
+                        continue;
+                    }
+
                     self.metrics.certificate_signatures_verified.inc();
-                    certificate.data().verify()?;
+                    certificate.data().verify(None)?;
                     let idx = obligation.add_message(
                         certificate.data(),
                         certificate.epoch(),
@@ -83,6 +94,11 @@ impl TransactionValidator for SuiTxValidator {
                         idx,
                     )?;
 
+                    // The digest must not be added to the cache until:
+                    // - the user signature is verified (checked above)
+                    // - batch verification completes successfully.
+                    verified_cert_digests.push(cert_digest);
+
                     // if !certificate.contains_shared_object() {
                     //     // new_unchecked safety: we do not use the certs in this list until all
                     //     // have had their signatures verified.
@@ -91,20 +107,17 @@ impl TransactionValidator for SuiTxValidator {
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     self.metrics.checkpoint_signatures_verified.inc();
-                    let summary = signature.summary.summary;
+                    let summary = signature.summary;
                     let idx = obligation.add_message(
-                        &summary,
+                        summary.data(),
                         summary.epoch,
                         Intent::default().with_scope(IntentScope::CheckpointSummary),
                     );
-                    signature
-                        .summary
-                        .auth_signature
-                        .add_to_verification_obligation(
-                            self.epoch_store.committee(),
-                            &mut obligation,
-                            idx,
-                        )?;
+                    summary.auth_sig().add_to_verification_obligation(
+                        self.epoch_store.committee(),
+                        &mut obligation,
+                        idx,
+                    )?;
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_) => {}
@@ -113,7 +126,15 @@ impl TransactionValidator for SuiTxValidator {
         // verify the user transaction signatures as a batch
         obligation
             .verify_all()
-            .wrap_err("Malformed batch (failed to verify)")
+            .tap_err(|e| warn!("batch verification error: {}", e))
+            .wrap_err("Malformed batch (failed to verify)")?;
+
+        // All the certs that we just batch verified can now be cached as verified.
+        self.epoch_store
+            .verified_cert_cache()
+            .cache_certs_verified(verified_cert_digests);
+
+        Ok(())
 
         // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch
         // all certificates had valid signatures, schedule them for execution prior to sequencing

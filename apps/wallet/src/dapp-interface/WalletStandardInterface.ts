@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress, toB64 } from '@mysten/sui.js';
+import { type SuiAddress, toB64, Transaction } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -223,9 +223,11 @@ export class SuiWallet implements Wallet {
     };
 
     #signTransaction: SuiSignTransactionMethod = async (input) => {
-        // const transaction = Transaction.is(input.transaction)
-        //     ? input.transaction.serialize()
-        //     : input.transaction;
+        if (!Transaction.is(input.transaction)) {
+            throw new Error(
+                'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+            );
+        }
 
         return mapToPromise(
             this.#send<SignTransactionRequest, SignTransactionResponse>({
@@ -238,7 +240,7 @@ export class SuiWallet implements Wallet {
                         input.account?.address ||
                         this.#accounts[0]?.address ||
                         '',
-                    transaction: input.transaction,
+                    transaction: input.transaction.serialize(),
                 },
             }),
             (response) => response.result
@@ -248,16 +250,18 @@ export class SuiWallet implements Wallet {
     #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
         input
     ) => {
-        // const transaction = Transaction.is(input.transaction)
-        //     ? input.transaction.serialize()
-        //     : input.transaction;
+        if (!Transaction.is(input.transaction)) {
+            throw new Error(
+                'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+            );
+        }
 
         return mapToPromise(
             this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
                 transaction: {
-                    type: 'v2',
-                    data: input.transaction,
+                    type: 'transaction',
+                    data: input.transaction.serialize(),
                     options: input.options,
                     // account might be undefined if previous version of adapters is used
                     // in that case use the first account address

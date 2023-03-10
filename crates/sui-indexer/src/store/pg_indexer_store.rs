@@ -293,9 +293,9 @@ impl IndexerStore for PgIndexerStore {
                 }
                 if let Some(start_sequence) = start_sequence {
                     if is_descending {
-                        builder = builder.filter(move_calls_dsl::id.le(start_sequence));
+                        builder = builder.filter(move_calls_dsl::id.lt(start_sequence));
                     } else {
-                        builder = builder.filter(move_calls_dsl::id.ge(start_sequence));
+                        builder = builder.filter(move_calls_dsl::id.gt(start_sequence));
                     }
                 }
 
@@ -334,10 +334,10 @@ impl IndexerStore for PgIndexerStore {
                 if let Some(start_sequence) = start_sequence {
                     if is_descending {
                         boxed_query = boxed_query
-                            .filter(dsl::id.le(start_sequence));
+                            .filter(dsl::id.lt(start_sequence));
                     } else {
                         boxed_query = boxed_query
-                            .filter(dsl::id.ge(start_sequence));
+                            .filter(dsl::id.gt(start_sequence));
                     }
                 }
 
@@ -380,10 +380,10 @@ impl IndexerStore for PgIndexerStore {
                     if let Some(start_sequence) = start_sequence {
                         if is_descending {
                             boxed_query = boxed_query
-                                .filter(dsl::id.le(start_sequence));
+                                .filter(dsl::id.lt(start_sequence));
                         } else {
                             boxed_query = boxed_query
-                                .filter(dsl::id.ge(start_sequence));
+                                .filter(dsl::id.gt(start_sequence));
                         }
                     }
 
@@ -433,9 +433,9 @@ impl IndexerStore for PgIndexerStore {
                     recipient_address.clone(),
                     if let Some(start_sequence) = start_sequence {
                         if is_descending {
-                            format!("AND id <= {}", start_sequence)
+                            format!("AND id < {}", start_sequence)
                         } else {
-                            format!("AND id >= {}", start_sequence)
+                            format!("AND id > {}", start_sequence)
                         }
                     } else {
                         "".to_string()

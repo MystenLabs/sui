@@ -19,11 +19,9 @@ import {
 
 describe('Transaction Builders', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
 
   beforeEach(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
   it('SplitCoin + TransferObjects', async () => {
@@ -36,7 +34,7 @@ describe('Transaction Builders', () => {
       ),
     );
     tx.add(Commands.TransferObjects([coin], tx.input(toolbox.address())));
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('MergeCoins', async () => {
@@ -47,7 +45,7 @@ describe('Transaction Builders', () => {
         tx.input(coins[1].objectId),
       ]),
     );
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('MoveCall', async () => {
@@ -55,7 +53,6 @@ describe('Transaction Builders', () => {
     tx.add(
       Commands.MoveCall({
         target: '0x2::devnet_nft::mint',
-        typeArguments: [],
         arguments: [
           tx.input('Example NFT'),
           tx.input('An NFT created by the wallet Command Line Tool'),
@@ -65,42 +62,41 @@ describe('Transaction Builders', () => {
         ],
       }),
     );
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('MoveCall Shared Object', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
-    const [{ sui_address: validator_address }] =
+    const [{ suiAddress: validatorAddress }] =
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
     tx.add(
       Commands.MoveCall({
         target: '0x2::sui_system::request_add_delegation',
-        typeArguments: [],
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
           tx.input(coins[2].objectId),
-          tx.input(validator_address),
+          tx.input(validatorAddress),
         ],
       }),
     );
 
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('SplitCoin from gas object + TransferObjects', async () => {
     const tx = new Transaction();
     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(1)));
     tx.add(Commands.TransferObjects([coin], tx.input(DEFAULT_RECIPIENT)));
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObjects gas object', async () => {
     const tx = new Transaction();
     tx.add(Commands.TransferObjects([tx.gas], tx.input(DEFAULT_RECIPIENT)));
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObject', async () => {
@@ -112,7 +108,7 @@ describe('Transaction Builders', () => {
         tx.input(DEFAULT_RECIPIENT),
       ),
     );
-    await validateTransaction(signer, tx);
+    await validateTransaction(toolbox.signer, tx);
   });
 });
 

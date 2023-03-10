@@ -24,9 +24,9 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::intent::Intent;
 use sui_types::messages::{
-    CallArg, ExecuteTransactionRequestType, InputObjectKind, MoveCall, MoveModulePublish,
-    ObjectArg, SingleTransactionKind, Transaction, TransactionData, TransactionDataAPI,
-    TransactionKind, DUMMY_GAS_PRICE,
+    CallArg, ExecuteTransactionRequestType, InputObjectKind, ObjectArg, ProgrammableTransaction,
+    SingleTransactionKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+    DUMMY_GAS_PRICE,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -47,13 +47,12 @@ async fn test_transfer_sui() {
         builder.transfer_sui(recipient, Some(50000));
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient],
         sender,
-        tx,
+        pt,
         vec![],
         10000,
         false,
@@ -75,13 +74,12 @@ async fn test_transfer_sui_whole_coin() {
         builder.transfer_sui(recipient, None);
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient],
         sender,
-        tx,
+        pt,
         vec![],
         10000,
         false,
@@ -104,13 +102,12 @@ async fn test_transfer_object() {
         builder.transfer_object(recipient, object_ref);
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient],
         sender,
-        tx,
+        pt,
         vec![],
         10000,
         false,
@@ -138,15 +135,17 @@ async fn test_publish_and_move_call() {
         })
         .collect::<Vec<_>>();
 
-    let tx = SingleTransactionKind::Publish(MoveModulePublish {
-        modules: compiled_module,
-    });
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish(compiled_module);
+        builder.finish()
+    };
     let response =
-        test_transaction(&client, keystore, vec![], sender, tx, vec![], 10000, false).await;
-    let events = response.events;
+        test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
+    let events = response.events.unwrap();
 
     // Test move call (reuse published module from above test)
-    let effect = response.effects;
+    let effect = response.effects.unwrap();
     let package = events
         .data
         .iter()
@@ -160,21 +159,28 @@ async fn test_publish_and_move_call() {
         .unwrap();
 
     // TODO: Improve tx response to make it easier to find objects.
-    let treasury = find_module_object(&effect, &events, "managed", "TreasuryCap");
+    let treasury = find_module_object(&effect, &events, "::TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
-    let tx = SingleTransactionKind::Call(MoveCall {
-        package: *package,
-        module: Identifier::from_str("managed").unwrap(),
-        function: Identifier::from_str("mint").unwrap(),
-        type_arguments: vec![],
-        arguments: vec![
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury)),
-            CallArg::Pure(bcs::to_bytes(&10000u64).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
-        ],
-    });
-    test_transaction(&client, keystore, vec![], sender, tx, vec![], 10000, false).await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .move_call(
+                *package,
+                Identifier::from_str("managed").unwrap(),
+                Identifier::from_str("mint").unwrap(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury)),
+                    CallArg::Pure(bcs::to_bytes(&10000u64).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
+                ],
+            )
+            .unwrap();
+        builder.finish()
+    };
+
+    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
 }
 
 #[tokio::test]
@@ -191,8 +197,11 @@ async fn test_split_coin() {
         .split_coin(sender, coin.0, vec![100000], None, 10000)
         .await
         .unwrap();
-    let tx = tx.into_kind().single_transactions().next().unwrap().clone();
-    test_transaction(&client, keystore, vec![], sender, tx, vec![], 10000, false).await;
+    let pt = match tx.into_kind() {
+        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        _ => unreachable!(),
+    };
+    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
 }
 
 #[tokio::test]
@@ -210,8 +219,11 @@ async fn test_merge_coin() {
         .merge_coins(sender, coin.0, coin2.0, None, 10000)
         .await
         .unwrap();
-    let tx = tx.into_kind().single_transactions().next().unwrap().clone();
-    test_transaction(&client, keystore, vec![], sender, tx, vec![], 10000, false).await;
+    let pt = match tx.into_kind() {
+        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        _ => unreachable!(),
+    };
+    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
 }
 
 #[tokio::test]
@@ -231,13 +243,12 @@ async fn test_pay() {
             .unwrap();
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient],
         sender,
-        tx,
+        pt,
         vec![],
         10000,
         false,
@@ -268,13 +279,12 @@ async fn test_pay_multiple_coin_multiple_recipient() {
             .unwrap();
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient1, recipient2],
         sender,
-        tx,
+        pt,
         vec![],
         10000,
         false,
@@ -303,13 +313,12 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
             .unwrap();
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient1],
         sender,
-        tx,
+        pt,
         vec![coin1, coin2],
         10000,
         false,
@@ -336,13 +345,12 @@ async fn test_pay_sui() {
             .unwrap();
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient1, recipient2],
         sender,
-        tx,
+        pt,
         vec![coin1, coin2],
         10000,
         false,
@@ -369,13 +377,12 @@ async fn test_failed_pay_sui() {
             .unwrap();
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![],
         sender,
-        tx,
+        pt,
         vec![coin1, coin2],
         110,
         true,
@@ -393,8 +400,13 @@ async fn test_delegate_sui() {
     let sender = get_random_address(&network.accounts, vec![]);
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
-    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
-
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let tx = client
         .transaction_builder()
         .request_add_delegation(
@@ -407,9 +419,11 @@ async fn test_delegate_sui() {
         )
         .await
         .unwrap();
-    let tx = tx.into_kind().into_single_transactions().next().unwrap();
-
-    test_transaction(&client, keystore, vec![], sender, tx, vec![], 10000, false).await;
+    let pt = match tx.into_kind() {
+        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        _ => unreachable!(),
+    };
+    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
 }
 
 #[tokio::test]
@@ -422,8 +436,13 @@ async fn test_delegate_sui_with_none_amount() {
     let sender = get_random_address(&network.accounts, vec![]);
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
-    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
-
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let tx = client
         .transaction_builder()
         .request_add_delegation(
@@ -436,9 +455,11 @@ async fn test_delegate_sui_with_none_amount() {
         )
         .await
         .unwrap();
-    let tx = tx.into_kind().into_single_transactions().next().unwrap();
-
-    test_transaction(&client, keystore, vec![], sender, tx, vec![], 10000, false).await;
+    let pt = match tx.into_kind() {
+        TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt)) => pt,
+        _ => unreachable!(),
+    };
+    test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
 }
 
 #[tokio::test]
@@ -457,13 +478,12 @@ async fn test_pay_all_sui() {
         builder.pay_all_sui(recipient);
         builder.finish()
     };
-    let tx = SingleTransactionKind::ProgrammableTransaction(pt);
     test_transaction(
         &client,
         keystore,
         vec![recipient],
         sender,
-        tx,
+        pt,
         vec![coin1, coin2],
         10000,
         false,
@@ -479,8 +499,13 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let coin1 = get_random_sui(&client, sender, vec![]).await;
     let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
     let gas = get_random_sui(&client, sender, vec![coin1.0, coin2.0]).await;
-    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
-
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let data = client
         .transaction_builder()
         .request_add_delegation(
@@ -500,7 +525,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
             locked_until_epoch: None,
         },
         sender,
-        gas,
+        gas: vec![gas],
         gas_price: client.read_api().get_reference_gas_price().await?,
         budget: 10000,
     };
@@ -515,7 +540,6 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
 fn find_module_object(
     effects: &SuiTransactionEffects,
     events: &SuiTransactionEvents,
-    module: &str,
     object_type_name: &str,
 ) -> OwnedObjectRef {
     let mut results: Vec<_> = events
@@ -523,13 +547,12 @@ fn find_module_object(
         .iter()
         .filter_map(|event| {
             if let SuiEvent::NewObject {
-                transaction_module,
                 object_id,
                 object_type,
                 ..
             } = event
             {
-                if transaction_module == module && object_type.contains(object_type_name) {
+                if object_type.contains(object_type_name) {
                     return effects
                         .created()
                         .iter()
@@ -552,7 +575,7 @@ async fn test_transaction(
     keystore: &Keystore,
     addr_to_check: Vec<SuiAddress>,
     sender: SuiAddress,
-    tx: SingleTransactionKind,
+    tx: ProgrammableTransaction,
     gas: Vec<ObjectRef>,
     budget: u64,
     expect_fail: bool,
@@ -576,7 +599,7 @@ async fn test_transaction(
     };
 
     let data = TransactionData::new_with_gas_coins(
-        TransactionKind::Single(tx.clone()),
+        TransactionKind::programmable(tx.clone()),
         sender,
         gas,
         budget,
@@ -607,7 +630,7 @@ async fn test_transaction(
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
 
-    let effects = &response.effects;
+    let effects = response.effects.as_ref().unwrap();
 
     if !expect_fail {
         assert_eq!(

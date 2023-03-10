@@ -14,7 +14,11 @@ export const navigateWithUnknown = async (
     if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
-                .getTransactionWithEffects(input)
+                .getTransactionResponse(input, {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                })
                 .then((data) => ({
                     category: 'transaction',
                     data: data,

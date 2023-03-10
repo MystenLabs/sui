@@ -475,7 +475,6 @@ pub fn make_certificates_with_slow_nodes(
         .map(|(key, _)| committee.authorities.get(key).unwrap().stake)
         .sum();
 
-    assert_eq!(keys.len(), 4);
     assert!(slow_nodes_stake < committee.validity_threshold());
 
     let mut certificates = VecDeque::new();

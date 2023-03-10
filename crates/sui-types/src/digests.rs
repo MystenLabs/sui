@@ -8,6 +8,7 @@ use fastcrypto::encoding::{Base58, Encoding};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
+
 /// A representation of a SHA3-256 Digest
 #[serde_as]
 #[derive(
@@ -279,9 +280,35 @@ impl fmt::UpperHex for CheckpointContentsDigest {
     }
 }
 
+/// A digest of a cerificate, which commits to the signatures as well as the tx.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CertificateDigest(Sha3Digest);
+
+impl CertificateDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
+    }
+}
+
+impl fmt::Debug for CertificateDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("CertificateDigest").field(&self.0).finish()
+    }
+}
+
 /// A transaction will have a (unique) digest.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(Sha3Digest);
+
+impl Default for TransactionDigest {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
 
 impl TransactionDigest {
     pub const ZERO: Self = Self(Sha3Digest::ZERO);

@@ -19,6 +19,7 @@ mod pg_integration {
     use tokio::task::JoinHandle;
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
     use sui_json_rpc::api::ReadApiClient;
+    use sui_json_rpc_types::SuiTransactionResponseOptions;
 
     #[tokio::test]
     async fn test_genesis_sync() {
@@ -35,10 +36,13 @@ mod pg_integration {
             let tx_digest = TransactionDigest::from_str(&tx).unwrap();
             let _fullnode_rpc_tx = test_cluster
                 .rpc_client()
-                .get_transaction(tx_digest)
+                .get_transaction_with_options(tx_digest, Some(SuiTransactionResponseOptions::new()))
                 .await
                 .unwrap();
-            let _indexer_rpc_tx = indexer_rpc_client.get_transaction(tx_digest).await.unwrap();
+            let _indexer_rpc_tx = indexer_rpc_client
+                .get_transaction_with_options(tx_digest, Some(SuiTransactionResponseOptions::new()))
+                .await
+                .unwrap();
 
             // This fails because of events mismatch
             // TODO: fix this

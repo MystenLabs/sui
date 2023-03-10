@@ -62,7 +62,7 @@ pub fn make_split_coin_tx(
         ],
         1000000,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
-    );
+    )?;
     let verified_tx = to_sender_signed_transaction(split_coin, keypair);
     Ok(verified_tx)
 }

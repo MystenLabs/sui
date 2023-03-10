@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_store::LockDetails;
+use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
@@ -12,11 +12,12 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
-use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
+use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    StoreData, StoreMoveObject, StoreObject, StoreObjectPair,
+    MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper,
+    StoreObjectWrapper,
 };
 use typed_store_derive::DBMapUtils;
 
@@ -37,10 +38,10 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
-    pub(crate) objects: DBMap<ObjectKey, StoreObject>,
+    pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
 
     #[default_options_override_fn = "indirect_move_objects_table_default_config"]
-    pub(crate) indirect_move_objects: DBMap<ObjectDigest, StoreMoveObject>,
+    pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -49,7 +50,7 @@ pub struct AuthorityPerpetualTables {
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
-    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
+    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetailsWrapper>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
@@ -96,6 +97,9 @@ pub struct AuthorityPerpetualTables {
 
     /// Parameters of the system fixed at the epoch start
     pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+
+    /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
+    pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 }
 
 impl AuthorityPerpetualTables {
@@ -132,14 +136,16 @@ impl AuthorityPerpetualTables {
         iter.reverse().next().and_then(|(_, o)| self.object(o).ok())
     }
 
-    pub fn object(&self, store_object: StoreObject) -> Result<Object, SuiError> {
+    pub fn object(&self, store_object: StoreObjectWrapper) -> Result<Object, SuiError> {
+        let store_object = store_object.migrate().into_inner();
         let indirect_object = match store_object.data {
-            StoreData::IndirectObject(ref metadata) => {
-                self.indirect_move_objects.get(&metadata.digest)?
-            }
+            StoreData::IndirectObject(ref metadata) => self
+                .indirect_move_objects
+                .get(&metadata.digest)?
+                .map(|o| o.migrate().into_inner()),
             _ => None,
         };
-        StoreObjectPair(store_object, indirect_object).try_into()
+        MigratedStoreObjectPair(store_object, indirect_object).try_into()
     }
 
     pub fn get_latest_parent_entry(
@@ -182,6 +188,18 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
+    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        Ok(self.pruned_checkpoint.get(&())?.unwrap_or_default())
+    }
+
+    pub fn set_highest_pruned_checkpoint(
+        &self,
+        wb: DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult<DBBatch> {
+        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
+    }
+
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
@@ -196,6 +214,13 @@ impl AuthorityPerpetualTables {
             iter: self.parent_sync.keys(),
             prev: None,
         }
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        // This checkpoints the entire db and not just objects table
+        self.objects
+            .checkpoint_db(path)
+            .map_err(SuiError::StorageError)
     }
 }
 
