@@ -5,10 +5,12 @@ import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
+  extractMutableReference,
   extractStructTag,
   getObjectReference,
   getSharedObjectInitialVersion,
   normalizeSuiObjectId,
+  SuiMoveNormalizedType,
   SuiObjectRef,
   SUI_TYPE_ARG,
 } from '../types';
@@ -267,7 +269,11 @@ export class Transaction {
 
     // Keep track of the object references that will need to be resolved at the end of the transaction.
     // We keep the input by-reference to avoid needing to re-resolve it:
-    const objectsToResolve: { id: string; input: TransactionInput }[] = [];
+    const objectsToResolve: {
+      id: string;
+      input: TransactionInput;
+      normalizedType?: SuiMoveNormalizedType;
+    }[] = [];
 
     commands.forEach((command) => {
       // Special case move call:
@@ -395,7 +401,11 @@ export class Transaction {
                   )}`,
                 );
               }
-              objectsToResolve.push({ id: inputValue, input });
+              objectsToResolve.push({
+                id: inputValue,
+                input,
+                normalizedType: param,
+              });
               return;
             }
 
@@ -419,11 +429,13 @@ export class Transaction {
       );
 
       objects.forEach((object, i) => {
-        const { id, input } = objectsToResolve[i];
+        const { id, input, normalizedType } = objectsToResolve[i];
         const initialSharedVersion = getSharedObjectInitialVersion(object);
 
         if (initialSharedVersion) {
-          const mutable = true; // Defaulted to True to match current behavior.
+          const mutable =
+            normalizedType != null &&
+            extractMutableReference(normalizedType) != null;
           input.value = Inputs.SharedObjectRef({
             objectId: id,
             initialSharedVersion,
