@@ -45,17 +45,6 @@ export const DelegatedStake = object({
   stakes: array(StakeObject),
 });
 
-export const ParametersFields = object({
-  max_validator_count: string(),
-  min_validator_stake: string(),
-  storage_gas_price: optional(string()),
-});
-
-export const Parameters = object({
-  type: string(),
-  fields: ParametersFields,
-});
-
 export const StakeSubsidyFields = object({
   balance: object({ value: number() }),
   currentEpochAmount: number(),
