@@ -45,18 +45,21 @@ pub enum SuiMoveVisibility {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveStructTypeParameter {
     pub constraints: SuiMoveAbilitySet,
     pub is_phantom: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedField {
     pub name: String,
     pub type_: SuiMoveNormalizedType,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedStruct {
     pub abilities: SuiMoveAbilitySet,
     pub type_parameters: Vec<SuiMoveStructTypeParameter>,
@@ -74,6 +77,7 @@ pub enum SuiMoveNormalizedType {
     U256,
     Address,
     Signer,
+    #[serde(rename_all = "camelCase")]
     Struct {
         address: String,
         module: String,
@@ -87,6 +91,7 @@ pub enum SuiMoveNormalizedType {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedFunction {
     pub visibility: SuiMoveVisibility,
     pub is_entry: bool,
@@ -102,6 +107,7 @@ pub struct SuiMoveModuleId {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedModule {
     pub file_format_version: u32,
     pub address: String,
