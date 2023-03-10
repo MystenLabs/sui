@@ -116,6 +116,7 @@ pub enum CommandKind<'a> {
     SplitCoin,
     MergeCoins,
     Publish,
+    Upgrade,
 }
 
 impl InputValue {

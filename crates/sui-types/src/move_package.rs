@@ -32,6 +32,8 @@ use std::collections::BTreeMap;
 
 pub const PACKAGE_MODULE_NAME: &IdentStr = ident_str!("package");
 pub const UPGRADECAP_STRUCT_NAME: &IdentStr = ident_str!("UpgradeCap");
+pub const UPGRADETICKET_STRUCT_NAME: &IdentStr = ident_str!("UpgradeTicket");
+pub const UPGRADERECEIPT_STRUCT_NAME: &IdentStr = ident_str!("UpgradeReceipt");
 
 #[derive(Clone, Debug)]
 /// Additional information about a function
@@ -86,6 +88,22 @@ pub struct UpgradeCap {
     pub package: ID,
     pub version: u64,
     pub policy: u8,
+}
+
+/// Rust representation of `sui::package::UpgradeTicket`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpgradeTicket {
+    pub cap: ID,
+    pub package: ID,
+    pub policy: u8,
+    pub digest: Vec<u8>,
+}
+
+/// Rust representation of `sui::package::UpgradeReceipt`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpgradeReceipt {
+    pub cap: ID,
+    pub package: ID,
 }
 
 impl MovePackage {
@@ -202,14 +220,47 @@ impl UpgradeCap {
         }
     }
 
-    /// Create an UpgradeCap for the newly published package at `package_id`, and associate it with
-    /// the fresh `uid.
+    /// Create an `UpgradeCap` for the newly published package at `package_id`, and associate it with
+    /// the fresh `uid`.
     pub fn new(uid: ObjectID, package_id: ObjectID) -> Self {
         UpgradeCap {
             id: UID::new(uid),
             package: ID { bytes: package_id },
             version: 1,
             policy: UPGRADE_POLICY_COMPATIBLE,
+        }
+    }
+}
+
+impl UpgradeTicket {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: PACKAGE_MODULE_NAME.to_owned(),
+            name: UPGRADETICKET_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
+impl UpgradeReceipt {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: PACKAGE_MODULE_NAME.to_owned(),
+            name: UPGRADERECEIPT_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+
+    /// Create an `UpgradeReceipt` for the upgraded package at `package_id` using the
+    /// `UpgradeTicket` and newly published package id.
+    pub fn new(upgrade_ticket: UpgradeTicket, upgraded_package_id: ObjectID) -> Self {
+        UpgradeReceipt {
+            cap: upgrade_ticket.cap,
+            package: ID {
+                bytes: upgraded_package_id,
+            },
         }
     }
 }
@@ -256,4 +307,16 @@ where
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
     Ok(normalized_modules)
+}
+
+pub fn normalize_deserialized_modules<'a, I>(modules: I) -> BTreeMap<String, normalized::Module>
+where
+    I: Iterator<Item = &'a CompiledModule>,
+{
+    let mut normalized_modules = BTreeMap::new();
+    for module in modules {
+        let normalized_module = normalized::Module::new(module);
+        normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
+    }
+    normalized_modules
 }

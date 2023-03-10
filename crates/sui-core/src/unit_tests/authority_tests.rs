@@ -1012,6 +1012,38 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .is_none());
 }
 
+#[tokio::test]
+async fn test_upgrade_module_is_feature_gated() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 10000);
+    let authority_state = init_state().await;
+    authority_state.insert_genesis_object(gas_object).await;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Data doesn't matter here. We hit the feature flag before checking it.
+        let arg = builder.pure(1).unwrap();
+        builder.upgrade(arg, vec![], vec![vec![]]);
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = execute_programmable_transaction(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        pt,
+    )
+    .await
+    .unwrap();
+    let (failure_status, _) = effects.status.unwrap_err();
+    assert_eq!(
+        failure_status,
+        ExecutionFailureStatus::FeatureNotYetSupported
+    );
+}
+
 /* FIXME: This tests the submission of out of transaction certs, but modifies object sequence numbers manually
    and leaves the authority in an inconsistent state. We should re-code it in a proper way.
 

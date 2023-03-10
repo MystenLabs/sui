@@ -118,6 +118,15 @@ impl ProgrammableTransactionBuilder {
             })));
     }
 
+    pub fn upgrade(
+        &mut self,
+        upgrade_ticket: Argument,
+        transitive_deps: Vec<ObjectID>,
+        modules: Vec<Vec<u8>>,
+    ) -> Argument {
+        self.command(Command::Upgrade(upgrade_ticket, transitive_deps, modules))
+    }
+
     pub fn transfer_arg(&mut self, recipient: SuiAddress, arg: Argument) {
         self.transfer_args(recipient, vec![arg])
     }

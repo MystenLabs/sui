@@ -318,7 +318,7 @@ fn display_validator(summary: &SuiValidatorSummary, metadata: &VerifiedValidator
     );
     println!("Rewards Pool: {}", summary.rewards_pool);
     println!("Pool Token Balance: {}", summary.pool_token_balance);
-    println!("Pending Delegation: {}", summary.pending_delegation);
+    println!("Pending Delegation: {}", summary.pending_stake);
     println!(
         "Pending Total Sui Withdraw: {}",
         summary.pending_total_sui_withdraw
