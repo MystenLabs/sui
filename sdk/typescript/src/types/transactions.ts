@@ -31,18 +31,6 @@ import {
 // TODO: support u64
 export const EpochId = number();
 
-export const TransferObject = object({
-  recipient: SuiAddress,
-  objectRef: SuiObjectRef,
-});
-export type TransferObject = Infer<typeof TransferObject>;
-
-export const SuiTransferSui = object({
-  recipient: SuiAddress,
-  amount: union([number(), literal(null)]),
-});
-export type SuiTransferSui = Infer<typeof SuiTransferSui>;
-
 export const SuiChangeEpoch = object({
   epoch: EpochId,
   storage_charge: number(),
@@ -60,35 +48,6 @@ export const SuiConsensusCommitPrologue = object({
 export type SuiConsensusCommitPrologue = Infer<
   typeof SuiConsensusCommitPrologue
 >;
-
-export const Pay = object({
-  coins: array(SuiObjectRef),
-  recipients: array(SuiAddress),
-  amounts: array(string()),
-});
-export type Pay = Infer<typeof Pay>;
-
-export const PaySui = object({
-  coins: array(SuiObjectRef),
-  recipients: array(SuiAddress),
-  amounts: array(string()),
-});
-export type PaySui = Infer<typeof PaySui>;
-
-export const PayAllSui = object({
-  coins: array(SuiObjectRef),
-  recipient: SuiAddress,
-});
-export type PayAllSui = Infer<typeof PayAllSui>;
-
-export const MoveCall = object({
-  package: string(),
-  module: string(),
-  function: string(),
-  typeArguments: optional(array(string())),
-  arguments: optional(array(SuiJsonValue)),
-});
-export type MoveCall = Infer<typeof MoveCall>;
 
 export const Genesis = object({
   objects: array(ObjectId),
@@ -134,23 +93,12 @@ export type ExecuteTransactionRequestType =
   | 'WaitForLocalExecution';
 
 export type TransactionKindName =
-  | 'TransferObject'
-  | 'Publish'
-  | 'Call'
-  | 'TransferSui'
   | 'ChangeEpoch'
   | 'ConsensusCommitPrologue'
-  | 'Pay'
-  | 'PaySui'
-  | 'PayAllSui'
   | 'Genesis'
   | 'ProgrammableTransaction';
 
 export const SuiTransactionKind = union([
-  assign(TransferObject, object({ kind: literal('TransferObject') })),
-  assign(SuiMovePackage, object({ kind: literal('Publish') })),
-  assign(MoveCall, object({ kind: literal('Call') })),
-  assign(SuiTransferSui, object({ kind: literal('TransferSui') })),
   assign(SuiChangeEpoch, object({ kind: literal('ChangeEpoch') })),
   assign(
     SuiConsensusCommitPrologue,
@@ -158,9 +106,6 @@ export const SuiTransactionKind = union([
       kind: literal('ConsensusCommitPrologue'),
     }),
   ),
-  assign(Pay, object({ kind: literal('Pay') })),
-  assign(PaySui, object({ kind: literal('PaySui') })),
-  assign(PayAllSui, object({ kind: literal('PayAllSui') })),
   assign(Genesis, object({ kind: literal('Genesis') })),
   assign(
     ProgrammableTransaction,
@@ -172,7 +117,7 @@ export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 export const SuiTransactionData = object({
   // Eventually this will become union(literal('v1'), literal('v2'), ...)
   messageVersion: literal('v1'),
-  transactions: array(SuiTransactionKind),
+  transaction: SuiTransactionKind,
   sender: SuiAddress,
   gasData: SuiGasData,
 });
@@ -398,46 +343,6 @@ export function getTransactionGasBudget(tx: SuiTransactionResponse) {
   return getGasData(tx)?.budget;
 }
 
-export function getTransferObjectTransaction(
-  data: SuiTransactionKind,
-): TransferObject | undefined {
-  return data.kind === 'TransferObject' ? data : undefined;
-}
-
-export function getPublishTransaction(
-  data: SuiTransactionKind,
-): SuiMovePackage | undefined {
-  return data.kind === 'Publish' ? data : undefined;
-}
-
-export function getMoveCallTransaction(
-  data: SuiTransactionKind,
-): MoveCall | undefined {
-  return data.kind === 'Call' ? data : undefined;
-}
-
-export function getTransferSuiTransaction(
-  data: SuiTransactionKind,
-): SuiTransferSui | undefined {
-  return data.kind === 'TransferSui' ? data : undefined;
-}
-
-export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
-  return data.kind === 'Pay' ? data : undefined;
-}
-
-export function getPaySuiTransaction(
-  data: SuiTransactionKind,
-): PaySui | undefined {
-  return data.kind === 'PaySui' ? data : undefined;
-}
-
-export function getPayAllSuiTransaction(
-  data: SuiTransactionKind,
-): PayAllSui | undefined {
-  return data.kind === 'PayAllSui' ? data : undefined;
-}
-
 export function getChangeEpochTransaction(
   data: SuiTransactionKind,
 ): SuiChangeEpoch | undefined {
@@ -450,16 +355,10 @@ export function getConsensusCommitPrologueTransaction(
   return data.kind === 'ConsensusCommitPrologue' ? data : undefined;
 }
 
-export function getTransactionKinds(
+export function getTransactionKind(
   data: SuiTransactionResponse,
-): SuiTransactionKind[] | undefined {
-  return data.transaction?.data.transactions;
-}
-
-export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {
-  return data.kind === 'TransferSui' && data.amount
-    ? BigInt(data.amount)
-    : null;
+): SuiTransactionKind | undefined {
+  return data.transaction?.data.transaction;
 }
 
 export function getTransactionKindName(

@@ -83,81 +83,79 @@ it('can serialize transaction data with a programmable transaction', () => {
         budget: 1000000n,
       },
       kind: {
-        Single: {
-          ProgrammableTransaction: {
-            inputs: [
-              // first argument is the publisher object
-              { Object: { ImmOrOwned: ref() } },
-              // second argument is a vector of names
-              {
-                Pure: Array.from(
-                  builder
-                    .ser('vector<string>', ['name', 'description', 'img_url'])
-                    .toBytes(),
-                ),
-              },
-              // third argument is a vector of values
-              {
-                Pure: Array.from(
-                  builder
-                    .ser('vector<string>', [
-                      'Capy {name}',
-                      'A cute little creature',
-                      'https://api.capy.art/{id}/svg',
-                    ])
-                    .toBytes(),
-                ),
-              },
-              // 4th and last argument is the account address to send display to
-              {
-                Pure: Array.from(
-                  builder.ser('address', ref().objectId).toBytes(),
-                ),
-              },
-            ],
-            commands: [
-              {
-                kind: 'MoveCall',
-                target: `${sui}::display::new`,
-                typeArguments: [`${sui}::capy::Capy`],
-                arguments: [
-                  // publisher object
-                  { kind: 'Input', index: 0 },
-                ],
-              },
-              {
-                kind: 'MoveCall',
-                target: `${sui}::display::add_multiple`,
-                typeArguments: [`${sui}::capy::Capy`],
-                arguments: [
-                  // result of the first command
-                  { kind: 'Result', index: 0 },
-                  // second argument - vector of names
-                  { kind: 'Input', index: 1 },
-                  // third argument - vector of values
-                  { kind: 'Input', index: 2 },
-                ],
-              },
-              {
-                kind: 'MoveCall',
-                target: `${sui}::display::update_version`,
-                typeArguments: [`${sui}::capy::Capy`],
-                arguments: [
-                  // result of the first command again
-                  { kind: 'Result', index: 0 },
-                ],
-              },
-              {
-                kind: 'TransferObjects',
-                objects: [
-                  // the display object
-                  { kind: 'Result', index: 0 },
-                ],
-                // address is also an input
-                address: { kind: 'Input', index: 3 },
-              },
-            ],
-          },
+        ProgrammableTransaction: {
+          inputs: [
+            // first argument is the publisher object
+            { Object: { ImmOrOwned: ref() } },
+            // second argument is a vector of names
+            {
+              Pure: Array.from(
+                builder
+                  .ser('vector<string>', ['name', 'description', 'img_url'])
+                  .toBytes(),
+              ),
+            },
+            // third argument is a vector of values
+            {
+              Pure: Array.from(
+                builder
+                  .ser('vector<string>', [
+                    'Capy {name}',
+                    'A cute little creature',
+                    'https://api.capy.art/{id}/svg',
+                  ])
+                  .toBytes(),
+              ),
+            },
+            // 4th and last argument is the account address to send display to
+            {
+              Pure: Array.from(
+                builder.ser('address', ref().objectId).toBytes(),
+              ),
+            },
+          ],
+          commands: [
+            {
+              kind: 'MoveCall',
+              target: `${sui}::display::new`,
+              typeArguments: [`${sui}::capy::Capy`],
+              arguments: [
+                // publisher object
+                { kind: 'Input', index: 0 },
+              ],
+            },
+            {
+              kind: 'MoveCall',
+              target: `${sui}::display::add_multiple`,
+              typeArguments: [`${sui}::capy::Capy`],
+              arguments: [
+                // result of the first command
+                { kind: 'Result', index: 0 },
+                // second argument - vector of names
+                { kind: 'Input', index: 1 },
+                // third argument - vector of values
+                { kind: 'Input', index: 2 },
+              ],
+            },
+            {
+              kind: 'MoveCall',
+              target: `${sui}::display::update_version`,
+              typeArguments: [`${sui}::capy::Capy`],
+              arguments: [
+                // result of the first command again
+                { kind: 'Result', index: 0 },
+              ],
+            },
+            {
+              kind: 'TransferObjects',
+              objects: [
+                // the display object
+                { kind: 'Result', index: 0 },
+              ],
+              // address is also an input
+              address: { kind: 'Input', index: 3 },
+            },
+          ],
         },
       },
     },

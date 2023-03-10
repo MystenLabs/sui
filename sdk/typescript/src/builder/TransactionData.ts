@@ -72,7 +72,7 @@ const TRANSACTION_DATA_MAX_SIZE = 64 * 1024;
 export class TransactionDataBuilder {
   static fromBytes(bytes: Uint8Array) {
     const data = builder.de('TransactionData', bytes);
-    const programmableTx = data?.V1?.kind?.Single?.ProgrammableTransaction;
+    const programmableTx = data?.V1?.kind?.ProgrammableTransaction;
     if (!programmableTx) {
       throw new Error('Unable to deserialize from bytes.');
     }
@@ -166,11 +166,9 @@ export class TransactionDataBuilder {
         budget: BigInt(this.gasConfig.budget),
       },
       kind: {
-        Single: {
-          ProgrammableTransaction: {
-            inputs,
-            commands: this.commands,
-          },
+        ProgrammableTransaction: {
+          inputs,
+          commands: this.commands,
         },
       },
     };

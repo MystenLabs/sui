@@ -323,15 +323,7 @@ const BCS_SPEC: TypeSchema = {
       u32: null,
       u256: null,
     },
-    Transaction: {
-      TransferObject: 'TransferObjectTx',
-      Publish: 'PublishTx',
-      Call: 'MoveCallTx',
-      TransferSui: 'TransferSuiTx',
-      Pay: 'PayTx',
-      PaySui: 'PaySuiTx',
-      PayAllSui: 'PayAllSuiTx',
-
+    TransactionKind: {
       // can not be called from sui.js; dummy placement
       // to set the enum counter right for ProgrammableTransact
       ChangeEpoch: null,
@@ -339,10 +331,6 @@ const BCS_SPEC: TypeSchema = {
       ConsensusCommitPrologue: null,
 
       ProgrammableTransaction: 'ProgrammableTransaction',
-    },
-    TransactionKind: {
-      Single: 'Transaction',
-      Batch: [VECTOR, 'Transaction'],
     },
     TransactionExpiration: {
       None: null,
