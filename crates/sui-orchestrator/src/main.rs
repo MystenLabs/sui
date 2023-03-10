@@ -60,50 +60,44 @@ pub enum Operation {
     Benchmark {
         /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
         /// only shared objects.
-        #[clap(long, value_name = "INT", default_value = "0")]
+        #[clap(long, value_name = "INT", default_value = "0", global = true)]
         shared_objects_ratio: u16,
 
         /// The committee size to deploy.
         #[clap(long, value_name = "INT")]
         committee: usize,
 
-        /// The fixed loads (in tx/s) to submit to the nodes.
-        #[clap(
-            long,
-            value_name = "INT",
-            multiple_occurrences = false,
-            multiple_values = true,
-            value_delimiter = ','
-        )]
-        loads: Vec<usize>,
-
         /// Number of faulty nodes.
-        #[clap(long, value_name = "INT", default_value = "0")]
+        #[clap(long, value_name = "INT", default_value = "0", global = true)]
         faults: usize,
 
         /// The minimum duration of the benchmark in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "180")]
+        #[clap(long, value_parser = parse_duration, default_value = "180", global = true)]
         duration: Duration,
 
         /// Whether to skip testbed updates before running benchmarks.
-        #[clap(long, action, default_value = "false")]
+        #[clap(long, action, default_value = "false", global = true)]
         skip_testbed_update: bool,
 
         /// Whether to skip testbed configuration before running benchmarks.
-        #[clap(long, action, default_value = "false")]
+        #[clap(long, action, default_value = "false", global = true)]
         skip_testbed_configuration: bool,
 
         /// Whether to skip downloading and analyzing log files.
-        #[clap(long, action, default_value = "false")]
+        #[clap(long, action, default_value = "false", global = true)]
         skip_logs_processing: bool,
 
         /// The timeout duration for ssh commands (in seconds).
-        #[clap(long, action, value_parser = parse_duration, default_value = "30")]
+        #[clap(long, action, value_parser = parse_duration, default_value = "30", global = true)]
         timeout: Duration,
 
         /// The number of times the orchestrator should retry an ssh command.
-        #[clap(long, value_name = "INT", default_value = "5")]
+        #[clap(long, value_name = "INT", default_value = "5", global = true)]
         retries: usize,
+
+        /// The load to submit to the system.
+        #[clap(subcommand)]
+        load_type: Load,
     },
 
     /// Print L-graphs from the collected data. These plots are very basic, their purpose
@@ -157,6 +151,33 @@ pub enum TestbedAction {
 
     /// Destroy the testbed and terminate all instances.
     Destroy,
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub enum Load {
+    /// The fixed loads (in tx/s) to submit to the nodes.
+    Fixed {
+        /// A list of fixed load (tx/s).
+        #[clap(
+            index(0),
+            value_name = "INT",
+            multiple_occurrences = false,
+            multiple_values = true,
+            value_delimiter = ','
+        )]
+        loads: Vec<usize>,
+    },
+
+    /// Search for the maximum load that the system can sustainably handle.
+    Search {
+        /// The initial load (in tx/s) to test and use a baseline.
+        #[clap(long, value_name = "INT", default_value = "200")]
+        starting_load: usize,
+        /// The maximum number of iterations before converging on a breaking point.
+        #[clap(long, value_name = "INT", default_value = "5")]
+        max_iterations: usize,
+    },
 }
 
 #[tokio::main]
@@ -227,12 +248,12 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             committee,
             faults,
             duration,
-            loads,
             skip_testbed_update,
             skip_testbed_configuration,
             skip_logs_processing,
             timeout,
             retries,
+            load_type,
         } => {
             // TODO: Fix the load generator to support benchmarks with faults.
             if faults != 0 {
@@ -250,15 +271,24 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             let orchestrator = Orchestrator::new(settings, instances, ssh_manager);
 
             let shared_objects_ratio = shared_objects_ratio.min(100);
-            let loads = if loads.is_empty() { vec![200] } else { loads };
+            let load = match load_type {
+                Load::Fixed { loads } => {
+                    let loads = if loads.is_empty() { vec![200] } else { loads };
+                    LoadType::Fixed(loads)
+                }
+                Load::Search {
+                    starting_load,
+                    max_iterations,
+                } => LoadType::Search {
+                    starting_load,
+                    max_iterations,
+                },
+            };
 
-            let generator = BenchmarkParametersGenerator::new(
-                shared_objects_ratio,
-                committee,
-                LoadType::Fixed(loads),
-            )
-            .with_custom_duration(duration)
-            .with_faults(faults);
+            let generator =
+                BenchmarkParametersGenerator::new(shared_objects_ratio, committee, load)
+                    .with_custom_duration(duration)
+                    .with_faults(faults);
 
             orchestrator
                 .skip_testbed_updates(skip_testbed_update)
