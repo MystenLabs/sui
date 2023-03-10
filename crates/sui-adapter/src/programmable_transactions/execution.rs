@@ -22,7 +22,6 @@ use move_vm_runtime::{
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    balance::Balance,
     base_types::{
         MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_STRUCT_NAME,
@@ -47,7 +46,7 @@ use sui_verifier::{
 };
 
 use crate::{
-    adapter::{convert_type_argument_error, generate_package_id, validate_primitive_arg_string},
+    adapter::{generate_package_id, validate_primitive_arg_string},
     execution_mode::ExecutionMode,
 };
 
@@ -197,7 +196,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
             let new_coin_id = context.fresh_id()?;
-            let new_coin = coin.split_coin(amount, UID::new(new_coin_id))?;
+            let new_coin = coin.split(amount, UID::new(new_coin_id))?;
             let coin_type = obj.type_.clone();
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
             vec![Value::Object(ObjectValue::coin(coin_type, new_coin)?)]
@@ -236,13 +235,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     );
                 };
                 context.delete_id(*id.object_id())?;
-                let Some(new_value) = target_coin.balance.value().checked_add(balance.value())
-                else {
-                    return Err(ExecutionError::from_kind(
-                        ExecutionErrorKind::TotalCoinBalanceOverflow,
-                    ));
-                };
-                target_coin.balance = Balance::new(new_value);
+                target_coin.add(balance)?;
             }
             context.restore_arg::<Mode>(
                 &mut argument_updates,
@@ -518,9 +511,10 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionM
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;
 
-    if modules.is_empty() {
-        return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
-    }
+    assert_invariant!(
+        !modules.is_empty(),
+        "input checker ensures package is not empty"
+    );
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
@@ -610,7 +604,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         context
             .session
             .load_type(ty)
-            .map_err(|e| convert_type_argument_error(idx, e, context.vm, context.state_view))?;
+            .map_err(|e| context.convert_type_argument_error(idx, e))?;
     }
     if from_init {
         // the session is weird and does not load the module on publishing. This is a temporary
@@ -930,7 +924,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
                 validate_primitive_arg_string(
                     &bytes,
-                    idx as LocalIndex,
+                    idx as u16,
                     string_struct,
                     string_struct_layout,
                 )?;
@@ -1079,6 +1073,16 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
     })
 }
 
+fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let module_id = &s.module;
+    let struct_name = &s.name;
+    (
+        module_id.address(),
+        module_id.name(),
+        struct_name.as_ident_str(),
+    )
+}
+
 /// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
 fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
@@ -1124,14 +1128,4 @@ fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
         }
     }
     Ok(true)
-}
-
-fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
 }

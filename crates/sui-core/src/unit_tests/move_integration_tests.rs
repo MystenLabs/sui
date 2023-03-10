@@ -110,6 +110,79 @@ async fn test_publishing_with_unpublished_deps() {
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
+async fn test_publish_empty_package() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+
+    // empty package
+    let data =
+        TransactionData::new_module_with_dummy_gas_price(sender, gas_object_ref, vec![], MAX_GAS);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let err = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::EmptyCommandInput
+        }
+    );
+
+    // empty module
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        sender,
+        gas_object_ref,
+        vec![vec![]],
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    )
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publish_duplicate_modules() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+
+    // empty package
+    let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ true);
+    assert_eq!(modules.len(), 1);
+    modules.push(modules[0].clone());
+    let data =
+        TransactionData::new_module_with_dummy_gas_price(sender, gas_object_ref, modules, MAX_GAS);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    )
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
 async fn test_object_wrapping_unwrapping() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
@@ -2153,6 +2226,18 @@ async fn test_custom_property_check_unpublished_dependencies() {
     expected.assert_eq(&error)
 }
 
+pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src");
+    path.push("unit_tests");
+    path.push("data");
+    path.push(test_dir);
+    sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_package_bytes(with_unpublished_deps)
+}
+
 pub async fn build_and_try_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
@@ -2162,13 +2247,7 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let build_config = BuildConfig::new_for_testing();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/");
-    path.push(test_dir);
-    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes(with_unpublished_deps);
+    let all_module_bytes = build_test_package(test_dir, with_unpublished_deps);
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();

@@ -15,8 +15,7 @@ use serde_with::serde_as;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use tracing::trace;
 
-use crate::base_types::MoveObjectType;
-use crate::coin::{check_coins, update_input_coins, Coin};
+use crate::coin::Coin;
 use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
 use crate::messages::TransactionEvents;
@@ -795,16 +794,46 @@ impl<S> TemporaryStore<S> {
         gas: &[ObjectRef],
     ) -> Result<ObjectRef, ExecutionError> {
         if gas.len() > 1 {
-            let mut gas_coins: Vec<Object> = gas
+            let mut gas_coins: Vec<(Object, Coin)> = gas
                 .iter()
-                .map(|obj_ref| self.objects().get(&obj_ref.0).unwrap().clone())
-                .collect();
-            // this should not fail as we checked gas coins are correct already
-            let (mut coins, _) = check_coins(&gas_coins, Some(MoveObjectType::GasCoin))?;
-            let mut merged_coin = coins.swap_remove(0);
-            merged_coin.merge_coins(&mut coins)?;
+                .map(|obj_ref| {
+                    let obj = self.objects().get(&obj_ref.0).unwrap().clone();
+                    let Data::Move(move_obj) = &obj.data else {
+                        return Err(ExecutionError::invariant_violation(
+                            "Provided non-gas coin object as input for gas!"
+                        ));
+                    };
+                    if !move_obj.type_().is_gas_coin() {
+                        return Err(ExecutionError::invariant_violation(
+                            "Provided non-gas coin object as input for gas!",
+                        ));
+                    }
+                    let coin = Coin::from_bcs_bytes(move_obj.contents()).map_err(|_| {
+                        ExecutionError::invariant_violation(
+                            "Deserializing Gas coin should not fail!",
+                        )
+                    })?;
+                    Ok((obj, coin))
+                })
+                .collect::<Result<_, _>>()?;
+            let (mut gas_object, mut gas_coin) = gas_coins.swap_remove(0);
             let ctx = SingleTxContext::gas(sender);
-            update_input_coins(&ctx, self, &mut gas_coins, &merged_coin, None);
+            for (other_object, other_coin) in gas_coins {
+                gas_coin.add(other_coin.balance)?;
+                self.delete_object(
+                    &ctx,
+                    &other_object.id(),
+                    other_object.version(),
+                    DeleteKind::Normal,
+                )
+            }
+            let new_contents = bcs::to_bytes(&gas_coin).map_err(|_| {
+                ExecutionError::invariant_violation("Deserializing Gas coin should not fail!")
+            })?;
+            // unwrap is safe because we checked that it was a coin object above.
+            let move_obj = gas_object.data.try_as_move_mut().unwrap();
+            move_obj.update_coin_contents(new_contents);
+            self.write_object(&ctx, gas_object, WriteKind::Mutate);
         }
         Ok(gas[0])
     }

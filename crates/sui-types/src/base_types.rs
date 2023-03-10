@@ -680,7 +680,10 @@ impl TxContext {
             || self.digest != other.digest
             || other.ids_created < self.ids_created
         {
-            return Err(ExecutionErrorKind::InvalidTransactionUpdate.into());
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InvariantViolation,
+                "Immutable fields for TxContext changed",
+            ));
         }
         self.ids_created = other.ids_created;
         Ok(())

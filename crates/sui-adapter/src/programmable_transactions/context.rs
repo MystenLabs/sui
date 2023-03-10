@@ -9,7 +9,7 @@ use std::{
 
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::{CodeOffset, FunctionDefinitionIndex},
+    file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -621,6 +621,28 @@ where
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
     }
 
+    /// Special case errors for type arguments to Move functions
+    pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+        use move_core_types::vm_status::StatusCode;
+        use sui_types::messages::TypeArgumentError;
+        match error.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => self.convert_vm_error(error),
+        }
+    }
+
     /// Returns true if the value at the argument's location is borrowed, mutably or immutably
     fn arg_is_borrowed(&self, arg: &Argument) -> bool {
         self.borrowed.contains_key(arg)
@@ -800,7 +822,7 @@ fn refund_max_gas_budget(
         .value()
         .checked_add(gas_status.max_gax_budget_in_balance()) else {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::TotalCoinBalanceOverflow,
+                ExecutionErrorKind::CoinBalanceOverflow,
                 "Gas coin too large after returning the max gas budget",
             ));
         };
