@@ -52,9 +52,9 @@ pub struct SuiMoveStructTypeParameter {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct SuiMoveNormalizedField {
     pub name: String,
+    #[serde(rename = "type")]
     pub type_: SuiMoveNormalizedType,
 }
 
