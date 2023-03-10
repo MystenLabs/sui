@@ -2,7 +2,7 @@
 title: Sui Exchange Integration Guide
 ---
 
-This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking and delegation on the Sui network.
+This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking on the Sui network.
 
 ## Requirements to configure a SUI integration
 
@@ -232,15 +232,15 @@ Sui supports the following API operations related to transferring SUI between ad
 
 ## SUI Staking and Delegation
 
-The Sui blockchain uses a delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to delegate their tokens to any validator of their choice. When someone delegates their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake and stake with a different validator between epochs.
+The Sui blockchain uses a Delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to stake their SUI tokens to any validator of their choice. When someone stakes their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake at any time, but new staking requests become active only at the start of the next epoch.
 
-SUI holders who delegate their tokens to validators earn rewards for helping secure the Sui network. Sui determines rewards for delegation based on stake rewards on the network, and distributes them at the end of each epoch.
+SUI holders who stake their tokens to validators earn rewards for helping secure the Sui network. Sui determines rewards for staking based on stake rewards on the network, and distributes them at the end of each epoch.
 
 The total voting power in the Sui Network is always 10,000. The voting power of each individual validator is similar to basis points. For example, a voting power of 101 = 1.01%. Sui's quorum threshold (number of votes needed to confirm a transaction) is 6,667 (which is greater than 2/3). The voting power for a single validator is capped at 1,000 (10%) regardless of how much stake the validator has.
 
-## Delegated staking functions
+## Staking functions
 
-Sui supports the following API operations related to staking and delegation. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
+Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
 
  * `request_add_stake`
  Add delegated stake to a validator's staking pool.
