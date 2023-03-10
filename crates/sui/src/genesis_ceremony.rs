@@ -24,6 +24,8 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
 };
 
+use crate::genesis_inspector::examine_genesis_checkpoint;
+
 #[derive(Parser)]
 pub struct Ceremony {
     #[clap(long)]
@@ -83,6 +85,8 @@ pub enum CeremonyCommand {
     },
 
     BuildUnsignedCheckpoint,
+
+    ExamineGenesisCheckpoint,
 
     VerifyAndSign {
         #[clap(long)]
@@ -177,6 +181,12 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             );
 
             builder.save(dir)?;
+        }
+
+        CeremonyCommand::ExamineGenesisCheckpoint => {
+            let builder = Builder::load(&dir)?;
+            let genesis = builder.build();
+            examine_genesis_checkpoint(genesis);
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {

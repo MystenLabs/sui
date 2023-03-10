@@ -8,7 +8,9 @@ use move_core_types::language_storage::StructTag;
 use crate::balance::Balance;
 use crate::base_types::{ObjectID, SuiAddress};
 use crate::committee::EpochId;
+use crate::error::SuiError;
 use crate::id::{ID, UID};
+use crate::object::{Data, Object};
 use crate::SUI_FRAMEWORK_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
@@ -69,5 +71,25 @@ impl StakedSui {
 
     pub fn sui_token_lock(&self) -> Option<EpochId> {
         self.sui_token_lock
+    }
+}
+
+impl TryFrom<&Object> for StakedSui {
+    type Error = SuiError;
+    fn try_from(object: &Object) -> Result<Self, Self::Error> {
+        match &object.data {
+            Data::Move(o) => {
+                if o.type_ == StakedSui::type_() {
+                    return bcs::from_bytes(o.contents()).map_err(|err| SuiError::TypeError {
+                        error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                    });
+                }
+            }
+            Data::Package(_) => {}
+        }
+
+        Err(SuiError::TypeError {
+            error: format!("Object type is not a StakedSui: {:?}", object),
+        })
     }
 }
