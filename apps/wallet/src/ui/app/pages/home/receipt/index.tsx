@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import {
-    getExecutionStatusType,
-    getTransactionKindName,
-    getTransactionKinds,
-    getTransactionSender,
-} from '@mysten/sui.js';
+import { getExecutionStatusType } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
@@ -17,7 +12,6 @@ import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
-import { checkStakingTxn } from '_helpers';
 import { useAppSelector } from '_hooks';
 
 function ReceiptPage() {
@@ -51,27 +45,9 @@ function ReceiptPage() {
     const pageTitle = useMemo(() => {
         if (data) {
             const executionStatus = getExecutionStatusType(data);
-            const [transaction] = getTransactionKinds(data)!;
 
-            const txnKind = getTransactionKindName(transaction);
-            const stakingTxn = checkStakingTxn(data);
-
-            const isTransfer =
-                txnKind === 'PaySui' ||
-                txnKind === 'TransferSui' ||
-                txnKind === 'PayAllSui' ||
-                txnKind === 'TransferObject' ||
-                txnKind === 'Pay';
-
-            const isSender = activeAddress === getTransactionSender(data);
-
-            const transferName = isTransfer
-                ? isSender
-                    ? 'Sent Successfully'
-                    : 'Received Successfully'
-                : stakingTxn
-                ? `${stakingTxn} Successfully`
-                : 'Move Call';
+            // TODO: Infer out better name:
+            const transferName = 'Transaction';
 
             return `${
                 executionStatus === 'success'
@@ -81,7 +57,7 @@ function ReceiptPage() {
         }
 
         return 'Transaction Failed';
-    }, [activeAddress, data]);
+    }, [/*activeAddress,*/ data]);
 
     if (!transactionId || !activeAddress) {
         return <Navigate to="/transactions" replace={true} />;

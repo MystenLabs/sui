@@ -13,8 +13,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DryRunTransactionResponse, DynamicFieldPage,
-    EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
+    DynamicFieldPage, EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
     SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
     SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionsPage,
@@ -32,7 +32,6 @@ use sui_types::query::{EventQuery, TransactionQuery};
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
-use sui_types::governance::DelegatedStake;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[derive(Debug)]
@@ -421,7 +420,7 @@ impl QuorumDriver {
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .submit_transaction(tx_bytes, signatures, request_type.clone())
+            .execute_transaction(tx_bytes, signatures, request_type.clone())
             .await?;
 
         Ok(match request_type {

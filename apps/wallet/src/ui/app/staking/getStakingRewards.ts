@@ -3,37 +3,25 @@
 
 import BigNumber from 'bignumber.js';
 
-import type { SuiValidatorSummary, DelegatedStake } from '@mysten/sui.js';
+import type { SuiValidatorSummary, StakeObject } from '@mysten/sui.js';
 
 export function getStakingRewards(
-    activeValidators: SuiValidatorSummary[],
-    delegation: DelegatedStake
+    validator: SuiValidatorSummary,
+    stakes: StakeObject
 ) {
-    if (
-        !activeValidators ||
-        !delegation ||
-        delegation.delegationStatus === 'Pending'
-    )
-        return 0;
-    const pool_id = delegation.stakedSui.poolId;
-    const validator = activeValidators.find(
-        (validator) => validator.stakingPoolId === pool_id
-    );
+    if (!validator || !stakes || stakes.status === 'Pending') return 0;
 
     if (!validator) return 0;
 
-    const poolTokens = new BigNumber(
-        delegation.delegationStatus.Active.poolTokens.value
-    );
+    const poolTokens = new BigNumber(stakes.principal);
     const delegationTokenSupply = new BigNumber(validator.poolTokenBalance);
     const suiBalance = new BigNumber(validator.stakingPoolSuiBalance);
-    const pricipalAmout = new BigNumber(
-        delegation.delegationStatus.Active.principalSuiAmount
-    );
+    const principalAmount = new BigNumber(stakes.principal);
+
     const currentSuiWorth = poolTokens
         .multipliedBy(suiBalance)
         .dividedBy(delegationTokenSupply);
 
-    const earnToken = currentSuiWorth.minus(pricipalAmout);
+    const earnToken = currentSuiWorth.minus(principalAmount);
     return earnToken.decimalPlaces(0, BigNumber.ROUND_DOWN).toNumber();
 }

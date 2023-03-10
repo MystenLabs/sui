@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { toB64, type SuiValidatorSummary } from '@mysten/sui.js';
+import { type SuiValidatorSummary } from '@mysten/sui.js';
 
 import { StakeButton } from './StakeButton';
 
@@ -17,10 +17,7 @@ type ValidatorMetaProps = {
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
-    const validatorPublicKey = toB64(
-        new Uint8Array(validatorData.protocolPubkeyBytes)
-    );
-
+    const validatorPublicKey = validatorData.protocolPubkeyBytes;
     const validatorName = validatorData.name;
     const logo = validatorData.imageUrl;
     const description = validatorData.description;

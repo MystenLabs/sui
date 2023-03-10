@@ -2,26 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { formatAddress, type SuiAddress } from '@mysten/sui.js';
+import {
+    formatAddress,
+    getTotalGasUsed,
+    type Transaction,
+    type SuiAddress,
+} from '@mysten/sui.js';
+import { useMemo } from 'react';
 
 import { MiniNFT } from './MiniNFT';
 import { SummaryCard } from './SummaryCard';
 import { AccountAddress } from '_components/AccountAddress';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useGetNFTMeta, useTransactionSummary } from '_hooks';
+import { useGetNFTMeta, useTransactionDryRun } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { type CoinsMetaProps } from '_src/ui/app/helpers/getEventsSummary';
-import { type TransactionDryRun } from '_src/ui/app/hooks/useTransactionDryRun';
-
-import type { TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
+import {
+    getEventsSummary,
+    type CoinsMetaProps,
+} from '_src/ui/app/helpers/getEventsSummary';
 
 import st from './TransactionRequest.module.scss';
 
 type TransferSummerCardProps = {
     coinsMeta: CoinsMetaProps[];
     objectIDs: string[];
-    gasEstimate: number | null;
+    gasEstimate?: number | null;
     addressForTransaction: SuiAddress;
 };
 
@@ -148,36 +154,28 @@ function TransactionSummary({
 }
 
 export function TransactionSummaryCard({
-    txRequest,
+    transaction,
     address,
 }: {
-    txRequest: TransactionApprovalRequest;
+    transaction: Transaction;
     address: string;
 }) {
-    const txData: TransactionDryRun = (
-        txRequest.tx.type === 'move-call'
-            ? {
-                  kind: 'moveCall',
-                  data: txRequest.tx.data,
-              }
-            : txRequest.tx.data
-    ) as TransactionDryRun;
+    const { data } = useTransactionDryRun(address, transaction);
 
-    const txReqData = {
-        txData: txData,
-        addressForTransaction: address,
-    };
+    const eventsSummary = useMemo(
+        () => (data ? getEventsSummary(data.events, address) : null),
+        [data, address]
+    );
 
-    const [transactionSummary, gasEstimation] =
-        useTransactionSummary(txReqData);
+    const gasEstimation = data && getTotalGasUsed(data.effects);
 
-    if (!transactionSummary) {
+    if (!eventsSummary) {
         return null;
     }
     return (
         <TransactionSummary
-            objectIDs={transactionSummary.objectIDs}
-            coinsMeta={transactionSummary.coins}
+            objectIDs={eventsSummary.objectIDs}
+            coinsMeta={eventsSummary.coins}
             gasEstimate={gasEstimation}
             addressForTransaction={address}
         />

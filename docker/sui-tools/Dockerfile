@@ -42,7 +42,6 @@ RUN cargo build --release \
     --bin sui \
     --bin sui-faucet \
     --bin stress \
-    --bin sui-indexer \
     --bin sui-cluster-test
 
 # Production Image
@@ -52,9 +51,6 @@ COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
-COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
-# sui-indexer needs postgres libpq5 and ca-certificates
-RUN apt update && apt install -y libpq5 ca-certificates
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 
 ARG BUILD_DATE

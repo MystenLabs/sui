@@ -216,15 +216,49 @@ export class BcsReader {
  *   .write64(10000001000000)
  *   .hex();
  */
+
+interface BcsWriterOptions {
+  /** The initial size (in bytes) of the buffer tht will be allocated */
+  size?: number;
+  /** The maximum size (in bytes) that the buffer is allowed to grow to */
+  maxSize?: number;
+  /** The amount of bytes that will be allocated whenever additional memory is required */
+  allocateSize?: number;
+}
+
 export class BcsWriter {
   private dataView: DataView;
   private bytePosition: number = 0;
+  private size: number;
+  private maxSize: number;
+  private allocateSize: number;
 
-  /**
-   * @param {Number} [size=1024] Size of the buffer to reserve for serialization.
-   */
-  constructor(size = 1024) {
+  constructor({
+    size = 1024,
+    maxSize,
+    allocateSize = 1024,
+  }: BcsWriterOptions = {}) {
+    this.size = size;
+    this.maxSize = maxSize || size;
+    this.allocateSize = allocateSize;
     this.dataView = new DataView(new ArrayBuffer(size));
+  }
+
+  private ensureSizeOrGrow(bytes: number) {
+    const requiredSize = this.bytePosition + bytes;
+    if (requiredSize > this.size) {
+      const nextSize = Math.min(this.maxSize, this.size + this.allocateSize);
+      if (requiredSize > nextSize) {
+        throw new Error(
+          `Attempting to serialize to BCS, but buffer does not have enough size. Allocated size: ${this.size}, Max size: ${this.maxSize}, Required size: ${requiredSize}`
+        );
+      }
+
+      this.size = nextSize;
+      const nextBuffer = new ArrayBuffer(this.size);
+      new Uint8Array(nextBuffer).set(new Uint8Array(this.dataView.buffer));
+      this.dataView = new DataView(nextBuffer);
+    }
   }
 
   /**
@@ -243,6 +277,7 @@ export class BcsWriter {
    * @returns {this}
    */
   write8(value: number | bigint): this {
+    this.ensureSizeOrGrow(1);
     this.dataView.setUint8(this.bytePosition, Number(value));
     return this.shift(1);
   }
@@ -252,6 +287,7 @@ export class BcsWriter {
    * @returns {this}
    */
   write16(value: number | bigint): this {
+    this.ensureSizeOrGrow(2);
     this.dataView.setUint16(this.bytePosition, Number(value), true);
     return this.shift(2);
   }
@@ -261,6 +297,7 @@ export class BcsWriter {
    * @returns {this}
    */
   write32(value: number | bigint): this {
+    this.ensureSizeOrGrow(4);
     this.dataView.setUint32(this.bytePosition, Number(value), true);
     return this.shift(4);
   }
@@ -406,7 +443,7 @@ export interface TypeInterface {
   encode: (
     self: BCS,
     data: any,
-    size: number,
+    options: BcsWriterOptions | undefined,
     typeParams: TypeName[]
   ) => BcsWriter;
   decode: (self: BCS, data: Uint8Array, typeParams: TypeName[]) => any;
@@ -607,14 +644,14 @@ export class BCS {
   public ser(
     type: TypeName | StructTypeDefinition,
     data: any,
-    size: number = 1024
+    options?: BcsWriterOptions
   ): BcsWriter {
     if (typeof type === "string" || Array.isArray(type)) {
       const { name, params } = this.parseTypeName(type);
       return this.getTypeInterface(name).encode(
         this,
         data,
-        size,
+        options,
         params as string[]
       );
     }
@@ -623,7 +660,7 @@ export class BCS {
     if (typeof type === "object") {
       const key = this.tempKey();
       const temp = new BCS(this);
-      return temp.registerStructType(key, type).ser(key, data, size);
+      return temp.registerStructType(key, type).ser(key, data, options);
     }
 
     throw new Error(
@@ -747,7 +784,7 @@ export class BCS {
     const { name, params: generics } = this.parseTypeName(typeName);
 
     this.types.set(name, {
-      encode(self: BCS, data, size = 1024, typeParams) {
+      encode(self: BCS, data, options: BcsWriterOptions, typeParams) {
         const typeMap = (generics as string[]).reduce(
           (acc: any, value: string, index) => {
             return Object.assign(acc, { [value]: typeParams[index] });
@@ -757,7 +794,7 @@ export class BCS {
 
         return this._encodeRaw.call(
           self,
-          new BcsWriter(size),
+          new BcsWriter(options),
           data,
           typeParams,
           typeMap

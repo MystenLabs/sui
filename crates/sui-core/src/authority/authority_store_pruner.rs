@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store_types::StoreData;
+use crate::authority::authority_store_types::{ObjectContentDigest, StoreData};
 use crate::checkpoints::CheckpointStore;
 use mysten_metrics::monitored_scope;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_types::digests::CheckpointDigest;
+use sui_storage::mutex_table::RwLockTable;
 use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
@@ -33,9 +34,11 @@ enum DeletionMethod {
 
 impl AuthorityStorePruner {
     /// prunes old versions of objects based on transaction effects
-    fn prune_effects(
+    async fn prune_effects(
         transaction_effects: Vec<TransactionEffects>,
         perpetual_db: &Arc<AuthorityPerpetualTables>,
+        objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
+        checkpoint_number: CheckpointSequenceNumber,
         deletion_method: DeletionMethod,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
@@ -52,7 +55,9 @@ impl AuthorityStorePruner {
             .objects
             .multi_get(object_keys_to_prune.iter())?
         {
-            if let Some(StoreData::IndirectObject(indirect_object)) = object.map(|o| o.data) {
+            if let Some(StoreData::IndirectObject(indirect_object)) =
+                object.map(|o| o.into_inner().data)
+            {
                 *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
             }
         }
@@ -82,18 +87,24 @@ impl AuthorityStorePruner {
         }
         if !indirect_objects.is_empty() {
             let ref_count_update = indirect_objects
-                .into_iter()
+                .iter()
                 .map(|(digest, delta)| (digest, delta.to_le_bytes()));
             wb = wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
         }
+        wb = perpetual_db.set_highest_pruned_checkpoint(wb, checkpoint_number)?;
+
+        let _locks = objects_lock_table
+            .acquire_locks(indirect_objects.into_keys())
+            .await;
         wb.write()?;
         Ok(())
     }
 
     /// Prunes old object versions based on effects from all checkpoints from epochs eligible for pruning
-    fn prune_objects_for_eligible_epochs(
+    async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
+        objects_lock_table: &Arc<RwLockTable<ObjectContentDigest>>,
         config: AuthorityStorePruningConfig,
     ) -> anyhow::Result<()> {
         let deletion_method = if config.use_range_deletion {
@@ -101,10 +112,7 @@ impl AuthorityStorePruner {
         } else {
             DeletionMethod::PointDelete
         };
-        let mut checkpoint_number = checkpoint_store
-            .get_highest_pruned_checkpoint_seq_number()?
-            .unwrap_or_default();
-        let mut checkpoint_digest = CheckpointDigest::random();
+        let mut checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| c.epoch())
@@ -130,7 +138,6 @@ impl AuthorityStorePruner {
                 break;
             }
             checkpoint_number = *checkpoint.sequence_number();
-            checkpoint_digest = *checkpoint.digest();
             checkpoints_in_batch += 1;
             if network_total_transactions == checkpoint.network_total_transactions {
                 continue;
@@ -152,17 +159,27 @@ impl AuthorityStorePruner {
             if batch_effects.len() >= config.max_transactions_in_batch
                 || checkpoints_in_batch >= config.max_checkpoints_in_batch
             {
-                Self::prune_effects(batch_effects, perpetual_db, deletion_method)?;
-                checkpoint_store
-                    .update_highest_pruned_checkpoint(checkpoint_number, checkpoint_digest)?;
+                Self::prune_effects(
+                    batch_effects,
+                    perpetual_db,
+                    objects_lock_table,
+                    checkpoint_number,
+                    deletion_method,
+                )
+                .await?;
                 batch_effects = vec![];
                 checkpoints_in_batch = 0;
             }
         }
         if !batch_effects.is_empty() {
-            Self::prune_effects(batch_effects, perpetual_db, deletion_method)?;
-            checkpoint_store
-                .update_highest_pruned_checkpoint(checkpoint_number, checkpoint_digest)?;
+            Self::prune_effects(
+                batch_effects,
+                perpetual_db,
+                objects_lock_table,
+                checkpoint_number,
+                deletion_method,
+            )
+            .await?;
         }
         debug!(
             "Finished pruner iteration. Latest pruned checkpoint: {}",
@@ -176,6 +193,7 @@ impl AuthorityStorePruner {
         epoch_duration_ms: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
+        objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -196,7 +214,7 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, config) {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
@@ -209,6 +227,7 @@ impl AuthorityStorePruner {
     pub fn new(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
+        objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
         pruning_config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
     ) -> Self {
@@ -218,6 +237,7 @@ impl AuthorityStorePruner {
                 epoch_duration_ms,
                 perpetual_db,
                 checkpoint_store,
+                objects_lock_table,
             ),
         }
     }
@@ -234,9 +254,12 @@ mod tests {
 
     use crate::authority::authority_store_pruner::DeletionMethod;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
-    use crate::authority::authority_store_types::{StoreData, StoreObject, StoreObjectPair};
+    use crate::authority::authority_store_types::{
+        get_store_object_pair, ObjectContentDigest, StoreData, StoreObjectPair, StoreObjectWrapper,
+    };
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
+    use sui_storage::mutex_table::RwLockTable;
     use sui_types::base_types::{ObjectDigest, VersionNumber};
     use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::{
@@ -268,7 +291,7 @@ mod tests {
         );
 
         let mut after_pruning = HashSet::new();
-        let objects = DBMap::<ObjectKey, StoreObject>::reopen(
+        let objects = DBMap::<ObjectKey, StoreObjectWrapper>::reopen(
             &perpetual_db?,
             Some("objects"),
             // open the db to bypass default db options which ignores range tombstones
@@ -295,7 +318,7 @@ mod tests {
     }
 
     fn insert_keys(
-        objects: &DBMap<ObjectKey, StoreObject>,
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
     ) -> Result<TransactionEffects, anyhow::Error> {
         let mut to_delete = vec![];
         let num_versions_to_keep = 2;
@@ -304,7 +327,7 @@ mod tests {
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
         for id in ids {
             for i in (0..num_versions_per_object).rev() {
-                let StoreObjectPair(obj, _) = Object::immutable_with_id_for_testing(id).into();
+                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
                 objects.insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
                 if i < num_versions_per_object - num_versions_to_keep {
                     to_delete.push((id, SequenceNumber::from(i)));
@@ -319,7 +342,7 @@ mod tests {
     }
 
     fn read_keys(
-        objects: &DBMap<ObjectKey, StoreObject>,
+        objects: &DBMap<ObjectKey, StoreObjectWrapper>,
         num_reads: u32,
     ) -> Result<(), anyhow::Error> {
         let mut i = 0;
@@ -350,12 +373,12 @@ mod tests {
                     to_delete.push(object_key);
                 }
                 let StoreObjectPair(obj, indirect_obj) =
-                    Object::immutable_with_id_for_testing(id).into();
+                    get_store_object_pair(Object::immutable_with_id_for_testing(id), 1);
                 batch = batch.insert_batch(
                     &db.objects,
                     [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
                 )?;
-                if let StoreData::IndirectObject(metadata) = obj.data {
+                if let StoreData::IndirectObject(metadata) = obj.into_inner().data {
                     batch = batch.merge_batch(
                         &db.indirect_move_objects,
                         [(metadata.digest, indirect_obj.unwrap())],
@@ -370,6 +393,10 @@ mod tests {
                 * total_unique_object_ids as u64
         );
         Ok((to_keep, to_delete))
+    }
+
+    fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
+        Arc::new(RwLockTable::new(1, 10))
     }
 
     async fn run_pruner(
@@ -391,7 +418,15 @@ mod tests {
             let mut effects = TransactionEffects::default();
             *effects.modified_at_versions_mut_for_testing() =
                 to_delete.into_iter().map(|o| (o.0, o.1)).collect();
-            AuthorityStorePruner::prune_effects(vec![effects], &db, deletion_method).unwrap();
+            AuthorityStorePruner::prune_effects(
+                vec![effects],
+                &db,
+                &lock_table(),
+                0,
+                deletion_method,
+            )
+            .await
+            .unwrap();
             to_keep
         };
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -459,7 +494,7 @@ mod tests {
                 if i < num_versions_per_object - 2 {
                     to_delete.push((id, SequenceNumber::from(i)));
                 }
-                let StoreObjectPair(obj, _) = Object::immutable_with_id_for_testing(id).into();
+                let obj = get_store_object_pair(Object::immutable_with_id_for_testing(id), 0).0;
                 perpetual_db
                     .objects
                     .insert(&ObjectKey(id, SequenceNumber::from(i)), &obj)?;
@@ -473,8 +508,11 @@ mod tests {
         let total_pruned = AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,
+            &lock_table(),
+            0,
             DeletionMethod::RangeDelete,
-        );
+        )
+        .await;
         info!("Total pruned keys = {:?}", total_pruned);
         let start = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
         let end = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
@@ -504,8 +542,11 @@ mod tests {
         AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,
+            &lock_table(),
+            0,
             DeletionMethod::RangeDelete,
-        )?;
+        )
+        .await?;
         let guard = pprof::ProfilerGuardBuilder::default()
             .frequency(1000)
             .build()
@@ -533,8 +574,11 @@ mod tests {
         AuthorityStorePruner::prune_effects(
             vec![effects],
             &perpetual_db,
+            &lock_table(),
+            0,
             DeletionMethod::RangeDelete,
-        )?;
+        )
+        .await?;
         if let Ok(()) = perpetual_db.objects.flush() {
             info!("Completed flushing objects table");
         } else {

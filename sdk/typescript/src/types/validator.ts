@@ -14,13 +14,14 @@ import {
   tuple,
   optional,
 } from 'superstruct';
-import { SuiAddress } from './common';
-import { AuthorityName } from './transactions';
+import { ObjectId, SuiAddress } from './common';
+import { AuthorityName, EpochId } from './transactions';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */
 
 export type DelegatedStake = Infer<typeof DelegatedStake>;
 export type CommitteeInfo = Infer<typeof CommitteeInfo>;
+export type StakeObject = Infer<typeof StakeObject>;
 
 // Staking
 
@@ -28,33 +29,20 @@ export const Balance = object({
   value: number(),
 });
 
-export const StakedSui = object({
-  id: object({
-    id: string(),
-  }),
-  poolId: string(),
-  validatorAddress: string(),
-  delegationRequestEpoch: number(),
-  principal: Balance,
-  suiTokenLock: union([number(), literal(null)]),
-});
-
-export const ActiveFields = object({
-  id: object({
-    id: string(),
-  }),
-  stakedSuiId: SuiAddress,
-  principalSuiAmount: number(),
-  poolTokens: Balance,
-});
-
-export const ActiveDelegationStatus = object({
-  Active: ActiveFields,
+export const StakeObject = object({
+  stakedSuiId: ObjectId,
+  stakeRequestEpoch: EpochId,
+  stakeActiveEpoch: EpochId,
+  principal: number(),
+  tokenLock: nullable(EpochId),
+  status: union([literal('Active'), literal('Pending')]),
+  estimatedReward: optional(number()),
 });
 
 export const DelegatedStake = object({
-  stakedSui: StakedSui,
-  delegationStatus: union([literal('Pending'), ActiveDelegationStatus]),
+  validatorAddress: SuiAddress,
+  stakingPool: ObjectId,
+  stakes: array(StakeObject),
 });
 
 export const ParametersFields = object({
@@ -111,7 +99,7 @@ export const DelegationStakingPoolFields = object({
   pendingTotalSuiWithdraw: number(),
   poolTokenBalance: number(),
   rewardsPool: object({ value: number() }),
-  activationEpoch: object({ vec: array(number()) }),
+  startingEpoch: number(),
   deactivationEpoch: object({ vec: array() }),
   suiBalance: number(),
 });
@@ -129,26 +117,27 @@ export const CommitteeInfo = object({
 
 export const SuiValidatorSummary = object({
   suiAddress: SuiAddress,
-  protocolPubkeyBytes: array(number()),
-  networkPubkeyBytes: array(number()),
-  workerPubkeyBytes: array(number()),
-  proofOfPossessionBytes: array(number()),
+  protocolPubkeyBytes: string(),
+  networkPubkeyBytes: string(),
+  workerPubkeyBytes: string(),
+  proofOfPossessionBytes: string(),
+  operationCapId: string(),
   name: string(),
   description: string(),
   imageUrl: string(),
   projectUrl: string(),
-  p2pAddress: array(number()),
-  netAddress: array(number()),
-  primaryAddress: array(number()),
-  workerAddress: array(number()),
-  nextEpochProtocolPubkeyBytes: nullable(array(number())),
-  nextEpochProofOfPossession: nullable(array(number())),
-  nextEpochNetworkPubkeyBytes: nullable(array(number())),
-  nextEpochWorkerPubkeyBytes: nullable(array(number())),
-  nextEpochNetAddress: nullable(array(number())),
-  nextEpochP2pAddress: nullable(array(number())),
-  nextEpochPrimaryAddress: nullable(array(number())),
-  nextEpochWorkerAddress: nullable(array(number())),
+  p2pAddress: string(),
+  netAddress: string(),
+  primaryAddress: string(),
+  workerAddress: string(),
+  nextEpochProtocolPubkeyBytes: nullable(string()),
+  nextEpochProofOfPossession: nullable(string()),
+  nextEpochNetworkPubkeyBytes: nullable(string()),
+  nextEpochWorkerPubkeyBytes: nullable(string()),
+  nextEpochNetAddress: nullable(string()),
+  nextEpochP2pAddress: nullable(string()),
+  nextEpochPrimaryAddress: nullable(string()),
+  nextEpochWorkerAddress: nullable(string()),
   votingPower: number(),
   gasPrice: number(),
   commissionRate: number(),

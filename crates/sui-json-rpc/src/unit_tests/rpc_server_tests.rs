@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::{
-    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, ThresholdBlsApiClient,
-    TransactionBuilderClient, WriteApiClient,
+    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
+    WriteApiClient,
 };
 use std::path::Path;
 
@@ -13,12 +13,12 @@ use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
+use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
-    SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes,
 };
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
@@ -33,7 +33,6 @@ use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS}
 use test_utils::network::TestClusterBuilder;
 
 use sui_macros::sim_test;
-use sui_types::governance::{DelegatedStake, DelegationStatus};
 
 use tokio::time::{sleep, Duration};
 
@@ -46,6 +45,14 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     assert_eq!(5, objects.len());
+
+    // Multiget objectIDs test
+    let object_digests = objects.iter().map(|o| o.object_id).collect();
+
+    let object_resp = http_client
+        .multi_get_object_with_options(object_digests, None)
+        .await?;
+    assert_eq!(5, object_resp.len());
     Ok(())
 }
 
@@ -75,7 +82,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
     let tx_response: SuiTransactionResponse = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes1,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -87,163 +94,6 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         dryrun_response.effects.transaction_digest(),
         effects.unwrap().transaction_digest()
     );
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
-    let http_client = cluster.rpc_client();
-
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-
-    let address = cluster.accounts.first().unwrap();
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    let gas = objects.first().unwrap();
-
-    ////////////////////////////////////////////////////////////////////////
-    // Trying to get a tBLS signature for a type that is not Randomness should fail.
-
-    let tx_response = http_client
-        .tbls_sign_randomness_object(
-            gas.object_id,
-            SuiTBlsSignObjectCommitmentType::ConsensusCommitted,
-        )
-        .await;
-    assert!(tx_response.is_err());
-
-    ////////////////////////////////////////////////////////////////////////
-    // Publish the basic randomness example
-
-    let compiled_modules = BuildConfig::new_for_testing()
-        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64(false);
-    let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
-        .await?;
-    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    let tx_response = http_client
-        .submit_transaction(
-            tx_bytes,
-            signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
-        )
-        .await?;
-
-    let effects = tx_response.effects.as_ref().unwrap();
-    let read_resp = http_client
-        .get_transaction_with_options(
-            tx_response.digest,
-            Some(SuiTransactionResponseOptions::new().with_events()),
-        )
-        .await?;
-    let events = read_resp.events.as_ref().unwrap();
-    assert_eq!(SuiExecutionStatus::Success, *effects.status());
-
-    let package_id = events
-        .data
-        .iter()
-        .find_map(|e| {
-            if let SuiEvent::Publish { package_id, .. } = e {
-                Some(package_id)
-            } else {
-                None
-            }
-        })
-        .unwrap();
-
-    ////////////////////////////////////////////////////////////////////////
-    // Call create_owned_randomness
-
-    let transaction_bytes: TransactionBytes = http_client
-        .move_call(
-            *address,
-            *package_id,
-            "randomness_basics".to_string(),
-            "create_owned_randomness".to_string(),
-            vec![],
-            vec![],
-            Some(gas.object_id),
-            10_000,
-            None,
-        )
-        .await?;
-    let tx = transaction_bytes.to_data()?;
-    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    let tx_response = http_client
-        .submit_transaction(
-            tx_bytes,
-            signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
-        )
-        .await?;
-
-    let effects = tx_response.effects.as_ref().unwrap();
-    let events = tx_response.events.as_ref().unwrap();
-    assert_eq!(SuiExecutionStatus::Success, *effects.status());
-
-    let randomness_object_id = events
-        .data
-        .iter()
-        .find_map(|e| {
-            if let SuiEvent::NewObject { object_id, .. } = e {
-                Some(*object_id)
-            } else {
-                None
-            }
-        })
-        .unwrap();
-
-    ////////////////////////////////////////////////////////////////////////
-    // Get the tBLS signature from the JSON-RPC.
-
-    let tx_response = http_client
-        .tbls_sign_randomness_object(
-            randomness_object_id,
-            SuiTBlsSignObjectCommitmentType::ConsensusCommitted,
-        )
-        .await?;
-
-    let sig = tx_response.signature.0;
-
-    ////////////////////////////////////////////////////////////////////////
-    // Call set_randomness
-
-    let transaction_bytes = http_client
-        .move_call(
-            *address,
-            *package_id,
-            "randomness_basics".to_string(),
-            "set_randomness".to_string(),
-            vec![],
-            vec![
-                SuiJsonValue::from_object_id(randomness_object_id),
-                SuiJsonValue::from_bcs_bytes(&sig).unwrap(),
-            ],
-            Some(gas.object_id),
-            10_000,
-            None,
-        )
-        .await?;
-    let tx = transaction_bytes.to_data()?;
-    let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    let tx_response = http_client
-        .submit_transaction(
-            tx_bytes,
-            signatures,
-            ExecuteTransactionRequestType::WaitForEffectsCert,
-        )
-        .await?;
-    let effects = tx_response.effects.unwrap();
-    assert_eq!(SuiExecutionStatus::Success, *effects.status());
-
     Ok(())
 }
 
@@ -270,7 +120,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -321,7 +171,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -360,7 +210,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
 
     let result: CoinPage = http_client.get_coins(*address, None, None, None).await?;
     assert_eq!(5, result.data.len());
-    assert_eq!(None, result.next_cursor);
+    assert!(!result.has_next_page);
 
     let result: CoinPage = http_client
         .get_coins(*address, Some("0x2::sui::TestCoin".into()), None, None)
@@ -371,14 +221,14 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
         .get_coins(*address, Some("0x2::sui::SUI".into()), None, None)
         .await?;
     assert_eq!(5, result.data.len());
-    assert_eq!(None, result.next_cursor);
+    assert!(!result.has_next_page);
 
     // Test paging
     let result: CoinPage = http_client
         .get_coins(*address, Some("0x2::sui::SUI".into()), None, Some(3))
         .await?;
     assert_eq!(3, result.data.len());
-    assert!(result.next_cursor.is_some());
+    assert!(result.has_next_page);
 
     let result: CoinPage = http_client
         .get_coins(
@@ -389,7 +239,7 @@ async fn test_get_coins() -> Result<(), anyhow::Error> {
         )
         .await?;
     assert_eq!(2, result.data.len());
-    assert!(result.next_cursor.is_none());
+    assert!(!result.has_next_page);
 
     Ok(())
 }
@@ -433,7 +283,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -490,7 +340,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -565,7 +415,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -605,7 +455,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let response = http_client
-            .submit_transaction(
+            .execute_transaction(
                 tx_bytes,
                 signatures,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -696,6 +546,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
+    assert!(tx.has_next_page);
 
     // test get all transactions paged
     let first_page = client
@@ -704,16 +555,15 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
-    assert!(first_page.next_cursor.is_some());
+    assert!(first_page.has_next_page);
 
-    // test get all transactions in ascending order
     let second_page = client
         .read_api()
         .get_transactions(TransactionQuery::All, first_page.next_cursor, None, false)
         .await
         .unwrap();
     assert_eq!(16, second_page.data.len());
-    assert!(second_page.next_cursor.is_none());
+    assert!(!second_page.has_next_page);
 
     let mut all_txs_rev = first_page.data.clone();
     all_txs_rev.extend(second_page.data);
@@ -726,9 +576,9 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
-
-    assert_eq!(Some(all_txs_rev[10]), latest.next_cursor);
+    assert_eq!(Some(all_txs_rev[9]), latest.next_cursor);
     assert_eq!(all_txs_rev[0..10], latest.data);
+    assert!(latest.has_next_page);
 
     // test get from address txs in ascending order
     let address_txs_asc = client
@@ -850,8 +700,8 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    assert_eq!(15, page2.data.len());
-    assert_eq!(None, page2.next_cursor);
+    assert_eq!(14, page2.data.len());
+    assert!(!page2.has_next_page);
 
     // test get all events descending
     let page1 = client
@@ -860,21 +710,22 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((tx_responses[16].digest, 0).into()), page1.next_cursor);
+    assert_eq!(Some((tx_responses[17].digest, 0).into()), page1.next_cursor);
 
     let page2 = client
         .event_api()
         .get_events(
             EventQuery::All,
-            Some((tx_responses[16].digest, 0).into()),
+            Some((tx_responses[17].digest, 0).into()),
             None,
             true,
         )
         .await
         .unwrap();
-    // 17 events created by this test + 44 Genesis event
-    assert_eq!(61, page2.data.len());
-    assert_eq!(None, page2.next_cursor);
+
+    // 17 events created by this test + 48 Genesis event
+    assert_eq!(65, page2.data.len());
+    assert!(!page2.has_next_page);
 
     // test get sender events
     let page = client
@@ -968,7 +819,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1026,7 +877,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1036,11 +887,11 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
-    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert!(staked_sui[0].stakes[0].token_lock.is_none());
     assert!(matches!(
-        staked_sui[0].delegation_status,
-        DelegationStatus::Pending
+        staked_sui[0].stakes[0].status,
+        StakeStatus::Pending
     ));
     Ok(())
 }
@@ -1088,7 +939,7 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1098,11 +949,11 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
-    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert!(staked_sui[0].stakes[0].token_lock.is_none());
     assert!(matches!(
-        staked_sui[0].delegation_status,
-        DelegationStatus::Pending
+        staked_sui[0].stakes[0].status,
+        StakeStatus::Pending
     ));
 
     // Coins should be merged into one and returned to the sender.
@@ -1155,7 +1006,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1189,7 +1040,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .submit_transaction(
+        .execute_transaction(
             tx_bytes,
             signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -1199,12 +1050,12 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     // Check StakedSui object
     let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
-    assert_eq!(Some(20), staked_sui[0].staked_sui.sui_token_lock());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert_eq!(Some(20), staked_sui[0].stakes[0].token_lock);
 
     assert!(matches!(
-        staked_sui[0].delegation_status,
-        DelegationStatus::Pending
+        staked_sui[0].stakes[0].status,
+        StakeStatus::Pending
     ));
 
     Ok(())

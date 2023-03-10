@@ -23,21 +23,26 @@ export function TokenIconLink({
     accountAddress: SuiAddress;
 }) {
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
-    const { data: delegations, isLoading } =
+    const { data: delegatedStake, isLoading } =
         useGetDelegatedStake(accountAddress);
 
+    // Total active stake for all delegations
     const totalActivePendingStake = useMemo(() => {
-        if (!delegations) return 0n;
-        return delegations.reduce(
-            (acc, { stakedSui }) => acc + BigInt(stakedSui.principal.value),
+        if (!delegatedStake) return 0n;
+
+        return delegatedStake.reduce(
+            (acc, curr) =>
+                curr.stakes.reduce(
+                    (total, { principal }) => total + BigInt(principal),
+                    acc
+                ),
+
             0n
         );
-    }, [delegations]);
+    }, [delegatedStake]);
 
-    const stakedValidators = useMemo(() => {
-        if (!delegations) return [];
-        return delegations.map(({ stakedSui }) => stakedSui.validatorAddress);
-    }, [delegations]);
+    const stakedValidators =
+        delegatedStake?.map(({ validatorAddress }) => validatorAddress) || [];
 
     const [formatted, symbol, queryResult] = useFormatCoin(
         totalActivePendingStake,

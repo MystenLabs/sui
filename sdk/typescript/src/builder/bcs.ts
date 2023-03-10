@@ -9,7 +9,7 @@ import { CommandArgument, MoveCallCommand } from './Commands';
 
 export const ARGUMENT_INNER = 'Argument';
 export const VECTOR = 'vector';
-export const OPTION = 'Option;';
+export const OPTION = 'Option';
 export const CALL_ARG = 'CallArg';
 export const TYPE_TAG = 'TypeTag';
 export const OBJECT_ARG = 'ObjectArg';

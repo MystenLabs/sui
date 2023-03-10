@@ -89,9 +89,10 @@ impl ReadStore for RocksDbStore {
             .get_checkpoint_contents(digest)?
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
             .transpose()
+            .map(|contents| contents.flatten())
     }
 
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Committee>, Self::Error> {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
         Ok(self.committee_store.get_committee(&epoch).unwrap())
     }
 

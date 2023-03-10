@@ -53,7 +53,6 @@ describe('Transaction Builders', () => {
     tx.add(
       Commands.MoveCall({
         target: '0x2::devnet_nft::mint',
-        typeArguments: [],
         arguments: [
           tx.input('Example NFT'),
           tx.input('An NFT created by the wallet Command Line Tool'),
@@ -69,18 +68,17 @@ describe('Transaction Builders', () => {
   it('MoveCall Shared Object', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
-    const [{ suiAddress: validator_address }] =
+    const [{ suiAddress: validatorAddress }] =
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
     tx.add(
       Commands.MoveCall({
         target: '0x2::sui_system::request_add_delegation',
-        typeArguments: [],
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
           tx.input(coins[2].objectId),
-          tx.input(validator_address),
+          tx.input(validatorAddress),
         ],
       }),
     );

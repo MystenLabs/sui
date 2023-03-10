@@ -280,6 +280,26 @@ impl fmt::UpperHex for CheckpointContentsDigest {
     }
 }
 
+/// A digest of a cerificate, which commits to the signatures as well as the tx.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CertificateDigest(Sha3Digest);
+
+impl CertificateDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
+    }
+}
+
+impl fmt::Debug for CertificateDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("CertificateDigest").field(&self.0).finish()
+    }
+}
+
 /// A transaction will have a (unique) digest.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(Sha3Digest);
@@ -602,5 +622,15 @@ impl TryFrom<&[u8]> for ObjectDigest {
             .try_into()
             .map_err(|_| crate::error::SuiError::InvalidTransactionDigest)?;
         Ok(Self::new(arr))
+    }
+}
+
+impl std::str::FromStr for ObjectDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(ObjectDigest::new(result))
     }
 }

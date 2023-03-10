@@ -251,16 +251,14 @@ impl IndexStore {
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
         // Lookup TransactionDigest sequence number,
-        // also default cursor to 0 or the current sequence number depends on ordering.
         let cursor = if let Some(cursor) = cursor {
-            self.get_transaction_seq(&cursor)?
-                .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?
-        } else if reverse {
-            TxSequenceNumber::MAX
+            Some(
+                self.get_transaction_seq(&cursor)?
+                    .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?,
+            )
         } else {
-            TxSequenceNumber::MIN
+            None
         };
-
         Ok(match query {
             TransactionQuery::MoveFunction {
                 package,
@@ -286,8 +284,9 @@ impl IndexStore {
 
                 if reverse {
                     let iter = iter
-                        .skip_prior_to(&cursor)?
+                        .skip_prior_to(&cursor.unwrap_or(TxSequenceNumber::MAX))?
                         .reverse()
+                        .skip(usize::from(cursor.is_some()))
                         .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
                         iter.take(limit).collect()
@@ -295,7 +294,10 @@ impl IndexStore {
                         iter.collect()
                     }
                 } else {
-                    let iter = iter.skip_to(&cursor)?.map(|(_, digest)| digest);
+                    let iter = iter
+                        .skip_to(&cursor.unwrap_or(TxSequenceNumber::MIN))?
+                        .skip(usize::from(cursor.is_some()))
+                        .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
                         iter.take(limit).collect()
                     } else {
@@ -382,15 +384,17 @@ impl IndexStore {
     fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         key: KeyT,
-        cursor: TxSequenceNumber,
+        cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
         Ok(if reverse {
             let iter = index
                 .iter()
-                .skip_prior_to(&(key.clone(), cursor))?
+                .skip_prior_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MAX)))?
                 .reverse()
+                // skip one more if exclusive cursor is Some
+                .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
             if let Some(limit) = limit {
@@ -401,7 +405,9 @@ impl IndexStore {
         } else {
             let iter = index
                 .iter()
-                .skip_to(&(key.clone(), cursor))?
+                .skip_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN)))?
+                // skip one more if exclusive cursor is Some
+                .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
             if let Some(limit) = limit {
@@ -415,7 +421,7 @@ impl IndexStore {
     pub fn get_transactions_by_input_object(
         &self,
         input_object: ObjectID,
-        cursor: TxSequenceNumber,
+        cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
@@ -431,7 +437,7 @@ impl IndexStore {
     pub fn get_transactions_by_mutated_object(
         &self,
         mutated_object: ObjectID,
-        cursor: TxSequenceNumber,
+        cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
@@ -447,7 +453,7 @@ impl IndexStore {
     pub fn get_transactions_from_addr(
         &self,
         addr: SuiAddress,
-        cursor: TxSequenceNumber,
+        cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
@@ -465,21 +471,29 @@ impl IndexStore {
         package: ObjectID,
         module: Option<String>,
         function: Option<String>,
-        cursor: TxSequenceNumber,
+        cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        let cursor_val = cursor.unwrap_or(if reverse {
+            TxSequenceNumber::MAX
+        } else {
+            TxSequenceNumber::MIN
+        });
+
         let key = (
             package,
             module.clone().unwrap_or_default(),
             function.clone().unwrap_or_default(),
-            cursor,
+            cursor_val,
         );
         let iter = self.tables.transactions_by_move_function.iter();
         Ok(if reverse {
             let iter = iter
                 .skip_prior_to(&key)?
                 .reverse()
+                // skip one more if exclusive cursor is Some
+                .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, m, f, _), _)| {
                     *id == package
                         && module.as_ref().map(|x| x == m).unwrap_or(true)
@@ -494,6 +508,8 @@ impl IndexStore {
         } else {
             let iter = iter
                 .skip_to(&key)?
+                // skip one more if exclusive cursor is Some
+                .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, m, f, _), _)| {
                     *id == package
                         && module.as_ref().map(|x| x == m).unwrap_or(true)
@@ -511,7 +527,7 @@ impl IndexStore {
     pub fn get_transactions_to_addr(
         &self,
         addr: SuiAddress,
-        cursor: TxSequenceNumber,
+        cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
@@ -531,24 +547,22 @@ impl IndexStore {
         Ok(self.tables.transactions_seq.get(digest)?)
     }
 
-    pub fn get_dynamic_fields(
+    pub fn get_dynamic_fields_iterator(
         &self,
         object: ObjectID,
         cursor: Option<ObjectID>,
-        limit: usize,
-    ) -> SuiResult<Vec<DynamicFieldInfo>> {
+    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         debug!(?object, "get_dynamic_fields");
-        let cursor = cursor.unwrap_or(ObjectID::ZERO);
         Ok(self
             .tables
             .dynamic_field_index
             .iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(object, cursor))?
-            .take_while(|((object_owner, _), _)| (object_owner == &object))
-            .map(|(_, object_info)| object_info)
-            .take(limit)
-            .collect())
+            .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
+            // skip an extra b/c the cursor is exclusive
+            .skip(usize::from(cursor.is_some()))
+            .take_while(move |((object_owner, _), _)| (object_owner == &object))
+            .map(|(_, object_info)| object_info))
     }
 
     pub fn get_dynamic_field_object_id(

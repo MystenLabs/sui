@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getMoveEvent,
+    isEventType,
     type SuiValidatorSummary,
     type SuiEventEnvelope,
 } from '@mysten/sui.js';
@@ -221,8 +223,8 @@ function ValidatorPageResult() {
         let totalRewards = 0;
 
         validatorEvents.data.forEach(({ event }) => {
-            if ('moveEvent' in event) {
-                const { moveEvent } = event;
+            if (isEventType(event, 'moveEvent')) {
+                const moveEvent = getMoveEvent(event)!;
                 totalRewards += +moveEvent.fields.stake_rewards;
             }
         });

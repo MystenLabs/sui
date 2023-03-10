@@ -6,5 +6,6 @@
   "include": ["src"],
   "references": [
     { "path": "../wallet-kit" },
+    { "path": "../../typescript" },
   ]
 }

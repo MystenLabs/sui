@@ -15,8 +15,12 @@ import {
   union,
   assert,
   Struct,
+  define,
 } from 'superstruct';
 import { COMMAND_TYPE, WellKnownEncoding } from './utils';
+
+const option = <T extends Struct<any, any>>(some: T) =>
+  union([object({ None: literal(null) }), object({ Some: some })]);
 
 export const TransactionInput = object({
   kind: literal('Input'),
@@ -58,7 +62,10 @@ export const PureCommandArgument = (type: string) => {
 
 export const MoveCallCommand = object({
   kind: literal('MoveCall'),
-  target: string(),
+  target: define<`${string}::${string}::${string}`>(
+    'target',
+    string().validator,
+  ),
   typeArguments: array(string()),
   arguments: array(CommandArgument),
 });
@@ -87,7 +94,7 @@ export type MergeCoinsCommand = Infer<typeof MergeCoinsCommand>;
 
 export const MakeMoveVecCommand = object({
   kind: literal('MakeMoveVec'),
-  type: optional(string()),
+  type: optional(option(string())),
   objects: array(ObjectCommandArgument),
 });
 export type MakeMoveVecCommand = Infer<typeof MakeMoveVecCommand>;
@@ -115,38 +122,21 @@ export function getTransactionCommandType(data: unknown) {
   return TransactionCommandTypes.find((schema) => is(data, schema as Struct))!;
 }
 
-// Refined types for move call which support both the target interface, and the
-// deconstructed interface:
-type MoveCallInput = (
-  | {
-      target: string;
-      package?: never;
-      module?: never;
-      function?: never;
-    }
-  | {
-      target?: never;
-      package: string;
-      module: string;
-      function: string;
-    }
-) & {
-  typeArguments: string[];
-  arguments: CommandArgument[];
-};
-
 /**
  * Simple helpers used to construct commands:
  */
 export const Commands = {
-  MoveCall(input: MoveCallInput): MoveCallCommand {
+  MoveCall(
+    input: Omit<MoveCallCommand, 'kind' | 'arguments' | 'typeArguments'> & {
+      arguments?: CommandArgument[];
+      typeArguments?: string[];
+    },
+  ): MoveCallCommand {
     return {
       kind: 'MoveCall',
-      target:
-        input.target ??
-        [input.package, input.module, input.function].join('::'),
-      arguments: input.arguments,
-      typeArguments: input.typeArguments,
+      target: input.target,
+      arguments: input.arguments ?? [],
+      typeArguments: input.typeArguments ?? [],
     };
   },
   TransferObjects(
@@ -168,6 +158,16 @@ export const Commands = {
   Publish(modules: number[][]): PublishCommand {
     return { kind: 'Publish', modules };
   },
-  // TODO:
-  MakeMoveVec() {},
+  MakeMoveVec({
+    type,
+    objects,
+  }: Omit<MakeMoveVecCommand, 'kind' | 'type'> & {
+    type?: string;
+  }): MakeMoveVecCommand {
+    return {
+      kind: 'MakeMoveVec',
+      type: type ? { Some: type } : { None: null },
+      objects,
+    };
+  },
 };

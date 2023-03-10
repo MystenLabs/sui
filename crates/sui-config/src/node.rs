@@ -101,6 +101,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub db_checkpoint_config: DBCheckpointConfig,
+
+    #[serde(default)]
+    pub indirect_objects_threshold: usize,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {

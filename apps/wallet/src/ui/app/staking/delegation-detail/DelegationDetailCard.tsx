@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 
 import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
+import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -53,41 +54,32 @@ export function DelegationDetailCard({
     }, [validatorAddress, system]);
 
     const delegationData = useMemo(() => {
-        if (!allDelegation) return null;
-
-        return allDelegation.find(
-            ({ stakedSui }) => stakedSui.id.id === stakedId
-        );
+        return allDelegation
+            ? getDelegationDataByStakeId(allDelegation, stakedId)
+            : null;
     }, [allDelegation, stakedId]);
 
-    const totalStake = delegationData?.stakedSui.principal.value || 0n;
+    const totalStake = BigInt(delegationData?.principal || 0n);
 
     const suiEarned = useMemo(() => {
-        if (!system || !delegationData) return 0n;
-        return getStakingRewards(system.activeValidators, delegationData);
-    }, [delegationData, system]);
+        if (!validatorData || !delegationData) return 0n;
+        return getStakingRewards(validatorData, delegationData);
+    }, [delegationData, validatorData]);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;
         return calculateAPY(validatorData, +system.epoch);
     }, [validatorData, system]);
 
-    const delegationId = useMemo(() => {
-        if (!delegationData || delegationData.delegationStatus === 'Pending')
-            return null;
-        return delegationData.delegationStatus.Active.id.id;
-    }, [delegationData]);
+    const delegationId =
+        delegationData?.status === 'Active' && delegationData?.stakedSuiId;
 
     const stakeByValidatorAddress = `/stake/new?${new URLSearchParams({
         address: validatorAddress,
         staked: stakedId,
     }).toString()}`;
 
-    const commission = useMemo(() => {
-        if (!validatorData) return 0;
-        return +validatorData.commissionRate / 100;
-    }, [validatorData]);
-
+    const commission = validatorData ? +validatorData.commissionRate / 100 : 0;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading || loadingValidators) {

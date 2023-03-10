@@ -28,8 +28,7 @@ pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 use crate::apis::{
-    CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, ThresholdBlsApi, TransactionBuilderApi,
-    WriteApi,
+    CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, TransactionBuilderApi, WriteApi,
 };
 use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::store::IndexerStore;
@@ -129,7 +128,6 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static>(
 
     builder.register_module(ReadApi::new(state, http_client.clone()))?;
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
-    builder.register_module(ThresholdBlsApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
     builder.register_module(EventReadApi::new(http_client.clone()))?;

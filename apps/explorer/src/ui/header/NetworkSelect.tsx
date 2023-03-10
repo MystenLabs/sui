@@ -22,6 +22,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
+import { Text } from '../Text';
 import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
 import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
 import { ReactComponent as MenuIcon } from '../icons/menu.svg';
@@ -39,6 +40,7 @@ export interface NetworkOption {
 export interface NetworkSelectProps {
     networks: NetworkOption[];
     value: string;
+    version?: number | string;
     onChange(networkId: string): void;
 }
 
@@ -65,17 +67,17 @@ function SelectableNetwork({
             role="button"
             onClick={onClick}
             className={clsx(
-                'flex items-start gap-4 rounded-md px-2 py-3 text-body font-semibold hover:bg-gray-40 hover:text-gray-90 ui-active:bg-gray-40 ui-active:text-gray-90',
+                'flex items-start gap-3 rounded-md py-2 px-1.25 text-body font-semibold hover:bg-gray-40 ui-active:bg-gray-40',
                 state !== NetworkState.UNSELECTED
-                    ? 'text-gray-90'
-                    : 'text-gray-75'
+                    ? 'text-steel-darker'
+                    : 'text-steel-dark'
             )}
             {...props}
         >
             <CheckIcon
                 className={clsx('flex-shrink-0', {
                     'text-success': state === NetworkState.SELECTED,
-                    'text-gray-60': state === NetworkState.PENDING,
+                    'text-steel': state === NetworkState.PENDING,
                     'text-gray-45': state === NetworkState.UNSELECTED,
                 })}
             />
@@ -136,7 +138,30 @@ function CustomRPCInput({
     );
 }
 
-function NetworkSelectPanel({ networks, onChange, value }: NetworkSelectProps) {
+function NetworkVersion({
+    label,
+    version,
+}: {
+    label: string;
+    version: number | string;
+}) {
+    return (
+        <div className="flex justify-between py-2 px-4">
+            <Text variant="subtitle/normal" color="steel">
+                Sui {label}
+            </Text>
+            <Text variant="subtitle/normal" color="steel">
+                v{version}
+            </Text>
+        </div>
+    );
+}
+
+function NetworkSelectPanel({
+    networks,
+    onChange,
+    value,
+}: Omit<NetworkSelectProps, 'version'>) {
     const isCustomNetwork = !networks.find(({ id }) => id === value);
     const [customOpen, setCustomOpen] = useState(isCustomNetwork);
 
@@ -198,6 +223,7 @@ function ResponsiveIcon() {
 export function NetworkSelect({
     networks,
     value,
+    version,
     onChange,
 }: NetworkSelectProps) {
     const { x, y, reference, floating, strategy } = useFloating({
@@ -241,7 +267,7 @@ export function NetworkSelect({
                                         scale: 0.95,
                                     }}
                                     transition={{ duration: 0.15 }}
-                                    className="z-10 flex w-64 flex-col gap-3 rounded-lg bg-white p-4 shadow-lg focus:outline-none"
+                                    className="z-20 flex w-52 flex-col gap-2 rounded-lg border border-steel-dark border-opacity-10 bg-white px-3 py-4 shadow-lg focus:outline-none"
                                     style={{
                                         position: strategy,
                                         top: y ?? 0,
@@ -256,6 +282,14 @@ export function NetworkSelect({
                                             close();
                                         }}
                                     />
+                                    {selected && version ? (
+                                        <div className="-mx-4 -mb-4 mt-2 rounded-b-lg bg-gray-40">
+                                            <NetworkVersion
+                                                label={selected.label}
+                                                version={version}
+                                            />
+                                        </div>
+                                    ) : null}
                                 </Popover.Panel>
                             )}
                         </AnimatePresence>

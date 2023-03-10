@@ -86,14 +86,13 @@ impl TestCaseImpl for CallContractTest {
             .find_map(|e| match e {
                 SuiEvent::NewObject {
                     package_id,
-                    transaction_module,
+                    transaction_module: _,
                     sender,
                     recipient,
                     object_type,
                     object_id,
                     version,
                 } if package_id == &SUI_FRAMEWORK_OBJECT_ID
-                    && transaction_module == &String::from("devnet_nft")
                     && sender == &signer
                     && recipient == &Owner::AddressOwner(signer)
                     && object_type == "0x2::devnet_nft::DevNetNFT"
@@ -108,14 +107,13 @@ impl TestCaseImpl for CallContractTest {
 
         events.iter().find(|e| matches!(e, SuiEvent::MoveEvent{
             package_id,
-            transaction_module,
+            transaction_module: _,
             sender,
             type_,
             fields: _,
             bcs
         } if
             package_id == &SUI_FRAMEWORK_OBJECT_ID
-            && transaction_module == &String::from("devnet_nft")
             && sender == &signer
             && type_ == &String::from("0x2::devnet_nft::MintNFTEvent")
             && bcs::from_bytes::<MintNFTEvent>(bcs).unwrap() == MintNFTEvent {object_id: ID {bytes: nft_id}, creator: signer, name: EXAMPLE_NFT_NAME.into()}

@@ -6,59 +6,17 @@
 
 use anyhow::Context;
 use indexmap::{IndexMap, IndexSet};
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
 use crate::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     messages::{
-        Argument, CallArg, Command, MoveCall, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
-        ProgrammableMoveCall, ProgrammableTransaction, SingleTransactionKind, TransactionData,
-        TransactionKind, TransferObject, TransferSui,
+        Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
     },
+    move_package::PACKAGE_MODULE_NAME,
+    SUI_FRAMEWORK_OBJECT_ID,
 };
-
-pub fn migrate_transaction_data(m: TransactionData) -> anyhow::Result<TransactionData> {
-    let mut builder = ProgrammableTransactionBuilder::new();
-    let TransactionData::V1(mut v1) = m;
-    match v1.kind {
-        TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
-            coins,
-            recipients,
-            amounts,
-        })) => {
-            builder.pay_sui(recipients, amounts)?;
-            let mut v = v1.gas_data.payment;
-            v.extend(coins);
-            v1.gas_data.payment = unique_obj_vec(v);
-        }
-        TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
-            coins,
-            recipient,
-        })) => {
-            builder.pay_all_sui(recipient);
-            let mut v = v1.gas_data.payment;
-            v.extend(coins);
-            v1.gas_data.payment = unique_obj_vec(v);
-        }
-        TransactionKind::Single(t) => builder.single_transaction(t)?,
-        TransactionKind::Batch(ts) => {
-            for t in ts {
-                builder.single_transaction(t)?
-            }
-        }
-    };
-    let pt = builder.finish();
-    v1.kind = TransactionKind::Single(SingleTransactionKind::ProgrammableTransaction(pt));
-    Ok(TransactionData::V1(v1))
-}
-
-/// Collects an iterator of object refs into a vector,
-/// ensuring the output is unique but while preserving a stable ordering
-fn unique_obj_vec(objs: impl IntoIterator<Item = ObjectRef>) -> Vec<ObjectRef> {
-    let set: IndexSet<ObjectRef> = IndexSet::from_iter(objs);
-    set.into_iter().collect()
-}
 
 #[derive(Default)]
 pub struct ProgrammableTransactionBuilder {
@@ -90,18 +48,7 @@ impl ProgrammableTransactionBuilder {
     }
 
     pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
-        match call_arg {
-            call_arg @ (CallArg::Pure(_) | CallArg::Object(_)) => {
-                Ok(Argument::Input(self.inputs.insert_full(call_arg).0 as u16))
-            }
-            CallArg::ObjVec(objs) if objs.is_empty() => {
-                anyhow::bail!(
-                    "Empty ObjVec is not supported in programmable transactions \
-                        without a type annotation"
-                )
-            }
-            CallArg::ObjVec(objs) => Ok(self.make_obj_vec(objs)),
-        }
+        Ok(Argument::Input(self.inputs.insert_full(call_arg).0 as u16))
     }
 
     pub fn make_obj_vec(&mut self, objs: impl IntoIterator<Item = ObjectArg>) -> Argument {
@@ -113,46 +60,6 @@ impl ProgrammableTransactionBuilder {
         let i = self.commands.len();
         self.commands.push(command);
         Argument::Result(i as u16)
-    }
-
-    pub fn single_transaction(&mut self, t: SingleTransactionKind) -> anyhow::Result<()> {
-        match t {
-            SingleTransactionKind::ProgrammableTransaction(_) => anyhow::bail!(
-                "ProgrammableTransaction are not supported in ProgrammableTransactionBuilder"
-            ),
-            SingleTransactionKind::TransferObject(TransferObject {
-                recipient,
-                object_ref,
-            }) => self.transfer_object(recipient, object_ref),
-            SingleTransactionKind::Publish(MoveModulePublish { modules }) => self.publish(modules),
-            SingleTransactionKind::Call(MoveCall {
-                package,
-                module,
-                function,
-                type_arguments,
-                arguments,
-            }) => self.move_call(package, module, function, type_arguments, arguments)?,
-            SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
-                self.transfer_sui(recipient, amount)
-            }
-            SingleTransactionKind::Pay(Pay {
-                coins,
-                recipients,
-                amounts,
-            }) => self.pay(coins, recipients, amounts)?,
-            SingleTransactionKind::PaySui(_) | SingleTransactionKind::PayAllSui(_) => {
-                anyhow::bail!(
-                    "PaySui and PayAllSui cannot be migrated as a single transaction kind, \
-                only as a full transaction"
-                )
-            }
-            SingleTransactionKind::ChangeEpoch(_)
-            | SingleTransactionKind::Genesis(_)
-            | SingleTransactionKind::ConsensusCommitPrologue(_) => anyhow::bail!(
-                "System transactions are not expressed with programmable transactions"
-            ),
-        };
-        Ok(())
     }
 
     /// Will fail to generate if given an empty ObjVec
@@ -168,13 +75,13 @@ impl ProgrammableTransactionBuilder {
             .into_iter()
             .map(|a| self.input(a))
             .collect::<Result<_, _>>()?;
-        self.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        self.command(Command::move_call(
             package,
             module,
             function,
             type_arguments,
             arguments,
-        })));
+        ));
         Ok(())
     }
 
@@ -195,8 +102,29 @@ impl ProgrammableTransactionBuilder {
         })))
     }
 
+    pub fn publish_upgradeable(&mut self, modules: Vec<Vec<u8>>) -> Argument {
+        self.command(Command::Publish(modules))
+    }
+
     pub fn publish(&mut self, modules: Vec<Vec<u8>>) {
-        self.commands.push(Command::Publish(modules))
+        let cap = self.publish_upgradeable(modules);
+        self.commands
+            .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: SUI_FRAMEWORK_OBJECT_ID,
+                module: PACKAGE_MODULE_NAME.to_owned(),
+                function: ident_str!("make_immutable").to_owned(),
+                type_arguments: vec![],
+                arguments: vec![cap],
+            })));
+    }
+
+    pub fn transfer_arg(&mut self, recipient: SuiAddress, arg: Argument) {
+        self.transfer_args(recipient, vec![arg])
+    }
+
+    pub fn transfer_args(&mut self, recipient: SuiAddress, args: Vec<Argument>) {
+        let rec_arg = self.pure(recipient).unwrap();
+        self.commands.push(Command::TransferObjects(args, rec_arg));
     }
 
     pub fn transfer_object(&mut self, recipient: SuiAddress, object_ref: ObjectRef) {

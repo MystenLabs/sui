@@ -25,7 +25,6 @@ describe('Test Move call with strings', () => {
     tx.add(
       Commands.MoveCall({
         target: `${packageId}::entry_point_string::${funcName}`,
-        typeArguments: [],
         arguments: [tx.input(str)],
       }),
     );

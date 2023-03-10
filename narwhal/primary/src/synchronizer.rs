@@ -1,13 +1,18 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anemo::{Network, Request};
+use anemo::{rpc::Status, Network, Request, Response};
 use config::{Committee, Epoch, WorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
+use futures::{stream::FuturesOrdered, StreamExt};
+use mysten_common::notify_once::NotifyOnce;
 use mysten_metrics::spawn_monitored_task;
-use network::{anemo_ext::NetworkExt, RetryConfig};
+use network::{
+    anemo_ext::{NetworkExt, WaitingPeer},
+    RetryConfig,
+};
 use parking_lot::Mutex;
 use std::{
     cmp::min,
@@ -24,15 +29,16 @@ use store::Store;
 use tokio::{
     sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
-    time::timeout,
+    time::sleep,
 };
 use tracing::{debug, error, trace, warn};
 use types::{
     ensure,
-    error::{new_accept_notification, AcceptNotification, DagError, DagResult},
+    error::{AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
     BatchDigest, Certificate, CertificateDigest, Header, PrimaryToPrimaryClient,
-    PrimaryToWorkerClient, Round, SendCertificateRequest, WorkerSynchronizeMessage,
+    PrimaryToWorkerClient, Round, SendCertificateRequest, SendCertificateResponse,
+    WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics};
@@ -108,12 +114,15 @@ impl Inner {
         lock: &MutexGuard<'_, State>,
         suspended: SuspendedCertificate,
     ) -> DagResult<()> {
-        self.accept_certificate_internal(lock, suspended.certificate)
+        self.accept_certificate_internal(lock, suspended.certificate.clone())
             .await?;
         // Notify waiters that the certificate is no longer suspended.
         // Must be after certificate acceptance.
         // It is ok if there is no longer any waiter.
-        let _ = suspended.notify.send(());
+        suspended
+            .notify
+            .notify()
+            .expect("Suspended certificate should be notified once.");
         Ok(())
     }
 
@@ -124,6 +133,15 @@ impl Inner {
         certificate: Certificate,
     ) -> DagResult<()> {
         let digest = certificate.digest();
+
+        // TODO: remove this validation later to reduce rocksdb access.
+        if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
+            for digest in &certificate.header.parents {
+                if !self.certificate_store.contains(digest).unwrap() {
+                    panic!("Parent {digest:?} not found for {certificate:?}!");
+                }
+            }
+        }
 
         // Store the certificate. After this, the certificate must be sent to consensus
         // or Narwhal needs to shutdown, to avoid inconsistencies in certificate store and
@@ -370,12 +388,8 @@ impl Synchronizer {
             .await
         {
             Err(DagError::Suspended(notify)) => {
-                let notify = notify.lock().unwrap().take();
-                notify
-                    .unwrap()
-                    .recv()
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
+                notify.wait().await;
+                Ok(())
             }
             result => result,
         }
@@ -611,82 +625,78 @@ impl Synchronizer {
 
     /// Pushes new certificates received from the rx_own_certificate_broadcast channel
     /// to the target peer continuously. Only exits when the primary is shutting down.
-    // TODO: allow sending multiple (<=10) outgoing requests concurrently.
+    // TODO: move this to proposer, since this naturally follows after a certificate is created.
     async fn push_certificates(
         network: Network,
         name: PublicKey,
         network_key: NetworkPublicKey,
         mut rx_own_certificate_broadcast: broadcast::Receiver<Certificate>,
     ) {
-        const PUSH_TIMEOUT: Duration = Duration::from_secs(5);
-        const MIN_FAILURE_BACKOFF: Duration = Duration::from_millis(100);
-        const MAX_FAILURE_BACKOFF: Duration = Duration::from_secs(10);
+        const PUSH_TIMEOUT: Duration = Duration::from_secs(10);
         let peer_id = anemo::PeerId(network_key.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
-        let mut client = PrimaryToPrimaryClient::new(peer);
-        let mut certificates = VecDeque::new();
-        let mut failure_backoff = MIN_FAILURE_BACKOFF;
+        let client = PrimaryToPrimaryClient::new(peer);
+        // Older broadcasts return early, so the last broadcast must be the latest certificate.
+        // This will contain at most certificates created within the last PUSH_TIMEOUT.
+        let mut requests = FuturesOrdered::new();
+        // Back off and retry only happen when there is only one certificate to be broadcasted.
+        // Otherwise no retry happens.
+        const BACKOFF_INTERVAL: Duration = Duration::from_millis(100);
+        const MAX_BACKOFF_MULTIPLIER: u32 = 100;
+        let mut backoff_multiplier: u32 = 0;
+
+        async fn send_certificate(
+            mut client: PrimaryToPrimaryClient<WaitingPeer>,
+            request: Request<SendCertificateRequest>,
+            cert: Certificate,
+        ) -> (
+            Certificate,
+            Result<Response<SendCertificateResponse>, Status>,
+        ) {
+            let resp = client.send_certificate(request).await;
+            (cert, resp)
+        }
+
         loop {
-            let wait_timeout = if certificates.is_empty() {
-                MAX_FAILURE_BACKOFF
-            } else {
-                failure_backoff
-            };
-            match timeout(wait_timeout, rx_own_certificate_broadcast.recv()).await {
-                Ok(Ok(cert)) => certificates.push_back(cert),
-                Ok(Err(broadcast::error::RecvError::Closed)) => {
-                    trace!("Certificate sender {name} shutting down!");
-                    return;
+            tokio::select! {
+                result = rx_own_certificate_broadcast.recv() => {
+                    let cert = match result {
+                        Ok(cert) => cert,
+                        Err(broadcast::error::RecvError::Closed) => {
+                            trace!("Certificate sender {name} is shutting down!");
+                            return;
+                        }
+                        Err(broadcast::error::RecvError::Lagged(e)) => {
+                            warn!("Certificate broadcaster {name} lagging! {e}");
+                            // Re-run the loop to receive again.
+                            continue;
+                        }
+                    };
+                    let request = Request::new(SendCertificateRequest { certificate: cert.clone() }).with_timeout(PUSH_TIMEOUT);
+                    requests.push_back(send_certificate(client.clone(),request, cert));
                 }
-                Ok(Err(broadcast::error::RecvError::Lagged(e))) => {
-                    warn!("Certificate broadcaster {name} lagging! {e}");
-                    // Re-run the loop to receive again.
-                    continue;
-                }
-                Err(_) => {
-                    if certificates.is_empty() {
-                        // MAX_FAILURE_BACKOFF has elapsed without a certificate created.
-                        // This should rarely happen.
-                        continue;
+                Some((cert, resp)) = requests.next() => {
+                    backoff_multiplier = match resp {
+                        Ok(_) => {
+                            0
+                        },
+                        Err(_) => {
+                            if requests.is_empty() {
+                                // Retry broadcasting the latest certificate, to help the network stay alive.
+                                let request = Request::new(SendCertificateRequest { certificate: cert.clone() }).with_timeout(PUSH_TIMEOUT);
+                                requests.push_back(send_certificate(client.clone(), request, cert));
+                                min(backoff_multiplier * 2 + 1, MAX_BACKOFF_MULTIPLIER)
+                            } else {
+                                // TODO: add backoff and retries for transient & retriable errors.
+                                0
+                            }
+                        },
+                    };
+                    if backoff_multiplier > 0 {
+                        sleep(BACKOFF_INTERVAL * backoff_multiplier).await;
                     }
                 }
             };
-            // Get more certificates if available in the broadcast channel.
-            'recv: loop {
-                match rx_own_certificate_broadcast.try_recv() {
-                    Ok(cert) => {
-                        certificates.push_back(cert);
-                    }
-                    Err(broadcast::error::TryRecvError::Closed) => {
-                        trace!("Certificate sender {name} shutting down!");
-                        return;
-                    }
-                    Err(broadcast::error::TryRecvError::Lagged(e)) => {
-                        warn!("Certificate sender {name} lagging! {e}");
-                    }
-                    Err(broadcast::error::TryRecvError::Empty) => {
-                        break 'recv;
-                    }
-                };
-            }
-            // TODO: support sending multiple certificates concurrently.
-            // Only send the latest certificate.
-            while certificates.len() > 1 {
-                certificates.pop_front();
-            }
-            let cert = certificates.front().unwrap().clone();
-            let request = Request::new(SendCertificateRequest { certificate: cert })
-                .with_timeout(PUSH_TIMEOUT);
-            match client.send_certificate(request).await {
-                Ok(_) => {
-                    certificates.pop_front();
-                    failure_backoff = MIN_FAILURE_BACKOFF;
-                }
-                Err(status) => {
-                    debug!("Failed to send certificate to {name}! {status:?}");
-                    failure_backoff = min(failure_backoff * 2, MAX_FAILURE_BACKOFF);
-                }
-            }
         }
     }
 
@@ -900,7 +910,14 @@ impl Synchronizer {
 struct SuspendedCertificate {
     certificate: Certificate,
     missing_parents: HashSet<CertificateDigest>,
-    notify: broadcast::Sender<()>,
+    notify: AcceptNotification,
+}
+
+impl Drop for SuspendedCertificate {
+    fn drop(&mut self) {
+        // Make sure waiters are notified on shutdown.
+        let _ = self.notify.notify();
+    }
 }
 
 /// Keeps track of suspended certificates and their missing parents.
@@ -931,7 +948,7 @@ impl State {
     fn check_suspended(&self, digest: &CertificateDigest) -> Option<AcceptNotification> {
         self.suspended
             .get(digest)
-            .map(|suspended_cert| new_accept_notification(suspended_cert.notify.subscribe()))
+            .map(|suspended_cert| suspended_cert.notify.clone())
     }
 
     /// Inserts a certificate with its missing parents into the suspended state.
@@ -954,10 +971,10 @@ impl State {
                     "Inconsistent missing parents! {:?} vs {:?}",
                     suspended_cert.missing_parents, missing_parents_map
                 );
-                return new_accept_notification(suspended_cert.notify.subscribe());
+                return suspended_cert.notify.clone();
             }
         }
-        let (tx, rx) = broadcast::channel(1);
+        let notify = Arc::new(NotifyOnce::new());
         assert!(self
             .suspended
             .insert(
@@ -965,7 +982,7 @@ impl State {
                 SuspendedCertificate {
                     certificate,
                     missing_parents: missing_parents_map,
-                    notify: tx,
+                    notify: notify.clone(),
                 }
             )
             .is_none());
@@ -976,7 +993,7 @@ impl State {
                 .or_default()
                 .insert(digest));
         }
-        new_accept_notification(rx)
+        notify
     }
 
     /// Examines children of a certificate that has been accepted, and returns the children that
@@ -1042,7 +1059,10 @@ impl State {
         }
         // Notify waiters on GC'ed certificates.
         for suspended in gc_certificates {
-            let _ = suspended.notify.send(());
+            suspended
+                .notify
+                .notify()
+                .expect("Suspended certificate should be notified once.");
         }
         // All certificates at gc round + 1 can be accepted.
         let mut to_accept = Vec::new();

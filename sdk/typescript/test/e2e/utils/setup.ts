@@ -112,16 +112,23 @@ export async function publishPackage(
   );
   const tx = new Transaction();
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
-  tx.add(
+  const cap = tx.add(
     Commands.Publish(compiledModules.map((m: any) => Array.from(fromB64(m)))),
   );
+  tx.add(
+    Commands.MoveCall({
+      target: '0x2::package::make_immutable',
+      arguments: [cap],
+    }),
+  );
+
   const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx);
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => 'publish' in e);
+  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
 
   // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.publish.packageId.replace(/^(0x)(0+)/, '0x');
+  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );

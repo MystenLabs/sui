@@ -5,6 +5,8 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { calculateAPY } from '../calculateAPY';
+import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
+import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
@@ -49,27 +51,15 @@ export function ValidatorFormDetail({
         );
     }, [validatorAddress, system]);
 
+    //TODO: verify this is the correct validator stake balance
     const totalValidatorStake = validatorData?.stakingPoolSuiBalance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;
-        let totalActiveStake = 0n;
-
-        if (stakeIdParams) {
-            const balance =
-                allDelegation.find(
-                    ({ stakedSui }) => stakedSui.id.id === stakeIdParams
-                )?.stakedSui.principal.value || 0;
-            return BigInt(balance);
-        }
-
-        allDelegation.forEach((event) => {
-            if (event.stakedSui.validatorAddress === validatorAddress) {
-                totalActiveStake += BigInt(event.stakedSui.principal.value);
-            }
-        });
-        return totalActiveStake;
-    }, [allDelegation, validatorAddress, stakeIdParams]);
+        return stakeIdParams
+            ? getStakeSuiBySuiId(allDelegation, stakeIdParams)
+            : getTokenStakeSuiForValidator(allDelegation, validatorAddress);
+    }, [allDelegation, stakeIdParams, validatorAddress]);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;

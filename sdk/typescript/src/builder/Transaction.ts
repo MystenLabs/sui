@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
@@ -85,6 +86,8 @@ function expectProvider(provider: Provider | undefined): Provider {
   return provider;
 }
 
+const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
+
 /**
  * Transaction Builder
  * @experimental
@@ -92,7 +95,11 @@ function expectProvider(provider: Provider | undefined): Provider {
 export class Transaction {
   /** Returns `true` if the object is an instance of the Transaction builder class. */
   static is(obj: unknown): obj is Transaction {
-    return obj instanceof Transaction;
+    return (
+      !!obj &&
+      typeof obj === 'object' &&
+      (obj as any)[TRANSACTION_BRAND] === true
+    );
   }
 
   /**
@@ -102,15 +109,19 @@ export class Transaction {
    * - A byte array (or base64-encoded bytes) containing BCS transaction data.
    */
   static from(serialized: string | Uint8Array) {
+    const tx = new Transaction();
+
     // Check for bytes:
     if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
-      // TODO: Support fromBytes.
-      throw new Error('from() does not yet support bytes');
+      tx.#transactionData = TransactionDataBuilder.fromBytes(
+        typeof serialized === 'string' ? fromB64(serialized) : serialized,
+      );
+    } else {
+      tx.#transactionData = TransactionDataBuilder.restore(
+        JSON.parse(serialized),
+      );
     }
 
-    const parsed = JSON.parse(serialized);
-    const tx = new Transaction();
-    tx.#transactionData = TransactionDataBuilder.restore(parsed);
     return tx;
   }
 
@@ -144,6 +155,12 @@ export class Transaction {
   /** Get a snapshot of the transaction data, in JSON form: */
   get transactionData() {
     return this.#transactionData.snapshot();
+  }
+
+  // Used to brand transaction classes so that they can be identified, even between multiple copies
+  // of the builder.
+  get [TRANSACTION_BRAND]() {
+    return true;
   }
 
   constructor(transaction?: Transaction) {
@@ -216,12 +233,20 @@ export class Transaction {
   /** Build the transaction to BCS bytes. */
   async build({
     provider,
-    // TODO: derive the buffer size automatically
-    size = 8192,
+    onlyTransactionKind,
   }: {
     provider?: Provider;
-    size?: number;
+    onlyTransactionKind?: boolean;
   } = {}): Promise<Uint8Array> {
+    await this.#prepare(provider);
+    return this.#transactionData.build({ onlyTransactionKind });
+  }
+
+  /**
+   * Prepare the transaction by valdiating the transaction data and resolving all inputs
+   * so that it can be built into bytes.
+   */
+  async #prepare(provider?: Provider) {
     if (!this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
     }
@@ -447,7 +472,5 @@ export class Transaction {
         throw new Error('No valid gas coins found for the transaction.');
       }
     }
-
-    return this.#transactionData.build({ size });
   }
 }
