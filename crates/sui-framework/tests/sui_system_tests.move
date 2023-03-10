@@ -56,7 +56,7 @@ module sui::sui_system_tests {
 
         report_helper(@0x3, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3], 0);
-        
+
         // After 0x3 leaves, its reports are gone
         remove_validator(@0x3, scenario);
         advance_epoch(scenario);
@@ -516,7 +516,7 @@ module sui::sui_system_tests {
                 0,
                 ctx,
             );
-            sui_system::request_add_validator(&mut system_state, ctx);
+            sui_system::request_add_validator_for_testing(&mut system_state, 0, ctx);
         };
 
         test_scenario::next_tx(scenario, new_validator_addr);

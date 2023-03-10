@@ -155,8 +155,6 @@ export const SuiSystemStateSummary = object({
   referenceGasPrice: number(),
   safeMode: boolean(),
   epochStartTimestampMs: number(),
-  minValidatorStake: number(),
-  maxValidatorCount: number(),
   governanceStartEpoch: number(),
   stakeSubsidyEpochCounter: number(),
   stakeSubsidyBalance: number(),

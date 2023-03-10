@@ -43,14 +43,6 @@ module sui::sui_system {
     // - the change in the validator set across epochs can be at most x validators
     //
     struct SystemParameters has store {
-        /// Lower-bound on the amount of stake required to become a validator.
-        // TODO: use a different threshold for new validator joining vs. validator keeping their
-        // spot in the validator set.
-        min_validator_stake: u64,
-        /// Maximum number of active validators at any moment.
-        /// We do not allow the number of validators in any epoch to go above this.
-        max_validator_count: u64,
-
         /// The starting epoch in which various on-chain governance features take effect:
         /// - stake subsidies are paid out
         /// - TODO validators with stake less than a 'validator_stake_threshold' are
@@ -125,6 +117,14 @@ module sui::sui_system {
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
+    /// Maximum number of active validators at any moment.
+    /// We do not allow the number of validators in any epoch to go above this.
+    const MAX_VALIDATOR_COUNT: u64 = 150;
+
+    /// Lower-bound on the amount of stake required to become a validator.
+    const MIN_VALIDATOR_STAKE: u64 = 25_000_000_000_000_000; // 25 million SUI
+
+
     // ==== functions that can only be called by genesis ====
 
     /// Create a new SuiSystemState object and make it shared.
@@ -133,8 +133,6 @@ module sui::sui_system {
         validators: vector<Validator>,
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
-        max_validator_count: u64,
-        min_validator_stake: u64,
         governance_start_epoch: u64,
         initial_stake_subsidy_amount: u64,
         protocol_version: u64,
@@ -150,8 +148,6 @@ module sui::sui_system {
             validators,
             storage_fund,
             parameters: SystemParameters {
-                min_validator_stake,
-                max_validator_count,
                 governance_start_epoch,
             },
             reference_gas_price,
@@ -172,7 +168,7 @@ module sui::sui_system {
     // ==== entry functions ====
 
     /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
-    /// stakes in their staking pool. Once they have at least `min_validator_stake` amount of stake they
+    /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_STAKE` amount of stake they
     /// can call `request_add_validator` to officially become an active validator at the next epoch.
     /// Aborts if the caller is already a pending or active validator, or a validator candidate.
     public entry fun request_add_validator_candidate(
@@ -239,11 +235,11 @@ module sui::sui_system {
     ) {
         let self = load_system_state_mut(wrapper);
         assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
+            validator_set::next_epoch_validator_count(&self.validators) < MAX_VALIDATOR_COUNT,
             ELimitExceeded,
         );
 
-        validator_set::request_add_validator(&mut self.validators, self.parameters.min_validator_stake, ctx);
+        validator_set::request_add_validator(&mut self.validators, MIN_VALIDATOR_STAKE, ctx);
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -369,7 +365,7 @@ module sui::sui_system {
     /// Report a validator as a bad or non-performant actor in the system.
     /// Succeeds if all the following are satisfied:
     /// 1. both the reporter in `cap` and the input `reportee_addr` are active validators.
-    /// 2. reporter and reportee not the same address. 
+    /// 2. reporter and reportee not the same address.
     /// 3. the cap object is still valid.
     /// This function is idempotent.
     public entry fun report_validator(
@@ -869,5 +865,20 @@ module sui::sui_system {
     public fun set_epoch_for_testing(wrapper: &mut SuiSystemState, epoch_num: u64) {
         let self = load_system_state_mut(wrapper);
         self.epoch = epoch_num
+    }
+
+    #[test_only]
+    public fun request_add_validator_for_testing(
+        wrapper: &mut SuiSystemState,
+        min_joining_stake_for_testing: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        assert!(
+            validator_set::next_epoch_validator_count(&self.validators) < MAX_VALIDATOR_COUNT,
+            ELimitExceeded,
+        );
+
+        validator_set::request_add_validator(&mut self.validators, min_joining_stake_for_testing, ctx);
     }
 }

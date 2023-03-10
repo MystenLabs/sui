@@ -27,26 +27,6 @@
 ## Constants
 
 
-<a name="0x2_genesis_INIT_MAX_VALIDATOR_COUNT"></a>
-
-Initial value of the upper-bound on the number of validators.
-
-
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MAX_VALIDATOR_COUNT">INIT_MAX_VALIDATOR_COUNT</a>: u64 = 100;
-</code></pre>
-
-
-
-<a name="0x2_genesis_INIT_MIN_VALIDATOR_STAKE"></a>
-
-Initial value of the lower-bound on the amount of stake required to become a validator.
-
-
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>: u64 = 25000000000000000;
-</code></pre>
-
-
-
 <a name="0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT"></a>
 
 Stake subisidy to be given out in the very first epoch. Placeholder value.
@@ -174,8 +154,6 @@ all the information we need in the system.
         validators,
         subsidy_fund,
         storage_fund,
-        <a href="genesis.md#0x2_genesis_INIT_MAX_VALIDATOR_COUNT">INIT_MAX_VALIDATOR_COUNT</a>,
-        <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>,
         governance_start_epoch,
         <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
         protocol_version,
