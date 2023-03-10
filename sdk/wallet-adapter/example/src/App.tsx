@@ -11,7 +11,6 @@ transaction.setGasBudget(2000);
 transaction.add(
   Commands.MoveCall({
     target: `0x2::devnet_nft::mint`,
-    typeArguments: [],
     arguments: [
       transaction.input("foo"),
       transaction.input("bar"),
