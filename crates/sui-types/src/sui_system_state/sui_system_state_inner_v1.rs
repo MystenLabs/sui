@@ -65,12 +65,14 @@ pub struct ValidatorMetadataV1 {
     pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(derivative::Derivative, Clone, Eq, PartialEq)]
+#[derivative(Debug)]
 pub struct VerifiedValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    #[derivative(Debug = "ignore")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
@@ -302,7 +304,7 @@ impl ValidatorV1 {
                             id: exchange_rates_id,
                             size: exchange_rates_size,
                         },
-                    pending_delegation,
+                    pending_stake,
                     pending_total_sui_withdraw,
                     pending_pool_token_withdraw,
                 },
@@ -344,7 +346,7 @@ impl ValidatorV1 {
             pool_token_balance,
             exchange_rates_id,
             exchange_rates_size,
-            pending_delegation,
+            pending_stake,
             pending_total_sui_withdraw,
             pending_pool_token_withdraw,
             commission_rate,
@@ -367,7 +369,7 @@ pub struct StakingPoolV1 {
     pub rewards_pool: Balance,
     pub pool_token_balance: u64,
     pub exchange_rates: Table,
-    pub pending_delegation: u64,
+    pub pending_stake: u64,
     pub pending_total_sui_withdraw: u64,
     pub pending_pool_token_withdraw: u64,
 }

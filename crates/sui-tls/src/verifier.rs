@@ -12,43 +12,82 @@ static SUPPORTED_SIG_ALGS: &[&webpki::SignatureAlgorithm] = &[&webpki::ED25519];
 
 pub type ValidatorAllowlist = Arc<RwLock<HashSet<Ed25519PublicKey>>>;
 
+/// The Allower trait provides an interface for callers to inject decsions whether
+/// to allow a cert to be verified or not.  This does not prform actual cert validation
+/// it only acts as a gatekeeper to decide if we should even try.  For example, we may want
+/// to filter our actions to well known public keys.
+pub trait Allower: Send + Sync {
+    fn allowed(&self, key: &Ed25519PublicKey) -> bool;
+}
+
+/// AllowAll will allow all public certificates to be validated, it fails open
+pub struct AllowAll;
+
+impl Allower for AllowAll {
+    fn allowed(&self, _: &Ed25519PublicKey) -> bool {
+        true
+    }
+}
+
+/// HashSetAllow restricts keys to those that are found in the member set. non-members will not be
+/// allowed.
+#[derive(Clone, Default)]
+pub struct HashSetAllow {
+    inner: ValidatorAllowlist,
+}
+
+impl HashSetAllow {
+    pub fn new() -> Self {
+        let inner = Arc::new(RwLock::new(HashSet::new()));
+        Self { inner }
+    }
+    /// Get a reference to the inner service
+    pub fn inner(&self) -> &ValidatorAllowlist {
+        &self.inner
+    }
+
+    /// Get a mutable reference to the inner service
+    pub fn inner_mut(&mut self) -> &mut ValidatorAllowlist {
+        &mut self.inner
+    }
+}
+
+impl Allower for HashSetAllow {
+    fn allowed(&self, key: &Ed25519PublicKey) -> bool {
+        self.inner.read().unwrap().contains(key)
+    }
+}
+
 /// A `rustls::server::ClientCertVerifier` that will ensure that every client provides a valid,
 /// expected certificate and that the client's public key is in the validator set.
 #[derive(Clone, Debug)]
-pub struct ValidatorCertVerifier {
-    // Set of public keys to allow
-    allowlist: ValidatorAllowlist,
+pub struct CertVerifier<A> {
+    allower: A,
 }
 
-impl ValidatorCertVerifier {
-    pub fn new() -> (Self, ValidatorAllowlist) {
-        let allowlist = Arc::new(RwLock::new(HashSet::new()));
-
-        (
-            Self {
-                allowlist: allowlist.clone(),
-            },
-            allowlist,
-        )
+impl<A> CertVerifier<A> {
+    pub fn new(allower: A) -> Self {
+        Self { allower }
     }
+}
 
+impl<A: Allower + 'static> CertVerifier<A> {
     pub fn rustls_server_config(
+        self,
         certificates: Vec<rustls::Certificate>,
         private_key: rustls::PrivateKey,
-    ) -> Result<(rustls::ServerConfig, ValidatorAllowlist), rustls::Error> {
-        let (cert_verifier, allowlist) = Self::new();
-
+    ) -> Result<rustls::ServerConfig, rustls::Error> {
         let mut config = rustls::ServerConfig::builder()
             .with_safe_defaults()
-            .with_client_cert_verifier(std::sync::Arc::new(cert_verifier))
+            .with_client_cert_verifier(std::sync::Arc::new(self))
             .with_single_cert(certificates, private_key)?;
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
-        Ok((config, allowlist))
+        Ok(config)
     }
 }
 
-impl rustls::server::ClientCertVerifier for ValidatorCertVerifier {
+impl<A: Allower> rustls::server::ClientCertVerifier for CertVerifier<A> {
     fn offer_client_auth(&self) -> bool {
         true
     }
@@ -76,7 +115,7 @@ impl rustls::server::ClientCertVerifier for ValidatorCertVerifier {
         // Step 1: Check this matches the key we expect
         let public_key = public_key_from_certificate(end_entity)?;
 
-        if !self.allowlist.read().unwrap().contains(&public_key) {
+        if !self.allower.allowed(&public_key) {
             return Err(rustls::Error::InvalidCertificateData(format!(
                 "invalid certificate: {:?} is not in the validator set",
                 public_key,

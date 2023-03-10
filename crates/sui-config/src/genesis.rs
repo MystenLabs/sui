@@ -38,6 +38,8 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
+use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
@@ -152,6 +154,19 @@ impl Genesis {
                     image_url: metadata.image_url.clone(),
                     project_url: metadata.project_url.clone(),
                 }
+            })
+            .collect()
+    }
+
+    pub fn validator_summary_set(&self) -> Vec<(SuiValidatorSummary, VerifiedValidatorMetadataV1)> {
+        self.sui_system_object()
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let summary = validator.clone().into_sui_validator_summary();
+                let metadata = validator.verified_metadata().clone();
+                (summary, metadata)
             })
             .collect()
     }

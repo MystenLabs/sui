@@ -18,23 +18,23 @@ import {
 export const SUI_SYSTEM_STATE_OBJECT_ID: string = normalizeSuiAddress('0x5');
 
 export const SUI_SYSTEM_MODULE_NAME = 'sui_system';
-export const ADD_DELEGATION_FUN_NAME = 'request_add_delegation';
-export const ADD_DELEGATION_LOCKED_COIN_FUN_NAME =
-  'request_add_delegation_with_locked_coin';
-export const WITHDRAW_DELEGATION_FUN_NAME = 'request_withdraw_delegation';
+export const ADD_STAKE_FUN_NAME = 'request_add_stake';
+export const ADD_STAKE_LOCKED_COIN_FUN_NAME =
+  'request_add_stake_with_locked_coin';
+export const WITHDRAW_STAKE_FUN_NAME = 'request_withdraw_stake';
 
 /**
  * Utility class for `0x5` object
  */
 export class SuiSystemStateUtil {
   /**
-   * Create a new transaction for delegating coins ready to be signed and executed with `signer-and-provider`.
+   * Create a new transaction for staking coins ready to be signed and executed with `signer-and-provider`.
    *
-   * @param coins the coins to be used in delegation
-   * @param amount the amount to delegate
+   * @param coins the coins to be staked
+   * @param amount the amount to stake
    * @param gasBudget omittable only for DevInspect mode
    */
-  public static async newRequestAddDelegationTxn(
+  public static async newRequestAddStakeTxn(
     provider: Provider,
     coins: ObjectId[],
     amount: bigint,
@@ -45,7 +45,7 @@ export class SuiSystemStateUtil {
     const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(amount)));
     tx.add(
       Commands.MoveCall({
-        target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${ADD_DELEGATION_FUN_NAME}`,
+        target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${ADD_STAKE_FUN_NAME}`,
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
           coin,
@@ -64,21 +64,21 @@ export class SuiSystemStateUtil {
    * Create a new transaction for withdrawing coins ready to be signed and
    * executed with `signer-and-provider`.
    *
-   * @param delegation the delegation object created in the requestAddDelegation txn
+   * @param stake the stake object created in the requestAddStake txn
    * @param stakedCoinId the coins to withdraw
    * @param gasBudget omittable only for DevInspect mode
    */
-  public static async newRequestWithdrawlDelegationTxn(
-    delegation: ObjectId,
+  public static async newRequestWithdrawlStakeTxn(
+    stake: ObjectId,
     stakedCoinId: ObjectId,
   ): Promise<Transaction> {
     const tx = new Transaction();
     tx.add(
       Commands.MoveCall({
-        target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${WITHDRAW_DELEGATION_FUN_NAME}`,
+        target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${WITHDRAW_STAKE_FUN_NAME}`,
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-          tx.input(delegation),
+          tx.input(stake),
           tx.input(stakedCoinId),
         ],
       }),

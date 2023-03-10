@@ -875,6 +875,8 @@ pub enum SuiCommand {
     MergeCoins(SuiArgument, Vec<SuiArgument>),
     /// Publishes a Move package
     Publish(SuiMovePackage),
+    /// Upgrades a Move package
+    Upgrade(SuiArgument, Vec<ObjectID>, SuiMovePackage),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -910,6 +912,12 @@ impl Display for SuiCommand {
                 write!(f, ")")
             }
             Self::Publish(_bytes) => write!(f, "Publish(_)"),
+            Self::Upgrade(ticket, deps, _bytes) => {
+                write!(f, "Upgrade({ticket},")?;
+                write_sep(f, deps, ",")?;
+                write!(f, ", _)")?;
+                write!(f, ")")
+            }
         }
     }
 }
@@ -933,6 +941,13 @@ impl From<Command> for SuiCommand {
             Command::MakeMoveVec(tag_opt, args) => SuiCommand::MakeMoveVec(
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),
+            ),
+            Command::Upgrade(ticket, dep_ids, modules) => SuiCommand::Upgrade(
+                SuiArgument::from(ticket),
+                dep_ids,
+                SuiMovePackage {
+                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
+                },
             ),
         }
     }

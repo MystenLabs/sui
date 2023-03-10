@@ -176,13 +176,13 @@ pub struct SuiValidatorSummary {
     pub staking_pool_deactivation_epoch: Option<u64>,
     /// The total number of SUI tokens in this pool.
     pub staking_pool_sui_balance: u64,
-    /// The epoch delegation rewards will be added here at the end of each epoch.
+    /// The epoch stake rewards will be added here at the end of each epoch.
     pub rewards_pool: u64,
     /// Total number of pool tokens issued by the pool.
     pub pool_token_balance: u64,
-    /// Pending delegation amount for this epoch.
-    pub pending_delegation: u64,
-    /// Pending delegation withdrawn during the current epoch, emptied at epoch boundaries.
+    /// Pending stake amount for this epoch.
+    pub pending_stake: u64,
+    /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
     pub pending_total_sui_withdraw: u64,
     /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
     pub pending_pool_token_withdraw: u64,

@@ -135,35 +135,35 @@ module sui::governance_test_utils {
         test_scenario::next_epoch(scenario, @0x0);
     }
 
-    public fun delegate_to(
-        delegator: address, validator: address, amount: u64, scenario: &mut Scenario
+    public fun stake_with(
+        staker: address, validator: address, amount: u64, scenario: &mut Scenario
     ) {
-        test_scenario::next_tx(scenario, delegator);
+        test_scenario::next_tx(scenario, staker);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::request_add_delegation(&mut system_state, coin::mint_for_testing(amount, ctx), validator, ctx);
+        sui_system::request_add_stake(&mut system_state, coin::mint_for_testing(amount, ctx), validator, ctx);
         test_scenario::return_shared(system_state);
     }
 
-    public fun delegate_locked_to(
-        delegator: address, validator: address, amount: u64, locked_until_epoch: u64, scenario: &mut Scenario
+    public fun stake_locked_to(
+        staker: address, validator: address, amount: u64, locked_until_epoch: u64, scenario: &mut Scenario
     ) {
         // First lock the coin
-        test_scenario::next_tx(scenario, delegator);
+        test_scenario::next_tx(scenario, staker);
         {
             let ctx = test_scenario::ctx(scenario);
-            locked_coin::lock_coin<SUI>(coin::mint_for_testing(amount, ctx), delegator, locked_until_epoch, ctx);
+            locked_coin::lock_coin<SUI>(coin::mint_for_testing(amount, ctx), staker, locked_until_epoch, ctx);
         };
 
-        // Next delegate the locked coin
-        test_scenario::next_tx(scenario, delegator);
+        // Next stake the locked coin
+        test_scenario::next_tx(scenario, staker);
         {
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let locked_val = test_scenario::take_from_sender<LockedCoin<SUI>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            sui_system::request_add_delegation_with_locked_coin(
+            sui_system::request_add_stake_with_locked_coin(
                 &mut system_state,
                 locked_val,
                 validator,
@@ -173,16 +173,16 @@ module sui::governance_test_utils {
         };
     }
 
-    public fun undelegate(
-        delegator: address, staked_sui_idx: u64, scenario: &mut Scenario
+    public fun unstake(
+        staker: address, staked_sui_idx: u64, scenario: &mut Scenario
     ) {
-        test_scenario::next_tx(scenario, delegator);
+        test_scenario::next_tx(scenario, staker);
         let stake_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
         let staked_sui = test_scenario::take_from_sender_by_id(scenario, *vector::borrow(&stake_sui_ids, staked_sui_idx));
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
-        sui_system::request_withdraw_delegation(&mut system_state, staked_sui, ctx);
+        sui_system::request_withdraw_stake(&mut system_state, staked_sui, ctx);
         test_scenario::return_shared(system_state);
     }
 
@@ -211,7 +211,7 @@ module sui::governance_test_utils {
             0,
             ctx
         );
-        sui_system::request_add_delegation(&mut system_state, coin::mint_for_testing<SUI>(init_stake_amount, ctx), validator, ctx);
+        sui_system::request_add_stake(&mut system_state, coin::mint_for_testing<SUI>(init_stake_amount, ctx), validator, ctx);
         sui_system::request_add_validator_for_testing(&mut system_state, 0, ctx);
         test_scenario::return_shared(system_state);
     }
@@ -311,11 +311,11 @@ module sui::governance_test_utils {
         };
     }
 
-    public fun assert_validator_non_self_stake_amounts(validator_addrs: vector<address>, delegate_amounts: vector<u64>, scenario: &mut Scenario) {
+    public fun assert_validator_non_self_stake_amounts(validator_addrs: vector<address>, stake_amounts: vector<u64>, scenario: &mut Scenario) {
         let i = 0;
         while (i < vector::length(&validator_addrs)) {
             let validator_addr = *vector::borrow(&validator_addrs, i);
-            let amount = *vector::borrow(&delegate_amounts, i);
+            let amount = *vector::borrow(&stake_amounts, i);
             test_scenario::next_tx(scenario, validator_addr);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let non_self_stake_amount = sui_system::validator_stake_amount(&mut system_state, validator_addr) - stake_plus_current_rewards_for_validator(validator_addr, &system_state, scenario);

@@ -2124,13 +2124,13 @@
       }
     },
     {
-      "name": "sui_requestAddDelegation",
+      "name": "sui_requestAddStake",
       "tags": [
         {
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Add delegated stake to a validator's staking pool using multiple coins and amount.",
+      "description": "Add stake to a validator's staking pool using multiple coins and amount.",
       "params": [
         {
           "name": "signer",
@@ -2142,7 +2142,7 @@
         },
         {
           "name": "coins",
-          "description": "Coin<SUI> or LockedCoin<SUI> object to delegate",
+          "description": "Coin<SUI> or LockedCoin<SUI> object to stake",
           "required": true,
           "schema": {
             "type": "array",
@@ -2153,7 +2153,7 @@
         },
         {
           "name": "amount",
-          "description": "delegation amount",
+          "description": "stake amount",
           "schema": {
             "type": "integer",
             "format": "uint64",
@@ -2195,13 +2195,13 @@
       }
     },
     {
-      "name": "sui_requestWithdrawDelegation",
+      "name": "sui_requestWithdrawStake",
       "tags": [
         {
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Withdraw a delegation from a validator's staking pool.",
+      "description": "Withdraw stake from a validator's staking pool.",
       "params": [
         {
           "name": "signer",
@@ -5424,6 +5424,35 @@
             "additionalProperties": false
           },
           {
+            "description": "Upgrades a Move package",
+            "type": "object",
+            "required": [
+              "Upgrade"
+            ],
+            "properties": {
+              "Upgrade": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  }
+                ],
+                "maxItems": 3,
+                "minItems": 3
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
             "type": "object",
             "required": [
@@ -6052,8 +6081,8 @@
           "nextEpochStake",
           "operationCapId",
           "p2pAddress",
-          "pendingDelegation",
           "pendingPoolTokenWithdraw",
+          "pendingStake",
           "pendingTotalSuiWithdraw",
           "poolTokenBalance",
           "primaryAddress",
@@ -6201,20 +6230,20 @@
           "p2pAddress": {
             "type": "string"
           },
-          "pendingDelegation": {
-            "description": "Pending delegation amount for this epoch.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
           "pendingPoolTokenWithdraw": {
             "description": "Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
+          "pendingStake": {
+            "description": "Pending stake amount for this epoch.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "pendingTotalSuiWithdraw": {
-            "description": "Pending delegation withdrawn during the current epoch, emptied at epoch boundaries.",
+            "description": "Pending stake withdrawn during the current epoch, emptied at epoch boundaries.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6238,7 +6267,7 @@
             "$ref": "#/components/schemas/Base58"
           },
           "rewardsPool": {
-            "description": "The epoch delegation rewards will be added here at the end of each epoch.",
+            "description": "The epoch stake rewards will be added here at the end of each epoch.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
