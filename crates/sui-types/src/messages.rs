@@ -3367,6 +3367,13 @@ impl TransactionEffects {
         })
     }
 
+    // Convenience fn to some components
+    pub fn unpack_components(self) -> (Vec<ObjectRef>, Vec<TransactionDigest>, GasCostSummary) {
+        match self {
+            TransactionEffects::V1(eff) => (eff.shared_objects, eff.dependencies, eff.gas_used),
+        }
+    }
+
     pub fn execution_digests(&self) -> ExecutionDigests {
         ExecutionDigests {
             transaction: *self.transaction_digest(),

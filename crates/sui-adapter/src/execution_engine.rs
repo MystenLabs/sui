@@ -1002,7 +1002,7 @@ fn test_pay_success_without_delete() {
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.inner();
+    let store = store.into_inner();
 
     assert!(store.deleted.is_empty());
     assert_eq!(store.created().len(), 2);
@@ -1039,7 +1039,7 @@ fn test_pay_success_delete_one() {
     let mut ctx = TxContext::random_for_testing_only();
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 1);
     assert!(store.deleted.contains_key(&input_coin_id1));
@@ -1075,7 +1075,7 @@ fn test_pay_success_delete_all() {
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
 
     assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id1));
@@ -1110,7 +1110,7 @@ fn test_pay_sui_success_one_input_coin() {
     );
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
     assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.inner();
+    let store = store.into_inner();
 
     assert!(store.deleted.is_empty());
     assert_eq!(store.written.len(), 3);
@@ -1149,7 +1149,7 @@ fn test_pay_sui_success_multiple_input_coins() {
     );
     let mut ctx = TxContext::with_sender_for_testing_only(&sender);
     assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id2));
@@ -1188,7 +1188,7 @@ fn test_pay_all_sui_success_multiple_input_coins() {
         input_objects_from_objects(coin_objects.clone()),
     );
     assert!(pay_all_sui(sender, &mut store, &mut coin_objects, recipient).is_ok());
-    let store = store.inner();
+    let store = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);
     assert!(store.deleted.contains_key(&input_coin_id2));

@@ -3066,7 +3066,7 @@ async fn test_sui_system_state_nop_upgrade() {
         pt,
     )
     .unwrap();
-    let inner = temporary_store.inner();
+    let inner = temporary_store.into_inner();
     // Make sure that the new version is set, and that we can still read the inner object.
     assert_eq!(
         inner.get_sui_system_state_wrapper_object().unwrap().version,

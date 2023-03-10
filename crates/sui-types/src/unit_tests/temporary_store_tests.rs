@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::gas::{GasPrice, SuiCostTable};
 use crate::messages::ExecutionFailureStatus::EffectsTooLarge;
 use crate::{in_memory_storage::InMemoryStorage, messages::InputObjectKind};
 
 use super::*;
 
 #[test]
-fn check_effects_limits_enforced() {
+fn check_effects_metered_limits_enforced() {
     let mut store = InMemoryStorage::new(Vec::new());
     let protocol_config = ProtocolConfig::get_for_max_version();
     let max_effects_size = protocol_config.max_serialized_tx_effects_size_bytes();
     let max_input_objects = protocol_config.max_mutable_inputs();
-    let amount_to_deduct = 1_000_000;
-    let rebate = 10;
+    let gas_per_obj = u64::MAX / 11;
 
     assert!(max_input_objects > 0);
 
@@ -34,10 +34,11 @@ fn check_effects_limits_enforced() {
         .collect();
     let gas_objects: Vec<_> = (0..10)
         .map(|r| {
-            Object::with_id_owner_version_for_testing(
+            Object::with_id_owner_version_gas_for_testing(
                 ObjectID::random(),
-                SequenceNumber::from_u64(r),
                 sender,
+                SequenceNumber::from_u64(r),
+                gas_per_obj,
             )
         })
         .collect();
@@ -67,12 +68,8 @@ fn check_effects_limits_enforced() {
         .iter()
         .map(|q| q.compute_object_reference())
         .collect();
-    let mut gas_object = gas_objects[0].clone();
     temporary_store.smash_gas(sender, &gas_obj_refs).unwrap();
     temporary_store.ensure_active_inputs_mutated(sender, &gas_obj_refs[0].0);
-
-    gas::deduct_gas(&mut gas_object, amount_to_deduct, rebate);
-    temporary_store.write_object(&SingleTxContext::gas(sender), gas_object, WriteKind::Mutate);
 
     // Perform some writes on the temp store
     mutable_input_objects.iter().for_each(|q| {
@@ -93,6 +90,23 @@ fn check_effects_limits_enforced() {
             WriteKind::Mutate,
         )
     });
+    let mut gas_status = SuiGasStatus::new_with_budget(
+        gas_per_obj - 1,
+        GasPrice::from(1),
+        1.into(),
+        SuiCostTable::new(&protocol_config),
+    );
+
+    let mut errr = Ok(());
+    temporary_store.charge_gas(
+        sender,
+        gas_obj_refs[0].0,
+        &mut gas_status,
+        &mut errr,
+        &gas_obj_refs,
+    );
+
+    let gas_summary = temporary_store.gas_charged.clone().unwrap().2;
 
     // For maximum effects size, assume all are shared
     let dummy_shared_obj_refs = all_input_objects
@@ -107,11 +121,7 @@ fn check_effects_limits_enforced() {
             .iter()
             .map(|q| q.1.previous_transaction)
             .collect(),
-        GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
+        gas_summary,
         ExecutionStatus::Success,
         &gas_obj_refs,
         123,
@@ -225,14 +235,164 @@ fn check_effects_limits_enforced() {
             assert!(inner_effects.unwrapped.is_empty());
             assert!(inner_effects.unwrapped_then_deleted.is_empty());
 
-            // All events must be coin balance change
+            // 9 events for smashing into primary gas, plus one for primary gas receiving 9 other gas
+            // then 1 more event for gas payment for the tx. Total 11
+            assert!(inner_temp_store.events.data.len() == 11);
+
+            // Gas object will have both BalanceChangeType::Gas and BalanceChangeType::Receive events
+            // because it received gas by smashing and paid gas
+            assert!(
+                *inner_temp_store.events.data[0]
+                    .balance_change_type()
+                    .unwrap()
+                    == BalanceChangeType::Gas
+            );
+            assert!(
+                *inner_temp_store.events.data[1]
+                    .balance_change_type()
+                    .unwrap()
+                    == BalanceChangeType::Receive
+            );
+
+            // All other events must be coin balance change
             assert!(inner_temp_store.events.digest() == inner_effects.events_digest.unwrap());
-            inner_temp_store
-                .events
-                .data
+
+            // All other events must be coin balance change events
+            inner_temp_store.events.data[2..]
                 .iter()
                 .for_each(|q| assert!(*q.balance_change_type().unwrap() == BalanceChangeType::Pay));
         }
         _ => unimplemented!("Test not implemented for effects other than V1"),
     }
+}
+
+#[test]
+fn check_effects_unmetered_limits_not_enforced() {
+    let mut store = InMemoryStorage::new(Vec::new());
+    let protocol_config = ProtocolConfig::get_for_max_version();
+    let max_effects_size = protocol_config.max_serialized_tx_effects_size_bytes();
+    let max_input_objects = protocol_config.max_mutable_inputs();
+    let gas_per_obj = u64::MAX / 11;
+
+    assert!(max_input_objects > 0);
+
+    let sender = SuiAddress::random_for_testing_only();
+
+    // Create lots of input objects
+    let immutable_input_objects: Vec<_> = (0..max_input_objects / 10)
+        .map(|_| Object::immutable_with_id_for_testing(ObjectID::random()))
+        .collect();
+    let mutable_input_objects: Vec<_> = (0..(max_input_objects - 10))
+        .map(|r| {
+            Object::with_id_owner_version_for_testing(
+                ObjectID::random(),
+                SequenceNumber::from_u64(r * 10 + r + 7),
+                sender,
+            )
+        })
+        .collect();
+    let gas_objects: Vec<_> = (0..10)
+        .map(|r| {
+            Object::with_id_owner_version_gas_for_testing(
+                ObjectID::random(),
+                sender,
+                SequenceNumber::from_u64(r),
+                gas_per_obj,
+            )
+        })
+        .collect();
+
+    let mut all_input_objects = Vec::new();
+    all_input_objects.extend_from_slice(&immutable_input_objects);
+    all_input_objects.extend_from_slice(&mutable_input_objects);
+    all_input_objects.extend_from_slice(&gas_objects);
+
+    let all_input_objects: Vec<_> = all_input_objects
+        .iter()
+        .map(|q| {
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(q.compute_object_reference()),
+                q.clone(),
+            )
+        })
+        .collect();
+
+    let mut temporary_store = TemporaryStore::new(
+        &mut store,
+        InputObjects::new(all_input_objects.clone()),
+        TransactionDigest::random(),
+        &ProtocolConfig::get_for_max_version(),
+    );
+    let gas_obj_refs: Vec<_> = gas_objects
+        .iter()
+        .map(|q| q.compute_object_reference())
+        .collect();
+    temporary_store.smash_gas(sender, &gas_obj_refs).unwrap();
+    temporary_store.ensure_active_inputs_mutated(sender, &gas_obj_refs[0].0);
+
+    // Perform some writes on the temp store
+    mutable_input_objects.iter().for_each(|q| {
+        temporary_store.write_object(
+            &SingleTxContext::transfer_object(sender),
+            q.clone(),
+            WriteKind::Mutate,
+        )
+    });
+
+    let mut objects_to_write = Vec::new();
+    (0..(max_input_objects * 300)).for_each(|_| {
+        let obj = Object::new_gas_for_testing();
+        objects_to_write.push(obj.clone());
+        temporary_store.write_object(
+            &SingleTxContext::transfer_object(sender),
+            obj,
+            WriteKind::Mutate,
+        )
+    });
+    let mut gas_status = SuiGasStatus::new_with_budget(
+        gas_per_obj - 1,
+        GasPrice::from(1),
+        1.into(),
+        SuiCostTable::new(&protocol_config),
+    );
+
+    let mut errr = Ok(());
+    temporary_store.charge_gas(
+        sender,
+        gas_obj_refs[0].0,
+        &mut gas_status,
+        &mut errr,
+        &gas_obj_refs,
+    );
+
+    let gas_summary = temporary_store.gas_charged.clone().unwrap().2;
+
+    // For maximum effects size, assume all are shared
+    let dummy_shared_obj_refs = all_input_objects
+        .iter()
+        .map(|q| q.1.compute_object_reference())
+        .collect();
+
+    let (_, effects, status) = temporary_store.to_effects(
+        dummy_shared_obj_refs,
+        &TransactionDigest::random(),
+        all_input_objects
+            .iter()
+            .map(|q| q.1.previous_transaction)
+            .collect(),
+        gas_summary,
+        ExecutionStatus::Success,
+        &gas_obj_refs,
+        123,
+        false,
+        &protocol_config,
+        &sender,
+    );
+
+    let serialized_size = bcs::serialized_size(&effects).unwrap();
+
+    assert!(serialized_size > max_effects_size);
+
+    // This must err be ok because limits unchecked
+    assert!(status.is_ok());
 }

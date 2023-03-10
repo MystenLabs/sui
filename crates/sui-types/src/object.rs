@@ -716,10 +716,19 @@ impl Object {
     }
 
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
+        Self::with_id_owner_version_gas_for_testing(id, owner, OBJECT_START_VERSION, gas)
+    }
+
+    pub fn with_id_owner_version_gas_for_testing(
+        id: ObjectID,
+        owner: SuiAddress,
+        version: SequenceNumber,
+        gas: u64,
+    ) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            version: OBJECT_START_VERSION,
+            version,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
         Self {
