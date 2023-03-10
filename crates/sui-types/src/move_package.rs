@@ -52,6 +52,13 @@ pub struct FnInfoKey {
 /// A map from function info keys to function info
 pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 
+/// Identifies a struct and the module it was defined in
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize, Hash)]
+pub struct ModuleStruct {
+    pub module_name: Identifier,
+    pub struct_name: Identifier,
+}
+
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -71,6 +78,9 @@ pub struct MovePackage {
     // TODO use session cache
     #[serde_as(as = "BTreeMap<_, Bytes>")]
     module_map: BTreeMap<String, Vec<u8>>,
+
+    /// maps struct/module to a package version where it was first defined
+    type_origin: Option<BTreeMap<ModuleStruct, ObjectID>>,
 }
 
 /// Rust representation of upgrade policy constants in `sui::package`.
@@ -113,10 +123,21 @@ impl MovePackage {
         module_map: &BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
+        Self::new_with_type_origin(id, version, module_map, max_move_package_size, None)
+    }
+
+    pub fn new_with_type_origin(
+        id: ObjectID,
+        version: SequenceNumber,
+        module_map: &BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
+        type_origin: Option<BTreeMap<ModuleStruct, ObjectID>>,
+    ) -> Result<Self, ExecutionError> {
         let pkg = Self {
             id,
             version,
             module_map: module_map.clone(),
+            type_origin,
         };
         let object_size = pkg.size() as u64;
         if object_size > max_move_package_size {
@@ -134,6 +155,15 @@ impl MovePackage {
         iter: T,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
+        Self::from_module_iter_with_type_origin(version, iter, max_move_package_size, None)
+    }
+
+    pub fn from_module_iter_with_type_origin<T: IntoIterator<Item = CompiledModule>>(
+        version: SequenceNumber,
+        iter: T,
+        max_move_package_size: u64,
+        type_origin: Option<BTreeMap<ModuleStruct, ObjectID>>,
+    ) -> Result<Self, ExecutionError> {
         let mut iter = iter.into_iter().peekable();
         let id = ObjectID::from(
             *iter
@@ -143,7 +173,7 @@ impl MovePackage {
                 .address(),
         );
 
-        Self::new(
+        Self::new_with_type_origin(
             id,
             version,
             &iter
@@ -154,6 +184,7 @@ impl MovePackage {
                 })
                 .collect(),
             max_move_package_size,
+            type_origin,
         )
     }
 
