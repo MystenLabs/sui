@@ -13,7 +13,6 @@ use sui_indexer::Indexer;
 use sui_json_rpc_types::{CheckpointId, SuiObjectDataOptions, SuiObjectResponse};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::object::MoveObject;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
