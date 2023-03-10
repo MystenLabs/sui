@@ -41,7 +41,7 @@ use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
-    move_package::{FnInfo, FnInfoKey, FnInfoMap},
+    move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
@@ -49,6 +49,7 @@ use sui_verifier::verifier as sui_bytecode_verifier;
 use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME};
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
+#[derive(Debug)]
 pub struct CompiledPackage {
     pub package: MoveCompiledPackage,
     /// Path to the Move package (i.e., where the Move.toml file is)
@@ -294,6 +295,13 @@ impl CompiledPackage {
         // dependencies.
         ids.remove(&ObjectID::ZERO);
         ids.into_iter().collect()
+    }
+
+    pub fn get_package_digest(&self) -> [u8; 32] {
+        MovePackage::compute_digest_for_modules_and_deps(
+            &self.get_package_bytes(/* with_unpublished_deps */ true),
+            &self.get_dependency_original_package_ids(),
+        )
     }
 
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
