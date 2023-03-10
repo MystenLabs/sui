@@ -28,7 +28,6 @@ pub const ADD_DELEGATION_LOCKED_COIN_FUN_NAME: &IdentStr =
 pub const WITHDRAW_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_withdraw_delegation");
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct StakedSui {
     id: UID,
     pool_id: ID,

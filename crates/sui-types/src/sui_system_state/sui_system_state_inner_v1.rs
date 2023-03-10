@@ -31,7 +31,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 // TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "SystemParameters", rename_all = "camelCase")]
+#[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub min_validator_stake: u64,
     pub max_validator_count: u64,
