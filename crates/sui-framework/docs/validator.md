@@ -5,6 +5,7 @@
 
 
 
+-  [Struct `SupportedProtocolVersions`](#0x2_validator_SupportedProtocolVersions)
 -  [Struct `ValidatorMetadata`](#0x2_validator_ValidatorMetadata)
 -  [Struct `Validator`](#0x2_validator_Validator)
 -  [Struct `StakingRequestEvent`](#0x2_validator_StakingRequestEvent)
@@ -100,6 +101,39 @@
 </code></pre>
 
 
+
+<a name="0x2_validator_SupportedProtocolVersions"></a>
+
+## Struct `SupportedProtocolVersions`
+
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_SupportedProtocolVersions">SupportedProtocolVersions</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><b>min</b>: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>max: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
 
 <a name="0x2_validator_ValidatorMetadata"></a>
 
@@ -246,6 +280,18 @@
 </dt>
 <dd>
 
+</dd>
+<dt>
+<code>initial_supported_protocol_versions: <a href="_Option">option::Option</a>&lt;<a href="validator.md#0x2_validator_SupportedProtocolVersions">validator::SupportedProtocolVersions</a>&gt;</code>
+</dt>
+<dd>
+ Currently unused - may be used in the future to allow validators to pledge to support
+ some range of protocol versions when they join the committee, which would allow the
+ reconfiguration process to omit would-be validators who haven't pledged to support the
+ version that will become active in the new epoch. Without this, it is possible for the
+ current committee to vote to upgrade to a protocol version that may not have 2f+1
+ support in the new epoch, due to newly-joined validators that did not participate in
+ the vote.
 </dd>
 </dl>
 
@@ -630,6 +676,7 @@ Intended validator is not a candidate one.
         next_epoch_p2p_address: <a href="_none">option::none</a>(),
         next_epoch_primary_address: <a href="_none">option::none</a>(),
         next_epoch_worker_address: <a href="_none">option::none</a>(),
+        initial_supported_protocol_versions: <a href="_none">option::none</a>(),
     };
     metadata
 }

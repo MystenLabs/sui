@@ -37,6 +37,12 @@ pub struct SystemParametersV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct SupportedProtocolVersions {
+    pub min: u64,
+    pub max: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey_bytes: Vec<u8>,
@@ -59,6 +65,7 @@ pub struct ValidatorMetadataV1 {
     pub next_epoch_p2p_address: Option<Vec<u8>>,
     pub next_epoch_primary_address: Option<Vec<u8>>,
     pub next_epoch_worker_address: Option<Vec<u8>>,
+    pub initial_supported_protocol_versions: Option<SupportedProtocolVersions>,
 }
 
 #[derive(derivative::Derivative, Clone, Eq, PartialEq)]
@@ -280,6 +287,7 @@ impl ValidatorV1 {
                     next_epoch_p2p_address,
                     next_epoch_primary_address,
                     next_epoch_worker_address,
+                    initial_supported_protocol_versions: _,
                 },
             verified_metadata: _,
             voting_power,

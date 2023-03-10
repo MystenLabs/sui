@@ -3123,6 +3123,10 @@ impl AuthorityState {
                 epoch_store.protocol_version(),
                 epoch_store.committee(),
                 epoch_store.protocol_config(),
+                // TODO: capabilities reflects the capabilities of the current committee. It
+                // does not reflect the capabilities of the next epoch committee. We should
+                // consider discounting the vote of any validator who will be leaving the
+                // committee after this epoch.
                 epoch_store.get_capabilities(),
             );
 

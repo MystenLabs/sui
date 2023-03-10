@@ -238,6 +238,7 @@ validators:
         next_epoch_p2p_address: ~
         next_epoch_primary_address: ~
         next_epoch_worker_address: ~
+        initial_supported_protocol_versions: ~
       voting_power: 10000
       operation_cap_id: "0x16bb51edad1714f14cae3a3b1265f619900cee6126bafed1e743e68f2928a536"
       gas_price: 1

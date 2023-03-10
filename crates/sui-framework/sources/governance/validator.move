@@ -70,6 +70,11 @@ module sui::validator {
 
     const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
 
+    struct SupportedProtocolVersions has store, drop, copy {
+      min: u64,
+      max: u64,
+    }
+
     struct ValidatorMetadata has store, drop, copy {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
@@ -108,6 +113,15 @@ module sui::validator {
         next_epoch_p2p_address: Option<vector<u8>>,
         next_epoch_primary_address: Option<vector<u8>>,
         next_epoch_worker_address: Option<vector<u8>>,
+
+        /// Currently unused - may be used in the future to allow validators to pledge to support
+        /// some range of protocol versions when they join the committee, which would allow the
+        /// reconfiguration process to omit would-be validators who haven't pledged to support the
+        /// version that will become active in the new epoch. Without this, it is possible for the
+        /// current committee to vote to upgrade to a protocol version that may not have 2f+1
+        /// support in the new epoch, due to newly-joined validators that did not participate in
+        /// the vote.
+        initial_supported_protocol_versions: Option<SupportedProtocolVersions>,
     }
 
     struct Validator has store {
@@ -189,6 +203,7 @@ module sui::validator {
             next_epoch_p2p_address: option::none(),
             next_epoch_primary_address: option::none(),
             next_epoch_worker_address: option::none(),
+            initial_supported_protocol_versions: option::none(),
         };
         metadata
     }
