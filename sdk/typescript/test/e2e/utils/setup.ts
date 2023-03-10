@@ -118,7 +118,6 @@ export async function publishPackage(
   tx.add(
     Commands.MoveCall({
       target: '0x2::package::make_immutable',
-      typeArguments: [],
       arguments: [cap],
     }),
   );

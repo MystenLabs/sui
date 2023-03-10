@@ -53,7 +53,6 @@ describe('Transaction Builders', () => {
     tx.add(
       Commands.MoveCall({
         target: '0x2::devnet_nft::mint',
-        typeArguments: [],
         arguments: [
           tx.input('Example NFT'),
           tx.input('An NFT created by the wallet Command Line Tool'),
@@ -76,7 +75,6 @@ describe('Transaction Builders', () => {
     tx.add(
       Commands.MoveCall({
         target: '0x2::sui_system::request_add_delegation',
-        typeArguments: [],
         arguments: [
           tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
           tx.input(coins[2].objectId),
