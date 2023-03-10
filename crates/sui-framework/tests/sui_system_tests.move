@@ -303,8 +303,12 @@ module sui::sui_system_tests {
             name,
             protocol_pub_key,
             pop,
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
             network_address,
-            p2p_address
+            p2p_address,
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
         );
         assert!(validator::commission_rate(validator) == commission_rate, 0);
 
@@ -319,7 +323,7 @@ module sui::sui_system_tests {
         protocol_pub_key: vector<u8>,
         pop: vector<u8>,
         network_address: vector<u8>,
-        p2p_address: vector<u8>
+        p2p_address: vector<u8>,
     ) {
         let ctx = test_scenario::ctx(scenario);
         sui_system::update_validator_name(system_state, name, ctx);
@@ -358,8 +362,12 @@ module sui::sui_system_tests {
             name,
             protocol_pub_key,
             pop,
+            vector[4, 127, 0, 0, 1],
+            vector[4, 127, 0, 0, 1],
             network_address,
-            p2p_address
+            p2p_address,
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
         );
 
         // Next epoch
@@ -390,8 +398,12 @@ module sui::sui_system_tests {
         name: vector<u8>,
         protocol_pub_key: vector<u8>,
         pop: vector<u8>,
+        primary_address: vector<u8>,
+        worker_address: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
+        network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
     ) {
         // Current epoch
         assert!(validator::name(validator) == &string::from_ascii(ascii::string(name)), 0);
@@ -400,12 +412,12 @@ module sui::sui_system_tests {
         assert!(validator::project_url(validator) == &url::new_unsafe_from_bytes(b"new_project_url"), 0);
         assert!(validator::network_address(validator) == &network_address, 0);
         assert!(validator::p2p_address(validator) == &p2p_address, 0);
-        assert!(validator::primary_address(validator) == &vector[4, 127, 0, 0, 1], 0);
-        assert!(validator::worker_address(validator) == &vector[4, 127, 0, 0, 1], 0);
+        assert!(validator::primary_address(validator) == &primary_address, 0);
+        assert!(validator::worker_address(validator) == &worker_address, 0);
         assert!(validator::protocol_pubkey_bytes(validator) == &protocol_pub_key, 0);
         assert!(validator::proof_of_possession(validator) == &pop, 0);
-        assert!(validator::network_pubkey_bytes(validator) == &vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62], 0);
-        assert!(validator::worker_pubkey_bytes(validator) == &vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25], 0);
+        assert!(validator::worker_pubkey_bytes(validator) == &worker_pubkey_bytes, 0);
+        assert!(validator::network_pubkey_bytes(validator) == &network_pubkey_bytes, 0);
     }
 
 
@@ -418,18 +430,18 @@ module sui::sui_system_tests {
         p2p_address: vector<u8>,
     ) {
         // Current epoch
-        assert!(validator::name(validator) == &string::from_ascii(ascii::string(name)), 0);
-        assert!(validator::description(validator) == &string::from_ascii(ascii::string(b"new_desc")), 0);
-        assert!(validator::image_url(validator) == &url::new_unsafe_from_bytes(b"new_image_url"), 0);
-        assert!(validator::project_url(validator) == &url::new_unsafe_from_bytes(b"new_project_url"), 0);
-        assert!(validator::network_address(validator) == &network_address, 0);
-        assert!(validator::p2p_address(validator) == &p2p_address, 0);
-        assert!(validator::primary_address(validator) == &vector[4, 168, 168, 168, 168], 0);
-        assert!(validator::worker_address(validator) == &vector[4, 168, 168, 168, 168], 0);
-        assert!(validator::protocol_pubkey_bytes(validator) == &protocol_pub_key, 0);
-        assert!(validator::proof_of_possession(validator) == &pop, 0);
-        assert!(validator::worker_pubkey_bytes(validator) == &vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43], 0);
-        assert!(validator::network_pubkey_bytes(validator) == &vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199], 0);
+        verify_current_epoch_metadata(
+            validator,
+            name,
+            protocol_pub_key,
+            pop,
+            vector[4, 168, 168, 168, 168],
+            vector[4, 168, 168, 168, 168],
+            network_address,
+            p2p_address,
+            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+        );
 
         // Next epoch
         assert!(option::is_none(validator::next_epoch_network_address(validator)), 0);
@@ -621,6 +633,15 @@ module sui::sui_system_tests {
     #[test]
     fun test_validator_candidate_update() {
         let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
+        // pubkey generated with protocol key on seed [0; 32]
+        let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+        // pop generated using the protocol key and address with [fn test_proof_of_possession]
+        let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+
+        // pubkey generated with protocol key on seed [1; 32]
+        let pubkey1 = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
+        let pop1 = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
+
         let scenario_val = test_scenario::begin(validator_addr);
         let scenario = &mut scenario_val;
 
@@ -630,10 +651,10 @@ module sui::sui_system_tests {
         test_scenario::next_tx(scenario, validator_addr);
         sui_system::request_add_validator_candidate_for_testing(
             &mut system_state,
-            vector[153, 21, 95, 72, 205, 126, 148, 249, 194, 129, 121, 224, 137, 171, 173, 206, 207, 69, 3, 142, 106, 91, 158, 244, 0, 234, 14, 134, 130, 255, 173, 137, 125, 109, 44, 193, 187, 107, 78, 227, 84, 147, 66, 54, 92, 53, 208, 76, 10, 110, 217, 188, 125, 75, 58, 1, 143, 160, 113, 62, 239, 45, 154, 163, 105, 227, 253, 87, 44, 156, 5, 211, 41, 8, 35, 13, 197, 240, 203, 104, 222, 70, 62, 189, 63, 228, 214, 32, 82, 119, 148, 170, 155, 82, 223, 127],
+            pubkey,
             vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
             vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-            vector[131, 170, 51, 121, 46, 85, 50, 42, 110, 180, 220, 186, 24, 12, 168, 180, 66, 63, 129, 111, 6, 94, 250, 52, 137, 174, 6, 184, 181, 148, 15, 5, 129, 14, 8, 206, 163, 32, 239, 20, 141, 242, 195, 80, 179, 142, 35, 13],
+            pop,
             b"ValidatorName2",
             b"description2",
             b"image_url2",
@@ -651,8 +672,8 @@ module sui::sui_system_tests {
             scenario,
             &mut system_state,
             b"validator_new_name",
-            vector[143, 97, 231, 116, 194, 3, 239, 10, 180, 80, 18, 78, 135, 46, 201, 7, 72, 33, 52, 183, 108, 35, 55, 55, 38, 187, 187, 150, 233, 146, 117, 165, 157, 219, 220, 157, 150, 19, 224, 131, 23, 206, 189, 221, 55, 134, 90, 140, 21, 159, 246, 179, 108, 104, 152, 249, 176, 243, 55, 27, 154, 78, 142, 169, 64, 77, 159, 227, 43, 123, 35, 252, 28, 205, 209, 160, 249, 40, 110, 101, 55, 16, 176, 56, 56, 177, 123, 185, 58, 61, 63, 88, 239, 241, 95, 99],
-            vector[161, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36],
+            pubkey1,
+            pop1,
             vector[4, 42, 42, 42, 42],
             vector[4, 43, 43, 43, 43],
             42,
@@ -662,8 +683,8 @@ module sui::sui_system_tests {
         verify_candidate(
             validator,
             b"validator_new_name",
-            vector[143, 97, 231, 116, 194, 3, 239, 10, 180, 80, 18, 78, 135, 46, 201, 7, 72, 33, 52, 183, 108, 35, 55, 55, 38, 187, 187, 150, 233, 146, 117, 165, 157, 219, 220, 157, 150, 19, 224, 131, 23, 206, 189, 221, 55, 134, 90, 140, 21, 159, 246, 179, 108, 104, 152, 249, 176, 243, 55, 27, 154, 78, 142, 169, 64, 77, 159, 227, 43, 123, 35, 252, 28, 205, 209, 160, 249, 40, 110, 101, 55, 16, 176, 56, 56, 177, 123, 185, 58, 61, 63, 88, 239, 241, 95, 99],
-            vector[161, 130, 28, 216, 188, 134, 52, 4, 25, 167, 187, 251, 207, 203, 145, 37, 30, 135, 202, 189, 170, 87, 115, 250, 82, 59, 216, 9, 150, 110, 52, 167, 225, 17, 132, 192, 32, 41, 20, 124, 115, 54, 158, 228, 55, 75, 98, 36],
+            pubkey1,
+            pop1,
             vector[4, 42, 42, 42, 42],
             vector[4, 43, 43, 43, 43],
             42
