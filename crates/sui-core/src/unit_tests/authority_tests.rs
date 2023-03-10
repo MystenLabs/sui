@@ -88,7 +88,7 @@ impl TestCallArg {
                 for object_id in vec {
                     refs.push(Self::call_arg_from_id(object_id, state).await)
                 }
-                builder.make_obj_vec(refs)
+                builder.make_obj_vec(refs).unwrap()
             }
         }
     }
@@ -541,24 +541,20 @@ async fn test_dev_inspect_dynamic_field() {
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // add a dynamic field to itself
-    let pt = ProgrammableTransaction {
-        inputs: vec![
-            CallArg::Pure(test_object1_bytes.clone()),
-            CallArg::Pure(test_object1_bytes.clone()),
+    let DevInspectResults { results, .. } = call_dev_inspect(
+        &fullnode,
+        &sender,
+        &object_basics.0,
+        "object_basics",
+        "add_ofield",
+        vec![],
+        vec![
+            TestCallArg::Pure(test_object1_bytes.clone()),
+            TestCallArg::Pure(test_object1_bytes.clone()),
         ],
-        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-            package: object_basics.0,
-            module: Identifier::new("object_basics").unwrap(),
-            function: Identifier::new("add_ofield").unwrap(),
-            type_arguments: vec![],
-            arguments: vec![Argument::Input(0), Argument::Input(1)],
-        }))],
-    };
-    let kind = TransactionKind::programmable(pt);
-    let DevInspectResults { results, .. } = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
-        .await
-        .unwrap();
+    )
+    .await
+    .unwrap();
     // produces an error
     let err = results.unwrap_err();
     assert!(
@@ -1181,7 +1177,9 @@ async fn test_handle_sponsored_transaction() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object.compute_object_reference());
+        builder
+            .transfer_object(recipient, object.compute_object_reference())
+            .unwrap();
         builder.finish()
     };
     let tx_kind = TransactionKind::programmable(pt);

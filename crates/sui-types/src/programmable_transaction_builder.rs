@@ -5,7 +5,7 @@
 //! migrating legacy transactions
 
 use anyhow::Context;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use serde::Serialize;
 
@@ -18,9 +18,15 @@ use crate::{
     SUI_FRAMEWORK_OBJECT_ID,
 };
 
+#[derive(PartialEq, Eq, Hash)]
+enum BuilderArg {
+    Object(ObjectID),
+    Pure(usize),
+}
+
 #[derive(Default)]
 pub struct ProgrammableTransactionBuilder {
-    inputs: IndexSet<CallArg>,
+    inputs: IndexMap<BuilderArg, CallArg>,
     commands: Vec<Command>,
 }
 
@@ -31,29 +37,54 @@ impl ProgrammableTransactionBuilder {
 
     pub fn finish(self) -> ProgrammableTransaction {
         let Self { inputs, commands } = self;
-        let inputs = inputs.into_iter().collect();
+        let inputs = inputs.into_values().collect();
         ProgrammableTransaction { inputs, commands }
     }
 
-    pub fn pure<T: Serialize>(&mut self, value: T) -> anyhow::Result<Argument> {
-        Ok(self
-            .input(CallArg::Pure(
-                bcs::to_bytes(&value).context("Searlizing pure argument.")?,
-            ))
-            .unwrap())
+    fn pure_bytes(&mut self, bytes: Vec<u8>) -> Argument {
+        let n = self.inputs.len();
+        let (i, _) = self
+            .inputs
+            .insert_full(BuilderArg::Pure(n), CallArg::Pure(bytes));
+        Argument::Input(i as u16)
     }
 
-    pub fn obj(&mut self, obj_arg: ObjectArg) -> Argument {
-        self.input(CallArg::Object(obj_arg)).unwrap()
+    pub fn pure<T: Serialize>(&mut self, value: T) -> anyhow::Result<Argument> {
+        Ok(self.pure_bytes(bcs::to_bytes(&value).context("Searlizing pure argument.")?))
+    }
+
+    pub fn obj(&mut self, obj_arg: ObjectArg) -> anyhow::Result<Argument> {
+        let id = obj_arg.id();
+        let (i, old_value_opt) = self
+            .inputs
+            .insert_full(BuilderArg::Object(id), CallArg::Object(obj_arg));
+        if let Some(old_value) = old_value_opt {
+            let obj_arg = CallArg::Object(obj_arg);
+            anyhow::ensure!(
+                old_value == obj_arg,
+                "Mismatched Object argument kind for object {i}. \
+                {old_value:?} is not compatible with {obj_arg:?}"
+            )
+        }
+        Ok(Argument::Input(i as u16))
     }
 
     pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
-        Ok(Argument::Input(self.inputs.insert_full(call_arg).0 as u16))
+        match call_arg {
+            CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes)),
+            CallArg::Object(obj) => self.obj(obj),
+        }
     }
 
-    pub fn make_obj_vec(&mut self, objs: impl IntoIterator<Item = ObjectArg>) -> Argument {
-        let make_vec_args = objs.into_iter().map(|obj| self.obj(obj)).collect();
-        self.command(Command::MakeMoveVec(None, make_vec_args))
+    pub fn make_obj_vec(
+        &mut self,
+        objs: impl IntoIterator<Item = ObjectArg>,
+    ) -> anyhow::Result<Argument> {
+        let make_vec_args = objs
+            .into_iter()
+            .map(|obj| self.obj(obj))
+            .collect::<Result<_, _>>()?;
+        Ok(self.command(Command::MakeMoveVec(None, make_vec_args)))
     }
 
     pub fn command(&mut self, command: Command) -> Argument {
@@ -136,11 +167,16 @@ impl ProgrammableTransactionBuilder {
         self.commands.push(Command::TransferObjects(args, rec_arg));
     }
 
-    pub fn transfer_object(&mut self, recipient: SuiAddress, object_ref: ObjectRef) {
+    pub fn transfer_object(
+        &mut self,
+        recipient: SuiAddress,
+        object_ref: ObjectRef,
+    ) -> anyhow::Result<()> {
         let rec_arg = self.pure(recipient).unwrap();
         let obj_arg = self.obj(ObjectArg::ImmOrOwnedObject(object_ref));
         self.commands
-            .push(Command::TransferObjects(vec![obj_arg], rec_arg));
+            .push(Command::TransferObjects(vec![obj_arg?], rec_arg));
+        Ok(())
     }
 
     pub fn transfer_sui(&mut self, recipient: SuiAddress, amount: Option<u64>) {
@@ -181,10 +217,10 @@ impl ProgrammableTransactionBuilder {
         else {
             anyhow::bail!("coins vector is empty");
         };
-        let coin_arg = self.obj(ObjectArg::ImmOrOwnedObject(coin));
+        let coin_arg = self.obj(ObjectArg::ImmOrOwnedObject(coin))?;
         let merge_args: Vec<_> = coins
             .map(|c| self.obj(ObjectArg::ImmOrOwnedObject(c)))
-            .collect();
+            .collect::<Result<_, _>>()?;
         if !merge_args.is_empty() {
             self.command(Command::MergeCoins(coin_arg, merge_args));
         }

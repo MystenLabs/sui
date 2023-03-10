@@ -142,7 +142,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         object_id: ObjectID,
         recipient: SuiAddress,
     ) -> anyhow::Result<()> {
-        builder.transfer_object(recipient, self.get_object_ref(object_id).await?);
+        builder.transfer_object(recipient, self.get_object_ref(object_id).await?)?;
         Ok(())
     }
 
@@ -434,11 +434,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let args = check_args
             .into_iter()
             .map(|check_arg| match check_arg {
-                CheckCallArg::Pure(bytes) => builder.input(CallArg::Pure(bytes)).unwrap(),
-                CheckCallArg::Object(obj) => builder.input(CallArg::Object(obj)).unwrap(),
+                CheckCallArg::Pure(bytes) => builder.input(CallArg::Pure(bytes)),
+                CheckCallArg::Object(obj) => builder.input(CallArg::Object(obj)),
                 CheckCallArg::ObjVec(objs) => builder.make_obj_vec(objs),
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
         Ok(args)
     }
 
@@ -695,7 +695,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                         mutable: true,
                     }))
                     .unwrap(),
-                builder.make_obj_vec(obj_vec),
+                builder.make_obj_vec(obj_vec)?,
                 builder
                     .input(CallArg::Pure(bcs::to_bytes(&amount)?))
                     .unwrap(),

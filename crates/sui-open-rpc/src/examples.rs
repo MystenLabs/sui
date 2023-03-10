@@ -124,14 +124,16 @@ impl RpcExampleProvider {
                     ],
                 )
                 .unwrap();
-            builder.transfer_object(
-                recipient,
-                (
-                    object_id,
-                    SequenceNumber::from_u64(1),
-                    ObjectDigest::new(self.rng.gen()),
-                ),
-            );
+            builder
+                .transfer_object(
+                    recipient,
+                    (
+                        object_id,
+                        SequenceNumber::from_u64(1),
+                        ObjectDigest::new(self.rng.gen()),
+                    ),
+                )
+                .unwrap();
             builder.finish()
         };
         let data = TransactionData::new_with_dummy_gas_price(

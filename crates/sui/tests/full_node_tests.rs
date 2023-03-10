@@ -127,7 +127,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     // Construct the sponsored transction
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(another_addr, object_ref);
+        builder.transfer_object(another_addr, object_ref).unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);

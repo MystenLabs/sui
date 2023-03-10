@@ -906,14 +906,16 @@ impl InternalOperation {
                             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                             mutable: true,
                         }))
-                        .unwrap(),
-                    builder.make_obj_vec(coins.into_iter().map(ObjectArg::ImmOrOwnedObject)),
+                        .map_err(Error::InternalError)?,
+                    builder
+                        .make_obj_vec(coins.into_iter().map(ObjectArg::ImmOrOwnedObject))
+                        .map_err(Error::InternalError)?,
                     builder
                         .input(CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?))
-                        .unwrap(),
+                        .map_err(Error::InternalError)?,
                     builder
                         .input(CallArg::Pure(bcs::to_bytes(&validator)?))
-                        .unwrap(),
+                        .map_err(Error::InternalError)?,
                 ];
                 builder.command(Command::move_call(
                     SUI_FRAMEWORK_OBJECT_ID,
