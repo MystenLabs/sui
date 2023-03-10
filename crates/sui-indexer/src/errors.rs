@@ -4,6 +4,7 @@
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use sui_types::base_types::ObjectIDParseError;
+use sui_types::error::SuiError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -55,6 +56,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     ObjectIdParseError(#[from] ObjectIDParseError),
+
+    #[error(transparent)]
+    SuiError(#[from] SuiError),
 }
 
 impl IndexerError {
@@ -76,6 +80,7 @@ impl IndexerError {
             IndexerError::PostgresError(_) => "PostgresError".into(),
             IndexerError::UncategorizedError(_) => "UncategorizedError".into(),
             IndexerError::ObjectIdParseError(_) => "ObjectIdParseError".into(),
+            IndexerError::SuiError(_) => "SuiError".into(),
         }
     }
 }

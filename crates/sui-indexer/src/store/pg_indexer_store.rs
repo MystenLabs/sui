@@ -5,23 +5,12 @@ use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
 use crate::models::objects::Object;
-use crate::models::objects::{Object, ObjectStatus};
 use crate::models::transactions::Transaction;
-use crate::schema::addresses::account_address;
-use crate::schema::checkpoints::dsl::checkpoints as checkpoints_table;
-use crate::schema::checkpoints::{checkpoint_digest, sequence_number};
-use crate::schema::move_calls::dsl as move_calls_dsl;
-use crate::schema::recipients::dsl as recipients_dsl;
-use crate::schema::transactions::{dsl, transaction_digest};
+
 use crate::schema::{
-    addresses, checkpoints, events, move_calls, objects, packages, recipients, transactions,
-};
-use crate::schema::{
-    addresses, events, move_calls, objects, objects_history, packages, recipients, transactions,
-};
-use crate::schema::{
-    checkpoints::dsl as checkpoints_dsl, move_calls::dsl as move_calls_dsl,
-    objects::dsl as objects_dsl, recipients::dsl as recipients_dsl,
+    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, events, move_calls,
+    move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
+    packages, recipients, recipients::dsl as recipients_dsl, transactions,
     transactions::dsl as transactions_dsl,
 };
 use crate::store::indexer_store::TemporaryCheckpointStore;
@@ -38,10 +27,10 @@ use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json_rpc_types::{CheckpointId, SuiObjectDataOptions, SuiObjectResponse};
-use sui_types::base_types::ObjectID;
+use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
+use sui_types::object::ObjectRead;
 use tracing::{error, info};
 
 const GET_PARTITION_SQL: &str = r#"
@@ -188,20 +177,28 @@ impl IndexerStore for PgIndexerStore {
             .transpose()
     }
 
-    fn get_object_with_options(
+    fn get_object(
         &self,
         object_id: ObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, IndexerError> {
+        version: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         let object = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                objects_dsl::objects
-                    .filter(objects_dsl::object_id.eq(object_id.to_string()))
-                    .first::<Object>(conn)
-                    .optional()
+                if let Some(version) = version {
+                    objects_history::dsl::objects_history
+                        .filter(objects_history::object_id.eq(object_id.to_string()))
+                        .filter(objects_history::version.eq(version.value() as i64))
+                        .get_result(conn)
+                        .optional()
+                } else {
+                    objects_dsl::objects
+                        .filter(objects_dsl::object_id.eq(object_id.to_string()))
+                        .first::<Object>(conn)
+                        .optional()
+                }
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
@@ -210,13 +207,10 @@ impl IndexerStore for PgIndexerStore {
                 ))
             })?;
 
-        Ok(match object {
-            None => SuiObjectResponse::NotExists(object_id),
-            Some(obj) => match obj.object_status {
-                ObjectStatus::Deleted => SuiObjectResponse::Deleted(obj.get_object_ref()?),
-                _ => obj.to_object_response(&options)?,
-            },
-        })
+        match object {
+            None => Ok(ObjectRead::NotExists(object_id)),
+            Some(o) => o.try_into_object_read(&self.module_cache),
+        }
     }
 
     fn get_move_call_sequence_by_digest(
@@ -626,24 +620,6 @@ impl IndexerStore for PgIndexerStore {
                     transactions, e
                 ))
             })
-    }
-
-    fn get_object(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> Result<sui_types::object::Object, IndexerError> {
-        let object_id = object_id.to_string();
-        let version = version.value() as i64;
-
-        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-        let object: Object = pg_pool_conn.build_transaction().read_only().run(|conn| {
-            objects_history::dsl::objects_history
-                .filter(objects_history::object_id.eq(object_id))
-                .filter(objects_history::version.eq(version))
-                .get_result(conn)
-        })?;
-        object.try_into()
     }
 
     fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<usize, IndexerError> {
