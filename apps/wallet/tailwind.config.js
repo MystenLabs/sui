@@ -40,6 +40,8 @@ module.exports = {
                 20: '1.25rem',
                 15: '0.9375rem',
                 '2lg': '0.625rem',
+                '3lg': '0.75rem',
+                '4lg': '1rem',
             },
             gridTemplateColumns: {
                 header: '1fr fit-content(160px) 1fr',

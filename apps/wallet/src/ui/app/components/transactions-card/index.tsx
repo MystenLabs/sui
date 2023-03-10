@@ -187,7 +187,7 @@ export function TransactionCard({
                             {transferAmountComponent}
                         </div>
                     ) : (
-                        <div className="flex w-full justify-between flex-col ">
+                        <>
                             <div className="flex w-full justify-between">
                                 <div className="flex gap-1 align-middle items-baseline">
                                     <Text color="gray-90" weight="semibold">
@@ -205,7 +205,7 @@ export function TransactionCard({
                                 </div>
                                 {transferAmountComponent}
                             </div>
-                            <div className="flex flex-col w-full gap-1.5">
+                            <>
                                 <TxnTypeLabel
                                     address={recipientAddress!}
                                     moveCallFnName={moveCallTxn?.function}
@@ -213,8 +213,8 @@ export function TransactionCard({
                                     isTransfer={isTransfer}
                                 />
                                 {objectId && <TxnImage id={objectId} />}
-                            </div>
-                        </div>
+                            </>
+                        </>
                     )}
 
                     {timestamp && <DateCard timestamp={timestamp} size="sm" />}
