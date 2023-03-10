@@ -37,6 +37,7 @@ module sui::randomness {
     use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::recipient::Recipient;
 
     /// Set is called with an invalid signature.
     const EInvalidSignature: u64 = 0;
@@ -65,7 +66,7 @@ module sui::randomness {
         // TODO: Front load the fee.
     }
 
-    public fun transfer<T>(self: Randomness<T>, to: address) {
+    public fun transfer<T>(self: Randomness<T>, to: Recipient) {
         transfer::transfer(self, to);
     }
 

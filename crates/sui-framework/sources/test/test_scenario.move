@@ -7,6 +7,7 @@ module sui::test_scenario {
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::VecMap;
+    use sui::recipient::Recipient;
 
     /// the transaction failed when generating these effects. For example, a circular ownership
     /// of objects was created
@@ -162,6 +163,11 @@ module sui::test_scenario {
         tx_context::sender(&scenario.ctx)
     }
 
+    /// Return the recipient of the current tx in this `scenario`
+    public fun recipient(scenario: &Scenario): Recipient {
+        tx_context::recipient(&scenario.ctx)
+    }
+
     /// Return the number of concluded transactions in this scenario.
     /// This does not include the current transaction, e.g. this will return 0 if `next_tx` has
     /// not yet been called
@@ -248,7 +254,7 @@ module sui::test_scenario {
     public fun return_to_address<T: key>(account: address, t: T) {
         let id = object::id(&t);
         assert!(was_taken_from_address(account, id), ECantReturnObject);
-        sui::transfer::transfer(t, account)
+        sui::transfer::transfer_to_address(t, account)
     }
 
     /// Returns true if the object with `ID` id was in the inventory for `account`

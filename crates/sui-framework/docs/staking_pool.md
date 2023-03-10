@@ -43,12 +43,14 @@
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
@@ -479,7 +481,7 @@ Request to delegate to a staking pool. The delegation starts counting at the beg
         sui_token_lock,
     };
     pool.pending_delegation = pool.pending_delegation + sui_amount;
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(staked_sui, delegator);
+    <a href="transfer.md#0x2_transfer_transfer_to_address">transfer::transfer_to_address</a>(staked_sui, delegator);
 }
 </code></pre>
 
@@ -512,7 +514,7 @@ A proportional amount of pool tokens is burnt.
 ) : u64 {
     <b>let</b> (pool_token_withdraw_amount, principal_withdraw, time_lock) =
         <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, staked_sui);
-    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_recipient">tx_context::recipient</a>(ctx);
     <b>let</b> principal_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
 
     <b>let</b> rewards_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(
@@ -857,9 +859,14 @@ portion because the principal portion was already taken out of the delegator's s
 
     // TODO: consider sharing code <b>with</b> `request_withdraw_delegation`
     <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
-        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal, <a href="_destroy_some">option::destroy_some</a>(time_lock), delegator, ctx);
+        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(
+            principal,
+            <a href="_destroy_some">option::destroy_some</a>(time_lock),
+            sui::address::recipient(delegator),
+            ctx,
+        );
     } <b>else</b> {
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), delegator);
+        <a href="transfer.md#0x2_transfer_transfer_to_address">transfer::transfer_to_address</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), delegator);
         <a href="_destroy_none">option::destroy_none</a>(time_lock);
     };
     withdraw_amount
@@ -1091,7 +1098,7 @@ transfer the newly split part to the sender address.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split_staked_sui">split_staked_sui</a>(c: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="staking_pool.md#0x2_staking_pool_split">split</a>(c, split_amount, ctx), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="staking_pool.md#0x2_staking_pool_split">split</a>(c, split_amount, ctx), <a href="tx_context.md#0x2_tx_context_recipient">tx_context::recipient</a>(ctx));
 }
 </code></pre>
 

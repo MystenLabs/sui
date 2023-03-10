@@ -12,7 +12,7 @@
 /// More entry functions might be added in the future depending on the use cases.
 module sui::display {
     use sui::package::{from_package, Publisher};
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::{recipient, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::object::{Self, ID, UID};
     use sui::transfer::transfer;
@@ -114,7 +114,7 @@ module sui::display {
 
     /// Create a new empty Display<T> object and keep it.
     entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
-        transfer(new<T>(pub, ctx), sender(ctx))
+        transfer(new<T>(pub, ctx), recipient(ctx))
     }
 
     /// Manually bump the version and emit an event with the updated version's contents.
@@ -235,7 +235,7 @@ module sui::display_tests {
         display::add(&mut display, utf8(b"description"), utf8(b"A Lovely Capy"));
 
         package::burn_publisher(pub);
-        transfer(display, @0x2);
+        transfer(display, sui::address::recipient(@0x2));
         test::end(test);
     }
 }

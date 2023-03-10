@@ -38,6 +38,7 @@ More entry functions might be added in the future depending on the use cases.
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
@@ -313,7 +314,7 @@ Create a new empty Display<T> object and keep it.
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer">transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), sender(ctx))
+    <a href="transfer.md#0x2_transfer">transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), <a href="recipient.md#0x2_recipient">recipient</a>(ctx))
 }
 </code></pre>
 

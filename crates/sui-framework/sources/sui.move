@@ -33,7 +33,7 @@ module sui::sui {
         assert!(tx_context::epoch(ctx) == 0, EAlreadyMinted);
 
         let (treasury, metadata) = coin::create_currency(
-            SUI {}, 
+            SUI {},
             9,
             b"SUI",
             b"Sui",
@@ -49,7 +49,4 @@ module sui::sui {
         total_sui
     }
 
-    public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
-        transfer::transfer(c, recipient)
-    }
 }

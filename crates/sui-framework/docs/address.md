@@ -14,6 +14,8 @@
 -  [Function `to_string`](#0x2_address_to_string)
 -  [Function `length`](#0x2_address_length)
 -  [Function `max`](#0x2_address_max)
+-  [Function `recipient`](#0x2_address_recipient)
+-  [Function `from_recipient`](#0x2_address_from_recipient)
 -  [Module Specification](#@Module_Specification_1)
 
 
@@ -21,6 +23,7 @@
 <b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="hex.md#0x2_hex">0x2::hex</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 </code></pre>
 
 
@@ -30,12 +33,32 @@
 ## Constants
 
 
+<a name="0x2_address_ADDRESS_RECIPIENT_KIND"></a>
+
+The recipient is an address
+
+
+<pre><code><b>const</b> <a href="address.md#0x2_address_ADDRESS_RECIPIENT_KIND">ADDRESS_RECIPIENT_KIND</a>: u8 = 0;
+</code></pre>
+
+
+
 <a name="0x2_address_EAddressParseError"></a>
 
 Error from <code>from_bytes</code> when it is supplied too many or too few bytes.
 
 
 <pre><code><b>const</b> <a href="address.md#0x2_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_address_ENotAnAddressRecipient"></a>
+
+The recipient is not an object
+
+
+<pre><code><b>const</b> <a href="address.md#0x2_address_ENotAnAddressRecipient">ENotAnAddressRecipient</a>: u64 = 100;
 </code></pre>
 
 
@@ -288,6 +311,59 @@ Largest possible address
 
 <pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_max">max</a>(): u256 {
     <a href="address.md#0x2_address_MAX">MAX</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_address_recipient"></a>
+
+## Function `recipient`
+
+Constructs an address Recipient
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="recipient.md#0x2_recipient">recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>): <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="recipient.md#0x2_recipient">recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>): Recipient {
+    <a href="recipient.md#0x2_recipient_new">recipient::new</a>(<a href="address.md#0x2_address_ADDRESS_RECIPIENT_KIND">ADDRESS_RECIPIENT_KIND</a>, <a href="recipient.md#0x2_recipient">recipient</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_address_from_recipient"></a>
+
+## Function `from_recipient`
+
+Converts the recipient to an address.
+Aborts if the kind is not an address kind
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_from_recipient">from_recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_from_recipient">from_recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: Recipient): <b>address</b> {
+    <b>let</b> (kind, value) = <a href="recipient.md#0x2_recipient_destroy">recipient::destroy</a>(<a href="recipient.md#0x2_recipient">recipient</a>);
+    <b>assert</b>!(kind == <a href="address.md#0x2_address_ADDRESS_RECIPIENT_KIND">ADDRESS_RECIPIENT_KIND</a>, <a href="address.md#0x2_address_ENotAnAddressRecipient">ENotAnAddressRecipient</a>);
+    value
 }
 </code></pre>
 

@@ -369,7 +369,7 @@ module sui::sui_system {
     /// Report a validator as a bad or non-performant actor in the system.
     /// Succeeds if all the following are satisfied:
     /// 1. both the reporter in `cap` and the input `reportee_addr` are active validators.
-    /// 2. reporter and reportee not the same address. 
+    /// 2. reporter and reportee not the same address.
     /// 3. the cap object is still valid.
     /// This function is idempotent.
     public entry fun report_validator(
@@ -806,7 +806,10 @@ module sui::sui_system {
             let balance = balance::split(&mut total_balance, amount);
             // transfer back the remainder if non zero.
             if (balance::value(&total_balance) > 0) {
-                transfer::transfer(coin::from_balance(total_balance, ctx), tx_context::sender(ctx));
+                transfer::transfer(
+                    coin::from_balance(total_balance, ctx),
+                    tx_context::recipient(ctx),
+                );
             } else {
                 balance::destroy_zero(total_balance);
             };
@@ -839,7 +842,12 @@ module sui::sui_system {
             let amount = option::destroy_some(amount);
             let balance = balance::split(&mut total_balance, amount);
             if (balance::value(&total_balance) > 0) {
-                locked_coin::new_from_balance(total_balance, first_lock, tx_context::sender(ctx), ctx);
+                locked_coin::new_from_balance(
+                    total_balance,
+                    first_lock,
+                    tx_context::recipient(ctx),
+                    ctx,
+                );
             } else {
                 balance::destroy_zero(total_balance);
             };

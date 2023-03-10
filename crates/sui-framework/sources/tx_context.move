@@ -5,6 +5,8 @@ module sui::tx_context {
 
     friend sui::object;
 
+    use sui::recipient::Recipient;
+
     #[test_only]
     use std::vector;
 
@@ -40,6 +42,13 @@ module sui::tx_context {
     public fun sender(self: &TxContext): address {
         self.sender
     }
+
+    /// Return the recipient for the user that signed the current
+    /// transaction
+    public fun recipient(self: &TxContext): Recipient {
+        sui::address::recipient(self.sender)
+    }
+
 
     /// Return the current epoch
     public fun epoch(self: &TxContext): u64 {

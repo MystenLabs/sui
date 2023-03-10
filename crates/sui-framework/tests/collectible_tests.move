@@ -5,7 +5,7 @@
 /// Initializes a simple collection.
 module sui::boars {
     use sui::tx_context::{TxContext, sender};
-    use sui::transfer::transfer;
+    use sui::transfer::transfer_to_address;
     use sui::collectible;
     use sui::display;
     use std::string::utf8;
@@ -42,9 +42,9 @@ module sui::boars {
         ]);
 
         display::update_version(&mut display);
-        transfer(creator_cap, sender(ctx));
-        transfer(display, sender(ctx));
-        transfer(pub, sender(ctx))
+        transfer_to_address(creator_cap, sender(ctx));
+        transfer_to_address(display, sender(ctx));
+        transfer_to_address(pub, sender(ctx))
     }
 
     #[test_only]
@@ -58,7 +58,7 @@ module sui::collectible_tests {
     use sui::test_scenario::{Self as ts};
     use sui::collectible::{Self, CollectionCreatorCap};
     use sui::boars::{Self, Boar};
-    use sui::transfer::transfer;
+    use sui::transfer::transfer_to_address;
     use std::option::{some, none};
     use std::string::utf8;
     use std::vector as vec;
@@ -86,8 +86,8 @@ module sui::collectible_tests {
                 ts::ctx(&mut test)
             );
 
-            transfer(creator_cap, creator);
-            transfer(boar, creator)
+            transfer_to_address(creator_cap, creator);
+            transfer_to_address(boar, creator)
         };
 
         ts::next_tx(&mut test, creator); {
@@ -103,10 +103,10 @@ module sui::collectible_tests {
             );
 
             while (vec::length(&boars) > 0) {
-                transfer(vec::pop_back(&mut boars), creator);
+                transfer_to_address(vec::pop_back(&mut boars), creator);
             };
 
-            transfer(creator_cap, creator);
+            transfer_to_address(creator_cap, creator);
             vec::destroy_empty(boars);
         };
 

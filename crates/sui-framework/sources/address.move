@@ -6,15 +6,23 @@ module sui::address {
     use std::ascii;
     use std::bcs;
     use std::string;
+    use sui::recipient::{Self, Recipient};
 
     /// The length of an address, in bytes
     const LENGTH: u64 = 32;
 
     // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
-    const MAX: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
+    const MAX: u256 =
+        0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;
 
     /// Error from `from_bytes` when it is supplied too many or too few bytes.
     const EAddressParseError: u64 = 0;
+
+    /// The recipient is not an object
+    const ENotAnAddressRecipient: u64 = 100;
+
+    /// The recipient is an address
+    const ADDRESS_RECIPIENT_KIND: u8 = 0;
 
     /// Convert `a` into a u256 by interpreting `a` as the bytes of a big-endian integer
     /// (e.g., `to_u256(0x1) == 1`)
@@ -72,6 +80,19 @@ module sui::address {
     /// Largest possible address
     public fun max(): u256 {
         MAX
+    }
+
+    /// Constructs an address Recipient
+    public fun recipient(recipient: address): Recipient {
+        recipient::new(ADDRESS_RECIPIENT_KIND, recipient)
+    }
+
+    /// Converts the recipient to an address.
+    /// Aborts if the kind is not an address kind
+    public fun from_recipient(recipient: Recipient): address {
+        let (kind, value) = recipient::destroy(recipient);
+        assert!(kind == ADDRESS_RECIPIENT_KIND, ENotAnAddressRecipient);
+        value
     }
 
     spec module { pragma verify = false; }

@@ -8,6 +8,7 @@
 -  [Struct `TxContext`](#0x2_tx_context_TxContext)
 -  [Constants](#@Constants_0)
 -  [Function `sender`](#0x2_tx_context_sender)
+-  [Function `recipient`](#0x2_tx_context_recipient)
 -  [Function `epoch`](#0x2_tx_context_epoch)
 -  [Function `epoch_timestamp_ms`](#0x2_tx_context_epoch_timestamp_ms)
 -  [Function `new_object`](#0x2_tx_context_new_object)
@@ -15,7 +16,9 @@
 -  [Function `derive_id`](#0x2_tx_context_derive_id)
 
 
-<pre><code></code></pre>
+<pre><code><b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
+</code></pre>
 
 
 
@@ -118,6 +121,32 @@ transaction
 
 <pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_sender">sender</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
     self.sender
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_tx_context_recipient"></a>
+
+## Function `recipient`
+
+Return the recipient for the user that signed the current
+transaction
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="recipient.md#0x2_recipient">recipient</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="recipient.md#0x2_recipient">recipient</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): Recipient {
+    sui::address::recipient(self.sender)
 }
 </code></pre>
 

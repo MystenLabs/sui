@@ -13,7 +13,7 @@ module sui::prover_tests {
     // ====================================================================
 
     public fun simple_transfer(o: Obj, recipient: address) {
-        sui::transfer::transfer(o, recipient);
+        sui::transfer::transfer_to_address(o, recipient);
     }
 
     spec simple_transfer {

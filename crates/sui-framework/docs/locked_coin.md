@@ -13,10 +13,12 @@
 -  [Function `unlock_coin`](#0x2_locked_coin_unlock_coin)
 
 
-<pre><code><b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<pre><code><b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
+<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -70,7 +72,7 @@ A coin of type <code>T</code> locked until <code>locked_until_epoch</code>.
 Create a LockedCoin from <code><a href="balance.md#0x2_balance">balance</a></code> and transfer it to <code>owner</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_new_from_balance">new_from_balance</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, locked_until_epoch: <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>, owner: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_new_from_balance">new_from_balance</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, locked_until_epoch: <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>, owner: <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -79,7 +81,7 @@ Create a LockedCoin from <code><a href="balance.md#0x2_balance">balance</a></cod
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_new_from_balance">new_from_balance</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>: Balance&lt;T&gt;, locked_until_epoch: EpochTimeLock, owner: <b>address</b>, ctx: &<b>mut</b> TxContext) {
+<pre><code><b>public</b> <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_new_from_balance">new_from_balance</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>: Balance&lt;T&gt;, locked_until_epoch: EpochTimeLock, owner: Recipient, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="locked_coin.md#0x2_locked_coin">locked_coin</a> = <a href="locked_coin.md#0x2_locked_coin_LockedCoin">LockedCoin</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         <a href="balance.md#0x2_balance">balance</a>,
@@ -150,11 +152,11 @@ Public getter for the locked coin's value
 ## Function `lock_coin`
 
 Lock a coin up until <code>locked_until_epoch</code>. The input Coin<T> is deleted and a LockedCoin<T>
-is transferred to the <code>recipient</code>. This function aborts if the <code>locked_until_epoch</code> is less than
+is transferred to the <code><a href="recipient.md#0x2_recipient">recipient</a></code>. This function aborts if the <code>locked_until_epoch</code> is less than
 or equal to the current epoch.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_lock_coin">lock_coin</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, recipient: <b>address</b>, locked_until_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_lock_coin">lock_coin</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>, locked_until_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -164,10 +166,11 @@ or equal to the current epoch.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_lock_coin">lock_coin</a>&lt;T&gt;(
-    <a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;, recipient: <b>address</b>, locked_until_epoch: u64, ctx: &<b>mut</b> TxContext
+    <a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>, locked_until_epoch: u64, ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="coin.md#0x2_coin">coin</a>);
-    <a href="locked_coin.md#0x2_locked_coin_new_from_balance">new_from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, <a href="epoch_time_lock.md#0x2_epoch_time_lock_new">epoch_time_lock::new</a>(locked_until_epoch, ctx), recipient, ctx);
+    <b>let</b> <a href="recipient.md#0x2_recipient">recipient</a> = sui::address::recipient(<a href="recipient.md#0x2_recipient">recipient</a>);
+    <a href="locked_coin.md#0x2_locked_coin_new_from_balance">new_from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, <a href="epoch_time_lock.md#0x2_epoch_time_lock_new">epoch_time_lock::new</a>(locked_until_epoch, ctx), <a href="recipient.md#0x2_recipient">recipient</a>, ctx);
 }
 </code></pre>
 
@@ -198,7 +201,7 @@ to the sender.
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy">epoch_time_lock::destroy</a>(locked_until_epoch, ctx);
     <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin">coin</a>, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin">coin</a>, <a href="tx_context.md#0x2_tx_context_recipient">tx_context::recipient</a>(ctx));
 }
 </code></pre>
 

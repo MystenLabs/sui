@@ -56,7 +56,7 @@ module sui::sui_system_tests {
 
         report_helper(@0x3, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3], 0);
-        
+
         // After 0x3 leaves, its reports are gone
         remove_validator(@0x3, scenario);
         advance_epoch(scenario);
@@ -80,7 +80,7 @@ module sui::sui_system_tests {
         let delegatee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, delegatee_address);
+        transfer::transfer_to_address(cap, delegatee_address);
 
         // With the cap object in hand, delegatee could report validators on behalf of @0x1.
         report_helper(delegatee_address, @0x2, false, scenario);
@@ -93,7 +93,7 @@ module sui::sui_system_tests {
         test_scenario::next_tx(scenario, delegatee_address);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
         let new_delegatee_address = @0xcafe;
-        transfer::transfer(cap, new_delegatee_address);
+        transfer::transfer_to_address(cap, new_delegatee_address);
 
         // New delegatee could report validators on behalf of @0x1.
         report_helper(new_delegatee_address, @0x2, false, scenario);
@@ -134,7 +134,7 @@ module sui::sui_system_tests {
         let delegatee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, delegatee_address);
+        transfer::transfer_to_address(cap, delegatee_address);
 
         report_helper(delegatee_address, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
@@ -160,7 +160,7 @@ module sui::sui_system_tests {
         let delegatee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, delegatee_address);
+        transfer::transfer_to_address(cap, delegatee_address);
 
         // With the cap object in hand, delegatee could report validators on behalf of @0x1.
         set_gas_price_helper(delegatee_address, 888, scenario);

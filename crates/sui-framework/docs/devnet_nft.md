@@ -22,6 +22,7 @@ on Sui. The user should be able to use the wallet command line tool
 <pre><code><b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
@@ -98,7 +99,7 @@ An example NFT that can be minted by anybody
 
 </dd>
 <dt>
-<code>creator: <b>address</b></code>
+<code>creator: <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a></code>
 </dt>
 <dd>
 
@@ -142,13 +143,13 @@ Create a new devnet_nft
         description: <a href="_utf8">string::utf8</a>(description),
         <a href="url.md#0x2_url">url</a>: <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(<a href="url.md#0x2_url">url</a>)
     };
-    <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> <a href="recipient.md#0x2_recipient">recipient</a> = <a href="tx_context.md#0x2_tx_context_recipient">tx_context::recipient</a>(ctx);
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="devnet_nft.md#0x2_devnet_nft_MintNFTEvent">MintNFTEvent</a> {
         object_id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&nft.id),
-        creator: sender,
+        creator: <a href="recipient.md#0x2_recipient">recipient</a>,
         name: nft.name,
     });
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(nft, sender);
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(nft, <a href="recipient.md#0x2_recipient">recipient</a>);
 }
 </code></pre>
 

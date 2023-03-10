@@ -130,7 +130,7 @@ module sui::staking_pool {
             sui_token_lock,
         };
         pool.pending_delegation = pool.pending_delegation + sui_amount;
-        transfer::transfer(staked_sui, delegator);
+        transfer::transfer_to_address(staked_sui, delegator);
     }
 
     /// Request to withdraw `principal_withdraw_amount` of stake plus rewards from a staking pool.
@@ -143,7 +143,7 @@ module sui::staking_pool {
     ) : u64 {
         let (pool_token_withdraw_amount, principal_withdraw, time_lock) =
             withdraw_from_principal(pool, staked_sui);
-        let delegator = tx_context::sender(ctx);
+        let delegator = tx_context::recipient(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
 
         let rewards_withdraw = withdraw_rewards_and_burn_pool_tokens(
@@ -313,9 +313,14 @@ module sui::staking_pool {
 
         // TODO: consider sharing code with `request_withdraw_delegation`
         if (option::is_some(&time_lock)) {
-            locked_coin::new_from_balance(principal, option::destroy_some(time_lock), delegator, ctx);
+            locked_coin::new_from_balance(
+                principal,
+                option::destroy_some(time_lock),
+                sui::address::recipient(delegator),
+                ctx,
+            );
         } else {
-            transfer::transfer(coin::from_balance(principal, ctx), delegator);
+            transfer::transfer_to_address(coin::from_balance(principal, ctx), delegator);
             option::destroy_none(time_lock);
         };
         withdraw_amount
@@ -371,7 +376,7 @@ module sui::staking_pool {
     /// Split the given StakedSui to the two parts, one with principal `split_amount`,
     /// transfer the newly split part to the sender address.
     public entry fun split_staked_sui(c: &mut StakedSui, split_amount: u64, ctx: &mut TxContext) {
-        transfer::transfer(split(c, split_amount, ctx), tx_context::sender(ctx));
+        transfer::transfer(split(c, split_amount, ctx), tx_context::recipient(ctx));
     }
 
     /// Consume the staked sui `other` and add its value to `self`.

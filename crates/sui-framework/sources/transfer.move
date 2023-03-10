@@ -5,6 +5,7 @@ module sui::transfer {
 
     use sui::object;
     use sui::prover;
+    use sui::recipient::Recipient;
 
     /// Shared an object that was previously created. Shared objects must currently
     /// be constructed in the transaction they are created.
@@ -13,7 +14,14 @@ module sui::transfer {
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
     /// unique ID.
-    public fun transfer<T: key>(obj: T, recipient: address) {
+    public fun transfer<T: key>(obj: T, recipient: Recipient) {
+        transfer_internal(obj, sui::address::from_recipient(recipient))
+    }
+
+    /// Transfer ownership of `obj` to an address `recipient`. `obj` must have the
+    /// `key` attribute, which (in turn) ensures that `obj` has a globally
+    /// unique ID.
+    public fun transfer_to_address<T: key>(obj: T, recipient: address) {
         // TODO: emit event
         transfer_internal(obj, recipient)
     }

@@ -130,6 +130,9 @@ module sui::genesis {
         clock::create();
 
         // Transfer the remaining balance of sui's supply to the initial account
-        sui::transfer(coin::from_balance(sui_supply, ctx), initial_sui_custody_account_address);
+        sui::transfer::transfer(
+            coin::from_balance(sui_supply, ctx),
+            sui::address::recipient(initial_sui_custody_account_address),
+        );
     }
 }

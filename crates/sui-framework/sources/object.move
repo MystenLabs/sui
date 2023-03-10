@@ -6,6 +6,7 @@ module sui::object {
     use std::bcs;
     use sui::address;
     use sui::tx_context::{Self, TxContext};
+    use sui::recipient::{Self, Recipient};
 
     friend sui::clock;
     friend sui::dynamic_field;
@@ -16,11 +17,17 @@ module sui::object {
     #[test_only]
     friend sui::test_scenario;
 
+    /// The recipient is not an object
+    const ENotAnObjectRecipient: u64 = 101;
+
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
 
     /// The hardcoded ID for the singleton Clock Object.
     const SUI_CLOCK_OBJECT_ID: address = @0x6;
+
+    /// Currently unused. The recipient is an object
+    const OBJECT_RECIPIENT_KIND: u8 = 1;
 
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
@@ -66,6 +73,18 @@ module sui::object {
     /// Make an `ID` from an address.
     public fun id_from_address(bytes: address): ID {
         ID { bytes }
+    }
+
+    /// Not yet supported
+    fun recipient(recipient: ID): Recipient {
+        recipient::new(OBJECT_RECIPIENT_KIND, id_to_address(&recipient))
+    }
+
+    /// Not yet supported
+    fun from_recipient(recipient: Recipient): ID {
+        let (kind, value) = recipient::destroy(recipient);
+        assert!(kind == OBJECT_RECIPIENT_KIND, ENotAnObjectRecipient);
+        id_from_address(value)
     }
 
     // === uid ===

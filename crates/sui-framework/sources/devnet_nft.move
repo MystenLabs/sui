@@ -12,6 +12,7 @@ module sui::devnet_nft {
     use sui::event;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::recipient::Recipient;
 
     /// An example NFT that can be minted by anybody
     struct DevNetNFT has key, store {
@@ -29,7 +30,7 @@ module sui::devnet_nft {
         // The Object ID of the NFT
         object_id: ID,
         // The creator of the NFT
-        creator: address,
+        creator: Recipient,
         // The name of the NFT
         name: string::String,
     }
@@ -47,13 +48,13 @@ module sui::devnet_nft {
             description: string::utf8(description),
             url: url::new_unsafe_from_bytes(url)
         };
-        let sender = tx_context::sender(ctx);
+        let recipient = tx_context::recipient(ctx);
         event::emit(MintNFTEvent {
             object_id: object::uid_to_inner(&nft.id),
-            creator: sender,
+            creator: recipient,
             name: nft.name,
         });
-        transfer::transfer(nft, sender);
+        transfer::transfer(nft, recipient);
     }
 
     /// Update the `description` of `nft` to `new_description`
@@ -106,7 +107,7 @@ module sui::devnet_nftTests {
         ts::next_tx(&mut scenario, addr1);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            transfer::transfer(nft, addr2);
+            transfer::transfer_to_address(nft, addr2);
         };
         // update its description
         ts::next_tx(&mut scenario, addr2);

@@ -13,7 +13,7 @@ module sui::pay {
 
     /// Transfer `c` to the sender of the current transaction
     public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
-        transfer::transfer(c, tx_context::sender(ctx))
+        transfer::transfer(c, tx_context::recipient(ctx))
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
@@ -41,7 +41,7 @@ module sui::pay {
     public entry fun split_and_transfer<T>(
         c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(coin::split(c, amount, ctx), recipient)
+        transfer::transfer_to_address(coin::split(c, amount, ctx), recipient)
     }
 
 
@@ -53,7 +53,7 @@ module sui::pay {
         let vec: vector<Coin<T>> = coin::divide_into_n(self, n, ctx);
         let (i, len) = (0, vector::length(&vec));
         while (i < len) {
-            transfer::transfer(vector::pop_back(&mut vec), tx_context::sender(ctx));
+            transfer::transfer(vector::pop_back(&mut vec), tx_context::recipient(ctx));
             i = i + 1;
         };
         vector::destroy_empty(vec);
@@ -82,6 +82,6 @@ module sui::pay {
 
         let self = vector::pop_back(&mut coins);
         join_vec(&mut self, coins);
-        transfer::transfer(self, receiver)
+        transfer::transfer_to_address(self, receiver)
     }
 }

@@ -40,7 +40,7 @@ module sui::test_scenarioTests {
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
-            transfer::transfer(obj, copy sender);
+            transfer::transfer_to_address(obj, copy sender);
         };
         // now, object gets wrapped
         ts::next_tx(&mut scenario, sender);
@@ -48,7 +48,7 @@ module sui::test_scenarioTests {
             let id = ts::new_object(&mut scenario);
             let child = ts::take_from_sender<Object>(&mut scenario);
             let wrapper = Wrapper { id, child };
-            transfer::transfer(wrapper, copy sender);
+            transfer::transfer_to_address(wrapper, copy sender);
         };
         // wrapped object should no longer be removable, but wrapper should be
         ts::next_tx(&mut scenario, sender);
@@ -66,7 +66,7 @@ module sui::test_scenarioTests {
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
-            transfer::transfer(obj, copy sender);
+            transfer::transfer_to_address(obj, copy sender);
         };
         // object gets removed, then returned
         ts::next_tx(&mut scenario, sender);
@@ -89,7 +89,7 @@ module sui::test_scenarioTests {
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
-            transfer::transfer(obj, copy sender);
+            transfer::transfer_to_address(obj, copy sender);
         };
         ts::next_tx(&mut scenario, sender);
         {
@@ -114,7 +114,7 @@ module sui::test_scenarioTests {
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
-            transfer::transfer(obj, copy sender);
+            transfer::transfer_to_address(obj, copy sender);
             // an object transferred during the tx shouldn't be available in that tx
             assert!(!ts::has_most_recent_for_sender<Object>(&scenario), 0)
         };
@@ -129,7 +129,7 @@ module sui::test_scenarioTests {
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
-            transfer::transfer(obj, copy sender);
+            transfer::transfer_to_address(obj, copy sender);
         };
         ts::next_tx(&mut scenario, sender);
         {
@@ -153,13 +153,13 @@ module sui::test_scenarioTests {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
             // self-transfer
-            transfer::transfer(obj, copy addr1);
+            transfer::transfer_to_address(obj, copy addr1);
         };
         // addr1 -> addr2
         ts::next_tx(&mut scenario, addr1);
         {
             let obj = ts::take_from_sender<Object>(&mut scenario);
-            transfer::transfer(obj, copy addr2)
+            transfer::transfer_to_address(obj, copy addr2)
         };
         // addr1 cannot access
         ts::next_tx(&mut scenario, addr1);
@@ -170,7 +170,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, addr2);
         {
             let obj = ts::take_from_sender<Object>(&mut scenario);
-            transfer::transfer(obj, copy addr3)
+            transfer::transfer_to_address(obj, copy addr3)
         };
         // addr1 cannot access
         ts::next_tx(&mut scenario, addr1);
@@ -201,7 +201,7 @@ module sui::test_scenarioTests {
             let id = ts::new_object(&mut scenario);
             id_bytes = object::uid_to_inner(&id);
             let obj = Object { id, value: 100 };
-            transfer::transfer(obj, copy tx2_sender);
+            transfer::transfer_to_address(obj, copy tx2_sender);
             // sender cannot access the object
             assert!(!ts::has_most_recent_for_sender<Object>(&scenario), 0);
         };
@@ -237,9 +237,9 @@ module sui::test_scenarioTests {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
             let obj3 = Object { id: uid3, value: 30 };
-            transfer::transfer(obj1, copy sender);
-            transfer::transfer(obj2, copy sender);
-            transfer::transfer(obj3, copy sender);
+            transfer::transfer_to_address(obj1, copy sender);
+            transfer::transfer_to_address(obj2, copy sender);
+            transfer::transfer_to_address(obj3, copy sender);
         };
         ts::next_tx(&mut scenario, sender);
         let ids = ts::ids_for_sender<Object>(&scenario);
@@ -261,9 +261,9 @@ module sui::test_scenarioTests {
             let obj1 = Object { id: uid1, value: 10 };
             let obj2 = Object { id: uid2, value: 20 };
             let obj3 = Object { id: uid3, value: 30 };
-            transfer::transfer(obj1, copy sender);
-            transfer::transfer(obj2, copy sender);
-            transfer::transfer(obj3, copy sender);
+            transfer::transfer_to_address(obj1, copy sender);
+            transfer::transfer_to_address(obj2, copy sender);
+            transfer::transfer_to_address(obj3, copy sender);
         };
         ts::next_tx(&mut scenario, sender);
         {
@@ -288,7 +288,7 @@ module sui::test_scenarioTests {
             let id = ts::new_object(&mut scenario);
             let id_addr = object::uid_to_address(&id);
             let obj = Object { id, value: 10 };
-            transfer::transfer(obj, copy sender);
+            transfer::transfer_to_address(obj, copy sender);
             let ctx = ts::ctx(&mut scenario);
             assert!(id_addr == tx_context::last_created_object_id(ctx), 0);
         };
@@ -409,7 +409,7 @@ module sui::test_scenarioTests {
         {
             transfer::share_object(Object { id: uid1, value: 10 });
             transfer::freeze_object(Object { id: uid2, value: 10 });
-            transfer::transfer(Object { id: uid3, value: 10 }, sender);
+            transfer::transfer_to_address(Object { id: uid3, value: 10 }, sender);
         };
         ts::next_tx(&mut scenario, sender);
         let shared = ts::take_shared<Object>(&scenario);
@@ -422,7 +422,7 @@ module sui::test_scenarioTests {
         ts::end(scenario);
         transfer::share_object(shared);
         transfer::freeze_object(imm);
-        transfer::transfer(owned, sender);
+        transfer::transfer_to_address(owned, sender);
     }
 
     #[test]
@@ -492,7 +492,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             let obj1 = ts::take_immutable<Object>(&mut scenario);
-            transfer::transfer(obj1, @0x0);
+            transfer::transfer_to_address(obj1, @0x0);
         };
         ts::next_tx(&mut scenario, sender);
         abort 42
@@ -615,7 +615,7 @@ module sui::test_scenarioTests {
         let scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
-        transfer::transfer(Object { id: uid, value: 10 }, sender);
+        transfer::transfer_to_address(Object { id: uid, value: 10 }, sender);
         ts::return_to_sender(&scenario, ts::take_from_sender_by_id<Wrapper>(&scenario, id));
         abort 42
     }
@@ -677,7 +677,7 @@ module sui::test_scenarioTests {
         let uid = ts::new_object(&mut scenario);
         let obj = Object { id: uid, value: 10};
         let id = object::id(&obj);
-        transfer::transfer(obj, sender);
+        transfer::transfer_to_address(obj, sender);
         ts::next_tx(&mut scenario, sender);
         assert!(ts::has_most_recent_for_address<Object>(sender), 0);
         let obj = ts::take_from_sender<Object>(&mut scenario);
@@ -770,6 +770,6 @@ module sui::test_scenarioTests {
             id: ts::new_object(scenario),
             value,
         };
-        transfer::transfer(object, ts::sender(scenario));
+        transfer::transfer(object, ts::recipient(scenario));
     }
 }

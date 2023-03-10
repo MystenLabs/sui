@@ -36,6 +36,7 @@ Functions for operating on Move packages from within Move:
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
 <b>use</b> <a href="">0x1::type_name</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="types.md#0x2_types">0x2::types</a>;
@@ -368,7 +369,7 @@ the sender is the publisher.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim_and_keep">claim_and_keep</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext) {
-    sui::transfer::transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), sender(ctx))
+    sui::transfer::transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), <a href="recipient.md#0x2_recipient">recipient</a>(ctx))
 }
 </code></pre>
 

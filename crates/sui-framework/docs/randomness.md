@@ -51,6 +51,7 @@ This object can be used as a shared-/owned-object.
 <b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="bcs.md#0x2_bcs">0x2::bcs</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -178,7 +179,7 @@ Supplied randomness is not of the right length.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T&gt;(self: <a href="randomness.md#0x2_randomness_Randomness">randomness::Randomness</a>&lt;T&gt;, <b>to</b>: <b>address</b>)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T&gt;(self: <a href="randomness.md#0x2_randomness_Randomness">randomness::Randomness</a>&lt;T&gt;, <b>to</b>: <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>)
 </code></pre>
 
 
@@ -187,7 +188,7 @@ Supplied randomness is not of the right length.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T&gt;(self: <a href="randomness.md#0x2_randomness_Randomness">Randomness</a>&lt;T&gt;, <b>to</b>: <b>address</b>) {
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T&gt;(self: <a href="randomness.md#0x2_randomness_Randomness">Randomness</a>&lt;T&gt;, <b>to</b>: Recipient) {
     <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(self, <b>to</b>);
 }
 </code></pre>

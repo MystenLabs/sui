@@ -18,6 +18,7 @@ This module provides handy functionality for wallets and <code>sui::Coin</code> 
 
 
 <pre><code><b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -56,7 +57,7 @@ Transfer <code>c</code> to the sender of the current transaction
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_keep">keep</a>&lt;T&gt;(c: Coin&lt;T&gt;, ctx: &TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, <a href="tx_context.md#0x2_tx_context_recipient">tx_context::recipient</a>(ctx))
 }
 </code></pre>
 
@@ -128,11 +129,11 @@ in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 
 ## Function `split_and_transfer`
 
-Send <code>amount</code> units of <code>c</code> to <code>recipient</code>
+Send <code>amount</code> units of <code>c</code> to <code><a href="recipient.md#0x2_recipient">recipient</a></code>
 Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal to <code>amount</code>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, amount: u64, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -142,9 +143,9 @@ Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal 
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
-    c: &<b>mut</b> Coin&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
+    c: &<b>mut</b> Coin&lt;T&gt;, amount: u64, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> TxContext
 ) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), recipient)
+    <a href="transfer.md#0x2_transfer_transfer_to_address">transfer::transfer_to_address</a>(<a href="coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), <a href="recipient.md#0x2_recipient">recipient</a>)
 }
 </code></pre>
 
@@ -175,7 +176,7 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
     <b>let</b> vec: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt; = <a href="coin.md#0x2_coin_divide_into_n">coin::divide_into_n</a>(self, n, ctx);
     <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&vec));
     <b>while</b> (i &lt; len) {
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> vec), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> vec), <a href="tx_context.md#0x2_tx_context_recipient">tx_context::recipient</a>(ctx));
         i = i + 1;
     };
     <a href="_destroy_empty">vector::destroy_empty</a>(vec);
@@ -264,7 +265,7 @@ Join a vector of <code>Coin</code> into a single object and transfer it to <code
 
     <b>let</b> self = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
     <a href="pay.md#0x2_pay_join_vec">join_vec</a>(&<b>mut</b> self, coins);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(self, receiver)
+    <a href="transfer.md#0x2_transfer_transfer_to_address">transfer::transfer_to_address</a>(self, receiver)
 }
 </code></pre>
 

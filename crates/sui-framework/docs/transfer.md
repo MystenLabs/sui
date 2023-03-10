@@ -7,12 +7,15 @@
 
 -  [Constants](#@Constants_0)
 -  [Function `transfer`](#0x2_transfer_transfer)
+-  [Function `transfer_to_address`](#0x2_transfer_transfer_to_address)
 -  [Function `freeze_object`](#0x2_transfer_freeze_object)
 -  [Function `share_object`](#0x2_transfer_share_object)
 -  [Function `transfer_internal`](#0x2_transfer_transfer_internal)
 
 
-<pre><code></code></pre>
+<pre><code><b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
+</code></pre>
 
 
 
@@ -36,12 +39,12 @@ be constructed in the transaction they are created.
 
 ## Function `transfer`
 
-Transfer ownership of <code>obj</code> to <code>recipient</code>. <code>obj</code> must have the
+Transfer ownership of <code>obj</code> to <code><a href="recipient.md#0x2_recipient">recipient</a></code>. <code>obj</code> must have the
 <code>key</code> attribute, which (in turn) ensures that <code>obj</code> has a globally
 unique ID.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T: key&gt;(obj: T, <a href="recipient.md#0x2_recipient">recipient</a>: <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>)
 </code></pre>
 
 
@@ -50,9 +53,36 @@ unique ID.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>) {
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T: key&gt;(obj: T, <a href="recipient.md#0x2_recipient">recipient</a>: Recipient) {
+    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, sui::address::from_recipient(<a href="recipient.md#0x2_recipient">recipient</a>))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_transfer_transfer_to_address"></a>
+
+## Function `transfer_to_address`
+
+Transfer ownership of <code>obj</code> to an address <code><a href="recipient.md#0x2_recipient">recipient</a></code>. <code>obj</code> must have the
+<code>key</code> attribute, which (in turn) ensures that <code>obj</code> has a globally
+unique ID.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_to_address">transfer_to_address</a>&lt;T: key&gt;(obj: T, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_to_address">transfer_to_address</a>&lt;T: key&gt;(obj: T, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>) {
     // TODO: emit <a href="event.md#0x2_event">event</a>
-    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, recipient)
+    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, <a href="recipient.md#0x2_recipient">recipient</a>)
 }
 </code></pre>
 
@@ -149,7 +179,7 @@ in this transaction. This restriction may be relaxed in the future.
 
 
 
-<pre><code><b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>)
+<pre><code><b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>)
 </code></pre>
 
 
@@ -158,7 +188,7 @@ in this transaction. This restriction may be relaxed in the future.
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>);
+<pre><code><b>native</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>&lt;T: key&gt;(obj: T, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>);
 </code></pre>
 
 
@@ -174,7 +204,7 @@ in this transaction. This restriction may be relaxed in the future.
 <b>aborts_if</b> [abstract] <b>false</b>;
 <b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
 <b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
-<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).owner == recipient;
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).owner == <a href="recipient.md#0x2_recipient">recipient</a>;
 <b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_OWNED">prover::OWNED</a>;
 </code></pre>
 

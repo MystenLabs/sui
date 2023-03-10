@@ -10,7 +10,6 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 -  [Struct `SUI`](#0x2_sui_SUI)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_sui_new)
--  [Function `transfer`](#0x2_sui_transfer)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -131,30 +130,6 @@ This should be called only once during genesis creation.
     <b>let</b> total_sui = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> supply, <a href="sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>);
     <a href="balance.md#0x2_balance_destroy_supply">balance::destroy_supply</a>(supply);
     total_sui
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_transfer"></a>
-
-## Function `transfer`
-
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>(c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, recipient: <b>address</b>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>(c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt;, recipient: <b>address</b>) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, recipient)
 }
 </code></pre>
 

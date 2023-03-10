@@ -54,7 +54,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_transfer">simple_transfer</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">prover_tests::Obj</a>, recipient: <b>address</b>)
+<pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_transfer">simple_transfer</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">prover_tests::Obj</a>, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>)
 </code></pre>
 
 
@@ -63,8 +63,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_transfer">simple_transfer</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a>, recipient: <b>address</b>) {
-    sui::transfer::transfer(o, recipient);
+<pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_transfer">simple_transfer</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a>, <a href="recipient.md#0x2_recipient">recipient</a>: <b>address</b>) {
+    sui::transfer::transfer_to_address(o, <a href="recipient.md#0x2_recipient">recipient</a>);
 }
 </code></pre>
 
@@ -77,7 +77,7 @@
 
 
 
-<pre><code><b>ensures</b> sui::prover::owned_by(o, recipient);
+<pre><code><b>ensures</b> sui::prover::owned_by(o, <a href="recipient.md#0x2_recipient">recipient</a>);
 <b>aborts_if</b> <b>false</b>;
 </code></pre>
 

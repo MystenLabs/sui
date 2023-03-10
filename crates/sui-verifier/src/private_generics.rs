@@ -19,6 +19,7 @@ pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer"),
+    ident_str!("transfer_to_address"),
     ident_str!("freeze_object"),
     ident_str!("share_object"),
 ];

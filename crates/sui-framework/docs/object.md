@@ -15,6 +15,8 @@ Sui object identifiers
 -  [Function `id_to_address`](#0x2_object_id_to_address)
 -  [Function `id_from_bytes`](#0x2_object_id_from_bytes)
 -  [Function `id_from_address`](#0x2_object_id_from_address)
+-  [Function `recipient`](#0x2_object_recipient)
+-  [Function `from_recipient`](#0x2_object_from_recipient)
 -  [Function `sui_system_state`](#0x2_object_sui_system_state)
 -  [Function `clock`](#0x2_object_clock)
 -  [Function `uid_as_inner`](#0x2_object_uid_as_inner)
@@ -35,6 +37,7 @@ Sui object identifiers
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
+<b>use</b> <a href="recipient.md#0x2_recipient">0x2::recipient</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
@@ -174,6 +177,26 @@ containing object's address)
 ## Constants
 
 
+<a name="0x2_object_OBJECT_RECIPIENT_KIND"></a>
+
+Currently unused. The recipient is an object
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_OBJECT_RECIPIENT_KIND">OBJECT_RECIPIENT_KIND</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="0x2_object_ENotAnObjectRecipient"></a>
+
+The recipient is not an object
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_ENotAnObjectRecipient">ENotAnObjectRecipient</a>: u64 = 101;
+</code></pre>
+
+
+
 <a name="0x2_object_SUI_CLOCK_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Clock Object.
@@ -287,6 +310,58 @@ Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from an address.
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_address">id_from_address</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_ID">ID</a> {
     <a href="object.md#0x2_object_ID">ID</a> { bytes }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_recipient"></a>
+
+## Function `recipient`
+
+Not yet supported
+
+
+<pre><code><b>fun</b> <a href="recipient.md#0x2_recipient">recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: <a href="object.md#0x2_object_ID">object::ID</a>): <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="recipient.md#0x2_recipient">recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: <a href="object.md#0x2_object_ID">ID</a>): Recipient {
+    <a href="recipient.md#0x2_recipient_new">recipient::new</a>(<a href="object.md#0x2_object_OBJECT_RECIPIENT_KIND">OBJECT_RECIPIENT_KIND</a>, <a href="object.md#0x2_object_id_to_address">id_to_address</a>(&<a href="recipient.md#0x2_recipient">recipient</a>))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_from_recipient"></a>
+
+## Function `from_recipient`
+
+Not yet supported
+
+
+<pre><code><b>fun</b> <a href="object.md#0x2_object_from_recipient">from_recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: <a href="recipient.md#0x2_recipient_Recipient">recipient::Recipient</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="object.md#0x2_object_from_recipient">from_recipient</a>(<a href="recipient.md#0x2_recipient">recipient</a>: Recipient): <a href="object.md#0x2_object_ID">ID</a> {
+    <b>let</b> (kind, value) = <a href="recipient.md#0x2_recipient_destroy">recipient::destroy</a>(<a href="recipient.md#0x2_recipient">recipient</a>);
+    <b>assert</b>!(kind == <a href="object.md#0x2_object_OBJECT_RECIPIENT_KIND">OBJECT_RECIPIENT_KIND</a>, <a href="object.md#0x2_object_ENotAnObjectRecipient">ENotAnObjectRecipient</a>);
+    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(value)
 }
 </code></pre>
 
