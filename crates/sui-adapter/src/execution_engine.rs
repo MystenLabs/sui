@@ -183,7 +183,7 @@ fn execute_transaction<
         );
         if execution_result.is_err() {
             // Roll back the temporary store if execution failed.
-            temporary_store.reset(BTreeSet::new());
+            temporary_store.reset();
             // re-smash so temporary store is again aware of smashing
             gas_object_ref = match temporary_store.smash_gas(sender, gas) {
                 Ok(obj_ref) => obj_ref,
@@ -410,7 +410,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
             change_epoch,
         );
-        temporary_store.reset(BTreeSet::new());
+        temporary_store.reset();
         let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
         let safe_mode_pt = {
             let mut builder = ProgrammableTransactionBuilder::new();

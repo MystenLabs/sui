@@ -922,7 +922,7 @@ impl<S> TemporaryStore<S> {
             // the `temporary_store` to eliminate all effects caused by the execution,
             // and re-ensure all mutable objects' versions are incremented.
             if result.is_ok() {
-                self.reset(BTreeSet::new());
+                self.reset();
                 let gas_object_id = match self.smash_gas(sender, gas) {
                     Ok(obj_ref) => obj_ref.0,
                     Err(_) => gas[0].0, // this cannot fail, but we use gas[0] anyway
@@ -998,10 +998,10 @@ impl<S> TemporaryStore<S> {
         self.deleted.insert(*id, (ctx.clone(), version, kind));
     }
 
-    /// Resets any mutations and deletions recorded in the store. Ignore object IDs in `retain_ids`
-    pub fn reset(&mut self, retain_ids: BTreeSet<ObjectID>) {
-        self.written.retain(|q, _| retain_ids.contains(q));
-        self.deleted.retain(|q, _| retain_ids.contains(q));
+    /// Resets any mutations and deletions recorded in the store
+    pub fn reset(&mut self) {
+        self.written.clear();
+        self.deleted.clear();
         self.events.clear();
     }
 
@@ -1101,7 +1101,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
 
 impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     fn reset(&mut self) {
-        TemporaryStore::reset(self, BTreeSet::new())
+        TemporaryStore::reset(self)
     }
 
     fn log_event(&mut self, event: Event) {
