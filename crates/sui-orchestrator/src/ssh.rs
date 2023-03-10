@@ -199,7 +199,6 @@ impl SshConnectionManager {
 
             let check_command = SshCommand::new(move |_| "(tmux ls || true)".into());
             let result = self.execute(instances.clone(), &check_command).await?;
-
             if result
                 .iter()
                 .all(|(stdout, _)| command.status(stdout) == status)

@@ -165,7 +165,7 @@ impl Orchestrator {
         let command = [
             "git fetch -f",
             &format!("(git checkout -b {commit} {commit} || git checkout -f {commit})"),
-            "git pull -f",
+            "(git pull -f || true)",
             "source $HOME/.cargo/env",
             "cargo build --release",
         ]
@@ -379,7 +379,14 @@ impl Orchestrator {
                 break;
             }
         }
-        aggregator.save(&self.settings.results_directory);
+
+        let results_directory = &self.settings.results_directory;
+        let commit = &self.settings.repository.commit;
+        let path: PathBuf = [results_directory, &format!("results-{commit}").into()]
+            .iter()
+            .collect();
+        fs::create_dir_all(&path).expect("Failed to create log directory");
+        aggregator.save(path);
 
         display::done();
         Ok(aggregator)
