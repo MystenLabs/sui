@@ -108,14 +108,17 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nLogs: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
                 }
+              },
+              {
+                "type": "divider"
               },
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<${{ env.GH_JOB_LINK }}|logs>"
+                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in `/home/ubuntu/simtest_logs/{date}` folder"
                 }
               }
             ]
