@@ -169,15 +169,14 @@ export function TransactionCard({
                                 </div>
                                 {transferAmountComponent}
                             </div>
-                            <>
-                                {/* TODO: Support programmable tx: */}
-                                <TxnTypeLabel
-                                    address={recipientAddress!}
-                                    isSender={isSender}
-                                    isTransfer={false}
-                                />
-                                {objectId && <TxnImage id={objectId} />}
-                            </>
+
+                            {/* TODO: Support programmable tx: */}
+                            <TxnTypeLabel
+                                address={recipientAddress!}
+                                isSender={isSender}
+                                isTransfer={false}
+                            />
+                            {objectId && <TxnImage id={objectId} />}
                         </>
                     )}
 
