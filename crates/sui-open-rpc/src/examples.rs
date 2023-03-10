@@ -31,11 +31,11 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
-    TransactionKind, TransferObject,
+    CallArg, ExecuteTransactionRequestType, TransactionData, TransactionKind,
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
 use sui_types::signature::GenericSignature;
@@ -109,28 +109,33 @@ impl RpcExampleProvider {
             }),
         ];
 
-        let data = TransactionData::new_with_dummy_gas_price(
-            TransactionKind::Batch(vec![
-                SingleTransactionKind::Call(MoveCall {
-                    package: SUI_FRAMEWORK_OBJECT_ID,
-                    module: Identifier::from_str("devnet_nft").unwrap(),
-                    function: Identifier::from_str("mint").unwrap(),
-                    type_arguments: vec![],
-                    arguments: vec![
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    SUI_FRAMEWORK_OBJECT_ID,
+                    Identifier::from_str("devnet_nft").unwrap(),
+                    Identifier::from_str("mint").unwrap(),
+                    vec![],
+                    vec![
                         CallArg::Pure(EXAMPLE_NFT_NAME.as_bytes().to_vec()),
                         CallArg::Pure(EXAMPLE_NFT_DESCRIPTION.as_bytes().to_vec()),
                         CallArg::Pure(EXAMPLE_NFT_URL.as_bytes().to_vec()),
                     ],
-                }),
-                SingleTransactionKind::TransferObject(TransferObject {
-                    recipient,
-                    object_ref: (
-                        object_id,
-                        SequenceNumber::from_u64(1),
-                        ObjectDigest::new(self.rng.gen()),
-                    ),
-                }),
-            ]),
+                )
+                .unwrap();
+            builder.transfer_object(
+                recipient,
+                (
+                    object_id,
+                    SequenceNumber::from_u64(1),
+                    ObjectDigest::new(self.rng.gen()),
+                ),
+            );
+            builder.finish()
+        };
+        let data = TransactionData::new_with_dummy_gas_price(
+            TransactionKind::programmable(pt),
             signer,
             (
                 gas_id,

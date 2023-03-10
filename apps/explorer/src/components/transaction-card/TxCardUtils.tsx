@@ -5,11 +5,9 @@ import { useFormatCoin } from '@mysten/core';
 import {
     getExecutionStatusType,
     getTotalGasUsed,
-    getTransactionKinds,
+    getTransactionKind,
     getTransactionDigest,
     getTransactionKindName,
-    getTransferObjectTransaction,
-    getTransferSuiTransaction,
     SUI_TYPE_ARG,
     type GetTxnDigestsResponse,
     type ExecutionStatusType,
@@ -185,20 +183,11 @@ export const getDataOnTxDigests = (
                         (transactionId) =>
                             transactionId === getTransactionDigest(txEff)
                     )[0];
-                    // TODO: handle multiple transactions
-                    const txns = getTransactionKinds(txEff)!;
-                    if (txns.length > 1) {
-                        console.error(
-                            'Handling multiple transactions is not yet supported',
-                            txEff
-                        );
-                        return null;
-                    }
-                    const txn = txns[0];
+                    const txn = getTransactionKind(txEff)!;
                     const txKind = getTransactionKindName(txn);
-                    const recipient =
-                        getTransferObjectTransaction(txn)?.recipient ||
-                        getTransferSuiTransaction(txn)?.recipient;
+                    const recipient = null;
+                    //     getTransferObjectTransaction(txn)?.recipient ||
+                    //     getTransferSuiTransaction(txn)?.recipient;
 
                     const transfer = getAmount({
                         txnData: txEff,

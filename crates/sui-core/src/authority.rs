@@ -919,9 +919,14 @@ impl AuthorityState {
         self.metrics
             .num_shared_objects
             .observe(shared_object_count as f64);
-        self.metrics
-            .batch_size
-            .observe(certificate.data().intent_message.value.kind().batch_size() as f64);
+        self.metrics.batch_size.observe(
+            certificate
+                .data()
+                .intent_message
+                .value
+                .kind()
+                .num_commands() as f64,
+        );
 
         Ok(())
     }

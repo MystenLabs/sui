@@ -190,7 +190,7 @@ diesel::table! {
         recipients -> Array<Nullable<Text>>,
         checkpoint_sequence_number -> Int8,
         transaction_time -> Nullable<Timestamp>,
-        transaction_kinds -> Array<Nullable<Text>>,
+        transaction_kind -> Nullable<Text>,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,

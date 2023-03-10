@@ -5,44 +5,31 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
 use move_binary_format::CompiledModule;
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::move_vm::MoveVM;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::ObjectID;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{debug, info, instrument};
 
 use crate::programmable_transactions;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::coin::{check_coins, transfer_coin, update_input_coins, Coin};
 use sui_types::epoch_data::EpochData;
-use sui_types::error::{ExecutionError, ExecutionErrorKind};
+use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
-use sui_types::gas_coin::GasCoin;
-use sui_types::id::UID;
-#[cfg(test)]
-use sui_types::messages::ExecutionFailureStatus;
-#[cfg(test)]
-use sui_types::messages::InputObjects;
 use sui_types::messages::{
-    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind,
+    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
 };
-use sui_types::object::{MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
-use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
+use sui_types::storage::{ChildObjectResolver, ParentSync, WriteKind};
 use sui_types::sui_system_state::{
     get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
     CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
 };
-#[cfg(test)]
-use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
     gas::SuiGasStatus,
-    messages::{
-        CallArg, ChangeEpoch, ExecutionStatus, SingleTransactionKind, TransactionEffects,
-        TransferObject, TransferSui,
-    },
+    messages::{CallArg, ChangeEpoch, ExecutionStatus, TransactionEffects},
     object::Object,
     storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
@@ -207,137 +194,65 @@ fn execution_loop<
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
-    let mut results = Mode::empty_results();
-    // TODO: Since we require all mutable objects to not show up more than
-    // once across single tx, we should be able to run them in parallel.
-    for single_tx in transaction_kind.into_single_transactions() {
-        match single_tx {
-            SingleTransactionKind::TransferObject(TransferObject {
-                recipient,
-                object_ref,
-            }) => {
-                // unwrap is safe because we built the object map from the transactions
-                let object = temporary_store
-                    .objects()
-                    .get(&object_ref.0)
-                    .unwrap()
-                    .clone();
-                transfer_object(temporary_store, object, tx_ctx.sender(), recipient)?;
+    match transaction_kind {
+        TransactionKind::ChangeEpoch(change_epoch) => {
+            advance_epoch(
+                change_epoch,
+                temporary_store,
+                tx_ctx,
+                move_vm,
+                gas_status,
+                protocol_config,
+            )?;
+            Ok(Mode::empty_results())
+        }
+        TransactionKind::Genesis(GenesisTransaction { objects }) => {
+            if tx_ctx.epoch() != 0 {
+                panic!("BUG: Genesis Transactions can only be executed in epoch 0");
             }
-            SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
-                let gas_object = temporary_store
-                    .objects()
-                    .get(&gas_object_id)
-                    .expect(
-                        "We constructed the object map so it should always have the gas object id",
-                    )
-                    .clone();
-                transfer_sui(temporary_store, gas_object, recipient, amount, tx_ctx)?;
-            }
-            SingleTransactionKind::PaySui(PaySui {
-                coins,
-                recipients,
-                amounts,
-            }) => {
-                let mut coin_objects: Vec<Object> =  // unwrap is is safe because we built the object map from the transaction
-                    coins.iter().map(|c|
-                    temporary_store
-                        .objects()
-                        .get(&c.0)
-                        .unwrap()
-                        .clone()
-                    ).collect();
-                pay_sui(
-                    temporary_store,
-                    &mut coin_objects,
-                    recipients,
-                    amounts,
-                    tx_ctx,
-                )?;
-            }
-            SingleTransactionKind::PayAllSui(PayAllSui { coins, recipient }) => {
-                // unwrap is is safe because we built the object map from the transaction
-                let mut coin_objects: Vec<Object> = coins
-                    .iter()
-                    .map(|c| temporary_store.objects().get(&c.0).unwrap().clone())
-                    .collect();
-                pay_all_sui(
-                    tx_ctx.sender(),
-                    temporary_store,
-                    &mut coin_objects,
-                    recipient,
-                )?;
-            }
-            SingleTransactionKind::Call(_) | SingleTransactionKind::Publish(_) => {
-                panic!("actively being migrated to programmable transactions")
-            }
-            SingleTransactionKind::Pay(Pay {
-                coins,
-                recipients,
-                amounts,
-            }) => {
-                // unwrap is is safe because we built the object map from the transaction
-                let coin_objects = coins
-                    .iter()
-                    .map(|c| temporary_store.objects().get(&c.0).unwrap().clone())
-                    .collect();
-                pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)?;
-            }
-            SingleTransactionKind::ChangeEpoch(change_epoch) => {
-                advance_epoch(
-                    change_epoch,
-                    temporary_store,
-                    tx_ctx,
-                    move_vm,
-                    gas_status,
-                    protocol_config,
-                )?;
-            }
-            SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
-                if tx_ctx.epoch() != 0 {
-                    panic!("BUG: Genesis Transactions can only be executed in epoch 0");
-                }
 
-                for genesis_object in objects {
-                    match genesis_object {
-                        sui_types::messages::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
-                                data,
-                                owner,
-                                previous_transaction: tx_ctx.digest(),
-                                storage_rebate: 0,
-                            };
-                            temporary_store.write_object(
-                                &SingleTxContext::genesis(),
-                                object,
-                                WriteKind::Create,
-                            );
-                        }
+            for genesis_object in objects {
+                match genesis_object {
+                    sui_types::messages::GenesisObject::RawObject { data, owner } => {
+                        let object = Object {
+                            data,
+                            owner,
+                            previous_transaction: tx_ctx.digest(),
+                            storage_rebate: 0,
+                        };
+                        temporary_store.write_object(
+                            &SingleTxContext::genesis(),
+                            object,
+                            WriteKind::Create,
+                        );
                     }
                 }
             }
-            SingleTransactionKind::ConsensusCommitPrologue(prologue) => setup_consensus_commit(
+            Ok(Mode::empty_results())
+        }
+        TransactionKind::ConsensusCommitPrologue(prologue) => {
+            setup_consensus_commit(
                 prologue,
                 temporary_store,
                 tx_ctx,
                 move_vm,
                 gas_status,
                 protocol_config,
-            )?,
-            SingleTransactionKind::ProgrammableTransaction(pt) => {
-                results = programmable_transactions::execution::execute::<_, _, Mode>(
-                    protocol_config,
-                    move_vm,
-                    temporary_store,
-                    tx_ctx,
-                    gas_status,
-                    Some(gas_object_id),
-                    pt,
-                )?
-            }
-        };
+            )?;
+            Ok(Mode::empty_results())
+        }
+        TransactionKind::ProgrammableTransaction(pt) => {
+            programmable_transactions::execution::execute::<_, _, Mode>(
+                protocol_config,
+                move_vm,
+                temporary_store,
+                tx_ctx,
+                gas_status,
+                Some(gas_object_id),
+                pt,
+            )
+        }
     }
-    Ok(results)
 }
 
 fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
@@ -497,695 +412,4 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
         None,
         pt,
     )
-}
-
-fn transfer_object<S>(
-    temporary_store: &mut TemporaryStore<S>,
-    mut object: Object,
-    sender: SuiAddress,
-    recipient: SuiAddress,
-) -> Result<(), ExecutionError> {
-    object.ensure_public_transfer_eligible()?;
-    object.transfer(recipient);
-    // This will extract the transfer amount if the object is a Coin of some kind
-    let ctx = SingleTxContext::transfer_object(sender);
-    temporary_store.write_object(&ctx, object, WriteKind::Mutate);
-    Ok(())
-}
-
-fn check_recipients(recipients: &[SuiAddress], amounts: &[u64]) -> Result<(), ExecutionError> {
-    if recipients.is_empty() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::EmptyRecipients,
-            "Pay transaction requires a non-empty list of recipient addresses".to_string(),
-        ));
-    }
-    if recipients.len() != amounts.len() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::RecipientsAmountsArityMismatch,
-            format!(
-                "Found {:?} recipient addresses, but {:?} recipient amounts",
-                recipients.len(),
-                amounts.len()
-            ),
-        ));
-    }
-    Ok(())
-}
-
-fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), ExecutionError> {
-    let Some(total_amount) = amounts.iter().fold(Some(0u64), |acc, a| acc?.checked_add(*a)) else {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::TotalPaymentAmountOverflow,
-            "Attempting to pay a total amount that overflows u64".to_string(),
-        ));
-    };
-    let Some(total_coins) = coins.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::TotalCoinBalanceOverflow,
-            "Total balance of input coins overflows u64".to_string(),
-        ));
-    };
-    if total_amount > total_coins {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::InsufficientBalance,
-            format!("Attempting to pay a total amount {:?} that is greater than the total balance of input coins {:?}", total_amount, total_coins),
-        ));
-    }
-    Ok((total_coins, total_amount))
-}
-
-fn debit_coins_and_transfer<S>(
-    ctx: &SingleTxContext,
-    temporary_store: &mut TemporaryStore<S>,
-    coins: &mut [Coin],
-    recipients: &[SuiAddress],
-    amounts: &[u64],
-    coin_type: StructTag,
-    tx_ctx: &mut TxContext,
-) -> usize {
-    let mut cur_coin_idx = 0;
-    for (recipient, amount) in recipients.iter().zip(amounts) {
-        let mut remaining_amount = *amount;
-        loop {
-            if remaining_amount == 0 {
-                break; // nothing to pay
-            }
-            // while remaining_amount != 0
-            // guaranteed to be in-bounds because of the total > total_coins check above
-            let coin = &mut coins[cur_coin_idx];
-            let coin_value = coin.value();
-            if coin_value == 0 {
-                // can't extract any more value from this coin, go to the next one
-                cur_coin_idx += 1;
-                continue;
-            }
-            if coin_value >= remaining_amount {
-                // can get everything we need from this coin
-                coin.balance.withdraw(remaining_amount).unwrap();
-                // create a new coin for the recipient with the original amount
-                let new_coin = Object::new_move(
-                    MoveObject::new_coin(
-                        coin_type.clone(),
-                        SequenceNumber::new(),
-                        tx_ctx.fresh_id(),
-                        *amount,
-                    ),
-                    Owner::AddressOwner(*recipient),
-                    tx_ctx.digest(),
-                );
-                temporary_store.write_object(ctx, new_coin, WriteKind::Create);
-                break; // done paying this recipieint, on to the next one
-            } else {
-                // need to take all of this coin and some from a subsequent coin
-                coin.balance.withdraw(coin_value).unwrap();
-                remaining_amount -= coin_value;
-            }
-        }
-    }
-    cur_coin_idx
-}
-
-/// Debit `coins` to pay amount[i] to recipient[i]. The coins are debited from left to right.
-/// A new coin object is created for each recipient.
-fn pay<S>(
-    temporary_store: &mut TemporaryStore<S>,
-    coin_objects: Vec<Object>,
-    recipients: Vec<SuiAddress>,
-    amounts: Vec<u64>,
-    tx_ctx: &mut TxContext,
-) -> Result<(), ExecutionError> {
-    check_recipients(&recipients, &amounts)?;
-    let (mut coins, coin_type) = check_coins(&coin_objects, None)?;
-    let (total_coins, total_amount) = check_total_coins(&coins, &amounts)?;
-    let ctx = SingleTxContext::pay(tx_ctx.sender());
-
-    debit_coins_and_transfer(
-        &ctx,
-        temporary_store,
-        &mut coins,
-        &recipients,
-        &amounts,
-        coin_type,
-        tx_ctx,
-    );
-
-    // double check that we didn't create or destroy money
-    let Some(left_coins) = coins.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::TotalCoinBalanceOverflow,
-            "Total balance of coins left overflows u64".to_string(),
-        ));
-    };
-    debug_assert!(left_coins <= total_coins);
-    debug_assert_eq!(total_coins - left_coins, total_amount);
-
-    // update the input coins to reflect the decrease in value.
-    // if the input coin has value 0, delete it
-    for (coin_idx, mut coin_object) in coin_objects.into_iter().enumerate() {
-        let coin = &coins[coin_idx];
-        if coin.value() == 0 {
-            temporary_store.delete_object(
-                &ctx,
-                &coin_object.id(),
-                coin_object.version(),
-                DeleteKind::Normal,
-            );
-        } else {
-            let new_contents = bcs::to_bytes(&coin).expect("Coin serialization should not fail");
-            // unwrap safe because we checked that it was a coin object above
-            let move_obj = coin_object.data.try_as_move_mut().unwrap();
-            move_obj.update_coin_contents(new_contents);
-            temporary_store.write_object(&ctx, coin_object, WriteKind::Mutate);
-        }
-    }
-    Ok(())
-}
-
-fn pay_sui<S>(
-    temporary_store: &mut TemporaryStore<S>,
-    coin_objects: &mut Vec<Object>,
-    recipients: Vec<SuiAddress>,
-    amounts: Vec<u64>,
-    tx_ctx: &mut TxContext,
-) -> Result<(), ExecutionError> {
-    let (mut coins, coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
-    check_recipients(&recipients, &amounts)?;
-    let (total_coins, total_amount) = check_total_coins(&coins, &amounts)?;
-
-    let mut merged_coin = coins.swap_remove(0);
-    merged_coin.merge_coins(&mut coins)?;
-
-    let ctx = SingleTxContext::pay_sui(tx_ctx.sender());
-
-    for (recipient, amount) in recipients.iter().zip(amounts) {
-        // unwrap is safe b/c merged_coin value is total_coins, which is greater than total_amount
-        let new_coin = merged_coin
-            .split_coin(amount, UID::new(tx_ctx.fresh_id()))
-            .unwrap();
-        transfer_coin(
-            &ctx,
-            temporary_store,
-            &new_coin,
-            *recipient,
-            coin_type.clone(),
-            tx_ctx.digest(),
-        );
-    }
-    update_input_coins(&ctx, temporary_store, coin_objects, &merged_coin, None);
-
-    debug_assert_eq!(total_coins - merged_coin.value(), total_amount);
-    Ok(())
-}
-
-fn pay_all_sui<S>(
-    sender: SuiAddress,
-    temporary_store: &mut TemporaryStore<S>,
-    coin_objects: &mut Vec<Object>,
-    recipient: SuiAddress,
-) -> Result<(), ExecutionError> {
-    let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
-    // overflow is not possible b/c total SUI supply is 10B SUI or 10^19 MIST, and 10^19 < u64::MAX
-    let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
-
-    let mut merged_coin = coins.swap_remove(0);
-    merged_coin.merge_coins(&mut coins)?;
-    let ctx = SingleTxContext::pay_all_sui(sender);
-    update_input_coins(
-        &ctx,
-        temporary_store,
-        coin_objects,
-        &merged_coin,
-        Some(recipient),
-    );
-
-    debug_assert_eq!(total_coins, merged_coin.value());
-    Ok(())
-}
-
-/// Transfer the gas object (which is a SUI coin object) with an optional `amount`.
-/// If `amount` is specified, the gas object remains in the original owner, but a new SUI coin
-/// is created with `amount` balance and is transferred to `recipient`;
-/// if `amount` is not specified, the entire object will be transferred to `recipient`.
-/// `tx_ctx` is needed to create new object ID for the split coin.
-/// We make sure that the gas object's version is not incremented after this function call, because
-/// when we charge gas later, its version will be officially incremented.
-fn transfer_sui<S>(
-    temporary_store: &mut TemporaryStore<S>,
-    mut object: Object,
-    recipient: SuiAddress,
-    amount: Option<u64>,
-    tx_ctx: &mut TxContext,
-) -> Result<(), ExecutionError> {
-    #[cfg(debug_assertions)]
-    let version = object.version();
-    let ctx = SingleTxContext::transfer_sui(tx_ctx.sender());
-    if let Some(amount) = amount {
-        // Deduct the amount from the gas coin and update it.
-        let mut gas_coin = GasCoin::try_from(&object)
-            .expect("gas object is transferred, so already checked to be a SUI coin");
-        gas_coin.0.balance.withdraw(amount)?;
-        let move_object = object
-            .data
-            .try_as_move_mut()
-            .expect("Gas object must be Move object");
-        let new_contents = bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail");
-        move_object.update_coin_contents(new_contents);
-
-        // Creat a new gas coin with the amount.  Set a blank version, to be updated by the store
-        // when it is committed to effects.
-        let new_object = Object::new_move(
-            MoveObject::new_gas_coin(SequenceNumber::new(), tx_ctx.fresh_id(), amount),
-            Owner::AddressOwner(recipient),
-            tx_ctx.digest(),
-        );
-        temporary_store.write_object(&ctx, new_object, WriteKind::Create);
-        Some(amount)
-    } else {
-        // If amount is not specified, we simply transfer the entire coin object.
-        object.transfer(recipient);
-        Coin::extract_balance_if_coin(&object)?
-    };
-
-    #[cfg(debug_assertions)]
-    assert_eq!(object.version(), version);
-
-    temporary_store.write_object(&ctx, object, WriteKind::Mutate);
-
-    Ok(())
-}
-
-#[test]
-fn test_pay_empty_coins() {
-    let coin_objects = Vec::new();
-    let recipients = vec![SuiAddress::random_for_testing_only()];
-    let amounts = vec![10];
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::EmptyInputCoins
-    );
-}
-
-#[test]
-fn test_pay_empty_recipients() {
-    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
-        10,
-        SuiAddress::random_for_testing_only(),
-    )];
-    let recipients = Vec::new();
-    let amounts = vec![10];
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::EmptyRecipients
-    );
-}
-
-#[test]
-fn test_pay_empty_amounts() {
-    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
-        10,
-        SuiAddress::random_for_testing_only(),
-    )];
-    let recipients = vec![SuiAddress::random_for_testing_only()];
-    let amounts = Vec::new();
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::RecipientsAmountsArityMismatch
-    );
-}
-
-#[test]
-fn test_pay_arity_mismatch() {
-    // different number of recipients and amounts
-    let owner = SuiAddress::random_for_testing_only();
-    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
-        10, owner,
-    )];
-    let recipients = vec![
-        SuiAddress::random_for_testing_only(),
-        SuiAddress::random_for_testing_only(),
-    ];
-    let amounts = vec![5];
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::RecipientsAmountsArityMismatch
-    );
-}
-
-#[test]
-fn test_pay_amount_overflow() {
-    let coin_objects = vec![Object::new_gas_with_balance_and_owner_for_testing(
-        10,
-        SuiAddress::random_for_testing_only(),
-    )];
-    let recipients = vec![
-        SuiAddress::random_for_testing_only(),
-        SuiAddress::random_for_testing_only(),
-    ];
-    let amounts = vec![u64::MAX, 100u64];
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::TotalPaymentAmountOverflow
-    );
-}
-
-#[test]
-fn test_pay_coin_overflow() {
-    let coin_objects = vec![
-        Object::new_gas_with_balance_and_owner_for_testing(
-            u64::MAX,
-            SuiAddress::random_for_testing_only(),
-        ),
-        Object::new_gas_with_balance_and_owner_for_testing(
-            100u64,
-            SuiAddress::random_for_testing_only(),
-        ),
-    ];
-    let recipients = vec![
-        SuiAddress::random_for_testing_only(),
-        SuiAddress::random_for_testing_only(),
-    ];
-    let amounts = vec![100, 100];
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::TotalCoinBalanceOverflow
-    );
-}
-
-#[test]
-fn test_pay_insufficient_balance() {
-    let coin_objects = vec![
-        Object::new_gas_with_balance_and_owner_for_testing(
-            10,
-            SuiAddress::random_for_testing_only(),
-        ),
-        Object::new_gas_with_balance_and_owner_for_testing(
-            5,
-            SuiAddress::random_for_testing_only(),
-        ),
-    ];
-    let recipients = vec![
-        SuiAddress::random_for_testing_only(),
-        SuiAddress::random_for_testing_only(),
-    ];
-    let amounts = vec![10, 6];
-    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert_eq!(
-        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
-            .unwrap_err()
-            .to_execution_status()
-            .0,
-        ExecutionFailureStatus::InsufficientBalance
-    );
-}
-
-#[cfg(test)]
-fn get_coin_balance(store: &InnerTemporaryStore, id: &ObjectID) -> u64 {
-    Coin::extract_balance_if_coin(store.get_written_object(id).unwrap())
-        .unwrap()
-        .unwrap()
-}
-
-#[cfg(test)]
-fn input_object_kind(object: &Object) -> sui_types::messages::InputObjectKind {
-    match &object.owner {
-        Owner::Shared {
-            initial_shared_version,
-            ..
-        } => sui_types::messages::InputObjectKind::SharedMoveObject {
-            id: object.id(),
-            initial_shared_version: *initial_shared_version,
-            mutable: true,
-        },
-        Owner::ObjectOwner(_) | Owner::AddressOwner(_) | Owner::Immutable => {
-            sui_types::messages::InputObjectKind::ImmOrOwnedMoveObject(
-                object.compute_object_reference(),
-            )
-        }
-    }
-}
-
-#[cfg(test)]
-/// Test only method that return mutable InputObjects from given objects
-fn input_objects_from_objects(objects: Vec<Object>) -> InputObjects {
-    InputObjects::new(
-        objects
-            .into_iter()
-            .map(|o| (input_object_kind(&o), o))
-            .collect(),
-    )
-}
-
-#[test]
-fn test_pay_success_without_delete() {
-    // supplied one coin and only needed to use part of it. should
-    // mutate 1 object, create 1 object, and delete no objects
-    let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
-    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(5, sender);
-    let coin_objects = vec![coin1, coin2];
-    let recipient1 = SuiAddress::random_for_testing_only();
-    let recipient2 = SuiAddress::random_for_testing_only();
-    let recipients = vec![recipient1, recipient2];
-    let amounts = vec![6, 3];
-    let mut store: TemporaryStore<()> = temporary_store::with_input_objects_for_testing(
-        input_objects_from_objects(coin_objects.clone()),
-    );
-    let mut ctx = TxContext::with_sender_for_testing_only(&sender);
-
-    assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.into_inner();
-
-    assert!(store.deleted.is_empty());
-    assert_eq!(store.created().len(), 2);
-    let recipient1_objs = store.get_written_objects_owned_by(&recipient1);
-    let recipient2_objs = store.get_written_objects_owned_by(&recipient2);
-    assert_eq!(recipient1_objs.len(), 1);
-    assert_eq!(recipient2_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &recipient1_objs[0]), 6);
-    assert_eq!(get_coin_balance(&store, &recipient2_objs[0]), 3);
-
-    let owner_objs = store.get_written_objects_owned_by(&sender);
-    assert_eq!(owner_objs.len(), 2);
-    assert_eq!(
-        get_coin_balance(&store, &owner_objs[0]) + get_coin_balance(&store, &owner_objs[1]),
-        6
-    );
-}
-
-#[test]
-fn test_pay_success_delete_one() {
-    // supplied two coins, spent all of the first one and some of the second one
-    let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
-    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(5, sender);
-    let input_coin_id1 = coin1.id();
-    let input_coin_id2 = coin2.id();
-    let coin_objects = vec![coin1, coin2];
-    let recipient = SuiAddress::random_for_testing_only();
-    let recipients = vec![recipient];
-    let amounts = vec![11];
-    let mut store: TemporaryStore<()> = temporary_store::with_input_objects_for_testing(
-        input_objects_from_objects(coin_objects.clone()),
-    );
-    let mut ctx = TxContext::random_for_testing_only();
-
-    assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.into_inner();
-
-    assert_eq!(store.deleted.len(), 1);
-    assert!(store.deleted.contains_key(&input_coin_id1));
-
-    assert_eq!(store.written.len(), 2);
-    assert_eq!(store.created().len(), 1);
-    let recipient_objs = store.get_written_objects_owned_by(&recipient);
-    assert_eq!(recipient_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &recipient_objs[0]), 11);
-
-    let owner_objs = store.get_written_objects_owned_by(&sender);
-    assert_eq!(owner_objs.len(), 1);
-    assert_eq!(owner_objs[0], input_coin_id2);
-    assert_eq!(get_coin_balance(&store, &owner_objs[0]), 4);
-}
-
-#[test]
-fn test_pay_success_delete_all() {
-    // supplied two coins, spent both of them
-    let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
-    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(5, sender);
-    let input_coin_id1 = coin1.id();
-    let input_coin_id2 = coin2.id();
-    let coin_objects = vec![coin1, coin2];
-    let recipient1 = SuiAddress::random_for_testing_only();
-    let recipient2 = SuiAddress::random_for_testing_only();
-    let recipients = vec![recipient1, recipient2];
-    let amounts = vec![4, 11];
-    let mut store: TemporaryStore<()> = temporary_store::with_input_objects_for_testing(
-        input_objects_from_objects(coin_objects.clone()),
-    );
-    let mut ctx = TxContext::with_sender_for_testing_only(&sender);
-
-    assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.into_inner();
-
-    assert_eq!(store.deleted.len(), 2);
-    assert!(store.deleted.contains_key(&input_coin_id1));
-    assert!(store.deleted.contains_key(&input_coin_id2));
-
-    assert_eq!(store.written.len(), 2);
-    assert_eq!(store.created().len(), 2);
-    let recipient1_objs = store.get_written_objects_owned_by(&recipient1);
-    let recipient2_objs = store.get_written_objects_owned_by(&recipient2);
-    assert_eq!(recipient1_objs.len(), 1);
-    assert_eq!(recipient2_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &recipient1_objs[0]), 4);
-    assert_eq!(get_coin_balance(&store, &recipient2_objs[0]), 11);
-
-    let owner_objs = store.get_written_objects_owned_by(&sender);
-    assert!(owner_objs.is_empty());
-}
-
-#[test]
-fn test_pay_sui_success_one_input_coin() {
-    let sender = SuiAddress::random_for_testing_only();
-    let coin = Object::new_gas_with_balance_and_owner_for_testing(18, sender);
-    let mut coin_objects = vec![coin];
-
-    let recipient1 = SuiAddress::random_for_testing_only();
-    let recipient2 = SuiAddress::random_for_testing_only();
-    let recipients = vec![recipient1, recipient2];
-    let amounts = vec![8, 6];
-
-    let mut store: TemporaryStore<()> = temporary_store::with_input_objects_for_testing(
-        input_objects_from_objects(coin_objects.clone()),
-    );
-    let mut ctx = TxContext::with_sender_for_testing_only(&sender);
-    assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.into_inner();
-
-    assert!(store.deleted.is_empty());
-    assert_eq!(store.written.len(), 3);
-    assert_eq!(store.created().len(), 2);
-
-    let recipient1_objs = store.get_written_objects_owned_by(&recipient1);
-    let recipient2_objs = store.get_written_objects_owned_by(&recipient2);
-    assert_eq!(recipient1_objs.len(), 1);
-    assert_eq!(recipient2_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &recipient1_objs[0]), 8);
-    assert_eq!(get_coin_balance(&store, &recipient2_objs[0]), 6);
-
-    let owner_objs = store.get_written_objects_owned_by(&sender);
-    assert_eq!(owner_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &owner_objs[0]), 4);
-}
-
-#[test]
-fn test_pay_sui_success_multiple_input_coins() {
-    let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(30, sender);
-    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(20, sender);
-    let coin3 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
-    let input_coin_id2 = coin2.id();
-    let input_coin_id3 = coin3.id();
-    let mut coin_objects = vec![coin1, coin2, coin3];
-
-    let recipient1 = SuiAddress::random_for_testing_only();
-    let recipient2 = SuiAddress::random_for_testing_only();
-    let recipient3 = SuiAddress::random_for_testing_only();
-    let recipients = vec![recipient1, recipient2, recipient3];
-    let amounts = vec![5, 15, 25];
-
-    let mut store: TemporaryStore<()> = temporary_store::with_input_objects_for_testing(
-        input_objects_from_objects(coin_objects.clone()),
-    );
-    let mut ctx = TxContext::with_sender_for_testing_only(&sender);
-    assert!(pay_sui(&mut store, &mut coin_objects, recipients, amounts, &mut ctx).is_ok());
-    let store = store.into_inner();
-
-    assert_eq!(store.deleted.len(), 2);
-    assert!(store.deleted.contains_key(&input_coin_id2));
-    assert!(store.deleted.contains_key(&input_coin_id3));
-    assert_eq!(store.written.len(), 4);
-    assert_eq!(store.created().len(), 3);
-
-    let recipient1_objs = store.get_written_objects_owned_by(&recipient1);
-    let recipient2_objs = store.get_written_objects_owned_by(&recipient2);
-    let recipient3_objs = store.get_written_objects_owned_by(&recipient3);
-    assert_eq!(recipient1_objs.len(), 1);
-    assert_eq!(recipient2_objs.len(), 1);
-    assert_eq!(recipient3_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &recipient1_objs[0]), 5);
-    assert_eq!(get_coin_balance(&store, &recipient2_objs[0]), 15);
-    assert_eq!(get_coin_balance(&store, &recipient3_objs[0]), 25);
-
-    let owner_objs = store.get_written_objects_owned_by(&sender);
-    assert_eq!(owner_objs.len(), 1);
-    assert_eq!(get_coin_balance(&store, &owner_objs[0]), 15);
-}
-
-#[test]
-fn test_pay_all_sui_success_multiple_input_coins() {
-    let sender = SuiAddress::random_for_testing_only();
-    let coin1 = Object::new_gas_with_balance_and_owner_for_testing(30, sender);
-    let coin2 = Object::new_gas_with_balance_and_owner_for_testing(20, sender);
-    let coin3 = Object::new_gas_with_balance_and_owner_for_testing(10, sender);
-    let input_coin_id2 = coin2.id();
-    let input_coin_id3 = coin3.id();
-    let mut coin_objects = vec![coin1, coin2, coin3];
-
-    let recipient = SuiAddress::random_for_testing_only();
-
-    let mut store: TemporaryStore<()> = temporary_store::with_input_objects_for_testing(
-        input_objects_from_objects(coin_objects.clone()),
-    );
-    assert!(pay_all_sui(sender, &mut store, &mut coin_objects, recipient).is_ok());
-    let store = store.into_inner();
-
-    assert_eq!(store.deleted.len(), 2);
-    assert!(store.deleted.contains_key(&input_coin_id2));
-    assert!(store.deleted.contains_key(&input_coin_id3));
-    assert_eq!(store.written.len(), 1);
-    assert!(store.created().is_empty());
-
-    let owner_objs = store.get_written_objects_owned_by(&sender);
-    assert!(owner_objs.is_empty());
 }

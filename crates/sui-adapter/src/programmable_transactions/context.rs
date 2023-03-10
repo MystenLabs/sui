@@ -728,10 +728,6 @@ fn load_call_arg<S: Storage>(
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => load_object_arg(state_view, object_owner_map, obj_arg)?,
-        CallArg::ObjVec(_) => {
-            // protected by transaction input checker
-            invariant_violation!("ObjVec is not supported in programmable transactions")
-        }
     })
 }
 
