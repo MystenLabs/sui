@@ -1,6 +1,5 @@
 ---
 source: crates/sui-cost/tests/empirical_transaction_cost.rs
-assertion_line: 78
 expression: common_costs_actual
 ---
 {

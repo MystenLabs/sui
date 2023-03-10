@@ -34,6 +34,12 @@ pub struct SuiPublishArgs {
     pub upgradeable: bool,
     #[clap(long = "view-gas-used")]
     pub view_gas_used: bool,
+    #[clap(
+        long = "dependencies",
+        multiple_values(true),
+        multiple_occurrences(false)
+    )]
+    pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]

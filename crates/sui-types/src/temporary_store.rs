@@ -783,6 +783,12 @@ impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     }
 }
 
+impl<S: BackingPackageStore> BackingPackageStore for TemporaryStore<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        self.store.get_package_object(package_id)
+    }
+}
+
 impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -790,7 +796,7 @@ impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
         let package_obj;
         let package = match self.read_object(package_id) {
             Some(object) => object,
-            None => match self.store.get_package(package_id)? {
+            None => match self.store.get_package_object(package_id)? {
                 Some(object) => {
                     package_obj = object;
                     &package_obj
