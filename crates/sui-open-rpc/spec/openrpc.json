@@ -555,9 +555,9 @@
               "networkTotalTransactions": 792385,
               "previousDigest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt",
               "epochRollingGasCostSummary": {
-                "computation_cost": 0,
-                "storage_cost": 0,
-                "storage_rebate": 0
+                "computationCost": 0,
+                "storageCost": 0,
+                "storageRebate": 0
               },
               "timestampMs": 1676911928,
               "endOfEpochData": null,

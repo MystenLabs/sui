@@ -50,6 +50,7 @@ macro_rules! ok_or_gas_balance_error {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct GasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,
