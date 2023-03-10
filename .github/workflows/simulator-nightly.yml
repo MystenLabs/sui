@@ -30,29 +30,31 @@ env:
 jobs:
   simtest:
     timeout-minutes: 120
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ self-hosted, simtest-01 ]
     env:
       RUST_LOG: off
       # Runs tests much faster - disables signing and verification
       USE_MOCK_CRYPTO: 1
+      MSIM_TEST_NUM: 30
+      SIM_STRESS_TEST_DURATION_SECS: 300
+      CARGO_TERM_COLOR: always
 
     steps:
-    - name: Checkout sui repo main branch
-      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    - name: Checkout sui repo and cargo clean
+      run: |
+        cd ~/sui && git fetch origin && git rebase origin/main && cargo clean
 
-    - name: Install rust toolchain
-      uses: actions-rs/toolchain@v1
-
-    - name: Install nexttest
-      uses: taiki-e/install-action@nextest
+    - name: Install simtest
+      run: |
+        cd ~/sui && ./scripts/simtest/install.sh
 
     - name: Build simtest
       run: |
-        ./scripts/simtest/cargo-simtest simtest build
-
+        cd ~/sui && ./scripts/simtest/cargo-simtest simtest build
+    
     - name: Run simtest
       run: |
-        ./scripts/simtest/simtest-run.sh
+        cd ~/sui && ./scripts/simtest/simtest-run.sh
 
   notify:
     name: Notify
