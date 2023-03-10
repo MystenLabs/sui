@@ -833,7 +833,7 @@ async fn test_dev_inspect_gas_coin_argument() {
 fn check_coin_value(actual_value: &[u8], actual_type: &SuiTypeTag, expected_value: u64) {
     let actual_type: TypeTag = actual_type.clone().try_into().unwrap();
     assert_eq!(actual_type, TypeTag::Struct(Box::new(GasCoin::type_())));
-    let actual_coin: GasCoin = bcs::from_bytes(&actual_value).unwrap();
+    let actual_coin: GasCoin = bcs::from_bytes(actual_value).unwrap();
     assert_eq!(actual_coin.value(), expected_value);
 }
 
