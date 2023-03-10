@@ -30,7 +30,6 @@ pub mod governance_api;
 mod metrics;
 pub mod read_api;
 mod routing_layer;
-pub mod threshold_bls_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
