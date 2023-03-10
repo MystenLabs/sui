@@ -624,3 +624,13 @@ impl TryFrom<&[u8]> for ObjectDigest {
         Ok(Self::new(arr))
     }
 }
+
+impl std::str::FromStr for ObjectDigest {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        Ok(ObjectDigest::new(result))
+    }
+}

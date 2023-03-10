@@ -43,7 +43,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
             .checkpoint_digest
             .parse::<CheckpointDigest>()
             .map_err(|e| {
-                IndexerError::JsonSerdeError(format!(
+                IndexerError::SerdeError(format!(
                     "Failed to decode checkpoint digest: {:?} with err: {:?}",
                     checkpoint.checkpoint_digest, e
                 ))
@@ -53,7 +53,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
             .previous_checkpoint_digest
             .map(|digest| {
                 digest.parse::<CheckpointDigest>().map_err(|e| {
-                    IndexerError::JsonSerdeError(format!(
+                    IndexerError::SerdeError(format!(
                         "Failed to decode previous checkpoint digest: {:?} with err: {:?}",
                         digest, e
                     ))
@@ -66,7 +66,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
             .filter_map(|txn| {
                 txn.map(|txn| {
                     txn.parse().map_err(|e| {
-                        IndexerError::JsonSerdeError(format!(
+                        IndexerError::SerdeError(format!(
                             "Failed to decode transaction digest: {:?} with err: {:?}",
                             txn, e
                         ))
@@ -78,7 +78,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
         let data: Option<EndOfEpochData> =
             if let Some(end_of_epoch_data_str) = checkpoint.end_of_epoch_data {
                 Some(serde_json::from_str(&end_of_epoch_data_str).map_err(|e| {
-                    IndexerError::JsonSerdeError(format!(
+                    IndexerError::SerdeError(format!(
                         "Failed to decode end_of_epoch_data: {:?} with err: {:?}",
                         end_of_epoch_data, e
                     ))
@@ -122,7 +122,7 @@ impl Checkpoint {
             .clone()
             .map(|data| {
                 serde_json::to_string(&data).map_err(|e| {
-                    IndexerError::JsonSerdeError(format!(
+                    IndexerError::SerdeError(format!(
                         "Failed to serialize end_of_epoch_data to JSON: {:?}",
                         e
                     ))
@@ -134,7 +134,7 @@ impl Checkpoint {
             .clone()
             .map(|data| {
                 serde_json::to_string(&data.next_epoch_committee).map_err(|e| {
-                    IndexerError::JsonSerdeError(format!(
+                    IndexerError::SerdeError(format!(
                         "Failed to serialize next_epoch_committee to JSON: {:?}",
                         e
                     ))

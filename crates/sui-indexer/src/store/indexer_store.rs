@@ -11,15 +11,24 @@ use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
 use crate::models::recipients::Recipient;
 use crate::models::transactions::Transaction;
+
 use async_trait::async_trait;
 use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, SuiObjectData, SuiTransactionResponse,
+    Checkpoint as RpcCheckpoint, CheckpointId, SuiObjectData, SuiObjectDataOptions,
+    SuiObjectResponse, SuiTransactionResponse,
 };
+use sui_types::base_types::ObjectID;
 
 #[async_trait]
 pub trait IndexerStore {
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError>;
+
+    fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: SuiObjectDataOptions,
+    ) -> Result<SuiObjectResponse, IndexerError>;
 
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError>;
 
