@@ -4804,6 +4804,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03f1160296536f10c833a82dca22267d5486734230d47bf00bf435885814ba1e"
+dependencies = [
+ "hashbrown 0.13.2",
+]
+
+[[package]]
 name = "lz4-sys"
 version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9158,6 +9167,7 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
+ "move-symbol-pool",
  "move-unit-test",
  "multiaddr",
  "mysten-metrics",
@@ -9255,6 +9265,7 @@ dependencies = [
  "indicatif",
  "itertools",
  "move-core-types",
+ "move-package",
  "multiaddr",
  "narwhal-node",
  "num_cpus",
@@ -9376,6 +9387,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap 3.2.23",
+ "criterion",
  "dashmap",
  "either",
  "expect-test",
@@ -9384,6 +9396,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "itertools",
+ "lru",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
@@ -9602,6 +9615,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-proc-macros",
+ "move-core-types",
  "mysten-metrics",
  "narwhal-network",
  "prometheus",
@@ -9659,11 +9673,14 @@ dependencies = [
  "fastcrypto-tbls",
  "futures",
  "hyper",
+ "itertools",
  "jsonrpsee",
  "jsonrpsee-proc-macros",
+ "linked-hash-map",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-package",
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",
@@ -10060,6 +10077,8 @@ dependencies = [
  "anemo",
  "anemo-tower",
  "fastcrypto",
+ "lru",
+ "move-package",
  "msim",
  "narwhal-network",
  "sui-framework",
@@ -10629,6 +10648,7 @@ dependencies = [
  "jsonrpsee",
  "move-binary-format",
  "move-core-types",
+ "move-package",
  "multiaddr",
  "mysten-metrics",
  "mysten-network",
@@ -12279,6 +12299,7 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
+ "lru",
  "lz4-sys",
  "mach",
  "match_opt",

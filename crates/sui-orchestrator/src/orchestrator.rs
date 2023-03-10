@@ -411,10 +411,14 @@ impl Orchestrator {
             let connection = self.ssh_manager.connect(instance.ssh_address()).await?;
 
             // Create a log sub-directory for this run.
-            let log_directory = &self.settings.logs_directory;
-            let path: PathBuf = [log_directory, &format!("logs-{parameters:?}").into()]
-                .iter()
-                .collect();
+            let commit = &self.settings.repository.commit;
+            let path: PathBuf = [
+                &self.settings.logs_directory,
+                &format!("logs-{commit}").into(),
+                &format!("logs-{parameters:?}").into(),
+            ]
+            .iter()
+            .collect();
             fs::create_dir_all(&path).expect("Failed to create log directory");
 
             // Download the node log files.
