@@ -820,14 +820,9 @@ impl SuiNode {
             if let Some(components) = &*self.validator_components.lock().await {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
-                let transaction =
-                    ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
-                        self.state.name,
-                        self.config
-                            .supported_protocol_versions
-                            .expect("Supported versions should be populated"),
-                        self.state.get_available_system_packages().await,
-                    ));
+                let transaction = ConsensusTransaction::new_capability_notification(
+                    self.get_capabilities().await,
+                );
                 info!(?transaction, "submitting capabilities to consensus");
                 components
                     .consensus_adapter
@@ -994,6 +989,25 @@ impl SuiNode {
         info!(next_epoch, "Validator State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
+    }
+
+    pub async fn get_capabilities(&self) -> AuthorityCapabilities {
+        let chain_id = format!(
+            "{}",
+            self.config
+                .genesis()
+                .expect("genesis() cannot fail")
+                .checkpoint()
+                .digest()
+        );
+        tracing::error!("{}", chain_id);
+        AuthorityCapabilities::new(
+            self.state.name,
+            self.config
+                .supported_protocol_versions
+                .expect("Supported versions should be populated"),
+            self.state.get_available_system_packages().await,
+        )
     }
 }
 
