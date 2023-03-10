@@ -302,26 +302,25 @@
                 "data": {
                   "messageVersion": "v1",
                   "transaction": {
-                    "ProgrammableTransaction": {
-                      "inputs": [
-                        "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
-                        "1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e"
-                      ],
-                      "commands": [
-                        {
-                          "TransferObjects": [
-                            [
-                              {
-                                "Input": 1
-                              }
-                            ],
+                    "kind": "ProgrammableTransaction",
+                    "inputs": [
+                      "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
+                      "1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e"
+                    ],
+                    "commands": [
+                      {
+                        "TransferObjects": [
+                          [
                             {
-                              "Input": 0
+                              "Input": 1
                             }
-                          ]
-                        }
-                      ]
-                    }
+                          ],
+                          {
+                            "Input": 0
+                          }
+                        ]
+                      }
+                    ]
                   },
                   "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
                   "gasData": {
@@ -1404,26 +1403,25 @@
                 "data": {
                   "messageVersion": "v1",
                   "transaction": {
-                    "ProgrammableTransaction": {
-                      "inputs": [
-                        "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653",
-                        "8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
-                      ],
-                      "commands": [
-                        {
-                          "TransferObjects": [
-                            [
-                              {
-                                "Input": 1
-                              }
-                            ],
+                    "kind": "ProgrammableTransaction",
+                    "inputs": [
+                      "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653",
+                      "8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
+                    ],
+                    "commands": [
+                      {
+                        "TransferObjects": [
+                          [
                             {
-                              "Input": 0
+                              "Input": 1
                             }
-                          ]
-                        }
-                      ]
-                    }
+                          ],
+                          {
+                            "Input": 0
+                          }
+                        ]
+                      }
+                    ]
                   },
                   "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
                   "gasData": {
@@ -5390,43 +5388,6 @@
           }
         }
       },
-      "SuiChangeEpoch": {
-        "type": "object",
-        "required": [
-          "computation_charge",
-          "epoch",
-          "epoch_start_timestamp_ms",
-          "storage_charge",
-          "storage_rebate"
-        ],
-        "properties": {
-          "computation_charge": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch_start_timestamp_ms": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_charge": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_rebate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      },
       "SuiCoinMetadata": {
         "type": "object",
         "required": [
@@ -5609,31 +5570,6 @@
           }
         ]
       },
-      "SuiConsensusCommitPrologue": {
-        "type": "object",
-        "required": [
-          "commit_timestamp_ms",
-          "epoch",
-          "round"
-        ],
-        "properties": {
-          "commit_timestamp_ms": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "round": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      },
       "SuiExecutionResult": {
         "type": "object",
         "properties": {
@@ -5682,20 +5618,6 @@
               ],
               "maxItems": 2,
               "minItems": 2
-            }
-          }
-        }
-      },
-      "SuiGenesisTransaction": {
-        "type": "object",
-        "required": [
-          "objects"
-        ],
-        "properties": {
-          "objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectID"
             }
           }
         }
@@ -6020,30 +5942,6 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
-          }
-        }
-      },
-      "SuiProgrammableTransaction": {
-        "description": "A series of commands where the results of one command can be used in future commands",
-        "type": "object",
-        "required": [
-          "commands",
-          "inputs"
-        ],
-        "properties": {
-          "commands": {
-            "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiCommand"
-            }
-          },
-          "inputs": {
-            "description": "Input objects or primitive values",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiJsonValue"
             }
           }
         }
@@ -6795,53 +6693,132 @@
             "description": "A system transaction that will update epoch information on-chain.",
             "type": "object",
             "required": [
-              "ChangeEpoch"
+              "computation_charge",
+              "epoch",
+              "epoch_start_timestamp_ms",
+              "kind",
+              "storage_charge",
+              "storage_rebate"
             ],
             "properties": {
-              "ChangeEpoch": {
-                "$ref": "#/components/schemas/SuiChangeEpoch"
+              "computation_charge": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch_start_timestamp_ms": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ChangeEpoch"
+                ]
+              },
+              "storage_charge": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "storage_rebate": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction used for initializing the initial state of the chain.",
             "type": "object",
             "required": [
-              "Genesis"
+              "kind",
+              "objects"
             ],
             "properties": {
-              "Genesis": {
-                "$ref": "#/components/schemas/SuiGenesisTransaction"
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "Genesis"
+                ]
+              },
+              "objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectID"
+                }
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
             "type": "object",
             "required": [
-              "ConsensusCommitPrologue"
+              "commit_timestamp_ms",
+              "epoch",
+              "kind",
+              "round"
             ],
             "properties": {
-              "ConsensusCommitPrologue": {
-                "$ref": "#/components/schemas/SuiConsensusCommitPrologue"
+              "commit_timestamp_ms": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologue"
+                ]
+              },
+              "round": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "A series of commands where the results of one command can be used in future commands",
             "type": "object",
             "required": [
-              "ProgrammableTransaction"
+              "commands",
+              "inputs",
+              "kind"
             ],
             "properties": {
-              "ProgrammableTransaction": {
-                "$ref": "#/components/schemas/SuiProgrammableTransaction"
+              "commands": {
+                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiCommand"
+                }
+              },
+              "inputs": {
+                "description": "Input objects or primitive values",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiJsonValue"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ProgrammableTransaction"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
