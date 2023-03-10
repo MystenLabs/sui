@@ -40,7 +40,7 @@ export function useDeriveLedgerAccounts(
                 }
 
                 // We have to do this sequentially since Ledger uses a device lock to
-                // enure that only one operation is only ever being executed at once
+                // enure that only one operation is being executed at a time
                 const accounts = await deriveAccountsFromLedger(
                     suiLedgerClient,
                     numAccountsToDerive
