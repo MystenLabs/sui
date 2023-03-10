@@ -53,8 +53,9 @@ New entries added 03/09/23.
 Added 3/9/23
 
 **[Major API breaking changes]** - `GetTransaction` API refactoring
-    - [RPC] `sui_getTransaction` and `sui_multiGetTransaction` now take in an additional optional parameter called `options` that specifies which fields to retrieve (such as  `transaction`, `effects`, `events`, etc). By default, these operations return only the transaction digest.
-    - [TS SDK] Renamed `provider.getTransactionWithEffects` to `provider.getTransactionResponse`. The new method takes in an additional parameter, `SuiTransactionResponseOptions`, to configure which fields to retrieve (such as `transaction`, `effects`, `events`, etc). By default, this method returns only the transaction digest.
+
+ * [RPC] `sui_getTransaction` and `sui_multiGetTransaction` now take in an additional optional parameter called `options` that specifies which fields to retrieve (such as  `transaction`, `effects`, `events`, etc). By default, these operations return only the transaction digest.
+ * [TS SDK] Renamed `provider.getTransactionWithEffects` to `provider.getTransactionResponse`. The new method takes in an additional parameter, `SuiTransactionResponseOptions`, to configure which fields to retrieve (such as `transaction`, `effects`, `events`, etc). By default, this method returns only the transaction digest.
 
 For more information, see [PR 8888](https://github.com/MystenLabs/sui/pull/8888).
 
