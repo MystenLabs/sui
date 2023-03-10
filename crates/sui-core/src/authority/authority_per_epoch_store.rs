@@ -224,7 +224,8 @@ impl EpochStartConfiguration {
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
-    transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
+    signed_transactions:
+        DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
 
     /// Signatures over transaction effects that were executed in the current epoch.
     /// Store this to avoid re-signing the same effects twice.
@@ -593,23 +594,27 @@ impl AuthorityPerEpochStore {
         )?)
     }
 
-    pub fn insert_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
+    pub fn insert_signed_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
         Ok(self
             .tables
-            .transactions
+            .signed_transactions
             .insert(transaction.digest(), transaction.serializable_ref())?)
     }
 
     #[cfg(test)]
     pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
-        self.tables.transactions.remove(transaction).unwrap();
+        self.tables.signed_transactions.remove(transaction).unwrap();
     }
 
     pub fn get_signed_transaction(
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
+        Ok(self
+            .tables
+            .signed_transactions
+            .get(tx_digest)?
+            .map(|t| t.into()))
     }
 
     pub fn insert_tx_cert_and_effects_signature(

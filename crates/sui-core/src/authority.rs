@@ -2717,7 +2717,7 @@ impl AuthorityState {
         // For now write transactions after because if we write before, there is a chance the lock can fail
         // and this can cause invalid transactions to be inserted in the table.
         // https://github.com/MystenLabs/sui/issues/1990
-        epoch_store.insert_transaction(transaction)?;
+        epoch_store.insert_signed_transaction(transaction)?;
 
         Ok(())
     }
