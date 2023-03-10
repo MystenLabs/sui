@@ -5165,48 +5165,30 @@ async fn test_gas_smashing() {
     }
 
     // run an object creation transaction with the given amount of gas and coins
-    async fn run_and_check_ok(reference_gas_used: u64, coin_num: u64, budget: u64) -> u64 {
+    async fn run_and_check(
+        reference_gas_used: u64,
+        coin_num: u64,
+        budget: u64,
+        success: bool,
+    ) -> u64 {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
         let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
         let (state, effects) = create_obj(sender, sender_key, gas_coins, budget).await;
-        // transaction is good
-        assert!(effects.status().is_ok());
-        // gas object in effects is first coin in vector of coins
-        assert_eq!(gas_coin_ids[0], effects.gas_object().0 .0);
-        // object is created and gas at position 0 mutated
-        assert_eq!((effects.created().len(), effects.mutated().len()), (1, 1));
-        // extra coin are deleted
-        assert_eq!(effects.deleted().len() as u64, coin_num - 1);
-        for gas_coin_id in &gas_coin_ids[1..] {
-            assert!(effects
-                .deleted()
-                .iter()
-                .any(|deleted| deleted.0 == *gas_coin_id));
+        // check transaction
+        if success {
+            assert!(effects.status().is_ok());
+        } else {
+            assert!(effects.status().is_err());
         }
-        // balance on first coin is correct
-        let balance = sui_types::gas::get_gas_balance(
-            &state.get_object(&gas_coin_ids[0]).await.unwrap().unwrap(),
-        )
-        .unwrap();
-        let gas_used = effects.gas_cost_summary().gas_used();
-        assert!(reference_gas_used > balance);
-        assert_eq!(reference_gas_used, balance + gas_used);
-        gas_used
-    }
-
-    // run an object creation transaction with the given amount of gas and coins, failure case
-    async fn run_and_check_err(reference_gas_used: u64, coin_num: u64, budget: u64) -> u64 {
-        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-        let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
-        let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
-        let (state, effects) = create_obj(sender, sender_key, gas_coins, budget).await;
-        // transaction is good
-        assert!(effects.status().is_err());
         // gas object in effects is first coin in vector of coins
         assert_eq!(gas_coin_ids[0], effects.gas_object().0 .0);
-        // object is created and gas at position 0 mutated
-        assert_eq!((effects.created().len(), effects.mutated().len()), (0, 1));
+        // object is created on success and gas at position 0 mutated
+        let created = usize::from(success);
+        assert_eq!(
+            (effects.created().len(), effects.mutated().len()),
+            (created, 1)
+        );
         // extra coin are deleted
         assert_eq!(effects.deleted().len() as u64, coin_num - 1);
         for gas_coin_id in &gas_coin_ids[1..] {
@@ -5228,17 +5210,17 @@ async fn test_gas_smashing() {
 
     // 1. get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
-    let gas_used = run_and_check_ok(100_000, 1, 100_000).await;
+    let gas_used = run_and_check(100_000, 1, 100_000, true).await;
 
     // add something to the gas used to account for multiple gas coins being charged for
     let reference_gas_used = gas_used + 1_000;
-    let three_coin_gas = run_and_check_ok(reference_gas_used, 3, reference_gas_used).await;
-    run_and_check_ok(reference_gas_used, 10, reference_gas_used - 100).await;
+    let three_coin_gas = run_and_check(reference_gas_used, 3, reference_gas_used, true).await;
+    run_and_check(reference_gas_used, 10, reference_gas_used - 100, true).await;
 
     // make less then required to succeed
     let reference_gas_used = gas_used - 10;
-    run_and_check_err(reference_gas_used, 2, reference_gas_used - 10).await;
-    run_and_check_err(reference_gas_used, 30, reference_gas_used).await;
+    run_and_check(reference_gas_used, 2, reference_gas_used - 10, false).await;
+    run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
     // use a small amount less than what 3 coins above reported (with success)
-    run_and_check_err(three_coin_gas, 3, three_coin_gas - 1).await;
+    run_and_check(three_coin_gas, 3, three_coin_gas - 1, false).await;
 }
