@@ -892,7 +892,7 @@ impl ObjectID {
     pub fn derive_id(digest: TransactionDigest, creation_num: u64) -> Self {
         // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
 
-        let mut hasher = InternalHash::default();
+        let mut hasher = UserHash::default();
         hasher.update(digest);
         hasher.update(creation_num.to_le_bytes());
         let hash = hasher.finalize();
