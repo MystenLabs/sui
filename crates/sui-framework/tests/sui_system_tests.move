@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // This file contains tests testing functionalities in `sui_system` that are not
-// already tested by the other more themed tests such as `delegation_tests` or
+// already tested by the other more themed tests such as `stake_tests` or
 // `rewards_distribution_tests`.
 
 #[test_only]
@@ -71,36 +71,36 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    fun test_validator_ops_by_delegatee_ok() {
+    fun test_validator_ops_by_stakee_ok() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
         set_up_sui_system_state(vector[@0x1, @0x2], scenario);
 
-        // @0x1 transfers the cap object to delegatee.
-        let delegatee_address = @0xbeef;
+        // @0x1 transfers the cap object to stakee.
+        let stakee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, delegatee_address);
+        transfer::transfer(cap, stakee_address);
 
-        // With the cap object in hand, delegatee could report validators on behalf of @0x1.
-        report_helper(delegatee_address, @0x2, false, scenario);
+        // With the cap object in hand, stakee could report validators on behalf of @0x1.
+        report_helper(stakee_address, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
 
-        // delegatee could also undo report.
-        report_helper(delegatee_address, @0x2, true, scenario);
+        // stakee could also undo report.
+        report_helper(stakee_address, @0x2, true, scenario);
         assert!(vector::is_empty(&get_reporters_of(@0x2, scenario)), 0);
 
-        test_scenario::next_tx(scenario, delegatee_address);
+        test_scenario::next_tx(scenario, stakee_address);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        let new_delegatee_address = @0xcafe;
-        transfer::transfer(cap, new_delegatee_address);
+        let new_stakee_address = @0xcafe;
+        transfer::transfer(cap, new_stakee_address);
 
-        // New delegatee could report validators on behalf of @0x1.
-        report_helper(new_delegatee_address, @0x2, false, scenario);
+        // New stakee could report validators on behalf of @0x1.
+        report_helper(new_stakee_address, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
 
-        // New delegatee could also set reference gas price on behalf of @0x1.
-        set_gas_price_helper(new_delegatee_address, 666, scenario);
+        // New stakee could also set reference gas price on behalf of @0x1.
+        set_gas_price_helper(new_stakee_address, 666, scenario);
 
         // Add a pending validator
         let new_validator_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
@@ -113,7 +113,7 @@ module sui::sui_system_tests {
         // Pending validator could set reference price as well
         set_gas_price_helper(new_validator_addr, 777, scenario);
 
-        test_scenario::next_tx(scenario, new_delegatee_address);
+        test_scenario::next_tx(scenario, new_stakee_address);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let validator = sui_system::active_validator_by_address(&system_state, @0x1);
         assert!(validator::next_epoch_gas_price(validator) == 666, 0);
@@ -126,58 +126,58 @@ module sui::sui_system_tests {
 
     #[test]
     #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
-    fun test_report_validator_by_delegatee_revoked() {
+    fun test_report_validator_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
         set_up_sui_system_state(vector[@0x1, @0x2], scenario);
 
-        // @0x1 transfers the cap object to delegatee.
-        let delegatee_address = @0xbeef;
+        // @0x1 transfers the cap object to stakee.
+        let stakee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, delegatee_address);
+        transfer::transfer(cap, stakee_address);
 
-        report_helper(delegatee_address, @0x2, false, scenario);
+        report_helper(stakee_address, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
 
-        // @0x1 revokes delegatee's permission by creating a new
+        // @0x1 revokes stakee's permission by creating a new
         // operation cap object.
         rotate_operation_cap(@0x1, scenario);
 
-        // delegatee no longer has permission to report validators, here it aborts.
-        report_helper(delegatee_address, @0x2, true, scenario);
+        // stakee no longer has permission to report validators, here it aborts.
+        report_helper(stakee_address, @0x2, true, scenario);
 
         test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
-    fun test_set_reference_gas_price_by_delegatee_revoked() {
+    fun test_set_reference_gas_price_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
         set_up_sui_system_state(vector[@0x1, @0x2], scenario);
 
-        // @0x1 transfers the cap object to delegatee.
-        let delegatee_address = @0xbeef;
+        // @0x1 transfers the cap object to stakee.
+        let stakee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, delegatee_address);
+        transfer::transfer(cap, stakee_address);
 
-        // With the cap object in hand, delegatee could report validators on behalf of @0x1.
-        set_gas_price_helper(delegatee_address, 888, scenario);
+        // With the cap object in hand, stakee could report validators on behalf of @0x1.
+        set_gas_price_helper(stakee_address, 888, scenario);
 
-        test_scenario::next_tx(scenario, delegatee_address);
+        test_scenario::next_tx(scenario, stakee_address);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let validator = sui_system::active_validator_by_address(&system_state, @0x1);
         assert!(validator::next_epoch_gas_price(validator) == 888, 0);
         test_scenario::return_shared(system_state);
 
-        // @0x1 revokes delegatee's permssion by creating a new
+        // @0x1 revokes stakee's permssion by creating a new
         // operation cap object.
         rotate_operation_cap(@0x1, scenario);
 
-        // delegatee no longer has permission to report validators, here it aborts.
-        set_gas_price_helper(delegatee_address, 888, scenario);
+        // stakee no longer has permission to report validators, here it aborts.
+        set_gas_price_helper(stakee_address, 888, scenario);
 
         test_scenario::end(scenario_val);
     }

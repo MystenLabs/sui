@@ -840,7 +840,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_delegation() -> Result<(), anyhow::Error> {
+async fn test_staking() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
     let http_client = cluster.rpc_client();
@@ -861,7 +861,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
 
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
-        .request_add_delegation(
+        .request_add_stake(
             *address,
             vec![objects[0].object_id],
             Some(1000000),
@@ -897,7 +897,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
+async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
 
     let http_client = cluster.rpc_client();
@@ -919,7 +919,7 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
         .sui_address;
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
-        .request_add_delegation(
+        .request_add_stake(
             *address,
             vec![
                 coins.data[0].coin_object_id,
@@ -1027,7 +1027,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let transaction_bytes: TransactionBytes = http_client
-        .request_add_delegation(
+        .request_add_stake(
             *address,
             vec![locked_sui],
             Some(1000000),

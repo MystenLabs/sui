@@ -98,7 +98,7 @@ module sui::validator_tests {
         {
             let ctx = test_scenario::ctx(scenario);
             let new_stake = coin::into_balance(coin::mint_for_testing(30, ctx));
-            validator::request_add_delegation(&mut validator, new_stake, option::none(), sender, ctx);
+            validator::request_add_stake(&mut validator, new_stake, option::none(), sender, ctx);
 
             assert!(validator::total_stake(&validator) == 10, 0);
             assert!(validator::pending_stake_amount(&validator) == 30, 0);
@@ -109,16 +109,16 @@ module sui::validator_tests {
             let coin_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
             let stake = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&coin_ids, 0));
             let ctx = test_scenario::ctx(scenario);
-            validator::request_withdraw_delegation(&mut validator, stake, ctx);
+            validator::request_withdraw_stake(&mut validator, stake, ctx);
 
             assert!(validator::total_stake(&validator) == 10, 0);
             assert!(validator::pending_stake_amount(&validator) == 30, 0);
             assert!(validator::pending_stake_withdraw_amount(&validator) == 10, 0);
 
-            validator::deposit_delegation_rewards(&mut validator, balance::zero());
+            validator::deposit_stake_rewards(&mut validator, balance::zero());
 
-            // Calling `process_pending_delegations_and_withdraws` will withdraw the coin and transfer to sender.
-            validator::process_pending_delegations_and_withdraws(&mut validator, ctx);
+            // Calling `process_pending_stakes_and_withdraws` will withdraw the coin and transfer to sender.
+            validator::process_pending_stakes_and_withdraws(&mut validator, ctx);
 
             assert!(validator::total_stake(&validator) == 30, 0);
             assert!(validator::pending_stake_amount(&validator) == 0, 0);

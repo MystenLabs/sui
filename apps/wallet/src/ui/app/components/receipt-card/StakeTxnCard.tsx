@@ -18,7 +18,7 @@ type StakeTxnCardProps = {
     events: TransactionEvents;
 };
 
-const REQUEST_DELEGATION_EVENT = '0x2::validator_set::DelegationRequestEvent';
+const REQUEST_DELEGATION_EVENT = '0x2::validator_set::StakingRequestEvent';
 
 // TODO: moveEvents is will be changing
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch

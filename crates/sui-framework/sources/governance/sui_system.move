@@ -6,7 +6,7 @@ module sui::sui_system {
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
-    use sui::staking_pool::{delegation_activation_epoch, StakedSui};
+    use sui::staking_pool::{stake_activation_epoch, StakedSui};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -167,12 +167,12 @@ module sui::sui_system {
 
     // ==== entry functions ====
 
-    /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+    /// Can be called by anyone who wishes to become a validator candidate and starts accuring
     /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_STAKE` amount of stake they
     /// can call `request_add_validator` to officially become an active validator at the next epoch.
     /// Aborts if the caller is already a pending or active validator, or a validator candidate.
-    /// Note: `proof_of_possession` MUST be a valid signature using sui_address and protocol_pubkey_bytes. 
-    /// To produce a valid PoP, run [fn test_proof_of_possession]. 
+    /// Note: `proof_of_possession` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
+    /// To produce a valid PoP, run [fn test_proof_of_possession].
     public entry fun request_add_validator_candidate(
         wrapper: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
@@ -290,59 +290,59 @@ module sui::sui_system {
         )
     }
 
-    /// Add delegated stake to a validator's staking pool.
-    public entry fun request_add_delegation(
+    /// Add stake to a validator's staking pool.
+    public entry fun request_add_stake(
         wrapper: &mut SuiSystemState,
-        delegate_stake: Coin<SUI>,
+        stake: Coin<SUI>,
         validator_address: address,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        validator_set::request_add_delegation(
+        validator_set::request_add_stake(
             &mut self.validators,
             validator_address,
-            coin::into_balance(delegate_stake),
+            coin::into_balance(stake),
             option::none(),
             ctx,
         );
     }
 
-    /// Add delegated stake to a validator's staking pool using multiple coins.
-    public entry fun request_add_delegation_mul_coin(
+    /// Add stake to a validator's staking pool using multiple coins.
+    public entry fun request_add_stake_mul_coin(
         wrapper: &mut SuiSystemState,
-        delegate_stakes: vector<Coin<SUI>>,
+        stakes: vector<Coin<SUI>>,
         stake_amount: option::Option<u64>,
         validator_address: address,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::none(), ctx);
+        let balance = extract_coin_balance(stakes, stake_amount, ctx);
+        validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
     }
 
-    /// Add delegated stake to a validator's staking pool using a locked SUI coin.
-    public entry fun request_add_delegation_with_locked_coin(
+    /// Add stake to a validator's staking pool using a locked SUI coin.
+    public entry fun request_add_stake_with_locked_coin(
         wrapper: &mut SuiSystemState,
-        delegate_stake: LockedCoin<SUI>,
+        stake: LockedCoin<SUI>,
         validator_address: address,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        let (balance, lock) = locked_coin::into_balance(delegate_stake);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::some(lock), ctx);
+        let (balance, lock) = locked_coin::into_balance(stake);
+        validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
     }
 
-    /// Add delegated stake to a validator's staking pool using multiple locked SUI coins.
-    public entry fun request_add_delegation_mul_locked_coin(
+    /// Add stake to a validator's staking pool using multiple locked SUI coins.
+    public entry fun request_add_stake_mul_locked_coin(
         wrapper: &mut SuiSystemState,
-        delegate_stakes: vector<LockedCoin<SUI>>,
+        stakes: vector<LockedCoin<SUI>>,
         stake_amount: option::Option<u64>,
         validator_address: address,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        let (balance, lock) = extract_locked_coin_balance(delegate_stakes, stake_amount, ctx);
-        validator_set::request_add_delegation(
+        let (balance, lock) = extract_locked_coin_balance(stakes, stake_amount, ctx);
+        validator_set::request_add_stake(
             &mut self.validators,
             validator_address,
             balance,
@@ -351,15 +351,15 @@ module sui::sui_system {
         );
     }
 
-    /// Withdraw some portion of a delegation from a validator's staking pool.
-    public entry fun request_withdraw_delegation(
+    /// Withdraw some portion of a stake from a validator's staking pool.
+    public entry fun request_withdraw_stake(
         wrapper: &mut SuiSystemState,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
-        assert!(delegation_activation_epoch(&staked_sui) <= tx_context::epoch(ctx), 0);
-        validator_set::request_withdraw_delegation(
+        assert!(stake_activation_epoch(&staked_sui) <= tx_context::epoch(ctx), 0);
+        validator_set::request_withdraw_stake(
             &mut self.validators, staked_sui, ctx,
         );
     }
@@ -580,7 +580,7 @@ module sui::sui_system {
     /// 1. Add storage charge to the storage fund.
     /// 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
     ///    gas coins.
-    /// 3. Distribute computation charge to validator stake and delegation stake.
+    /// 3. Distribute computation charge to validator stake.
     /// 4. Update all validators.
     public entry fun advance_epoch(
         wrapper: &mut SuiSystemState,
@@ -618,7 +618,7 @@ module sui::sui_system {
         let storage_reward = balance::create_staking_rewards(storage_charge);
         let computation_reward = balance::create_staking_rewards(computation_charge);
 
-        // Include stake subsidy in the rewards given out to validators and delegators.
+        // Include stake subsidy in the rewards given out to validators and stakers.
         // Delay distributing any stake subsidies until after `governance_start_epoch`.
         let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.governance_start_epoch) {
             stake_subsidy::advance_epoch(&mut self.stake_subsidy)
