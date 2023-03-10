@@ -242,11 +242,16 @@ impl SuiNode {
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
         let (trusted_peer_change_tx, trusted_peer_change_rx) =
-            watch::channel(TrustedPeerChangeEvent {
+            watch::channel(TrustedPeerChangeEvent { new_peers: vec![] });
+        // Sending the inital TrustedPeerChangeEvents separately, to ensure receivers get notified.
+        trusted_peer_change_tx
+            .send(TrustedPeerChangeEvent {
                 new_peers: epoch_store
                     .epoch_start_state()
                     .get_validator_as_p2p_peers(config.protocol_public_key()),
-            });
+            })
+            .unwrap();
+
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store,
