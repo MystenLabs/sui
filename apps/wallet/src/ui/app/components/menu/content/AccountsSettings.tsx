@@ -102,5 +102,5 @@ function getLedgerErrorMessage(error: unknown) {
     } else if (error instanceof LedgerNoTransportMechanismError) {
         return "Your machine doesn't support USB or HID.";
     }
-    return 'Something went wrong. Try again.';
+    return 'Make sure the Sui application is open and try again.';
 }
