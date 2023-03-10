@@ -17,7 +17,7 @@ describe('Test ID as args to entry functions', () => {
   beforeAll(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/id_entry_args';
-    packageId = await publishPackage(packagePath);
+    ({ packageId } = await publishPackage(packagePath));
   });
 
   it('Test ID as arg to entry functions', async () => {

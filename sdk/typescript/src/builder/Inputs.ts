@@ -42,3 +42,19 @@ export const Inputs = {
     return { Object: { Shared: ref } };
   },
 };
+
+export function getSharedObjectInput(
+  arg: BuilderCallArg,
+): SharedObjectRef | undefined {
+  return 'Object' in arg && 'Shared' in arg.Object
+    ? arg.Object.Shared
+    : undefined;
+}
+
+export function isSharedObjectInput(arg: BuilderCallArg): boolean {
+  return getSharedObjectInput(arg) !== undefined;
+}
+
+export function isMutableSharedObjectInput(arg: BuilderCallArg): boolean {
+  return getSharedObjectInput(arg)?.mutable ?? false;
+}

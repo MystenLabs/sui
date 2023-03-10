@@ -17,7 +17,7 @@ describe('Test dev inspect', () => {
   beforeAll(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/serializer';
-    packageId = await publishPackage(packagePath);
+    ({ packageId } = await publishPackage(packagePath));
   });
 
   // TODO: This is skipped because this fails currently.

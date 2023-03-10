@@ -12,7 +12,7 @@ describe('Test Coin Metadata', () => {
   beforeEach(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/coin_metadata';
-    packageId = await publishPackage(packagePath);
+    ({ packageId } = await publishPackage(packagePath));
   });
 
   it('Test accessing coin metadata', async () => {
