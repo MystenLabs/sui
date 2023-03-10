@@ -38,7 +38,7 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { effects, events } = txn;
+    const { events } = txn;
     const timestamp = txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
@@ -52,8 +52,8 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     });
 
     const objectId = useMemo(() => {
-        return getTxnEffectsEventID(effects!, events!, activeAddress)[0];
-    }, [/*transaction,*/ effects, events, activeAddress]);
+        return getTxnEffectsEventID(events!, activeAddress)[0];
+    }, [events, activeAddress]);
 
     const transferAmount = useGetTransferAmount({
         txn,
@@ -140,27 +140,14 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                 amount={totalSuiAmount || 0}
                             />
                         )
-                    ) : (
-                        <>
-                            {objectId && (
-                                <TxnImage
-                                    id={objectId}
-                                    actionLabel={nftObjectLabel}
-                                />
-                            )}
+                    ) 
                     )} */}
                     <>
                         {objectId && (
-                            <div className="py-3.5 first:pt-0 flex gap-2 flex-col">
-                                <Text
-                                    variant="body"
-                                    weight="medium"
-                                    color="steel-darker"
-                                >
-                                    {nftObjectLabel}
-                                </Text>
-                                <TxnImage id={objectId} />
-                            </div>
+                            <TxnImage
+                                id={objectId}
+                                actionLabel={nftObjectLabel}
+                            />
                         )}
 
                         {transferAmount.length > 0
