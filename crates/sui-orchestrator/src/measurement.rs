@@ -140,6 +140,17 @@ impl Measurement {
         let stdev = variance.sqrt();
         Duration::from_secs_f64(stdev)
     }
+
+    #[cfg(test)]
+    pub fn new_for_test() -> Self {
+        Self {
+            timestamp: Duration::from_secs(30),
+            buckets: HashMap::new(),
+            sum: Duration::from_secs(1265),
+            count: 1860,
+            squared_sum: Duration::from_secs(952),
+        }
+    }
 }
 
 /// The identifier of the scrapers collecting the prometheus metrics.
@@ -154,7 +165,7 @@ pub struct MeasurementsCollection {
     /// The benchmark parameters of the current run.
     pub parameters: BenchmarkParameters,
     /// The data collected by each scraper.
-    scrapers: HashMap<ScraperId, Vec<Measurement>>,
+    pub scrapers: HashMap<ScraperId, Vec<Measurement>>,
 }
 
 impl MeasurementsCollection {

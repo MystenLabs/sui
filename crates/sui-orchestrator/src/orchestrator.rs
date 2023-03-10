@@ -467,7 +467,7 @@ impl Orchestrator {
         // Run all benchmarks.
         let mut i = 1;
         let mut latest_comittee_size = 0;
-        while let Some(parameters) = generator.next_parameters() {
+        while let Some(parameters) = generator.next() {
             display::header(format!("Starting benchmark {i}"));
             display::config("Parameters", &parameters);
 
