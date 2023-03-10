@@ -5549,13 +5549,13 @@
         "type": "object",
         "required": [
           "name",
-          "type_"
+          "type"
         ],
         "properties": {
           "name": {
             "type": "string"
           },
-          "type_": {
+          "type": {
             "$ref": "#/components/schemas/SuiMoveNormalizedType"
           }
         }
@@ -5563,14 +5563,14 @@
       "SuiMoveNormalizedFunction": {
         "type": "object",
         "required": [
-          "is_entry",
+          "isEntry",
           "parameters",
-          "return_",
-          "type_parameters",
+          "return",
+          "typeParameters",
           "visibility"
         ],
         "properties": {
-          "is_entry": {
+          "isEntry": {
             "type": "boolean"
           },
           "parameters": {
@@ -5579,13 +5579,13 @@
               "$ref": "#/components/schemas/SuiMoveNormalizedType"
             }
           },
-          "return_": {
+          "return": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiMoveNormalizedType"
             }
           },
-          "type_parameters": {
+          "typeParameters": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiMoveAbilitySet"
@@ -5600,8 +5600,8 @@
         "type": "object",
         "required": [
           "address",
-          "exposed_functions",
-          "file_format_version",
+          "exposedFunctions",
+          "fileFormatVersion",
           "friends",
           "name",
           "structs"
@@ -5610,13 +5610,13 @@
           "address": {
             "type": "string"
           },
-          "exposed_functions": {
+          "exposedFunctions": {
             "type": "object",
             "additionalProperties": {
               "$ref": "#/components/schemas/SuiMoveNormalizedFunction"
             }
           },
-          "file_format_version": {
+          "fileFormatVersion": {
             "type": "integer",
             "format": "uint32",
             "minimum": 0.0
@@ -5643,7 +5643,7 @@
         "required": [
           "abilities",
           "fields",
-          "type_parameters"
+          "typeParameters"
         ],
         "properties": {
           "abilities": {
@@ -5655,7 +5655,7 @@
               "$ref": "#/components/schemas/SuiMoveNormalizedField"
             }
           },
-          "type_parameters": {
+          "typeParameters": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
@@ -5691,7 +5691,7 @@
                   "address",
                   "module",
                   "name",
-                  "type_arguments"
+                  "typeArguments"
                 ],
                 "properties": {
                   "address": {
@@ -5703,7 +5703,7 @@
                   "name": {
                     "type": "string"
                   },
-                  "type_arguments": {
+                  "typeArguments": {
                     "type": "array",
                     "items": {
                       "$ref": "#/components/schemas/SuiMoveNormalizedType"
@@ -5770,13 +5770,13 @@
         "type": "object",
         "required": [
           "constraints",
-          "is_phantom"
+          "isPhantom"
         ],
         "properties": {
           "constraints": {
             "$ref": "#/components/schemas/SuiMoveAbilitySet"
           },
-          "is_phantom": {
+          "isPhantom": {
             "type": "boolean"
           }
         }
