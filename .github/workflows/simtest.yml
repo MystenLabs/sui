@@ -35,19 +35,19 @@ jobs:
 
       - name: Checkout sui repo
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && git fetch origin && git rebase origin/main && cargo clean"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01.sui.io "cd ~/sui && git fetch origin && git rebase origin/main && cargo clean"
 
       - name: Install simtest
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && ./scripts/simtest/install.sh"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01.sui.io "cd ~/sui && ./scripts/simtest/install.sh"
 
       - name: Build simtest
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/cargo-simtest simtest build"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01.sui.io "cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/cargo-simtest simtest build"
       
       - name: Run simtest
         run: |
-          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01 "cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/simtest-run.sh"
+          tsh ssh -i ${{ steps.auth.outputs.identity-file }} ubuntu@simtest-01.sui.io "cd ~/sui && MSIM_TEST_NUM=30 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 ./scripts/simtest/simtest-run.sh"
 
   notify:
     name: Notify
