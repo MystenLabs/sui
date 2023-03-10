@@ -273,10 +273,9 @@ const ExecutionResultType = object({
   mutableReferenceOutputs: optional(array(MutableReferenceOutputType)),
   returnValues: optional(array(ReturnValueType)),
 });
-const DevInspectResultTupleType = tuple([number(), ExecutionResultType]);
 
 const DevInspectResultsType = union([
-  object({ Ok: array(DevInspectResultTupleType) }),
+  object({ Ok: array(ExecutionResultType) }),
   object({ Err: string() }),
 ]);
 

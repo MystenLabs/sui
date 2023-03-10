@@ -118,7 +118,7 @@ export class TransactionDataBuilder {
     this.commands = clone?.commands ?? [];
   }
 
-  build() {
+  build({ onlyTransactionKind }: { onlyTransactionKind?: boolean } = {}) {
     if (!this.gasConfig.budget) {
       throw new Error('Missing gas budget');
     }
@@ -140,6 +140,21 @@ export class TransactionDataBuilder {
       assert(input.value, BuilderCallArg);
       return input.value;
     });
+
+    const kind = {
+      Single: {
+        ProgrammableTransaction: {
+          inputs,
+          commands: this.commands,
+        },
+      },
+    };
+
+    if (onlyTransactionKind) {
+      return builder
+        .ser('TransactionKind', kind, { maxSize: TRANSACTION_DATA_MAX_SIZE })
+        .toBytes();
+    }
 
     const transactionData = {
       sender: prepareSuiAddress(this.sender),

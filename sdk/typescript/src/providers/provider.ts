@@ -4,7 +4,6 @@
 import { Transaction } from '../builder';
 import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
-import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   SuiObjectResponse,
   SuiObjectInfo,
@@ -325,7 +324,7 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: Transaction | UnserializedSignableTransaction | string | Uint8Array,
+    txn: Transaction | string | Uint8Array,
     gasPrice: number | null,
     epoch: number | null,
   ): Promise<DevInspectResults>;

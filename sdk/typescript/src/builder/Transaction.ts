@@ -233,9 +233,20 @@ export class Transaction {
   /** Build the transaction to BCS bytes. */
   async build({
     provider,
+    onlyTransactionKind,
   }: {
     provider?: Provider;
+    onlyTransactionKind?: boolean;
   } = {}): Promise<Uint8Array> {
+    await this.#prepare(provider);
+    return this.#transactionData.build({ onlyTransactionKind });
+  }
+
+  /**
+   * Prepare the transaction by valdiating the transaction data and resolving all inputs
+   * so that it can be built into bytes.
+   */
+  async #prepare(provider?: Provider) {
     if (!this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
     }
@@ -461,7 +472,5 @@ export class Transaction {
         throw new Error('No valid gas coins found for the transaction.');
       }
     }
-
-    return this.#transactionData.build();
   }
 }
