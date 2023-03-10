@@ -14,9 +14,9 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::{
-    Balance, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus, SuiObjectResponse,
-    SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes,
+    Balance, CheckpointPage, CoinPage, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    SuiObjectResponse, SuiTBlsSignObjectCommitmentType, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
 };
 use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectInfo};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -644,6 +644,59 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             |resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == response.digest)
         ))
     }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_get_checkpoint() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let gas_id = objects.last().unwrap().object_id;
+
+    // Make some transactions
+    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
+    for oref in &objects[..objects.len() - 1] {
+        let transaction_bytes: TransactionBytes = http_client
+            .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+            .await?;
+        let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let tx =
+            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+        let response = http_client
+            .submit_transaction(
+                tx_bytes,
+                signatures,
+                ExecuteTransactionRequestType::WaitForLocalExecution,
+            )
+            .await?;
+
+        tx_responses.push(response);
+    }
+
+    sleep(Duration::from_millis(10000)).await;
+
+    let last_checkpoint = http_client.get_latest_checkpoint_sequence_number().await?;
+    let all_checkpoints = http_client.get_checkpoints(None, None, false).await?;
+    assert_eq!(
+        usize::try_from(last_checkpoint).unwrap() + 1,
+        all_checkpoints.data.len()
+    );
+
+    let ch: CheckpointPage = http_client.get_checkpoints(None, 2.into(), false).await?;
+    println!("{:?}", ch);
+    assert_eq!(2, ch.data.len());
+    assert_eq!(2, ch.next_cursor.unwrap());
+
+    // let ch1: CheckpointPage = http_client.get_checkpoints(1.into(), 2.into(), false).await?;
+    // assert_eq!(2, ch1.data[0].sequence_number);
 
     Ok(())
 }

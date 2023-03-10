@@ -50,6 +50,7 @@ use crate::api::cap_page_limit;
 use crate::api::ReadApiServer;
 use crate::error::Error;
 use crate::SuiRpcModule;
+use std::convert::TryFrom;
 
 use crate::api::QUERY_MAX_RESULT_LIMIT;
 
@@ -620,11 +621,12 @@ impl ReadApiServer for ReadApi {
         let mut data = checkpoints[start_index..end_index].to_vec();
 
         let next_cursor = data
-            .get(limit)
-            .cloned()
-            .map(|checkpoint| checkpoint.sequence_number);
+            .last()
+            .map(|checkpoint| usize::try_from(checkpoint.sequence_number).unwrap() + 1);
 
+        // println!("Next cursor: {:?}", next_cursor);
         data.truncate(limit);
+        // println!("{:?}", data);
         Ok(Page { data, next_cursor })
     }
 }
