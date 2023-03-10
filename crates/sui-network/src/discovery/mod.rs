@@ -13,8 +13,8 @@ use std::{
 };
 use sui_config::p2p::{DiscoveryConfig, P2pConfig, SeedPeer};
 use tap::{Pipe, TapFallible};
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::watch;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},
@@ -76,7 +76,7 @@ struct DiscoveryEventLoop {
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
-    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    trusted_peer_change_rx: broadcast::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl DiscoveryEventLoop {
@@ -101,10 +101,9 @@ impl DiscoveryEventLoop {
                 peer_event = peer_events.recv() => {
                     self.handle_peer_event(peer_event);
                 },
-                Ok(()) = self.trusted_peer_change_rx.changed() => {
-                    let event: TrustedPeerChangeEvent = self.trusted_peer_change_rx.borrow_and_update().clone();
-                    self.handle_trusted_peer_change_event(event);
-                }
+                trusted_peer_change_event = self.trusted_peer_change_rx.recv() => {
+                    self.handle_trusted_peer_change_event(trusted_peer_change_event);
+                },
                 Some(task_result) = self.tasks.join_next() => {
                     task_result.unwrap();
                 },
@@ -170,11 +169,22 @@ impl DiscoveryEventLoop {
     // in the future along with other network management work.
     fn handle_trusted_peer_change_event(
         &mut self,
-        trusted_peer_change_event: TrustedPeerChangeEvent,
+        trusted_peer_change_event: Result<TrustedPeerChangeEvent, RecvError>,
     ) {
-        for peer_info in trusted_peer_change_event.new_peers {
-            debug!(?peer_info, "Add committee member as preferred peer.");
-            self.network.known_peers().insert(peer_info);
+        match trusted_peer_change_event {
+            Ok(event) => {
+                for peer_info in event.new_peers {
+                    debug!(?peer_info, "Add committee member as preferred peer.");
+                    self.network.known_peers().insert(peer_info);
+                }
+            }
+            Err(RecvError::Closed) => {
+                panic!("Reconfig channel shouldn't be able to be closed");
+            }
+            Err(RecvError::Lagged(_)) => {
+                // This is OK, we only care about the latest committee.
+                debug!("State-Sync fell behind processing reconfig events");
+            }
         }
     }
 

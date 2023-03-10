@@ -12,19 +12,19 @@ use std::{
 use sui_config::p2p::P2pConfig;
 use tap::Pipe;
 use tokio::{
-    sync::{oneshot, watch},
+    sync::{broadcast, oneshot},
     task::JoinSet,
 };
 
 /// Discovery Service Builder.
 pub struct Builder {
     config: Option<P2pConfig>,
-    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    trusted_peer_change_rx: broadcast::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl Builder {
     #[allow(clippy::new_without_default)]
-    pub fn new(trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>) -> Self {
+    pub fn new(trusted_peer_change_rx: broadcast::Receiver<TrustedPeerChangeEvent>) -> Self {
         Self {
             config: None,
             trusted_peer_change_rx,
@@ -100,7 +100,7 @@ pub struct UnstartedDiscovery {
     pub(super) config: P2pConfig,
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
-    pub(super) trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    pub(super) trusted_peer_change_rx: broadcast::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl UnstartedDiscovery {

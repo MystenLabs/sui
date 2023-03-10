@@ -123,7 +123,7 @@ pub struct SuiNode {
     end_of_epoch_channel: broadcast::Sender<(Committee, ProtocolVersion)>,
 
     /// Broadcast channel to notify state-sync for new validator peers.
-    trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
+    trusted_peer_change_tx: broadcast::Sender<TrustedPeerChangeEvent>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -242,18 +242,23 @@ impl SuiNode {
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
-        let (trusted_peer_change_tx, trusted_peer_change_rx) =
-            watch::channel(TrustedPeerChangeEvent {
-                new_peers: epoch_store
-                    .epoch_start_state()
-                    .get_validator_as_p2p_peers(config.protocol_public_key()),
-            });
+        let (trusted_peer_change_tx, trusted_peer_change_rx) = broadcast::channel(100);
         let (p2p_network, discovery_handle, state_sync_handle) = Self::create_p2p_network(
             &config,
             state_sync_store,
             trusted_peer_change_rx,
             &prometheus_registry,
         )?;
+        if let Err(err) = trusted_peer_change_tx.send(TrustedPeerChangeEvent {
+            new_peers: epoch_store
+                .epoch_start_state()
+                .get_validator_as_p2p_peers(config.protocol_public_key()),
+        }) {
+            warn!(
+                "Failed to send validator peer information to state sync: {:?}",
+                err
+            );
+        }
 
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
@@ -441,7 +446,7 @@ impl SuiNode {
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
-        trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+        trusted_peer_change_rx: broadcast::Receiver<TrustedPeerChangeEvent>,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()

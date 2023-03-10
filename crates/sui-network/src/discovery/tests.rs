@@ -127,7 +127,8 @@ async fn make_connection_to_seed_peer_with_peer_id() -> Result<()> {
 async fn three_nodes_can_connect_via_discovery() -> Result<()> {
     // Setup the peer that will be the seed for the other two
     let config = P2pConfig::default();
-    let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
+    let (tx, _) = create_test_channel();
+    let (builder, server) = Builder::new(tx.subscribe()).config(config).build();
     let network_1 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone());
 
@@ -136,16 +137,16 @@ async fn three_nodes_can_connect_via_discovery() -> Result<()> {
         peer_id: Some(network_1.peer_id()),
         address: format!("/dns/localhost/udp/{}", network_1.local_addr().port()).parse()?,
     });
-    let (builder, server) = Builder::new(create_test_channel().1)
-        .config(config.clone())
-        .build();
+    let (tx, _) = create_test_channel();
+    let (builder, server) = Builder::new(tx.subscribe()).config(config.clone()).build();
     let network_2 = build_network(|router| router.add_rpc_service(server));
     let (mut event_loop_2, _handle_2) = builder.build(network_2.clone());
     // Set an external_address address for node 2 so that it can share its address
     event_loop_2.config.external_address =
         Some(format!("/dns/localhost/udp/{}", network_2.local_addr().port()).parse()?);
 
-    let (builder, server) = Builder::new(create_test_channel().1).config(config).build();
+    let (tx, _) = create_test_channel();
+    let (builder, server) = Builder::new(tx.subscribe()).config(config).build();
     let network_3 = build_network(|router| router.add_rpc_service(server));
     let (event_loop_3, _handle_3) = builder.build(network_3.clone());
 
@@ -254,9 +255,9 @@ fn unwrap_new_peer_event(event: PeerEvent) -> PeerId {
 }
 
 fn create_test_channel() -> (
-    watch::Sender<TrustedPeerChangeEvent>,
-    watch::Receiver<TrustedPeerChangeEvent>,
+    broadcast::Sender<TrustedPeerChangeEvent>,
+    broadcast::Receiver<TrustedPeerChangeEvent>,
 ) {
-    let (tx, rx) = watch::channel(TrustedPeerChangeEvent { new_peers: vec![] });
+    let (tx, rx) = broadcast::channel(100);
     (tx, rx)
 }
