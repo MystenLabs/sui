@@ -37,6 +37,7 @@ enum_dispatch = "^0.3"
 eyre = "0.6.8"
 multiaddr = "0.17.0"
 indexmap = "1.9.2"
+derivative = "2.2.0"
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

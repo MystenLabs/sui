@@ -63,12 +63,14 @@ pub struct ValidatorMetadataV1 {
     pub next_epoch_worker_address: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(derivative::Derivative, Clone, Eq, PartialEq)]
+#[derivative(Debug)]
 pub struct VerifiedValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub network_pubkey: narwhal_crypto::NetworkPublicKey,
     pub worker_pubkey: narwhal_crypto::NetworkPublicKey,
+    #[derivative(Debug = "ignore")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
