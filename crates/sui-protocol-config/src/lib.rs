@@ -150,7 +150,7 @@ pub struct ProtocolConfig {
     max_mutable_inputs: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
-    max_serialized_tx_effects_size: Option<usize>,
+    max_serialized_tx_effects_size_bytes: Option<usize>,
     /// Maximum number of gas payment objets for a transaction.
     max_gas_payment_objects: Option<u32>,
 
@@ -386,8 +386,9 @@ impl ProtocolConfig {
     pub fn max_mutable_inputs(&self) -> u64 {
         self.max_mutable_inputs.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_serialized_tx_effects_size(&self) -> usize {
-        self.max_serialized_tx_effects_size.expect(CONSTANT_ERR_MSG)
+    pub fn max_serialized_tx_effects_size_bytes(&self) -> usize {
+        self.max_serialized_tx_effects_size_bytes
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_gas_payment_objects(&self) -> u32 {
         self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
@@ -692,9 +693,9 @@ impl ProtocolConfig {
 
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
-                // We need this number to be at least 100x less than `max_serialized_tx_effects_size`otherwise effects can be huge
+                // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
                 max_mutable_inputs: Some(1024),
-                max_serialized_tx_effects_size: Some(512 * 1024),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
                 max_gas_payment_objects: Some(32),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),

@@ -10,7 +10,7 @@ use super::*;
 fn check_effects_limits_enforced() {
     let mut store = InMemoryStorage::new(Vec::new());
     let protocol_config = ProtocolConfig::get_for_max_version();
-    let max_effects_size = protocol_config.max_serialized_tx_effects_size();
+    let max_effects_size = protocol_config.max_serialized_tx_effects_size_bytes();
     let max_input_objects = protocol_config.max_mutable_inputs();
     let amount_to_deduct = 1_000_000;
     let rebate = 10;

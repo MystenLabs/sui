@@ -367,7 +367,7 @@ impl AuthorityStore {
             fp_ensure!(
                 num_mutable_input_objects <= protocol_config.max_mutable_inputs(),
                 UserInputError::SizeLimitExceeded {
-                    limit: "maximum input objects a transaction".to_string(),
+                    limit: "maximum input objects in a transaction".to_string(),
                     value: protocol_config.max_mutable_inputs().to_string()
                 }
                 .into()

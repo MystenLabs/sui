@@ -590,7 +590,7 @@ impl<S> TemporaryStore<S> {
         status: ExecutionStatus,
         gas: &[ObjectRef],
         epoch: EpochId,
-        check_effects_size: bool,
+        enforce_effects_size_limit: bool,
         protocol_config: &ProtocolConfig,
         sender: &SuiAddress,
     ) -> (
@@ -682,16 +682,16 @@ impl<S> TemporaryStore<S> {
         let mut effects_check_error = Ok(());
 
         // We might have to check the size of effects and rollback if too large
-        if check_effects_size {
+        if enforce_effects_size_limit {
             // Check the effects size and reset if too large
             let size_check_status = match bcs::serialized_size(&effects) {
                 Err(_e) => Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::InvariantViolation,
-                    "Transaction effects should be not fail serialization",
+                    "Transaction effects should not fail serialization",
                 )),
                 Ok(serialized_effects_size) => {
                     let max_serialized_effects_size =
-                        protocol_config.max_serialized_tx_effects_size();
+                        protocol_config.max_serialized_tx_effects_size_bytes();
                     if serialized_effects_size > max_serialized_effects_size {
                         Err(ExecutionError::new_with_source(
                             ExecutionErrorKind::EffectsTooLarge {
