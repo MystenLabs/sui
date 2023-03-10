@@ -101,6 +101,68 @@ module sui::sui_system_tests {
 
         // New stakee could also set reference gas price on behalf of @0x1.
         set_gas_price_helper(new_stakee_address, 666, scenario);
+
+        // Add a pending validator
+        let new_validator_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
+        test_scenario::next_tx(scenario, new_validator_addr);
+        let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+        let pop = x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
+        add_validator_full_flow(new_validator_addr, 100, pubkey, pop, scenario);
+
+        test_scenario::next_tx(scenario, new_validator_addr);
+        // Pending validator could set reference price as well
+        set_gas_price_helper(new_validator_addr, 777, scenario);
+
+        test_scenario::next_tx(scenario, new_stakee_address);
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+        let validator = sui_system::active_validator_by_address(&system_state, @0x1);
+        assert!(validator::next_epoch_gas_price(validator) == 666, 0);
+        let pending_validator = sui_system::pending_validator_by_address(&system_state, new_validator_addr);
+        assert!(validator::next_epoch_gas_price(pending_validator) == 777, 0);
+        test_scenario::return_shared(system_state);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
+    fun test_report_validator_by_stakee_revoked() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+
+        // @0x1 transfers the cap object to stakee.
+        let stakee_address = @0xbeef;
+        test_scenario::next_tx(scenario, @0x1);
+        let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
+        transfer::transfer(cap, stakee_address);
+
+        report_helper(stakee_address, @0x2, false, scenario);
+        assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
+
+        // @0x1 revokes stakee's permission by creating a new
+        // operation cap object.
+        rotate_operation_cap(@0x1, scenario);
+
+        // stakee no longer has permission to report validators, here it aborts.
+        report_helper(stakee_address, @0x2, true, scenario);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
+    fun test_set_reference_gas_price_by_stakee_revoked() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+
+        // @0x1 transfers the cap object to stakee.
+        let stakee_address = @0xbeef;
+        test_scenario::next_tx(scenario, @0x1);
+        let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
+        transfer::transfer(cap, stakee_address);
+
         // With the cap object in hand, stakee could report validators on behalf of @0x1.
         set_gas_price_helper(stakee_address, 888, scenario);
 
