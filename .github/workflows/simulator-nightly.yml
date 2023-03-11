@@ -1,8 +1,11 @@
 name: Simulator Tests
 
+concurrency:
+  group: ${{ github.workflow }}
+
 on:
   schedule:
-    - cron: '0 2 * * *'  # every day at 2am
+    - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
 
 env:
