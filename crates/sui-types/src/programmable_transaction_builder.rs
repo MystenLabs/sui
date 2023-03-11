@@ -55,17 +55,49 @@ impl ProgrammableTransactionBuilder {
 
     pub fn obj(&mut self, obj_arg: ObjectArg) -> anyhow::Result<Argument> {
         let id = obj_arg.id();
-        let (i, old_value_opt) = self
+        let obj_arg = if let Some(old_value) = self.inputs.get(&BuilderArg::Object(id)) {
+            let old_obj_arg = match old_value {
+                CallArg::Pure(_) => anyhow::bail!("invariant violation! object has pure argument"),
+                CallArg::Object(arg) => arg,
+            };
+            match (old_obj_arg, obj_arg) {
+                (
+                    ObjectArg::SharedObject {
+                        id: id1,
+                        initial_shared_version: v1,
+                        mutable: mut1,
+                    },
+                    ObjectArg::SharedObject {
+                        id: id2,
+                        initial_shared_version: v2,
+                        mutable: mut2,
+                    },
+                ) if v1 == &v2 => {
+                    anyhow::ensure!(
+                        id1 == &id2 && id == id2,
+                        "invariant violation! object has id does not match call arg"
+                    );
+                    ObjectArg::SharedObject {
+                        id,
+                        initial_shared_version: v2,
+                        mutable: *mut1 || mut2,
+                    }
+                }
+                (old_obj_arg, obj_arg) => {
+                    anyhow::ensure!(
+                        old_obj_arg == &obj_arg,
+                        "Mismatched Object argument kind for object {id}. \
+                        {old_value:?} is not compatible with {obj_arg:?}"
+                    );
+                    obj_arg
+                }
+            }
+        } else {
+            obj_arg
+        };
+        let (i, _) = self
             .inputs
             .insert_full(BuilderArg::Object(id), CallArg::Object(obj_arg));
-        if let Some(old_value) = old_value_opt {
-            let obj_arg = CallArg::Object(obj_arg);
-            anyhow::ensure!(
-                old_value == obj_arg,
-                "Mismatched Object argument kind for object {i}. \
-                {old_value:?} is not compatible with {obj_arg:?}"
-            )
-        }
         Ok(Argument::Input(i as u16))
     }
 
