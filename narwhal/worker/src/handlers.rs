@@ -15,8 +15,9 @@ use tokio::time::sleep;
 use tracing::{debug, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
-    RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -26,6 +27,8 @@ use crate::TransactionValidator;
 #[cfg(test)]
 #[path = "tests/handlers_tests.rs"]
 pub mod handlers_tests;
+
+pub const MAX_REQUEST_BATCHES_RESPONSE_SIZE: usize = 6_000_000;
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
@@ -75,6 +78,30 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         })?;
 
         Ok(anemo::Response::new(RequestBatchResponse { batch }))
+    }
+
+    async fn request_batches(
+        &self,
+        request: anemo::Request<RequestBatchesRequest>,
+    ) -> Result<anemo::Response<RequestBatchesResponse>, anemo::rpc::Status> {
+        let batch_digests = request.into_body().batches;
+        let fetched_batches = self.store.multi_get(batch_digests).map_err(|e| {
+            anemo::rpc::Status::internal(format!("failed to read from batch store: {e:?}"))
+        })?;
+
+        let mut total_size = 0;
+        let mut batches = Vec::new();
+        for fetched_batch in fetched_batches.into_iter().flatten() {
+            let batch_size = fetched_batch.size();
+            if total_size + batch_size <= MAX_REQUEST_BATCHES_RESPONSE_SIZE {
+                batches.push(fetched_batch);
+                total_size += batch_size;
+            } else {
+                break;
+            }
+        }
+
+        Ok(anemo::Response::new(RequestBatchesResponse { batches }))
     }
 }
 
