@@ -83,6 +83,7 @@ split-debuginfo = 'packed'
 strip = 'debuginfo'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
+overflow-checks = true
 
 # Inherits from the release profile above.
 [profile.bench]
