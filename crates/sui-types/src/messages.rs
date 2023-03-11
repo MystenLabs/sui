@@ -3093,19 +3093,18 @@ impl TransactionEffects {
         num_deletes: usize,
         num_deps: usize,
     ) -> usize {
-        // TODO: size_of is not guaranteed to be stable across platforms. We should use a fixed constant size here?
-        let fixed_sizes = mem::size_of::<ExecutionStatus>()
-            + mem::size_of::<EpochId>()
-            + mem::size_of::<GasCostSummary>()
-            + mem::size_of::<Option<TransactionEventsDigest>>();
+        let fixed_sizes = APPROX_SIZE_OF_EXECUTION_STATUS
+            + APPROX_SIZE_OF_EPOCH_ID
+            + APPROX_SIZE_OF_GAS_COST_SUMARY
+            + APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST;
 
         // Each write or delete contributes at roughly this amount because:
         // Each write can be a mutation which can show up in `mutated` and `modified_at_versions`
         // `num_delete` is added for padding
-        let approx_change_entry_size =
-            100 + mem::size_of::<(ObjectRef, Owner)>() * (num_writes + num_deletes) * 2;
+        let approx_change_entry_size = 100
+            + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * (num_writes + num_deletes) * 2;
 
-        let deps_size = 100 + mem::size_of::<TransactionDigest>() * num_deps;
+        let deps_size = 100 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
 
         fixed_sizes + approx_change_entry_size + deps_size
     }
