@@ -28,17 +28,7 @@ export function ConnectLedgerModal({
     const onContinueClick = async () => {
         try {
             setConnectingToLedger(true);
-
             await connectToLedger();
-
-            // Let's make sure that the user has the Sui application open
-            // by making a call to getVersion. We can probably abstract this
-            // away at the SDK level in some follow-up work
-            // (See https://github.com/LedgerHQ/ledgerjs/issues/122)
-            // TODO: I'll un-comment this out when I can actually load the
-            // Sui application onto my Ledger device.
-            // await suiLedgerClient.getVersion();
-
             onConfirm();
         } catch (error) {
             onError(error);
