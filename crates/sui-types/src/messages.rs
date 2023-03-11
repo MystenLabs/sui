@@ -63,6 +63,23 @@ pub const DUMMY_GAS_PRICE: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
+// Since `std::mem::size_of` may not be stable acrpss platforms, we use rough constans
+// We need these for estimating effects sizes
+// Approximate size of `ObjectRef` type in bytes
+pub const APPROX_SIZE_OF_OBJECT_REF: usize = 100;
+// Approximate size of `ExecutionStatus` type in bytes
+pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
+// Approximate size of `EpochId` type in bytes
+pub const APPROX_SIZE_OF_EPOCH_ID: usize = 10;
+// Approximate size of `GasCostSummary` type in bytes
+pub const APPROX_SIZE_OF_GAS_COST_SUMARY: usize = 30;
+// Approximate size of `Option<TransactionEventsDigest>` type in bytes
+pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
+// Approximate size of `TransactionDigest` type in bytes
+pub const APPROX_SIZE_OF_TX_DIGEST: usize = 40;
+// Approximate size of `Owner` type in bytes
+pub const APPROX_SIZE_OF_OWNER: usize = 48;
+
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;

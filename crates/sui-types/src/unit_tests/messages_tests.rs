@@ -1293,3 +1293,39 @@ fn test_certificate_digest() {
     *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
     assert_ne!(digest, cert.certificate_digest());
 }
+
+// Use this to ensure that our approximation for components used in effects size are not smaller than expected
+// If this test fails, the value of the constant must be increased
+#[test]
+fn check_approx_effects_components_size() {
+    use std::mem::size_of;
+
+    assert!(
+        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMARY,
+        "Update APPROX_SIZE_OF_GAS_COST_SUMARY constant"
+    );
+    assert!(
+        size_of::<EpochId>() < APPROX_SIZE_OF_EPOCH_ID,
+        "Update APPROX_SIZE_OF_EPOCH_ID constant"
+    );
+    assert!(
+        size_of::<Option<TransactionEventsDigest>>() < APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
+        "Update APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST constant"
+    );
+    assert!(
+        size_of::<ObjectRef>() < APPROX_SIZE_OF_OBJECT_REF,
+        "Update APPROX_SIZE_OF_OBJECT_REF constant"
+    );
+    assert!(
+        size_of::<TransactionDigest>() < APPROX_SIZE_OF_TX_DIGEST,
+        "Update APPROX_SIZE_OF_TX_DIGEST constant"
+    );
+    assert!(
+        size_of::<Owner>() < APPROX_SIZE_OF_OWNER,
+        "Update APPROX_SIZE_OF_OWNER constant"
+    );
+    assert!(
+        size_of::<ExecutionStatus>() < APPROX_SIZE_OF_EXECUTION_STATUS,
+        "Update APPROX_SIZE_OF_EXECUTION_STATUS constant"
+    );
+}

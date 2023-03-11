@@ -707,7 +707,7 @@ impl ProtocolConfig {
                 max_tx_in_batch: Some(10),
                 // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
                 max_mutable_inputs: Some(1024),
-                max_serialized_tx_effects_size_bytes: Some(256 * 1024),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
                 max_gas_payment_objects: Some(256),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),
