@@ -21,7 +21,8 @@ use crate::{
 #[derive(PartialEq, Eq, Hash)]
 enum BuilderArg {
     Object(ObjectID),
-    Pure(usize),
+    Pure(Vec<u8>),
+    ForcedNonUniquePure(usize),
 }
 
 #[derive(Default)]
@@ -41,16 +42,29 @@ impl ProgrammableTransactionBuilder {
         ProgrammableTransaction { inputs, commands }
     }
 
-    fn pure_bytes(&mut self, bytes: Vec<u8>) -> Argument {
-        let n = self.inputs.len();
-        let (i, _) = self
-            .inputs
-            .insert_full(BuilderArg::Pure(n), CallArg::Pure(bytes));
+    fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
+        let arg = if force_separate {
+            BuilderArg::ForcedNonUniquePure(self.inputs.len())
+        } else {
+            BuilderArg::Pure(bytes.clone())
+        };
+        let (i, _) = self.inputs.insert_full(arg, CallArg::Pure(bytes));
         Argument::Input(i as u16)
     }
 
     pub fn pure<T: Serialize>(&mut self, value: T) -> anyhow::Result<Argument> {
-        Ok(self.pure_bytes(bcs::to_bytes(&value).context("Searlizing pure argument.")?))
+        Ok(self.pure_bytes(
+            bcs::to_bytes(&value).context("Searlizing pure argument.")?,
+            /* force separate */ false,
+        ))
+    }
+
+    /// Like pure but forces a separate input entry
+    pub fn force_separate_pure<T: Serialize>(&mut self, value: T) -> anyhow::Result<Argument> {
+        Ok(self.pure_bytes(
+            bcs::to_bytes(&value).context("Searlizing pure argument.")?,
+            /* force separate */ true,
+        ))
     }
 
     pub fn obj(&mut self, obj_arg: ObjectArg) -> anyhow::Result<Argument> {
@@ -103,7 +117,7 @@ impl ProgrammableTransactionBuilder {
 
     pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
         match call_arg {
-            CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes)),
+            CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes, /* force separate */ false)),
             CallArg::Object(obj) => self.obj(obj),
         }
     }

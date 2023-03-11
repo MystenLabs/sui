@@ -541,20 +541,24 @@ async fn test_dev_inspect_dynamic_field() {
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // add a dynamic field to itself
-    let DevInspectResults { results, .. } = call_dev_inspect(
-        &fullnode,
-        &sender,
-        &object_basics.0,
-        "object_basics",
-        "add_ofield",
-        vec![],
-        vec![
-            TestCallArg::Pure(test_object1_bytes.clone()),
-            TestCallArg::Pure(test_object1_bytes.clone()),
+    let pt = ProgrammableTransaction {
+        inputs: vec![
+            CallArg::Pure(test_object1_bytes.clone()),
+            CallArg::Pure(test_object1_bytes.clone()),
         ],
-    )
-    .await
-    .unwrap();
+        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: object_basics.0,
+            module: Identifier::new("object_basics").unwrap(),
+            function: Identifier::new("add_ofield").unwrap(),
+            type_arguments: vec![],
+            arguments: vec![Argument::Input(0), Argument::Input(1)],
+        }))],
+    };
+    let kind = TransactionKind::programmable(pt);
+    let DevInspectResults { results, .. } = fullnode
+        .dev_inspect_transaction(sender, kind, Some(1))
+        .await
+        .unwrap();
     // produces an error
     let err = results.unwrap_err();
     assert!(
