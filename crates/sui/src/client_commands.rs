@@ -32,7 +32,8 @@ use sui_types::error::SuiError;
 
 use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::{
-    build_from_resolution_graph, ensure_published_dependencies, BuildConfig,
+    build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
+    gather_dependencies, BuildConfig,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -479,9 +480,12 @@ impl SuiClientCommands {
                 };
 
                 let resolution_graph = config.resolution_graph(&package_path)?;
+                let dependencies = gather_dependencies(&resolution_graph);
+
+                check_invalid_dependencies(dependencies.invalid)?;
 
                 if !with_unpublished_dependencies {
-                    ensure_published_dependencies(&resolution_graph)?;
+                    check_unpublished_dependencies(dependencies.unpublished)?;
                 };
 
                 let compiled_package = build_from_resolution_graph(

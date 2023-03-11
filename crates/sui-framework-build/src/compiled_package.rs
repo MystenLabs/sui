@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::fmt;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
@@ -496,34 +495,23 @@ impl PackageHooks for SuiPackageHooks {
     }
 }
 
-enum AddressError {
-    NoPublishedAddress(Symbol),
-    InvalidPublishedAddress(Symbol, String),
+pub struct PackageDependencies {
+    /// Set of published dependencies (name and address).
+    pub published: BTreeMap<Symbol, ObjectID>,
+    /// Set of unpublished dependencies (name).
+    pub unpublished: BTreeSet<Symbol>,
+    /// Set of dependencies with invalid `published-at` addresses.
+    pub invalid: BTreeMap<Symbol, String>,
 }
 
-impl fmt::Display for AddressError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AddressError::NoPublishedAddress(name) => write!(
-                f,
-                "Package dependency \"{name}\" does not \
-		     specify a published address \
-		     (the Move.toml manifest for \"{name}\" does \
-		     not contain a published-at field)."
-            ),
-            AddressError::InvalidPublishedAddress(name, value) => write!(
-                f,
-                "Package dependency \"{name}\" does not \
-		     specify a valid published address: \
-		     could not parse value \"{value}\" for published-at field.",
-            ),
-        }
-    }
-}
+/// Gather transitive package dependencies, partitioned into two sets:
+/// - published dependencies (which contain `published-at` address in manifest); and
+/// - unpublished dependencies (no `published-at` address in manifest).
+pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependencies {
+    let mut published = BTreeMap::new();
+    let mut unpublished = BTreeSet::new();
+    let mut invalid = BTreeMap::new();
 
-/// Ensure dependencies are published (contain `published-at` address in manifest).
-pub fn ensure_published_dependencies(resolution_graph: &ResolvedGraph) -> Result<(), SuiError> {
-    let mut address_errors = vec![];
     for name in resolution_graph.graph.package_table.keys() {
         if let Some(package) = &resolution_graph.package_table.get(name) {
             let value = package
@@ -533,36 +521,68 @@ pub fn ensure_published_dependencies(resolution_graph: &ResolvedGraph) -> Result
                 .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD));
 
             if value.is_none() {
-                address_errors.push(AddressError::NoPublishedAddress(*name));
+                unpublished.insert(*name);
                 continue;
             }
 
-            if value
-                .and_then(|v| ObjectID::from_str(v.as_str()).ok())
-                .is_none()
-            {
-                address_errors.push(AddressError::InvalidPublishedAddress(
-                    *name,
-                    value.unwrap().to_string(),
-                ));
-                continue;
+            if let Some(id) = value.and_then(|v| ObjectID::from_str(v.as_str()).ok()) {
+                published.insert(*name, id);
+            } else {
+                invalid.insert(*name, value.unwrap().to_string());
             }
         }
     }
-    if !address_errors.is_empty() {
-        let mut error_messages = address_errors
-            .iter()
-            .map(|v| format!("{}", v))
-            .collect::<Vec<_>>();
-        error_messages.push(
-            "If this is intentional, you may use the --with-unpublished-dependencies flag to \
-	     continue publishing these dependencies as part of your package (they won't be \
-	     linked against existing packages on-chain)."
-                .into(),
-        );
-        return Err(SuiError::ModulePublishFailure {
-            error: error_messages.join("\n"),
-        });
+
+    PackageDependencies {
+        published,
+        unpublished,
+        invalid,
     }
-    Ok(())
+}
+
+pub fn check_unpublished_dependencies(unpublished: BTreeSet<Symbol>) -> Result<(), SuiError> {
+    if unpublished.is_empty() {
+        return Ok(());
+    };
+
+    let mut error_messages = unpublished
+        .iter()
+        .map(|name| {
+            format!(
+                "Package dependency \"{name}\" does not specify a published address \
+		 (the Move.toml manifest for \"{name}\" does not contain a published-at field).",
+            )
+        })
+        .collect::<Vec<_>>();
+
+    error_messages.push(
+        "If this is intentional, you may use the --with-unpublished-dependencies flag to \
+             continue publishing these dependencies as part of your package (they won't be \
+             linked against existing packages on-chain)."
+            .into(),
+    );
+
+    Err(SuiError::ModulePublishFailure {
+        error: error_messages.join("\n"),
+    })
+}
+
+pub fn check_invalid_dependencies(invalid: BTreeMap<Symbol, String>) -> Result<(), SuiError> {
+    if invalid.is_empty() {
+        return Ok(());
+    }
+
+    let error_messages = invalid
+        .iter()
+        .map(|(name, value)| {
+            format!(
+                "Package dependency \"{name}\" does not specify a valid published \
+		 address: could not parse value \"{value}\" for published-at field."
+            )
+        })
+        .collect::<Vec<_>>();
+
+    Err(SuiError::ModulePublishFailure {
+        error: error_messages.join("\n"),
+    })
 }
