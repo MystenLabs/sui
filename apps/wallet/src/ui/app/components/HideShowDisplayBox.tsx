@@ -89,8 +89,11 @@ export function HideShowDisplayBox({
                         <Link
                             color="heroDark"
                             weight="medium"
+                            size="body"
                             text="Copy"
-                            before={<Copy16 />}
+                            before={
+                                <Copy16 className="text-base leading-none" />
+                            }
                             onClick={copyCallback}
                         />
                     ) : null}
@@ -98,6 +101,8 @@ export function HideShowDisplayBox({
                 <div>
                     <Link
                         color="steelDark"
+                        size="base"
+                        weight="medium"
                         text={
                             valueHidden ? (
                                 <EyeClose16 className="block" />
