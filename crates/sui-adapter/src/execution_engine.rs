@@ -14,7 +14,7 @@ use tracing::{debug, info, instrument};
 use crate::programmable_transactions;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
@@ -64,7 +64,6 @@ pub fn execute_transaction_to_effects<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
-    let metered = !gas_status.is_unmetered();
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -76,7 +75,7 @@ pub fn execute_transaction_to_effects<
         protocol_config,
     );
 
-    let (status, mut execution_result) = match execution_result {
+    let (status, execution_result) = match execution_result {
         Ok(results) => (ExecutionStatus::Success, Ok(results)),
         Err(error) => {
             let (status, command) = error.to_execution_status();
@@ -94,7 +93,7 @@ pub fn execute_transaction_to_effects<
     // Remove from dependencies the generic hash
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
-    let (inner, effects, effects_exec_result) = temporary_store.to_effects(
+    let (inner, effects) = temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
@@ -102,15 +101,7 @@ pub fn execute_transaction_to_effects<
         status,
         gas,
         epoch_data.epoch_id(),
-        metered, /* Check the size of effects for metered transactions only */
-        protocol_config,
-        &tx_ctx.sender(),
     );
-
-    // Effects creation can throw an error and reset execution
-    if let Err(e) = effects_exec_result {
-        execution_result = Err(e);
-    }
 
     (inner, effects, execution_result)
 }
@@ -159,7 +150,7 @@ fn execute_transaction<
     // we must still ensure an effect is committed and all objects versions incremented.
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
-        let execution_result = execution_loop::<Mode, _>(
+        let mut execution_result = execution_loop::<Mode, _>(
             temporary_store,
             transaction_kind,
             gas_object_ref.0,
@@ -168,7 +159,11 @@ fn execute_transaction<
             &mut gas_status,
             protocol_config,
         );
-        if execution_result.is_err() {
+
+        let metered = !gas_status.is_unmetered();
+        let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
+        let effects_size_limit = protocol_config.max_serialized_tx_effects_size_bytes();
+        if execution_result.is_err() || (effects_estimated_size >= effects_size_limit && metered) {
             // Roll back the temporary store if execution failed.
             temporary_store.reset();
             // re-smash so temporary store is again aware of smashing
@@ -176,6 +171,16 @@ fn execute_transaction<
                 Ok(obj_ref) => obj_ref,
                 Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
             };
+
+            if effects_estimated_size >= effects_size_limit && metered {
+                execution_result = Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::EffectsTooLarge {
+                        current_size: effects_estimated_size,
+                        max_size: effects_size_limit,
+                    },
+                    "Transaction effects are too large",
+                ))
+            }
         }
         execution_result
     });

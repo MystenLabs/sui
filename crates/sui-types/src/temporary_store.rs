@@ -16,7 +16,6 @@ use tracing::trace;
 
 use crate::coin::{check_coins, update_input_coins, Coin};
 use crate::committee::EpochId;
-use crate::error::ExecutionErrorKind;
 use crate::event::BalanceChangeType;
 use crate::gas_coin::GasCoin;
 use crate::messages::TransactionEvents;
@@ -41,10 +40,6 @@ use crate::{
         WriteKind,
     },
 };
-
-#[cfg(test)]
-#[path = "unit_tests/temporary_store_tests.rs"]
-mod temporary_store_tests;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -185,44 +180,8 @@ impl<S> TemporaryStore<S> {
         dynamic_fields
     }
 
-    /// Recreate temporary store from inner components and rollback all changes
-    pub fn reset_from_components(
-        input_objects: BTreeMap<ObjectID, Object>,
-        mutable_input_refs: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
-        store: S,
-        tx_digest: TransactionDigest,
-        lamport_timestamp: SequenceNumber,
-        protocol_config: &ProtocolConfig,
-    ) -> TemporaryStore<S> {
-        Self {
-            store,
-            tx_digest,
-            input_objects,
-            lamport_timestamp,
-            mutable_input_refs,
-            written: BTreeMap::new(),
-            deleted: BTreeMap::new(),
-            events: vec![],
-            gas_charged: None,
-            storage_rebate_rate: protocol_config.storage_rebate_rate(),
-            protocol_version: protocol_config.version,
-        }
-    }
-
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
-        self.into_inner_components().0
-    }
-
-    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted) and other components
-    pub fn into_inner_components(
-        self,
-    ) -> (
-        InnerTemporaryStore,
-        S,
-        SequenceNumber,
-        Option<(SuiAddress, ObjectID, GasCostSummary)>,
-    ) {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
@@ -325,18 +284,13 @@ impl<S> TemporaryStore<S> {
         // Combine object events with move events.
         events.extend(self.events);
 
-        (
-            InnerTemporaryStore {
-                objects: self.input_objects,
-                mutable_inputs: self.mutable_input_refs,
-                written,
-                deleted,
-                events: TransactionEvents { data: events },
-            },
-            self.store,
-            self.lamport_timestamp,
-            self.gas_charged,
-        )
+        InnerTemporaryStore {
+            objects: self.input_objects,
+            mutable_inputs: self.mutable_input_refs,
+            written,
+            deleted,
+            events: TransactionEvents { data: events },
+        }
     }
 
     fn create_written_events(
@@ -618,16 +572,9 @@ impl<S> TemporaryStore<S> {
         transaction_dependencies: Vec<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
-        ordered_gas_payment_objs: &[ObjectRef],
+        gas: &[ObjectRef],
         epoch: EpochId,
-        enforce_effects_size_limit: bool,
-        protocol_config: &ProtocolConfig,
-        sender: &SuiAddress,
-    ) -> (
-        InnerTemporaryStore,
-        TransactionEffects,
-        Result<(), ExecutionError>,
-    ) {
+    ) -> (InnerTemporaryStore, TransactionEffects) {
         let mut modified_at_versions = vec![];
 
         // Remember the versions objects were updated from in case of rollback.
@@ -642,13 +589,13 @@ impl<S> TemporaryStore<S> {
         });
 
         let protocol_version = self.protocol_version;
-        let (mut inner, store, lamport_timestamp, gas_charged) = self.into_inner_components();
+        let inner = self.into_inner();
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
-        let gas_object_ref = ordered_gas_payment_objs[0];
+        let gas_object_ref = gas[0];
         let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
             (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
         } else {
@@ -686,7 +633,7 @@ impl<S> TemporaryStore<S> {
             }
         }
 
-        let mut effects = TransactionEffects::new_from_execution(
+        let effects = TransactionEffects::new_from_execution(
             protocol_version,
             status,
             epoch,
@@ -708,118 +655,7 @@ impl<S> TemporaryStore<S> {
             },
             transaction_dependencies,
         );
-
-        let mut effects_check_error = Ok(());
-
-        // We might have to check the size of effects and rollback if too large
-        if enforce_effects_size_limit {
-            // Check the effects size and reset if too large
-            let size_check_status = match bcs::serialized_size(&effects) {
-                Err(_e) => Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::InvariantViolation,
-                    "Transaction effects should not fail serialization",
-                )),
-                Ok(serialized_effects_size) => {
-                    let max_serialized_effects_size =
-                        protocol_config.max_serialized_tx_effects_size_bytes();
-                    if serialized_effects_size > max_serialized_effects_size {
-                        Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::EffectsTooLarge {
-                                current_size: serialized_effects_size,
-                                max_size: max_serialized_effects_size,
-                            },
-                            "Transaction effects are too large",
-                        ))
-                    } else {
-                        Ok(())
-                    }
-                }
-            };
-
-            // Rollback if size too large. Only gas smashed must remain in effects
-            // TODO (Ade): should we surcharge for the work required to rollback?
-            if let Err(size_check_err) = size_check_status {
-                // Extract some components which we will need in case of rollback
-                let input_objects = inner.objects;
-                let mutable_input_refs = inner.mutable_inputs;
-
-                // Unpack the effects so we can reuse
-                let (shared_object_refs, dependencies, gas_summary_from_effects) =
-                    effects.unpack_components();
-
-                // Recreate reset temporary store
-                let mut temp_store_reset = Self::reset_from_components(
-                    input_objects,
-                    mutable_input_refs,
-                    store,
-                    *transaction_digest,
-                    lamport_timestamp,
-                    protocol_config,
-                );
-
-                // Smash gas
-                if temp_store_reset
-                    .smash_gas(*sender, ordered_gas_payment_objs)
-                    .is_err()
-                {
-                    // Gas smashing cannot fail
-                    panic!("Internal invariant violation: Gas smashing must not fail.")
-                };
-
-                // Charge for the prior computation
-                if let Some((_, gas_id, gas_summary)) = gas_charged {
-                    // These must be exactly same
-                    debug_assert!(gas_summary_from_effects == gas_summary);
-
-                    // Fetch the gas object and apply changes
-                    let mut gas_object = temp_store_reset.read_object(&gas_id).expect(
-                        "We constructed the object map so it should always have the gas object id",
-                    ).clone();
-                    let gas_used = gas_summary.gas_used();
-                    gas::deduct_gas(
-                        &mut gas_object,
-                        gas_used,
-                        gas_summary.sender_rebate(temp_store_reset.storage_rebate_rate),
-                    );
-                    trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
-
-                    // Do not overwrite inner transaction context for gas charge
-                    let ctx = if let Some((ctx, ..)) = temp_store_reset.written.get(&gas_id) {
-                        ctx.clone()
-                    } else {
-                        SingleTxContext::gas(*sender)
-                    };
-                    temp_store_reset.write_object(&ctx, gas_object, WriteKind::Mutate);
-                    temp_store_reset.gas_charged = Some((*sender, gas_id, gas_summary));
-                }
-
-                // All mutable inputs must be version bumped
-                // Primary gas object is updated separately
-                temp_store_reset
-                    .ensure_active_inputs_mutated(*sender, &ordered_gas_payment_objs[0].0);
-
-                // We need to use a special execution error
-                let (status, command) = size_check_err.to_execution_status();
-                let status = ExecutionStatus::new_failure(status, command);
-
-                (inner, effects, _) = temp_store_reset.to_effects(
-                    shared_object_refs,
-                    transaction_digest,
-                    dependencies,
-                    gas_summary_from_effects,
-                    status,
-                    ordered_gas_payment_objs,
-                    epoch,
-                    false, /* No need to enforce this time around */
-                    protocol_config,
-                    sender,
-                );
-
-                effects_check_error = Err(size_check_err);
-            }
-        }
-
-        (inner, effects, effects_check_error)
+        (inner, effects)
     }
 
     /// An internal check of the invariants (will only fire in debug)
@@ -998,7 +834,7 @@ impl<S> TemporaryStore<S> {
         self.deleted.insert(*id, (ctx.clone(), version, kind));
     }
 
-    /// Resets any mutations and deletions recorded in the store
+    /// Resets any mutations and deletions recorded in the store.
     pub fn reset(&mut self) {
         self.written.clear();
         self.deleted.clear();
@@ -1029,6 +865,15 @@ impl<S> TemporaryStore<S> {
                 }
             }
         }
+    }
+
+    pub fn estimate_effects_size_upperbound(&self) -> usize {
+        // In the worst case, the number of deps is equal to the number of input objects
+        TransactionEffects::estimate_effects_size_upperbound(
+            self.written.len(),
+            self.deleted.len(),
+            self.input_objects.len(),
+        )
     }
 }
 

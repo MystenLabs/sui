@@ -46,6 +46,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::mem;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -3063,18 +3064,33 @@ impl TransactionEffects {
         })
     }
 
-    // Convenience fn to some components
-    pub fn unpack_components(self) -> (Vec<ObjectRef>, Vec<TransactionDigest>, GasCostSummary) {
-        match self {
-            TransactionEffects::V1(eff) => (eff.shared_objects, eff.dependencies, eff.gas_used),
-        }
-    }
-
     pub fn execution_digests(&self) -> ExecutionDigests {
         ExecutionDigests {
             transaction: *self.transaction_digest(),
             effects: self.digest(),
         }
+    }
+
+    pub fn estimate_effects_size_upperbound(
+        num_writes: usize,
+        num_deletes: usize,
+        num_deps: usize,
+    ) -> usize {
+        // TODO: size_of is not guaranteed to be stable across platforms. We should use a fixed constant size here?
+        let fixed_sizes = mem::size_of::<ExecutionStatus>()
+            + mem::size_of::<EpochId>()
+            + mem::size_of::<GasCostSummary>()
+            + mem::size_of::<Option<TransactionEventsDigest>>();
+
+        // Each write or delete contributes at roughly this amount because:
+        // Each write can be a mutation which can show up in `mutated` and `modified_at_versions`
+        // `num_delete` is added for padding
+        let approx_change_entry_size =
+            100 + mem::size_of::<(ObjectRef, Owner)>() * (num_writes + num_deletes) * 2;
+
+        let deps_size = 100 + mem::size_of::<TransactionDigest>() * num_deps;
+
+        fixed_sizes + approx_change_entry_size + deps_size
     }
 }
 

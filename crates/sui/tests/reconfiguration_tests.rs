@@ -316,7 +316,6 @@ async fn test_validator_resign_effects() {
 }
 
 // TODO: This test is currently flaky. Need to re-enable it once we fix the issue.
-#[ignore]
 #[sim_test]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
