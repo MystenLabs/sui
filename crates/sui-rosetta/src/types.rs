@@ -24,7 +24,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, Tra
 use sui_types::committee::EpochId;
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::governance::{ADD_STAKE_LOCKED_COIN_FUN_NAME, ADD_STAKE_MUL_COIN_FUN_NAME};
+use sui_types::governance::ADD_STAKE_MUL_COIN_FUN_NAME;
 use sui_types::messages::{CallArg, Command, ObjectArg, TransactionData};
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
@@ -535,16 +535,14 @@ pub struct ConstructionPreprocessRequest {
 #[derive(Serialize, Deserialize)]
 pub enum PreprocessMetadata {
     PaySui,
-    Delegation { locked_until_epoch: Option<EpochId> },
+    Delegation,
 }
 
 impl From<TransactionMetadata> for PreprocessMetadata {
     fn from(tx_metadata: TransactionMetadata) -> Self {
         match tx_metadata {
             TransactionMetadata::PaySui => Self::PaySui,
-            TransactionMetadata::Delegation {
-                locked_until_epoch, ..
-            } => Self::Delegation { locked_until_epoch },
+            TransactionMetadata::Delegation { .. } => Self::Delegation,
         }
     }
 }
@@ -606,10 +604,7 @@ impl IntoResponse for ConstructionMetadataResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TransactionMetadata {
     PaySui,
-    Delegation {
-        coins: Vec<ObjectRef>,
-        locked_until_epoch: Option<EpochId>,
-    },
+    Delegation { coins: Vec<ObjectRef> },
 }
 
 #[derive(Deserialize)]
@@ -858,7 +853,6 @@ pub enum InternalOperation {
         sender: SuiAddress,
         validator: SuiAddress,
         amount: u128,
-        locked_until_epoch: Option<EpochId>,
     },
 }
 
@@ -886,18 +880,10 @@ impl InternalOperation {
             }
             (
                 InternalOperation::Delegation {
-                    validator,
-                    amount,
-                    locked_until_epoch,
-                    ..
+                    validator, amount, ..
                 },
                 TransactionMetadata::Delegation { coins, .. },
             ) => {
-                let function = if locked_until_epoch.is_some() {
-                    ADD_STAKE_LOCKED_COIN_FUN_NAME.to_owned()
-                } else {
-                    ADD_STAKE_MUL_COIN_FUN_NAME.to_owned()
-                };
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let arguments = vec![
                     builder
@@ -920,7 +906,7 @@ impl InternalOperation {
                 builder.command(Command::move_call(
                     SUI_FRAMEWORK_OBJECT_ID,
                     SUI_SYSTEM_MODULE_NAME.to_owned(),
-                    function,
+                    ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
                     vec![],
                     arguments,
                 ));

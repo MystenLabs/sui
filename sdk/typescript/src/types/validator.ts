@@ -34,7 +34,6 @@ export const StakeObject = object({
   stakeRequestEpoch: EpochId,
   stakeActiveEpoch: EpochId,
   principal: number(),
-  tokenLock: nullable(EpochId),
   status: union([literal('Active'), literal('Pending')]),
   estimatedReward: optional(number()),
 });

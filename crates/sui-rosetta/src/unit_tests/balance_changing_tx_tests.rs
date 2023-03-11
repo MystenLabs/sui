@@ -521,7 +521,6 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let metadata = ConstructionMetadata {
         tx_metadata: TransactionMetadata::Delegation {
             coins: vec![coin1, coin2],
-            locked_until_epoch: None,
         },
         sender,
         gas: vec![gas],

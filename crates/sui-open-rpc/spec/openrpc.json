@@ -5189,14 +5189,6 @@
                 "$ref": "#/components/schemas/ObjectID"
               }
             ]
-          },
-          "tokenLock": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       },

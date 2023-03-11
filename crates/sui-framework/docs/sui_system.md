@@ -19,8 +19,6 @@
 -  [Function `request_set_commission_rate`](#0x2_sui_system_request_set_commission_rate)
 -  [Function `request_add_stake`](#0x2_sui_system_request_add_stake)
 -  [Function `request_add_stake_mul_coin`](#0x2_sui_system_request_add_stake_mul_coin)
--  [Function `request_add_stake_with_locked_coin`](#0x2_sui_system_request_add_stake_with_locked_coin)
--  [Function `request_add_stake_mul_locked_coin`](#0x2_sui_system_request_add_stake_mul_locked_coin)
 -  [Function `request_withdraw_stake`](#0x2_sui_system_request_withdraw_stake)
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
@@ -51,7 +49,6 @@
 -  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
 -  [Function `upgrade_system_state`](#0x2_sui_system_upgrade_system_state)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
--  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
 -  [Function `validators`](#0x2_sui_system_validators)
 -  [Function `active_validator_by_address`](#0x2_sui_system_active_validator_by_address)
 -  [Function `pending_validator_by_address`](#0x2_sui_system_pending_validator_by_address)
@@ -64,9 +61,7 @@
 <b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
-<b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="pay.md#0x2_pay">0x2::pay</a>;
 <b>use</b> <a href="stake_subsidy.md#0x2_stake_subsidy">0x2::stake_subsidy</a>;
@@ -563,7 +558,6 @@ To produce a valid PoP, run [fn test_proof_of_possession].
         primary_address,
         worker_address,
         <a href="_none">option::none</a>(),
-        <a href="_none">option::none</a>(),
         gas_price,
         commission_rate,
         <b>false</b>, // not an initial <a href="validator.md#0x2_validator">validator</a> active at <a href="genesis.md#0x2_genesis">genesis</a>
@@ -778,7 +772,6 @@ Add stake to a validator's staking pool.
         &<b>mut</b> self.validators,
         validator_address,
         <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(stake),
-        <a href="_none">option::none</a>(),
         ctx,
     );
 }
@@ -813,78 +806,7 @@ Add stake to a validator's staking pool using multiple coins.
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="sui_system.md#0x2_sui_system_extract_coin_balance">extract_coin_balance</a>(stakes, stake_amount, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_none">option::none</a>(), ctx);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_request_add_stake_with_locked_coin"></a>
-
-## Function `request_add_stake_with_locked_coin`
-
-Add stake to a validator's staking pool using a locked SUI coin.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin">request_add_stake_with_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stake: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin">request_add_stake_with_locked_coin</a>(
-    wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    stake: LockedCoin&lt;SUI&gt;,
-    validator_address: <b>address</b>,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(stake);
-    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_some">option::some</a>(lock), ctx);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_request_add_stake_mul_locked_coin"></a>
-
-## Function `request_add_stake_mul_locked_coin`
-
-Add stake to a validator's staking pool using multiple locked SUI coins.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_locked_coin">request_add_stake_mul_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stakes: <a href="">vector</a>&lt;<a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_locked_coin">request_add_stake_mul_locked_coin</a>(
-    wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    stakes: <a href="">vector</a>&lt;LockedCoin&lt;SUI&gt;&gt;,
-    stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;,
-    validator_address: <b>address</b>,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(stakes, stake_amount, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(
-        &<b>mut</b> self.validators,
-        validator_address,
-        <a href="balance.md#0x2_balance">balance</a>,
-        <a href="_some">option::some</a>(lock),
-        ctx
-    );
+    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, ctx);
 }
 </code></pre>
 
@@ -1951,59 +1873,6 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
         <a href="balance.md#0x2_balance">balance</a>
     } <b>else</b> {
         total_balance
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_extract_locked_coin_balance"></a>
-
-## Function `extract_locked_coin_balance`
-
-Extract required Balance from vector of LockedCoin<SUI>, transfer the remainder back to sender.
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(coins: <a href="">vector</a>&lt;<a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, amount: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(
-    coins: <a href="">vector</a>&lt;LockedCoin&lt;SUI&gt;&gt;,
-    amount: <a href="_Option">option::Option</a>&lt;u64&gt;,
-    ctx: &<b>mut</b> TxContext
-): (Balance&lt;SUI&gt;, EpochTimeLock) {
-    <b>let</b> (total_balance, first_lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins));
-    <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&coins));
-    <b>while</b> (i &lt; len) {
-        <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins));
-        // Make sure all time locks are the same
-        <b>assert</b>!(<a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(&lock) == <a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(&first_lock), 0);
-        <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy_unchecked">epoch_time_lock::destroy_unchecked</a>(lock);
-        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> total_balance, <a href="balance.md#0x2_balance">balance</a>);
-        i = i + 1
-    };
-    <a href="_destroy_empty">vector::destroy_empty</a>(coins);
-
-    // <b>return</b> the full amount <b>if</b> amount is not specified
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&amount)){
-        <b>let</b> amount = <a href="_destroy_some">option::destroy_some</a>(amount);
-        <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> total_balance, amount);
-        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&total_balance) &gt; 0) {
-            <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(total_balance, first_lock, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
-        } <b>else</b> {
-            <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(total_balance);
-        };
-        (<a href="balance.md#0x2_balance">balance</a>, first_lock)
-    } <b>else</b>{
-        (total_balance, first_lock)
     }
 }
 </code></pre>

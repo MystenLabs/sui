@@ -11,7 +11,6 @@ module sui::validator_set {
     use sui::validator::{Self, Validator, staking_pool_id, sui_address};
     use sui::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
     use sui::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
-    use sui::epoch_time_lock::EpochTimeLock;
     use sui::object::{Self, ID};
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
@@ -224,11 +223,10 @@ module sui::validator_set {
         self: &mut ValidatorSet,
         validator_address: address,
         stake: Balance<SUI>,
-        locking_period: Option<EpochTimeLock>,
         ctx: &mut TxContext,
     ) {
         let validator = get_preactive_or_active_validator_mut(self, validator_address);
-        validator::request_add_stake(validator, stake, locking_period, tx_context::sender(ctx), ctx);
+        validator::request_add_stake(validator, stake, tx_context::sender(ctx), ctx);
     }
 
     /// Called by `sui_system`, to withdraw some share of a stake from the validator. The share to withdraw
@@ -964,7 +962,7 @@ module sui::validator_set {
             // Add rewards to the validator. Don't try and distribute rewards though if the payout is zero.
             if (balance::value(&validator_reward) > 0) {
                 let validator_address = validator::sui_address(validator);
-                validator::request_add_stake(validator, validator_reward, option::none(), validator_address, ctx);
+                validator::request_add_stake(validator, validator_reward, validator_address, ctx);
             } else {
                 balance::destroy_zero(validator_reward);
             };

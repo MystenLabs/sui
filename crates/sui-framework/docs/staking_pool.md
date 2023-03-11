@@ -45,8 +45,6 @@
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
-<b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
-<b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
@@ -225,13 +223,6 @@ A self-custodial object holding the staked SUI tokens.
 </dt>
 <dd>
  The staked SUI tokens.
-</dd>
-<dt>
-<code>sui_token_lock: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;</code>
-</dt>
-<dd>
- If the stake comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>, this
- field will record the original lock expiration epoch, to be used when unstaking.
 </dd>
 </dl>
 
@@ -449,7 +440,7 @@ Create a new, empty staking pool.
 Request to stake to a staking pool. The stake starts counting at the beginning of the next epoch,
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_stake">request_add_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, sui_token_lock: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, validator_address: <b>address</b>, staker: <b>address</b>, stake_activation_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_stake">request_add_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, staker: <b>address</b>, stake_activation_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -461,7 +452,6 @@ Request to stake to a staking pool. The stake starts counting at the beginning o
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_stake">request_add_stake</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     stake: Balance&lt;SUI&gt;,
-    sui_token_lock: Option&lt;EpochTimeLock&gt;,
     validator_address: <b>address</b>,
     staker: <b>address</b>,
     stake_activation_epoch: u64,
@@ -476,7 +466,6 @@ Request to stake to a staking pool. The stake starts counting at the beginning o
         validator_address,
         stake_activation_epoch,
         principal: stake,
-        sui_token_lock,
     };
     pool.pending_stake = pool.pending_stake + sui_amount;
     <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(staked_sui, staker);
@@ -510,7 +499,7 @@ A proportional amount of pool tokens is burnt.
     staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
     ctx: &<b>mut</b> TxContext
 ) : u64 {
-    <b>let</b> (pool_token_withdraw_amount, principal_withdraw, time_lock) =
+    <b>let</b> (pool_token_withdraw_amount, principal_withdraw) =
         <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, staked_sui);
     <b>let</b> staker = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> principal_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
@@ -527,21 +516,9 @@ A proportional amount of pool tokens is burnt.
     <b>if</b> (<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool)) <a href="staking_pool.md#0x2_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool);
 
     // TODO: implement withdraw bonding period here.
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
-        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal_withdraw, <a href="_destroy_some">option::destroy_some</a>(time_lock), staker, ctx);
-        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&rewards_withdraw) &gt; 0) {
-            <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(rewards_withdraw, ctx), staker);
-        } <b>else</b> {
-            <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(rewards_withdraw);
-        }
-    } <b>else</b> {
-        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> principal_withdraw, rewards_withdraw);
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), staker);
-        <a href="_destroy_none">option::destroy_none</a>(time_lock);
-    };
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> principal_withdraw, rewards_withdraw);
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), staker);
     total_sui_withdraw_amount
-
-    // payment_amount
 }
 </code></pre>
 
@@ -554,12 +531,11 @@ A proportional amount of pool tokens is burnt.
 ## Function `withdraw_from_principal`
 
 Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
-tokens using exchange rate at stake epoch.
-Returns values are amount of pool tokens withdrawn, withdrawn principal portion of SUI, and its
-time lock if applicable.
+tokens using exchange rate at staking epoch.
+Returns values are amount of pool tokens withdrawn and withdrawn principal portion of SUI.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): (u64, <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): (u64, <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
 </code></pre>
 
 
@@ -571,19 +547,18 @@ time lock if applicable.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-) : (u64, Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
+) : (u64, Balance&lt;SUI&gt;) {
 
     // Check that the stake information matches the pool.
     <b>assert</b>!(staked_sui.pool_id == <a href="object.md#0x2_object_id">object::id</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>);
 
     <b>let</b> exchange_rate_at_staking_epoch = <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool, staked_sui.stake_activation_epoch);
-    <b>let</b> (principal_withdraw, time_lock) = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
+    <b>let</b> principal_withdraw = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
     <b>let</b> pool_token_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(&exchange_rate_at_staking_epoch, <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw));
 
     (
         pool_token_withdraw_amount,
         principal_withdraw,
-        time_lock
     )
 }
 </code></pre>
@@ -598,7 +573,7 @@ time lock if applicable.
 
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;)
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -607,17 +582,16 @@ time lock if applicable.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): (Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): Balance&lt;SUI&gt; {
     <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id,
         pool_id: _,
         validator_address: _,
         stake_activation_epoch: _,
         principal,
-        sui_token_lock
     } = staked_sui;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    (principal, sui_token_lock)
+    principal
 }
 </code></pre>
 
@@ -850,18 +824,12 @@ portion because the principal portion was already taken out of the staker's self
 
     <b>let</b> staker = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
 
-    <b>let</b> (principal, time_lock) = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
+    <b>let</b> principal = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
     <b>let</b> withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal);
     pool.sui_balance = pool.sui_balance - withdraw_amount;
     pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
-    // TODO: consider sharing code <b>with</b> `request_withdraw_stake`
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
-        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal, <a href="_destroy_some">option::destroy_some</a>(time_lock), staker, ctx);
-    } <b>else</b> {
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), staker);
-        <a href="_destroy_none">option::destroy_none</a>(time_lock);
-    };
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), staker);
     withdraw_amount
 }
 </code></pre>
@@ -1064,7 +1032,6 @@ All the other parameters of the StakedSui like <code>stake_activation_epoch</cod
         validator_address: self.validator_address,
         stake_activation_epoch: self.stake_activation_epoch,
         principal: <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.principal, split_amount),
-        sui_token_lock: self.sui_token_lock,
     }
 }
 </code></pre>
@@ -1124,15 +1091,9 @@ Aborts if some of the staking parameters are incompatible (pool id, stake activa
         validator_address: _,
         stake_activation_epoch: _,
         principal,
-        sui_token_lock
     } = other;
 
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&sui_token_lock)) {
-        <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy_unchecked">epoch_time_lock::destroy_unchecked</a>(<a href="_destroy_some">option::destroy_some</a>(sui_token_lock));
-    } <b>else</b> {
-        <a href="_destroy_none">option::destroy_none</a>(sui_token_lock);
-    };
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.principal, principal);
 }
 </code></pre>
@@ -1158,19 +1119,9 @@ Returns true if all the staking parameters of the staked sui except the principa
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, other: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): bool {
-    <b>if</b> ((self.pool_id != other.pool_id) ||
-        (self.validator_address != other.validator_address) ||
-        (self.stake_activation_epoch != other.stake_activation_epoch)) {
-        <b>return</b> <b>false</b>
-    };
-    <b>if</b> (<a href="_is_none">option::is_none</a>(&self.sui_token_lock) && <a href="_is_none">option::is_none</a>(&other.sui_token_lock)) {
-        <b>return</b> <b>true</b>
-    };
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&self.sui_token_lock) && <a href="_is_some">option::is_some</a>(&other.sui_token_lock)) {
-        <a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(<a href="_borrow">option::borrow</a>(&self.sui_token_lock)) ==
-            <a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(<a href="_borrow">option::borrow</a>(&other.sui_token_lock))
-    } <b>else</b>
-        <b>false</b> // locked <a href="coin.md#0x2_coin">coin</a> in one and unlocked in another
+    (self.pool_id == other.pool_id) &&
+    (self.validator_address == other.validator_address) &&
+    (self.stake_activation_epoch == other.stake_activation_epoch)
 }
 </code></pre>
 
