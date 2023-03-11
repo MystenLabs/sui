@@ -18,7 +18,9 @@ use move_core_types::{
     value::{MoveStruct, MoveValue},
 };
 use move_package::source_package::manifest_parser;
-use sui_framework_build::compiled_package::{ensure_published_dependencies, BuildConfig};
+use sui_framework_build::compiled_package::{
+    check_unpublished_dependencies, gather_dependencies, BuildConfig,
+};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -2125,7 +2127,7 @@ async fn test_custom_property_parse_published_at() {
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
-async fn test_custom_property_ensure_published_at() {
+async fn test_custom_property_check_unpublished_dependencies() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend([
@@ -2140,21 +2142,18 @@ async fn test_custom_property_ensure_published_at() {
         .resolution_graph_for_package(&path, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
-    let error_message = if let SuiError::ModulePublishFailure { error } =
-        ensure_published_dependencies(&resolution_graph)
+    let SuiError::ModulePublishFailure { error } =
+        check_unpublished_dependencies(gather_dependencies(&resolution_graph).unpublished)
             .err()
             .unwrap()
-    {
-        error
-    } else {
-        "Expected ModulePublishFailure".into()
+     else {
+        panic!("Expected ModulePublishFailure")
     };
 
     let expected = expect![[r#"
-        Package dependency "CustomPropertiesInManifestDependencyInvalidPublishedAt" does not specify a valid published address: could not parse value "mystery" for published-at field.
         Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
         If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
-    expected.assert_eq(&error_message)
+    expected.assert_eq(&error)
 }
 
 pub async fn build_and_try_publish_test_package(

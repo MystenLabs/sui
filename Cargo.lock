@@ -8416,6 +8416,7 @@ dependencies = [
  "clap 3.2.23",
  "colored",
  "const-str",
+ "expect-test",
  "fastcrypto",
  "futures",
  "git-version",
