@@ -102,7 +102,6 @@ pub fn execute_transaction_to_effects<
         gas,
         epoch_data.epoch_id(),
     );
-
     (inner, effects, execution_result)
 }
 
