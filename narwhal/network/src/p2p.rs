@@ -16,8 +16,9 @@ use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    RequestBatchRequest, RequestBatchesRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
+    WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
 fn unreliable_send<F, R, Fut>(
@@ -277,5 +278,26 @@ impl WorkerRpc for anemo::Network {
             .await
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body().batch)
+    }
+
+    async fn request_batches(
+        &self,
+        peer: NetworkPublicKey,
+        batches: Vec<BatchDigest>,
+    ) -> Result<Vec<Option<Batch>>> {
+        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+        let peer_id = PeerId(peer.0.to_bytes());
+
+        let peer = self
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let request = anemo::Request::new(RequestBatchesRequest { batches })
+            .with_timeout(BATCH_REQUEST_TIMEOUT);
+        let response = WorkerToWorkerClient::new(peer)
+            .request_batches(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body().batches)
     }
 }

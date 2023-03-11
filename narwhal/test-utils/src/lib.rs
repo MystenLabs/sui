@@ -37,10 +37,10 @@ use types::{
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
     PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SequenceNumber,
-    TimestampMs, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
+    RequestBatchesResponse, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
+    SendCertificateResponse, SequenceNumber, TimestampMs, Transaction, Vote, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -325,6 +325,14 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
         _request: anemo::Request<RequestBatchRequest>,
     ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
         tracing::error!("Not implemented WorkerToWorkerMockServer::request_batch");
+        Err(anemo::rpc::Status::internal("Unimplemented"))
+    }
+
+    async fn request_batches(
+        &self,
+        _request: anemo::Request<RequestBatchesRequest>,
+    ) -> Result<anemo::Response<RequestBatchesResponse>, anemo::rpc::Status> {
+        tracing::error!("Not implemented WorkerToWorkerMockServer::request_batches");
         Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 }

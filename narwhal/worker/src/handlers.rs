@@ -16,8 +16,9 @@ use tokio::time::sleep;
 use tracing::{debug, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
-    RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -76,6 +77,22 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         })?;
 
         Ok(anemo::Response::new(RequestBatchResponse { batch }))
+    }
+
+    async fn request_batches(
+        &self,
+        request: anemo::Request<RequestBatchesRequest>,
+    ) -> Result<anemo::Response<RequestBatchesResponse>, anemo::rpc::Status> {
+        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
+        let batch_digests = request.into_body().batches;
+        let batches = self
+            .store
+            .multi_get(batch_digests)
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+
+        // TODO: Add a limit to the total size of the response. Requester can
+        // re-request batches that were not able to fit in this response
+        Ok(anemo::Response::new(RequestBatchesResponse { batches }))
     }
 }
 
