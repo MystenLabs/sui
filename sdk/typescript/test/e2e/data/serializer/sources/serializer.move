@@ -14,7 +14,7 @@ module serializer::serializer_tests {
      fun init(ctx: &mut TxContext) {
         transfer::share_object(MutableShared {
             id: object::new(ctx),
-            value: 0,
+            value: 1,
         })
     }
 

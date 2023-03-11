@@ -62,7 +62,7 @@ function TransferCoinPage() {
                     tx.add(
                         Transaction.Commands.TransferObjects(
                             [tx.gas],
-                            tx.input(formData.to)
+                            tx.pure(formData.to)
                         )
                     );
                     tx.setGasPayment(
@@ -87,36 +87,40 @@ function TransferCoinPage() {
                     const coin = tx.add(
                         Transaction.Commands.SplitCoin(
                             tx.gas,
-                            tx.input(bigIntAmount)
+                            tx.pure(bigIntAmount)
                         )
                     );
                     tx.add(
                         Transaction.Commands.TransferObjects(
                             [coin],
-                            tx.input(formData.to)
+                            tx.pure(formData.to)
                         )
                     );
                 } else {
-                    const primaryCoinInput = tx.input(primaryCoin);
+                    const primaryCoinInput = tx.object(
+                        primaryCoin.coinObjectId
+                    );
                     if (coins.length) {
                         // TODO: This could just merge a subset of coins that meet the balance requirements instead of all of them.
                         tx.add(
                             Transaction.Commands.MergeCoins(
                                 primaryCoinInput,
-                                coins.map((coin) => tx.input(coin.coinObjectId))
+                                coins.map((coin) =>
+                                    tx.object(coin.coinObjectId)
+                                )
                             )
                         );
                     }
                     const coin = tx.add(
                         Transaction.Commands.SplitCoin(
                             primaryCoinInput,
-                            tx.input(bigIntAmount)
+                            tx.pure(bigIntAmount)
                         )
                     );
                     tx.add(
                         Transaction.Commands.TransferObjects(
                             [coin],
-                            tx.input(formData.to)
+                            tx.pure(formData.to)
                         )
                     );
                 }

@@ -25,7 +25,7 @@ describe('Test Move call with strings', () => {
     tx.add(
       Commands.MoveCall({
         target: `${packageId}::entry_point_string::${funcName}`,
-        arguments: [tx.input(str)],
+        arguments: [tx.pure(str)],
       }),
     );
     const result = await toolbox.signer.signAndExecuteTransaction(tx);

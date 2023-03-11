@@ -29,7 +29,7 @@ describe('Event Subscription API', () => {
 
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.add(Commands.TransferObjects([tx.gas], tx.input(DEFAULT_RECIPIENT)));
+    tx.add(Commands.TransferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT)));
     await toolbox.signer.signAndExecuteTransaction(tx);
 
     const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent(

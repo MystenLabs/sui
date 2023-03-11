@@ -10,6 +10,7 @@ import {
   getObjectReference,
   getSharedObjectInitialVersion,
   normalizeSuiObjectId,
+  ObjectId,
   SuiMoveNormalizedType,
   SuiObjectRef,
   SUI_TYPE_ARG,
@@ -22,7 +23,13 @@ import {
   getTransactionCommandType,
   MoveCallCommand,
 } from './Commands';
-import { BuilderCallArg, Inputs } from './Inputs';
+import {
+  BuilderCallArg,
+  getIdFromCallArg,
+  Inputs,
+  isMutableSharedObjectInput,
+  ObjectCallArg,
+} from './Inputs';
 import { getPureSerializationType, isTxContext } from './serializer';
 import {
   TransactionDataBuilder,
@@ -185,23 +192,38 @@ export class Transaction {
    * is the format required for custom serialization.
    *
    */
-  input(value?: unknown) {
-    // For Uint8Array
-    // if (value instanceof Uint8Array) {
-    //   value = { Pure: value };
-    // }
-
+  #input(type: 'object' | 'pure', value?: unknown) {
     const index = this.#transactionData.inputs.length;
-    const input = create({ kind: 'Input', value, index }, TransactionInput);
+    const input = create(
+      { kind: 'Input', value, index, type },
+      TransactionInput,
+    );
     this.#transactionData.inputs.push(input);
     return input;
   }
 
-  // TODO: Do we want to support these helper functions for inputs?
-  // Maybe we can make an `Inputs` helper like commands that works seamlessly with these.
-  // objectRef() {}
-  // sharedObjectRef() {}
-  // pure() {}
+  /**
+   * Add a new object input to the transaction.
+   */
+  object(value: ObjectId | ObjectCallArg) {
+    const id = getIdFromCallArg(value);
+    // deduplicate
+    const inserted = this.#transactionData.inputs.find(
+      (i) => i.type === 'object' && id === getIdFromCallArg(i.value),
+    );
+    return inserted ?? this.#input('object', value);
+  }
+
+  /**
+   * Add a new non-object input to the transaction.
+   *
+   * TODO: take an optional second type parameter here and do the BCS encoding into the
+   * fully-resolved type if folks happen to know the pure type encoding.
+   */
+  pure(value: unknown) {
+    // TODO: we can also do some deduplication here
+    return this.#input('pure', value);
+  }
 
   // TODO: Currently, tx.input() takes in both fully-resolved input values, and partially-resolved input values.
   // We could also simplify the transaction building quite a bit if we force folks to use fully-resolved pure types
@@ -434,7 +456,6 @@ export class Transaction {
 
     if (objectsToResolve.length) {
       const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
-      // TODO: Use multi-get objects when that API exists instead of batch:
       const objects = await expectProvider(provider).getObjectBatch(
         dedupedIds,
         { showOwner: true },
@@ -461,9 +482,14 @@ export class Transaction {
         const initialSharedVersion = getSharedObjectInitialVersion(object);
 
         if (initialSharedVersion) {
+          // There could be multiple commands that reference the same shared object.
+          // If one of them is a mutable reference, then we should mark the input
+          // as mutable.
           const mutable =
-            normalizedType != null &&
-            extractMutableReference(normalizedType) != null;
+            isMutableSharedObjectInput(input.value) ||
+            (normalizedType != null &&
+              extractMutableReference(normalizedType) != null);
+
           input.value = Inputs.SharedObjectRef({
             objectId: id,
             initialSharedVersion,

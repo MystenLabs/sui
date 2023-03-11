@@ -77,6 +77,7 @@ export class Coin {
         );
     }
 
+    // TODO: we should replace this function with the SDK implementation
     /**
      * Stake `amount` of Coin<T> to `validator`. Technically it means user stakes `amount` of Coin<T> to `validator`,
      * such that `validator` will stake the `amount` of Coin<T> for the user.
@@ -102,15 +103,15 @@ export class Coin {
             const tx = new Transaction();
             tx.setGasBudget(DEFAULT_GAS_BUDGET_FOR_STAKE);
             const stakeCoin = tx.add(
-                Transaction.Commands.SplitCoin(tx.gas, tx.input(amount))
+                Transaction.Commands.SplitCoin(tx.gas, tx.pure(amount))
             );
             tx.add(
                 Transaction.Commands.MoveCall({
                     target: '0x2::sui_system::request_add_stake',
                     arguments: [
-                        tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
+                        tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
                         stakeCoin,
-                        tx.input(validator),
+                        tx.pure(validator),
                     ],
                 })
             );
@@ -134,9 +135,9 @@ export class Coin {
                 Transaction.Commands.MoveCall({
                     target: '0x2::sui_system::request_withdraw_stake',
                     arguments: [
-                        tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-                        tx.input(stake),
-                        tx.input(stakedSuiId),
+                        tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+                        tx.object(stake),
+                        tx.object(stakedSuiId),
                     ],
                 })
             );

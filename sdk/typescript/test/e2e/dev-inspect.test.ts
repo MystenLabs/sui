@@ -24,8 +24,8 @@ describe('Test dev inspect', () => {
   it.skip('Dev inspect split + transfer', async () => {
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(10)));
-    tx.add(Commands.TransferObjects([coin], tx.input(toolbox.address())));
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(10)));
+    tx.add(Commands.TransferObjects([coin], tx.pure(toolbox.address())));
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
   });
 
@@ -38,12 +38,12 @@ describe('Test dev inspect', () => {
       Commands.MoveCall({
         target: `${packageId}::serializer_tests::return_struct`,
         typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-        arguments: [tx.input(coins[0].objectId)],
+        arguments: [tx.pure(coins[0].objectId)],
       }),
     );
 
     // TODO: Ideally dev inspect transactions wouldn't need this, but they do for now
-    tx.add(Commands.TransferObjects([obj], tx.input(toolbox.address())));
+    tx.add(Commands.TransferObjects([obj], tx.pure(toolbox.address())));
 
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
   });

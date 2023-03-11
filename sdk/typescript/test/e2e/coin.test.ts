@@ -27,9 +27,9 @@ describe('Coin related API', () => {
     coinToSplit = coins[0].objectId;
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const recieverInput = tx.input(toolbox.address());
+    const recieverInput = tx.pure(toolbox.address());
     SPLIT_AMOUNTS.forEach((amount) => {
-      const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(amount)));
+      const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(amount)));
       tx.add(Commands.TransferObjects([coin], recieverInput));
     });
 

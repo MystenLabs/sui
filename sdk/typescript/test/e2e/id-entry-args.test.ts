@@ -27,7 +27,7 @@ describe('Test ID as args to entry functions', () => {
       Commands.MoveCall({
         target: `${packageId}::test::test_id`,
         arguments: [
-          tx.input(
+          tx.pure(
             '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
           ),
         ],
