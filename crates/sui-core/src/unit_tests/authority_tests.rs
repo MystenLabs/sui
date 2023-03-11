@@ -1951,7 +1951,7 @@ async fn test_transaction_expiration() {
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             committee,
-            EpochStartConfiguration::new(system_state, Default::default()),
+            EpochStartConfiguration::new_v1(system_state, Default::default()),
         )
         .await
         .unwrap();

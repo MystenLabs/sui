@@ -34,6 +34,7 @@ use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -91,15 +92,15 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, EpochStartConfiguration,
-};
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 pub use crate::authority::authority_per_epoch_store::{
     VerifiedCertificateCache, VerifiedCertificateCacheMetrics,
 };
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -134,6 +135,7 @@ pub mod authority_per_epoch_store_pruner;
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
+pub mod epoch_start_configuration;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -976,7 +978,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 epoch_store.move_vm(),
                 gas_status,
-                &epoch_store.epoch_start_configuration().epoch_data(),
+                &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
             );
 
@@ -1061,7 +1063,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 &move_vm,
                 gas_status,
-                &epoch_store.epoch_start_configuration().epoch_data(),
+                &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
             );
         Ok(DryRunTransactionResponse {
@@ -1154,7 +1156,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 &move_vm,
                 gas_status,
-                &epoch_store.epoch_start_configuration().epoch_data(),
+                &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
             );
         DevInspectResults::new(
@@ -1837,7 +1839,9 @@ impl AuthorityState {
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
-            epoch_start_configuration.protocol_version(),
+            epoch_start_configuration
+                .epoch_start_state()
+                .protocol_version(),
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
@@ -3258,7 +3262,10 @@ impl AuthorityState {
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
-        assert_eq!(epoch_start_configuration.epoch(), new_committee.epoch);
+        assert_eq!(
+            epoch_start_configuration.epoch_start_state().epoch(),
+            new_committee.epoch
+        );
         self.db()
             .set_epoch_start_configuration(&epoch_start_configuration)
             .await?;

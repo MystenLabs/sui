@@ -7,6 +7,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObjectPair,
 };
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use either::Either;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
@@ -79,7 +80,7 @@ impl AuthorityStore {
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
-            let epoch_start_configuration = EpochStartConfiguration::new(
+            let epoch_start_configuration = EpochStartConfiguration::new_v1(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
             );

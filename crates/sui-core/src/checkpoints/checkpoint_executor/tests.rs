@@ -7,13 +7,13 @@ use tempfile::tempdir;
 
 use std::{sync::Arc, time::Duration};
 
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use broadcast::{Receiver, Sender};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::{ECMHLiveObjectSetDigest, VerifiedCheckpoint};
 use tokio::{sync::broadcast, time::timeout};
 
-use crate::authority::authority_per_epoch_store::EpochStartConfiguration;
 use crate::{
     authority::AuthorityState, checkpoints::CheckpointStore, state_accumulator::StateAccumulator,
 };
@@ -220,7 +220,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
-            EpochStartConfiguration::new(system_state, Default::default()),
+            EpochStartConfiguration::new_v1(system_state, Default::default()),
         )
         .await
         .unwrap();

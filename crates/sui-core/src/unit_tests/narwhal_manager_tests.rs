@@ -14,6 +14,7 @@ use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
