@@ -118,7 +118,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in `/home/ubuntu/simtest_logs/{date}` folder"
+                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder"
                 }
               }
             ]
