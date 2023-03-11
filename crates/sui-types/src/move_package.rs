@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -133,53 +133,9 @@ pub struct UpgradeReceipt {
 }
 
 impl MovePackage {
+    /// Create a package with all required data (including serialized modules, type origin and
+    /// linkage tables) already supplied.
     pub fn new(
-        id: ObjectID,
-        version: SequenceNumber,
-        module_map: &BTreeMap<String, Vec<u8>>,
-        max_move_package_size: u64,
-        dependencies: &[MovePackage],
-    ) -> Result<Self, ExecutionError> {
-        // TODO: there may be a better Rust incantation for this but dealing with error mapping in
-        // closures is painful sometimes
-        let mut modules = vec![];
-        for bytes in module_map.values() {
-            modules.push(
-                CompiledModule::deserialize(bytes)
-                    .map_err(|_| ExecutionErrorKind::InvalidMoveModule)?,
-            );
-        }
-        let type_origin_table = Self::build_type_origin_table(&modules);
-        Self::new_with_type_origin_table(
-            id,
-            version,
-            module_map,
-            max_move_package_size,
-            type_origin_table,
-            dependencies,
-        )
-    }
-
-    pub fn new_with_type_origin_table(
-        id: ObjectID,
-        version: SequenceNumber,
-        module_map: &BTreeMap<String, Vec<u8>>,
-        max_move_package_size: u64,
-        type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
-        dependencies: &[MovePackage],
-    ) -> Result<Self, ExecutionError> {
-        let linkage_table = Self::build_linkage_table(dependencies)?;
-        Self::new_with_type_origin_and_linkage_tables(
-            id,
-            version,
-            module_map,
-            max_move_package_size,
-            type_origin_table,
-            linkage_table,
-        )
-    }
-
-    pub fn new_with_type_origin_and_linkage_tables(
         id: ObjectID,
         version: SequenceNumber,
         module_map: &BTreeMap<String, Vec<u8>>,
@@ -205,13 +161,15 @@ impl MovePackage {
         Ok(pkg)
     }
 
-    pub fn from_module_iter(
+    /// Create an initial version of the package along with this version's type origin and linkage
+    /// tables.
+    pub fn new_initial(
         version: SequenceNumber,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
         dependencies: &[MovePackage],
     ) -> Result<Self, ExecutionError> {
-        let type_origin_table = Self::build_type_origin_table(&modules);
+        let type_origin_table = Self::build_initial_type_origin_table(&modules);
         Self::from_module_iter_with_type_origin_table(
             version,
             modules,
@@ -219,6 +177,41 @@ impl MovePackage {
             type_origin_table,
             dependencies,
         )
+    }
+
+    /// Create an upgraded version of the package along with this version's type origin and linkage
+    /// tables.
+    pub fn new_upgraded(
+        predecessor: &MovePackage,
+        modules: Vec<CompiledModule>,
+        max_move_package_size: u64,
+        dependencies: &[MovePackage],
+    ) -> Result<Self, ExecutionError> {
+        let type_origin_table = Self::build_upgraded_type_origin_table(predecessor, &modules);
+        let mut new_version = SequenceNumber::from(predecessor.version().value());
+        new_version.increment();
+        // TODO: compute all upgraded metadata
+        Self::from_module_iter_with_type_origin_table(
+            new_version,
+            modules,
+            max_move_package_size,
+            type_origin_table,
+            dependencies,
+        )
+    }
+
+    fn get_direct_dependencies(modules: Vec<CompiledModule>) -> BTreeSet<ObjectID> {
+        let mut direct_deps = BTreeSet::new();
+        for m in modules {
+            for dep_handle in m.module_handles() {
+                // exclude the root package
+                if dep_handle != m.self_handle() {
+                    let dep_id: ObjectID = (*m.address_identifier_at(dep_handle.address)).into();
+                    direct_deps.insert(dep_id);
+                }
+            }
+        }
+        direct_deps
     }
 
     fn from_module_iter_with_type_origin_table<T: IntoIterator<Item = CompiledModule>>(
@@ -237,7 +230,8 @@ impl MovePackage {
                 .address(),
         );
 
-        Self::new_with_type_origin_table(
+        let linkage_table = Self::build_linkage_table(dependencies)?;
+        Self::new(
             id,
             version,
             &iter
@@ -249,7 +243,7 @@ impl MovePackage {
                 .collect(),
             max_move_package_size,
             type_origin_table,
-            dependencies,
+            linkage_table,
         )
     }
 
@@ -257,9 +251,6 @@ impl MovePackage {
         dependencies: &[MovePackage],
     ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
         // all transitive dependencies are included so simply put them into the table
-
-        // TODO: there may be a better Rust incantation for this but dealing with error mapping in
-        // closures is painful sometimes
         let mut linkage_table = BTreeMap::new();
         for p in dependencies {
             let bytes: &Vec<u8> =
@@ -267,10 +258,8 @@ impl MovePackage {
                     "Tried to build a Move package from an empty iterator of Compiled modules",
                 );
             let module = CompiledModule::deserialize(bytes)
-                .map_err(|_| ExecutionErrorKind::InvalidMoveModule)?;
-            let module_handle = module.module_handle_at(module.self_handle_idx());
-            let original_id: ObjectID =
-                (*module.address_identifier_at(module_handle.address)).into();
+                .expect("A Move package contains a module that cannot be deserialized");
+            let original_id: ObjectID = (*module.address()).into();
             linkage_table.insert(
                 original_id,
                 UpgradeInfo {
@@ -283,13 +272,15 @@ impl MovePackage {
         Ok(linkage_table)
     }
 
-    fn build_type_origin_table(modules: &[CompiledModule]) -> BTreeMap<ModuleStruct, ObjectID> {
-        BTreeMap::from_iter(modules.iter().flat_map(|module| {
-            module.struct_defs().iter().map(|struct_def| {
-                let struct_handle = module.struct_handle_at(struct_def.struct_handle);
-                let module_name = module.name().to_string();
-                let struct_name = module.identifier_at(struct_handle.name).to_string();
-                let id: ObjectID = (*module.self_id().address()).into();
+    fn build_initial_type_origin_table(
+        modules: &[CompiledModule],
+    ) -> BTreeMap<ModuleStruct, ObjectID> {
+        BTreeMap::from_iter(modules.iter().flat_map(|m| {
+            m.struct_defs().iter().map(|struct_def| {
+                let struct_handle = m.struct_handle_at(struct_def.struct_handle);
+                let module_name = m.name().to_string();
+                let struct_name = m.identifier_at(struct_handle.name).to_string();
+                let id: ObjectID = (*m.self_id().address()).into();
                 (
                     ModuleStruct {
                         module_name,
@@ -299,6 +290,32 @@ impl MovePackage {
                 )
             })
         }))
+    }
+
+    fn build_upgraded_type_origin_table(
+        predecessor: &MovePackage,
+        modules: &[CompiledModule],
+    ) -> BTreeMap<ModuleStruct, ObjectID> {
+        let mut new_table = predecessor.type_origin_table.clone();
+        for m in modules {
+            for struct_def in m.struct_defs() {
+                let struct_handle = m.struct_handle_at(struct_def.struct_handle);
+                let module_name = m.name().to_string();
+                let struct_name = m.identifier_at(struct_handle.name).to_string();
+                let mod_struct = ModuleStruct {
+                    module_name,
+                    struct_name,
+                };
+                // only insert types that are not in the original table as only these should be
+                // marked as originating from the current package
+                if predecessor.type_origin_table.contains_key(&mod_struct) {
+                    continue;
+                }
+                let id: ObjectID = (*m.self_id().address()).into();
+                new_table.insert(mod_struct, id);
+            }
+        }
+        new_table
     }
 
     /// Return the size of the package in bytes. Only count the bytes of the modules themselves--the

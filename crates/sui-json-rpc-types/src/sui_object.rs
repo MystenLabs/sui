@@ -447,7 +447,8 @@ impl TryInto<Object> for SuiObjectData {
                 self.version,
                 &p.module_map,
                 protocol_config.max_move_package_size(),
-                &[],
+                p.type_origin_table,
+                p.linkage_table,
             )?),
             _ => Err(anyhow!(
                 "BCS data is required to convert SuiObjectData to Object"

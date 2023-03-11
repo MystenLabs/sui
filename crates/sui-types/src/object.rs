@@ -559,7 +559,7 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         let dependencies = vec![];
         Ok(Object {
-            data: Data::Package(MovePackage::from_module_iter(
+            data: Data::Package(MovePackage::new_initial(
                 version,
                 modules,
                 max_move_package_size,
