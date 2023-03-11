@@ -192,6 +192,11 @@ export abstract class Provider {
    */
   abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
 
+  /**
+   * Batch get details about a list of objects. If any of the object ids are duplicates the call will fail
+   * @param objectIds
+   * @param options
+   */
   abstract getObjectBatch(
     objectIds: ObjectId[],
     options?: SuiObjectDataOptions,

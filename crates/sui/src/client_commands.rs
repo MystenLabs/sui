@@ -1174,21 +1174,25 @@ impl WalletContext {
             .read_api()
             .get_objects_owned_by_address(address)
             .await?;
-
+        let o_ref_clone = object_refs.clone();
         // TODO: We should ideally fetch the objects from local cache
-        // TODO: replace with multi-get
         let mut values_objects = Vec::new();
-        for oref in object_refs {
-            let response = client
-                .read_api()
-                .get_object_with_options(oref.object_id, SuiObjectDataOptions::full_content())
-                .await?;
+        let oref_ids: Vec<ObjectID> = object_refs.into_iter().map(|oref| oref.object_id).collect();
+
+        let responses = client
+            .read_api()
+            .multi_get_object_with_options(oref_ids, SuiObjectDataOptions::full_content())
+            .await?;
+
+        let pairs: Vec<_> = responses.iter().zip(o_ref_clone.into_iter()).collect();
+
+        for (response, oref) in pairs {
             match response {
                 SuiObjectResponse::Exists(o) => {
                     if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
                         // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o, oref));
+                        let gas_coin = GasCoin::try_from(o)?;
+                        values_objects.push((gas_coin.value(), o.clone(), oref));
                     }
                 }
                 _ => continue,

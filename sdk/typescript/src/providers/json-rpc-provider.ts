@@ -520,6 +520,10 @@ export class JsonRpcProvider extends Provider {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
       });
+      const hasDuplicates = objectIds.length !== new Set(objectIds).size;
+      if (hasDuplicates) {
+        throw new Error(`Duplicate object ids in batch call ${objectIds}`);
+      }
 
       return await this.client.requestWithType(
         'sui_multiGetObjects',
@@ -650,6 +654,11 @@ export class JsonRpcProvider extends Provider {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
       });
+
+      const hasDuplicates = digests.length !== new Set(digests).size;
+      if (hasDuplicates) {
+        throw new Error(`Duplicate digests in batch call ${digests}`);
+      }
 
       return await this.client.requestWithType(
         'sui_multiGetTransactions',

@@ -194,12 +194,11 @@ where
             .await
             .into_iter()
             .try_fold(vec![], |mut acc, chunk| {
-                let object_datas: Vec<SuiObjectData> = chunk
-                    .0?
-                    .into_iter()
-                    // Unwrap should be ok here as the batched response will fail if any objects are invalid.
-                    .map(|resp| resp.into_object().unwrap())
-                    .collect();
+                let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
+                    let object_data = resp.into_object()?;
+                    acc.push(object_data);
+                    Ok::<Vec<SuiObjectData>, Error>(acc)
+                })?;
                 let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
                 acc.extend(mutated_object_chunk);
                 Ok::<_, Error>(acc)

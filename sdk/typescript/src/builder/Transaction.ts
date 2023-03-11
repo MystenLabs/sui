@@ -434,7 +434,6 @@ export class Transaction {
 
     if (objectsToResolve.length) {
       const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
-      // TODO: Use multi-get objects when that API exists instead of batch:
       const objects = await expectProvider(provider).getObjectBatch(
         dedupedIds,
         { showOwner: true },

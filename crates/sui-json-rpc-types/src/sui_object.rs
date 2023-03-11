@@ -882,6 +882,6 @@ impl From<ObjectInfo> for SuiObjectInfo {
 pub struct SuiGetPastObjectRequest {
     /// the ID of the queried object
     pub object_id: ObjectID,
-    /// the version of the queried object. If None, default to the latest known version
+    /// the version of the queried object.
     pub version: SequenceNumber,
 }
