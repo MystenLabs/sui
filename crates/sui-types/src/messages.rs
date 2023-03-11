@@ -196,6 +196,18 @@ impl MoveModulePublish {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct SuiMovePackageDependencies {
+    pub modules: Vec<ObjectRef>,
+}
+
+impl SuiMovePackageDependencies {
+    pub fn validity_check(&self, _config: &ProtocolConfig) -> UserInputResult {
+        // TODO fp_ensure!(...)
+        Ok(())
+    }
+}
+
 // TODO: we can deprecate TransferSui when its callsites on RPC & SDK are
 // fully replaced by PaySui and PayAllSui.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -535,8 +547,9 @@ pub enum Command {
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
-    /// Publishes a Move package
-    Publish(Vec<Vec<u8>>),
+    /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    /// dependencies to link against on-chain.
+    Publish(Vec<Vec<u8>>, Vec<ObjectID>),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -612,7 +625,10 @@ impl Command {
         }))
     }
 
-    fn publish_command_input_objects(modules: &[Vec<u8>]) -> Vec<InputObjectKind> {
+    fn publish_command_input_objects(
+        modules: &[Vec<u8>],
+        _dep_ids: &[ObjectID],
+    ) -> Vec<InputObjectKind> {
         // For module publishing, all the dependent packages are implicit input objects
         // because they must all be on-chain in order for the package to publish.
         // All authorities must have the same view of those dependencies in order
@@ -633,9 +649,10 @@ impl Command {
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
-            Command::Upgrade(_, _, modules) | Command::Publish(modules) => {
-                Self::publish_command_input_objects(modules)
+            Command::Publish(modules, dep_ids) => {
+                Self::publish_command_input_objects(modules, dep_ids)
             }
+            Command::Upgrade(_, _, modules) => Self::publish_command_input_objects(modules, &[]),
             Command::MoveCall(c) => c.input_objects(),
             Command::MakeMoveVec(Some(t), _) => {
                 let mut packages = BTreeSet::new();
@@ -717,7 +734,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules) => {
+            Command::Publish(modules, _dep_ids) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -890,7 +907,7 @@ impl Display for Command {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Command::Publish(_bytes) => write!(f, "Publish(_)"),
+            Command::Publish(_bytes, _dep_ids) => write!(f, "Publish(_)"),
             Command::Upgrade(ticket, deps, _bytes) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
@@ -1462,21 +1479,30 @@ impl TransactionData {
         sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas_budget: u64,
     ) -> Self {
-        Self::new_module(sender, gas_payment, modules, gas_budget, DUMMY_GAS_PRICE)
+        Self::new_module(
+            sender,
+            gas_payment,
+            modules,
+            dep_ids,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.publish(modules);
+            builder.publish(modules, dep_ids);
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)

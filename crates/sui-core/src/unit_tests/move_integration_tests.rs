@@ -2177,6 +2177,7 @@ pub async fn build_and_try_publish_test_package(
         *sender,
         gas_object_ref,
         all_module_bytes,
+        vec![],
         gas_budget,
     );
     let transaction = to_sender_signed_transaction(data, sender_key);

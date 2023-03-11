@@ -102,6 +102,7 @@ export type MakeMoveVecCommand = Infer<typeof MakeMoveVecCommand>;
 export const PublishCommand = object({
   kind: literal('Publish'),
   modules: array(array(integer())),
+  dependencies: array(integer()),
 });
 export type PublishCommand = Infer<typeof PublishCommand>;
 
@@ -156,7 +157,11 @@ export const Commands = {
     return { kind: 'MergeCoins', destination, sources };
   },
   Publish(modules: number[][]): PublishCommand {
-    return { kind: 'Publish', modules };
+    return {
+      kind: 'Publish',
+      modules,
+      dependencies: [] /* TODO: SDK changes for dependencies */,
+    };
   },
   MakeMoveVec({
     type,

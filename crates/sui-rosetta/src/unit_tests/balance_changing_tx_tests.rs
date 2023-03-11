@@ -136,7 +136,10 @@ async fn test_publish_and_move_call() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish(compiled_module);
+        builder.publish(
+            compiled_module,
+            vec![], /* TODO: update this test to collect deps */
+        );
         builder.finish()
     };
     let response =

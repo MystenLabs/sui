@@ -111,7 +111,13 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules,
+            vec![],
+            Some(gas.object_id),
+            10000,
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -274,7 +280,13 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules,
+            vec![],
+            Some(gas.object_id),
+            10000,
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -331,7 +343,13 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules,
+            vec![],
+            Some(gas.object_id),
+            10000,
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);

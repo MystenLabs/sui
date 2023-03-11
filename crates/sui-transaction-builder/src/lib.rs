@@ -445,6 +445,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
@@ -456,6 +457,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             sender,
             gas,
             compiled_modules,
+            dep_ids,
             gas_budget,
             gas_price,
         ))

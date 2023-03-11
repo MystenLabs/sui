@@ -95,7 +95,7 @@ pub async fn publish_package_with_wallet(
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(sender, all_module_bytes, None, GAS_BUDGET)
+            .publish(sender, all_module_bytes, vec![], None, GAS_BUDGET)
             .await
             .unwrap();
 
