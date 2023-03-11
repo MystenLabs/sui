@@ -10,9 +10,7 @@ use crate::{id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -156,8 +154,7 @@ where
     let inner_id = derive_dynamic_field_id(
         wrapper.id.id.bytes,
         &TypeTag::U64,
-        &MoveTypeLayout::U64,
-        &Value::u64(wrapper.version),
+        &bcs::to_bytes(&wrapper.version).unwrap(),
     )
     .expect("Sui System State object must exist");
     let inner = object_store
