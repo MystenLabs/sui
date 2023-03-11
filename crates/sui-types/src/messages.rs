@@ -46,7 +46,6 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
-use std::mem;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
