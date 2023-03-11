@@ -19,6 +19,7 @@ use move_core_types::{
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
@@ -53,10 +54,21 @@ pub struct FnInfoKey {
 pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 
 /// Identifies a struct and the module it was defined in
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize, Hash)]
+#[derive(
+    Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize, Hash, JsonSchema,
+)]
 pub struct ModuleStruct {
-    pub module_name: Identifier,
-    pub struct_name: Identifier,
+    pub module_name: String,
+    pub struct_name: String,
+}
+
+/// Upgraded package info for the linkage table
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+pub struct UpgradeInfo {
+    /// ID of the upgraded packages
+    upgraded_id: ObjectID,
+    /// Version of the upgraded package
+    upgraded_version: SequenceNumber,
 }
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
@@ -79,8 +91,12 @@ pub struct MovePackage {
     #[serde_as(as = "BTreeMap<_, Bytes>")]
     module_map: BTreeMap<String, Vec<u8>>,
 
-    /// maps struct/module to a package version where it was first defined
-    type_origin: Option<BTreeMap<ModuleStruct, ObjectID>>,
+    /// Maps struct/module to a package version where it was first defined
+    type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+
+    // For each dependency, maps original package ID to the info about the (upgraded) dependency
+    // version that this package is using
+    linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
 /// Rust representation of upgrade policy constants in `sui::package`.
@@ -122,22 +138,61 @@ impl MovePackage {
         version: SequenceNumber,
         module_map: &BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
+        dependencies: &[MovePackage],
     ) -> Result<Self, ExecutionError> {
-        Self::new_with_type_origin(id, version, module_map, max_move_package_size, None)
+        // TODO: there may be a better Rust incantation for this but dealing with error mapping in
+        // closures is painful sometimes
+        let mut modules = vec![];
+        for bytes in module_map.values() {
+            modules.push(
+                CompiledModule::deserialize(bytes)
+                    .map_err(|_| ExecutionErrorKind::InvalidMoveModule)?,
+            );
+        }
+        let type_origin_table = Self::build_type_origin_table(&modules);
+        Self::new_with_type_origin_table(
+            id,
+            version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            dependencies,
+        )
     }
 
-    pub fn new_with_type_origin(
+    pub fn new_with_type_origin_table(
         id: ObjectID,
         version: SequenceNumber,
         module_map: &BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
-        type_origin: Option<BTreeMap<ModuleStruct, ObjectID>>,
+        type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+        dependencies: &[MovePackage],
+    ) -> Result<Self, ExecutionError> {
+        let linkage_table = Self::build_linkage_table(dependencies)?;
+        Self::new_with_type_origin_and_linkage_tables(
+            id,
+            version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            linkage_table,
+        )
+    }
+
+    pub fn new_with_type_origin_and_linkage_tables(
+        id: ObjectID,
+        version: SequenceNumber,
+        module_map: &BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
+        type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
     ) -> Result<Self, ExecutionError> {
         let pkg = Self {
             id,
             version,
             module_map: module_map.clone(),
-            type_origin,
+            type_origin_table,
+            linkage_table,
         };
         let object_size = pkg.size() as u64;
         if object_size > max_move_package_size {
@@ -150,19 +205,28 @@ impl MovePackage {
         Ok(pkg)
     }
 
-    pub fn from_module_iter<T: IntoIterator<Item = CompiledModule>>(
+    pub fn from_module_iter(
         version: SequenceNumber,
-        iter: T,
+        modules: Vec<CompiledModule>,
         max_move_package_size: u64,
+        dependencies: &[MovePackage],
     ) -> Result<Self, ExecutionError> {
-        Self::from_module_iter_with_type_origin(version, iter, max_move_package_size, None)
+        let type_origin_table = Self::build_type_origin_table(&modules);
+        Self::from_module_iter_with_type_origin_table(
+            version,
+            modules,
+            max_move_package_size,
+            type_origin_table,
+            dependencies,
+        )
     }
 
-    pub fn from_module_iter_with_type_origin<T: IntoIterator<Item = CompiledModule>>(
+    fn from_module_iter_with_type_origin_table<T: IntoIterator<Item = CompiledModule>>(
         version: SequenceNumber,
         iter: T,
         max_move_package_size: u64,
-        type_origin: Option<BTreeMap<ModuleStruct, ObjectID>>,
+        type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+        dependencies: &[MovePackage],
     ) -> Result<Self, ExecutionError> {
         let mut iter = iter.into_iter().peekable();
         let id = ObjectID::from(
@@ -173,7 +237,7 @@ impl MovePackage {
                 .address(),
         );
 
-        Self::new_with_type_origin(
+        Self::new_with_type_origin_table(
             id,
             version,
             &iter
@@ -184,8 +248,57 @@ impl MovePackage {
                 })
                 .collect(),
             max_move_package_size,
-            type_origin,
+            type_origin_table,
+            dependencies,
         )
+    }
+
+    fn build_linkage_table(
+        dependencies: &[MovePackage],
+    ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
+        // all transitive dependencies are included so simply put them into the table
+
+        // TODO: there may be a better Rust incantation for this but dealing with error mapping in
+        // closures is painful sometimes
+        let mut linkage_table = BTreeMap::new();
+        for p in dependencies {
+            let bytes: &Vec<u8> =
+                p.module_map.values().next().expect(
+                    "Tried to build a Move package from an empty iterator of Compiled modules",
+                );
+            let module = CompiledModule::deserialize(bytes)
+                .map_err(|_| ExecutionErrorKind::InvalidMoveModule)?;
+            let module_handle = module.module_handle_at(module.self_handle_idx());
+            let original_id: ObjectID =
+                (*module.address_identifier_at(module_handle.address)).into();
+            linkage_table.insert(
+                original_id,
+                UpgradeInfo {
+                    upgraded_id: p.id,
+                    upgraded_version: p.version,
+                },
+            );
+        }
+        // TODO: verification
+        Ok(linkage_table)
+    }
+
+    fn build_type_origin_table(modules: &[CompiledModule]) -> BTreeMap<ModuleStruct, ObjectID> {
+        BTreeMap::from_iter(modules.iter().flat_map(|module| {
+            module.struct_defs().iter().map(|struct_def| {
+                let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+                let module_name = module.name().to_string();
+                let struct_name = module.identifier_at(struct_handle.name).to_string();
+                let id: ObjectID = (*module.self_id().address()).into();
+                (
+                    ModuleStruct {
+                        module_name,
+                        struct_name,
+                    },
+                    id,
+                )
+            })
+        }))
     }
 
     /// Return the size of the package in bytes. Only count the bytes of the modules themselves--the
@@ -218,6 +331,14 @@ impl MovePackage {
 
     pub fn serialized_module_map(&self) -> &BTreeMap<String, Vec<u8>> {
         &self.module_map
+    }
+
+    pub fn type_origin_table(&self) -> &BTreeMap<ModuleStruct, ObjectID> {
+        &self.type_origin_table
+    }
+
+    pub fn linkage_table(&self) -> &BTreeMap<ObjectID, UpgradeInfo> {
+        &self.linkage_table
     }
 
     pub fn deserialize_module(&self, module: &Identifier) -> SuiResult<CompiledModule> {

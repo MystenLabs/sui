@@ -380,11 +380,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .try_as_package()
             .cloned()
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
-        let package: MovePackage = MovePackage::new(
+        let package: MovePackage = MovePackage::new_with_type_origin_and_linkage_tables(
             package.id,
             object.version,
             &package.module_map,
             ProtocolConfig::get_for_min_version().max_move_package_size(),
+            package.type_origin_table.clone(),
+            package.linkage_table.clone(),
         )?;
 
         let json_args_and_tokens = resolve_move_function_args(

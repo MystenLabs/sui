@@ -286,9 +286,6 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     arguments: Vec<Argument>,
     is_init: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
-    // TODO: when package upgrades are actually in place and linkage table is available, we need to
-    // get the actual running_pkg_id from the linkage table
-    let running_pkg_id = ObjectID::from(*module_id.address());
     // check that the function is either an entry function or a valid public function
     let LoadedFunctionInfo {
         kind,
@@ -330,12 +327,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-        let value = make_value(
-            value_info,
-            bytes,
-            used_in_non_entry_move_call,
-            running_pkg_id,
-        )?;
+        let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
     }
 
@@ -350,10 +342,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .map(|(value_info, (bytes, _layout))| {
             // only non entry functions have return values
             make_value(
-                value_info,
-                bytes,
-                /* used_in_non_entry_move_call */ true,
-                running_pkg_id,
+                value_info, bytes, /* used_in_non_entry_move_call */ true,
             )
         })
         .collect()
@@ -363,7 +352,6 @@ fn make_value(
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
-    running_pkg_id: ObjectID,
 ) -> Result<Value, ExecutionError> {
     Ok(match value_info {
         ValueKind::Object {

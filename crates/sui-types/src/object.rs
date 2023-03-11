@@ -1,20 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
-use move_binary_format::{access::ModuleAccess, CompiledModule};
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::{
-    identifier::Identifier,
-    value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue},
-};
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -25,7 +21,7 @@ use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
-use crate::move_package::{ModuleStruct, MovePackage};
+use crate::move_package::MovePackage;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -561,26 +557,13 @@ impl Object {
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
-        let type_origin = BTreeMap::from_iter(modules.iter().flat_map(|module| {
-            module.struct_handles().iter().map(|struct_handle| {
-                let module_name = Identifier::from(module.name());
-                let struct_name = Identifier::from(module.identifier_at(struct_handle.name));
-                (
-                    ModuleStruct {
-                        module_name,
-                        struct_name,
-                    },
-                    ObjectID::from(SuiAddress::from(*module.self_id().address())),
-                )
-            })
-        }));
-
+        let dependencies = vec![];
         Ok(Object {
-            data: Data::Package(MovePackage::from_module_iter_with_type_origin(
+            data: Data::Package(MovePackage::from_module_iter(
                 version,
                 modules,
                 max_move_package_size,
-                Some(type_origin),
+                &dependencies,
             )?),
             owner: Owner::Immutable,
             previous_transaction,
