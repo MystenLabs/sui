@@ -379,7 +379,7 @@ where
     }
 
     /// Determine the object changes and collect all user events
-    pub fn finish(self) -> Result<ExecutionResults, ExecutionError> {
+    pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
         use sui_types::error::convert_vm_error;
         let Self {
             protocol_config,
@@ -428,41 +428,44 @@ where
             add_input_object_write(input)
         }
         // check for unused values
-        for (i, command_result) in results.iter().enumerate() {
-            for (j, result_value) in command_result.iter().enumerate() {
-                let ResultValue {
-                    last_usage_kind,
-                    value,
-                } = result_value;
-                match value {
-                    None => (),
-                    Some(Value::Object(_)) => {
-                        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
-                            result_idx: i as u16,
-                            secondary_idx: j as u16,
+        // disable this check for dev inspect
+        if !Mode::allow_arbitrary_values() {
+            for (i, command_result) in results.iter().enumerate() {
+                for (j, result_value) in command_result.iter().enumerate() {
+                    let ResultValue {
+                        last_usage_kind,
+                        value,
+                    } = result_value;
+                    match value {
+                        None => (),
+                        Some(Value::Object(_)) => {
+                            return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+                                result_idx: i as u16,
+                                secondary_idx: j as u16,
+                            }
+                            .into())
                         }
-                        .into())
-                    }
-                    Some(Value::Raw(RawValueType::Any, _)) => (),
-                    Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
-                        // - nothing to check for drop
-                        // - if it does not have drop, but has copy,
-                        //   the last usage must be by value in order to "lie" and say that the
-                        //   last usage is actually a take instead of a clone
-                        // - Otherwise, an error
-                        if abilities.has_drop() {
-                        } else if abilities.has_copy()
-                            && !matches!(last_usage_kind, Some(UsageKind::ByValue))
-                        {
-                            let msg = "The value has copy, but not drop. \
+                        Some(Value::Raw(RawValueType::Any, _)) => (),
+                        Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
+                            // - nothing to check for drop
+                            // - if it does not have drop, but has copy,
+                            //   the last usage must be by value in order to "lie" and say that the
+                            //   last usage is actually a take instead of a clone
+                            // - Otherwise, an error
+                            if abilities.has_drop() {
+                            } else if abilities.has_copy()
+                                && !matches!(last_usage_kind, Some(UsageKind::ByValue))
+                            {
+                                let msg = "The value has copy, but not drop. \
                                 Its last usage must be by-value so it can be taken.";
-                            return Err(ExecutionError::new_with_source(
-                                ExecutionErrorKind::UnusedValueWithoutDrop {
-                                    result_idx: i as u16,
-                                    secondary_idx: j as u16,
-                                },
-                                msg,
-                            ));
+                                return Err(ExecutionError::new_with_source(
+                                    ExecutionErrorKind::UnusedValueWithoutDrop {
+                                        result_idx: i as u16,
+                                        secondary_idx: j as u16,
+                                    },
+                                    msg,
+                                ));
+                            }
                         }
                     }
                 }

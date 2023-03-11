@@ -1095,8 +1095,9 @@ impl AuthorityState {
         let storage_gas_price = protocol_config.storage_gas_price();
 
         let gas_object_id = ObjectID::random();
+        // give the gas object 2x the max gas to have coin balance to play with during execution
         let gas_object = Object::new_move(
-            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas),
+            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas * 2),
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );

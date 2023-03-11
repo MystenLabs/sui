@@ -33,9 +33,11 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use sui_json_rpc_types::{
-    SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary, SuiTransactionEffectsAPI,
+    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
+    SuiTransactionEffectsAPI, SuiTypeTag,
 };
 use sui_types::error::UserInputError;
+use sui_types::gas_coin::GasCoin;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
@@ -722,13 +724,40 @@ async fn test_dev_inspect_return_values() {
     let type_tag: TypeTag = return_type.try_into().unwrap();
     assert!(matches!(type_tag, TypeTag::U64));
 
-    // read two values from it's bytes
+    // An unused value without drop is an error normally
+    let effects = call_move_(
+        &validator,
+        Some(&fullnode),
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics.0,
+        "object_basics",
+        "wrap_object",
+        vec![],
+        vec![TestCallArg::Object(created_object_id)],
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::UnusedValueWithoutDrop {
+                result_idx: 0,
+                secondary_idx: 0,
+            },
+            command: None,
+        }
+    );
+
+    // An unused value without drop is not an error in dev inspect
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
         "object_basics",
-        "get_contents",
+        "wrap_object",
         vec![],
         vec![TestCallArg::Pure(created_object_bytes)],
     )
@@ -742,12 +771,70 @@ async fn test_dev_inspect_return_values() {
         mut return_values,
     } = exec_results;
     assert!(mutable_reference_outputs.is_empty());
-    assert_eq!(return_values.len(), 2);
-    let (return_value_2, _return_type) = return_values.pop().unwrap();
-    let (returned_id_bytes, _return_type) = return_values.pop().unwrap();
-    let returned_id: ObjectID = bcs::from_bytes(&returned_id_bytes).unwrap();
-    assert_eq!(return_value_1, return_value_2);
-    assert_eq!(created_object_id, returned_id);
+    assert_eq!(return_values.len(), 1);
+    let (_return_value, return_type) = return_values.pop().unwrap();
+    let expected_type = TypeTag::Struct(Box::new(StructTag {
+        address: object_basics.0.into(),
+        module: Identifier::new("object_basics").unwrap(),
+        name: Identifier::new("Wrapper").unwrap(),
+        type_params: vec![],
+    }));
+    let return_type: TypeTag = return_type.try_into().unwrap();
+    assert_eq!(return_type, expected_type);
+}
+
+#[tokio::test]
+async fn test_dev_inspect_gas_coin_argument() {
+    let (validator, fullnode, _object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![]).await;
+    let epoch_store = validator.epoch_store_for_testing();
+    let protocol_config = epoch_store.protocol_config();
+
+    let sender = SuiAddress::random_for_testing_only();
+    let recipient = SuiAddress::random_for_testing_only();
+    let amount = 500;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_sui(vec![recipient], vec![amount]).unwrap();
+        builder.finish()
+    };
+    let kind = TransactionKind::programmable(pt);
+    let results = fullnode
+        .dev_inspect_transaction(sender, kind, Some(1))
+        .await
+        .unwrap()
+        .results
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    // Split results
+    let SuiExecutionResult {
+        mutable_reference_outputs,
+        return_values,
+    } = &results[0];
+    // check argument is the gas coin updated
+    assert_eq!(mutable_reference_outputs.len(), 1);
+    let (arg, arg_value, arg_type) = &mutable_reference_outputs[0];
+    assert_eq!(arg, &SuiArgument::GasCoin);
+    check_coin_value(arg_value, arg_type, protocol_config.max_tx_gas() - amount);
+
+    assert_eq!(return_values.len(), 1);
+    let (ret_value, ret_type) = &return_values[0];
+    check_coin_value(ret_value, ret_type, amount);
+
+    // Transfer results
+    let SuiExecutionResult {
+        mutable_reference_outputs,
+        return_values,
+    } = &results[1];
+    assert!(mutable_reference_outputs.is_empty());
+    assert!(return_values.is_empty());
+}
+
+fn check_coin_value(actual_value: &[u8], actual_type: &SuiTypeTag, expected_value: u64) {
+    let actual_type: TypeTag = actual_type.clone().try_into().unwrap();
+    assert_eq!(actual_type, TypeTag::Struct(Box::new(GasCoin::type_())));
+    let actual_coin: GasCoin = bcs::from_bytes(actual_value).unwrap();
+    assert_eq!(actual_coin.value(), expected_value);
 }
 
 #[tokio::test]
