@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
-use super::SuiSystemStateTrait;
+use super::{SuiSystemStateTrait, INIT_SYSTEM_STATE_VERSION};
 
 const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -407,6 +407,7 @@ pub struct ValidatorSetV1 {
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
+    pub system_state_version: u64,
     pub validators: ValidatorSetV1,
     pub storage_fund: Balance,
     pub parameters: SystemParametersV1,
@@ -438,6 +439,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
 
     fn protocol_version(&self) -> u64 {
         self.protocol_version
+    }
+
+    fn system_state_version(&self) -> u64 {
+        self.system_state_version
     }
 
     fn epoch_start_timestamp_ms(&self) -> u64 {
@@ -507,6 +512,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         let Self {
             epoch,
             protocol_version,
+            system_state_version,
             validators:
                 ValidatorSetV1 {
                     total_stake,
@@ -557,6 +563,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         SuiSystemStateSummary {
             epoch,
             protocol_version,
+            system_state_version,
             storage_fund: storage_fund.value(),
             reference_gas_price,
             safe_mode,
@@ -602,6 +609,7 @@ impl Default for SuiSystemStateInnerV1 {
         Self {
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
+            system_state_version: INIT_SYSTEM_STATE_VERSION,
             validators: validator_set,
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {

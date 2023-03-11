@@ -56,6 +56,10 @@ module sui::sui_system {
         epoch: u64,
         /// The current protocol version, starting from 1.
         protocol_version: u64,
+        /// The current version of the system state data structure type.
+        /// This is always the same as SuiSystemState.version. Keeping a copy here so that
+        /// we know what version it is by inspecting SuiSystemStateInner as well.
+        system_state_version: u64,
         /// Contains all information about the validators.
         validators: ValidatorSet,
         /// The storage fund.
@@ -145,6 +149,7 @@ module sui::sui_system {
         let system_state = SuiSystemStateInner {
             epoch: 0,
             protocol_version,
+            system_state_version,
             validators,
             storage_fund,
             parameters: SystemParameters {
@@ -218,7 +223,7 @@ module sui::sui_system {
     }
 
     /// Called by a validator candidate to remove themselves from the candidacy. After this call
-    /// their staking pool becomes deactive.
+    /// their staking pool becomes deactivate.
     public entry fun request_remove_validator_candidate(
         wrapper: &mut SuiSystemState,
         ctx: &mut TxContext,
@@ -697,6 +702,7 @@ module sui::sui_system {
             assert!(old_protocol_version != next_protocol_version, 0);
             let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
             let new_state = upgrade_system_state(cur_state);
+            new_state.system_state_version = new_system_state_version;
             wrapper.version = new_system_state_version;
             dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
         };
@@ -778,11 +784,17 @@ module sui::sui_system {
     }
 
     fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
-        dynamic_field::borrow(&self.id, self.version)
+        let version = self.version;
+        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, version);
+        assert!(inner.system_state_version == version, 0);
+        inner
     }
 
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
-        dynamic_field::borrow_mut(&mut self.id, self.version)
+        let version = self.version;
+        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
+        assert!(inner.system_state_version == version, 0);
+        inner
     }
 
     fun upgrade_system_state(cur_state: SuiSystemStateInner): SuiSystemStateInner {
