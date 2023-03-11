@@ -7,6 +7,7 @@ use rand::prelude::*;
 use rand::seq::SliceRandom;
 
 use futures::future::join_all;
+use prometheus::Registry;
 use std::sync::Arc;
 use sui_core::test_utils::{make_cert_with_large_committee, make_dummy_tx};
 use sui_types::committee::Committee;
@@ -33,7 +34,7 @@ fn gen_certs(
         .collect();
 
     txns.iter()
-        .map(|t| make_cert_with_large_committee(&committee, key_pairs, t))
+        .map(|t| make_cert_with_large_committee(committee, key_pairs, t))
         .collect()
 }
 
@@ -53,6 +54,9 @@ fn async_verifier_bench(c: &mut Criterion) {
 
     group.sample_size(10);
 
+    let registry = Registry::new();
+    let metrics = BatchCertificateVerifier::new(&registry);
+
     let num_cpus = num_cpus::get() as u64;
     for num_threads in [1, num_cpus / 2, num_cpus] {
         for batch_size in [8, 16, 32] {
@@ -68,8 +72,11 @@ fn async_verifier_bench(c: &mut Criterion) {
                         .enable_time()
                         .build()
                         .unwrap();
-                    let async_verifier =
-                        Arc::new(AsyncBatchVerifier::new(committee.clone(), batch_size));
+                    let async_verifier = Arc::new(AsyncBatchVerifier::new(
+                        committee.clone(),
+                        batch_size,
+                        metrics.clone(),
+                    ));
 
                     b.iter(|| {
                         let handles: Vec<_> = (0..(num_threads * over_subscription))

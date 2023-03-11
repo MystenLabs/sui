@@ -361,29 +361,16 @@ impl ValidatorService {
         }
         // code block within reconfiguration lock
         let certificate = {
+            let certificate = {
+                let _timer = metrics.cert_verification_latency.start_timer();
+                epoch_store.batch_verifier.verify_cert(certificate).await?
+            };
+
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
                 metrics.num_rejected_cert_in_epoch_boundary.inc();
                 return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
             }
-
-            let certificate = {
-                let cert_digest = certificate.certificate_digest();
-                if epoch_store
-                    .verified_cert_cache()
-                    .is_cert_verified(&cert_digest)
-                {
-                    VerifiedCertificate::new_unchecked(certificate)
-                } else {
-                    let _timer = metrics.cert_verification_latency.start_timer();
-                    // Note: verify verifies user sigs as well before caching cert.
-                    certificate.verify(epoch_store.committee()).tap_ok(|_| {
-                        epoch_store
-                            .verified_cert_cache()
-                            .cache_cert_verified(cert_digest)
-                    })?
-                }
-            };
 
             // 3) All certificates are sent to consensus (at least by some authorities)
             // For shared objects this will wait until either timeout or we have heard back from consensus.

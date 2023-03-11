@@ -3,7 +3,7 @@
 
 use criterion::*;
 
-use sui_core::authority::{VerifiedCertificateCache, VerifiedCertificateCacheMetrics};
+use sui_core::batch_bls_verifier::{VerifiedCertificateCache, VerifiedCertificateCacheMetrics};
 use sui_types::digests::CertificateDigest;
 
 use criterion::Criterion;

@@ -70,6 +70,7 @@ use sui_config::node::DBCheckpointConfig;
 use sui_core::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, EpochStartConfiguration,
 };
+use sui_core::batch_bls_verifier::AsyncBatchVerifierMetrics;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -193,6 +194,7 @@ impl SuiNode {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let verified_cert_cache_metrics =
             VerifiedCertificateCacheMetrics::new(&prometheus_registry);
+        let async_batch_verifier_metrics = AsyncBatchVerifierMetrics::new(&prometheus_registry);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
@@ -203,6 +205,7 @@ impl SuiNode {
             store.clone(),
             cache_metrics,
             verified_cert_cache_metrics,
+            async_batch_verifier_metrics,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));

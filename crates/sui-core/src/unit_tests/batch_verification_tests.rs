@@ -4,6 +4,7 @@
 use crate::batch_bls_verifier::*;
 use crate::test_utils::{make_cert_with_large_committee, make_dummy_tx};
 use futures::future::join_all;
+use prometheus::Registry;
 use rand::{thread_rng, Rng};
 use std::sync::Arc;
 use sui_macros::sim_test;
@@ -29,7 +30,7 @@ fn gen_certs(
         .collect();
 
     txns.iter()
-        .map(|t| make_cert_with_large_committee(&committee, key_pairs, t))
+        .map(|t| make_cert_with_large_committee(committee, key_pairs, t))
         .collect()
 }
 
@@ -66,7 +67,9 @@ async fn test_async_verifier() {
     let committee = Arc::new(committee);
     let key_pairs = Arc::new(key_pairs);
 
-    let verifier = Arc::new(AsyncBatchVerifier::new(committee.clone(), 16));
+    let registry = Registry::new();
+    let metrics = BatchCertificateVerifier::new(&registry);
+    let verifier = Arc::new(AsyncBatchVerifier::new(committee.clone(), 16, metrics));
 
     let tasks: Vec<_> = (0..32)
         .into_iter()

@@ -2017,6 +2017,10 @@ impl CertifiedTransaction {
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
     }
+
+    pub fn verify_sender_signatures(&self) -> SuiResult {
+        self.data().verify(None)
+    }
 }
 
 pub type TxCertAndSignedEffects = (
