@@ -90,7 +90,7 @@ impl TestCallArg {
                 for object_id in vec {
                     refs.push(Self::call_arg_from_id(object_id, state).await)
                 }
-                builder.make_obj_vec(refs)
+                builder.make_obj_vec(refs).unwrap()
             }
         }
     }
@@ -1268,7 +1268,9 @@ async fn test_handle_sponsored_transaction() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object.compute_object_reference());
+        builder
+            .transfer_object(recipient, object.compute_object_reference())
+            .unwrap();
         builder.finish()
     };
     let tx_kind = TransactionKind::programmable(pt);

@@ -609,7 +609,9 @@ async fn execute_transfer_with_price(
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object.compute_object_reference());
+        builder
+            .transfer_object(recipient, object.compute_object_reference())
+            .unwrap();
         builder.finish()
     };
     let kind = TransactionKind::ProgrammableTransaction(pt);

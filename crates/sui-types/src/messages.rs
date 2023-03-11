@@ -456,6 +456,14 @@ impl CallArg {
     }
 }
 
+impl ObjectArg {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            ObjectArg::ImmOrOwnedObject((id, _, _)) | ObjectArg::SharedObject { id, .. } => *id,
+        }
+    }
+}
+
 impl MoveCall {
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
         let MoveCall {
@@ -1313,7 +1321,7 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_object(recipient, object_ref);
+            builder.transfer_object(recipient, object_ref).unwrap();
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)

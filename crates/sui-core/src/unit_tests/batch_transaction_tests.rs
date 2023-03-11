@@ -31,14 +31,16 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     .await;
     let mut builder = ProgrammableTransactionBuilder::new();
     for obj_id in all_ids.iter().take(N) {
-        builder.transfer_object(
-            recipient,
-            authority_state
-                .get_object(obj_id)
-                .await?
-                .unwrap()
-                .compute_object_reference(),
-        )
+        builder
+            .transfer_object(
+                recipient,
+                authority_state
+                    .get_object(obj_id)
+                    .await?
+                    .unwrap()
+                    .compute_object_reference(),
+            )
+            .unwrap()
     }
     for _ in 0..N {
         builder
@@ -105,14 +107,16 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     .await;
     let mut builder = ProgrammableTransactionBuilder::new();
     for obj_id in all_ids.iter().take(N) {
-        builder.transfer_object(
-            recipient,
-            authority_state
-                .get_object(obj_id)
-                .await?
-                .unwrap()
-                .compute_object_reference(),
-        )
+        builder
+            .transfer_object(
+                recipient,
+                authority_state
+                    .get_object(obj_id)
+                    .await?
+                    .unwrap()
+                    .compute_object_reference(),
+            )
+            .unwrap()
     }
     builder
         .move_call(

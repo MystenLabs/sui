@@ -98,7 +98,7 @@ async fn test_transfer_object() {
     let object_ref = get_random_sui(&client, sender, vec![]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object_ref);
+        builder.transfer_object(recipient, object_ref).unwrap();
         builder.finish()
     };
     test_transaction(

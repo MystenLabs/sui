@@ -668,7 +668,9 @@ fn test_sponsored_transaction_message() {
     let sponsor = (&sponsor_kp.public()).into();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder
+            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -782,7 +784,9 @@ fn test_sponsored_transaction_validity_check() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder
+            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -1080,10 +1084,12 @@ fn test_move_input_objects() {
         builder
             .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
             .unwrap(),
-        builder.make_obj_vec(vec![
-            ObjectArg::ImmOrOwnedObject(o2),
-            ObjectArg::ImmOrOwnedObject(o3),
-        ]),
+        builder
+            .make_obj_vec(vec![
+                ObjectArg::ImmOrOwnedObject(o2),
+                ObjectArg::ImmOrOwnedObject(o3),
+            ])
+            .unwrap(),
         builder
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: shared.0,
@@ -1166,10 +1172,12 @@ fn test_unique_input_objects() {
         builder
             .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
             .unwrap(),
-        builder.make_obj_vec(vec![
-            ObjectArg::ImmOrOwnedObject(o2),
-            ObjectArg::ImmOrOwnedObject(o3),
-        ]),
+        builder
+            .make_obj_vec(vec![
+                ObjectArg::ImmOrOwnedObject(o2),
+                ObjectArg::ImmOrOwnedObject(o3),
+            ])
+            .unwrap(),
     ];
     let args_2 = vec![builder
         .input(CallArg::Object(ObjectArg::SharedObject {
