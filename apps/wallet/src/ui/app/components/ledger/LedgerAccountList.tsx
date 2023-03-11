@@ -3,15 +3,15 @@
 
 import { LedgerAccountItem, type LedgerAccount } from './LedgerAccountItem';
 
-type SelectLedgerAccountsListProps = {
+type LedgerAccountListProps = {
     accounts: LedgerAccount[];
-    onSelect: (selectedAccount: LedgerAccount) => void;
+    onAccountClick: (account: LedgerAccount) => void;
 };
 
-export function SelectLedgerAccountsList({
+export function LedgerAccountList({
     accounts,
-    onSelect,
-}: SelectLedgerAccountsListProps) {
+    onAccountClick,
+}: LedgerAccountListProps) {
     return (
         <ul className="list-none m-0 p-0">
             {accounts.map((account) => (
@@ -19,7 +19,7 @@ export function SelectLedgerAccountsList({
                     <button
                         className="w-full appearance-none border-0 p-0 bg-transparent cursor-pointer"
                         onClick={() => {
-                            onSelect(account);
+                            onAccountClick(account);
                         }}
                     >
                         <LedgerAccountItem

@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
 import { type LedgerAccount } from './LedgerAccountItem';
-import { SelectLedgerAccountsList } from './SelectLedgerAccountsList';
+import { LedgerAccountList } from './LedgerAccountList';
 import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
@@ -36,14 +36,14 @@ export function ImportLedgerAccounts() {
             onError: onDeriveError,
         });
 
-    const onSelectAccount = useCallback(
-        (selectedAccount: LedgerAccount) => {
+    const onAccountClick = useCallback(
+        (targetAccount: LedgerAccount) => {
             setLedgerAccounts((prevState) =>
                 prevState.map((account) => {
-                    if (account.address === selectedAccount.address) {
+                    if (account.address === targetAccount.address) {
                         return {
-                            isSelected: !selectedAccount.isSelected,
-                            address: selectedAccount.address,
+                            isSelected: !targetAccount.isSelected,
+                            address: targetAccount.address,
                         };
                     }
                     return account;
@@ -53,7 +53,7 @@ export function ImportLedgerAccounts() {
         [setLedgerAccounts]
     );
 
-    const onSelectAllAccounts = useCallback(() => {
+    const onSelectAllAccountsClick = useCallback(() => {
         setLedgerAccounts((prevState) =>
             prevState.map((account) => ({
                 isSelected: true,
@@ -100,9 +100,9 @@ export function ImportLedgerAccounts() {
     } else {
         summaryCardBody = (
             <div className="max-h-[272px] -mr-2 mt-1 pr-2 overflow-auto custom-scrollbar">
-                <SelectLedgerAccountsList
+                <LedgerAccountList
                     accounts={filteredLedgerAccounts}
-                    onSelect={onSelectAccount}
+                    onAccountClick={onAccountClick}
                 />
             </div>
         );
@@ -137,7 +137,7 @@ export function ImportLedgerAccounts() {
                                 text="Select All Accounts"
                                 color="heroDark"
                                 weight="medium"
-                                onClick={onSelectAllAccounts}
+                                onClick={onSelectAllAccountsClick}
                                 disabled={isSelectAllButtonDisabled}
                             />
                         </div>
