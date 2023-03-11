@@ -4,15 +4,12 @@
 
 NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=$(sysctl -n hw.ncpu) # mac
+# NUM_CPUS=64 # We can increase this later if needed
 
 # filter out some tests that give spurious failures.
 TEST_FILTER="(not test(test_move_call_args_linter_command)) & (not test(test_package_publish_command))"
 
 DATE=$(date +%s)
-
-export MSIM_TEST_NUM=30
-export SIM_STRESS_TEST_DURATION_SECS=300
-
 SEED="$DATE"
 # LOG_FILE="log-$SEED"
 
@@ -26,9 +23,15 @@ scripts/simtest/cargo-simtest simtest \
   --package sui-core \
   --profile simtestnightly
 
+# create logs directory
+SIMTEST_LOGS_DIR=~/simtest_logs
+[ ! -d ${SIMTEST_LOGS_DIR} ] && mkdir -p ${SIMTEST_LOGS_DIR}
+[ ! -d ${SIMTEST_LOGS_DIR}/${DATE} ] && mkdir -p ${SIMTEST_LOGS_DIR}/${DATE}
+
 for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
-  echo "Iteration $SUB_SEED using MSIM_TEST_SEED=$SEED"
+  LOG_FILE=${SIMTEST_LOGS_DIR}/${DATE}/"log-$SEED"
+  echo "Iteration $SUB_SEED using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 
   # --test-threads 1 is important: parallelism is achieved via the for loop
   MSIM_TEST_SEED="$SEED" \
@@ -39,7 +42,7 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
     --run-ignored all \
     --test-threads 1 \
     --profile simtestnightly \
-    -E "$TEST_FILTER" &
+    -E "$TEST_FILTER" > "$LOG_FILE" 2>&1 &
 done
 
 # wait for all the jobs to end
