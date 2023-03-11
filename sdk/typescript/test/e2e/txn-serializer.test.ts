@@ -64,9 +64,9 @@ describe('Transaction Serialization and deserialization', () => {
       Commands.MoveCall({
         target: '0x2::sui_system::request_add_stake',
         arguments: [
-          tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-          tx.input(coins[2].objectId),
-          tx.input(validatorAddress),
+          tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+          tx.object(coins[2].objectId),
+          tx.pure(validatorAddress),
         ],
       }),
     );
@@ -78,7 +78,7 @@ describe('Transaction Serialization and deserialization', () => {
     tx.add(
       Commands.MoveCall({
         target: `${packageId}::serializer_tests::value`,
-        arguments: [tx.input(sharedObjectId)],
+        arguments: [tx.object(sharedObjectId)],
       }),
     );
     await serializeAndDeserialize(tx, [false]);
@@ -89,15 +89,15 @@ describe('Transaction Serialization and deserialization', () => {
     tx.add(
       Commands.MoveCall({
         target: `${packageId}::serializer_tests::value`,
-        arguments: [tx.input(sharedObjectId)],
+        arguments: [tx.object(sharedObjectId)],
       }),
     );
     tx.add(
       Commands.MoveCall({
         target: `${packageId}::serializer_tests::set_value`,
-        arguments: [tx.input(sharedObjectId)],
+        arguments: [tx.object(sharedObjectId)],
       }),
     );
-    await serializeAndDeserialize(tx, [false, true]);
+    await serializeAndDeserialize(tx, [true]);
   });
 });

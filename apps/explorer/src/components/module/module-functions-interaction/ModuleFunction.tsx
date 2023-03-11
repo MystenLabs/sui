@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getPureSerializationType,
     getExecutionStatusType,
     getExecutionStatusError,
     Transaction,
@@ -68,6 +69,7 @@ export function ModuleFunction({
         functionDetails.parameters,
         resolvedTypeArguments
     );
+
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const tx = new Transaction();
@@ -76,7 +78,15 @@ export function ModuleFunction({
                 Commands.MoveCall({
                     target: `${packageId}::${moduleName}::${functionName}`,
                     typeArguments: types ?? [],
-                    arguments: params?.map((param) => tx.input(param)) ?? [],
+                    arguments:
+                        params?.map((param, i) =>
+                            getPureSerializationType(
+                                functionDetails.parameters[i],
+                                param
+                            )
+                                ? tx.pure(param)
+                                : tx.object(param)
+                        ) ?? [],
                 })
             );
             const result = await signAndExecuteTransaction({ transaction: tx });
