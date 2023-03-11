@@ -4,8 +4,7 @@ title: Examples of Sui Smart Contracts
 
 Find sample Sui smart contract implementations in the [sui_programmability/examples](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples) directory. Also see [Sui by Example](../explore/move-examples/index.md) for a feature-by-feature guide to [Sui Move](../learn/sui-move-diffs.md).
 
-
-Here is a rundown of existing examples in the Sui repository.
+Here is a list of existing examples in the Sui repository.
 
 ## Basics
 
@@ -14,9 +13,9 @@ In the [Basics](https://github.com/MystenLabs/sui/tree/main/sui_programmability/
 ## Crypto
 
 In the [Cryptography](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example, employ a simple contract to:
-  * Hash a piece of data using keccak256 and output an object with hashed data.
-  * Recover a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key and output an object with the public key.
-  * Verify a Secp256k1 signature and produce an event indicating whether it is verified.
+ * Hash a piece of data using keccak256 and output an object with hashed data.
+ * Recover a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key and output an object with the public key.
+ * Verify a Secp256k1 signature and produce an event indicating whether it is verified.
 
 ## DeFi
 
@@ -24,8 +23,7 @@ In the [DeFi](https://github.com/MystenLabs/sui/tree/main/sui_programmability/ex
 
 ## Fungible Tokens
 
-In the [Fungible Tokens](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/fungible_tokens) example, see a token managed by a treasurer trusted for minting and burning for
-how (e.g.) a fiat-backed stablecoin would work.
+In the [Fungible Tokens](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/fungible_tokens) example, see a token managed by a treasurer trusted for minting and burning for how (e.g.) a fiat-backed stablecoin would work.
 
 ## Games
 
