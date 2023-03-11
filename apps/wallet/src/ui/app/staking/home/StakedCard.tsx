@@ -3,7 +3,7 @@
 
 import { useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
-import { cva, type VariantProps } from 'class-variance-authority';
+import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
 import { ValidatorLogo } from '../validators/ValidatorLogo';
@@ -14,6 +14,7 @@ import type { StakeObject } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 export enum StakeState {
+    WARM_UP = 'WARM_UP',
     EARNING = 'EARNING',
     COOL_DOWN = 'COOL_DOWN',
     WITHDRAW = 'WITHDRAW',
@@ -21,13 +22,15 @@ export enum StakeState {
 }
 
 const STATUS_COPY = {
-    [StakeState.EARNING]: 'Staking Reward',
+    [StakeState.WARM_UP]: 'Starts Earning',
+    [StakeState.EARNING]: 'Staking Rewards',
     [StakeState.COOL_DOWN]: 'Available to withdraw',
     [StakeState.WITHDRAW]: 'Withdraw',
     [StakeState.IN_ACTIVE]: 'Inactive',
 };
 
 const STATUS_VARIANT = {
+    [StakeState.WARM_UP]: 'warmUp',
     [StakeState.EARNING]: 'earning',
     [StakeState.COOL_DOWN]: 'coolDown',
     [StakeState.WITHDRAW]: 'withDraw',
@@ -39,11 +42,12 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 pt-3 box-border h-36 w-full rounded-2xl border group border-solid ',
+        'group flex no-underline flex-col p-3.75 pr-2 pt-3 box-border h-36 w-full rounded-2xl border border-solid ',
     ],
     {
         variants: {
             variant: {
+                warmUp: 'bg-white border border-gray-45 text-steel-dark hover:bg-sui/10 hover:border-sui/30',
                 earning:
                     'bg-white border border-gray-45 text-steel-dark hover:bg-sui/10 hover:border-sui/30',
                 coolDown:
@@ -61,6 +65,7 @@ export interface StakeCardContentProps extends VariantProps<typeof cardStyle> {
     statusLabel: string;
     statusText: string;
     children?: ReactNode;
+    earnColor?: boolean;
 }
 
 function StakeCardContent({
@@ -68,13 +73,21 @@ function StakeCardContent({
     statusLabel,
     statusText,
     variant,
+    earnColor,
 }: StakeCardContentProps) {
     return (
         <div className={cardStyle({ variant })}>
             {children}
             <div className="flex flex-col gap-1">
                 <div className="text-subtitle font-medium">{statusLabel}</div>
-                <div className="text-bodySmall font-semibold">{statusText}</div>
+                <div
+                    className={cx(
+                        'text-bodySmall font-semibold',
+                        earnColor ? 'text-success-dark' : ''
+                    )}
+                >
+                    {statusText}
+                </div>
             </div>
         </div>
     );
@@ -83,12 +96,16 @@ function StakeCardContent({
 interface StakeCardProps {
     delegationObject: DelegationObjectWithValidator;
     currentEpoch: number;
+    inActiveValidator?: boolean;
 }
 
 // For delegationsRequestEpoch n  through n + 2, show Start Earning
 // Show epoch number or date/time for n + 3 epochs
-// TODO: Change delegation to Stake
-export function StakeCard({ delegationObject }: StakeCardProps) {
+export function StakeCard({
+    delegationObject,
+    currentEpoch,
+    inActiveValidator = false,
+}: StakeCardProps) {
     const {
         stakedSuiId,
         principal,
@@ -96,17 +113,27 @@ export function StakeCard({ delegationObject }: StakeCardProps) {
         estimatedReward,
         validatorAddress,
     } = delegationObject;
-    const rewards = estimatedReward;
 
-    const delegationState = StakeState.EARNING;
-    const [stakeRewards, symbol] = useFormatCoin(
-        principal + (rewards ?? 0),
-        SUI_TYPE_ARG
-    );
+    // TODO: Once two step withdraw is available, add cool down and withdraw now logic
+    // For cool down epoch, show Available to withdraw add rewards to principal
+    // Reward earning epoch is 2 epochs after stake request epoch
+    const rewardEarningEpoch = stakeRequestEpoch + 2;
+    const isEarnedRewards = currentEpoch >= rewardEarningEpoch;
+    const delegationState = inActiveValidator
+        ? StakeState.IN_ACTIVE
+        : isEarnedRewards
+        ? StakeState.EARNING
+        : StakeState.WARM_UP;
+
+    const rewards = isEarnedRewards && estimatedReward ? estimatedReward : 0;
+    const [principalStaked, symbol] = useFormatCoin(principal, SUI_TYPE_ARG);
+    const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);
+    const isEarning = delegationState === StakeState.EARNING && rewards > 0;
 
     const statusText = {
         // Epoch time before earning
-        [StakeState.EARNING]: `Epoch #${stakeRequestEpoch + 2}`,
+        [StakeState.WARM_UP]: `Epoch #${rewardEarningEpoch}`,
+        [StakeState.EARNING]: `${rewardsStaked} ${symbol}`,
         // Epoch time before redrawing
         [StakeState.COOL_DOWN]: `Epoch #`,
         [StakeState.WITHDRAW]: 'Now',
@@ -125,6 +152,7 @@ export function StakeCard({ delegationObject }: StakeCardProps) {
                 variant={STATUS_VARIANT[delegationState]}
                 statusLabel={STATUS_COPY[delegationState]}
                 statusText={statusText[delegationState]}
+                earnColor={isEarning}
             >
                 <div className="flex justify-between items-start mb-1 ">
                     <ValidatorLogo
@@ -144,9 +172,8 @@ export function StakeCard({ delegationObject }: StakeCardProps) {
                 <div className="flex-1 mb-4">
                     <div className="flex items-baseline gap-1">
                         <Text variant="body" weight="semibold" color="gray-90">
-                            {stakeRewards}
+                            {principalStaked}
                         </Text>
-
                         <Text
                             variant="subtitle"
                             weight="normal"

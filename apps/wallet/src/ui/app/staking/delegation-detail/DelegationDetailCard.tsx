@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
-import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
@@ -61,10 +60,7 @@ export function DelegationDetailCard({
 
     const totalStake = BigInt(delegationData?.principal || 0n);
 
-    const suiEarned = useMemo(() => {
-        if (!validatorData || !delegationData) return 0n;
-        return getStakingRewards(validatorData, delegationData);
-    }, [delegationData, validatorData]);
+    const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;

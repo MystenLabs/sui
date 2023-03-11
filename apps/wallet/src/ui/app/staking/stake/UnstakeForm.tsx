@@ -19,12 +19,14 @@ export type StakeFromProps = {
     coinBalance: bigint;
     coinType: string;
     stakingReward?: number;
+    epoch: string | number;
 };
 
 export function UnStakeForm({
     coinBalance,
     coinType,
     stakingReward,
+    epoch,
 }: StakeFromProps) {
     const { setFieldValue } = useFormikContext<FormValues>();
     const { gasBudget, isLoading } = useGasBudgetInMist(
@@ -32,7 +34,12 @@ export function UnStakeForm({
     );
     const [gasBudgetFormatted, symbol] = useFormatCoin(gasBudget, SUI_TYPE_ARG);
     const [rewards, rewardSymbol] = useFormatCoin(stakingReward, SUI_TYPE_ARG);
+    const [totalSui] = useFormatCoin(
+        BigInt(stakingReward || 0) + coinBalance,
+        SUI_TYPE_ARG
+    );
     const [tokenBalance] = useFormatCoin(coinBalance, coinType);
+
     useEffect(() => {
         setFieldValue(
             'gasBudget',
@@ -48,7 +55,6 @@ export function UnStakeForm({
             noValidate
         >
             <Card
-                variant="gray"
                 titleDivider
                 header={
                     <div className="px-4 py-3 w-full flex bg-white justify-between">
@@ -57,7 +63,23 @@ export function UnStakeForm({
                             weight="medium"
                             color="steel-darker"
                         >
-                            Your Stake
+                            Current Epoch Ends
+                        </Text>
+                        <div className="flex gap-0.5 items-end">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-dark"
+                            >
+                                Epoch #{epoch}
+                            </Text>
+                        </div>
+                    </div>
+                }
+                footer={
+                    <div className="flex gap-0.5 justify-between w-full">
+                        <Text variant="p2" weight="medium" color="steel-darker">
+                            Total unstaked SUI
                         </Text>
                         <div className="flex gap-0.5 items-end">
                             <Heading
@@ -66,7 +88,7 @@ export function UnStakeForm({
                                 color="steel-darker"
                                 leading="none"
                             >
-                                {tokenBalance}
+                                {totalSui}
                             </Heading>
                             <Text
                                 variant="bodySmall"
@@ -78,37 +100,32 @@ export function UnStakeForm({
                         </div>
                     </div>
                 }
-                footer={
-                    <div className="py-px flex justify-between w-full">
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            Gas Fees
-                        </Text>
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {isLoading ? (
-                                <LoadingIndicator />
-                            ) : (
-                                `${gasBudgetFormatted} ${symbol}`
-                            )}
-                        </Text>
-                    </div>
-                }
             >
                 <div className="pb-3.75 flex flex-col  w-full gap-2">
                     <div className="flex gap-0.5 justify-between w-full">
                         <Text
                             variant="body"
-                            weight="semibold"
+                            weight="medium"
                             color="steel-darker"
                         >
-                            Staking Rewards
+                            Your Stake
+                        </Text>
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            {tokenBalance}
+                            {symbol}
+                        </Text>
+                    </div>
+                    <div className="flex gap-0.5 justify-between w-full">
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            Staking Rewards Earned
                         </Text>
                         <Text
                             variant="body"
@@ -118,13 +135,29 @@ export function UnStakeForm({
                             {rewards} {rewardSymbol}
                         </Text>
                     </div>
-                    <div className="w-2/3">
-                        <Text variant="p2" weight="medium" color="steel-darker">
-                            Distributed at end of current Epoch
-                        </Text>
-                    </div>
                 </div>
             </Card>
+            <div className="mt-4">
+                <Card variant="gray">
+                    <div className=" w-full flex justify-between">
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            Gas Fees
+                        </Text>
+
+                        <Text variant="body" weight="medium" color="steel-dark">
+                            {isLoading ? (
+                                <LoadingIndicator />
+                            ) : (
+                                `${gasBudgetFormatted} ${symbol}`
+                            )}
+                        </Text>
+                    </div>
+                </Card>
+            </div>
         </Form>
     );
 }

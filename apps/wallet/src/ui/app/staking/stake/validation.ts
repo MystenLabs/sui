@@ -9,7 +9,8 @@ export function createValidationSchema(
     coinBalance: bigint,
     coinSymbol: string,
     decimals: number,
-    isUnstake: boolean
+    isUnstake: boolean,
+    minimumStake: number
 ) {
     return object({
         // NOTE: This is an intentional subset of the token validation:
@@ -34,8 +35,13 @@ export function createValidationSchema(
                   )
                   .test(
                       'min',
-                      `\${path} must be greater than 0 ${coinSymbol}`,
-                      (amount?: BigNumber) => (amount ? amount.gt(0) : false)
+                      `\${path} must be greater than 1 ${coinSymbol}`,
+                      (amount?: BigNumber) =>
+                          amount
+                              ? amount
+                                    .shiftedBy(decimals)
+                                    .gte(minimumStake.toString())
+                              : false
                   )
                   .test('max', (amount: BigNumber | undefined, ctx) => {
                       const gasBudget = ctx.parent.gasBudget || 0n;
