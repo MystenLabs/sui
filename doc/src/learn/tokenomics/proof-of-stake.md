@@ -4,22 +4,22 @@ title: Sui’s Delegated Proof-of-Stake System
 
 The Sui platform relies on Delegated Proof-of-Stake to determine the set of validators who process transactions. 
 
-## SUI token delegation
+## SUI token staking
 
-Within each epoch, operations are processed by a fixed set of validators, each with a specific amount of stake delegated from SUI token holders. A validator's share of total stake is relevant in that it determines each validator’s share of voting power for processing transactions. Delegating SUI implies the SUI tokens are locked for the entire epoch. SUI token holders are free to unstake their SUI or to change their delegate validator when the epoch changes.
+Within each epoch, operations are processed by a fixed set of validators, each with a specific amount of stake from SUI token holders. A validator's share of total stake is relevant in that it determines each validator’s share of voting power for processing transactions. Staking SUI implies the SUI tokens are locked for the entire epoch. SUI token holders are free to unstake their SUI or to change their selected validator when the epoch changes.
 
 ## Economic model
 
-We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the Staking and Tokenomics diagram in the [Sui Tokenomics](../tokenomics/index.md) overview.
+We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s Delegated Proof-of-Stake system. As a complementary reference, see the Staking and Tokenomics diagram in the [Sui Tokenomics](../tokenomics/index.md) overview.
 
 The Sui economic model works as follows:
 
 At the beginning of each epoch: Three important things happen:
- * SUI holders delegate (some) of their tokens to validators and a new [committee](../architecture/validators#committees) is formed. 
+ * SUI holders stake (some) of their tokens to validators and a new [committee](../architecture/validators#committees) is formed. 
  * The reference gas prices are set as described in Sui’s [gas price mechanism](gas-pricing.md).
  * The [storage fund’s](storage-fund.md) size is adjusted using the previous epoch’s net inflow.
   
-Following these actions, the protocol computes the total amount of stake as the sum of delegated stake plus the storage fund. Call the share of delegated stake $\alpha$.
+Following these actions, the protocol computes the total amount of stake as the sum of staked SUI plus the storage fund. Call the share of user stake $\alpha$.
 
 During each epoch: Users submit transactions to the Sui platform and validators process them. For each transaction, users pay the associated computation and storage gas fees. In cases where users delete previous transaction data, users obtain a partial rebate of their storage fees. Validators observe the behavior of other validators and evaluate each other’s performance.
 
