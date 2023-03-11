@@ -133,6 +133,22 @@ module sui::math {
         (res as u128)
     }
 
+    public fun sqrt_u256(y: u256): u256 {
+        let z = 0u256;
+        if (y > 3) {
+            z = y;
+            let x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            };
+        } else if (y != 0) {
+            z = 1;
+        };
+
+        z
+    }
+
     /// Calculate x / y, but round up the result.
     public fun divide_and_round_up(x: u64, y: u64): u64 {
         if (x % y == 0) {

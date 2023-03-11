@@ -4,6 +4,7 @@
 #[test_only]
 module sui::math_tests {
     use sui::math;
+    use sui::math::sqrt_u256;
 
     #[test]
     fun test_max() {
@@ -18,7 +19,7 @@ module sui::math_tests {
         assert!(math::min(100, 10) == 10, 2);
         assert!(math::min(0, 0) == 0, 3);
     }
-    
+
     #[test]
     fun test_pow() {
         assert!(math::pow(1, 0) == 1, 0);
@@ -68,5 +69,22 @@ module sui::math_tests {
     fun test_sqrt_big_numbers() {
         let u64_max = 18446744073709551615;
         assert!(4294967295 == math::sqrt(u64_max), 0)
+    }
+
+    #[test]
+    fun test_sqrt_u256() {
+        let i = 0;
+        while (i <= 5) {
+            assert!(i == sqrt_u256(i * i), 0);
+            i = i + 1;
+        };
+
+        // python3
+        // import math
+        // int(math.sqrt(115792089237316195423570985008687907853269984665640564039457584007913129639935))
+        // result: 340282366920938463463374607431768211456
+        // different here is 1 which is acceptable
+        let u256_max = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
+        assert!(340282366920938463463374607431768211455 == math::sqrt_u256(u256_max), 0);
     }
 }
