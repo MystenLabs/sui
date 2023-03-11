@@ -39,6 +39,7 @@ use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
+use sui_core::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -194,8 +195,8 @@ impl SuiNode {
             .get_epoch_start_configuration()?
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
-        let verified_cert_cache_metrics =
-            VerifiedCertificateCacheMetrics::new(&prometheus_registry);
+        let batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&prometheus_registry);
+
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
@@ -205,7 +206,7 @@ impl SuiNode {
             epoch_start_configuration,
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            batch_verifier_metrics,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
