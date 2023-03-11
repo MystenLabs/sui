@@ -237,6 +237,27 @@ export class Transaction {
     return createTransactionResult(index - 1);
   }
 
+  // Method shorthands:
+
+  splitCoin(...args: Parameters<(typeof Commands)['SplitCoin']>) {
+    return this.add(Commands.SplitCoin(...args));
+  }
+  mergeCoins(...args: Parameters<(typeof Commands)['MergeCoins']>) {
+    return this.add(Commands.MergeCoins(...args));
+  }
+  publish(...args: Parameters<(typeof Commands)['Publish']>) {
+    return this.add(Commands.Publish(...args));
+  }
+  moveCall(...args: Parameters<(typeof Commands)['MoveCall']>) {
+    return this.add(Commands.MoveCall(...args));
+  }
+  transferObjects(...args: Parameters<(typeof Commands)['TransferObjects']>) {
+    return this.add(Commands.TransferObjects(...args));
+  }
+  makeMoveVec(...args: Parameters<(typeof Commands)['MakeMoveVec']>) {
+    return this.add(Commands.MakeMoveVec(...args));
+  }
+
   /**
    * Serialize the transaction to a string so that it can be sent to a separate context.
    * This is different from `build` in that it does not serialize to BCS bytes, and instead

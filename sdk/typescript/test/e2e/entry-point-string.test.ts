@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  Commands,
-  getExecutionStatusType,
-  ObjectId,
-  Transaction,
-} from '../../src';
+import { getExecutionStatusType, ObjectId, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -22,12 +17,10 @@ describe('Test Move call with strings', () => {
   async function callWithString(str: string | string[], funcName: string) {
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::entry_point_string::${funcName}`,
-        arguments: [tx.pure(str)],
-      }),
-    );
+    tx.moveCall({
+      target: `${packageId}::entry_point_string::${funcName}`,
+      arguments: [tx.pure(str)],
+    });
     const result = await toolbox.signer.signAndExecuteTransaction(tx, {
       showEffects: true,
     });

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RawSigner, Transaction, Commands } from '../../src';
+import { RawSigner, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -24,8 +24,8 @@ describe('Test dev inspect', () => {
   it.skip('Dev inspect split + transfer', async () => {
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(10)));
-    tx.add(Commands.TransferObjects([coin], tx.pure(toolbox.address())));
+    const coin = tx.splitCoin(tx.gas, tx.pure(10));
+    tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
   });
 
@@ -34,16 +34,14 @@ describe('Test dev inspect', () => {
 
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const obj = tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::return_struct`,
-        typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-        arguments: [tx.pure(coins[0].objectId)],
-      }),
-    );
+    const obj = tx.moveCall({
+      target: `${packageId}::serializer_tests::return_struct`,
+      typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+      arguments: [tx.pure(coins[0].objectId)],
+    });
 
     // TODO: Ideally dev inspect transactions wouldn't need this, but they do for now
-    tx.add(Commands.TransferObjects([obj], tx.pure(toolbox.address())));
+    tx.transferObjects([obj], tx.pure(toolbox.address()));
 
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
   });
@@ -51,13 +49,11 @@ describe('Test dev inspect', () => {
   it('Move Call that aborts', async () => {
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::test_abort`,
-        typeArguments: [],
-        arguments: [],
-      }),
-    );
+    tx.moveCall({
+      target: `${packageId}::serializer_tests::test_abort`,
+      typeArguments: [],
+      arguments: [],
+    });
 
     await validateDevInspectTransaction(toolbox.signer, tx, 'failure');
   });
