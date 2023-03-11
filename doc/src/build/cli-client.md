@@ -126,7 +126,7 @@ sui client objects
 The response resembles the following:
 
 ```
-                               Object ID                                |  Version   |                    Digest                    |   Owner Type    |               Object Type
+                           Object ID                              |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
