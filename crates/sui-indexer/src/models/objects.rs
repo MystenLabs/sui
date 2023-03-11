@@ -199,7 +199,8 @@ impl TryFrom<Object> for sui_types::object::Object {
                     .map(|NamedBcsBytes(name, bytes)| (name, bytes))
                     .collect();
                 // Ok to unwrap, package size is safe guarded by the full node, we are not limiting size when reading back from DB.
-                let package = MovePackage::new(object_id, version, &modules, u64::MAX).unwrap();
+                let package =
+                    MovePackage::new(object_id, version, &modules, u64::MAX, &[]).unwrap();
                 sui_types::object::Object {
                     data: Data::Package(package),
                     owner,

@@ -1288,6 +1288,7 @@ mod tests {
                         SequenceNumber::new(),
                         &BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
                         100_000,
+                        &[],
                     )
                     .unwrap(),
                 ),
