@@ -548,8 +548,9 @@ module sui::validator {
         validate_metadata(&self.metadata);
     }
 
-    /// Update network address of this validator
-    public(friend) fun update_network_address(self: &mut Validator, net_address: vector<u8>) {
+    /// Update network address of this candidate validator
+    public(friend) fun update_candidate_network_address(self: &mut Validator, net_address: vector<u8>) {
+        assert!(is_preactive(self), ENotValidatorCandidate);
         self.metadata.net_address = net_address;
         validate_metadata(&self.metadata);
     }

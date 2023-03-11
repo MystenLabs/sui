@@ -643,10 +643,17 @@ module sui::validator_set {
     public(friend) fun get_validator_mut_with_ctx(
         self: &mut ValidatorSet,
         ctx: &TxContext,
-        include_candidate: bool,
     ): &mut Validator {
         let validator_address = tx_context::sender(ctx);
-        get_active_or_pending_or_candidate_validator_mut(self, validator_address, include_candidate)
+        get_active_or_pending_or_candidate_validator_mut(self, validator_address, false)
+    }
+
+    public(friend) fun get_validator_mut_with_ctx_including_candidates(
+        self: &mut ValidatorSet,
+        ctx: &TxContext,
+    ): &mut Validator {
+        let validator_address = tx_context::sender(ctx);
+        get_active_or_pending_or_candidate_validator_mut(self, validator_address, true)
     }
 
     fun get_validator_ref(

@@ -65,7 +65,7 @@
 -  [Function `update_image_url`](#0x2_validator_update_image_url)
 -  [Function `update_project_url`](#0x2_validator_update_project_url)
 -  [Function `update_next_epoch_network_address`](#0x2_validator_update_next_epoch_network_address)
--  [Function `update_network_address`](#0x2_validator_update_network_address)
+-  [Function `update_candidate_network_address`](#0x2_validator_update_candidate_network_address)
 -  [Function `update_next_epoch_p2p_address`](#0x2_validator_update_next_epoch_p2p_address)
 -  [Function `update_candidate_p2p_address`](#0x2_validator_update_candidate_p2p_address)
 -  [Function `update_next_epoch_primary_address`](#0x2_validator_update_next_epoch_primary_address)
@@ -2045,14 +2045,14 @@ Update network address of this validator, taking effects from next epoch
 
 </details>
 
-<a name="0x2_validator_update_network_address"></a>
+<a name="0x2_validator_update_candidate_network_address"></a>
 
-## Function `update_network_address`
+## Function `update_candidate_network_address`
 
-Update network address of this validator
+Update network address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_network_address">update_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2061,7 +2061,8 @@ Update network address of this validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_network_address">update_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x2_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.net_address = net_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
