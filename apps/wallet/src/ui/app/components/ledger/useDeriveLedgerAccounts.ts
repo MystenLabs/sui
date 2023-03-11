@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Ed25519PublicKey } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
-import { Ed25519PublicKey } from '../../../../../../../sdk/typescript/src';
 import { type LedgerAccount } from './LedgerAccountItem';
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
 

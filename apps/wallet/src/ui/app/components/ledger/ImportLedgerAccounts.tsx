@@ -10,7 +10,6 @@ import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { SummaryCard } from '../SummaryCard';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
 import { type LedgerAccount } from './LedgerAccountItem';
@@ -39,8 +38,8 @@ export function ImportLedgerAccounts() {
 
     const onSelectAccount = useCallback(
         (selectedAccount: LedgerAccount) => {
-            setLedgerAccounts((prevState) => {
-                return prevState.map((account) => {
+            setLedgerAccounts((prevState) =>
+                prevState.map((account) => {
                     if (account.address === selectedAccount.address) {
                         return {
                             isSelected: !selectedAccount.isSelected,
@@ -48,21 +47,19 @@ export function ImportLedgerAccounts() {
                         };
                     }
                     return account;
-                });
-            });
+                })
+            );
         },
         [setLedgerAccounts]
     );
 
     const onSelectAllAccounts = useCallback(() => {
-        setLedgerAccounts((prevState) => {
-            return prevState.map((account) => {
-                return {
-                    isSelected: true,
-                    address: account.address,
-                };
-            });
-        });
+        setLedgerAccounts((prevState) =>
+            prevState.map((account) => ({
+                isSelected: true,
+                address: account.address,
+            }))
+        );
     }, [setLedgerAccounts]);
 
     // TODO: Add logic to filter out already imported Ledger accounts
@@ -81,7 +78,7 @@ export function ImportLedgerAccounts() {
     const isSelectAllButtonDisabled =
         areAllAccountsSelected || areAllAccountsImported;
 
-    let summaryCardBody: JSX.Element | undefined;
+    let summaryCardBody: JSX.Element | null = null;
     if (areLedgerAccountsLoading) {
         summaryCardBody = (
             <div className="w-full h-full flex flex-col justify-center items-center gap-3">
@@ -102,10 +99,12 @@ export function ImportLedgerAccounts() {
         );
     } else {
         summaryCardBody = (
-            <SelectLedgerAccountsList
-                accounts={filteredLedgerAccounts}
-                onSelect={onSelectAccount}
-            />
+            <div className="max-h-[272px] -mr-2 mt-1 pr-2 overflow-auto custom-scrollbar">
+                <SelectLedgerAccountsList
+                    accounts={filteredLedgerAccounts}
+                    onSelect={onSelectAccount}
+                />
+            </div>
         );
     }
 
@@ -117,17 +116,23 @@ export function ImportLedgerAccounts() {
                 navigate(accountsUrl);
             }}
         >
-            <div className="w-full flex flex-col">
-                <SummaryCard
-                    minimalPadding
-                    header={
-                        areAllAccountsImported
-                            ? 'Ledger Accounts '
-                            : 'Connect Ledger Accounts'
-                    }
-                    body={<div className="h-[272px]">{summaryCardBody}</div>}
-                    footer={
-                        <div className="rounded-b-2xl text-center">
+            <div className="w-full flex flex-col gap-5">
+                <div className="h-full bg-white flex flex-col border border-solid border-gray-45 rounded-2xl">
+                    <div className="text-center bg-gray-40 py-2.5 rounded-t-2xl">
+                        <Text
+                            variant="captionSmall"
+                            weight="bold"
+                            color="steel-darker"
+                            truncate
+                        >
+                            {areAllAccountsImported
+                                ? 'Ledger Accounts '
+                                : 'Connect Ledger Accounts'}
+                        </Text>
+                    </div>
+                    <div className="grow px-4 py-2">{summaryCardBody}</div>
+                    <div className="w-full rounded-b-2xl border-x-0 border-b-0 border-t border-solid border-gray-40 text-center pt-3 pb-4">
+                        <div className="w-fit ml-auto mr-auto">
                             <Link
                                 text="Select All Accounts"
                                 color="heroDark"
@@ -136,21 +141,19 @@ export function ImportLedgerAccounts() {
                                 disabled={isSelectAllButtonDisabled}
                             />
                         </div>
-                    }
-                />
-                <div className="mt-5">
-                    <Button
-                        variant="primary"
-                        before={<UnlockedLockIcon />}
-                        text="Unlock"
-                        onClick={() => {
-                            // TODO: Do work to actually import the selected accounts once we have
-                            // the account infrastructure setup to support Ledger accounts
-                            navigate(accountsUrl);
-                        }}
-                        disabled={areNoAccountsSelected}
-                    />
+                    </div>
                 </div>
+                <Button
+                    variant="primary"
+                    before={<UnlockedLockIcon />}
+                    text="Unlock"
+                    onClick={() => {
+                        // TODO: Do work to actually import the selected accounts once we have
+                        // the account infrastructure setup to support Ledger accounts
+                        navigate(accountsUrl);
+                    }}
+                    disabled={areNoAccountsSelected}
+                />
             </div>
         </Overlay>
     );
