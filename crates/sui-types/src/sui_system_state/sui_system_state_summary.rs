@@ -24,6 +24,8 @@ pub struct SuiSystemStateSummary {
     pub epoch: u64,
     /// The current protocol version, starting from 1.
     pub protocol_version: u64,
+    /// The current version of the system state data structure type.
+    pub system_state_version: u64,
     /// The storage fund balance.
     pub storage_fund: u64,
     /// The reference gas price for the current epoch.

@@ -151,6 +151,7 @@ export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
 export const SuiSystemStateSummary = object({
   epoch: number(),
   protocolVersion: number(),
+  systemStateVersion: number(),
   storageFund: number(),
   referenceGasPrice: number(),
   safeMode: boolean(),

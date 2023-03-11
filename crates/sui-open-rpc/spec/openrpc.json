@@ -5881,6 +5881,7 @@
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
           "storageFund",
+          "systemStateVersion",
           "totalStake",
           "validatorCandidatesId",
           "validatorCandidatesSize",
@@ -5999,6 +6000,12 @@
           },
           "storageFund": {
             "description": "The storage fund balance.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "systemStateVersion": {
+            "description": "The current version of the system state data structure type.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
