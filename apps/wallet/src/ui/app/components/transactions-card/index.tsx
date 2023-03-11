@@ -140,8 +140,8 @@ export function TransactionCard({
 
                                 <div className="flex break-all">
                                     <Text
-                                        variant="subtitle"
-                                        weight="medium"
+                                        variant="p3"
+                                        weight="normal"
                                         color="issue-dark"
                                     >
                                         {error}

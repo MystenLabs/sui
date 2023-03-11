@@ -127,12 +127,7 @@ function StakingCard() {
         },
     });
     const unStakeToken = useMutation({
-        mutationFn: async ({
-            stakeSuId,
-        }: {
-            delegationId: string;
-            stakeSuId: string;
-        }) => {
+        mutationFn: async ({ stakeSuId }: { stakeSuId: string }) => {
             if (!stakeSuId || !signer) {
                 throw new Error(
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
@@ -167,7 +162,6 @@ function StakingCard() {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
-                        delegationId: stakeData.stakedSuiId,
                         stakeSuId: stakeSuiIdParams,
                     });
 

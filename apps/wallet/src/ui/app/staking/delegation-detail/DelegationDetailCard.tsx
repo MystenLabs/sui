@@ -10,6 +10,7 @@ import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
@@ -19,7 +20,6 @@ import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -37,7 +37,7 @@ export function DelegationDetailCard({
         isError: errorValidators,
     } = useSystemState();
 
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const {
         data: allDelegation,
