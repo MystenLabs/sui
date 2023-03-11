@@ -1,0 +1,48 @@
+[package]
+name = "sui-proxy"
+version = "0.0.1"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+axum = {version = "0.6.2", features = ["headers"]}
+axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
+bytes = "1.4"
+clap = { version = "3.2.17", features = ["derive"] }
+protobuf = {version="2.28", features=["with-bytes"]}
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.36"
+futures = "0.3.23"
+const-str = "0.5.3"
+tower-http = { version="0.4", features = ["trace"] }
+tower = "0.4"
+tower-layer = "0.3.2"
+serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde_json = "1.0.93"
+git-version = "0.3.5"
+rand = "0.8.5"
+reqwest = { version = "0.11.4", default-features = false, features = ["rustls-tls"] }
+hyper = { version = "0.14", features = ["full"] }
+sui-tls = { path = "../sui-tls" }
+sui-types = { path = "../sui-types" }
+multiaddr = "0.17.0"
+prometheus = "0.13.3"
+snap = "1.1.0"
+
+
+
+telemetry-subscribers.workspace = true
+fastcrypto.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+mime = "0.3"
+serde_json = "1.0"
+tower = { version = "0.4", features = ["util"] }
+axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
+
+[build-dependencies]
+protobuf-codegen-pure = "2.28"
