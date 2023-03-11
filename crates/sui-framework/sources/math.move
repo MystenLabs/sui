@@ -133,7 +133,7 @@ module sui::math {
         (res as u128)
     }
 
-    // calculate square root of usigned integger by using Babylonian method
+    // calculate square root of usigned integer by using Babylonian method
     public fun sqrt_u256(y: u256): u256 {
         let z = 0u256;
         if (y > 3) {
