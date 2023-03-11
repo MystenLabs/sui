@@ -122,16 +122,17 @@ Sui uses the active address if you do not specify one.
 
 ```shell
 sui client objects
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
+```
+The response resembles the following:
+
+```
+                               Object ID                                |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 
 ```shell
 sui client objects 0x68dcb3152fe19ef49ecc84ff145aae00e95f5f10c69e914ac654483659f5f930
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 
 All subsequent commands that omit `address` use the new active address:
