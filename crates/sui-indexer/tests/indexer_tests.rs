@@ -77,6 +77,23 @@ impl IndexerStore for InMemoryIndexerStore {
         })
     }
 
+    fn get_event(
+        &self,
+        _id: sui_types::event::EventID,
+    ) -> Result<sui_indexer::models::events::Event, IndexerError> {
+        todo!()
+    }
+
+    fn get_events(
+        &self,
+        _query: sui_types::query::EventQuery,
+        _cursor: Option<sui_types::event::EventID>,
+        _limit: Option<usize>,
+        _descending_order: bool,
+    ) -> Result<sui_json_rpc_types::EventPage, IndexerError> {
+        todo!()
+    }
+
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
         todo!()
     }

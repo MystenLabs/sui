@@ -4,7 +4,7 @@
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::events::Event;
+use crate::models::events::compose_event;
 use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
@@ -14,7 +14,6 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
-use chrono::NaiveDateTime;
 use futures::future::join_all;
 use futures::FutureExt;
 use mysten_metrics::spawn_monitored_task;
@@ -219,33 +218,15 @@ where
         let events = transactions
             .iter()
             .flat_map(|tx| {
-                let mut event_sequence = 0;
                 tx.events
                     .as_ref()
                     .expect("Events can only be None if there's an error in fetching or converting events")
                     .data
                     .iter()
-                    .map(move |event| {
-                        // TODO: we should rethink how we store the raw event in DB
-                        let event_content = serde_json::to_string(event).map_err(|err| {
-                            IndexerError::InsertableParsingError(format!(
-                                "Failed converting event to JSON with error: {:?}",
-                                err
-                            ))
-                        })?;
-                        let event = Event {
-                            id: None,
-                            transaction_digest: tx.digest.to_string(),
-                            event_sequence,
-                            event_time: tx
-                                .timestamp_ms
-                                .and_then(|t| NaiveDateTime::from_timestamp_millis(t as i64)),
-                            event_type: event.get_event_type(),
-                            event_content,
-                        };
-                        event_sequence += 1;
-                        Ok::<_, IndexerError>(event)
-                    })
+                    .enumerate()
+                    .filter_map(
+                        move |(seq, event)| compose_event(event, tx.digest.to_string(), seq, tx.timestamp_ms.map(|t| t as i64))
+                    )
             })
             .collect::<Result<Vec<_>, _>>()?;
 
