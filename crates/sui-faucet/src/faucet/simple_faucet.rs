@@ -16,6 +16,7 @@ use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -414,6 +415,7 @@ impl SimpleFaucet {
             .quorum_driver()
             .execute_transaction(
                 tx.clone(),
+                SuiTransactionResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await

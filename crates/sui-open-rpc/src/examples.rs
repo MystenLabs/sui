@@ -184,6 +184,10 @@ impl RpcExampleProvider {
                             .collect::<Vec<_>>()),
                     ),
                     (
+                        "options",
+                        json!(SuiTransactionResponseOptions::full_content()),
+                    ),
+                    (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
                     ),

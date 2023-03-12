@@ -73,6 +73,7 @@ export const respondToTransactionRequest = createAsyncThunk<
                     } else {
                         txResult = await signer.signAndExecuteTransaction(
                             tx,
+                            txRequest.tx.options?.contentOptions,
                             txRequest.tx.options?.requestType
                         );
                     }

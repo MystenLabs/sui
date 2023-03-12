@@ -46,7 +46,12 @@ function App() {
       <div>
         <button
           onClick={async () => {
-            console.log(await signAndExecuteTransaction({ transaction }));
+            console.log(
+              await signAndExecuteTransaction({
+                transaction,
+                options: { contentOptions: { showEffect: true } },
+              })
+            );
           }}
         >
           Sign + Execute Transaction

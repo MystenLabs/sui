@@ -332,7 +332,7 @@ impl ReadApiServer for ReadApi {
         }
 
         // Fetch effects when `show_events` is true because events relies on effects
-        if opts.show_effects || opts.show_events {
+        if opts.require_effects() {
             temp_response.effects =
                 Some(self.state.get_executed_effects(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get effects: {:?}", err),

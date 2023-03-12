@@ -44,6 +44,7 @@ import {
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   CoinStruct,
+  SuiTransactionResponseOptions,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -233,12 +234,15 @@ export abstract class Provider {
    * Submit the transaction to fullnode for execution
    * @param txnBytes BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
    * @param signature A single signature or list of signatures(used for sponsored transactions)
+   * @param options specify which fields to return (e.g., transaction, effects, events, etc).
+   * By default, only the transaction digest will be returned.
    * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`
    */
   abstract executeTransaction(
     txnBytes: Uint8Array | string,
     signature: SerializedSignature | SerializedSignature[],
-    requestType: ExecuteTransactionRequestType,
+    options?: SuiTransactionResponseOptions,
+    requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse>;
 
   // Move info

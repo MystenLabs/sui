@@ -42,6 +42,7 @@ import {
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   CoinStruct,
+  SuiTransactionResponseOptions,
 } from '../types';
 import { Provider } from './provider';
 
@@ -157,7 +158,8 @@ export class VoidProvider extends Provider {
   async executeTransaction(
     _txnBytes: Uint8Array,
     _signature: SerializedSignature | SerializedSignature[],
-    _requestType: ExecuteTransactionRequestType,
+    _options?: SuiTransactionResponseOptions,
+    _requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
   }

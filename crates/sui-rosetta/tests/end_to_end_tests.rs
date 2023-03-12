@@ -85,7 +85,7 @@ async fn test_locked_sui() {
     let tx = to_sender_signed_transaction(tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(tx, None)
+        .execute_transaction(tx, SuiTransactionResponseOptions::new(), None)
         .await
         .unwrap();
 
@@ -192,7 +192,7 @@ async fn test_get_staked_sui() {
     let tx = to_sender_signed_transaction(delegation_tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(tx, None)
+        .execute_transaction(tx, SuiTransactionResponseOptions::new(), None)
         .await
         .unwrap();
 

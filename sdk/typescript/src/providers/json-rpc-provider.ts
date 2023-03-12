@@ -676,7 +676,8 @@ export class JsonRpcProvider extends Provider {
   async executeTransaction(
     txnBytes: Uint8Array | string,
     signature: SerializedSignature | SerializedSignature[],
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
+    options?: SuiTransactionResponseOptions,
+    requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse> {
     try {
       return await this.client.requestWithType(
@@ -684,6 +685,7 @@ export class JsonRpcProvider extends Provider {
         [
           typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
           Array.isArray(signature) ? signature : [signature],
+          options,
           requestType,
         ],
         SuiTransactionResponse,

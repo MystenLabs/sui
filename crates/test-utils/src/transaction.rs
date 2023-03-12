@@ -14,6 +14,7 @@ use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
     SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -113,6 +114,7 @@ pub async fn publish_package_with_wallet(
         .quorum_driver()
         .execute_transaction(
             transaction,
+            SuiTransactionResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -172,6 +174,7 @@ pub async fn submit_move_transaction(
         .quorum_driver()
         .execute_transaction(
             tx,
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -409,6 +412,7 @@ pub async fn delete_devnet_nft(
         .quorum_driver()
         .execute_transaction(
             tx,
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

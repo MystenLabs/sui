@@ -28,7 +28,9 @@ describe('Test Move call with strings', () => {
         arguments: [tx.pure(str)],
       }),
     );
-    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
+      showEffects: true,
+    });
     expect(getExecutionStatusType(result)).toEqual('success');
   }
 

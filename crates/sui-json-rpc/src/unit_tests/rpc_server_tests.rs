@@ -85,7 +85,8 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes1,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
@@ -123,7 +124,8 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
     matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 6);
@@ -174,7 +176,8 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
     matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 1);
@@ -286,7 +289,8 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new().with_events()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
@@ -343,7 +347,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new().with_events()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
@@ -418,7 +423,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
@@ -458,7 +464,8 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .execute_transaction(
                 tx_bytes,
                 signatures,
-                ExecuteTransactionRequestType::WaitForLocalExecution,
+                Some(SuiTransactionResponseOptions::new()),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
 
@@ -530,6 +537,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
                 .quorum_driver()
                 .execute_transaction(
                     tx,
+                    SuiTransactionResponseOptions::new(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await
@@ -666,6 +674,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
                 .quorum_driver()
                 .execute_transaction(
                     tx,
+                    SuiTransactionResponseOptions::new(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await
@@ -822,7 +831,8 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
@@ -880,7 +890,8 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
@@ -941,7 +952,8 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            ExecuteTransactionRequestType::WaitForLocalExecution,
+            Some(SuiTransactionResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 

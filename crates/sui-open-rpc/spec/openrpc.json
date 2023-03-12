@@ -238,7 +238,7 @@
           "name": "Write API"
         }
       ],
-      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
+      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case. request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true",
       "params": [
         {
           "name": "tx_bytes",
@@ -260,9 +260,15 @@
           }
         },
         {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseOptions"
+          }
+        },
+        {
           "name": "request_type",
-          "description": "The request type",
-          "required": true,
+          "description": "The request type, derived from `SuiTransactionResponseOptions` if None",
           "schema": {
             "$ref": "#/components/schemas/ExecuteTransactionRequestType"
           }
@@ -288,6 +294,14 @@
               "value": [
                 "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
               ]
+            },
+            {
+              "name": "options",
+              "value": {
+                "showInput": true,
+                "showEffects": true,
+                "showEvents": true
+              }
             },
             {
               "name": "request_type",
