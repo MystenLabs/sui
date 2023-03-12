@@ -117,12 +117,16 @@ impl ReadApi {
         Ok(self.api.http.get_total_transaction_number().await?)
     }
 
-    pub async fn get_transactions_in_range(
+    pub async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> SuiRpcResult<Vec<TransactionDigest>> {
-        Ok(self.api.http.get_transactions_in_range(start, end).await?)
+        Ok(self
+            .api
+            .http
+            .get_transactions_in_range_deprecated(start, end)
+            .await?)
     }
 
     pub async fn get_transaction_with_options(

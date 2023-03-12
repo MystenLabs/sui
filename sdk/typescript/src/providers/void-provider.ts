@@ -196,11 +196,11 @@ export class VoidProvider extends Provider {
     throw this.newError('getTotalTransactionNumber');
   }
 
-  async getTransactionDigestsInRange(
+  async getTransactionDigestsInRangeDeprecated(
     _start: GatewayTxSeqNumber,
     _end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
-    throw this.newError('getTransactionDigestsInRange');
+    throw this.newError('getTransactionDigestsInRangeDeprecated');
   }
 
   async getMoveFunctionArgTypes(

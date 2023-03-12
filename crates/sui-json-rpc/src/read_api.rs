@@ -303,14 +303,14 @@ impl ReadApiServer for ReadApi {
         Ok(self.state.get_total_transaction_number()?)
     }
 
-    async fn get_transactions_in_range(
+    async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> RpcResult<Vec<TransactionDigest>> {
         Ok(self
             .state
-            .get_transactions_in_range(start, end)?
+            .get_transactions_in_range_deprecated(start, end)?
             .into_iter()
             .map(|(_, digest)| digest)
             .collect())

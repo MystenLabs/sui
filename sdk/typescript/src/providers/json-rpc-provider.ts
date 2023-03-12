@@ -710,13 +710,13 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionDigestsInRange(
+  async getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
     try {
       return await this.client.requestWithType(
-        'sui_getTransactionsInRange',
+        'sui_getTransactionsInRangeDeprecated',
         [start, end],
         GetTxnDigestsResponse,
         this.options.skipDataValidation,

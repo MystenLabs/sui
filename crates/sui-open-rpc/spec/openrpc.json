@@ -1610,13 +1610,13 @@
       ]
     },
     {
-      "name": "sui_getTransactionsInRange",
+      "name": "sui_getTransactionsInRangeDeprecated",
       "tags": [
         {
           "name": "Read API"
         }
       ],
-      "description": "Return list of transaction digests within the queried range.",
+      "description": "Return list of transaction digests within the queried range. This method will be removed before April 2023, please use `getTransactions` instead",
       "params": [
         {
           "name": "start",
@@ -1648,7 +1648,8 @@
             "$ref": "#/components/schemas/TransactionDigest"
           }
         }
-      }
+      },
+      "deprecated": true
     },
     {
       "name": "sui_mergeCoins",

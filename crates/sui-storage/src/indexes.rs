@@ -308,7 +308,7 @@ impl IndexStore {
         })
     }
 
-    pub fn get_transactions_in_range(
+    pub fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
@@ -369,7 +369,7 @@ impl IndexStore {
         );
         let end = self.next_sequence_number();
         let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range(start, end)
+        self.get_transactions_in_range_deprecated(start, end)
     }
 
     /// Returns unix timestamp for a transaction if it exists
