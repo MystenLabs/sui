@@ -89,8 +89,15 @@ function AccountBadge({ accountType }: AccountBadgeProps) {
                     </Text>
                 </div>
             );
-        case AccountType.DERIVED:
         case AccountType.IMPORTED:
+            return (
+                <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
+                    <Text variant="captionSmallExtra" color="steel-dark">
+                        Imported
+                    </Text>
+                </div>
+            );
+        case AccountType.DERIVED:
             return null;
         default:
             throw new Error(`Encountered unknown account type ${accountType}`);
