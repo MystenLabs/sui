@@ -25,7 +25,7 @@ use sui_json_rpc_types::{
     SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo,
     SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -44,7 +44,7 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
-use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::query::{EventQuery, TransactionFilter};
 
 use crate::api::cap_page_limit;
 use crate::api::ReadApiServer;
@@ -649,7 +649,7 @@ impl ReadApiServer for ReadApi {
 
     async fn query_transactions(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
@@ -657,18 +657,22 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
+        // TODO(chris): should we just remove `TransactionFilter::All`?
+        let filter = query.filter.unwrap_or(TransactionFilter::All);
 
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_transactions(query, cursor, Some(limit + 1), descending)?;
+            .get_transactions(filter, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
         let has_next_page = data.len() > limit;
         data.truncate(limit);
         let next_cursor = data.last().cloned().map_or(cursor, Some);
+
+        // TODO(chris): fetch transaction response based on `query.options`
         Ok(Page {
-            data,
+            data: data.into_iter().map(SuiTransactionResponse::new).collect(),
             next_cursor,
             has_next_page,
         })

@@ -20,7 +20,7 @@ describe('Object id/Address/Transaction digest validation', () => {
 
     //wrong id
     expect(
-      toolbox.provider.queryTransactionsForAddress('Wrong'),
+      toolbox.provider.queryTransactionsForAddressDeprecated('Wrong'),
     ).rejects.toThrowError(/Invalid Sui address/);
   });
 
@@ -37,7 +37,7 @@ describe('Object id/Address/Transaction digest validation', () => {
       ),
     ).rejects.toThrowError(/Invalid Sui Object id/);
     expect(
-      toolbox.provider.queryTransactionsForObject(
+      toolbox.provider.queryTransactionsForObjectDeprecated(
         '0000000000000000000000004ce52ee7b659b610d59a1ced129291b3d0d421632',
       ),
     ).rejects.toThrowError(/Invalid Sui Object id/);

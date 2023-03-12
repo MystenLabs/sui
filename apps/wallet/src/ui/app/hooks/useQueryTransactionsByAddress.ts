@@ -16,14 +16,22 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
             // combine from and to transactions
             const [txnIds, fromTxnIds] = await Promise.all([
                 rpc.queryTransactions({
-                    ToAddress: address!,
+                    filter: {
+                        ToAddress: address!,
+                    },
                 }),
                 rpc.queryTransactions({
-                    FromAddress: address!,
+                    filter: {
+                        FromAddress: address!,
+                    },
                 }),
             ]);
+            // TODO: replace this with queryTransactions
+            // It seems to be expensive to fetch all transaction data at once though
             const resp = await rpc.getTransactionResponseBatch(
-                dedupe([...txnIds.data, ...fromTxnIds.data]),
+                dedupe(
+                    [...txnIds.data, ...fromTxnIds.data].map((x) => x.digest)
+                ),
                 {
                     showInput: true,
                     showEffects: true,

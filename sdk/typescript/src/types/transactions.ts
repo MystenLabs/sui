@@ -235,16 +235,12 @@ export type GatewayTxSeqNumber = number;
 export const GetTxnDigestsResponse = array(TransactionDigest);
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 
-export const PaginatedTransactionDigests = object({
-  data: array(TransactionDigest),
-  nextCursor: union([TransactionDigest, literal(null)]),
-  hasNextPage: boolean(),
-});
-export type PaginatedTransactionDigests = Infer<
-  typeof PaginatedTransactionDigests
->;
+export type SuiTransactionResponseQuery = {
+  filter?: TransactionFilter;
+  options?: SuiTransactionResponseOptions;
+};
 
-export type TransactionQuery =
+export type TransactionFilter =
   | 'All'
   | {
       MoveFunction: {
@@ -292,6 +288,15 @@ export const SuiTransactionResponseOptions = object({
 
 export type SuiTransactionResponseOptions = Infer<
   typeof SuiTransactionResponseOptions
+>;
+
+export const PaginatedTransactionResponse = object({
+  data: array(SuiTransactionResponse),
+  nextCursor: union([TransactionDigest, literal(null)]),
+  hasNextPage: boolean(),
+});
+export type PaginatedTransactionResponse = Infer<
+  typeof PaginatedTransactionResponse
 >;
 
 /* -------------------------------------------------------------------------- */
