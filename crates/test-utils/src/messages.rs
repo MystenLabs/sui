@@ -288,13 +288,16 @@ pub fn create_publish_move_package_transaction(
     gas_price: Option<u64>,
 ) -> VerifiedTransaction {
     let build_config = BuildConfig::new_for_testing();
-    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes =
+        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
+
     let data = TransactionData::new_module(
         sender,
         gas_object_ref,
         all_module_bytes,
+        dependencies,
         MAX_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
@@ -326,6 +329,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
         sender,
         gas_object,
         all_module_bytes,
+        vec![],
         MAX_GAS,
     );
     to_sender_signed_transaction(data, &keypair)

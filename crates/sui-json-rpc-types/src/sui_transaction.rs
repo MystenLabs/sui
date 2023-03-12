@@ -893,8 +893,9 @@ pub enum SuiCommand {
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(SuiArgument, Vec<SuiArgument>),
-    /// Publishes a Move package
-    Publish(SuiMovePackage),
+    /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    /// dependencies to link against on-chain.
+    Publish(SuiMovePackage, Vec<ObjectID>),
     /// Upgrades a Move package
     Upgrade(SuiArgument, Vec<ObjectID>, SuiMovePackage),
     /// `forall T: Vec<T> -> vector<T>`
@@ -931,7 +932,11 @@ impl Display for SuiCommand {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Self::Publish(_bytes) => write!(f, "Publish(_)"),
+            Self::Publish(_bytes, deps) => {
+                write!(f, "Publish(_,")?;
+                write_sep(f, deps, ",")?;
+                write!(f, ")")
+            }
             Self::Upgrade(ticket, deps, _bytes) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
@@ -955,9 +960,12 @@ impl From<Command> for SuiCommand {
                 arg.into(),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Publish(modules) => SuiCommand::Publish(SuiMovePackage {
-                disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
-            }),
+            Command::Publish(modules, dep_ids) => SuiCommand::Publish(
+                SuiMovePackage {
+                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
+                },
+                dep_ids,
+            ),
             Command::MakeMoveVec(tag_opt, args) => SuiCommand::MakeMoveVec(
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),

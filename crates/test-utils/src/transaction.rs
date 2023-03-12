@@ -12,6 +12,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
+use sui_framework_build::compiled_package::CompiledPackage;
 use sui_json_rpc_types::{
     SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions,
@@ -78,25 +79,23 @@ pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInf
 
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
-    publish_package_with_wallet(
-        context,
-        sender,
-        compile_basics_package().get_package_bytes(/* with_unpublished_deps */ false),
-    )
-    .await
+    publish_package_with_wallet(context, sender, &compile_basics_package()).await
 }
 
 /// Returns the published package's ObjectRef.
 pub async fn publish_package_with_wallet(
     context: &WalletContext,
     sender: SuiAddress,
-    all_module_bytes: Vec<Vec<u8>>,
+    package: &CompiledPackage,
 ) -> ObjectRef {
+    let all_module_bytes = package.get_package_bytes(/* with_unpublished_deps */ false);
+    let dep_ids = package.get_dependency_original_package_ids();
+
     let client = context.get_client().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(sender, all_module_bytes, None, GAS_BUDGET)
+            .publish(sender, all_module_bytes, dep_ids, None, GAS_BUDGET)
             .await
             .unwrap();
 

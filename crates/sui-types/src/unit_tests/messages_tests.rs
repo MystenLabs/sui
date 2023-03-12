@@ -816,7 +816,7 @@ fn test_sponsored_transaction_validity_check() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish(vec![vec![]]);
+        builder.publish(vec![vec![]], vec![]);
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);

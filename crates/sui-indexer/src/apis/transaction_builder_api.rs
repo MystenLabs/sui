@@ -98,11 +98,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
+        dep_ids: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
-            .publish(sender, compiled_modules, gas, gas_budget)
+            .publish(sender, compiled_modules, dep_ids, gas, gas_budget)
             .await
     }
 

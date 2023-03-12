@@ -107,12 +107,20 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
-    let compiled_modules = BuildConfig::new_for_testing()
-        .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
-        .get_package_base64(/* with_unpublished_deps */ false);
+    let compiled_package = BuildConfig::new_for_testing()
+        .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?;
+    let compiled_modules_bytes =
+        compiled_package.get_package_base64(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules_bytes,
+            dependencies,
+            Some(gas.object_id),
+            10000,
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -272,12 +280,20 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     // Publish test coin package
-    let compiled_modules = BuildConfig::default()
-        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64(/* with_unpublished_deps */ false);
+    let compiled_package = BuildConfig::default()
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?;
+    let compiled_modules_bytes =
+        compiled_package.get_package_base64(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules_bytes,
+            dependencies,
+            Some(gas.object_id),
+            10000,
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -330,12 +346,20 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     // Publish test coin package
-    let compiled_modules = BuildConfig::new_for_testing()
-        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64(/* with_unpublished_deps */ false);
+    let compiled_package = BuildConfig::new_for_testing()
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?;
+    let compiled_modules_bytes =
+        compiled_package.get_package_base64(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules_bytes,
+            dependencies,
+            Some(gas.object_id),
+            10000,
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
