@@ -19,7 +19,9 @@ const textStyles = cva([], {
             subtitleSmall: 'text-subtitleSmall',
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
-            captionSmall: 'uppercase text-captionSmall ',
+            captionSmall: 'uppercase text-captionSmall',
+            captionSmallExtra:
+                'uppercase tracking-wider text-captionSmallExtra',
             p1: 'text-p1',
             p2: 'text-p2',
             p3: 'text-p3',
