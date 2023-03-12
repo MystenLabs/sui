@@ -19,7 +19,6 @@ use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::event::EventType;
 use sui_types::fp_ensure;
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
@@ -110,14 +109,6 @@ pub struct IndexStoreTables {
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
-
-    // Can be removed after removing system events
-    #[default_options_override_fn = "index_table_default_config"]
-    event_by_recipient: DBMap<(Owner, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
-    event_by_object: DBMap<(ObjectID, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
-    event_by_event_type: DBMap<(EventType, EventId), EventIndex>,
 }
 
 pub struct IndexStore {
@@ -280,56 +271,28 @@ impl IndexStore {
                 .data
                 .iter()
                 .enumerate()
-                .filter_map(|(i, e)| match (e.package_id(), e.module_name()) {
-                    (Some(id), Some(module)) => Some((i, ModuleId::new(id.into(), module.into()))),
-                    _ => None,
+                .map(|(i, e)| {
+                    (
+                        i,
+                        ModuleId::new(e.package_id.into(), e.transaction_module.clone()),
+                    )
                 })
                 .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
         )?;
         let batch = batch.insert_batch(
             &self.tables.event_by_sender,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.sender().map(|s| (i, s)))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+            events.data.iter().enumerate().map(|(i, e)| {
+                (
+                    (e.sender, (sequence, i)),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
         )?;
         let batch = batch.insert_batch(
             &self.tables.event_by_move_event,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.move_event_name().map(|s| (i, s.clone())))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
-        )?;
-
-        let batch = batch.insert_batch(
-            &self.tables.event_by_recipient,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.recipient().map(|s| (i, *s)))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
-        )?;
-
-        let batch = batch.insert_batch(
-            &self.tables.event_by_object,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.object_id().map(|s| (i, s)))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
-        )?;
-
-        let batch = batch.insert_batch(
-            &self.tables.event_by_event_type,
             events.data.iter().enumerate().map(|(i, e)| {
                 (
-                    (e.event_type(), (sequence, i)),
+                    (e.type_.clone(), (sequence, i)),
                     (event_digest, *digest, timestamp_ms),
                 )
             }),
@@ -805,60 +768,6 @@ impl IndexStore {
         Self::get_event_from_index(
             &self.tables.event_by_sender,
             sender,
-            tx_seq,
-            event_seq,
-            limit,
-            descending,
-        )
-    }
-
-    pub fn events_by_recipient(
-        &self,
-        recipient: &Owner,
-        tx_seq: TxSequenceNumber,
-        event_seq: usize,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
-        Self::get_event_from_index(
-            &self.tables.event_by_recipient,
-            recipient,
-            tx_seq,
-            event_seq,
-            limit,
-            descending,
-        )
-    }
-
-    pub fn events_by_object(
-        &self,
-        object: &ObjectID,
-        tx_seq: TxSequenceNumber,
-        event_seq: usize,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
-        Self::get_event_from_index(
-            &self.tables.event_by_object,
-            object,
-            tx_seq,
-            event_seq,
-            limit,
-            descending,
-        )
-    }
-
-    pub fn events_by_type(
-        &self,
-        event_type: &EventType,
-        tx_seq: TxSequenceNumber,
-        event_seq: usize,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
-        Self::get_event_from_index(
-            &self.tables.event_by_event_type,
-            event_type,
             tx_seq,
             event_seq,
             limit,

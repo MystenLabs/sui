@@ -1,19 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::{
-    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
-    WriteApiClient,
-};
 use std::path::Path;
-
 #[cfg(not(msim))]
 use std::str::FromStr;
+
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
-
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
@@ -21,21 +16,22 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{SuiObjectInfo, SuiTransactionResponseQuery};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_macros::sim_test;
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
-use sui_types::object::Owner;
-use sui_types::query::{EventQuery, TransactionFilter};
+use sui_types::query::TransactionFilter;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
 
-use sui_macros::sim_test;
-
-use tokio::time::{sleep, Duration};
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
+    WriteApiClient,
+};
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
@@ -347,7 +343,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-    let tx_response = http_client
+    let tx_response: SuiTransactionResponse = http_client
         .execute_transaction(
             tx_bytes,
             signatures,
@@ -656,146 +652,6 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             .iter()
             .any(|resp| resp.digest == response.digest))
     }
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await
-        .unwrap();
-    let client = cluster.wallet.get_client().await?;
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
-
-    for address in cluster.accounts.iter() {
-        let objects = client
-            .read_api()
-            .get_objects_owned_by_address(*address)
-            .await
-            .unwrap();
-        let gas_id = objects.last().unwrap().object_id;
-
-        // Make some transactions
-        for oref in &objects[..objects.len() - 1] {
-            let data = client
-                .transaction_builder()
-                .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
-                .await?;
-            let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
-
-            let response = client
-                .quorum_driver()
-                .execute_transaction(
-                    tx,
-                    SuiTransactionResponseOptions::new(),
-                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-                )
-                .await
-                .unwrap();
-            tx_responses.push(response);
-        }
-    }
-
-    // Add a delay to ensure event processing is done after transaction commits.
-    sleep(Duration::from_millis(100)).await;
-
-    // test get all events ascending
-    let page1 = client
-        .event_api()
-        .get_events(
-            EventQuery::All,
-            Some((tx_responses[2].digest, 0).into()),
-            Some(3),
-            false,
-        )
-        .await
-        .unwrap();
-    assert_eq!(3, page1.data.len());
-    assert_eq!(Some((tx_responses[5].digest, 0).into()), page1.next_cursor);
-    let page2 = client
-        .event_api()
-        .get_events(
-            EventQuery::All,
-            Some((tx_responses[5].digest, 0).into()),
-            Some(20),
-            false,
-        )
-        .await
-        .unwrap();
-    assert_eq!(14, page2.data.len());
-    assert!(!page2.has_next_page);
-
-    // test get all events descending
-    let page1 = client
-        .event_api()
-        .get_events(EventQuery::All, None, Some(3), true)
-        .await
-        .unwrap();
-    assert_eq!(3, page1.data.len());
-    assert_eq!(Some((tx_responses[17].digest, 0).into()), page1.next_cursor);
-
-    let page2 = client
-        .event_api()
-        .get_events(
-            EventQuery::All,
-            Some((tx_responses[17].digest, 0).into()),
-            None,
-            true,
-        )
-        .await
-        .unwrap();
-
-    // 17 events created by this test + 48 Genesis event
-    assert_eq!(65, page2.data.len());
-    assert!(!page2.has_next_page);
-
-    // test get sender events
-    let page = client
-        .event_api()
-        .get_events(
-            EventQuery::Sender(cluster.accounts[0]),
-            None,
-            Some(10),
-            false,
-        )
-        .await
-        .unwrap();
-    assert_eq!(4, page.data.len());
-
-    // test get recipient events
-    let page = client
-        .event_api()
-        .get_events(
-            EventQuery::Recipient(Owner::AddressOwner(cluster.accounts[1])),
-            None,
-            Some(10),
-            false,
-        )
-        .await
-        .unwrap();
-    assert_eq!(9, page.data.len());
-
-    let object = client
-        .read_api()
-        .get_objects_owned_by_address(cluster.accounts[2])
-        .await
-        .unwrap()
-        .last()
-        .unwrap()
-        .object_id;
-
-    // test get object events
-    let page = client
-        .event_api()
-        .get_events(EventQuery::Object(object), None, Some(10), false)
-        .await
-        .unwrap();
-    assert_eq!(5, page.data.len());
 
     Ok(())
 }

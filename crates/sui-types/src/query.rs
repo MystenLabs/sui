@@ -6,8 +6,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::base_types::{SuiAddress, TransactionDigest};
-use crate::event::EventType;
-use crate::object::Owner;
 use crate::ObjectID;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
@@ -49,13 +47,8 @@ pub enum EventQuery {
         /// the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params
         String,
     ),
-    EventType(EventType),
     /// Query by sender address.
     Sender(SuiAddress),
-    /// Query by recipient address.
-    Recipient(Owner),
-    /// Return events associated with the given object
-    Object(ObjectID),
     /// Return events emitted in [start_time, end_time] interval
     #[serde(rename_all = "camelCase")]
     TimeRange {

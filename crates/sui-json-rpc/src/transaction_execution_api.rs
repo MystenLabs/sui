@@ -1,20 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::WriteApiServer;
-use crate::balance_changes::get_balance_change_from_effect;
-use crate::error::Error;
-use crate::read_api::get_transaction_data_and_digest;
-use crate::{get_object_change_from_effect, ObjectProviderCache, SuiRpcModule};
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+
 use mysten_metrics::spawn_monitored_task;
 use shared_crypto::intent::Intent;
-use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -30,6 +27,12 @@ use sui_types::messages::{
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::messages::{TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
+
+use crate::api::WriteApiServer;
+use crate::balance_changes::get_balance_change_from_effect;
+use crate::error::Error;
+use crate::read_api::get_transaction_data_and_digest;
+use crate::{get_object_change_from_effect, ObjectProviderCache, SuiRpcModule};
 
 pub struct TransactionExecutionApi {
     state: Arc<AuthorityState>,
@@ -98,6 +101,8 @@ impl TransactionExecutionApi {
                         .clone();
                     events = Some(SuiTransactionEvents::try_from(
                         transaction_events,
+                        digest,
+                        None,
                         module_cache.as_ref(),
                     )?);
                 }

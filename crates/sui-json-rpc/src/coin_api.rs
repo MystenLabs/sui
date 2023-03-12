@@ -16,13 +16,12 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{MoveObjectType, ObjectID, ObjectType, SuiAddress};
+use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, CoinMetadata, LockedCoin, TreasuryCap};
 use sui_types::error::SuiError;
-use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
-use sui_types::messages::{TransactionEffectsAPI, TransactionEvents};
-use sui_types::object::Object;
+use sui_types::messages::TransactionEffectsAPI;
+use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
 
 use crate::api::{cap_page_limit, CoinReadApiServer};
@@ -141,31 +140,25 @@ impl CoinReadApi {
             .state
             .get_executed_transaction_and_effects(publish_txn_digest)
             .await?;
+        let created: &[(ObjectRef, Owner)] = effect.created();
 
-        let events = if let Some(digests) = effect.events_digest() {
-            self.state.get_transaction_events(digests)?
-        } else {
-            TransactionEvents::default()
-        };
-
-        let object_id = events.data
-            .into_iter()
-            .find_map(|e| {
-                if let Event::NewObject { object_type, .. } = &e {
-                    if matches!(parse_sui_struct_tag(object_type), Ok(tag) if tag == object_struct_tag) {
-                        return e.object_id();
+        let object_id = async {
+            for ((id, version, _), _) in created {
+                if let Ok(past_object) = self.state.get_past_object_read(id, *version).await {
+                    if let Ok(object) = past_object.into_object() {
+                        if matches!(object.type_(), Some(type_) if type_.is(&object_struct_tag)) {
+                            return Ok(*id);
+                        }
                     }
                 }
-                None
-            })
-            .ok_or_else(|| {
-                anyhow!(
-                    "Cannot find object [{}] from [{}] package event.",
-                    object_struct_tag,
-                    package_id
-                )
-            })?;
-
+            }
+            Err(anyhow!(
+                "Cannot find object [{}] from [{}] package event.",
+                object_struct_tag,
+                package_id
+            ))
+        }
+        .await?;
         self.get_object(&object_id).await
     }
 }

@@ -56,6 +56,8 @@ struct Tables {
 }
 
 impl IndexerStore for InMemoryIndexerStore {
+    type ModuleCache = ();
+
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         Ok(self.tables.read().unwrap().checkpoints.len() as i64 - 1)
     }
@@ -220,6 +222,10 @@ impl IndexerStore for InMemoryIndexerStore {
     }
 
     fn log_errors(&self, _errors: Vec<IndexerError>) -> Result<(), IndexerError> {
+        todo!()
+    }
+
+    fn module_cache(&self) -> &Self::ModuleCache {
         todo!()
     }
 }

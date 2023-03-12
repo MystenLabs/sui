@@ -4,7 +4,6 @@
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::events::compose_event;
 use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
@@ -19,6 +18,8 @@ use futures::FutureExt;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiCommand, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
     SuiRawData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
@@ -37,6 +38,7 @@ const MULTI_GET_CHUNK_SIZE: usize = 500;
 pub struct CheckpointHandler<S> {
     state: S,
     rpc_client: SuiClient,
+    event_handler: Arc<EventHandler>,
     metrics: IndexerCheckpointHandlerMetrics,
 }
 
@@ -44,10 +46,16 @@ impl<S> CheckpointHandler<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    pub fn new(state: S, rpc_client: SuiClient, prometheus_registry: &Registry) -> Self {
+    pub fn new(
+        state: S,
+        rpc_client: SuiClient,
+        event_handler: Arc<EventHandler>,
+        prometheus_registry: &Registry,
+    ) -> Self {
         Self {
             state,
             rpc_client,
+            event_handler,
             metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
         }
     }
@@ -100,7 +108,7 @@ where
 
             // Index checkpoint data
             // TODO: Metrics
-            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(checkpoint)?;
+            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
 
             // Write to DB
             let db_guard = self.metrics.db_write_request_latency.start_timer();
@@ -113,6 +121,21 @@ where
                 next_cursor_sequence_number
             );
             self.metrics.total_checkpoint_processed.inc();
+            db_guard.stop_and_record();
+
+            // Process websocket subscription
+            let db_guard = self.metrics.db_write_request_latency.start_timer();
+            for tx in &checkpoint.transactions {
+                let effect = tx
+                    .effects
+                    .as_ref()
+                    .expect("Transaction Effect cannot be None");
+                let events = tx
+                    .events
+                    .as_ref()
+                    .expect("Transaction Events cannot be None");
+                self.event_handler.process_events(effect, events).await?;
+            }
             db_guard.stop_and_record();
 
             if let Some(indexed_epoch) = indexed_epoch {
@@ -216,7 +239,7 @@ where
 
     fn index_checkpoint(
         &self,
-        data: CheckpointData,
+        data: &CheckpointData,
     ) -> Result<(TemporaryCheckpointStore, Option<TemporaryEpochStore>), IndexerError> {
         let CheckpointData {
             checkpoint,
@@ -246,12 +269,9 @@ where
                     .expect("Events can only be None if there's an error in fetching or converting events")
                     .data
                     .iter()
-                    .enumerate()
-                    .filter_map(
-                        move |(seq, event)| compose_event(event, tx.digest.to_string(), seq, tx.timestamp_ms.map(|t| t as i64))
-                    )
+                    .map(move |event| event.clone().into())
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Vec<_>>();
 
         // Index objects
         let tx_objects = changed_objects
@@ -310,7 +330,7 @@ where
             .collect();
 
         // Index packages
-        let packages = Self::index_packages(&transactions, &changed_objects)?;
+        let packages = Self::index_packages(transactions, changed_objects)?;
 
         let move_calls: Vec<MoveCall> = transactions
             .iter()
@@ -394,7 +414,7 @@ where
 
         Ok((
             TemporaryCheckpointStore {
-                checkpoint: Checkpoint::from(&checkpoint, &previous_cp)?,
+                checkpoint: Checkpoint::from(checkpoint, &previous_cp)?,
                 transactions: db_transactions,
                 events,
                 objects_changes,

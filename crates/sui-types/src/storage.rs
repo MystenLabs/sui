@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{SuiAddress, TransactionDigest, VersionNumber};
+use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
 use crate::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest, TransactionEventsDigest,
@@ -22,10 +22,7 @@ use crate::{
     error::SuiResult,
     event::Event,
     object::Object,
-    SUI_FRAMEWORK_OBJECT_ID,
 };
-use move_core_types::ident_str;
-use move_core_types::identifier::{IdentStr, Identifier};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
@@ -56,62 +53,8 @@ pub enum DeleteKind {
 
 #[derive(Debug)]
 pub enum ObjectChange {
-    Write(SingleTxContext, Object, WriteKind),
-    Delete(SingleTxContext, SequenceNumber, DeleteKind),
-}
-
-#[derive(Clone, Debug)]
-pub struct SingleTxContext {
-    pub package_id: ObjectID,
-    pub transaction_module: Identifier,
-    pub sender: SuiAddress,
-}
-
-impl SingleTxContext {
-    // legacy
-    pub fn transfer_sui(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("transfer_sui"), sender)
-    }
-    pub fn pay(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("pay"), sender)
-    }
-    pub fn pay_sui(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("pay_sui"), sender)
-    }
-    pub fn pay_all_sui(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("pay_all_sui"), sender)
-    }
-    // programmable transactions
-    pub fn split_coin(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("split_coin"), sender)
-    }
-    // common to legacy and programmable transactions
-    pub fn transfer_object(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("transfer_object"), sender)
-    }
-    pub fn unused_input(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("unused_input_object"), sender)
-    }
-    pub fn publish(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("publish"), sender)
-    }
-    // system
-    pub fn gas(sender: SuiAddress) -> Self {
-        Self::sui_transaction(ident_str!("gas"), sender)
-    }
-    pub fn genesis() -> Self {
-        Self::sui_transaction(ident_str!("genesis"), SuiAddress::ZERO)
-    }
-    pub fn sui_system() -> Self {
-        Self::sui_transaction(ident_str!("sui_system"), SuiAddress::ZERO)
-    }
-    fn sui_transaction(ident: &IdentStr, sender: SuiAddress) -> Self {
-        Self {
-            package_id: SUI_FRAMEWORK_OBJECT_ID,
-            transaction_module: Identifier::from(ident),
-            sender,
-        }
-    }
+    Write(Object, WriteKind),
+    Delete(SequenceNumber, DeleteKind),
 }
 
 /// An abstraction of the (possibly distributed) store for objects. This

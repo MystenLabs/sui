@@ -248,9 +248,9 @@ async fn access_clock_object_test() {
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
-    assert_eq!(2, events.data.len());
-    let event = events.data.get(1).unwrap();
-    let Event::MoveEvent { contents, .. } = event else { panic!("Expected move event, got {:?}", event) };
+    assert_eq!(1, events.data.len());
+    let event = events.data.get(0).unwrap();
+    let Event { contents, .. } = event;
 
     use serde::{Deserialize, Serialize};
     #[derive(Serialize, Deserialize)]

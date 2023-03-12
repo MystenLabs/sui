@@ -20,9 +20,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
 };
-use sui_types::storage::{
-    ChildObjectResolver, ObjectStore, ParentSync, SingleTxContext, WriteKind,
-};
+use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 use sui_types::sui_system_state::{
     get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
     CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
@@ -141,8 +139,7 @@ fn execute_transaction<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     // First smash gas into the first coin if more than 1 was provided
-    let sender = tx_ctx.sender();
-    let gas_object_ref = match temporary_store.smash_gas(sender, gas) {
+    let gas_object_ref = match temporary_store.smash_gas(gas) {
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
@@ -194,7 +191,7 @@ fn execute_transaction<
         execution_result
     });
     if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(sender, gas_object_ref.0, &mut gas_status, &mut result, gas);
+        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
     }
     if !is_system {
         #[cfg(debug_assertions)]
@@ -245,11 +242,7 @@ fn execution_loop<
                             previous_transaction: tx_ctx.digest(),
                             storage_rebate: 0,
                         };
-                        temporary_store.write_object(
-                            &SingleTxContext::genesis(),
-                            object,
-                            WriteKind::Create,
-                        );
+                        temporary_store.write_object(object, WriteKind::Create);
                     }
                 }
             }
@@ -384,11 +377,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             "upgraded system object {:?}",
             new_package.compute_object_reference()
         );
-        temporary_store.write_object(
-            &SingleTxContext::sui_system(),
-            new_package,
-            WriteKind::Mutate,
-        );
+        temporary_store.write_object(new_package, WriteKind::Mutate);
     }
 
     Ok(())
