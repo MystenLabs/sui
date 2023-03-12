@@ -224,7 +224,10 @@ mod sim_only_tests {
 
         test_cluster.swarm.validators().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
-            node_handle.with(|node| node.set_override_protocol_upgrade_buffer_stake(0).unwrap());
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
         });
 
         // upgrade happens with only 3 votes
@@ -260,7 +263,10 @@ mod sim_only_tests {
         // Verify that clearing the override is respected.
         test_cluster.swarm.validators().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
-            node_handle.with(|node| node.clear_override_protocol_upgrade_buffer_stake().unwrap());
+            node_handle.with(|node| {
+                node.clear_override_protocol_upgrade_buffer_stake(0)
+                    .unwrap()
+            });
         });
 
         // default buffer stake is in effect, we do not advance to version 2.
