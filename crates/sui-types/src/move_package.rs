@@ -202,7 +202,6 @@ impl MovePackage {
         let type_origin_table = build_upgraded_type_origin_table(self, &modules);
         let mut new_version = self.version();
         new_version.increment();
-        let direct_deps = Self::get_direct_dependencies(&modules);
         Self::from_module_iter_with_type_origin_table(
             storage_id,
             self_id,
