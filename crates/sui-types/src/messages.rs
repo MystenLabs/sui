@@ -62,7 +62,7 @@ pub const DUMMY_GAS_PRICE: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 
-// Since `std::mem::size_of` may not be stable acrpss platforms, we use rough constans
+// Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
 // Approximate size of `ObjectRef` type in bytes
 pub const APPROX_SIZE_OF_OBJECT_REF: usize = 80;
