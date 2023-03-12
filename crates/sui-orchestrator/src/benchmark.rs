@@ -202,16 +202,9 @@ impl BenchmarkParametersGenerator {
                     Some(loads.remove(0))
                 }
             }
-            LoadType::Search {
-                max_iterations,
-                starting_load,
-            } => {
-                // Make one search with a very high load to test the system's robustness.
-                if self.iterations == *max_iterations {
-                    Some(*starting_load * 100)
-
+            LoadType::Search { max_iterations, .. } => {
                 // Terminate the the search.
-                } else if self.iterations > *max_iterations {
+                if self.iterations >= *max_iterations {
                     None
 
                 // Search for the breaking point.

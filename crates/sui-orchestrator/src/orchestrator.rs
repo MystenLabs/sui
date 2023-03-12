@@ -360,21 +360,18 @@ impl Orchestrator {
         let start = Instant::now();
         loop {
             let now = interval.tick().await;
-            match self
+            let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
+            display::status(format!("{elapsed}s",));
+
+            let stdio = self
                 .ssh_manager
                 .execute(instances.iter(), &ssh_command)
-                .await
-            {
-                Ok(stdio) => {
-                    let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
-                    display::status(format!("{elapsed}s",));
-                    for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                        let measurement = Measurement::from_prometheus(stdout);
-                        aggregator.add(i, measurement);
-                    }
-                }
-                Err(e) => display::warn(format!("Failed to scrape metrics: {e}")),
+                .await?;
+            for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
+                let measurement = Measurement::from_prometheus(stdout);
+                aggregator.add(i, measurement);
             }
+
             if aggregator.benchmark_duration() >= parameters.duration {
                 break;
             }
