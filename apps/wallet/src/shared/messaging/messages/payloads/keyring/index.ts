@@ -9,7 +9,7 @@ import type {
     SuiAddress,
 } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
-import type { AccountSerialized } from '_src/background/keyring/Account';
+import type { SerializedAccount } from '_src/background/keyring/Account';
 
 type MethodToPayloads = {
     create: {
@@ -29,7 +29,7 @@ type MethodToPayloads = {
         return: {
             isLocked: boolean;
             isInitialized: boolean;
-            accounts: AccountSerialized[];
+            accounts: SerializedAccount[];
             activeAddress: string | null;
         };
     };

@@ -6,7 +6,14 @@ import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
-import { Account } from './Account';
+import {
+    type Account,
+    isDerivedAccount,
+    isImportedAccount,
+    isImportedOrDerivedAccount,
+} from './Account';
+import { DerivedAccount } from './DerivedAccount';
+import { ImportedAccount } from './ImportedAccount';
 import { VaultStorage } from './VaultStorage';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
@@ -152,7 +159,17 @@ export class Keyring {
             return null;
         }
         if (await VaultStorage.verifyPassword(password)) {
-            return this.#accountsMap.get(address)?.exportKeypair() || null;
+            const account = this.#accountsMap.get(address);
+            if (!account) {
+                return null;
+            }
+
+            const isImportedOrDerived =
+                isImportedAccount(account) || isDerivedAccount(account);
+
+            return isImportedOrDerived
+                ? account.accountKeypair.exportKeypair()
+                : null;
         } else {
             throw new Error('Wrong password');
         }
@@ -174,14 +191,17 @@ export class Keyring {
             // update the vault and encrypt it to persist the new keypair in storage
             throw new Error('Wrong password');
         }
+
+        const importedOrDerivedAccounts = currentAccounts.filter(
+            isImportedOrDerivedAccount
+        );
         const added = await VaultStorage.importKeypair(
             keypair,
             password,
-            currentAccounts
+            importedOrDerivedAccounts
         );
         if (added) {
-            const importedAccount = new Account({
-                type: 'imported',
+            const importedAccount = new ImportedAccount({
                 keypair: added,
             });
             this.#accountsMap.set(importedAccount.address, importedAccount);
@@ -255,17 +275,26 @@ export class Keyring {
                         `Account for address ${address} not found in keyring`
                     );
                 }
-                const signature = await account.sign(fromB64(data));
-                uiConnection.send(
-                    createMessage<KeyringPayload<'signData'>>(
-                        {
-                            type: 'keyring',
-                            method: 'signData',
-                            return: signature,
-                        },
-                        id
-                    )
-                );
+
+                if (isImportedAccount(account) || isDerivedAccount(account)) {
+                    const signature = await account.accountKeypair.sign(
+                        fromB64(data)
+                    );
+                    uiConnection.send(
+                        createMessage<KeyringPayload<'signData'>>(
+                            {
+                                type: 'keyring',
+                                method: 'signData',
+                                return: signature,
+                            },
+                            id
+                        )
+                    );
+                } else {
+                    throw new Error(
+                        `Unable to sign message for account with type ${account.type}`
+                    );
+                }
             } else if (isKeyringPayload(payload, 'switchAccount')) {
                 if (this.#locked) {
                     throw new Error('Keyring is locked. Unlock it first.');
@@ -400,8 +429,7 @@ export class Keyring {
             }
         }
         VaultStorage.getImportedKeys()?.forEach((anImportedKey) => {
-            const account = new Account({
-                type: 'imported',
+            const account = new ImportedAccount({
                 keypair: anImportedKey,
             });
             // there is a case where we can import a private key of an account that can be derived from the mnemonic but not yet derived
@@ -418,7 +446,7 @@ export class Keyring {
     private deriveAccount(accountIndex: number, mnemonic: string) {
         const derivationPath = this.makeDerivationPath(accountIndex);
         const keypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath);
-        return new Account({ type: 'derived', keypair, derivationPath });
+        return new DerivedAccount({ keypair, derivationPath });
     }
 
     private async getLastDerivedIndex() {
