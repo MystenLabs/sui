@@ -41,7 +41,7 @@ use types::{
     WorkerSynchronizeMessage,
 };
 
-use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics};
+use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNEL_CAPACITY};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
@@ -275,8 +275,9 @@ impl Synchronizer {
         let highest_created_certificate = certificate_store.last_round(&name).unwrap();
         let gc_round = (*rx_consensus_round_updates.borrow()).saturating_sub(gc_depth);
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
-            broadcast::channel(1000);
-        let (tx_certificate_acceptor, mut rx_certificate_acceptor) = mpsc::channel(1000);
+            broadcast::channel(CHANNEL_CAPACITY);
+        let (tx_certificate_acceptor, mut rx_certificate_acceptor) =
+            mpsc::channel(CHANNEL_CAPACITY);
         let inner = Arc::new(Inner {
             name,
             committee: committee.clone(),
