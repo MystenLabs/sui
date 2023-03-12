@@ -89,6 +89,18 @@ account addresses available on the platform:
 sui client addresses
 ```
 
+The response resembles the following:
+
+```Showing 5 results.
+0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106
+0x011a285261b9f8d10a0c7ecb4c0dbe6d396825768dba38c3056809472736e521
+0x4ab708d1a4160fa0fdbf359691764e16380444ddb48d2b8856a169594a9baa55
+0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030
+0xa56612ad4f5dbc04c651e8d20f56af3316ee6793335707f29857bacabf9127d0 <=
+```
+
+The `<=` indicates the active address.
+
 ### Active address
 
 You can specify an active address or default address to use to execute commands.
@@ -102,59 +114,35 @@ sui client active-address
 The response to the request resembles the following:
 
 ```shell
-0x68dcb3152fe19ef49ecc84ff145aae00e95f5f10c69e914ac654483659f5f930
+0xa56612ad4f5dbc04c651e8d20f56af3316ee6793335707f29857bacabf9127d0
 ```
 
 To change the default address, use the `switch` command:
 
 ```shell
-sui client switch --address 0x68dcb3152fe19ef49ecc84ff145aae00e95f5f10c69e914ac654483659f5f930
+sui client switch --address 0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030
 ```
 
 The response resembles the following:
 
 ```shell
-Active address switched to 0x68dcb3152fe19ef49ecc84ff145aae00e95f5f10c69e914ac654483659f5f930
+Active address switched to 0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030
 ```
 
-You can call the `objects` command with or without specifying an address.
-Sui uses the active address if you do not specify one.
-
-```shell
-sui client objects
-```
-The response resembles the following:
-
-```
-                           Object ID                              |  Version   |                    Digest                    |   Owner Type    |               Object Type
----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
-```
-
-```shell
-sui client objects 0x68dcb3152fe19ef49ecc84ff145aae00e95f5f10c69e914ac654483659f5f930
-```
-
-All subsequent commands that omit `address` use the new active address:
-0x68dcb3152fe19ef49ecc84ff145aae00e95f5f10c69e914ac654483659f5f930
-
-If you call a command that uses a gas object that is not owned by the active address,
-Sui temporarily uses the address that owns the gas object for the transaction.
+All commands use the active address if you don't specify an `address`.
 
 ### Paying For transactions with gas objects
 
-All Sui transactions require a gas object for payment, as well as a budget. You can omit the gas object and let the client pick an object that meets the specified budget, or specify the coin object to use.
+All Sui transactions require a gas object for gas fees. If you don't specify a gas object, Sui uses a gas object with sufficient SUI to cover the gas fee.
 
-A gas object cannot be part of the transaction and also be used to
-pay for the transaction. For example, you can't transfer gas object X and also pay for the transaction with the same object you transfer.
-
-To see how much gas is in an account, use the `gas` command. Note that this command uses the `active-address`, unless otherwise specified.
+You can't use the same gas object as part of a transaction and to pay for the same transaction. 
+To see how much gas is in an account, use the `gas` command. 
 
 ```shell
 sui client gas
 ```
 
-You can specify an address to see the amount of gas for that address instead of the active address.
+Specify an address to check an address other than the active address.
 
 ```shell
 sui client gas 0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee
@@ -193,25 +181,73 @@ Use the `objects` command to view the objects an address owns.
 sui client objects
 ```
 
+The response resembles the following:
+```                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x1aa482ad8c6240cda3097a4aa13ad5bfb27bf6052133c01f79c8b4ea0aaa0601 |     1      | OpU8HmueEaLzK6hkNSQkcahG8qo73ag4vJPG+g8EQBs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d |     1      | lRamSZkLHnfN9mcrkoVzmXwHxE7GnFHNnqe8dzWEUA8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x51ec7820e82035a5de7b4f3ba2a3813ea099dca1867876f4177a1fa1d1efe022 |     1      | 1NO7XtdmojnOch4gcCsUHDdV1n2bPYv5je83yXd5Suw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5 |     1      | 9C1lxL45JIxwX35rL69OtAFUf3kz39Dq6jiguVvpCeM= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xe638c76768804cebc0ab43e103999886641b0269a46783f2b454e2f8880b5255 |     1      | idJrGmd6ZkzJVQeKtu8XlUt2dA397GURgCUXJOLQhxI= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+Showing 5 results.
+```
+
 To view the objects for a different address than the active address, specify the address to see objects for.
 
 ```shell
 sui client objects 0x338567a5fe29132d68fade5172870d8ac1b607fd00eaace1e0aa42896d7f97d4
 ```
 
-To view more information about an object, use the `object` command.
+To view more information about an object, use the `object` command and specify the `objectId`.
 
 ```shell
-    sui client object <ID>
+sui client object <ID>
 ```
 
 The result shows some basic information about the object, the owner,
 version, ID, if the object is immutable and the type of the object.
+```
+----- 0x2::coin::Coin<0x2::sui::SUI> (0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d[0x1]) -----
+Owner: Account Address ( 0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030 )
+Version: 0x1
+Storage Rebate: 0
+Previous Transaction: TransactionDigest(HJ8WdB6536YHD1vgH9DMhVFS7hfgVUhtgotLBFF9Aosz)
+----- Data -----
+type: 0x2::coin::Coin<0x2::sui::SUI>
+balance: 100000000000000
+id: 0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d
+```
 
 To view the JSON representation of the object, include `--json` in the command.
 
 ```shell
-    sui client object <ID> --json
+sui client object <ID> --json
+```
+
+The response resembles the following:
+```json
+{
+  "objectId": "0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d",
+  "version": 1,
+  "digest": "B2yn9NvfxsPXDadWd5ga9DirurrY3gyu1sYLT169seZk",
+  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+  "owner": {
+    "AddressOwner": "0xa3c00467938b392a12355397bdd3d319cea5c9b8f4fc9c51b46b8e15a807f030"
+  },
+  "previousTransaction": "HJ8WdB6536YHD1vgH9DMhVFS7hfgVUhtgotLBFF9Aosz",
+  "storageRebate": 0,
+  "content": {
+    "dataType": "moveObject",
+    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+    "hasPublicTransfer": true,
+    "fields": {
+      "balance": "100000000000000",
+      "id": {
+        "id": "0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d"
+      }
+    }
+  }
+}
 ```
 
 ## Transfer objects
@@ -318,7 +354,7 @@ Use the following command to view the objects that the specified address owns.
 sui client objects 0x8f603d8a00ae87c43dc090e52bffc29a4b312c28ff3afd81c498caffa2a6b768
 ```
 
-Use the IDs returns from the previous command in the `merge-coin` command.
+Use the IDs returned from the previous command in the `merge-coin` command.
 
 ```shell
 sui client merge-coin --primary-coin 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --coin-to-merge 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --gas-budget 1000
@@ -383,26 +419,11 @@ Please note that there is no real need to use a Move call to transfer
 coins as this can be accomplished with a built-in Sui client
 [command](#transfer-objects).
 
-Use the `objects` command to view objects owned by address `0x8f603d8a00ae87c43dc090e52bffc29a4b312c28ff3afd81c498caffa2a6b768`:
-
-```shell
-sui client objects 0x8f603d8a00ae87c43dc090e52bffc29a4b312c28ff3afd81c498caffa2a6b768
-```
-
-| Object ID | Version | Digest | Owner Type | Object Type |
-| :-------- | :-----: | :----- | :--------- | :---------- |
-| 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 | 0 | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= | AddressOwner |      0x2::coin::Coin<0x2::sui::SUI> |
-| 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 | 0 | VIbuA4fcsitOUmJLQ+FugZWIn7bg6LnVO8eTIAUDzkg= | AddressOwner | 0x2::coin::Coin<0x2::sui::SUI> |
-
-Showing 2 results.
-
-To transfer one of the objects to another address, use the `transfer` function:
-
 ```shell
 sui client call --function transfer --module sui --package 0x2 --args 0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget 1000
 ```
 
-or using environment variables:
+You can also use environment variables:
 ```shell
 export OBJECT_ID=0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062
 ```
@@ -447,66 +468,8 @@ auto-injected by the platform at the point of a function call.
 
 **Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`.
 
-Additionally, when you specify a vector of object IDs, you must enclose each ID in double quotes. For example,
+To include multiple object IDs, enclose the IDs in double quotes. For example,
 `'["0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427","0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"]'`
-
-To gain a deeper view into the object, include the
-`--json` flag in the `sui client` command to see the raw JSON representation
-of the object.
-
-The response from the command includes information at the end that indicates object 
-changes as a result of the function call:
-
-```shell
------ Certificate ----
-Transaction Hash: KT7sEHzxavRFkLijfKGDqj6kM5bVl1QA1IawJPV2+Go=
-Transaction Signature: GIUaa8yAPgy/eSVypVz+fmbjC2mL5kHuYNodUyNcIUMvlUN5XxyPYdL8C25vvH6rYt/ZUDY2ntZU1NHUp4yPCg==@iocJzkLCMJMh1VGZ6sUsw0okqoDP71ed9a4Vf2vWlx4=
-Signed Authorities : [k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#e5b3bc0d482603d8b54a25246b9053e958c872530d4014676d5c30d885f116ac, k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4]
-Transaction Kind : Call
-Package ID : 0x2
-Module : sui
-Function : transfer
-Arguments : ["0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427", "0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"]
-Type Arguments : []
------ Transaction Effects ----
-Status : Success
-Mutated Objects:
-  - ID: 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 , Owner: Account Address ( 0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee )
-  - ID: 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 , Owner: Account Address ( 0xc8ec1d5b84dd6289e193b9f88de4a994358c9f856135236c3e75a925e1c77ac3 )
-```
-
-This output indicates the gas object
-was updated to collect gas payment for the function call, and the
-transferred object was updated as its owner had been
-modified. We can confirm the latter (and thus a successful execution
-of the `transfer` function) by querying objects that are now owned by
-the sender:
-
-```shell
-sui client objects 0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee
-```
-
-This address no longer owns the transferred object.
-And if we inspect this object, we can see it has the new
-owner, different from the original one:
-
-```shell
-sui client object 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427
-```
-
-Resulting in:
-
-```
------ Move Object (0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427[1]) -----
-Owner: Account Address ( 0xc8ec1d5b84dd6289e193b9f88de4a994358c9f856135236c3e75a925e1c77ac3 )
-Version: 1
-Storage Rebate: 15
-Previous Transaction: KT7sEHzxavRFkLijfKGDqj6kM5bVl1QA1IawJPV2+Go=
------ Data -----
-type: 0x2::coin::Coin<0x2::sui::SUI>
-balance: 100000
-id: 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760[1]
-```
 
 ## Publish packages
 
