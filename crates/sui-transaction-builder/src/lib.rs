@@ -9,7 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::future::join_all;
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use move_binary_format::file_format::SignatureToken;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
@@ -19,7 +19,7 @@ use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiTypeTag,
+    SuiRawData, SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
@@ -374,19 +374,16 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
             .await?
             .into_object()?;
-        let package = object
-            .bcs
-            .ok_or_else(|| anyhow!("Bcs field in object [{}] is missing.", package_id))?
-            .try_as_package()
-            .cloned()
-            .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
+        let Some(SuiRawData::Package(package)) = object.bcs else {
+            bail!("Bcs field in object [{}] is missing or not a package.", package_id);
+        };
         let package: MovePackage = MovePackage::new(
             package.id,
             object.version,
-            &package.module_map,
+            package.module_map,
             ProtocolConfig::get_for_min_version().max_move_package_size(),
-            package.type_origin_table.clone(),
-            package.linkage_table.clone(),
+            package.type_origin_table,
+            package.linkage_table,
         )?;
 
         let json_args_and_tokens = resolve_move_function_args(

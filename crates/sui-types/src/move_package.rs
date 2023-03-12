@@ -138,7 +138,7 @@ impl MovePackage {
     pub fn new(
         id: ObjectID,
         version: SequenceNumber,
-        module_map: &BTreeMap<String, Vec<u8>>,
+        module_map: BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
         type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
@@ -146,7 +146,7 @@ impl MovePackage {
         let pkg = Self {
             id,
             version,
-            module_map: module_map.clone(),
+            module_map,
             type_origin_table,
             linkage_table,
         };
@@ -220,11 +220,11 @@ impl MovePackage {
         Self::new(
             id,
             version,
-            &modules
+            modules
                 .map(|module| {
                     let mut bytes = Vec::new();
                     module.serialize(&mut bytes).unwrap();
-                    (module.self_id().name().to_string(), bytes)
+                    (module.name().to_string(), bytes)
                 })
                 .collect(),
             max_move_package_size,

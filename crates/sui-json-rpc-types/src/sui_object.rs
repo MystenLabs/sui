@@ -445,7 +445,7 @@ impl TryInto<Object> for SuiObjectData {
             Some(SuiRawData::Package(p)) => Data::Package(MovePackage::new(
                 p.id,
                 self.version,
-                &p.module_map,
+                p.module_map,
                 protocol_config.max_move_package_size(),
                 p.type_origin_table,
                 p.linkage_table,

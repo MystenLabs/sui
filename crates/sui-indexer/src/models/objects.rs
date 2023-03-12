@@ -202,7 +202,7 @@ impl TryFrom<Object> for sui_types::object::Object {
                 let package = MovePackage::new(
                     object_id,
                     version,
-                    &modules,
+                    modules,
                     u64::MAX,
                     // TODO: these represent internal data needed for Move code execution and as
                     // long as this MovePackage does not find its way to the Move adapter (which is
