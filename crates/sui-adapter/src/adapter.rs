@@ -8,14 +8,10 @@ use std::{
 };
 
 use anyhow::Result;
-use leb128;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    errors::VMError,
-    file_format::{
-        CompiledModule, LocalIndex, SignatureToken, StructHandleIndex, TypeParameterIndex,
-    },
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
@@ -37,13 +33,12 @@ use crate::execution_mode::ExecutionMode;
 use sui_framework::natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_json::primitive_type;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::error::convert_vm_error;
 use sui_types::{
     base_types::*,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
-    messages::{EntryArgumentErrorKind, InputObjectKind, ObjectArg},
-    object::{self, Data, Object, Owner},
+    messages::{CommandArgumentError, InputObjectKind, ObjectArg},
+    object::{Data, Object, Owner},
     storage::ChildObjectResolver,
 };
 use sui_verifier::entry_points_verifier::{
@@ -146,16 +141,6 @@ pub fn generate_package_id(
     Ok(package_id)
 }
 
-pub struct TypeCheckSuccess {
-    pub module_id: ModuleId,
-    pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
-    pub by_value_objects: BTreeSet<ObjectID>,
-    pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
-    pub args: Vec<Vec<u8>>,
-    /// is TxContext included in the arguments? If so, is it mutable?
-    pub tx_ctx_kind: TxContextKind,
-}
-
 /// Small enum used to type check function calls for external tools. ObjVec does not exist
 /// for Programmable Transactions, but it effectively does via the command MakeMoveVec
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,7 +164,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     type_args: &[TypeTag],
     args: Vec<CheckCallArg>,
     is_genesis: bool,
-) -> Result<TypeCheckSuccess, ExecutionError> {
+) -> anyhow::Result<()> {
     // Resolve the function we are calling
     let view = &BinaryIndexedView::Module(module);
     let function_str = function.as_ident_str();
@@ -190,13 +175,11 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     let fdef = match fdef_opt {
         Some(fdef) => fdef,
         None => {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::FunctionNotFound,
-                format!(
-                    "Could not resolve function '{}' in module {}",
-                    function, &module_id,
-                ),
-            ));
+            anyhow::bail!(
+                "Could not resolve function '{}' in module {}",
+                function,
+                &module_id,
+            )
         }
     };
     // Check for entry modifier, but ignore for genesis or dev-inspect.
@@ -208,23 +191,17 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
     // and is just for developers to check the result of Move functions. This mode is flagged by
     // allow_arbitrary_function_calls
     if !fdef.is_entry && !is_genesis && !Mode::allow_arbitrary_function_calls() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::NonEntryFunctionInvoked,
-            "Can only call `entry` functions",
-        ));
+        anyhow::bail!("Can only call `entry` functions",)
     }
     let fhandle = module.function_handle_at(fdef.function);
 
     // check arity of type and value arguments
     if fhandle.type_parameters.len() != type_args.len() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::EntryTypeArityMismatch,
-            format!(
-                "Expected {:?} type arguments, but found {:?}",
-                fhandle.type_parameters.len(),
-                type_args.len()
-            ),
-        ));
+        anyhow::bail!(
+            "Expected {:?} type arguments, but found {:?}",
+            fhandle.type_parameters.len(),
+            type_args.len()
+        );
     }
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
@@ -240,136 +217,98 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
         args.len()
     };
     if parameters.len() != num_args {
-        let idx = std::cmp::min(parameters.len(), num_args) as LocalIndex;
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::ArityMismatch),
-            format!(
-                "Expected {:?} arguments calling function '{}', but found {:?}",
-                parameters.len(),
-                function,
-                num_args
-            ),
-        ));
+        anyhow::bail!(
+            "Expected {:?} arguments calling function '{}', but found {:?}",
+            parameters.len(),
+            function,
+            num_args
+        )
     }
 
     // type check object arguments passed in by value and by reference
-    let mut object_data = BTreeMap::new();
-    let mut mutable_ref_objects = BTreeMap::new();
     let mut by_value_objects = BTreeSet::new();
 
     // Track the mapping from each input object to its Move type.
     // This will be needed latter in `check_child_object_of_shared_object`.
     let mut object_type_map = BTreeMap::new();
-    let bcs_args = args
-        .into_iter()
-        .enumerate()
-        .map(|(idx, arg)| {
-            let param_type = &parameters[idx];
-            let idx = idx as LocalIndex;
-            let object_arg = match arg {
-                // dev-inspect does not make state changes and just a developer aid, so let through
-                // any BCS bytes (they will be checked later by the VM)
-                CheckCallArg::Pure(arg) if Mode::allow_arbitrary_values() => return Ok(arg),
-                CheckCallArg::Pure(arg) => {
-                    let (is_primitive, type_layout_opt) =
-                        primitive_type(view, type_args, param_type);
-                    if !is_primitive {
-                        let msg = format!(
-                            "Non-primitive argument at index {}. If it is an object, it must be \
+    for (idx, arg) in args.into_iter().enumerate() {
+        let param_type = &parameters[idx];
+        let idx = idx as LocalIndex;
+        match arg {
+            // dev-inspect does not make state changes and just a developer aid, so let through
+            // any BCS bytes (they will be checked later by the VM)
+            CheckCallArg::Pure(_) if Mode::allow_arbitrary_values() => break,
+            CheckCallArg::Pure(arg) => {
+                let (is_primitive, type_layout_opt) = primitive_type(view, type_args, param_type);
+                if !is_primitive {
+                    anyhow::bail!(
+                        "Non-primitive argument at index {}. If it is an object, it must be \
                             populated by an object ID",
-                            idx,
-                        );
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::entry_argument_error(
-                                idx,
-                                EntryArgumentErrorKind::UnsupportedPureArg,
-                            ),
-                            msg,
-                        ));
-                    }
-                    validate_primitive_arg(view, &arg, idx, param_type, type_layout_opt)?;
-                    return Ok(arg);
-                }
-                CheckCallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
-                    let (o, arg_type, param_type) = serialize_object(
-                        InputObjectKind::ImmOrOwnedMoveObject(ref_),
                         idx,
-                        param_type,
-                        objects,
-                        &mut object_data,
-                        &mut mutable_ref_objects,
-                        &mut by_value_objects,
-                        &mut object_type_map,
-                    )?;
-                    type_check_struct(view, type_args, idx, arg_type, param_type)?;
-                    o
+                    );
                 }
-                CheckCallArg::Object(ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }) => {
-                    let (o, arg_type, param_type) = serialize_object(
-                        InputObjectKind::SharedMoveObject {
+                validate_primitive_arg(view, &arg, idx, param_type, type_layout_opt)?;
+                break;
+            }
+            CheckCallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
+                let (arg_type, param_type) = serialize_object(
+                    InputObjectKind::ImmOrOwnedMoveObject(ref_),
+                    idx,
+                    param_type,
+                    objects,
+                    &mut by_value_objects,
+                    &mut object_type_map,
+                )?;
+                type_check_struct(view, type_args, arg_type, param_type)?;
+            }
+            CheckCallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => {
+                let (arg_type, param_type) = serialize_object(
+                    InputObjectKind::SharedMoveObject {
+                        id,
+                        initial_shared_version,
+                        mutable,
+                    },
+                    idx,
+                    param_type,
+                    objects,
+                    &mut by_value_objects,
+                    &mut object_type_map,
+                )?;
+                type_check_struct(view, type_args, arg_type, param_type)?;
+            }
+            CheckCallArg::ObjVec(vec) => {
+                for arg in vec {
+                    let object_kind = match arg {
+                        ObjectArg::ImmOrOwnedObject(ref_) => {
+                            InputObjectKind::ImmOrOwnedMoveObject(ref_)
+                        }
+                        ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version,
+                            mutable,
+                        } => InputObjectKind::SharedMoveObject {
                             id,
                             initial_shared_version,
                             mutable,
                         },
+                    };
+                    let (arg_type, param_type) = serialize_object(
+                        object_kind,
                         idx,
                         param_type,
                         objects,
-                        &mut object_data,
-                        &mut mutable_ref_objects,
                         &mut by_value_objects,
                         &mut object_type_map,
                     )?;
-                    type_check_struct(view, type_args, idx, arg_type, param_type)?;
-                    o
+                    type_check_struct(view, type_args, arg_type, param_type)?;
                 }
-                CheckCallArg::ObjVec(vec) => {
-                    if vec.is_empty() {
-                        // bcs representation of the empty vector
-                        return Ok(vec![0]);
-                    }
-                    // write length of the vector as uleb128 as it is encoded in BCS and then append
-                    // all (already serialized) object content data
-                    let mut res = vec![];
-                    leb128::write::unsigned(&mut res, vec.len() as u64).unwrap();
-                    for arg in vec {
-                        let object_kind = match arg {
-                            ObjectArg::ImmOrOwnedObject(ref_) => {
-                                InputObjectKind::ImmOrOwnedMoveObject(ref_)
-                            }
-                            ObjectArg::SharedObject {
-                                id,
-                                initial_shared_version,
-                                mutable,
-                            } => InputObjectKind::SharedMoveObject {
-                                id,
-                                initial_shared_version,
-                                mutable,
-                            },
-                        };
-                        let (o, arg_type, param_type) = serialize_object(
-                            object_kind,
-                            idx,
-                            param_type,
-                            objects,
-                            &mut object_data,
-                            &mut mutable_ref_objects,
-                            &mut by_value_objects,
-                            &mut object_type_map,
-                        )?;
-                        type_check_struct(view, type_args, idx, arg_type, param_type)?;
-                        res.extend(o);
-                    }
-                    res
-                }
-            };
-
-            Ok(object_arg)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+            }
+        };
+    }
 
     check_shared_object_rules(
         objects,
@@ -378,14 +317,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
         module.self_id(),
     )?;
 
-    Ok(TypeCheckSuccess {
-        module_id,
-        object_data,
-        by_value_objects,
-        mutable_ref_objects,
-        args: bcs_args,
-        tx_ctx_kind,
-    })
+    Ok(())
 }
 
 // Validates a primitive argument
@@ -395,7 +327,7 @@ fn validate_primitive_arg(
     idx: LocalIndex,
     param_type: &SignatureToken,
     type_layout: Option<MoveTypeLayout>,
-) -> Result<(), ExecutionError> {
+) -> anyhow::Result<()> {
     // at this point we only check validity of string arguments (ascii and utf8)
     let string_arg_opt = string_arg(param_type, view);
     if string_arg_opt.is_none() {
@@ -405,23 +337,24 @@ fn validate_primitive_arg(
 
     // we already checked the type above and struct layout for this type is guaranteed to exist
     let string_struct_layout = type_layout.unwrap();
-    validate_primitive_arg_string(arg, idx, string_struct, string_struct_layout)
+    validate_primitive_arg_string(arg, idx as u16, string_struct, string_struct_layout)?;
+    Ok(())
 }
 
 pub fn validate_primitive_arg_string(
     arg: &[u8],
-    idx: LocalIndex,
+    idx: u16,
     string_struct: (&AccountAddress, &IdentStr, &IdentStr),
     string_struct_layout: MoveTypeLayout,
 ) -> Result<(), ExecutionError> {
     let string_move_value =
         MoveValue::simple_deserialize(arg, &string_struct_layout).map_err(|_| {
             ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+                ExecutionErrorKind::command_argument_error(CommandArgumentError::TypeMismatch, idx),
                 format!(
                 "Function expects {}::{}::{} struct but provided argument's value does not match",
                 string_struct.0, string_struct.1, string_struct.2,
-            ),
+                ),
             )
         })?;
     validate_string_move_value(&string_move_value, idx, string_struct.1)
@@ -431,7 +364,7 @@ pub fn validate_primitive_arg_string(
 // strings), validate that the content of the data represents a valid string
 fn validate_string_move_value(
     value: &MoveValue,
-    idx: LocalIndex,
+    idx: u16,
     module: &IdentStr,
 ) -> Result<(), ExecutionError> {
     match value {
@@ -478,17 +411,21 @@ fn move_values_to_u8(values: &[MoveValue]) -> Vec<u8> {
     res
 }
 
-// Validates that Vec<u8> represents a valid string
-fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(), ExecutionError> {
+// Validates that `bytes` represents a valid string
+fn validate_string(bytes: &[u8], idx: u16, module: &IdentStr) -> Result<(), ExecutionError> {
     if module == STD_ASCII_MODULE_NAME {
         for b in bytes {
             if *b > 0x7F {
                 return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::entry_argument_error(
+                    ExecutionErrorKind::command_argument_error(
+                        CommandArgumentError::TypeMismatch,
                         idx,
-                        EntryArgumentErrorKind::TypeMismatch,
                     ),
-                    format!("Unexpected non-ASCII value (outside of ASCII character range) in argument {}", idx),
+                    format!(
+                        "Unexpected non-ASCII value (outside of ASCII character range) \
+                        in argument {}",
+                        idx
+                    ),
                 ));
             }
         }
@@ -496,7 +433,7 @@ fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(
         debug_assert!(module == STD_UTF8_MODULE_NAME);
         if std::str::from_utf8(bytes).is_err() {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+                ExecutionErrorKind::command_argument_error(CommandArgumentError::TypeMismatch, idx),
                 format!(
                     "Unexpected non-UTF8 value (outside of UTF8 character range) in argument {}",
                     idx
@@ -533,11 +470,9 @@ fn serialize_object<'a>(
     idx: LocalIndex,
     param_type: &'a SignatureToken,
     objects: &'a BTreeMap<ObjectID, impl Borrow<Object>>,
-    object_data: &mut BTreeMap<ObjectID, (Owner, SequenceNumber)>,
-    mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
     object_type_map: &mut BTreeMap<ObjectID, ModuleId>,
-) -> Result<(Vec<u8>, &'a MoveObjectType, &'a SignatureToken), ExecutionError> {
+) -> anyhow::Result<(&'a MoveObjectType, &'a SignatureToken)> {
     let object_id = object_kind.object_id();
     let object = match objects.get(&object_id) {
         Some(object) => object.borrow(),
@@ -552,64 +487,40 @@ fn serialize_object<'a>(
     };
     match object_kind {
         InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
-            let error = format!(
+            anyhow::bail!(
                 "Argument at index {} populated with shared object id {} \
                         but an immutable or owned object was expected",
-                idx, object_id
+                idx,
+                object_id
             );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    idx,
-                    EntryArgumentErrorKind::ObjectKindMismatch,
-                ),
-                error,
-            ));
         }
         InputObjectKind::SharedMoveObject { mutable, .. } => {
             if !object.is_shared() {
-                let error = format!(
+                anyhow::bail!(
                     "Argument at index {} populated with an immutable or owned object id {} \
                             but an shared object was expected",
-                    idx, object_id
-                );
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::entry_argument_error(
-                        idx,
-                        EntryArgumentErrorKind::ObjectKindMismatch,
-                    ),
-                    error,
-                ));
+                    idx,
+                    object_id
+                )
             }
             // Immutable shared object can only pass as immutable reference to move call
             if !mutable {
                 match param_type {
                     SignatureToken::Reference(_) => {} // ok
                     SignatureToken::MutableReference(_) => {
-                        let error = format!(
+                        anyhow::bail!(
                             "Argument at index {} populated with an immutable shared object id {} \
                             but move call takes mutable object reference",
-                            idx, object_id
-                        );
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::entry_argument_error(
-                                idx,
-                                EntryArgumentErrorKind::ObjectMutabilityMismatch,
-                            ),
-                            error,
-                        ));
+                            idx,
+                            object_id
+                        )
                     }
                     _ => {
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::entry_argument_error(
-                                idx,
-                                EntryArgumentErrorKind::InvalidObjectByValue,
-                            ),
-                            format!(
-                                "Shared objects cannot be passed by-value, \
+                        anyhow::bail!(
+                            "Shared objects cannot be passed by-value, \
                                     violation found in argument {}",
-                                idx
-                            ),
-                        ));
+                            idx
+                        );
                     }
                 }
             }
@@ -621,15 +532,11 @@ fn serialize_object<'a>(
         Data::Move(m) => m,
         Data::Package(_) => {
             let for_vector = matches!(param_type, SignatureToken::Vector { .. });
-            let error = format!(
+            anyhow::bail!(
                 "Found module {} argument, but function expects {:?}",
                 if for_vector { "element in vector" } else { "" },
                 param_type
             );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
-                error,
-            ));
         }
     };
 
@@ -640,17 +547,11 @@ fn serialize_object<'a>(
         idx,
         param_type,
         move_object.type_(),
-        mutable_ref_objects,
         by_value_objects,
     )?;
 
     object_type_map.insert(object_id, move_object.type_().module_id());
-    object_data.insert(object_id, (object.owner, object.version()));
-    Ok((
-        move_object.contents().to_vec(),
-        move_object.type_(),
-        inner_param_type,
-    ))
+    Ok((move_object.type_(), inner_param_type))
 }
 
 /// Get "inner" type of an object passed as argument (e.g., an inner type of a reference or of a
@@ -661,69 +562,49 @@ fn inner_param_type<'a>(
     idx: LocalIndex,
     param_type: &'a SignatureToken,
     arg_type: &MoveObjectType,
-    mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
-) -> Result<&'a SignatureToken, ExecutionError> {
+) -> anyhow::Result<&'a SignatureToken> {
     if let Owner::ObjectOwner(parent) = &object.owner {
-        return Err(ExecutionErrorKind::invalid_child_object_argument(object_id, *parent).into());
+        anyhow::bail!(
+            "Cannot take a child object as an argyment. Object {object_id} is a child of {}",
+            *parent
+        )
     }
     match &param_type {
         SignatureToken::Reference(inner_t) => Ok(&**inner_t),
         SignatureToken::MutableReference(inner_t) => {
             if object.is_immutable() {
-                let error = format!(
+                anyhow::bail!(
                     "Argument {} is expected to be mutable, immutable object found",
                     idx
-                );
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::entry_argument_error(
-                        idx,
-                        EntryArgumentErrorKind::InvalidObjectByMuteRef,
-                    ),
-                    error,
-                ));
+                )
             }
-            mutable_ref_objects.insert(idx as LocalIndex, object_id);
             Ok(&**inner_t)
         }
-        SignatureToken::Vector(inner_t) => inner_param_type(
-            object,
-            object_id,
-            idx,
-            inner_t,
-            arg_type,
-            mutable_ref_objects,
-            by_value_objects,
-        ),
+        SignatureToken::Vector(inner_t) => {
+            inner_param_type(object, object_id, idx, inner_t, arg_type, by_value_objects)
+        }
         t @ SignatureToken::Struct(_)
         | t @ SignatureToken::StructInstantiation(_, _)
         | t @ SignatureToken::TypeParameter(_) => {
             match &object.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
                 Owner::Shared { .. } | Owner::Immutable => {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::entry_argument_error(
-                            idx,
-                            EntryArgumentErrorKind::InvalidObjectByValue,
-                        ),
-                        format!(
-                            "Immutable and shared objects cannot be passed by-value, \
+                    anyhow::bail!(
+                        "Immutable and shared objects cannot be passed by-value, \
                                     violation found in argument {}",
-                            idx
-                        ),
-                    ));
+                        idx
+                    )
                 }
             }
             by_value_objects.insert(object_id);
             Ok(t)
         }
-        t => Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
-            format!(
-                "Found object argument {}, but function expects {:?}",
-                arg_type, t
-            ),
-        )),
+        t => anyhow::bail!(
+            "Found object argument {}, but function expects {:?}",
+            arg_type,
+            t
+        ),
     }
 }
 
@@ -767,22 +648,17 @@ fn check_shared_object_rules(
 fn type_check_struct(
     view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
-    idx: LocalIndex,
     arg_type: &MoveObjectType,
     param_type: &SignatureToken,
-) -> Result<(), ExecutionError> {
+) -> anyhow::Result<()> {
     if !move_type_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
-        Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
-            format!(
-                "Expected argument of type {}, but found type {}",
-                sui_verifier::format_signature_token(view, param_type),
-                arg_type
-            ),
-        ))
-    } else {
-        Ok(())
+        anyhow::bail!(
+            "Expected argument of type {}, but found type {}",
+            sui_verifier::format_signature_token(view, param_type),
+            arg_type
+        )
     }
+    Ok(())
 }
 
 fn type_tag_equals_sig_token(
@@ -921,25 +797,4 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
         "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
         id
     )
-}
-
-pub fn convert_type_argument_error<
-    'r,
-    E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
->(
-    idx: usize,
-    error: VMError,
-    vm: &'r MoveVM,
-    state_view: &'r S,
-) -> ExecutionError {
-    use move_core_types::vm_status::StatusCode;
-    use sui_types::messages::EntryTypeArgumentErrorKind;
-    let kind = match error.major_status() {
-        StatusCode::TYPE_RESOLUTION_FAILURE => EntryTypeArgumentErrorKind::TypeNotFound,
-        StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => EntryTypeArgumentErrorKind::ArityMismatch,
-        StatusCode::CONSTRAINT_NOT_SATISFIED => EntryTypeArgumentErrorKind::ConstraintNotSatisfied,
-        _ => return convert_vm_error(error, vm, state_view),
-    };
-    ExecutionErrorKind::entry_type_argument_error(idx as TypeParameterIndex, kind).into()
 }

@@ -695,20 +695,6 @@ impl Object {
         let type_tag = move_struct.type_params[0].clone();
         Ok(type_tag)
     }
-
-    pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
-        if !matches!(self.owner, Owner::AddressOwner(_)) {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
-        let has_public_transfer = match &self.data {
-            Data::Move(m) => m.has_public_transfer(),
-            Data::Package(_) => false,
-        };
-        if !has_public_transfer {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
-        Ok(())
-    }
 }
 
 // Testing-related APIs.

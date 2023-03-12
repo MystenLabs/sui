@@ -534,7 +534,9 @@ fn update_owner_map(
                 let mut cur = new_owner;
                 loop {
                     if cur == id {
-                        return Err(ExecutionErrorKind::circular_object_ownership(cur).into());
+                        return Err(ExecutionError::from_kind(
+                            ExecutionErrorKind::CircularObjectOwnership { object: cur },
+                        ));
                     }
                     if let Some(parent) = object_owner_map.get(&cur) {
                         cur = *parent;
