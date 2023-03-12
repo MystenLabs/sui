@@ -175,7 +175,9 @@ class Plotter:
                 ncol=self.legend_columns
             )
         plt.xlim(xmin=0)
-        plt.ylim(bottom=0, top=self.y_max)
+        plt.ylim(bottom=0)
+        if plot_type == PlotType.L_GRAPH:
+            plt.ylim(top=self.y_max)
         plt.xlabel(x_label, fontweight='bold')
         plt.ylabel(y_label, fontweight='bold')
         plt.xticks(weight='bold')
@@ -347,7 +349,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--y-max', type=float, default=None,
-        help='The maximum value of the y-axis'
+        help='The maximum value of the y-axis for L-graphs'
     )
     parser.add_argument(
         '--legend-columns', type=int, default=1,
