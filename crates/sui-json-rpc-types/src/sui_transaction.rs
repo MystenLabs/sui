@@ -28,6 +28,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
+use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
@@ -58,8 +59,32 @@ impl Display for BigInt {
         write!(f, "{}", self.0)
     }
 }
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase", rename = "TransactionResponseQuery", default)]
+pub struct SuiTransactionResponseQuery {
+    /// If None, no filter will be applied
+    pub filter: Option<TransactionFilter>,
+    /// config which fields to include in the response, by default only digest is included
+    pub options: Option<SuiTransactionResponseOptions>,
+}
 
-pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
+impl SuiTransactionResponseQuery {
+    pub fn new(
+        filter: Option<TransactionFilter>,
+        options: Option<SuiTransactionResponseOptions>,
+    ) -> Self {
+        Self { filter, options }
+    }
+
+    pub fn new_with_filter(filter: TransactionFilter) -> Self {
+        Self {
+            filter: Some(filter),
+            options: None,
+        }
+    }
+}
+
+pub type TransactionsPage = Page<SuiTransactionResponse, TransactionDigest>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
 #[serde(

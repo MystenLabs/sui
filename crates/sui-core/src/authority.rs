@@ -76,7 +76,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::query::{EventQuery, TransactionFilter};
 use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -2341,14 +2341,14 @@ impl AuthorityState {
 
     pub fn get_transactions(
         &self,
-        query: TransactionQuery,
+        filter: Option<TransactionFilter>,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
         self.get_indexes()?
-            .get_transactions(query, cursor, limit, reverse)
+            .get_transactions(filter, cursor, limit, reverse)
     }
 
     fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {

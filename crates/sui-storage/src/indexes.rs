@@ -23,7 +23,7 @@ use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::object::Owner;
-use sui_types::query::TransactionQuery;
+use sui_types::query::TransactionFilter;
 
 use crate::default_db_options;
 
@@ -245,7 +245,7 @@ impl IndexStore {
 
     pub fn get_transactions(
         &self,
-        query: TransactionQuery,
+        filter: Option<TransactionFilter>,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
@@ -259,27 +259,27 @@ impl IndexStore {
         } else {
             None
         };
-        Ok(match query {
-            TransactionQuery::MoveFunction {
+        Ok(match filter {
+            Some(TransactionFilter::MoveFunction {
                 package,
                 module,
                 function,
-            } => self.get_transactions_by_move_function(
+            }) => self.get_transactions_by_move_function(
                 package, module, function, cursor, limit, reverse,
             )?,
-            TransactionQuery::InputObject(object_id) => {
+            Some(TransactionFilter::InputObject(object_id)) => {
                 self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?
             }
-            TransactionQuery::MutatedObject(object_id) => {
+            Some(TransactionFilter::MutatedObject(object_id)) => {
                 self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?
             }
-            TransactionQuery::FromAddress(address) => {
+            Some(TransactionFilter::FromAddress(address)) => {
                 self.get_transactions_from_addr(address, cursor, limit, reverse)?
             }
-            TransactionQuery::ToAddress(address) => {
+            Some(TransactionFilter::ToAddress(address)) => {
                 self.get_transactions_to_addr(address, cursor, limit, reverse)?
             }
-            TransactionQuery::All => {
+            None => {
                 let iter = self.tables.transaction_order.iter();
 
                 if reverse {

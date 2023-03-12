@@ -24,8 +24,8 @@ import {
   SuiAddress,
   EventQuery,
   EventId,
-  PaginatedTransactionDigests,
-  TransactionQuery,
+  PaginatedTransactionResponse,
+  SuiTransactionResponseQuery,
   PaginatedEvents,
   RpcApiVersion,
   FaucetResponse,
@@ -206,7 +206,7 @@ export abstract class Provider {
   // Transactions
   /**
    * Get transaction digests for a given range
-   * @deprecated this method will be removed before April 2023, please use `getTransactions` instead
+   * @deprecated this method will be removed before April 2023, please use `queryTransactions` instead
    */
   abstract getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
@@ -216,12 +216,12 @@ export abstract class Provider {
   /**
    * Get transactions for a given query criteria
    */
-  abstract getTransactions(
-    query: TransactionQuery,
+  abstract queryTransactions(
+    query: SuiTransactionResponseQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
     order: Order,
-  ): Promise<PaginatedTransactionDigests>;
+  ): Promise<PaginatedTransactionResponse>;
 
   /**
    * Get total number of transactions

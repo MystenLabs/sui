@@ -1523,100 +1523,13 @@
       ]
     },
     {
-      "name": "sui_getTransactions",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return list of transactions for a specified query criteria.",
-      "params": [
-        {
-          "name": "query",
-          "description": "the transaction query criteria.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionQuery"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "Optional paging cursor",
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.",
-          "schema": {
-            "type": "boolean"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionsPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_TransactionDigest_and_TransactionDigest"
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified query criteria",
-          "params": [
-            {
-              "name": "query",
-              "value": {
-                "InputObject": "0x6e1e02f6658d21bce9b88bdceee1294144eec47cf39388bb680f69b7426bc529"
-              }
-            },
-            {
-              "name": "cursor",
-              "value": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
-            },
-            {
-              "name": "limit",
-              "value": 100
-            },
-            {
-              "name": "descending_order",
-              "value": false
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": {
-              "data": [
-                "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
-                "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd",
-                "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD",
-                "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
-              ],
-              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2",
-              "hasNextPage": false
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_getTransactionsInRangeDeprecated",
       "tags": [
         {
           "name": "Read API"
         }
       ],
-      "description": "Return list of transaction digests within the queried range. This method will be removed before April 2023, please use `getTransactions` instead",
+      "description": "Return list of transaction digests within the queried range. This method will be removed before April 2023, please use `queryTransactions` instead",
       "params": [
         {
           "name": "start",
@@ -2137,6 +2050,101 @@
           "$ref": "#/components/schemas/TransactionBytes"
         }
       }
+    },
+    {
+      "name": "sui_queryTransactions",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return list of transactions for a specified query criteria.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the transaction query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "Optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"
+        }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified query criteria",
+          "params": [
+            {
+              "name": "query",
+              "value": {
+                "InputObject": "0x6e1e02f6658d21bce9b88bdceee1294144eec47cf39388bb680f69b7426bc529"
+              }
+            },
+            {
+              "name": "cursor",
+              "value": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "descending_order",
+              "value": false
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "digest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
+                },
+                {
+                  "digest": "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd"
+                },
+                {
+                  "digest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                },
+                {
+                  "digest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+                }
+              ],
+              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2",
+              "hasNextPage": false
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_requestAddStake",
@@ -4862,7 +4870,7 @@
         ]
       },
       "Page_for_Coin_and_ObjectID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4891,7 +4899,7 @@
         }
       },
       "Page_for_DynamicFieldInfo_and_ObjectID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4920,7 +4928,7 @@
         }
       },
       "Page_for_EventEnvelope_and_EventID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4948,8 +4956,8 @@
           }
         }
       },
-      "Page_for_TransactionDigest_and_TransactionDigest": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+      "Page_for_TransactionResponse_and_TransactionDigest": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4959,7 +4967,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TransactionDigest"
+              "$ref": "#/components/schemas/TransactionResponse"
             }
           },
           "hasNextPage": {
@@ -6646,6 +6654,95 @@
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Sha3Digest"
       },
+      "TransactionFilter": {
+        "oneOf": [
+          {
+            "description": "Query by move function.",
+            "type": "object",
+            "required": [
+              "MoveFunction"
+            ],
+            "properties": {
+              "MoveFunction": {
+                "type": "object",
+                "required": [
+                  "package"
+                ],
+                "properties": {
+                  "function": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "module": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "package": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by input object.",
+            "type": "object",
+            "required": [
+              "InputObject"
+            ],
+            "properties": {
+              "InputObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by mutated object.",
+            "type": "object",
+            "required": [
+              "MutatedObject"
+            ],
+            "properties": {
+              "MutatedObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by sender address.",
+            "type": "object",
+            "required": [
+              "FromAddress"
+            ],
+            "properties": {
+              "FromAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by recipient address.",
+            "type": "object",
+            "required": [
+              "ToAddress"
+            ],
+            "properties": {
+              "ToAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "TransactionKind": {
         "oneOf": [
           {
@@ -6781,102 +6878,6 @@
           }
         ]
       },
-      "TransactionQuery": {
-        "oneOf": [
-          {
-            "description": "All transaction hashes.",
-            "type": "string",
-            "enum": [
-              "All"
-            ]
-          },
-          {
-            "description": "Query by move function.",
-            "type": "object",
-            "required": [
-              "MoveFunction"
-            ],
-            "properties": {
-              "MoveFunction": {
-                "type": "object",
-                "required": [
-                  "package"
-                ],
-                "properties": {
-                  "function": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "module": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "package": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by input object.",
-            "type": "object",
-            "required": [
-              "InputObject"
-            ],
-            "properties": {
-              "InputObject": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by mutated object.",
-            "type": "object",
-            "required": [
-              "MutatedObject"
-            ],
-            "properties": {
-              "MutatedObject": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by sender address.",
-            "type": "object",
-            "required": [
-              "FromAddress"
-            ],
-            "properties": {
-              "FromAddress": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by recipient address.",
-            "type": "object",
-            "required": [
-              "ToAddress"
-            ],
-            "properties": {
-              "ToAddress": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "TransactionResponse": {
         "type": "object",
         "required": [
@@ -6964,6 +6965,35 @@
             "description": "Whether to show transaction input data. Default to be False",
             "default": false,
             "type": "boolean"
+          }
+        }
+      },
+      "TransactionResponseQuery": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "description": "If None, no filter will be applied",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "description": "config which fields to include in the response, by default only digest is included",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionResponseOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
