@@ -40,7 +40,12 @@ export function ImportLedgerAccounts() {
             onError: onDeriveError,
         });
 
-    const importLedgerAccountsMutation = useImportLedgerAccountsMutation();
+    const importLedgerAccountsMutation = useImportLedgerAccountsMutation({
+        onSuccess: () => navigate(accountsUrl),
+        onError: () => {
+            toast.error('There was an issue importing your Ledger accounts.');
+        },
+    });
 
     const existingAccounts = useAccounts();
     const existingAccountAddresses = existingAccounts.map(
@@ -158,18 +163,11 @@ export function ImportLedgerAccounts() {
                     before={<UnlockedLockIcon />}
                     text="Unlock"
                     loading={importLedgerAccountsMutation.isLoading}
-                    onClick={async () => {
-                        try {
-                            await importLedgerAccountsMutation.mutateAsync(
-                                selectedLedgerAccounts
-                            );
-                            navigate(accountsUrl);
-                        } catch (error) {
-                            toast.error(
-                                'There was an issue importing your Ledger accounts.'
-                            );
-                        }
-                    }}
+                    onClick={() =>
+                        importLedgerAccountsMutation.mutate(
+                            selectedLedgerAccounts
+                        )
+                    }
                     disabled={areNoAccountsSelected}
                 />
             </div>

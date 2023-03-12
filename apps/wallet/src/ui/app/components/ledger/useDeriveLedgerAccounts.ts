@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519PublicKey } from '@mysten/sui.js';
+import { Ed25519PublicKey, normalizeSuiAddress } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
@@ -19,15 +19,9 @@ type UseDeriveLedgerAccountOptions = {
     onError: (error: unknown) => void;
 };
 
-type UseDeriveLedgerAccountResult = [
-    SelectableLedgerAccount[],
-    React.Dispatch<React.SetStateAction<SelectableLedgerAccount[]>>,
-    boolean
-];
-
 export function useDeriveLedgerAccounts(
     options: UseDeriveLedgerAccountOptions
-): UseDeriveLedgerAccountResult {
+) {
     const { numAccountsToDerive, onError } = options;
     const [ledgerAccounts, setLedgerAccounts] = useState<
         SelectableLedgerAccount[]
@@ -64,7 +58,7 @@ export function useDeriveLedgerAccounts(
         generateLedgerAccounts();
     }, [numAccountsToDerive, onError, suiLedgerClient]);
 
-    return [ledgerAccounts, setLedgerAccounts, isLoading];
+    return [ledgerAccounts, setLedgerAccounts, isLoading] as const;
 }
 
 async function deriveAccountsFromLedger(
@@ -79,9 +73,10 @@ async function deriveAccountsFromLedger(
             derivationPath
         );
         const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
+        const suiAddress = normalizeSuiAddress(publicKey.toSuiAddress());
         ledgerAccounts.push({
             type: AccountType.LEDGER,
-            address: `0x${publicKey.toSuiAddress()}`,
+            address: suiAddress,
             derivationPath,
             isSelected: false,
         });
