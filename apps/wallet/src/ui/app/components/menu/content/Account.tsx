@@ -7,17 +7,21 @@ import { formatAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 
 import { AccountActions } from './AccountActions';
+import { AccountType } from '_src/background/keyring/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Heading } from '_src/ui/app/shared/heading';
+import { Text } from '_src/ui/app/shared/text';
 
 export type AccountProps = {
     address: string;
+    accountType: AccountType;
 };
 
-export function Account({ address }: AccountProps) {
+export function Account({ address, accountType }: AccountProps) {
     const copyCallback = useCopyToClipboard(address, {
         copySuccessMessage: 'Address copied',
     });
+
     return (
         <Disclosure>
             {({ open }) => (
@@ -33,7 +37,7 @@ export function Account({ address }: AccountProps) {
                         as="div"
                         className="flex flex-nowrap items-center p-5 self-stretch cursor-pointer gap-3 group"
                     >
-                        <div className="transition flex flex-1 justify-start text-steel-dark group-hover:text-steel-darker ui-open:text-steel-darker">
+                        <div className="transition flex flex-1 gap-3 justify-start items-center text-steel-dark group-hover:text-steel-darker ui-open:text-steel-darker">
                             <Heading
                                 mono
                                 weight="semibold"
@@ -42,6 +46,7 @@ export function Account({ address }: AccountProps) {
                             >
                                 {formatAddress(address)}
                             </Heading>
+                            <AccountBadge accountType={accountType} />
                         </div>
                         <Copy16
                             onClick={copyCallback}
@@ -58,11 +63,36 @@ export function Account({ address }: AccountProps) {
                         leaveTo="transform opacity-0"
                     >
                         <Disclosure.Panel className="px-5 pb-4">
-                            <AccountActions accountAddress={address} />
+                            <AccountActions
+                                accountAddress={address}
+                                accountType={accountType}
+                            />
                         </Disclosure.Panel>
                     </Transition>
                 </div>
             )}
         </Disclosure>
     );
+}
+
+type AccountBadgeProps = {
+    accountType: AccountType;
+};
+
+function AccountBadge({ accountType }: AccountBadgeProps) {
+    switch (accountType) {
+        case AccountType.LEDGER:
+            return (
+                <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
+                    <Text variant="captionSmallExtra" color="steel-dark">
+                        Ledger
+                    </Text>
+                </div>
+            );
+        case AccountType.DERIVED:
+        case AccountType.IMPORTED:
+            return null;
+        default:
+            throw new Error(`Encountered unknown account type ${accountType}`);
+    }
 }
