@@ -57,6 +57,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use tokio::sync::broadcast;
+use tokio::sync::oneshot::Sender;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -79,6 +80,7 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
@@ -124,6 +126,8 @@ pub struct SuiNode {
 
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
+
+    _db_checkpoint_handle: Option<Sender<()>>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -261,10 +265,22 @@ impl SuiNode {
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
-                ..config.db_checkpoint_config
+                ..config.db_checkpoint_config.clone()
             }
         } else {
             config.db_checkpoint_config.clone()
+        };
+
+        let db_checkpoint_handle = match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, config)) => {
+                let handler = DBCheckpointHandler::new(path, config, 60)?;
+                Some(handler.start())
+            }
+            None => None,
         };
 
         let state = AuthorityState::new(
@@ -387,6 +403,7 @@ impl SuiNode {
             connection_monitor_status,
             trusted_peer_change_tx,
 
+            _db_checkpoint_handle: db_checkpoint_handle,
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
