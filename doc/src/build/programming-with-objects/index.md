@@ -16,7 +16,7 @@ Understand:
 - [Sui Objects](../../learn/objects.md)
 
 Install:
-- [Sui binaries](../install.md#install-or-update-sui-binaries)
+- [Sui binaries](../install.md#install-sui-binaries)
 - [Sui source code](../install.md#source-code)
 
 ## Chapters

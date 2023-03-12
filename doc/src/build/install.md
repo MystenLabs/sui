@@ -208,7 +208,7 @@ brew install git
 
 After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
 
-Proceed to [Install Sui binaries](#install-or-update-sui-binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 ## Windows prerequisites
 

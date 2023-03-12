@@ -8,7 +8,7 @@ This guide is useful for developers interested in Sui network interactions via A
 
 For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
-Follow the instructions to [install Sui binaries](install.md).
+Follow the instructions to [install Sui binaries](install.md#install-sui-binaries).
 
 ## Connect to a Sui network
 
