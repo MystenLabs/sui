@@ -266,8 +266,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         Command::Publish(modules) => {
             execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
         }
-        Command::Upgrade(upgrade_ticket, dep_ids, modules) => {
-            execute_move_upgrade::<_, _, Mode>(context, upgrade_ticket, dep_ids, modules)?
+        Command::Upgrade(modules, dep_ids, upgrade_ticket) => {
+            execute_move_upgrade::<_, _, Mode>(context, modules, dep_ids, upgrade_ticket)?
         }
     };
 
@@ -437,9 +437,9 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
 fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
-    _upgrade_ticket_arg: Argument,
-    _dep_ids: Vec<ObjectID>,
     _module_bytes: Vec<Vec<u8>>,
+    _dep_ids: Vec<ObjectID>,
+    _upgrade_ticket_arg: Argument,
 ) -> Result<Vec<Value>, ExecutionError> {
     // Check that package upgrades are supported.
     context

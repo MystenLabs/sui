@@ -5505,7 +5505,7 @@
                 "type": "array",
                 "items": [
                   {
-                    "$ref": "#/components/schemas/SuiArgument"
+                    "$ref": "#/components/schemas/MovePackage"
                   },
                   {
                     "type": "array",
@@ -5514,7 +5514,7 @@
                     }
                   },
                   {
-                    "$ref": "#/components/schemas/MovePackage"
+                    "$ref": "#/components/schemas/SuiArgument"
                   }
                 ],
                 "maxItems": 3,

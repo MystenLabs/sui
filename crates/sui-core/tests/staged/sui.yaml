@@ -92,11 +92,11 @@ Command:
     6:
       Upgrade:
         TUPLE:
-          - TYPENAME: Argument
-          - SEQ:
-              TYPENAME: ObjectID
           - SEQ:
               SEQ: U8
+          - SEQ:
+              TYPENAME: ObjectID
+          - TYPENAME: Argument
 CommandArgumentError:
   ENUM:
     0:
