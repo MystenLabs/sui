@@ -884,7 +884,7 @@ pub enum LimitThresholdCrossed {
     Hard(u128, u128),
 }
 
-/// Convenicne function for comparing limit ranges
+/// Convenience function for comparing limit ranges
 /// V::MAX must be at >= U::MAX and T::MAX
 pub fn check_limit_in_range<T: Into<V>, U: Into<V>, V: PartialOrd + Into<u128>>(
     x: T,
