@@ -80,26 +80,26 @@ type AccountBadgeProps = {
 };
 
 function AccountBadge({ accountType }: AccountBadgeProps) {
+    let badgeText: string | null = null;
     switch (accountType) {
         case AccountType.LEDGER:
-            return (
-                <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
-                    <Text variant="captionSmallExtra" color="steel-dark">
-                        Ledger
-                    </Text>
-                </div>
-            );
+            badgeText = 'Ledger';
+            break;
         case AccountType.IMPORTED:
-            return (
-                <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
-                    <Text variant="captionSmallExtra" color="steel-dark">
-                        Imported
-                    </Text>
-                </div>
-            );
+            badgeText = 'Imported';
+            break;
         case AccountType.DERIVED:
-            return null;
+            badgeText = null;
+            break;
         default:
             throw new Error(`Encountered unknown account type ${accountType}`);
     }
+
+    return badgeText ? (
+        <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
+            <Text variant="captionSmallExtra" color="steel-dark">
+                {badgeText}
+            </Text>
+        </div>
+    ) : null;
 }
