@@ -36,4 +36,6 @@ mod pay_sui_tests;
 pub mod signature_verifier;
 pub mod test_authority_clients;
 
+pub mod batch_bls_verifier;
+
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

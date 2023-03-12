@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{random_committee_key_pairs, AuthorityKeyPair, AuthorityPublicKey};
+use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
@@ -293,10 +293,11 @@ impl Committee {
     }
 
     // ===== Testing-only methods =====
-
-    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
-    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
-        let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
+    //
+    pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs_of_size(size)
+            .into_iter()
+            .collect();
         let committee = Self::new(
             0,
             key_pairs
@@ -308,6 +309,11 @@ impl Committee {
         )
         .unwrap();
         (committee, key_pairs)
+    }
+
+    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
+    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
+        Self::new_simple_test_committee_of_size(4)
     }
 }
 
