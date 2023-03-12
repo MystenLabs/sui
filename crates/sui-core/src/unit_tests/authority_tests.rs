@@ -13,6 +13,7 @@ use crate::{
 };
 use bcs;
 use futures::{stream::FuturesUnordered, StreamExt};
+use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -33,7 +34,6 @@ use std::fs;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use sui_framework_build::compiled_package::package_dependencies;
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
     SuiTransactionEffectsAPI, SuiTypeTag,
@@ -1565,7 +1565,7 @@ async fn test_publish_dependent_module_ok() {
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
-        package_dependencies(vec![&dependent_module]),
+        vec![ObjectID::from(*genesis_module.address())],
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -1604,11 +1604,12 @@ async fn test_publish_module_no_dependencies_ok() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
+    let dependencies = vec![]; // no dependencies
     let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_payment_object_ref,
         module_bytes,
-        package_dependencies(vec![&module]),
+        dependencies,
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -1638,9 +1639,10 @@ async fn test_publish_non_existing_dependent_module() {
     // create a module that depends on a genesis module
     let mut dependent_module = make_dependent_module(&genesis_module);
     // Add another dependent module that points to a random address, hence does not exist on-chain.
+    let not_on_chain = ObjectID::random();
     dependent_module
         .address_identifiers
-        .push(AccountAddress::from(ObjectID::random()));
+        .push(AccountAddress::from(not_on_chain));
     dependent_module.module_handles.push(ModuleHandle {
         address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
         name: IdentifierIndex(0),
@@ -1657,7 +1659,7 @@ async fn test_publish_non_existing_dependent_module() {
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
-        package_dependencies(vec![&dependent_module]),
+        vec![ObjectID::from(*genesis_module.address()), not_on_chain],
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);

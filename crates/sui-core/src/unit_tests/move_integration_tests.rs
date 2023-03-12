@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use move_package::source_package::manifest_parser;
 use sui_framework_build::compiled_package::{
-    check_unpublished_dependencies, gather_dependencies, package_dependencies, BuildConfig,
+    check_unpublished_dependencies, gather_dependencies, BuildConfig,
 };
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
@@ -2253,9 +2253,7 @@ pub async fn build_and_try_publish_test_package(
     path.push(test_dir);
     let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
     let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
-
-    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
-    let dependencies = package_dependencies(compiled_modules);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();

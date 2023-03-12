@@ -14,7 +14,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
 use shared_crypto::intent::Intent;
-use sui_framework_build::compiled_package::{package_dependencies, BuildConfig};
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
@@ -127,17 +127,9 @@ async fn test_publish_and_move_call() {
         .join("../../sui_programmability/examples/fungible_tokens");
     let compiled_package =
         sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
-    let compiled_modules_bytes = compiled_package
-        .get_modules()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect::<Vec<_>>();
-
-    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
-    let dependencies = package_dependencies(compiled_modules);
+    let compiled_modules_bytes =
+        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();

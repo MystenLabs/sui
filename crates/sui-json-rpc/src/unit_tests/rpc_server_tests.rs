@@ -10,7 +10,7 @@ use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_framework_build::compiled_package::{package_dependencies, BuildConfig};
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 
 use sui_json_rpc_types::SuiObjectInfo;
@@ -111,9 +111,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-
-    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
-    let dependencies = package_dependencies(compiled_modules);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(
@@ -286,9 +284,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-
-    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
-    let dependencies = package_dependencies(compiled_modules);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(
@@ -354,9 +350,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?;
     let compiled_modules_bytes =
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
-
-    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
-    let dependencies = package_dependencies(compiled_modules);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(
