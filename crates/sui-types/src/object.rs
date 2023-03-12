@@ -545,9 +545,19 @@ impl Object {
             previous_transaction,
             // System objects are not subject to limits
             u64::MAX,
+            &[], // no external dependencies
         )?;
         assert!(ret.is_system_package());
         Ok(ret)
+    }
+
+    pub fn new_package_from_data(data: Data, previous_transaction: TransactionDigest) -> Self {
+        Object {
+            data,
+            owner: Owner::Immutable,
+            previous_transaction,
+            storage_rebate: 0,
+        }
     }
 
     // Note: this will panic if `modules` is empty
@@ -556,30 +566,30 @@ impl Object {
         version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
+        dependencies: &[MovePackage],
     ) -> Result<Self, ExecutionError> {
-        let dependencies = vec![];
-        Ok(Object {
-            data: Data::Package(MovePackage::new_initial(
+        Ok(Self::new_package_from_data(
+            Data::Package(MovePackage::new_initial(
                 version,
                 modules,
                 max_move_package_size,
-                &dependencies,
+                dependencies,
             )?),
-            owner: Owner::Immutable,
             previous_transaction,
-            storage_rebate: 0,
-        })
+        ))
     }
 
     pub fn new_package_for_testing(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
+        dependencies: &[MovePackage],
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
             OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
+            dependencies,
         )
     }
 

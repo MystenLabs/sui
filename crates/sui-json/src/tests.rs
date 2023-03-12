@@ -9,15 +9,20 @@ use move_core_types::u256::U256;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
+use once_cell::sync::Lazy;
 use serde_json::{json, Value};
+use sui_framework::make_std_sui_move_pkgs;
 use sui_framework_build::compiled_package::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Object;
 
 use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+
+static PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
 
 // Negative test cases
 #[test]
@@ -405,8 +410,15 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    let example_package =
-        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
+    // SAFETY: genesis packages should never exceed max size
+    let (std_move_pkg, sui_move_pkg) =
+        make_std_sui_move_pkgs(PROTOCOL_CONSTANTS.max_move_package_size());
+    let example_package = Object::new_package_for_testing(
+        compiled_modules,
+        TransactionDigest::genesis(),
+        &[std_move_pkg, sui_move_pkg],
+    )
+    .unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("geniteam").unwrap();
@@ -525,8 +537,15 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    let example_package =
-        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
+    // SAFETY: genesis packages should never exceed max size
+    let (std_move_pkg, sui_move_pkg) =
+        make_std_sui_move_pkgs(PROTOCOL_CONSTANTS.max_move_package_size());
+    let example_package = Object::new_package_for_testing(
+        compiled_modules,
+        TransactionDigest::genesis(),
+        &[std_move_pkg, sui_move_pkg],
+    )
+    .unwrap();
     let framework_pkg = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("object_basics").unwrap();
@@ -624,8 +643,15 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    let example_package =
-        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
+    // SAFETY: genesis packages should never exceed max size
+    let (std_move_pkg, sui_move_pkg) =
+        make_std_sui_move_pkgs(PROTOCOL_CONSTANTS.max_move_package_size());
+    let example_package = Object::new_package_for_testing(
+        compiled_modules,
+        TransactionDigest::genesis(),
+        &[std_move_pkg, sui_move_pkg],
+    )
+    .unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("entry_point_vector").unwrap();

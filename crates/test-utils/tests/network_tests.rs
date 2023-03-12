@@ -54,7 +54,7 @@ async fn test_package_override() {
         framework_modules.push(test_module);
 
         let package_override =
-            Object::new_package_for_testing(framework_modules, TransactionDigest::genesis())
+            Object::new_package_for_testing(framework_modules, TransactionDigest::genesis(), &[])
                 .unwrap();
 
         let modified_cluster = TestClusterBuilder::new()

@@ -371,6 +371,7 @@ fn test_move_package_size_for_gas_metering() {
         OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
+        &[], // empty dependencies for empty package (no modules)
     )
     .unwrap();
     let size = package.object_size_for_gas_metering();

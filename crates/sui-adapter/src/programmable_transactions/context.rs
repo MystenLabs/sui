@@ -22,6 +22,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
+    move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
 };
@@ -352,6 +353,7 @@ where
     pub fn new_package(
         &mut self,
         modules: Vec<move_binary_format::CompiledModule>,
+        dependencies: &[MovePackage],
     ) -> Result<ObjectID, ExecutionError> {
         // wrap the modules in an object, write it to the store
         let package_object = Object::new_package(
@@ -359,6 +361,7 @@ where
             OBJECT_START_VERSION,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
+            dependencies,
         )?;
         let id = package_object.id();
         self.new_packages.push(package_object);

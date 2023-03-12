@@ -404,7 +404,13 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .collect::<Vec<_>>();
 
     // new_package also initializes type origin table in the package object
-    let package_id = context.new_package(modules)?;
+
+    // TODO: need to pass actual dependencies from publish/upgrade command line (converted to a
+    // slice of MovePackage's; panic for now as it will fail down the road anyway and this way it's
+    // easier to spot.
+    panic!("Package dependencies not yet available");
+    let dependencies = &[];
+    let package_id = context.new_package(modules, dependencies)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, _, Mode>(
             context,
