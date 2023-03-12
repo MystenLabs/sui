@@ -43,9 +43,13 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
+    - name: Cargo clean
+      run: |
+        cd ~/sui && cargo clean && git restore Cargo.lock
+
     - name: Checkout sui repo and cargo clean
       run: |
-        cd ~/sui && git fetch origin && git rebase origin/main && cargo clean
+        cd ~/sui && git fetch origin && git rebase origin/main
 
     - name: Install simtest
       run: |
@@ -62,7 +66,7 @@ jobs:
   notify:
     name: Notify
     needs: [simtest]
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: [self-hosted, simtest-01]
     if: always() # always notify
 
     steps:
@@ -111,7 +115,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nLogs: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
                 }
               },
               {
