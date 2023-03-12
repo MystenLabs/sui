@@ -21,7 +21,7 @@ For the Hero module below, the Display would vary based on the "name", "id" and 
     "img_url": "ipfs://{img_url}",
     "description": "A true Hero of the Sui ecosystem!",
     "project_url": "https://sui-heroes.io",
-    "creator": "Uknown Sui Fan"
+    "creator": "Unknown Sui Fan"
 }
 ```
 

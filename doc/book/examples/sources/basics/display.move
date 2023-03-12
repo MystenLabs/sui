@@ -54,7 +54,7 @@ module examples::my_hero {
             // Project URL is usually static
             utf8(b"https://sui-heroes.io"),
             // Creator field can be any
-            utf8(b"Uknown Sui Fan")
+            utf8(b"Unknown Sui Fan")
         ];
 
         // Claim the `Publisher` for the package!
