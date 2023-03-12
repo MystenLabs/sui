@@ -12,4 +12,5 @@ created: object(107), object(108), object(109)
 written: object(106)
 
 task 3 'run'. lines 40-40:
-Error: Object 0x10657ef7b778bf4c19b3a32a445a7634f0388b82b53799c7deabda07d101d337 is owned by object 0xf2c06d97f4ad9da4a8a6cfb80dd73173302be0c6c245c62279a4bc86a366f33c. Objects owned by other objects cannot be used as input arguments.
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 13) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 13, instruction: 0, function_name: Some("remove_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 0)] }), command: Some(0) } }
