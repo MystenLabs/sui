@@ -4,10 +4,15 @@
 import { Ed25519PublicKey } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
-import { type LedgerAccount } from './LedgerAccountItem';
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
+import { AccountType } from '_src/background/keyring/Account';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
+
+export type SelectableLedgerAccount = SerializedLedgerAccount & {
+    isSelected: boolean;
+};
 
 type UseDeriveLedgerAccountOptions = {
     numAccountsToDerive: number;
@@ -15,8 +20,8 @@ type UseDeriveLedgerAccountOptions = {
 };
 
 type UseDeriveLedgerAccountResult = [
-    LedgerAccount[],
-    React.Dispatch<React.SetStateAction<LedgerAccount[]>>,
+    SelectableLedgerAccount[],
+    React.Dispatch<React.SetStateAction<SelectableLedgerAccount[]>>,
     boolean
 ];
 
@@ -24,7 +29,9 @@ export function useDeriveLedgerAccounts(
     options: UseDeriveLedgerAccountOptions
 ): UseDeriveLedgerAccountResult {
     const { numAccountsToDerive, onError } = options;
-    const [ledgerAccounts, setLedgerAccounts] = useState<LedgerAccount[]>([]);
+    const [ledgerAccounts, setLedgerAccounts] = useState<
+        SelectableLedgerAccount[]
+    >([]);
     const [suiLedgerClient] = useSuiLedgerClient();
     const [isLoading, setLoading] = useState(false);
 
@@ -64,7 +71,7 @@ async function deriveAccountsFromLedger(
     suiLedgerClient: SuiLedgerClient,
     numAccountsToDerive: number
 ) {
-    const ledgerAccounts: LedgerAccount[] = [];
+    const ledgerAccounts: SelectableLedgerAccount[] = [];
     const derivationPaths = getDerivationPathsForLedger(numAccountsToDerive);
 
     for (const derivationPath of derivationPaths) {
@@ -73,8 +80,10 @@ async function deriveAccountsFromLedger(
         );
         const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
         ledgerAccounts.push({
+            type: AccountType.LEDGER,
+            address: `0x${publicKey.toSuiAddress()}`,
+            derivationPath,
             isSelected: false,
-            address: publicKey.toSuiAddress(),
         });
     }
 

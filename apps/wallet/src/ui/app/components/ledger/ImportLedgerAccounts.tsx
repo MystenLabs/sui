@@ -10,11 +10,15 @@ import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useAccounts } from '../../hooks/useAccounts';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
-import { type LedgerAccount } from './LedgerAccountItem';
 import { LedgerAccountList } from './LedgerAccountList';
-import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
+import {
+    type SelectableLedgerAccount,
+    useDeriveLedgerAccounts,
+} from './useDeriveLedgerAccounts';
+import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
@@ -36,14 +40,27 @@ export function ImportLedgerAccounts() {
             onError: onDeriveError,
         });
 
+    const importLedgerAccountsMutation = useImportLedgerAccountsMutation();
+
+    const existingAccounts = useAccounts();
+    const existingAccountAddresses = existingAccounts.map(
+        (account) => account.address
+    );
+    const filteredLedgerAccounts = ledgerAccounts.filter(
+        (account) => !existingAccountAddresses.includes(account.address)
+    );
+    const selectedLedgerAccounts = filteredLedgerAccounts.filter(
+        (account) => account.isSelected
+    );
+
     const onAccountClick = useCallback(
-        (targetAccount: LedgerAccount) => {
+        (targetAccount: SelectableLedgerAccount) => {
             setLedgerAccounts((prevState) =>
                 prevState.map((account) => {
                     if (account.address === targetAccount.address) {
                         return {
+                            ...targetAccount,
                             isSelected: !targetAccount.isSelected,
-                            address: targetAccount.address,
                         };
                     }
                     return account;
@@ -56,18 +73,11 @@ export function ImportLedgerAccounts() {
     const onSelectAllAccountsClick = useCallback(() => {
         setLedgerAccounts((prevState) =>
             prevState.map((account) => ({
+                ...account,
                 isSelected: true,
-                address: account.address,
             }))
         );
     }, [setLedgerAccounts]);
-
-    // TODO: Add logic to filter out already imported Ledger accounts
-    // so we don't allow users to import the same account twice
-    const filteredLedgerAccounts = ledgerAccounts.filter(() => true);
-    const selectedLedgerAccounts = filteredLedgerAccounts.filter(
-        (account) => account.isSelected
-    );
 
     const numAccounts = ledgerAccounts.length;
     const numFilteredAccounts = filteredLedgerAccounts.length;
@@ -147,10 +157,18 @@ export function ImportLedgerAccounts() {
                     variant="primary"
                     before={<UnlockedLockIcon />}
                     text="Unlock"
-                    onClick={() => {
-                        // TODO: Do work to actually import the selected accounts once we have
-                        // the account infrastructure setup to support Ledger accounts
-                        navigate(accountsUrl);
+                    loading={importLedgerAccountsMutation.isLoading}
+                    onClick={async () => {
+                        try {
+                            await importLedgerAccountsMutation.mutateAsync(
+                                selectedLedgerAccounts
+                            );
+                            navigate(accountsUrl);
+                        } catch (error) {
+                            toast.error(
+                                'There was an issue importing your Ledger accounts.'
+                            );
+                        }
                     }}
                     disabled={areNoAccountsSelected}
                 />
