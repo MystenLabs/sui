@@ -167,7 +167,7 @@ impl MovePackage {
         version: SequenceNumber,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let type_origin_table = build_initial_type_origin_table(&modules);
         Self::from_module_iter_with_type_origin_table(
@@ -175,7 +175,7 @@ impl MovePackage {
             modules,
             max_move_package_size,
             type_origin_table,
-            dependencies,
+            transitive_dependencies,
         )
     }
 
@@ -185,7 +185,7 @@ impl MovePackage {
         predecessor: &MovePackage,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let type_origin_table = build_upgraded_type_origin_table(predecessor, &modules);
         let mut new_version = SequenceNumber::from(predecessor.version().value());
@@ -196,7 +196,7 @@ impl MovePackage {
             modules,
             max_move_package_size,
             type_origin_table,
-            dependencies,
+            transitive_dependencies,
         )
     }
 
@@ -205,22 +205,22 @@ impl MovePackage {
         modules: impl IntoIterator<Item = CompiledModule>,
         max_move_package_size: u64,
         type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        let mut iter = modules.into_iter().peekable();
+        let mut modules = modules.into_iter().peekable();
         let id = ObjectID::from(
-            *iter
+            *modules
                 .peek()
                 .expect("Tried to build a Move package from an empty iterator of Compiled modules")
                 .self_id()
                 .address(),
         );
 
-        let linkage_table = build_linkage_table(dependencies)?;
+        let linkage_table = build_linkage_table(transitive_dependencies)?;
         Self::new(
             id,
             version,
-            &iter
+            &modules
                 .map(|module| {
                     let mut bytes = Vec::new();
                     module.serialize(&mut bytes).unwrap();
@@ -271,6 +271,19 @@ impl MovePackage {
 
     pub fn linkage_table(&self) -> &BTreeMap<ObjectID, UpgradeInfo> {
         &self.linkage_table
+    }
+
+    /// The ObjectID that this package's modules believe they are from, at runtime (can differ from
+    /// `MovePackage::id()` in the case of package upgrades).
+    pub fn original_package_id(&self) -> ObjectID {
+        let bytes = self
+            .module_map
+            .values()
+            .next()
+            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
+        let module = CompiledModule::deserialize(bytes)
+            .expect("A Move package contains a module that cannot be deserialized");
+        (*module.address()).into()
     }
 
     pub fn deserialize_module(&self, module: &Identifier) -> SuiResult<CompiledModule> {
@@ -420,27 +433,17 @@ fn get_direct_dependencies(modules: Vec<CompiledModule>) -> BTreeSet<ObjectID> {
 }
 
 fn build_linkage_table<'p>(
-    dependencies: impl IntoIterator<Item = &'p MovePackage>,
+    transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
 ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
-    // all transitive dependencies are included so simply put them into the table
-    let mut linkage_table = BTreeMap::new();
-    for p in dependencies {
-        let bytes: &Vec<u8> = p
-            .module_map
-            .values()
-            .next()
-            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
-        let module = CompiledModule::deserialize(bytes)
-            .expect("A Move package contains a module that cannot be deserialized");
-        let original_id: ObjectID = (*module.address()).into();
-        linkage_table.insert(
-            original_id,
+    let linkage_table = BTreeMap::from_iter(transitive_dependencies.into_iter().map(|dep| {
+        (
+            dep.original_package_id(),
             UpgradeInfo {
-                upgraded_id: p.id,
-                upgraded_version: p.version,
+                upgraded_id: dep.id,
+                upgraded_version: dep.version,
             },
-        );
-    }
+        )
+    }));
     // TODO: verification
     Ok(linkage_table)
 }
