@@ -257,7 +257,7 @@ The response resembles the following:
 You can transfer mutable objects you own to another address using the command below
 
 ```shell
-    sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
+sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
         --object-id <OBJECT_ID> 
@@ -300,7 +300,7 @@ The command invokes the `mint` function in the `devnet_nft` module, which mints 
 `create-example-nft` command usage:
 
 ```shell
-    sui client create-example-nft [OPTIONS]
+sui client create-example-nft [OPTIONS]
 
 OPTIONS:
         --description <DESCRIPTION>    Description of the NFT
@@ -325,7 +325,7 @@ We can use the `merge-coin` command and `split-coin` command to consolidate or s
 ### Merge coins
 
 ```shell
-    sui client merge-coin [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
+sui client merge-coin [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
         --coin-to-merge <COIN_TO_MERGE>
@@ -365,7 +365,7 @@ sui client merge-coin --primary-coin 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2b
 ### Split coins
 
 ```shell
-    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> (--amounts <AMOUNTS>... | --count <COUNT>)
+sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> (--amounts <AMOUNTS>... | --count <COUNT>)
 
 OPTIONS:
         --amounts <AMOUNTS>...       Specific amounts to split out from the coin
@@ -444,7 +444,6 @@ sui client call --function transfer --module sui --package 0x2 --args $OBJECT_ID
 ```
 
 The command parameters include:
-
 * `--function` - name of the function to be called
 * `--module` - name of the module containing the function
 * `--package` - ID of the package object where the module containing
@@ -571,7 +570,6 @@ Running `sui client verify-source --skip-source --verify-deps` does not publish 
 The `sui client verify-source` command expects package on-chain addresses to be set in the package manifest. There should not be any unspecified or `0x0` addresses in the package. If you want to verify a seemingly unpublished package against an on-chain address, use the `--address-override` flag to supply the on-chain address to verify against. This flag only supports packages that are truly unpublished, with all modules at address `0x0`. You receive an error if you attempt to use this flag on a published (or somehow partially published) package. 
 
 If successful, the command returns a `0` exit code and prints `Source verification succeeded!` to the console. If it fails, it returns a non-zero exit code and prints an error message to the console.
-
 
 ## Customize genesis
 
