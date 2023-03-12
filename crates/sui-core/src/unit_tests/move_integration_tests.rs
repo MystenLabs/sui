@@ -13,10 +13,7 @@ use sui_types::{
     utils::to_sender_signed_transaction,
 };
 
-use move_core_types::{
-    language_storage::TypeTag,
-    value::{MoveStruct, MoveValue},
-};
+use move_core_types::language_storage::TypeTag;
 use move_package::source_package::manifest_parser;
 use sui_framework_build::compiled_package::{
     check_unpublished_dependencies, gather_dependencies, BuildConfig,
@@ -1865,16 +1862,8 @@ async fn test_entry_point_string() {
 
     // pass a valid ascii string
     let ascii_str = "SomeString";
-    let ascii_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
-        ascii_str
-            .as_bytes()
-            .iter()
-            .map(|c| MoveValue::U8(*c))
-            .collect(),
-    )]))
-    .simple_serialize()
-    .unwrap();
-
+    let ascii_str_bcs = bcs::to_bytes(ascii_str).unwrap();
+    let n = ascii_str.len() as u64;
     let effects = call_move(
         &authority,
         &gas,
@@ -1884,28 +1873,19 @@ async fn test_entry_point_string() {
         "entry_point_string",
         "ascii_arg",
         vec![],
-        vec![TestCallArg::Pure(ascii_str_bcs)],
+        vec![
+            TestCallArg::Pure(ascii_str_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&n).unwrap()),
+        ],
     )
     .await
     .unwrap();
-    assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status()
-    );
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 
     // pass a valid utf8 string
     let utf8_str = "çå∞≠¢õß∂ƒ∫";
-    let utf_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
-        utf8_str
-            .as_bytes()
-            .iter()
-            .map(|c| MoveValue::U8(*c))
-            .collect(),
-    )]))
-    .simple_serialize()
-    .unwrap();
-
+    let utf_str_bcs = bcs::to_bytes(utf8_str).unwrap();
+    let n = utf8_str.len() as u64;
     let effects = call_move(
         &authority,
         &gas,
@@ -1915,15 +1895,107 @@ async fn test_entry_point_string() {
         "entry_point_string",
         "utf8_arg",
         vec![],
+        vec![
+            TestCallArg::Pure(utf_str_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&n).unwrap()),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // pass a valid longer utf8 string
+    let utf8_str = "çå∞≠¢õß∂ƒ∫çå∞≠¢õß∂ƒ∫çå∞≠¢õß∂ƒ∫çå∞≠¢õß∂ƒ∫çå∞≠¢õß∂ƒ∫çå∞≠¢õß∂ƒ∫";
+    let utf_str_bcs = bcs::to_bytes(utf8_str).unwrap();
+    let n = utf8_str.len() as u64;
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "utf8_arg",
+        vec![],
+        vec![
+            TestCallArg::Pure(utf_str_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&n).unwrap()),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_nested_string() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+    )
+    .await;
+
+    // pass an option utf8 string
+    let utf8_str = Some("çå∞≠¢õß∂ƒ∫");
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "option_utf8_arg",
+        vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
     )
     .await
     .unwrap();
-    assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status()
-    );
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // vector option utf8 string
+    let utf8_str = vec![Some("çå∞≠¢õß∂ƒ∫")];
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "vec_option_utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // vector option utf8 string
+    let utf8_str = Some(vec![Some("çå∞≠¢õß∂ƒ∫")]);
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "option_vec_option_utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 }
 
 #[tokio::test]
@@ -1946,25 +2018,8 @@ async fn test_entry_point_string_vec() {
     // pass a valid utf8 string vector
     let utf8_str_1 = "çå∞≠¢";
     let utf8_str_2 = "õß∂ƒ∫";
-    let utf_str_vec_bcs = MoveValue::Vector(vec![
-        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
-            utf8_str_1
-                .as_bytes()
-                .iter()
-                .map(|c| MoveValue::U8(*c))
-                .collect(),
-        )])),
-        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
-            utf8_str_2
-                .as_bytes()
-                .iter()
-                .map(|c| MoveValue::U8(*c))
-                .collect(),
-        )])),
-    ])
-    .simple_serialize()
-    .unwrap();
-
+    let utf_str_vec_bcs = bcs::to_bytes(&vec![utf8_str_1, utf8_str_2]).unwrap();
+    let total_len = (utf8_str_1.len() + utf8_str_2.len()) as u64;
     let effects = call_move(
         &authority,
         &gas,
@@ -1974,15 +2029,14 @@ async fn test_entry_point_string_vec() {
         "entry_point_string",
         "utf8_vec_arg",
         vec![],
-        vec![TestCallArg::Pure(utf_str_vec_bcs)],
+        vec![
+            TestCallArg::Pure(utf_str_vec_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&total_len).unwrap()),
+        ],
     )
     .await
     .unwrap();
-    assert!(
-        matches!(effects.status(), ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status()
-    );
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 }
 
 #[tokio::test]
@@ -2002,21 +2056,10 @@ async fn test_entry_point_string_error() {
     )
     .await;
 
-    // pass a invalid ascii string
-    let ascii_str = "SomeString";
-    let mut ascii_u8_vec: Vec<MoveValue> = ascii_str
-        .as_bytes()
-        .iter()
-        .map(|c| MoveValue::U8(*c))
-        .collect();
-    // mess up one element
-    ascii_u8_vec[7] = MoveValue::U8(255);
-
-    let ascii_str_bcs =
-        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(ascii_u8_vec)]))
-            .simple_serialize()
-            .unwrap();
-
+    // pass a utf string for ascii
+    let utf8_str = "çå∞≠¢õß∂ƒ∫";
+    let utf_str_bcs = bcs::to_bytes(utf8_str).unwrap();
+    let n = utf8_str.len() as u64;
     let effects = call_move(
         &authority,
         &gas,
@@ -2026,30 +2069,67 @@ async fn test_entry_point_string_error() {
         "entry_point_string",
         "ascii_arg",
         vec![],
-        vec![TestCallArg::Pure(ascii_str_bcs)],
+        vec![
+            TestCallArg::Pure(utf_str_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&n).unwrap()),
+        ],
     )
     .await
     .unwrap();
-    assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
-        "{:?}",
-        effects.status()
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::TypeMismatch
+            },
+            command: Some(0)
+        }
+    );
+
+    // pass a invalid ascii string
+    let ascii_str = "SomeString";
+    let n = ascii_str.len() as u64;
+    let mut ascii_u8_vec = ascii_str.as_bytes().to_vec();
+    // mess up one element
+    ascii_u8_vec[7] = 255;
+
+    let ascii_str_bcs = bcs::to_bytes(&ascii_u8_vec).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "ascii_arg",
+        vec![],
+        vec![
+            TestCallArg::Pure(ascii_str_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&n).unwrap()),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::TypeMismatch
+            },
+            command: Some(0)
+        }
     );
 
     // pass a invalid utf8 string
     let utf8_str = "çå∞≠¢õß∂ƒ∫";
-    let mut utf8_u8_vec: Vec<MoveValue> = utf8_str
-        .as_bytes()
-        .iter()
-        .map(|c| MoveValue::U8(*c))
-        .collect();
+    let n = utf8_str.len() as u64;
+    let mut utf8_u8_vec = utf8_str.as_bytes().to_vec();
     // mess up one element
-    utf8_u8_vec[7] = MoveValue::U8(255);
+    utf8_u8_vec[7] = 255;
 
-    let utf8_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(utf8_u8_vec)]))
-        .simple_serialize()
-        .unwrap();
-
+    let utf8_str_bcs = bcs::to_bytes(&utf8_u8_vec).unwrap();
     let effects = call_move(
         &authority,
         &gas,
@@ -2059,14 +2139,22 @@ async fn test_entry_point_string_error() {
         "entry_point_string",
         "utf8_arg",
         vec![],
-        vec![TestCallArg::Pure(utf8_str_bcs)],
+        vec![
+            TestCallArg::Pure(utf8_str_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&n).unwrap()),
+        ],
     )
     .await
     .unwrap();
-    assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
-        "{:?}",
-        effects.status()
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::TypeMismatch
+            },
+            command: Some(0)
+        }
     );
 }
 
@@ -2090,25 +2178,12 @@ async fn test_entry_point_string_vec_error() {
     // pass an utf8 string vector with one invalid string
     let utf8_str_1 = "çå∞≠¢";
     let utf8_str_2 = "õß∂ƒ∫";
-    let mut utf8_u8_vec_1: Vec<MoveValue> = utf8_str_1
-        .as_bytes()
-        .iter()
-        .map(|c| MoveValue::U8(*c))
-        .collect();
+    let total_len = (utf8_str_1.len() + utf8_str_2.len()) as u64;
+    let mut utf8_u8_vec_1 = utf8_str_1.as_bytes().to_vec();
     // mess up one element
-    utf8_u8_vec_1[7] = MoveValue::U8(255);
-    let utf_str_vec_bcs = MoveValue::Vector(vec![
-        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(utf8_u8_vec_1)])),
-        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
-            utf8_str_2
-                .as_bytes()
-                .iter()
-                .map(|c| MoveValue::U8(*c))
-                .collect(),
-        )])),
-    ])
-    .simple_serialize()
-    .unwrap();
+    utf8_u8_vec_1[7] = 255;
+    let utf8_u8_vec_2 = utf8_str_2.as_bytes().to_vec();
+    let utf_str_vec_bcs = bcs::to_bytes(&[utf8_u8_vec_1, utf8_u8_vec_2]).unwrap();
 
     let effects = call_move(
         &authority,
@@ -2119,14 +2194,96 @@ async fn test_entry_point_string_vec_error() {
         "entry_point_string",
         "utf8_vec_arg",
         vec![],
+        vec![
+            TestCallArg::Pure(utf_str_vec_bcs),
+            TestCallArg::Pure(bcs::to_bytes(&total_len).unwrap()),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::TypeMismatch
+            },
+            command: Some(0)
+        }
+    );
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_entry_point_string_option_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+    )
+    .await;
+
+    // pass an ascii string option with an invalid string
+    let utf8_str = "çå∞≠¢õß∂ƒ∫";
+    let utf_option_bcs = bcs::to_bytes(&Some(utf8_str)).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "option_ascii_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_option_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::TypeMismatch
+            },
+            command: Some(0)
+        }
+    );
+
+    // pass an utf8 string option with an invalid string
+    let utf8_str = "çå∞≠¢";
+    let mut utf8_u8_vec = utf8_str.as_bytes().to_vec();
+    // mess up one element
+    utf8_u8_vec[7] = 255;
+    let utf_str_vec_bcs = bcs::to_bytes(&Some(utf8_u8_vec)).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "option_utf8_arg",
+        vec![],
         vec![TestCallArg::Pure(utf_str_vec_bcs)],
     )
     .await
     .unwrap();
-    assert!(
-        matches!(effects.status(), ExecutionStatus::Failure { .. }),
-        "{:?}",
-        effects.status()
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::TypeMismatch
+            },
+            command: Some(0)
+        }
     );
 }
 

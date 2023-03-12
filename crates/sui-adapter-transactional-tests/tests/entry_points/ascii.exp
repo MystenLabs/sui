@@ -18,4 +18,4 @@ written: object(108)
 
 task 5 'run'. lines 49-49:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: Some("Unexpected non-ASCII value (outside of ASCII character range) in argument 0"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: Some("Function expects std::ascii::String but provided argument's value does not match"), command: Some(0) } }

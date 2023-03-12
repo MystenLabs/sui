@@ -13,7 +13,6 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::{
     move_vm::MoveVM,
@@ -45,10 +44,7 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::{
-    adapter::{generate_package_id, validate_primitive_arg_string},
-    execution_mode::ExecutionMode,
-};
+use crate::{adapter::generate_package_id, execution_mode::ExecutionMode};
 
 use super::{context::*, types::*};
 
@@ -921,13 +917,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         // Any means this was just some bytes passed in as an argument (as opposed to being
         // generated from a Move function). Meaning we will need to run validation
         if matches!(value, Value::Raw(RawValueType::Any, _)) {
-            if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
-                validate_primitive_arg_string(
-                    &bytes,
-                    idx as u16,
-                    string_struct,
-                    string_struct_layout,
-                )?;
+            if let Some(layout) = additional_validation_layout(context, param_ty)? {
+                special_argument_validate(&bytes, idx as u16, layout)?;
             }
         }
         serialized_args.push(bytes);
@@ -990,11 +981,11 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
 /// If the type is a string, returns the name of the string type and the layout
 /// Otherwise, returns None
-fn is_string_arg<E: fmt::Debug, S: StorageView<E>>(
+fn additional_validation_layout<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
-) -> Result<Option<StringInfo>, ExecutionError> {
-    let idx = match param_ty {
+) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
+    match param_ty {
         Type::Bool
         | Type::U8
         | Type::U16
@@ -1006,41 +997,50 @@ fn is_string_arg<E: fmt::Debug, S: StorageView<E>>(
         | Type::Signer
         | Type::Reference(_)
         | Type::MutableReference(_)
-        | Type::TyParam(_) => return Ok(None),
-        // TODO should we support Option of string?
-        Type::StructInstantiation(_, _) => return Ok(None),
-        Type::Vector(inner) => {
-            let info_opt = is_string_arg(context, inner)?;
-            return Ok(info_opt.map(|(string_name, layout)| {
-                (string_name, MoveTypeLayout::Vector(Box::new(layout)))
-            }));
+        | Type::TyParam(_) => Ok(None),
+        Type::StructInstantiation(idx, targs) => {
+            let Some(s) = context.session.get_struct_type(*idx) else {
+                invariant_violation!("Loaded struct not found")
+            };
+            let resolved_struct = get_struct_ident(&s);
+            // is option of a string
+            if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
+                let info_opt = additional_validation_layout(context, &targs[0])?;
+                Ok(info_opt.map(|layout| SpecialArgumentLayout::Option(Box::new(layout))))
+            } else {
+                Ok(None)
+            }
         }
-        Type::Struct(idx) => idx,
-    };
-    let Some(s) = context.session.get_struct_type(*idx) else {
-        invariant_violation!("Loaded struct not found")
-    };
-    let resolved_struct = get_struct_ident(&s);
-    let string_name = if resolved_struct == RESOLVED_ASCII_STR {
-        RESOLVED_ASCII_STR
-    } else if resolved_struct == RESOLVED_UTF8_STR {
-        RESOLVED_UTF8_STR
-    } else {
-        return Ok(None);
-    };
-    let layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(
-        Box::new(MoveTypeLayout::U8),
-    )]));
-    Ok(Some((string_name, layout)))
+        Type::Vector(inner) => {
+            let info_opt = additional_validation_layout(context, inner)?;
+            Ok(info_opt.map(|layout| SpecialArgumentLayout::Vector(Box::new(layout))))
+        }
+        Type::Struct(idx) => {
+            let Some(s) = context.session.get_struct_type(*idx) else {
+                invariant_violation!("Loaded struct not found")
+            };
+            let resolved_struct = get_struct_ident(&s);
+            let layout = if resolved_struct == RESOLVED_ASCII_STR {
+                Some(SpecialArgumentLayout::Ascii)
+            } else if resolved_struct == RESOLVED_UTF8_STR {
+                Some(SpecialArgumentLayout::UTF8)
+            } else {
+                None
+            };
+            Ok(layout)
+        }
+    }
 }
-type StringInfo = (
-    (
-        &'static AccountAddress,
-        &'static IdentStr,
-        &'static IdentStr,
-    ),
-    MoveTypeLayout,
-);
+
+/// Special enum for values that need additional validation, in other words
+/// There is validation to do on top of the BCS layout. Currently only needed for
+/// strings
+pub enum SpecialArgumentLayout {
+    Option(Box<SpecialArgumentLayout>),
+    Vector(Box<SpecialArgumentLayout>),
+    Ascii,
+    UTF8,
+}
 
 // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
 // a MutableReference, and Immutable otherwise.
@@ -1128,4 +1128,81 @@ fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
         }
     }
     Ok(true)
+}
+
+pub fn special_argument_validate(
+    bytes: &[u8],
+    idx: u16,
+    layout: SpecialArgumentLayout,
+) -> Result<(), ExecutionError> {
+    bcs::from_bytes_seed(&layout, bytes).map_err(|_| {
+        ExecutionError::new_with_source(
+            ExecutionErrorKind::command_argument_error(CommandArgumentError::TypeMismatch, idx),
+            format!("Function expects {layout} but provided argument's value does not match",),
+        )
+    })
+}
+
+impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
+    type Value = ();
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        use serde::de::Error;
+        match self {
+            SpecialArgumentLayout::Ascii => {
+                let s: &str = serde::Deserialize::deserialize(deserializer)?;
+                if !s.is_ascii() {
+                    Err(D::Error::custom("not an ascii string"))
+                } else {
+                    Ok(())
+                }
+            }
+            SpecialArgumentLayout::UTF8 => {
+                deserializer.deserialize_string(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            SpecialArgumentLayout::Option(layout) | SpecialArgumentLayout::Vector(layout) => {
+                deserializer.deserialize_seq(VectorElementVisitor(layout))
+            }
+        }
+    }
+}
+
+struct VectorElementVisitor<'a>(&'a SpecialArgumentLayout);
+
+impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Vector")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'d>,
+    {
+        while seq.next_element_seed(self.0)?.is_some() {}
+        Ok(())
+    }
+}
+
+impl fmt::Display for SpecialArgumentLayout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SpecialArgumentLayout::Vector(inner) => {
+                write!(f, "vector<{inner}>")
+            }
+            SpecialArgumentLayout::Option(inner) => {
+                write!(f, "std::option::Option<{inner}>")
+            }
+            SpecialArgumentLayout::Ascii => {
+                write!(f, "std::{}::{}", RESOLVED_ASCII_STR.1, RESOLVED_ASCII_STR.2)
+            }
+            SpecialArgumentLayout::UTF8 => {
+                write!(f, "std::{}::{}", RESOLVED_UTF8_STR.1, RESOLVED_UTF8_STR.2)
+            }
+        }
+    }
 }
