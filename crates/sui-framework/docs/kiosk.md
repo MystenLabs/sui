@@ -3,8 +3,8 @@
 
 # Module `0x2::kiosk`
 
-Kiosk is a primitive and an open, zero-fee trading platform
-for assets with high degree of customization over transfer
+Kiosk is a primitive for building open, zero-fee trading platforms
+for assets with a high degree of customization over transfer
 policies.
 
 The system has 3 main audiences:
