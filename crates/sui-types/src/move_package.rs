@@ -163,11 +163,11 @@ impl MovePackage {
 
     /// Create an initial version of the package along with this version's type origin and linkage
     /// tables.
-    pub fn new_initial(
+    pub fn new_initial<'p>(
         version: SequenceNumber,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
-        dependencies: &[MovePackage],
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let type_origin_table = build_initial_type_origin_table(&modules);
         Self::from_module_iter_with_type_origin_table(
@@ -181,11 +181,11 @@ impl MovePackage {
 
     /// Create an upgraded version of the package along with this version's type origin and linkage
     /// tables.
-    pub fn new_upgraded(
+    pub fn new_upgraded<'p>(
         predecessor: &MovePackage,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
-        dependencies: &[MovePackage],
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let type_origin_table = build_upgraded_type_origin_table(predecessor, &modules);
         let mut new_version = SequenceNumber::from(predecessor.version().value());
@@ -200,14 +200,14 @@ impl MovePackage {
         )
     }
 
-    fn from_module_iter_with_type_origin_table<T: IntoIterator<Item = CompiledModule>>(
+    fn from_module_iter_with_type_origin_table<'p>(
         version: SequenceNumber,
-        iter: T,
+        modules: impl IntoIterator<Item = CompiledModule>,
         max_move_package_size: u64,
         type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
-        dependencies: &[MovePackage],
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        let mut iter = iter.into_iter().peekable();
+        let mut iter = modules.into_iter().peekable();
         let id = ObjectID::from(
             *iter
                 .peek()
@@ -419,8 +419,8 @@ fn get_direct_dependencies(modules: Vec<CompiledModule>) -> BTreeSet<ObjectID> {
     direct_deps
 }
 
-fn build_linkage_table(
-    dependencies: &[MovePackage],
+fn build_linkage_table<'p>(
+    dependencies: impl IntoIterator<Item = &'p MovePackage>,
 ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
     // all transitive dependencies are included so simply put them into the table
     let mut linkage_table = BTreeMap::new();
