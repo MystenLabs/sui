@@ -19,6 +19,7 @@ pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub enum WorkloadType {
+    BatchPayment,
     SharedCounter,
     TransferObject,
     Combination,
@@ -28,6 +29,7 @@ pub enum WorkloadType {
 impl fmt::Display for WorkloadType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            WorkloadType::BatchPayment => write!(f, "batch_payment"),
             WorkloadType::SharedCounter => write!(f, "shared_counter"),
             WorkloadType::TransferObject => write!(f, "transfer_object"),
             WorkloadType::Combination => write!(f, "combination"),
