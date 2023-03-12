@@ -411,7 +411,7 @@ fn move_values_to_u8(values: &[MoveValue]) -> Vec<u8> {
     res
 }
 
-// Validates that Vec<u8> represents a valid string
+// Validates that `bytes` represents a valid string
 fn validate_string(bytes: &[u8], idx: u16, module: &IdentStr) -> Result<(), ExecutionError> {
     if module == STD_ASCII_MODULE_NAME {
         for b in bytes {
