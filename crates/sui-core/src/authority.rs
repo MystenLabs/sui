@@ -2847,13 +2847,36 @@ impl AuthorityState {
     ///
     /// IMPORTANT: If this is used, it must be used on >=2f+1 validators (all should have the same
     /// value), or you risk halting the chain.
-    pub fn set_override_protocol_upgrade_buffer_stake(&self, buffer_stake_bps: u64) -> SuiResult {
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        expected_epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
         let epoch_store = self.load_epoch_store_one_call_per_task();
+        let actual_epoch = epoch_store.epoch();
+        if actual_epoch != expected_epoch {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch,
+            });
+        }
+
         epoch_store.set_override_protocol_upgrade_buffer_stake(buffer_stake_bps)
     }
 
-    pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
+    pub fn clear_override_protocol_upgrade_buffer_stake(
+        &self,
+        expected_epoch: EpochId,
+    ) -> SuiResult {
         let epoch_store = self.load_epoch_store_one_call_per_task();
+        let actual_epoch = epoch_store.epoch();
+        if actual_epoch != expected_epoch {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch,
+            });
+        }
+
         epoch_store.clear_override_protocol_upgrade_buffer_stake()
     }
 

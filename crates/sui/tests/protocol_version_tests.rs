@@ -251,7 +251,10 @@ mod sim_only_tests {
 
         test_cluster.swarm.validators().for_each(|v| {
             let node_handle = v.get_node_handle().expect("node should be running");
-            node_handle.with(|node| node.set_override_protocol_upgrade_buffer_stake(0).unwrap());
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
         });
 
         // Verify that clearing the override is respected.

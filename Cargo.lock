@@ -9408,6 +9408,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "prometheus",
  "reqwest",
+ "serde 1.0.152",
  "sui-config",
  "sui-core",
  "sui-json-rpc",

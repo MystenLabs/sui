@@ -437,13 +437,18 @@ impl SuiNode {
         Ok(())
     }
 
-    pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
-        self.state.clear_override_protocol_upgrade_buffer_stake()
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self, epoch: EpochId) -> SuiResult {
+        self.state
+            .clear_override_protocol_upgrade_buffer_stake(epoch)
     }
 
-    pub fn set_override_protocol_upgrade_buffer_stake(&self, buffer_stake_bps: u64) -> SuiResult {
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
         self.state
-            .set_override_protocol_upgrade_buffer_stake(buffer_stake_bps)
+            .set_override_protocol_upgrade_buffer_stake(epoch, buffer_stake_bps)
     }
 
     // Testing-only API to start epoch close process.

@@ -3,30 +3,33 @@
 
 use crate::SuiNode;
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     routing::{get, post},
     Router,
 };
 use mysten_metrics::spawn_monitored_task;
+use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use sui_types::error::SuiError;
 use telemetry_subscribers::FilterHandle;
 use tracing::info;
 
 // Example commands:
 //
-// Set buffer stake to 1500 basis points:
+// Set buffer stake for current epoch 2 to 1500 basis points:
 //
-//   $ curl -d 1500 -X POST http://127.0.0.1:1337/set-override-buffer-stake
+//   $ curl -X POST 'http://127.0.0.1:1337/set-override-buffer-stake?buffer_bps=1500&epoch=2'
 //
-// Clear buffer stake override, use ProtocolConfig::buffer_stake_for_protocol_upgrade_bps:
+// Clear buffer stake override for current epoch 2, use
+// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps:
 //
-//   $ curl -X POST http://127.0.0.1:1337/clear-override-buffer-stake
+//   $ curl -X POST 'http://127.0.0.1:1337/clear-override-buffer-stake?epoch=2'
 //
-// Vote to the epoch early
+// Vote to close epoch 2 early
 //
-//   $ curl -X POST http://127.0.0.1:1337/force-close-epoch
+//   $ curl -X POST 'http://127.0.0.1:1337/force-close-epoch?epoch=2'
 
 const LOGGING_ROUTE: &str = "/logging";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
@@ -95,37 +98,48 @@ async fn set_filter(
     }
 }
 
+#[derive(Deserialize)]
+struct Epoch {
+    epoch: u64,
+}
+
 async fn clear_override_protocol_upgrade_buffer_stake(
     State(state): State<Arc<AppState>>,
-    _body: String,
+    epoch: Query<Epoch>,
 ) -> (StatusCode, String) {
-    match state.node.clear_override_protocol_upgrade_buffer_stake() {
+    let Query(Epoch { epoch }) = epoch;
+
+    match state
+        .node
+        .clear_override_protocol_upgrade_buffer_stake(epoch)
+    {
         Ok(()) => (
             StatusCode::OK,
-            "protocol upgrade buffer stake cleared".to_string(),
+            "protocol upgrade buffer stake cleared\n".to_string(),
         ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }
 
+#[derive(Deserialize)]
+struct SetBufferStake {
+    buffer_bps: u64,
+    epoch: u64,
+}
+
 async fn set_override_protocol_upgrade_buffer_stake(
     State(state): State<Arc<AppState>>,
-    buffer_bps: String,
+    buffer_state: Query<SetBufferStake>,
 ) -> (StatusCode, String) {
-    let Ok(buffer_bps) = buffer_bps.parse::<u64>() else {
-        return (
-            StatusCode::BAD_REQUEST,
-            "argument must be a positive integer".to_string(),
-        );
-    };
+    let Query(SetBufferStake { buffer_bps, epoch }) = buffer_state;
 
     match state
         .node
-        .set_override_protocol_upgrade_buffer_stake(buffer_bps)
+        .set_override_protocol_upgrade_buffer_stake(epoch, buffer_bps)
     {
         Ok(()) => (
             StatusCode::OK,
-            format!("protocol upgrade buffer stake set to '{}'", buffer_bps),
+            format!("protocol upgrade buffer stake set to '{}'\n", buffer_bps),
         ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
@@ -133,14 +147,25 @@ async fn set_override_protocol_upgrade_buffer_stake(
 
 async fn force_close_epoch(
     State(state): State<Arc<AppState>>,
-    _body: String,
+    epoch: Query<Epoch>,
 ) -> (StatusCode, String) {
+    let Query(Epoch {
+        epoch: expected_epoch,
+    }) = epoch;
     let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
+    let actual_epoch = epoch_store.epoch();
+    if actual_epoch != expected_epoch {
+        let err = SuiError::WrongEpoch {
+            expected_epoch,
+            actual_epoch,
+        };
+        return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string());
+    }
 
     match state.node.close_epoch(&epoch_store).await {
         Ok(()) => (
             StatusCode::OK,
-            "close_epoch() called successfully".to_string(),
+            "close_epoch() called successfully\n".to_string(),
         ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
