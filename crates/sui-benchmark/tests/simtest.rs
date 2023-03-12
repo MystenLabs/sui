@@ -10,6 +10,7 @@ mod test {
     use std::time::{Duration, Instant};
     use sui_benchmark::benchmark_setup::ProxyGasAndCoin;
     use sui_benchmark::system_state_observer::SystemStateObserver;
+    use sui_benchmark::workloads::batch_payment;
     use sui_benchmark::workloads::workload_configuration::configure_combined_mode;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -266,6 +267,7 @@ mod test {
         let transfer_object_weight = 1;
         let num_transfer_accounts = 2;
         let delegation_weight = 1;
+        let batch_payment_weight = 1;
         let shared_counter_hotness_factor = 50;
 
         let proxy_workloads = configure_combined_mode(
@@ -274,6 +276,7 @@ mod test {
             shared_counter_weight,
             transfer_object_weight,
             delegation_weight,
+            batch_payment_weight,
             shared_counter_hotness_factor,
             target_qps,
             in_flight_ratio,
