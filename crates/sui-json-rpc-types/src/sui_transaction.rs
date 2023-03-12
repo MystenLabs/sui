@@ -62,7 +62,9 @@ impl Display for BigInt {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "TransactionResponseQuery", default)]
 pub struct SuiTransactionResponseQuery {
+    /// If None, no filter will be applied
     pub filter: Option<TransactionFilter>,
+    /// config which fields to include in the response, by default only digest is included
     pub options: Option<SuiTransactionResponseOptions>,
 }
 

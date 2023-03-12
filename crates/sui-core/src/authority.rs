@@ -2341,14 +2341,14 @@ impl AuthorityState {
 
     pub fn get_transactions(
         &self,
-        query: TransactionFilter,
+        filter: Option<TransactionFilter>,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
         self.get_indexes()?
-            .get_transactions(query, cursor, limit, reverse)
+            .get_transactions(filter, cursor, limit, reverse)
     }
 
     fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {

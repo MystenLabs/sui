@@ -67,21 +67,20 @@ impl<S: IndexerStore> ReadApi<S> {
         let limit = cap_page_limit(limit);
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
-        let filter = query.filter.unwrap_or(TransactionFilter::All);
 
-        let digests_from_db = match filter {
-            TransactionFilter::All => {
+        let digests_from_db = match query.filter {
+            None => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
                 self.state
                     .get_all_transaction_digest_page(indexer_seq_number, limit, is_descending)
             }
-            TransactionFilter::MoveFunction {
+            Some(TransactionFilter::MoveFunction {
                 package,
                 module,
                 function,
-            } => {
+            }) => {
                 let move_call_seq_number = self
                     .state
                     .get_move_call_sequence_by_digest(cursor_str, is_descending)?;
@@ -98,8 +97,8 @@ impl<S: IndexerStore> ReadApi<S> {
             // SuiTransactionResponse, instead we should store the BCS
             // serialized transaction and retrive from there.
             // This is now blocked by the endpoint on FN side.
-            TransactionFilter::InputObject(_input_obj_id) => Ok(vec![]),
-            TransactionFilter::MutatedObject(mutated_obj_id) => {
+            Some(TransactionFilter::InputObject(_input_obj_id)) => Ok(vec![]),
+            Some(TransactionFilter::MutatedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
@@ -110,7 +109,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     is_descending,
                 )
             }
-            TransactionFilter::FromAddress(sender_address) => {
+            Some(TransactionFilter::FromAddress(sender_address)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
@@ -121,7 +120,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     is_descending,
                 )
             }
-            TransactionFilter::ToAddress(recipient_address) => {
+            Some(TransactionFilter::ToAddress(recipient_address)) => {
                 let recipient_seq_number = self
                     .state
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)?;

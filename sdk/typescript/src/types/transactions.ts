@@ -241,7 +241,6 @@ export type SuiTransactionResponseQuery = {
 };
 
 export type TransactionFilter =
-  | 'All'
   | {
       MoveFunction: {
         package: ObjectId;

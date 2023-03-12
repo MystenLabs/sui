@@ -6657,13 +6657,6 @@
       "TransactionFilter": {
         "oneOf": [
           {
-            "description": "All transaction hashes.",
-            "type": "string",
-            "enum": [
-              "All"
-            ]
-          },
-          {
             "description": "Query by move function.",
             "type": "object",
             "required": [
@@ -6979,6 +6972,7 @@
         "type": "object",
         "properties": {
           "filter": {
+            "description": "If None, no filter will be applied",
             "default": null,
             "anyOf": [
               {
@@ -6990,6 +6984,7 @@
             ]
           },
           "options": {
+            "description": "config which fields to include in the response, by default only digest is included",
             "default": null,
             "anyOf": [
               {

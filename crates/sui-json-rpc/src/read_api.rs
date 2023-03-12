@@ -44,7 +44,7 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
-use sui_types::query::{EventQuery, TransactionFilter};
+use sui_types::query::EventQuery;
 
 use crate::api::cap_page_limit;
 use crate::api::ReadApiServer;
@@ -657,13 +657,11 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
-        // TODO(chris): should we just remove `TransactionFilter::All`?
-        let filter = query.filter.unwrap_or(TransactionFilter::All);
 
         // Retrieve 1 extra item for next cursor
-        let mut data = self
-            .state
-            .get_transactions(filter, cursor, Some(limit + 1), descending)?;
+        let mut data =
+            self.state
+                .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
         let has_next_page = data.len() > limit;
