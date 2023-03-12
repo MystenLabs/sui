@@ -9,17 +9,15 @@ import cl from 'classnames';
 import { useGetCoinBalance } from '../../hooks';
 import { Text } from '_src/ui/app/shared/text';
 
-export type LedgerAccount = {
+type LedgerAccountRowProps = {
     isSelected: boolean;
     address: SuiAddress;
 };
 
-type LedgerAccountItemProps = LedgerAccount;
-
-export function LedgerAccountItem({
+export function LedgerAccountRow({
     isSelected,
     address,
-}: LedgerAccountItemProps) {
+}: LedgerAccountRowProps) {
     const { data: coinBalance } = useGetCoinBalance(SUI_TYPE_ARG, address);
     const [totalAmount, totalAmountSymbol] = useFormatCoin(
         coinBalance?.totalBalance ?? 0,

@@ -10,7 +10,7 @@ import {
     setToSessionStorage,
     isSessionStorageSupported,
 } from '../storage-utils';
-import { Account } from './Account';
+import { ImportedAccount } from './ImportedAccount';
 import {
     EPHEMERAL_PASSWORD_KEY,
     EPHEMERAL_VAULT_KEY,
@@ -217,7 +217,11 @@ describe('VaultStorage', () => {
                 await VaultStorage.importKeypair(
                     testEd25519Serialized,
                     testDataVault1.password,
-                    [new Account({ type: 'imported', keypair: testEd25519 })]
+                    [
+                        new ImportedAccount({
+                            keypair: testEd25519,
+                        }),
+                    ]
                 )
             ).toBe(null);
         });
