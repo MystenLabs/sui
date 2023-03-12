@@ -3,7 +3,7 @@
 
 # Module `0x2::groth16`
 
-
+Notice that the current implementation works only with BLS12-381 curve.
 
 -  [Struct `PreparedVerifyingKey`](#0x2_groth16_PreparedVerifyingKey)
 -  [Struct `PublicProofInputs`](#0x2_groth16_PublicProofInputs)
@@ -252,7 +252,7 @@ Creates a Groth16 <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints
 
 ## Function `prepare_verifying_key`
 
-@param veriyfing_key: An Arkworks canonical serialization of a verifying key.
+@param veriyfing_key: An Arkworks canonical serialization of a verifying key. 
 
 Returns four vectors of bytes representing the four components of a prepared verifying key.
 This step computes one pairing e(P, Q), and binds the verification to one particular proof statement.
