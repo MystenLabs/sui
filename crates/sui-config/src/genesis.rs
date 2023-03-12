@@ -640,6 +640,7 @@ impl Builder {
             let validators = committee.clone().into_values().collect::<Vec<_>>();
 
             let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
+            loaded_genesis.1.digest(); // cache digest before compare
             assert_eq!(
                 &built, loaded_genesis,
                 "loaded genesis does not match built genesis"
