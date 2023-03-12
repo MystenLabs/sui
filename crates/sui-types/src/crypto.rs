@@ -3,10 +3,7 @@
 use anyhow::{anyhow, Error};
 use derive_more::From;
 use eyre::eyre;
-use fastcrypto::bls12381::min_sig::{
-    BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
-    BLS12381PrivateKey, BLS12381PublicKey, BLS12381Signature,
-};
+use fastcrypto::bls12381::min_sig::BLS12381PublicKey;
 use fastcrypto::ed25519::{
     Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, Ed25519SignatureAsBytes,
 };
@@ -113,7 +110,7 @@ pub fn verify_proof_of_possession(
     protocol_pubkey: &narwhal_crypto::PublicKey,
     sui_address: SuiAddress,
 ) -> Result<(), SuiError> {
-    protocol_pubkey.validate()?;
+    //protocol_pubkey.validate()?;
     let mut msg = protocol_pubkey.as_bytes().to_vec();
     msg.extend_from_slice(sui_address.as_ref());
     pop.verify_secure(

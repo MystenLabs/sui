@@ -9,7 +9,7 @@
 )]
 
 use fastcrypto::{
-    bls12381, ed25519,
+    ed25519,
     error::FastCryptoError,
     hash::{Blake2b256, HashFunction},
     unsecure,
@@ -34,7 +34,7 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, INTENT_PR
 // to change all four aliases to point to concrete types that work with each other. Failure to do
 // so will result in a ton of compilation errors, and worse: it will not make sense!
 
-pub type PublicKey = unsecure::signature::UnsecurePublicKey;
+pub type PublicKey = fastcrypto::unsecure::signature::UnsecurePublicKey;
 pub type Signature = unsecure::signature::UnsecureSignature;
 pub type AggregateSignature = unsecure::signature::UnsecureAggregateSignature;
 pub type PrivateKey = unsecure::signature::UnsecurePrivateKey;

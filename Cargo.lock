@@ -3041,6 +3041,7 @@ dependencies = [
  "schemars",
  "secp256k1",
  "serde 1.0.152",
+ "serde-big-array",
  "serde_bytes",
  "serde_with",
  "sha2 0.10.6",
@@ -3048,6 +3049,7 @@ dependencies = [
  "signature 1.6.4",
  "thiserror",
  "tokio",
+ "twox-hash",
  "typenum",
  "zeroize",
 ]
@@ -8127,6 +8129,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde 1.0.152",
+]
+
+[[package]]
 name = "serde-hjson"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10932,6 +10943,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
