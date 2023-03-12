@@ -685,7 +685,7 @@ impl SuiNode {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
         let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
-        let max_checkpoint_size = epoch_store.protocol_config().max_checkpoint_size();
+        let max_checkpoint_size = epoch_store.protocol_config().max_checkpoint_size() as usize;
 
         CheckpointService::spawn(
             state.clone(),
@@ -1069,7 +1069,7 @@ pub async fn build_server(
 
 #[cfg(not(test))]
 fn max_tx_per_checkpoint(protocol_config: &ProtocolConfig) -> usize {
-    protocol_config.max_transactions_per_checkpoint()
+    protocol_config.max_transactions_per_checkpoint() as usize
 }
 
 #[cfg(test)]
