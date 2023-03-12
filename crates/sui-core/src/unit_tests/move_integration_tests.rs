@@ -57,7 +57,7 @@ async fn test_publishing_with_unpublished_deps() {
     .into_data();
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects.created().len(), 1);
+    assert_eq!(effects.created().len(), 2);
     let package = effects.created()[0].0;
 
     let ObjectRead::Exists(read_ref, package_obj, _) = authority
@@ -2276,6 +2276,24 @@ pub async fn build_and_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
 ) -> ObjectRef {
+    build_and_publish_test_package_with_upgrade_cap(
+        authority,
+        sender,
+        sender_key,
+        gas_object_id,
+        test_dir,
+    )
+    .await
+    .0
+}
+
+pub async fn build_and_publish_test_package_with_upgrade_cap(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    test_dir: &str,
+) -> (ObjectRef, ObjectRef) {
     let effects = build_and_try_publish_test_package(
         authority,
         sender,
@@ -2293,7 +2311,19 @@ pub async fn build_and_publish_test_package(
         "{:?}",
         effects.status()
     );
-    effects.created()[0].0
+
+    let package = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap();
+    let upgrade_cap = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    (package.0, upgrade_cap.0)
 }
 
 async fn check_latest_object_ref(

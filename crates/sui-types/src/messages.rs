@@ -1476,7 +1476,8 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.publish(modules);
+            let upgrade_cap = builder.publish_upgradeable(modules);
+            builder.transfer_arg(sender, upgrade_cap);
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)

@@ -116,10 +116,9 @@ export async function publishPackage(
   const cap = tx.publish(
     compiledModules.map((m: any) => Array.from(fromB64(m))),
   );
-  tx.moveCall({
-    target: '0x2::package::make_immutable',
-    arguments: [cap],
-  });
+
+  // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
+  tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
 
   const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx, {
     showEffects: true,
