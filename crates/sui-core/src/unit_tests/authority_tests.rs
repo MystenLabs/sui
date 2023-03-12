@@ -217,9 +217,11 @@ async fn construct_shared_object_transaction_with_sequence_number(
 pub fn create_genesis_module_packages() -> Vec<Object> {
     let sui_modules = sui_framework::get_sui_framework();
     let std_modules = sui_framework::get_move_stdlib();
+    let (std_move_pkg, _) = sui_framework::make_std_sui_move_pkgs();
     vec![
         Object::new_package_for_testing(std_modules, TransactionDigest::genesis(), &[]).unwrap(),
-        Object::new_package_for_testing(sui_modules, TransactionDigest::genesis(), &[]).unwrap(),
+        Object::new_package_for_testing(sui_modules, TransactionDigest::genesis(), &[std_move_pkg])
+            .unwrap(),
     ]
 }
 
@@ -4168,7 +4170,9 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest, &[]).unwrap();
+    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
+    let pkg =
+        Object::new_package_for_testing(modules, digest, &[std_move_pkg, sui_move_pkg]).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
@@ -4200,7 +4204,9 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest, &[]).unwrap();
+    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
+    let pkg =
+        Object::new_package_for_testing(modules, digest, &[std_move_pkg, sui_move_pkg]).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
     fullnode.insert_genesis_object(pkg).await;

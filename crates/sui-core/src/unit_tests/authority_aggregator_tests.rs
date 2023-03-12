@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use sui_framework::make_std_sui_move_pkgs;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
@@ -324,7 +325,13 @@ async fn test_quorum_map_and_reduce_timeout() {
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package_for_testing(modules, TransactionDigest::genesis(), &[]).unwrap();
+    let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
+    let pkg = Object::new_package_for_testing(
+        modules,
+        TransactionDigest::genesis(),
+        &[std_move_pkg, sui_move_pkg],
+    )
+    .unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];

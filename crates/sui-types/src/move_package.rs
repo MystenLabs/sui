@@ -504,7 +504,9 @@ fn build_upgraded_type_origin_table(
     predecessor: &MovePackage,
     modules: &[CompiledModule],
 ) -> BTreeMap<ModuleStruct, ObjectID> {
-    let mut new_table = predecessor.type_origin_table.clone();
+    let mut new_table = BTreeMap::new();
+    // to double-check that the compatibility check for upgraded package was successful
+    let mut all_new_types = BTreeSet::new();
     for m in modules {
         for struct_def in m.struct_defs() {
             let struct_handle = m.struct_handle_at(struct_def.struct_handle);
@@ -514,6 +516,7 @@ fn build_upgraded_type_origin_table(
                 module_name,
                 struct_name,
             };
+            all_new_types.insert(mod_struct.clone());
             // only insert types that are not in the original table as only these should be
             // marked as originating from the current package
             if predecessor.type_origin_table.contains_key(&mod_struct) {
@@ -523,5 +526,11 @@ fn build_upgraded_type_origin_table(
             new_table.insert(mod_struct, id);
         }
     }
+    if !BTreeSet::from_iter(predecessor.type_origin_table.keys().cloned()).is_subset(&all_new_types)
+    {
+        // panic as it should be caught by compatibility check
+        panic!("Earlier package version contains a type missing from the upgraded one");
+    }
+    new_table.extend(predecessor.type_origin_table.clone().into_iter());
     new_table
 }

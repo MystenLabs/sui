@@ -110,24 +110,14 @@ pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<Compile
     Ok(pkg)
 }
 
-pub fn make_std_sui_move_pkgs(max_move_package_size: u64) -> (MovePackage, MovePackage) {
+pub fn make_std_sui_move_pkgs() -> (MovePackage, MovePackage) {
     let sui_modules = get_sui_framework();
     let std_modules = get_move_stdlib();
 
-    let std_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        std_modules,
-        max_move_package_size,
-        &[],
-    )
-    .unwrap();
+    let std_pkg =
+        MovePackage::new_initial(OBJECT_START_VERSION, std_modules, u64::MAX, &[]).unwrap();
 
-    let sui_pkg = MovePackage::new_initial(
-        OBJECT_START_VERSION,
-        sui_modules,
-        max_move_package_size,
-        &[std_pkg.clone()],
-    )
-    .unwrap();
+    let sui_pkg =
+        MovePackage::new_initial(OBJECT_START_VERSION, sui_modules, u64::MAX, [&std_pkg]).unwrap();
     (std_pkg, sui_pkg)
 }

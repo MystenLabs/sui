@@ -22,8 +22,6 @@ use sui_types::object::Object;
 use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
-static PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> = Lazy::new(ProtocolConfig::get_for_max_version);
-
 // Negative test cases
 #[test]
 fn test_json_not_homogeneous() {
@@ -411,8 +409,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     // SAFETY: genesis packages should never exceed max size
-    let (std_move_pkg, sui_move_pkg) =
-        make_std_sui_move_pkgs(PROTOCOL_CONSTANTS.max_move_package_size());
+    let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let example_package = Object::new_package_for_testing(
         compiled_modules,
         TransactionDigest::genesis(),
@@ -538,8 +535,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     // SAFETY: genesis packages should never exceed max size
-    let (std_move_pkg, sui_move_pkg) =
-        make_std_sui_move_pkgs(PROTOCOL_CONSTANTS.max_move_package_size());
+    let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let example_package = Object::new_package_for_testing(
         compiled_modules,
         TransactionDigest::genesis(),
@@ -644,8 +640,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     // SAFETY: genesis packages should never exceed max size
-    let (std_move_pkg, sui_move_pkg) =
-        make_std_sui_move_pkgs(PROTOCOL_CONSTANTS.max_move_package_size());
+    let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let example_package = Object::new_package_for_testing(
         compiled_modules,
         TransactionDigest::genesis(),

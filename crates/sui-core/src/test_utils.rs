@@ -150,12 +150,13 @@ async fn init_genesis(
         .into_iter()
         .cloned()
         .collect();
+    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
     let pkg = Object::new_package(
         modules,
         OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
-        &[],
+        &[std_move_pkg, sui_move_pkg],
     )
     .unwrap();
     let pkg_id = pkg.id();

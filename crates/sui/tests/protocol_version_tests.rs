@@ -3,6 +3,7 @@
 
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
+use sui_framework::make_std_sui_move_pkgs;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
 use test_utils::authority::start_node;
 
@@ -414,11 +415,13 @@ mod sim_only_tests {
 
     /// Like `sui_framework`, but package the modules in an `Object`.
     fn sui_framework_object(fixture: &str) -> Object {
+        let (std_move_pkg, _) = make_std_sui_move_pkgs();
         Object::new_package(
             sui_framework(fixture),
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
+            &[std_move_pkg],
         )
         .unwrap()
     }
