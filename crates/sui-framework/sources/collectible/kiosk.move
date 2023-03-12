@@ -46,20 +46,24 @@ module sui::kiosk {
     // Collectible is a special case to avoid storing `Publisher`.
     friend sui::collectible;
 
-    /// For when trying to withdraw profits as owner and owner is not set.
+    /// Trying to withdraw profits as owner and owner is not set.
     const EOwnerNotSet: u64 = 0;
-    /// For when trying to withdraw profits and sender is not owner.
+    /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 1;
-    /// For when Coin paid does not match the offer price.
+    /// Coin paid does not match the offer price.
     const EIncorrectAmount: u64 = 2;
-    /// For when incorrect arguments passed into `switch_mode` function.
+    /// Incorrect arguments passed into `switch_mode` function.
     const EIncorrectArgument: u64 = 3;
-    /// For when Transfer is accepted by a wrong Kiosk.
+    /// Transfer is accepted by a wrong Kiosk.
     const EWrongTarget: u64 = 4;
-    /// For when trying to withdraw higher amount than stored.
+    /// Trying to withdraw higher amount than stored.
     const ENotEnough: u64 = 5;
-    /// For when trying to close a Kiosk and it has items in it.
+    /// Trying to close a Kiosk and it has items in it.
     const ENotEmpty: u64 = 6;
+    /// Attempt to take an item that has a `PurchaseCap` issued.
+    const EListedExclusively: u64 = 7;
+    /// `PurchaseCap` does not match the `Kiosk`.
+    const EWrongKiosk: u64 = 8;
 
     /// An object that stores collectibles of all sorts.
     /// For sale, for collecting reasons, for fun.
@@ -80,6 +84,22 @@ module sui::kiosk {
     struct KioskOwnerCap has key, store {
         id: UID,
         for: ID
+    }
+
+    /// A capability which locks an item and gives a permission to
+    /// purchase it from a `Kiosk` for any price no less than `min_price`.
+    ///
+    /// Allows exclusive listing: only bearer of the `PurchaseCap` can
+    /// purchase the asset. However, the capablity should be used
+    /// carefully as losing it would lock the asset in the `Kiosk`.
+    struct PurchaseCap<phantom T: key + store> has key, store {
+        id: UID,
+        /// ID of the `Kiosk` the cap belongs to.
+        kiosk_id: ID,
+        /// ID of the listed item.
+        item_id: ID,
+        /// Minimum price for which the item can be purchased.
+        min_price: u64
     }
 
     /// A "Hot Potato" forcing the buyer to get a transfer permission
@@ -105,8 +125,9 @@ module sui::kiosk {
     /// Dynamic field key for an item placed into the kiosk.
     struct Key has store, copy, drop { id: ID }
 
-    /// Dynamic field key for an active offer to purchase the T.
-    struct Offer has store, copy, drop { id: ID }
+    /// Dynamic field key for an active offer to purchase the T. If an
+    /// item is listed without a `PurchaseCap`, exclusive is set to `false`.
+    struct Offer has store, copy, drop { id: ID, is_exclusive: bool }
 
     // === Events ===
 
@@ -226,28 +247,28 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
     ): T {
         assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(df::exists_<Offer>(&mut self.id, Offer { id, is_exclusive: true }) == false, EListedExclusively);
+
         self.item_count = self.item_count - 1;
-        df::remove_if_exists<Offer, u64>(&mut self.id, Offer { id });
+        df::remove_if_exists<Offer, u64>(&mut self.id, Offer { id, is_exclusive: false });
         dof::remove(&mut self.id, Key { id })
     }
 
-    // === Trading functionality ===
+    // === Trading functionality: List and Purchase ===
 
-    /// Make an offer by setting a price for the item and making it publicly
-    /// purchasable by anyone on the network.
-    ///
+    /// List the item by setting a price and making it available for purchase.
     /// Performs an authorization check to make sure only owner can sell.
     public fun list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        df::add(&mut self.id, Offer { id }, price);
+        df::add(&mut self.id, Offer { id, is_exclusive: false }, price);
         event::emit(NewOfferEvent<T> {
             kiosk: object::id(self), id, price
         })
     }
 
-    /// Place an item into the Kiosk and make an offer - simplifies the flow.
+    /// Calls `place` and `list` together - simplifies the flow.
     public fun place_and_list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T, price: u64
     ) {
@@ -269,7 +290,7 @@ module sui::kiosk {
     public fun purchase<T: key + store>(
         self: &mut Kiosk, id: ID, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
-        let price = df::remove<Offer, u64>(&mut self.id, Offer { id });
+        let price = df::remove<Offer, u64>(&mut self.id, Offer { id, is_exclusive: false });
         let inner = dof::remove<Key, T>(&mut self.id, Key { id });
 
         self.item_count = self.item_count - 1;
@@ -280,6 +301,56 @@ module sui::kiosk {
             paid: price,
             from: object::id(self),
         })
+    }
+
+    // === Trading Functionality: Exclusive listing with `PurchaseCap` ===
+
+    /// Creates a `PurchaseCap` which gives the right to purchase an item
+    /// for any price equal or higher than the `min_price`.
+    public fun list_with_purchase_cap<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
+    ): PurchaseCap<T> {
+        assert!(object::id(self) == cap.for, ENotOwner);
+
+        let uid = object::new(ctx);
+        df::add(&mut self.id, Offer { id, is_exclusive: true }, min_price);
+
+        PurchaseCap<T> {
+            id: uid,
+            item_id: id,
+            kiosk_id: cap.for,
+            min_price,
+        }
+    }
+
+    /// Unpack the `PurchaseCap` and call `purchase`. Sets the payment amount
+    /// as the price for the listing making sure it's no less than `min_amount`.
+    public fun purchase_with_cap<T: key + store>(
+        self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>
+    ): (T, TransferRequest<T>) {
+        let PurchaseCap { id, item_id, kiosk_id, min_price } = purchase_cap;
+        let paid = coin::value(&payment);
+
+        assert!(paid >= min_price, EIncorrectAmount);
+        assert!(object::id(self) == kiosk_id, EWrongKiosk);
+
+        df::remove<Offer, u64>(&mut self.id, Offer { id: item_id, is_exclusive: true });
+        df::add(&mut self.id, Offer { id: item_id, is_exclusive: false }, paid);
+        object::delete(id);
+
+        purchase<T>(self, item_id, payment)
+    }
+
+    /// Return the `PurchaseCap` without making a purchase; remove an active offer and
+    /// allow taking . Can only be returned to its `Kiosk`, aborts otherwise.
+    public fun return_purchase_cap<T: key + store>(
+        self: &mut Kiosk, purchase_cap: PurchaseCap<T>
+    ) {
+        let PurchaseCap { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
+
+        assert!(object::id(self) == kiosk_id, EWrongKiosk);
+        df::remove<Offer, u64>(&mut self.id, Offer { id: item_id, is_exclusive: true });
+        object::delete(id)
     }
 
     /// Allow a `TransferRequest` for the type `T`. The call is protected
@@ -312,7 +383,15 @@ module sui::kiosk {
         coin::take(&mut self.profits, amount, ctx)
     }
 
-    // === Fields access ===
+    // === Kiosk fields access ===
+
+    /// Get the UID to for dynamic field access. Requires a `KioskOwnerCap`
+    /// to prevent third party attachements without owner's approval in the
+    /// shared storage scenario.
+    public fun uid_mut(self: &mut Kiosk, cap: &KioskOwnerCap): &mut UID {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        &mut self.id
+    }
 
     /// Get the owner of the Kiosk.
     public fun owner(self: &Kiosk): address {
@@ -328,6 +407,23 @@ module sui::kiosk {
     public fun profits_amount(self: &Kiosk): u64 {
         balance::value(&self.profits)
     }
+
+    // === PurchaseCap fields access ===
+
+    /// Get the `kiosk_id` from the `PurchaseCap`.
+    public fun purchase_cap_kiosk<T: key + store>(self: &PurchaseCap<T>): ID {
+        self.kiosk_id
+    }
+
+    /// Get the `Item_id` from the `PurchaseCap`.
+    public fun purchase_cap_item<T: key + store>(self: &PurchaseCap<T>): ID {
+        self.item_id
+    }
+
+    /// Get the `min_price` from the `PurchaseCap`.
+    public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {
+        self.min_price
+    }
 }
 
 #[test_only]
@@ -335,7 +431,7 @@ module sui::kiosk_creature {
     use sui::tx_context::{TxContext, sender};
     use sui::object::{Self, UID};
     use sui::transfer::transfer;
-    use sui::package;
+    use sui::package::{Self, Publisher};
 
     struct Creature has key, store { id: UID }
     struct KIOSK_CREATURE has drop {}
@@ -345,7 +441,6 @@ module sui::kiosk_creature {
         transfer(package::claim(otw, ctx), sender(ctx))
     }
 
-    #[test_only]
     public fun new_creature(ctx: &mut TxContext): Creature {
         Creature { id: object::new(ctx) }
     }
@@ -354,18 +449,30 @@ module sui::kiosk_creature {
     public fun init_collection(ctx: &mut TxContext) {
         init(KIOSK_CREATURE {}, ctx)
     }
+
+    #[test_only]
+    public fun get_publisher(ctx: &mut TxContext): Publisher {
+        package::claim(KIOSK_CREATURE {}, ctx)
+    }
+
+    public fun return_creature(self: Creature) {
+        let Creature { id } = self;
+        object::delete(id)
+    }
 }
 
 #[test_only]
 module sui::kiosk_tests {
-    use sui::kiosk_creature::{Creature, new_creature, init_collection};
+    use sui::kiosk_creature::{Creature, new_creature, init_collection, get_publisher, return_creature};
     use sui::test_scenario::{Self as ts};
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap, TransferPolicyCap};
     use sui::package::Publisher;
-    use sui::transfer::{freeze_object, share_object, transfer};
+    use sui::transfer::{share_object, transfer};
+    use sui::tx_context;
     use sui::sui::SUI;
     use sui::object;
     use sui::coin;
+    use sui::package;
     use std::option;
     use std::vector;
 
@@ -373,7 +480,64 @@ module sui::kiosk_tests {
     const PRICE: u64 = 1000;
 
     /// Addresses for the current testing suite.
-    fun folks(): (address, address) { (@0xBA3, @0xC3EA403) }
+    fun folks(): (address, address) { (@0xA71CE, @0xB0B) }
+
+    #[test]
+    fun test_purchase_cap() {
+        let ctx = &mut tx_context::dummy();
+        let publisher = get_publisher(ctx);
+
+        let creature = new_creature(ctx);
+        let item_id = object::id(&creature);
+        let (kiosk, kiosk_cap) = kiosk::new(ctx);
+        let transfer_cap = kiosk::new_transfer_policy_cap(&publisher, ctx);
+
+        kiosk::place(&mut kiosk, &kiosk_cap, creature);
+
+        // create a PurchaseCap
+        let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &kiosk_cap, item_id, 10_000, ctx);
+
+        // use it right away to purchase a `Creature`
+        let (creature, transfer_request) = kiosk::purchase_with_cap(
+            &mut kiosk,
+            purchase_cap,
+            coin::mint_for_testing<SUI>(100_000, ctx)
+        );
+
+        let kiosk_id = object::id(&kiosk);
+        let (amount, from_id) = kiosk::allow_transfer(&transfer_cap, transfer_request);
+        let profits = kiosk::close_and_withdraw(kiosk, kiosk_cap, ctx);
+
+        assert!(amount == 100_000, 0);
+        assert!(kiosk_id == from_id, 1);
+        assert!(coin::value(&profits) == 100_000, 2);
+
+        kiosk::destroy_transfer_policy_cap(transfer_cap);
+        package::burn_publisher(publisher);
+        coin::burn_for_testing(profits);
+        return_creature(creature);
+    }
+
+    #[test]
+    fun test_purchase_cap_return() {
+        let ctx = &mut tx_context::dummy();
+
+        let creature = new_creature(ctx);
+        let item_id = object::id(&creature);
+        let (kiosk, kiosk_cap) = kiosk::new(ctx);
+
+        kiosk::place(&mut kiosk, &kiosk_cap, creature);
+
+        // create a PurchaseCap
+        let purchase_cap = kiosk::list_with_purchase_cap<Creature>(&mut kiosk, &kiosk_cap, item_id, 10_000, ctx);
+
+        kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
+        let creature = kiosk::take(&mut kiosk, &kiosk_cap, item_id);
+        let profits = kiosk::close_and_withdraw(kiosk, kiosk_cap, ctx);
+
+        coin::burn_for_testing(profits);
+        return_creature(creature);
+    }
 
     #[test]
     fun test_placing() {
@@ -381,20 +545,19 @@ module sui::kiosk_tests {
         let test = ts::begin(creator);
 
         // Creator creates a collection and gets a Publisher object.
-        ts::next_tx(&mut test, creator); {
-           init_collection(ts::ctx(&mut test));
-        };
+        init_collection(ts::ctx(&mut test));
 
         // Creator creates a Kiosk and registers a type.
         // No transfer policy set, TransferPolicyCap is frozen.
         ts::next_tx(&mut test, creator); {
             let pub = ts::take_from_address<Publisher>(&test, creator);
-            let (kiosk, kiosk_cap) = kiosk::new(ts::ctx(&mut test));
-            let allow_cap = kiosk::new_transfer_policy_cap<Creature>(&pub, ts::ctx(&mut test));
+            let ctx = ts::ctx(&mut test);
+            let (kiosk, kiosk_cap) = kiosk::new(ctx);
+            let allow_cap = kiosk::new_transfer_policy_cap<Creature>(&pub, ctx);
 
             share_object(kiosk);
             transfer(pub, creator);
-            freeze_object(allow_cap);
+            sui::royalty::set_zero_policy(allow_cap);
             transfer(kiosk_cap, creator);
         };
 
