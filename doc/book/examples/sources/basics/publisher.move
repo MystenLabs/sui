@@ -23,8 +23,8 @@ module examples::owner {
     }
 }
 
-/// A module that utilizes the `Publisher` object to set a custom
-/// policy for the type.
+/// A module that utilizes the `Publisher` object to give a token
+/// of appreciation and a `TypeOwnerCap` for the owned type.
 module examples::type_owner {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
