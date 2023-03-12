@@ -128,7 +128,7 @@ pub async fn submit(
         .quorum_driver()
         .execute_transaction(
             signed_tx,
-            SuiTransactionResponseOptions::new().with_effects(),
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForEffectsCert),
         )
         .await?;

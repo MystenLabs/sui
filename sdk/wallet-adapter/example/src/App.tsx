@@ -12,9 +12,9 @@ transaction.add(
   Commands.MoveCall({
     target: `0x2::devnet_nft::mint`,
     arguments: [
-      transaction.input("foo"),
-      transaction.input("bar"),
-      transaction.input("baz"),
+      transaction.pure("foo"),
+      transaction.pure("bar"),
+      transaction.pure("baz"),
     ],
   })
 );
@@ -49,7 +49,7 @@ function App() {
             console.log(
               await signAndExecuteTransaction({
                 transaction,
-                options: { contentOptions: { showEffect: true } },
+                options: { contentOptions: { showEffects: true } },
               })
             );
           }}
