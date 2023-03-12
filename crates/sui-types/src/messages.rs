@@ -65,7 +65,7 @@ const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 // Since `std::mem::size_of` may not be stable acrpss platforms, we use rough constans
 // We need these for estimating effects sizes
 // Approximate size of `ObjectRef` type in bytes
-pub const APPROX_SIZE_OF_OBJECT_REF: usize = 100;
+pub const APPROX_SIZE_OF_OBJECT_REF: usize = 80;
 // Approximate size of `ExecutionStatus` type in bytes
 pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
 // Approximate size of `EpochId` type in bytes
@@ -3089,6 +3089,7 @@ impl TransactionEffects {
 
     pub fn estimate_effects_size_upperbound(
         num_writes: usize,
+        num_mutables: usize,
         num_deletes: usize,
         num_deps: usize,
     ) -> usize {
@@ -3100,10 +3101,12 @@ impl TransactionEffects {
         // Each write or delete contributes at roughly this amount because:
         // Each write can be a mutation which can show up in `mutated` and `modified_at_versions`
         // `num_delete` is added for padding
-        let approx_change_entry_size = 100
-            + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * (num_writes + num_deletes) * 2;
+        let approx_change_entry_size = 1_000
+            + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_writes
+            + (APPROX_SIZE_OF_OBJECT_REF * num_mutables)
+            + (APPROX_SIZE_OF_OBJECT_REF * num_deletes);
 
-        let deps_size = 100 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
+        let deps_size = 1_000 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
 
         fixed_sizes + approx_change_entry_size + deps_size
     }
