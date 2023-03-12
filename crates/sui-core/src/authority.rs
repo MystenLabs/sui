@@ -77,7 +77,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::query::{EventQuery, TransactionFilter};
-use sui_types::storage::{ObjectKey, WriteKind};
+use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -1965,7 +1965,6 @@ impl AuthorityState {
     }
 
     // This function is only used for testing.
-    #[cfg(test)]
     pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }

@@ -354,11 +354,6 @@ impl AuthorityStore {
             .transpose()
     }
 
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.perpetual_tables.as_ref().get_object(object_id)
-    }
-
     /// Get many objects
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
@@ -1372,6 +1367,13 @@ impl BackingPackageStore for AuthorityStore {
     }
 }
 
+impl ObjectStore for AuthorityStore {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.perpetual_tables.as_ref().get_object(object_id)
+    }
+}
+
 impl ChildObjectResolver for AuthorityStore {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         let child_object = match self.get_object(child)? {
@@ -1429,12 +1431,6 @@ impl GetModule for AuthorityStore {
         Ok(self
             .get_module(id)?
             .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
-    }
-}
-
-impl ObjectStore for AuthorityStore {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.get_object(object_id)
     }
 }
 

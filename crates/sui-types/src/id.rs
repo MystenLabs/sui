@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::dynamic_field::MoveTypeTagTrait;
 use crate::{base_types::ObjectID, SUI_FRAMEWORK_ADDRESS};
+use move_core_types::language_storage::TypeTag;
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
@@ -82,5 +84,11 @@ impl ID {
                 MoveTypeLayout::Address,
             )],
         }
+    }
+}
+
+impl MoveTypeTagTrait for ID {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(Self::type_()))
     }
 }
