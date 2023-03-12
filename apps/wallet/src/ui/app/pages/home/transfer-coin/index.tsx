@@ -75,7 +75,11 @@ function TransferCoinPage() {
                             }))
                     );
 
-                    return signer.signAndExecuteTransaction(tx);
+                    return signer.signAndExecuteTransaction(tx, {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    });
                 }
 
                 const bigIntAmount = parseAmount(formData.amount, coinDecimals);
@@ -125,7 +129,11 @@ function TransferCoinPage() {
                     );
                 }
 
-                return signer.signAndExecuteTransaction(tx);
+                return signer.signAndExecuteTransaction(tx, {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                });
             } catch (error) {
                 transaction.setTag('failure', true);
                 throw error;

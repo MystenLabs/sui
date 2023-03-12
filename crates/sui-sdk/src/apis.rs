@@ -436,15 +436,20 @@ impl QuorumDriver {
     pub async fn execute_transaction(
         &self,
         tx: VerifiedTransaction,
+        options: SuiTransactionResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let request_type =
-            request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
+        let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .execute_transaction(tx_bytes, signatures, request_type.clone())
+            .execute_transaction(
+                tx_bytes,
+                signatures,
+                Some(options),
+                Some(request_type.clone()),
+            )
             .await?;
 
         Ok(match request_type {

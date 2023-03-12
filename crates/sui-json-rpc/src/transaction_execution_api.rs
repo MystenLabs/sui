@@ -18,6 +18,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionResponse, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -50,8 +51,20 @@ impl WriteApiServer for TransactionExecutionApi {
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
-        request_type: ExecuteTransactionRequestType,
+        options: Option<SuiTransactionResponseOptions>,
+        request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionResponse> {
+        let options = options.unwrap_or_default();
+        let request_type = match (request_type, options.require_local_execution()) {
+            (Some(ExecuteTransactionRequestType::WaitForEffectsCert), true) => {
+                return Err(anyhow!(
+                    "`request_type` must set to `None` or `WaitForLocalExecution`\
+                         if effects is required in the response"
+                )
+                .into());
+            }
+            (t, _) => t.unwrap_or_else(|| options.default_execution_request_type()),
+        };
         let tx_data =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
 

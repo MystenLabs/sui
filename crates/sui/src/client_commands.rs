@@ -38,7 +38,7 @@ use sui_framework_build::compiled_package::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,
-    SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -1252,6 +1252,8 @@ impl WalletContext {
             .quorum_driver()
             .execute_transaction(
                 tx,
+                // TODO(chris): we probably don't need full content here
+                SuiTransactionResponseOptions::full_content(),
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)

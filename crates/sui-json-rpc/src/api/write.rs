@@ -4,7 +4,10 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use sui_json_rpc_types::{DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
+};
 
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -22,6 +25,7 @@ pub trait WriteApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
+    /// request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true
     #[method(name = "executeTransaction", deprecated)]
     async fn execute_transaction(
         &self,
@@ -29,8 +33,10 @@ pub trait WriteApi {
         tx_bytes: Base64,
         /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signatures: Vec<Base64>,
-        /// The request type
-        request_type: ExecuteTransactionRequestType,
+        /// options for specifying the content to be returned
+        options: Option<SuiTransactionResponseOptions>,
+        /// The request type, derived from `SuiTransactionResponseOptions` if None
+        request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionResponse>;
 
     /// Runs the transaction in dev-inspect mode. Which allows for nearly any

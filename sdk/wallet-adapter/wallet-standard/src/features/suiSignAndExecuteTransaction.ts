@@ -4,6 +4,7 @@
 import type {
   ExecuteTransactionRequestType,
   SuiTransactionResponse,
+  SuiTransactionResponseOptions,
 } from "@mysten/sui.js";
 import type { SuiSignTransactionInput } from "./suiSignTransaction";
 
@@ -41,4 +42,5 @@ export interface SuiSignAndExecuteTransactionOutput
 /** Options for signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionOptions {
   requestType?: ExecuteTransactionRequestType;
+  contentOptions?: SuiTransactionResponseOptions;
 }

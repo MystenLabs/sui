@@ -31,7 +31,9 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
         arguments: [tx.pure(String(val))],
       }),
     );
-    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
+      showEffects: true,
+    });
     expect(getExecutionStatusType(result)).toEqual('success');
     return getCreatedObjects(result)![0].reference.objectId;
   }
@@ -48,7 +50,9 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
         arguments: [vec],
       }),
     );
-    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
+      showEffects: true,
+    });
     expect(getExecutionStatusType(result)).toEqual('success');
   }
 
@@ -82,7 +86,9 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
       }),
     );
     tx.setGasPayment([coins[3]]);
-    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
+      showEffects: true,
+    });
     expect(getExecutionStatusType(result)).toEqual('success');
   });
 });

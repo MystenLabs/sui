@@ -89,7 +89,16 @@ export function ModuleFunction({
                         ) ?? [],
                 })
             );
-            const result = await signAndExecuteTransaction({ transaction: tx });
+            const result = await signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    contentOptions: {
+                        showEffect: true,
+                        showEvents: true,
+                        showInputs: true,
+                    },
+                },
+            });
             if (getExecutionStatusType(result) === 'failure') {
                 throw new Error(
                     getExecutionStatusError(result) || 'Transaction failed'

@@ -3,7 +3,7 @@
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
-use sui_json_rpc_types::SuiTransactionEffectsAPI;
+use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponseOptions};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::messages::{
@@ -128,6 +128,7 @@ pub async fn submit(
         .quorum_driver()
         .execute_transaction(
             signed_tx,
+            SuiTransactionResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForEffectsCert),
         )
         .await?;

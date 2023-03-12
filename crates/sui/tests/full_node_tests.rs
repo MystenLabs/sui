@@ -15,7 +15,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletCont
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
     SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionEffectsAPI,
-    SuiTransactionResponse,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -1000,6 +1000,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
         let params = rpc_params![
             tx_bytes,
             signatures,
+            SuiTransactionResponseOptions::new(),
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
         let response: SuiTransactionResponse = jsonrpc_client
@@ -1040,6 +1041,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let params = rpc_params![
         tx_bytes,
         signatures,
+        SuiTransactionResponseOptions::new(),
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
     let response: SuiTransactionResponse = jsonrpc_client
@@ -1065,6 +1067,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let params = rpc_params![
         tx_bytes,
         signatures,
+        SuiTransactionResponseOptions::new().with_effects(),
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
     let response: SuiTransactionResponse = jsonrpc_client

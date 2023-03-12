@@ -115,7 +115,11 @@ export class Coin {
                     ],
                 })
             );
-            return await signer.signAndExecuteTransaction(tx);
+            return await signer.signAndExecuteTransaction(tx, {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            });
         } finally {
             span.finish();
             transaction.finish();
@@ -141,7 +145,11 @@ export class Coin {
                     ],
                 })
             );
-            return await signer.signAndExecuteTransaction(tx);
+            return await signer.signAndExecuteTransaction(tx, {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            });
         } finally {
             transaction.finish();
         }
