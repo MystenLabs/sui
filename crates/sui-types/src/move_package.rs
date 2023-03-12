@@ -418,17 +418,23 @@ where
     normalized_modules
 }
 
-fn get_direct_dependencies(modules: Vec<CompiledModule>) -> BTreeSet<ObjectID> {
-    let mut direct_deps = BTreeSet::new();
-    for m in modules {
-        for dep_handle in m.module_handles() {
-            // exclude the root package
-            if dep_handle != m.self_handle() {
-                let dep_id: ObjectID = (*m.address_identifier_at(dep_handle.address)).into();
-                direct_deps.insert(dep_id);
-            }
-        }
-    }
+/// Collect the immediate package dependencies required by `modules`, all assumed to be from the
+/// same package (which is not included in the output).
+fn immediate_dependencies<'m>(
+    modules: impl IntoIterator<Item = &'m CompiledModule>,
+) -> BTreeSet<ObjectID> {
+    let mut modules = modules.into_iter().peekable();
+    let Some(module) = modules.peek() else {
+        return BTreeSet::default();
+    };
+
+    let self_id: ObjectID = (*module.address()).into();
+    let mut direct_deps: BTreeSet<_> = modules
+        .flat_map(|m| m.immediate_dependencies())
+        .map(|dep| (*dep.address()).into())
+        .collect();
+
+    direct_deps.remove(&self_id);
     direct_deps
 }
 
