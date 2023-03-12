@@ -172,9 +172,12 @@ impl MovePackage {
         let module = modules
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
+        let self_id = ObjectID::from(*module.address());
+        let storage_id = self_id;
         let type_origin_table = build_initial_type_origin_table(&modules);
         Self::from_module_iter_with_type_origin_table(
-            ObjectID::from(*module.address()),
+            storage_id,
+            self_id,
             version,
             modules,
             max_move_package_size,
@@ -187,17 +190,22 @@ impl MovePackage {
     /// tables.
     pub fn new_upgraded<'p>(
         &self,
-        id: ObjectID,
+        storage_id: ObjectID,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
+        let module = modules
+            .first()
+            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
+        let self_id = ObjectID::from(*module.address());
         let type_origin_table = build_upgraded_type_origin_table(self, &modules);
         let mut new_version = self.version();
         new_version.increment();
         // TODO: compute all upgraded metadata
         Self::from_module_iter_with_type_origin_table(
-            id,
+            storage_id,
+            self_id,
             new_version,
             modules,
             max_move_package_size,
@@ -207,24 +215,38 @@ impl MovePackage {
     }
 
     fn from_module_iter_with_type_origin_table<'p>(
-        id: ObjectID,
+        storage_id: ObjectID,
+        self_id: ObjectID,
         version: SequenceNumber,
         modules: impl IntoIterator<Item = CompiledModule>,
         max_move_package_size: u64,
         type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        let linkage_table = build_linkage_table(transitive_dependencies)?;
+        let mut module_map = BTreeMap::new();
+        let mut immediate_dependencies = BTreeSet::new();
+
+        for module in modules {
+            let name = module.name().to_string();
+
+            immediate_dependencies.extend(
+                module
+                    .immediate_dependencies()
+                    .into_iter()
+                    .map(|dep| ObjectID::from(*dep.address())),
+            );
+
+            let mut bytes = Vec::new();
+            module.serialize(&mut bytes).unwrap();
+            module_map.insert(name, bytes);
+        }
+
+        immediate_dependencies.remove(&self_id);
+        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
         Self::new(
-            id,
+            storage_id,
             version,
-            modules
-                .map(|module| {
-                    let mut bytes = Vec::new();
-                    module.serialize(&mut bytes).unwrap();
-                    (module.name().to_string(), bytes)
-                })
-                .collect(),
+            module_map,
             max_move_package_size,
             type_origin_table,
             linkage_table,
@@ -234,6 +256,7 @@ impl MovePackage {
     /// Return the size of the package in bytes. Only count the bytes of the modules themselves--the
     /// fact that we store them in a map is an implementation detail
     pub fn size(&self) -> usize {
+        // TODO: Add sizes of linkage and type origin tables
         self.module_map.values().map(|b| b.len()).sum()
     }
 
@@ -274,11 +297,7 @@ impl MovePackage {
     /// The ObjectID that this package's modules believe they are from, at runtime (can differ from
     /// `MovePackage::id()` in the case of package upgrades).
     pub fn original_package_id(&self) -> ObjectID {
-        let bytes = self
-            .module_map
-            .values()
-            .next()
-            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
+        let bytes = self.module_map.values().next().expect("Empty module map");
         let module = CompiledModule::deserialize(bytes)
             .expect("A Move package contains a module that cannot be deserialized");
         (*module.address()).into()
@@ -416,39 +435,51 @@ where
     normalized_modules
 }
 
-/// Collect the immediate package dependencies required by `modules`, all assumed to be from the
-/// same package (which is not included in the output).
-fn immediate_dependencies<'m>(
-    modules: impl IntoIterator<Item = &'m CompiledModule>,
-) -> BTreeSet<ObjectID> {
-    let mut modules = modules.into_iter().peekable();
-    let Some(module) = modules.peek() else {
-        return BTreeSet::default();
-    };
-
-    let self_id: ObjectID = (*module.address()).into();
-    let mut direct_deps: BTreeSet<_> = modules
-        .flat_map(|m| m.immediate_dependencies())
-        .map(|dep| (*dep.address()).into())
-        .collect();
-
-    direct_deps.remove(&self_id);
-    direct_deps
-}
-
 fn build_linkage_table<'p>(
+    mut immediate_dependencies: BTreeSet<ObjectID>,
     transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
 ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
-    let linkage_table = BTreeMap::from_iter(transitive_dependencies.into_iter().map(|dep| {
-        (
-            dep.original_package_id(),
+    let mut linkage_table = BTreeMap::new();
+    let mut dep_linkage_tables = vec![];
+
+    for transitive_dep in transitive_dependencies.into_iter() {
+        let original_id = transitive_dep.original_package_id();
+
+        if immediate_dependencies.remove(&original_id) {
+            // Found an immediate dependency, mark it as seen, and stash a reference to its linkage
+            // table to check later.
+            dep_linkage_tables.push(&transitive_dep.linkage_table);
+        }
+
+        linkage_table.insert(
+            original_id,
             UpgradeInfo {
-                upgraded_id: dep.id,
-                upgraded_version: dep.version,
+                upgraded_id: transitive_dep.id,
+                upgraded_version: transitive_dep.version,
             },
-        )
-    }));
-    // TODO: verification
+        );
+    }
+    // (1) Every dependency is represented in the transitive dependencies
+    if !immediate_dependencies.is_empty() {
+        // TODO ExecutionError
+        panic!("Dependency not found in linkage table");
+    }
+
+    // (2) Every dependency's linkage table is superseded by this linkage table
+    for dep_linkage_table in dep_linkage_tables {
+        for (original_id, dep_info) in dep_linkage_table {
+            let Some(our_info) = linkage_table.get(original_id) else {
+                // TODO ExecutionError
+                panic!("Transitive dependency not found in linkage table");
+            };
+
+            if our_info.upgraded_version < dep_info.upgraded_version {
+                // TODO ExecutionError
+                panic!("Downgrade in linkage table");
+            }
+        }
+    }
+
     Ok(linkage_table)
 }
 
