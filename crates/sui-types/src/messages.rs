@@ -892,9 +892,9 @@ impl Display for Command {
             }
             Command::Publish(_bytes) => write!(f, "Publish(_)"),
             Command::Upgrade(_bytes, deps, ticket) => {
-                write!(f, "Upgrade({ticket},")?;
+                write!(f, "Upgrade(_,")?;
                 write_sep(f, deps, ",")?;
-                write!(f, ", _")?;
+                write!(f, ", {ticket}")?;
                 write!(f, ")")
             }
         }
