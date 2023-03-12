@@ -1,66 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    normalizeSuiAddress,
-    toSerializedSignature,
-    type SerializedSignature,
-    type Keypair,
-    type SuiAddress,
-} from '@mysten/sui.js';
+import { type SuiAddress } from '@mysten/sui.js';
 
-export type AccountType = 'derived' | 'imported';
-export type AccountSerialized = {
+import {
+    type DerivedAccount,
+    type SerializedDerivedAccount,
+} from './DerivedAccount';
+import {
+    type ImportedAccount,
+    type SerializedImportedAccount,
+} from './ImportedAccount';
+import {
+    type LedgerAccount,
+    type SerializedLedgerAccount,
+} from './LedgerAccount';
+
+export enum AccountType {
+    IMPORTED = 'imported',
+    DERIVED = 'derived',
+    LEDGER = 'ledger',
+}
+
+export type SerializedAccount =
+    | SerializedImportedAccount
+    | SerializedDerivedAccount
+    | SerializedLedgerAccount;
+
+export interface Account {
     type: AccountType;
     address: SuiAddress;
-    derivationPath: string | null;
-};
+    toJSON(): SerializedAccount;
+}
 
-export class Account {
-    #keypair: Keypair;
-    public readonly type: AccountType;
-    public readonly derivationPath: string | null;
-    public readonly address: SuiAddress;
+export function isImportedOrDerivedAccount(
+    account: Account
+): account is ImportedAccount | DerivedAccount {
+    return isImportedAccount(account) || isDerivedAccount(account);
+}
 
-    constructor(
-        options:
-            | { type: 'derived'; derivationPath: string; keypair: Keypair }
-            | { type: 'imported'; keypair: Keypair }
-    ) {
-        this.type = options.type;
-        this.derivationPath =
-            options.type === 'derived' ? options.derivationPath : null;
-        this.#keypair = options.keypair;
-        this.address = normalizeSuiAddress(
-            this.#keypair.getPublicKey().toSuiAddress()
-        );
-    }
+export function isImportedAccount(
+    account: Account
+): account is ImportedAccount {
+    return account.type === AccountType.IMPORTED;
+}
 
-    exportKeypair() {
-        return this.#keypair.export();
-    }
+export function isDerivedAccount(account: Account): account is DerivedAccount {
+    return account.type === AccountType.DERIVED;
+}
 
-    async sign(data: Uint8Array): Promise<SerializedSignature> {
-        const pubkey = this.#keypair.getPublicKey();
-        // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
-        const signature = this.#keypair.signData(data, false);
-        const signatureScheme = this.#keypair.getKeyScheme();
-        return toSerializedSignature({
-            signature,
-            signatureScheme,
-            pubKey: pubkey,
-        });
-    }
-
-    toJSON(): AccountSerialized {
-        return {
-            type: this.type,
-            address: this.address,
-            derivationPath: this.derivationPath,
-        };
-    }
-
-    get publicKey() {
-        return this.#keypair.getPublicKey();
-    }
+export function isLedgerAccount(account: Account): account is LedgerAccount {
+    return account.type === AccountType.LEDGER;
 }
