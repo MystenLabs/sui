@@ -6,12 +6,7 @@ import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
-import {
-    type Account,
-    isDerivedAccount,
-    isImportedAccount,
-    isImportedOrDerivedAccount,
-} from './Account';
+import { type Account, isImportedOrDerivedAccount } from './Account';
 import { DerivedAccount } from './DerivedAccount';
 import { ImportedAccount } from './ImportedAccount';
 import { VaultStorage } from './VaultStorage';
@@ -160,16 +155,10 @@ export class Keyring {
         }
         if (await VaultStorage.verifyPassword(password)) {
             const account = this.#accountsMap.get(address);
-            if (!account) {
+            if (!account || !isImportedOrDerivedAccount(account)) {
                 return null;
             }
-
-            const isImportedOrDerived =
-                isImportedAccount(account) || isDerivedAccount(account);
-
-            return isImportedOrDerived
-                ? account.accountKeypair.exportKeypair()
-                : null;
+            return account.accountKeypair.exportKeypair();
         } else {
             throw new Error('Wrong password');
         }
@@ -276,7 +265,7 @@ export class Keyring {
                     );
                 }
 
-                if (isImportedAccount(account) || isDerivedAccount(account)) {
+                if (isImportedOrDerivedAccount(account)) {
                     const signature = await account.accountKeypair.sign(
                         fromB64(data)
                     );
