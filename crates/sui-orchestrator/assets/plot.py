@@ -18,10 +18,12 @@ from itertools import cycle
 
 def aggregate_tps(measurement, i=-1):
     tps = []
+    max_duration = 0
     for data in measurement['scrapers'].values():
         count = float(data[i]['count'])
         duration = float(data[i]['timestamp']['secs'])
-        tps += [(count / duration) if duration != 0 else 0]
+        max_duration = max(duration, max_duration)
+        tps += [(count / max_duration) if max_duration != 0 else 0]
     return sum(tps)
 
 

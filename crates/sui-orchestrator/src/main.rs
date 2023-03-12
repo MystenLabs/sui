@@ -160,7 +160,7 @@ pub enum Load {
     Fixed {
         /// A list of fixed load (tx/s).
         #[clap(
-            index(0),
+            long,
             value_name = "INT",
             multiple_occurrences = false,
             multiple_values = true,

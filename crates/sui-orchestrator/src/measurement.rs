@@ -106,8 +106,11 @@ impl Measurement {
     }
 
     /// Compute the tps.
-    pub fn tps(&self) -> u64 {
-        let tps = self.count.checked_div(self.timestamp.as_secs() as usize);
+    /// NOTE: Do not use `self.timestamp` as benchmark duration because some clients may
+    /// be unable to submit transactions passed the first few seconds of the benchmark. This
+    /// may happen as a result of a bad control system withing the nodes.
+    pub fn tps(&self, duration: &Duration) -> u64 {
+        let tps = self.count.checked_div(duration.as_secs() as usize);
         tps.unwrap_or_default() as u64
     }
 
@@ -211,10 +214,17 @@ impl MeasurementsCollection {
 
     /// Aggregate the tps of multiple data points by taking the sum.
     pub fn aggregate_tps(&self) -> u64 {
+        let duration = self
+            .scrapers
+            .values()
+            .filter_map(|x| x.last())
+            .map(|x| x.timestamp)
+            .max()
+            .unwrap_or_default();
         self.scrapers
             .values()
             .filter_map(|x| x.last())
-            .map(|x| x.tps())
+            .map(|x| x.tps(&duration))
             .sum()
     }
 
