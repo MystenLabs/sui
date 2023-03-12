@@ -182,6 +182,7 @@ sui client objects
 ```
 
 The response resembles the following:
+
 ```
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
