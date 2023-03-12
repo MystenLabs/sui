@@ -1040,10 +1040,7 @@ pub async fn build_server(
         ))?;
     }
 
-    server.register_module(EventReadApi::new(
-        state.clone(),
-        state.event_handler.clone(),
-    ))?;
+    server.register_module(EventReadApi::new(state.clone()))?;
 
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
 

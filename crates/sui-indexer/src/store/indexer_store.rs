@@ -22,6 +22,8 @@ use sui_types::query::EventQuery;
 
 #[async_trait]
 pub trait IndexerStore {
+    type ModuleCache;
+
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError>;
 
@@ -118,6 +120,8 @@ pub trait IndexerStore {
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<usize, IndexerError>;
 
     fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError>;
+
+    fn module_cache(&self) -> &Self::ModuleCache;
 }
 
 pub struct CheckpointData {

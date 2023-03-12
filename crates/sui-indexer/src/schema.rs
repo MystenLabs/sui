@@ -66,7 +66,7 @@ diesel::table! {
         module -> Text,
         event_type -> Text,
         event_time_ms -> Nullable<Int8>,
-        move_struct_bcs -> Text,
+        parsed_json -> Jsonb,
         event_bcs -> Bytea,
     }
 }

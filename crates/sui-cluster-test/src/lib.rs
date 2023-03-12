@@ -139,6 +139,7 @@ impl TestContext {
                     .verify()
                     .unwrap(),
                 SuiTransactionResponseOptions::new()
+                    .with_balance_changes()
                     .with_effects()
                     .with_events(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),

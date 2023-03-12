@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::committee::EpochId;
 use crate::object::{MoveObject, Owner};
-use crate::storage::{SingleTxContext, WriteKind};
+use crate::storage::WriteKind;
 use crate::temporary_store::TemporaryStore;
 use crate::{
     balance::{Balance, Supply},
@@ -171,7 +171,6 @@ impl TreasuryCap {
 }
 
 pub fn transfer_coin<S>(
-    ctx: &SingleTxContext,
     temporary_store: &mut TemporaryStore<S>,
     coin: &Coin,
     recipient: SuiAddress,
@@ -183,7 +182,7 @@ pub fn transfer_coin<S>(
         Owner::AddressOwner(recipient),
         previous_transaction,
     );
-    temporary_store.write_object(ctx, new_coin, WriteKind::Create);
+    temporary_store.write_object(new_coin, WriteKind::Create);
 }
 
 // Rust version of the Move sui::coin::CoinMetadata type

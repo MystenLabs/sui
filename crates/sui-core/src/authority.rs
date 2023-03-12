@@ -16,7 +16,6 @@ use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
-use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
@@ -46,8 +45,7 @@ use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, SuiEvent, SuiEventEnvelope, SuiMoveValue,
-    SuiTransactionEvents,
+    DevInspectResults, DryRunTransactionResponse, SuiEvent, SuiMoveValue, SuiTransactionEvents,
 };
 use sui_macros::{fail_point, nondeterministic};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -104,12 +102,11 @@ use crate::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::event_handler::EventHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::{
-    event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
-};
+use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -1073,10 +1070,13 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
             );
+        let tx_digest = *effects.transaction_digest();
         Ok(DryRunTransactionResponse {
             effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
                 inner_temp_store.events,
+                tx_digest,
+                None,
                 epoch_store.module_cache().as_ref(),
             )?,
         })
@@ -1403,7 +1403,6 @@ impl AuthorityState {
 
         let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();
-
         // Index tx
         if let Some(indexes) = &self.indexes {
             let res = self
@@ -1420,14 +1419,16 @@ impl AuthorityState {
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
 
             // Emit events
-            if let Ok(seq) = res {
+            if res.is_ok() {
                 self.event_handler
                     .process_events(
-                        effects,
-                        events,
-                        timestamp_ms,
-                        seq,
-                        epoch_store.module_cache().as_ref(),
+                        &effects.clone().try_into()?,
+                        &SuiTransactionEvents::try_from(
+                            events.clone(),
+                            *tx_digest,
+                            Some(timestamp_ms),
+                            epoch_store.module_cache(),
+                        )?,
                     )
                     .await
                     .tap_ok(|_| {
@@ -1447,7 +1448,6 @@ impl AuthorityState {
                     .inc_by(events.data.len() as u64);
             }
         };
-
         Ok(())
     }
 
@@ -2439,7 +2439,7 @@ impl AuthorityState {
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
-    ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
+    ) -> Result<Vec<SuiEvent>, anyhow::Error> {
         let index_store = self.get_indexes()?;
 
         //Get the tx_num from tx_digest
@@ -2463,10 +2463,7 @@ impl AuthorityState {
                 index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }
             EventQuery::MoveModule { package, module } => {
-                let module_id = ModuleId::new(
-                    AccountAddress::from(package),
-                    Identifier::from_str(&module)?,
-                );
+                let module_id = ModuleId::new(package.into(), Identifier::from_str(&module)?);
                 index_store.events_by_module_id(&module_id, tx_num, event_num, limit, descending)?
             }
             EventQuery::MoveEvent(struct_name) => {
@@ -2482,20 +2479,11 @@ impl AuthorityState {
             EventQuery::Sender(sender) => {
                 index_store.events_by_sender(&sender, tx_num, event_num, limit, descending)?
             }
-            EventQuery::Recipient(recipient) => {
-                index_store.events_by_recipient(&recipient, tx_num, event_num, limit, descending)?
-            }
-            EventQuery::Object(object) => {
-                index_store.events_by_object(&object, tx_num, event_num, limit, descending)?
-            }
             EventQuery::TimeRange {
                 start_time,
                 end_time,
             } => index_store
                 .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
-            EventQuery::EventType(event_type) => {
-                index_store.events_by_type(&event_type, tx_num, event_num, limit, descending)?
-            }
         };
 
         // skip one event if exclusive cursor is provided,
@@ -2524,24 +2512,13 @@ impl AuthorityState {
 
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events {
-            let id = EventID {
+            events.push(SuiEvent::try_from(
+                e,
                 tx_digest,
-                event_seq: event_seq as i64,
-            };
-            events.push((
-                id.clone(),
-                SuiEventEnvelope {
-                    timestamp,
-                    tx_digest,
-                    id,
-                    // threading the epoch_store through this API does not
-                    // seem possible, so we just read it from the state (self) and fetch
-                    // the module cache out of it.
-                    // Notice that no matter what module cache we get things
-                    // should work
-                    event: SuiEvent::try_from(e, &**self.epoch_store.load().module_cache())?,
-                },
-            ))
+                event_seq as u64,
+                Some(timestamp),
+                &**self.epoch_store.load().module_cache(),
+            )?)
         }
         Ok(events)
     }
