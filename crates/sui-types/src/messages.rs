@@ -542,7 +542,7 @@ pub enum Command {
     /// the type tag must be specified.
     MakeMoveVec(Option<TypeTag>, Vec<Argument>),
     /// Upgrades a Move package
-    Upgrade(Argument, Vec<ObjectID>, Vec<Vec<u8>>),
+    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, Argument),
 }
 
 /// An argument to a programmable transaction command
@@ -633,7 +633,7 @@ impl Command {
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
-            Command::Upgrade(_, _, modules) | Command::Publish(modules) => {
+            Command::Upgrade(modules, _, _) | Command::Publish(modules) => {
                 Self::publish_command_input_objects(modules)
             }
             Command::MoveCall(c) => c.input_objects(),
@@ -729,7 +729,7 @@ impl Command {
                 );
             }
             Command::SplitCoin(_, _) => (),
-            Command::Upgrade(_, _, modules) => {
+            Command::Upgrade(modules, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -891,7 +891,7 @@ impl Display for Command {
                 write!(f, ")")
             }
             Command::Publish(_bytes) => write!(f, "Publish(_)"),
-            Command::Upgrade(ticket, deps, _bytes) => {
+            Command::Upgrade(_bytes, deps, ticket) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
                 write!(f, ", _")?;
