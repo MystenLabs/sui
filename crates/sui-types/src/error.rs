@@ -423,11 +423,11 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
-    #[error("Failed to get the system state object content")]
-    SuiSystemStateNotFound,
+    #[error("Failed to read dynamic field from table in the object store: {0}")]
+    DynamicFieldReadError(String),
 
-    #[error("Found the sui system state object but it has an unexpected version")]
-    SuiSystemStateUnexpectedVersion,
+    #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
+    SuiSystemStateReadError(String),
 
     #[error("Message version is not supported at the current protocol version: {error}")]
     WrongMessageVersion { error: String },

@@ -17,10 +17,12 @@ use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
+use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::governance::StakedSui;
-use sui_types::sui_system_state::sui_system_state_inner_v1::{PoolTokenExchangeRate, ValidatorV1};
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::id::ID;
+use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
@@ -117,21 +119,18 @@ impl GovernanceReadApi {
         });
 
         if let Some(active_rate) = active_rate {
-            return Ok(active_rate);
+            Ok(active_rate)
         } else {
             // try find from inactive pool
-            let inactive_validators = system_state.inactive_pools_id;
-            let inactive_validators = self
-                .state
-                .read_table_value::<ObjectID, ValidatorV1>(inactive_validators, pool_id)
-                .await;
-            if let Some(inactive_validators) = inactive_validators {
-                return Ok(inactive_validators.staking_pool.exchange_rates.id);
-            }
+            let validator = get_validator_from_table(
+                system_state.system_state_version,
+                self.state.db().as_ref(),
+                system_state.inactive_pools_id,
+                &ID { bytes: *pool_id },
+            )?;
+
+            Ok(validator.exchange_rates_id)
         }
-        Err(Error::UnexpectedError(format!(
-            "Cannot find exchange rate table for pool [{pool_id}]."
-        )))
     }
 
     async fn get_exchange_rate(
@@ -139,14 +138,9 @@ impl GovernanceReadApi {
         table: ObjectID,
         epoch: EpochId,
     ) -> Result<PoolTokenExchangeRate, Error> {
-        self.state
-            .read_table_value(table, &epoch)
-            .await
-            .ok_or_else(|| {
-                Error::UnexpectedError(format!(
-                    "Cannot find exchange rate for epoch [{epoch}], from rate table object [{table}]."
-                ))
-            })
+        let exchange_rate: PoolTokenExchangeRate =
+            get_dynamic_field_from_store(self.state.db().as_ref(), table, &epoch)?;
+        Ok(exchange_rate)
     }
 }
 

@@ -17,12 +17,14 @@ use sui_node::SuiNodeHandle;
 use sui_types::crypto::ToFromBytes;
 use sui_types::crypto::{generate_proof_of_possession, get_account_key_pair};
 use sui_types::gas::GasCostSummary;
+use sui_types::id::ID;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
     VerifiedTransaction,
 };
 use sui_types::object::{generate_test_gas_objects_with_owner, Object};
+use sui_types::sui_system_state::{get_validator_from_table, SuiSystemStateTrait};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -313,6 +315,79 @@ async fn test_validator_resign_effects() {
     // Ensure that we are able to form a new effects cert in the new epoch.
     assert_eq!(effects1.epoch(), 1);
     assert_eq!(effects0.into_message(), effects1.into_message());
+}
+
+#[sim_test]
+async fn test_inactive_validator_pool_read() {
+    let init_configs = test_and_configure_authority_configs(5);
+    let leaving_validator = &init_configs.validator_configs()[0];
+    let address = leaving_validator.sui_address();
+
+    let gas_objects = generate_test_gas_objects_with_owner(1, address);
+    let stake = Object::new_gas_with_balance_and_owner_for_testing(25_000_000_000_000_000, address);
+    let mut genesis_objects = vec![stake.clone()];
+    genesis_objects.extend(gas_objects.clone());
+
+    let authorities =
+        spawn_test_authorities(genesis_objects.clone().into_iter(), &init_configs).await;
+
+    let staking_pool_id = authorities[0].with(|node| {
+        node.state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .active_validators
+            .iter()
+            .find(|v| v.sui_address == address)
+            .unwrap()
+            .staking_pool_id
+    });
+
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        address,
+        SUI_FRAMEWORK_OBJECT_ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_remove_validator").to_owned(),
+        vec![],
+        gas_objects[0].compute_object_reference(),
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_SYSTEM_STATE_OBJECT_ID,
+            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            mutable: true,
+        })],
+        10000,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(tx_data, leaving_validator.account_key_pair());
+    let effects = execute_transaction(&authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    trigger_reconfiguration(&authorities).await;
+
+    // Check that the validator that just left now shows up in the inactive_validators,
+    // and we can still deserialize it and get the inactive staking pool.
+    authorities[0].with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap();
+        let version = system_state.version();
+        let inactive_pool_id = system_state
+            .into_sui_system_state_summary()
+            .inactive_pools_id;
+        let validator = get_validator_from_table(
+            version,
+            node.state().db().as_ref(),
+            inactive_pool_id,
+            &ID {
+                bytes: staking_pool_id,
+            },
+        )
+        .unwrap();
+        assert_eq!(validator.sui_address, address);
+    })
 }
 
 #[sim_test]
