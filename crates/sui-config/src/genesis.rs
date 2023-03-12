@@ -1119,7 +1119,9 @@ mod test {
         let genesis = network_config.genesis;
 
         let s = serde_yaml::to_string(&genesis).unwrap();
-        let from_s = serde_yaml::from_str(&s).unwrap();
+        let from_s: Genesis = serde_yaml::from_str(&s).unwrap();
+        // cache the digest so that the comparison succeeds.
+        from_s.checkpoint_contents.digest();
         assert_eq!(genesis, from_s);
     }
 

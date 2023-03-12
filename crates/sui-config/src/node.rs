@@ -648,11 +648,21 @@ mod tests {
 
         let mut s = serde_yaml::to_string(&g).unwrap();
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        loaded_genesis
+            .genesis()
+            .unwrap()
+            .checkpoint_contents()
+            .digest(); // cache digest before comparing.
         assert_eq!(g, loaded_genesis);
 
         // If both in-place and file location are provided, prefer the in-place variant
         s.push_str("\ngenesis-file-location: path/to/file");
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        loaded_genesis
+            .genesis()
+            .unwrap()
+            .checkpoint_contents()
+            .digest(); // cache digest before comparing.
         assert_eq!(g, loaded_genesis);
     }
 
@@ -667,6 +677,7 @@ mod tests {
         genesis.save(file.path()).unwrap();
 
         let loaded_genesis = genesis_config.genesis().unwrap();
+        loaded_genesis.checkpoint_contents().digest(); // cache digest before comparing.
         assert_eq!(&genesis, loaded_genesis);
     }
 
