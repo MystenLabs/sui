@@ -15,7 +15,6 @@ import {
   Connection,
   Coin,
   Transaction,
-  Commands,
   RawSigner,
   FaucetResponse,
   assert,
@@ -114,15 +113,13 @@ export async function publishPackage(
   );
   const tx = new Transaction();
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
-  const cap = tx.add(
-    Commands.Publish(compiledModules.map((m: any) => Array.from(fromB64(m)))),
+  const cap = tx.publish(
+    compiledModules.map((m: any) => Array.from(fromB64(m))),
   );
-  tx.add(
-    Commands.MoveCall({
-      target: '0x2::package::make_immutable',
-      arguments: [cap],
-    }),
-  );
+  tx.moveCall({
+    target: '0x2::package::make_immutable',
+    arguments: [cap],
+  });
 
   const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx, {
     showEffects: true,

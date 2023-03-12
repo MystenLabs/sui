@@ -3,7 +3,6 @@
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import {
-  Commands,
   getExecutionStatusType,
   getObjectId,
   getSharedObjectInitialVersion,
@@ -45,41 +44,33 @@ describe('Transaction Builders', () => {
   it('SplitCoin + TransferObjects', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const tx = new Transaction();
-    const coin = tx.add(
-      Commands.SplitCoin(
-        tx.object(coins[0].objectId),
-        tx.pure(DEFAULT_GAS_BUDGET * 2),
-      ),
+    const coin = tx.splitCoin(
+      tx.object(coins[0].objectId),
+      tx.pure(DEFAULT_GAS_BUDGET * 2),
     );
-    tx.add(Commands.TransferObjects([coin], tx.pure(toolbox.address())));
+    tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('MergeCoins', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const tx = new Transaction();
-    tx.add(
-      Commands.MergeCoins(tx.object(coins[0].objectId), [
-        tx.object(coins[1].objectId),
-      ]),
-    );
+    tx.mergeCoins(tx.object(coins[0].objectId), [tx.object(coins[1].objectId)]);
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('MoveCall', async () => {
     const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        target: '0x2::devnet_nft::mint',
-        arguments: [
-          tx.pure('Example NFT'),
-          tx.pure('An NFT created by the wallet Command Line Tool'),
-          tx.pure(
-            'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-          ),
-        ],
-      }),
-    );
+    tx.moveCall({
+      target: '0x2::devnet_nft::mint',
+      arguments: [
+        tx.pure('Example NFT'),
+        tx.pure('An NFT created by the wallet Command Line Tool'),
+        tx.pure(
+          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+        ),
+      ],
+    });
     await validateTransaction(toolbox.signer, tx);
   });
 
@@ -90,59 +81,51 @@ describe('Transaction Builders', () => {
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        target: '0x2::sui_system::request_add_stake',
-        arguments: [
-          tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
-          tx.object(coins[2].objectId),
-          tx.pure(validatorAddress),
-        ],
-      }),
-    );
+    tx.moveCall({
+      target: '0x2::sui_system::request_add_stake',
+      arguments: [
+        tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+        tx.object(coins[2].objectId),
+        tx.pure(validatorAddress),
+      ],
+    });
 
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('SplitCoin from gas object + TransferObjects', async () => {
     const tx = new Transaction();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(1)));
-    tx.add(Commands.TransferObjects([coin], tx.pure(DEFAULT_RECIPIENT)));
+    const coin = tx.splitCoin(tx.gas, tx.pure(1));
+    tx.transferObjects([coin], tx.pure(DEFAULT_RECIPIENT));
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObjects gas object', async () => {
     const tx = new Transaction();
-    tx.add(Commands.TransferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT)));
+    tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObject', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const tx = new Transaction();
-    tx.add(
-      Commands.TransferObjects(
-        [tx.object(coins[0].objectId)],
-        tx.pure(DEFAULT_RECIPIENT),
-      ),
+    tx.transferObjects(
+      [tx.object(coins[0].objectId)],
+      tx.pure(DEFAULT_RECIPIENT),
     );
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
     const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::value`,
-        arguments: [tx.object(sharedObjectId)],
-      }),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::set_value`,
-        arguments: [tx.object(sharedObjectId)],
-      }),
-    );
+    tx.moveCall({
+      target: `${packageId}::serializer_tests::value`,
+      arguments: [tx.object(sharedObjectId)],
+    });
+    tx.moveCall({
+      target: `${packageId}::serializer_tests::set_value`,
+      arguments: [tx.object(sharedObjectId)],
+    });
     await validateTransaction(toolbox.signer, tx);
   });
 });
