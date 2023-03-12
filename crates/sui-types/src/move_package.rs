@@ -169,8 +169,12 @@ impl MovePackage {
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
+        let module = modules
+            .first()
+            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
         let type_origin_table = build_initial_type_origin_table(&modules);
         Self::from_module_iter_with_type_origin_table(
+            ObjectID::from(*module.address()),
             version,
             modules,
             max_move_package_size,
@@ -183,6 +187,7 @@ impl MovePackage {
     /// tables.
     pub fn new_upgraded<'p>(
         &self,
+        id: ObjectID,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
@@ -192,6 +197,7 @@ impl MovePackage {
         new_version.increment();
         // TODO: compute all upgraded metadata
         Self::from_module_iter_with_type_origin_table(
+            id,
             new_version,
             modules,
             max_move_package_size,
@@ -201,21 +207,13 @@ impl MovePackage {
     }
 
     fn from_module_iter_with_type_origin_table<'p>(
+        id: ObjectID,
         version: SequenceNumber,
         modules: impl IntoIterator<Item = CompiledModule>,
         max_move_package_size: u64,
         type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        let mut modules = modules.into_iter().peekable();
-        let id = ObjectID::from(
-            *modules
-                .peek()
-                .expect("Tried to build a Move package from an empty iterator of Compiled modules")
-                .self_id()
-                .address(),
-        );
-
         let linkage_table = build_linkage_table(transitive_dependencies)?;
         Self::new(
             id,
