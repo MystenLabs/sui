@@ -33,4 +33,21 @@ describe('Object Reading API', () => {
       ),
     );
   });
+
+  it('Get Objects', async () => {
+    const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
+    expect(gasObjects.length).to.greaterThan(0);
+    const gasObjectIds = gasObjects.map((gasObject) => gasObject['objectId']);
+    const objectInfos = await toolbox.provider.getObjectBatch(gasObjectIds, {
+      showType: true,
+    });
+
+    expect(gasObjects.length).to.equal(objectInfos.length);
+
+    objectInfos.forEach((objectInfo) =>
+      expect(getObjectType(objectInfo)).to.equal(
+        '0x2::coin::Coin<0x2::sui::SUI>',
+      ),
+    );
+  });
 });

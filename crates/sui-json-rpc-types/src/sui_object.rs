@@ -876,3 +876,12 @@ impl From<ObjectInfo> for SuiObjectInfo {
         }
     }
 }
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "GetPastObjectRequest", rename_all = "camelCase")]
+pub struct SuiGetPastObjectRequest {
+    /// the ID of the queried object
+    pub object_id: ObjectID,
+    /// the version of the queried object.
+    pub version: SequenceNumber,
+}

@@ -22,9 +22,9 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVer
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiEvent, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
+    SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_open_rpc::Module;
@@ -242,6 +242,43 @@ impl ReadApiServer for ReadApi {
                 asked_version,
                 latest_version,
             }),
+        }
+    }
+
+    async fn try_multi_get_past_objects(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiPastObjectResponse>> {
+        if past_objects.len() <= QUERY_MAX_RESULT_LIMIT {
+            let mut futures = vec![];
+            for past_object in past_objects {
+                futures.push(self.try_get_past_object(
+                    past_object.object_id,
+                    past_object.version,
+                    options.clone(),
+                ));
+            }
+            let results = join_all(futures).await;
+            let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+            let success = oks.into_iter().filter_map(Result::ok).collect();
+            let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
+            if !errors.is_empty() {
+                let error_string = errors
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join("; ");
+                Err(anyhow!("{error_string}").into())
+            } else {
+                Ok(success)
+            }
+        } else {
+            Err(anyhow!(UserInputError::SizeLimitExceeded {
+                limit: "input limit".to_string(),
+                value: QUERY_MAX_RESULT_LIMIT.to_string()
+            })
+            .into())
         }
     }
 

@@ -20,9 +20,9 @@ use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiCommand, SuiObjectData, SuiObjectDataOptions, SuiRawData,
-    SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    OwnedObjectRef, SuiCommand, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
+    SuiRawData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
@@ -170,19 +170,39 @@ where
                 },
             );
 
-        // TODO: Use multi get objects
         let rpc = self.rpc_client.clone();
-        let all_mutated_objects = join_all(all_mutated.into_iter().map(|(id, version, status)| {
-            rpc.read_api()
-                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::bcs_lossless())
-                .map(move |resp| (resp, status))
-        }))
-        .await
-        .into_iter()
-        .try_fold(vec![], |mut acc, (response, status)| {
-            acc.push((status, response?.into_object()?));
-            Ok::<_, Error>(acc)
-        })?;
+        let all_mutated_objects =
+            join_all(all_mutated.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
+                let wanted_past_object_statuses: Vec<ObjectStatus> =
+                    objects.iter().map(|(_, _, status)| *status).collect();
+
+                let wanted_past_object_request = objects
+                    .iter()
+                    .map(|(id, seq_num, _)| SuiGetPastObjectRequest {
+                        object_id: *id,
+                        version: *seq_num,
+                    })
+                    .collect();
+
+                rpc.read_api()
+                    .try_multi_get_parsed_past_object(
+                        wanted_past_object_request,
+                        SuiObjectDataOptions::bcs_lossless(),
+                    )
+                    .map(move |resp| (resp, wanted_past_object_statuses))
+            }))
+            .await
+            .into_iter()
+            .try_fold(vec![], |mut acc, chunk| {
+                let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
+                    let object_data = resp.into_object()?;
+                    acc.push(object_data);
+                    Ok::<Vec<SuiObjectData>, Error>(acc)
+                })?;
+                let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
+                acc.extend(mutated_object_chunk);
+                Ok::<_, Error>(acc)
+            })?;
 
         Ok(CheckpointData {
             checkpoint,
