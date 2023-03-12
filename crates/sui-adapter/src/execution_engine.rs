@@ -10,10 +10,10 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use crate::programmable_transactions;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
@@ -161,27 +161,45 @@ fn execute_transaction<
             protocol_config,
         );
 
-        let metered = !gas_status.is_unmetered();
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
-        let effects_size_limit = protocol_config.max_serialized_tx_effects_size_bytes();
-        if execution_result.is_err() || (effects_estimated_size >= effects_size_limit && metered) {
-            // Roll back the temporary store if execution failed.
+
+        // Check if a limit threshold was crossed.
+        // For metered transactions, there is not soft limit.
+        // For system transactions, we allow a soft limit with alerting, and a hard limit where we terminate
+        match check_limit_by_meter!(
+            !gas_status.is_unmetered(),
+            effects_estimated_size,
+            protocol_config.max_serialized_tx_effects_size_bytes(),
+            protocol_config.max_serialized_tx_effects_size_bytes_system_tx()
+        ) {
+            LimitThresholdCrossed::None => (),
+            LimitThresholdCrossed::Soft(_, limit) => {
+                /* TODO: add more alerting */
+                warn!(
+                    effects_estimated_size = effects_estimated_size,
+                    soft_limit = limit,
+                    "Estimated transaction effects size crossed soft limit",
+                )
+            }
+            LimitThresholdCrossed::Hard(_, lim) => {
+                execution_result = Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::EffectsTooLarge {
+                        current_size: effects_estimated_size as u64,
+                        max_size: lim as u64,
+                    },
+                    "Transaction effects are too large",
+                ))
+            }
+        };
+
+        if execution_result.is_err() {
+            // Roll back the temporary store if execution failed or effects too large.
             temporary_store.reset();
             // re-smash so temporary store is again aware of smashing
             gas_object_ref = match temporary_store.smash_gas(sender, gas) {
                 Ok(obj_ref) => obj_ref,
                 Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
             };
-
-            if effects_estimated_size >= effects_size_limit && metered {
-                execution_result = Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::EffectsTooLarge {
-                        current_size: effects_estimated_size,
-                        max_size: effects_size_limit,
-                    },
-                    "Transaction effects are too large",
-                ))
-            }
         }
         execution_result
     });

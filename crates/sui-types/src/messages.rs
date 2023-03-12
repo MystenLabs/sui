@@ -2402,10 +2402,7 @@ pub enum ExecutionFailureStatus {
         "Effects of size {current_size} bytes too large. \
     Limit is {max_size} bytes"
     )]
-    EffectsTooLarge {
-        current_size: usize,
-        max_size: usize,
-    },
+    EffectsTooLarge { current_size: u64, max_size: u64 },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
