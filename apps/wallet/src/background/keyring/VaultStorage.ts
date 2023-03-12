@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
+import { fromExportedKeypair, normalizeSuiAddress } from '@mysten/sui.js';
 import { randomBytes } from '@noble/hashes/utils';
 
 import {
@@ -146,12 +146,12 @@ class VaultStorageClass {
             throw new Error('Error, vault is locked. Unlock the vault first.');
         }
         const keypairToImport = fromExportedKeypair(keypair);
-        const importedAddress = keypairToImport.getPublicKey().toSuiAddress();
-        const isDuplicate = existingAccounts.some((anAccount) => {
-            const suiAddress =
-                anAccount.accountKeypair.publicKey.toSuiAddress();
-            return suiAddress === importedAddress;
-        });
+        const importedAddress = normalizeSuiAddress(
+            keypairToImport.getPublicKey().toSuiAddress()
+        );
+        const isDuplicate = existingAccounts.some(
+            (anAccount) => anAccount.address === importedAddress
+        );
         if (isDuplicate) {
             return null;
         }

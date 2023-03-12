@@ -17,10 +17,10 @@ export type SerializedDerivedAccount = {
 };
 
 export class DerivedAccount implements Account {
-    accountKeypair: AccountKeypair;
-    type: AccountType;
-    address: string;
-    derivationPath: string;
+    readonly accountKeypair: AccountKeypair;
+    readonly type: AccountType;
+    readonly address: SuiAddress;
+    readonly derivationPath: string;
 
     constructor({
         derivationPath,

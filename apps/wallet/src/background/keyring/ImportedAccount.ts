@@ -17,9 +17,9 @@ export type SerializedImportedAccount = {
 };
 
 export class ImportedAccount implements Account {
-    accountKeypair: AccountKeypair;
-    type: AccountType;
-    address: string;
+    readonly accountKeypair: AccountKeypair;
+    readonly type: AccountType;
+    readonly address: SuiAddress;
 
     constructor({ keypair }: { keypair: Keypair }) {
         this.type = AccountType.IMPORTED;

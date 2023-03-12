@@ -17,9 +17,9 @@ import {
 } from './LedgerAccount';
 
 export enum AccountType {
-    IMPORTED = 'imported',
-    DERIVED = 'derived',
-    LEDGER = 'ledger',
+    IMPORTED = 'IMPORTED',
+    DERIVED = 'DERIVED',
+    LEDGER = 'LEDGER',
 }
 
 export type SerializedAccount =
@@ -28,8 +28,8 @@ export type SerializedAccount =
     | SerializedLedgerAccount;
 
 export interface Account {
-    type: AccountType;
-    address: SuiAddress;
+    readonly type: AccountType;
+    readonly address: SuiAddress;
     toJSON(): SerializedAccount;
 }
 

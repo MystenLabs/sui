@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { normalizeSuiAddress, type SuiAddress } from '@mysten/sui.js';
 
 import { type Account, AccountType } from './Account';
 
@@ -12,9 +12,9 @@ export type SerializedLedgerAccount = {
 };
 
 export class LedgerAccount implements Account {
-    type: AccountType;
-    address: string;
-    derivationPath: string;
+    readonly type: AccountType;
+    readonly address: SuiAddress;
+    readonly derivationPath: string;
 
     constructor({
         address,
@@ -24,7 +24,7 @@ export class LedgerAccount implements Account {
         derivationPath: string;
     }) {
         this.type = AccountType.LEDGER;
-        this.address = address;
+        this.address = normalizeSuiAddress(address);
         this.derivationPath = derivationPath;
     }
 
