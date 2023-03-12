@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LedgerAccountItem, type LedgerAccount } from './LedgerAccountItem';
+import { LedgerAccountRow } from './LedgerAccountRow';
+import { type SelectableLedgerAccount } from './useDeriveLedgerAccounts';
 
 type LedgerAccountListProps = {
-    accounts: LedgerAccount[];
-    onAccountClick: (account: LedgerAccount) => void;
+    accounts: SelectableLedgerAccount[];
+    onAccountClick: (account: SelectableLedgerAccount) => void;
 };
 
 export function LedgerAccountList({
@@ -22,7 +23,7 @@ export function LedgerAccountList({
                             onAccountClick(account);
                         }}
                     >
-                        <LedgerAccountItem
+                        <LedgerAccountRow
                             isSelected={account.isSelected}
                             address={account.address}
                         />
