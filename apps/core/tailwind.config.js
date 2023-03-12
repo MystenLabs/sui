@@ -100,6 +100,7 @@ module.exports = {
                 subtitleSmallExtra: ['10px', '1'],
                 caption: ['12px', '1'],
                 captionSmall: ['11px', '1'],
+                captionSmallExtra: ['10px', '1'],
                 iconTextLarge: ['48px', '1'],
 
                 // Heading sizes:

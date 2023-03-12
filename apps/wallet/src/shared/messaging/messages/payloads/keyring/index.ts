@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isBasePayload } from '_payloads';
+import { type SerializedAccount } from '_src/background/keyring/Account';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
 import type {
     ExportedKeypair,
@@ -9,7 +11,6 @@ import type {
     SuiAddress,
 } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
-import type { AccountSerialized } from '_src/background/keyring/Account';
 
 type MethodToPayloads = {
     create: {
@@ -29,7 +30,7 @@ type MethodToPayloads = {
         return: {
             isLocked: boolean;
             isInitialized: boolean;
-            accounts: AccountSerialized[];
+            accounts: SerializedAccount[];
             activeAddress: string | null;
         };
     };
@@ -60,6 +61,10 @@ type MethodToPayloads = {
     deriveNextAccount: {
         args: void;
         return: { accountAddress: SuiAddress };
+    };
+    importLedgerAccounts: {
+        args: { ledgerAccounts: SerializedLedgerAccount[] };
+        return: void;
     };
     verifyPassword: {
         args: { password: string };

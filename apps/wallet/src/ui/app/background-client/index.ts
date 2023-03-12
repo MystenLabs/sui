@@ -24,6 +24,7 @@ import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
 import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -273,6 +274,18 @@ export class BackgroundClient {
                     type: 'keyring',
                     method: 'switchAccount',
                     args: { address },
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    importLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'importLedgerAccounts'>>({
+                    type: 'keyring',
+                    method: 'importLedgerAccounts',
+                    args: { ledgerAccounts },
                 })
             ).pipe(take(1))
         );
