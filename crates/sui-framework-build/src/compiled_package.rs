@@ -586,3 +586,19 @@ pub fn check_invalid_dependencies(invalid: BTreeMap<Symbol, String>) -> Result<(
         error: error_messages.join("\n"),
     })
 }
+
+/// Resolve external package dependency addresses for a collection of modules
+/// (i.e., package) from module handle addresses.
+pub fn package_dependencies(modules: Vec<&CompiledModule>) -> Vec<ObjectID> {
+    let module_self_addresses: BTreeSet<_> = modules.iter().map(|m| m.self_id()).collect();
+    let mut dependent_packages = BTreeSet::new();
+    for module in modules {
+        for handle in &module.module_handles {
+            if !module_self_addresses.contains(&module.module_id_for_handle(handle)) {
+                let address = ObjectID::from(*module.address_identifier_at(handle.address));
+                dependent_packages.insert(address);
+            }
+        }
+    }
+    Vec::from_iter(dependent_packages)
+}

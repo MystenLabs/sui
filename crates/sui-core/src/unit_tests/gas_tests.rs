@@ -302,7 +302,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response.0.data().intent_message.value.kind() {
         TransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
-            Command::Publish(modules) => modules,
+            Command::Publish(modules, _dep_ids) => modules,
             _ => unreachable!(),
         },
         _ => unreachable!(),

@@ -303,6 +303,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiPublishArgs {
             sender,
             upgradeable,
+            dependencies: _,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -314,10 +315,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                let cap = builder.publish_upgradeable(vec![module_bytes], vec![]);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish(vec![module_bytes]);
+                builder.publish(vec![module_bytes], vec![]);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(

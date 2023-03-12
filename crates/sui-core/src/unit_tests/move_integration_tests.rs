@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use move_package::source_package::manifest_parser;
 use sui_framework_build::compiled_package::{
-    check_unpublished_dependencies, gather_dependencies, BuildConfig,
+    check_unpublished_dependencies, gather_dependencies, package_dependencies, BuildConfig,
 };
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
@@ -2247,7 +2247,15 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let all_module_bytes = build_test_package(test_dir, with_unpublished_deps);
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/");
+    path.push(test_dir);
+    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
+
+    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
+    let dependencies = package_dependencies(compiled_modules);
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -2256,6 +2264,7 @@ pub async fn build_and_try_publish_test_package(
         *sender,
         gas_object_ref,
         all_module_bytes,
+        dependencies,
         gas_budget,
     );
     let transaction = to_sender_signed_transaction(data, sender_key);

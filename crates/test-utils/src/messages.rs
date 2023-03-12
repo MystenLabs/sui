@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::test_utils::dummy_transaction_effects;
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{package_dependencies, BuildConfig};
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -288,13 +288,18 @@ pub fn create_publish_move_package_transaction(
     gas_price: Option<u64>,
 ) -> VerifiedTransaction {
     let build_config = BuildConfig::new_for_testing();
-    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes =
+        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+
+    let compiled_modules = compiled_package.get_modules().collect::<Vec<_>>();
+    let dependencies = package_dependencies(compiled_modules);
+
     let data = TransactionData::new_module(
         sender,
         gas_object_ref,
         all_module_bytes,
+        dependencies,
         MAX_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
@@ -326,6 +331,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
         sender,
         gas_object,
         all_module_bytes,
+        vec![],
         MAX_GAS,
     );
     to_sender_signed_transaction(data, &keypair)

@@ -2113,6 +2113,17 @@
           }
         },
         {
+          "name": "dependencies",
+          "description": "a list of transitive dependency addresses that this set of modules depends on.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
           "name": "gas",
           "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
           "schema": {
@@ -5482,14 +5493,27 @@
             "additionalProperties": false
           },
           {
-            "description": "Publishes a Move package",
+            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
             "type": "object",
             "required": [
               "Publish"
             ],
             "properties": {
               "Publish": {
-                "$ref": "#/components/schemas/MovePackage"
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
               }
             },
             "additionalProperties": false

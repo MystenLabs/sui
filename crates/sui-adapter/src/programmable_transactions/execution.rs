@@ -263,8 +263,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 /* is_init */ false,
             )?
         }
-        Command::Publish(modules) => {
-            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
+        Command::Publish(modules, dep_ids) => {
+            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules, dep_ids)?
         }
         Command::Upgrade(modules, dep_ids, upgrade_ticket) => {
             execute_move_upgrade::<_, _, Mode>(context, modules, dep_ids, upgrade_ticket)?
@@ -380,6 +380,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
+    _dep_ids: Vec<ObjectID>,
 ) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
