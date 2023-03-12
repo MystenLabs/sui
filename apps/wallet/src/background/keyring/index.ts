@@ -9,6 +9,7 @@ import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { type Account, isImportedOrDerivedAccount } from './Account';
 import { DerivedAccount } from './DerivedAccount';
 import { ImportedAccount } from './ImportedAccount';
+import { LedgerAccount, type SerializedLedgerAccount } from './LedgerAccount';
 import { VaultStorage } from './VaultStorage';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
@@ -29,6 +30,8 @@ import type { KeyringPayload } from '_payloads/keyring';
 /** The key for the extension's storage, that holds the index of the last derived account (zero based) */
 const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';
 const STORAGE_ACTIVE_ACCOUNT = 'active_account';
+
+const STORAGE_IMPORTED_LEDGER_ACCOUNTS = 'imported_ledger_accounts';
 
 type KeyringEvents = {
     lockedStatusUpdate: boolean;
@@ -122,6 +125,25 @@ export class Keyring {
         this.#accountsMap.set(account.address, account);
         this.notifyAccountsChanged();
         return account;
+    }
+
+    public async importLedgerAccounts(
+        ledgerAccounts: SerializedLedgerAccount[]
+    ) {
+        if (this.isLocked) {
+            return null;
+        }
+
+        await this.storeLedgerAccounts(ledgerAccounts);
+
+        for (const ledgerAccount of ledgerAccounts) {
+            const account = new LedgerAccount({
+                derivationPath: ledgerAccount.derivationPath,
+                address: ledgerAccount.address,
+            });
+            this.#accountsMap.set(ledgerAccount.address, account);
+        }
+        this.notifyAccountsChanged();
     }
 
     public getAccounts() {
@@ -313,6 +335,12 @@ export class Keyring {
                     )
                 );
             } else if (
+                isKeyringPayload(payload, 'importLedgerAccounts') &&
+                payload.args
+            ) {
+                await this.importLedgerAccounts(payload.args.ledgerAccounts);
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
                 isKeyringPayload(payload, 'verifyPassword') &&
                 payload.args
             ) {
@@ -417,6 +445,18 @@ export class Keyring {
                 this.#mainDerivedAccount = account.address;
             }
         }
+
+        const savedLedgerAccounts = await this.getSavedLedgerAccounts();
+        for (const savedLedgerAccount of savedLedgerAccounts) {
+            this.#accountsMap.set(
+                savedLedgerAccount.address,
+                new LedgerAccount({
+                    derivationPath: savedLedgerAccount.derivationPath,
+                    address: savedLedgerAccount.address,
+                })
+            );
+        }
+
         VaultStorage.getImportedKeys()?.forEach((anImportedKey) => {
             const account = new ImportedAccount({
                 keypair: anImportedKey,
@@ -450,6 +490,20 @@ export class Keyring {
 
     private storeActiveAccount(address: SuiAddress) {
         return setToLocalStorage(STORAGE_ACTIVE_ACCOUNT, address);
+    }
+
+    private async getSavedLedgerAccounts() {
+        const ledgerAccounts = await getFromLocalStorage<
+            SerializedLedgerAccount[]
+        >(STORAGE_IMPORTED_LEDGER_ACCOUNTS, []);
+        return ledgerAccounts || [];
+    }
+
+    private storeLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {
+        return setToLocalStorage(
+            STORAGE_IMPORTED_LEDGER_ACCOUNTS,
+            ledgerAccounts
+        );
     }
 
     private makeDerivationPath(index: number) {
