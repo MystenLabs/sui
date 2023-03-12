@@ -269,12 +269,14 @@ where
         Ok(self.get_transactions(query, cursor, limit, descending_order)?)
     }
 
-    async fn get_transactions_in_range(
+    async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> RpcResult<Vec<TransactionDigest>> {
-        self.fullnode.get_transactions_in_range(start, end).await
+        self.fullnode
+            .get_transactions_in_range_deprecated(start, end)
+            .await
     }
 
     async fn get_transaction_with_options(

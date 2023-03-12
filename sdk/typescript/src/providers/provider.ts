@@ -206,10 +206,9 @@ export abstract class Provider {
   // Transactions
   /**
    * Get transaction digests for a given range
-   *
-   * NOTE: this method may get deprecated after DevNet
+   * @deprecated this method will be removed before April 2023, please use `getTransactions` instead
    */
-  abstract getTransactionDigestsInRange(
+  abstract getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse>;
@@ -226,7 +225,6 @@ export abstract class Provider {
 
   /**
    * Get total number of transactions
-   * NOTE: this method may get deprecated after DevNet
    */
   abstract getTotalTransactionNumber(): Promise<number>;
 

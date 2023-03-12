@@ -471,8 +471,10 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
         tx_responses.push(response);
     }
-    // test get_transactions_in_range
-    let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(0, 10).await?;
+    // test get_transactions_in_range_deprecated
+    let tx: Vec<TransactionDigest> = http_client
+        .get_transactions_in_range_deprecated(0, 10)
+        .await?;
     assert_eq!(5, tx.len());
 
     // test get_transaction_batch
@@ -488,8 +490,10 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .any(|resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == r.digest)))
     }
 
-    // test get_transactions_in_range with smaller range
-    let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(1, 3).await?;
+    // test get_transactions_in_range_deprecated with smaller range
+    let tx: Vec<TransactionDigest> = http_client
+        .get_transactions_in_range_deprecated(1, 3)
+        .await?;
     assert_eq!(2, tx.len());
 
     // test get_transaction
