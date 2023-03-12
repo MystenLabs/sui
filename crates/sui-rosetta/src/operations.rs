@@ -4,21 +4,20 @@
 use anyhow::anyhow;
 use std::collections::HashMap;
 use std::vec;
-use sui_json_rpc_types::SuiArgument;
 use sui_json_rpc_types::SuiCommand;
 use sui_json_rpc_types::SuiProgrammableMoveCall;
 use sui_json_rpc_types::SuiProgrammableTransaction;
+use sui_json_rpc_types::{BalanceChange, BalanceChangeType, SuiArgument};
 use sui_sdk::json::SuiJsonValue;
 
 use serde::Deserialize;
 use serde::Serialize;
 use sui_sdk::rpc_types::{
-    SuiEvent, SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionKind, SuiTransactionResponse,
+    SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
+    SuiTransactionResponse,
 };
 
 use sui_types::base_types::{SequenceNumber, SuiAddress};
-use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::governance::ADD_STAKE_MUL_COIN_FUN_NAME;
 use sui_types::messages::TransactionData;
@@ -344,25 +343,27 @@ impl Operations {
             && tx.function == ADD_STAKE_MUL_COIN_FUN_NAME.as_str()
     }
 
-    fn get_balance_operation_from_events(
-        events: &[SuiEvent],
+    fn process_balance_change(
+        balance_changes: &[BalanceChange],
         status: Option<OperationStatus>,
         balances: HashMap<SuiAddress, i128>,
     ) -> impl Iterator<Item = Operation> {
-        let (balances, gas) = events
-            .iter()
-            .flat_map(Self::get_balance_change_from_event)
-            .fold(
-                (balances, HashMap::<SuiAddress, i128>::new()),
-                |(mut balances, mut gas), (type_, address, amount)| {
-                    if type_ == BalanceChangeType::Gas {
-                        *gas.entry(address).or_default() += amount;
-                    } else {
-                        *balances.entry(address).or_default() += amount;
+        let (balances, gas) = balance_changes.iter().fold(
+            (balances, HashMap::<SuiAddress, i128>::new()),
+            |(mut balances, mut gas), balance_change| {
+                // Rosetta only care about address owner
+                if let Owner::AddressOwner(owner) = balance_change.owner {
+                    if balance_change.coin_type == GAS::type_tag() {
+                        if balance_change.change_type == BalanceChangeType::Gas {
+                            *gas.entry(owner).or_default() += balance_change.amount;
+                        } else {
+                            *balances.entry(owner).or_default() += balance_change.amount;
+                        }
                     }
-                    (balances, gas)
-                },
-            );
+                }
+                (balances, gas)
+            },
+        );
 
         let balance_change = balances
             .into_iter()
@@ -373,25 +374,6 @@ impl Operations {
             .map(|(addr, amount)| Operation::gas(addr, amount));
 
         balance_change.chain(gas)
-    }
-
-    fn get_balance_change_from_event(
-        event: &SuiEvent,
-    ) -> Option<(BalanceChangeType, SuiAddress, i128)> {
-        if let SuiEvent::CoinBalanceChange {
-            owner: Owner::AddressOwner(owner),
-            coin_type,
-            amount,
-            change_type,
-            ..
-        } = event
-        {
-            // We only interested in SUI coins and account addresses
-            if coin_type == &GAS::type_().to_string() {
-                return Some((*change_type, *owner, *amount));
-            }
-        }
-        None
     }
 }
 
@@ -445,13 +427,10 @@ impl TryFrom<SuiTransactionResponse> for Operations {
             });
 
         // Extract coin change operations from events
-        let coin_change_operations = Self::get_balance_operation_from_events(
-            &response
-                .events
-                .ok_or_else(|| {
-                    Error::InternalError(anyhow!("Response events should not be empty"))
-                })?
-                .data,
+        let coin_change_operations = Self::process_balance_change(
+            &response.balance_changes.ok_or_else(|| {
+                Error::InternalError(anyhow!("Response balance changes should not be empty."))
+            })?,
             status,
             accounted_balances,
         );

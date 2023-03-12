@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
+use move_core_types::parser::parse_struct_tag;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
@@ -15,7 +16,7 @@ use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
+    Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
     SuiGasCostSummary, SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef,
     SuiObjectResponse, SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
@@ -444,6 +445,14 @@ impl RpcExampleProvider {
             id: EventID::from((*tx_digest, 0)),
             event: sui_event.clone(),
         }];
+        let object_change = ObjectChange::Transferred {
+            sender: signer,
+            recipient: Owner::AddressOwner(recipient),
+            object_type: parse_struct_tag("0x2::example::Object").unwrap(),
+            object_id: object_ref.0,
+            version: object_ref.1,
+            digest: ObjectDigest::new(self.rng.gen()),
+        };
         let result = SuiTransactionResponse {
             digest: *tx_digest,
             effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
@@ -481,6 +490,8 @@ impl RpcExampleProvider {
             events: Some(SuiTransactionEvents {
                 data: vec![sui_event],
             }),
+            object_changes: Some(vec![object_change]),
+            balance_changes: None,
             timestamp_ms: None,
             transaction: Some(SuiTransaction {
                 data: SuiTransactionData::try_from(data1).unwrap(),

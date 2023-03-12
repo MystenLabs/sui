@@ -31,6 +31,8 @@ use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 
+use crate::balance_changes::BalanceChange;
+use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 #[serde_as]
@@ -99,6 +101,10 @@ pub struct SuiTransactionResponseOptions {
     pub show_effects: bool,
     /// Whether to show transaction events. Default to be False
     pub show_events: bool,
+    /// Whether to show object_changes. Default to be False
+    pub show_object_changes: bool,
+    /// Whether to show balance_changes. Default to be False
+    pub show_balance_changes: bool,
 }
 
 impl SuiTransactionResponseOptions {
@@ -111,6 +117,8 @@ impl SuiTransactionResponseOptions {
             show_effects: true,
             show_input: true,
             show_events: true,
+            show_object_changes: true,
+            show_balance_changes: true,
         }
     }
 
@@ -141,12 +149,24 @@ impl SuiTransactionResponseOptions {
     }
 
     pub fn require_local_execution(&self) -> bool {
-        // TODO: change this if we add new options that require local execution
-        false
+        self.show_balance_changes || self.show_object_changes
     }
 
     pub fn require_effects(&self) -> bool {
-        self.show_effects || self.show_events
+        self.show_effects
+            || self.show_events
+            || self.show_balance_changes
+            || self.show_object_changes
+    }
+
+    pub fn with_balance_changes(mut self) -> Self {
+        self.show_balance_changes = true;
+        self
+    }
+
+    pub fn with_object_changes(mut self) -> Self {
+        self.show_object_changes = true;
+        self
     }
 }
 
@@ -161,6 +181,10 @@ pub struct SuiTransactionResponse {
     pub effects: Option<SuiTransactionEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<SuiTransactionEvents>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_changes: Option<Vec<ObjectChange>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance_changes: Option<Vec<BalanceChange>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

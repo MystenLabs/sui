@@ -9366,6 +9366,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "eyre",
  "fastcrypto",
  "futures",
  "hyper",

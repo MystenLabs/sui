@@ -12,9 +12,10 @@ use std::str::FromStr;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::ObjectChange;
 
 use sui_json_rpc_types::{
-    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes,
 };
@@ -294,12 +295,11 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let events = tx_response.events.as_ref().unwrap();
-    let package_id = events
-        .data
+    let object_changes = tx_response.object_changes.unwrap();
+    let package_id = object_changes
         .iter()
         .find_map(|e| {
-            if let SuiEvent::Publish { package_id, .. } = e {
+            if let ObjectChange::Published { package_id, .. } = e {
                 Some(package_id)
             } else {
                 None
@@ -352,12 +352,11 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let events = tx_response.events.as_ref().unwrap();
-    let package_id = events
-        .data
+    let object_changes = tx_response.object_changes.as_ref().unwrap();
+    let package_id = object_changes
         .iter()
         .find_map(|e| {
-            if let SuiEvent::Publish { package_id, .. } = e {
+            if let ObjectChange::Published { package_id, .. } = e {
                 Some(package_id)
             } else {
                 None
@@ -371,19 +370,17 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     assert_eq!(0, result.value);
 
-    let treasury_cap = events
-        .data
+    let object_changes = tx_response.object_changes.as_ref().unwrap();
+    let treasury_cap = object_changes
         .iter()
         .find_map(|e| {
-            if let SuiEvent::NewObject {
+            if let ObjectChange::Created {
                 object_id,
                 object_type,
                 ..
             } = e
             {
-                if TreasuryCap::type_(parse_sui_struct_tag(&coin_name).unwrap())
-                    == parse_sui_struct_tag(object_type).unwrap()
-                {
+                if &TreasuryCap::type_(parse_sui_struct_tag(&coin_name).unwrap()) == object_type {
                     Some(object_id)
                 } else {
                     None
