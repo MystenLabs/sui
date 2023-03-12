@@ -126,6 +126,7 @@ export async function publishPackage(
 
   const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx, {
     showEffects: true,
+    showEvents: true,
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 

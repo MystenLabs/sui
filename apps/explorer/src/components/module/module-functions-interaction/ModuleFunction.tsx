@@ -93,9 +93,9 @@ export function ModuleFunction({
                 transaction: tx,
                 options: {
                     contentOptions: {
-                        showEffect: true,
+                        showEffects: true,
                         showEvents: true,
-                        showInputs: true,
+                        showInput: true,
                     },
                 },
             });
