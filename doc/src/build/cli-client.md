@@ -428,9 +428,6 @@ sui client call --function transfer --module sui --package 0x2 --args 0x1b9c00a9
 You can also use environment variables:
 ```shell
 export OBJECT_ID=0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062
-```
-
-```shell
 export RECIPIENT=0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427
 ```
 
