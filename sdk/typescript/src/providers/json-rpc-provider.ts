@@ -515,18 +515,20 @@ export class JsonRpcProvider extends Provider {
     options?: SuiObjectDataOptions,
   ): Promise<SuiObjectResponse[]> {
     try {
-      const requests = objectIds.map((id) => {
+      objectIds.forEach((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
-        return {
-          method: 'sui_getObject',
-          args: [id, options],
-        };
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        SuiObjectResponse,
+      const hasDuplicates = objectIds.length !== new Set(objectIds).size;
+      if (hasDuplicates) {
+        throw new Error(`Duplicate object ids in batch call ${objectIds}`);
+      }
+
+      return await this.client.requestWithType(
+        'sui_multiGetObjects',
+        [objectIds, options],
+        array(SuiObjectResponse),
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -647,18 +649,21 @@ export class JsonRpcProvider extends Provider {
     options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse[]> {
     try {
-      const requests = digests.map((d) => {
+      digests.forEach((d) => {
         if (!isValidTransactionDigest(d)) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
-        return {
-          method: 'sui_getTransaction',
-          args: [d, options],
-        };
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        SuiTransactionResponse,
+
+      const hasDuplicates = digests.length !== new Set(digests).size;
+      if (hasDuplicates) {
+        throw new Error(`Duplicate digests in batch call ${digests}`);
+      }
+
+      return await this.client.requestWithType(
+        'sui_multiGetTransactions',
+        [digests, options],
+        array(SuiTransactionResponse),
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -671,7 +676,8 @@ export class JsonRpcProvider extends Provider {
   async executeTransaction(
     txnBytes: Uint8Array | string,
     signature: SerializedSignature | SerializedSignature[],
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
+    options?: SuiTransactionResponseOptions,
+    requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse> {
     try {
       return await this.client.requestWithType(
@@ -679,6 +685,7 @@ export class JsonRpcProvider extends Provider {
         [
           typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
           Array.isArray(signature) ? signature : [signature],
+          options,
           requestType,
         ],
         SuiTransactionResponse,
@@ -703,13 +710,13 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionDigestsInRange(
+  async getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
     try {
       return await this.client.requestWithType(
-        'sui_getTransactionsInRange',
+        'sui_getTransactionsInRangeDeprecated',
         [start, end],
         GetTxnDigestsResponse,
         this.options.skipDataValidation,

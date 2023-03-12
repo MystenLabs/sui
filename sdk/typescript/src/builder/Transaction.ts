@@ -5,10 +5,13 @@ import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
 import { Provider } from '../providers/provider';
 import {
+  extractMutableReference,
   extractStructTag,
   getObjectReference,
   getSharedObjectInitialVersion,
   normalizeSuiObjectId,
+  ObjectId,
+  SuiMoveNormalizedType,
   SuiObjectRef,
   SUI_TYPE_ARG,
 } from '../types';
@@ -20,7 +23,13 @@ import {
   getTransactionCommandType,
   MoveCallCommand,
 } from './Commands';
-import { BuilderCallArg, Inputs } from './Inputs';
+import {
+  BuilderCallArg,
+  getIdFromCallArg,
+  Inputs,
+  isMutableSharedObjectInput,
+  ObjectCallArg,
+} from './Inputs';
 import { getPureSerializationType, isTxContext } from './serializer';
 import {
   TransactionDataBuilder,
@@ -182,25 +191,39 @@ export class Transaction {
    * For `Uint8Array` type automatically convert the input into a `Pure` CallArg, since this
    * is the format required for custom serialization.
    *
-   * For `
    */
-  input(value?: unknown) {
-    // For Uint8Array
-    // if (value instanceof Uint8Array) {
-    //   value = { Pure: value };
-    // }
-
+  #input(type: 'object' | 'pure', value?: unknown) {
     const index = this.#transactionData.inputs.length;
-    const input = create({ kind: 'Input', value, index }, TransactionInput);
+    const input = create(
+      { kind: 'Input', value, index, type },
+      TransactionInput,
+    );
     this.#transactionData.inputs.push(input);
     return input;
   }
 
-  // TODO: Do we want to support these helper functions for inputs?
-  // Maybe we can make an `Inputs` helper like commands that works seamlessly with these.
-  // objectRef() {}
-  // sharedObjectRef() {}
-  // pure() {}
+  /**
+   * Add a new object input to the transaction.
+   */
+  object(value: ObjectId | ObjectCallArg) {
+    const id = getIdFromCallArg(value);
+    // deduplicate
+    const inserted = this.#transactionData.inputs.find(
+      (i) => i.type === 'object' && id === getIdFromCallArg(i.value),
+    );
+    return inserted ?? this.#input('object', value);
+  }
+
+  /**
+   * Add a new non-object input to the transaction.
+   *
+   * TODO: take an optional second type parameter here and do the BCS encoding into the
+   * fully-resolved type if folks happen to know the pure type encoding.
+   */
+  pure(value: unknown) {
+    // TODO: we can also do some deduplication here
+    return this.#input('pure', value);
+  }
 
   // TODO: Currently, tx.input() takes in both fully-resolved input values, and partially-resolved input values.
   // We could also simplify the transaction building quite a bit if we force folks to use fully-resolved pure types
@@ -212,6 +235,27 @@ export class Transaction {
     // TODO: This should also look at the command arguments and add any referenced commands that are not present in this transaction.
     const index = this.#transactionData.commands.push(command);
     return createTransactionResult(index - 1);
+  }
+
+  // Method shorthands:
+
+  splitCoin(...args: Parameters<(typeof Commands)['SplitCoin']>) {
+    return this.add(Commands.SplitCoin(...args));
+  }
+  mergeCoins(...args: Parameters<(typeof Commands)['MergeCoins']>) {
+    return this.add(Commands.MergeCoins(...args));
+  }
+  publish(...args: Parameters<(typeof Commands)['Publish']>) {
+    return this.add(Commands.Publish(...args));
+  }
+  moveCall(...args: Parameters<(typeof Commands)['MoveCall']>) {
+    return this.add(Commands.MoveCall(...args));
+  }
+  transferObjects(...args: Parameters<(typeof Commands)['TransferObjects']>) {
+    return this.add(Commands.TransferObjects(...args));
+  }
+  makeMoveVec(...args: Parameters<(typeof Commands)['MakeMoveVec']>) {
+    return this.add(Commands.MakeMoveVec(...args));
   }
 
   /**
@@ -277,7 +321,11 @@ export class Transaction {
 
     // Keep track of the object references that will need to be resolved at the end of the transaction.
     // We keep the input by-reference to avoid needing to re-resolve it:
-    const objectsToResolve: { id: string; input: TransactionInput }[] = [];
+    const objectsToResolve: {
+      id: string;
+      input: TransactionInput;
+      normalizedType?: SuiMoveNormalizedType;
+    }[] = [];
 
     commands.forEach((command) => {
       // Special case move call:
@@ -380,8 +428,10 @@ export class Transaction {
           params.forEach((param, i) => {
             const arg = moveCall.arguments[i];
             if (arg.kind !== 'Input') return;
-            if (is(inputs[arg.index], BuilderCallArg)) return;
             const input = inputs[arg.index];
+            // Skip if the input is already resolved
+            if (is(input, BuilderCallArg)) return;
+
             const inputValue = input.value;
 
             const serType = getPureSerializationType(param, inputValue);
@@ -405,7 +455,11 @@ export class Transaction {
                   )}`,
                 );
               }
-              objectsToResolve.push({ id: inputValue, input });
+              objectsToResolve.push({
+                id: inputValue,
+                input,
+                normalizedType: param,
+              });
               return;
             }
 
@@ -422,18 +476,41 @@ export class Transaction {
     }
 
     if (objectsToResolve.length) {
-      // TODO: Use multi-get objects when that API exists instead of batch:
+      const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
       const objects = await expectProvider(provider).getObjectBatch(
-        objectsToResolve.map(({ id }) => id),
+        dedupedIds,
         { showOwner: true },
       );
+      let objectsById = new Map(
+        dedupedIds.map((id, index) => {
+          return [id, objects[index]];
+        }),
+      );
 
-      objects.forEach((object, i) => {
-        const { id, input } = objectsToResolve[i];
+      const invalidObjects = Array.from(objectsById)
+        .filter(([_, obj]) => obj.status !== 'Exists')
+        .map(([id, _]) => id);
+      if (invalidObjects.length) {
+        throw new Error(
+          `The following input objects are not invalid: ${invalidObjects.join(
+            ', ',
+          )}`,
+        );
+      }
+
+      objectsToResolve.forEach(({ id, input, normalizedType }) => {
+        const object = objectsById.get(id)!;
         const initialSharedVersion = getSharedObjectInitialVersion(object);
 
         if (initialSharedVersion) {
-          const mutable = true; // Defaulted to True to match current behavior.
+          // There could be multiple commands that reference the same shared object.
+          // If one of them is a mutable reference, then we should mark the input
+          // as mutable.
+          const mutable =
+            isMutableSharedObjectInput(input.value) ||
+            (normalizedType != null &&
+              extractMutableReference(normalizedType) != null);
+
           input.value = Inputs.SharedObjectRef({
             objectId: id,
             initialSharedVersion,

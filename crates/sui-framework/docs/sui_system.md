@@ -19,8 +19,6 @@
 -  [Function `request_set_commission_rate`](#0x2_sui_system_request_set_commission_rate)
 -  [Function `request_add_stake`](#0x2_sui_system_request_add_stake)
 -  [Function `request_add_stake_mul_coin`](#0x2_sui_system_request_add_stake_mul_coin)
--  [Function `request_add_stake_with_locked_coin`](#0x2_sui_system_request_add_stake_with_locked_coin)
--  [Function `request_add_stake_mul_locked_coin`](#0x2_sui_system_request_add_stake_mul_locked_coin)
 -  [Function `request_withdraw_stake`](#0x2_sui_system_request_withdraw_stake)
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
@@ -51,7 +49,6 @@
 -  [Function `load_system_state_mut`](#0x2_sui_system_load_system_state_mut)
 -  [Function `upgrade_system_state`](#0x2_sui_system_upgrade_system_state)
 -  [Function `extract_coin_balance`](#0x2_sui_system_extract_coin_balance)
--  [Function `extract_locked_coin_balance`](#0x2_sui_system_extract_locked_coin_balance)
 -  [Function `validators`](#0x2_sui_system_validators)
 -  [Function `active_validator_by_address`](#0x2_sui_system_active_validator_by_address)
 -  [Function `pending_validator_by_address`](#0x2_sui_system_pending_validator_by_address)
@@ -64,9 +61,7 @@
 <b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
-<b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
-<b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="pay.md#0x2_pay">0x2::pay</a>;
 <b>use</b> <a href="stake_subsidy.md#0x2_stake_subsidy">0x2::stake_subsidy</a>;
@@ -144,6 +139,14 @@ The top-level object containing all information of the Sui system.
 </dt>
 <dd>
  The current protocol version, starting from 1.
+</dd>
+<dt>
+<code>system_state_version: u64</code>
+</dt>
+<dd>
+ The current version of the system state data structure type.
+ This is always the same as SuiSystemState.version. Keeping a copy here so that
+ we know what version it is by inspecting SuiSystemStateInner as well.
 </dd>
 <dt>
 <code>validators: <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a></code>
@@ -431,12 +434,44 @@ We do not allow the number of validators in any epoch to go above this.
 
 
 
-<a name="0x2_sui_system_MIN_VALIDATOR_STAKE"></a>
+<a name="0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE"></a>
 
 Lower-bound on the amount of stake required to become a validator.
 
 
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>: u64 = 25000000000000000;
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>: u64 = 30000000000000000;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD"></a>
+
+Validators with stake amount below <code><a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a></code> are considered to
+have low stake and will be escorted out of the validator set after being below this
+threshold for more than <code><a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a></code> number of epochs.
+And validators with stake below <code><a href="sui_system.md#0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a></code> will be removed
+immediately at epoch change, no grace period.
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>: u64 = 25000000000000000;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>: u64 = 20000000000000000;
 </code></pre>
 
 
@@ -474,6 +509,7 @@ This function will be called only once in genesis.
     <b>let</b> system_state = <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
         epoch: 0,
         protocol_version,
+        system_state_version,
         validators,
         storage_fund,
         parameters: <a href="sui_system.md#0x2_sui_system_SystemParameters">SystemParameters</a> {
@@ -503,8 +539,8 @@ This function will be called only once in genesis.
 
 ## Function `request_add_validator_candidate`
 
-Can be called by anyone who wishes to become a validator candidate and starts accuring
-stakes in their staking pool. Once they have at least <code><a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a></code> amount of stake they
+Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+stakes in their staking pool. Once they have at least <code><a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a></code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
 Note: <code>proof_of_possession</code> MUST be a valid signature using sui_address and protocol_pubkey_bytes.
@@ -554,7 +590,6 @@ To produce a valid PoP, run [fn test_proof_of_possession].
         primary_address,
         worker_address,
         <a href="_none">option::none</a>(),
-        <a href="_none">option::none</a>(),
         gas_price,
         commission_rate,
         <b>false</b>, // not an initial <a href="validator.md#0x2_validator">validator</a> active at <a href="genesis.md#0x2_genesis">genesis</a>
@@ -574,7 +609,7 @@ To produce a valid PoP, run [fn test_proof_of_possession].
 ## Function `request_remove_validator_candidate`
 
 Called by a validator candidate to remove themselves from the candidacy. After this call
-their staking pool becomes deactive.
+their staking pool becomes deactivate.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_remove_validator_candidate">request_remove_validator_candidate</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -628,7 +663,7 @@ epoch has already reached the maximum.
         <a href="sui_system.md#0x2_sui_system_ELimitExceeded">ELimitExceeded</a>,
     );
 
-    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_STAKE">MIN_VALIDATOR_STAKE</a>, ctx);
+    <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system.md#0x2_sui_system_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>, ctx);
 }
 </code></pre>
 
@@ -769,7 +804,6 @@ Add stake to a validator's staking pool.
         &<b>mut</b> self.validators,
         validator_address,
         <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(stake),
-        <a href="_none">option::none</a>(),
         ctx,
     );
 }
@@ -804,78 +838,7 @@ Add stake to a validator's staking pool using multiple coins.
 ) {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="sui_system.md#0x2_sui_system_extract_coin_balance">extract_coin_balance</a>(stakes, stake_amount, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_none">option::none</a>(), ctx);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_request_add_stake_with_locked_coin"></a>
-
-## Function `request_add_stake_with_locked_coin`
-
-Add stake to a validator's staking pool using a locked SUI coin.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin">request_add_stake_with_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stake: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin">request_add_stake_with_locked_coin</a>(
-    wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    stake: LockedCoin&lt;SUI&gt;,
-    validator_address: <b>address</b>,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(stake);
-    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, <a href="_some">option::some</a>(lock), ctx);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_request_add_stake_mul_locked_coin"></a>
-
-## Function `request_add_stake_mul_locked_coin`
-
-Add stake to a validator's staking pool using multiple locked SUI coins.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_locked_coin">request_add_stake_mul_locked_coin</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, stakes: <a href="">vector</a>&lt;<a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;, validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_request_add_stake_mul_locked_coin">request_add_stake_mul_locked_coin</a>(
-    wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
-    stakes: <a href="">vector</a>&lt;LockedCoin&lt;SUI&gt;&gt;,
-    stake_amount: <a href="_Option">option::Option</a>&lt;u64&gt;,
-    validator_address: <b>address</b>,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-    <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(stakes, stake_amount, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(
-        &<b>mut</b> self.validators,
-        validator_address,
-        <a href="balance.md#0x2_balance">balance</a>,
-        <a href="_some">option::some</a>(lock),
-        ctx
-    );
+    <a href="validator_set.md#0x2_validator_set_request_add_stake">validator_set::request_add_stake</a>(&<b>mut</b> self.validators, validator_address, <a href="balance.md#0x2_balance">balance</a>, ctx);
 }
 </code></pre>
 
@@ -1540,6 +1503,10 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
+        self.parameters.governance_start_epoch,
+        <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>,
+        <a href="sui_system.md#0x2_sui_system_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>,
+        <a href="sui_system.md#0x2_sui_system_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>,
         ctx,
     );
 
@@ -1581,6 +1548,7 @@ gas coins.
         <b>assert</b>!(old_protocol_version != next_protocol_version, 0);
         <b>let</b> cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
         <b>let</b> new_state = <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(cur_state);
+        new_state.system_state_version = new_system_state_version;
         wrapper.version = new_system_state_version;
         <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> wrapper.id, wrapper.version, new_state);
     };
@@ -1842,7 +1810,10 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 <pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-    <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version)
+    <b>let</b> version = self.version;
+    <b>let</b> inner: &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, version);
+    <b>assert</b>!(inner.system_state_version == version, 0);
+    inner
 }
 </code></pre>
 
@@ -1866,7 +1837,10 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 <pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
-    <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version)
+    <b>let</b> version = self.version;
+    <b>let</b> inner: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
+    <b>assert</b>!(inner.system_state_version == version, 0);
+    inner
 }
 </code></pre>
 
@@ -1935,59 +1909,6 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
         <a href="balance.md#0x2_balance">balance</a>
     } <b>else</b> {
         total_balance
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_extract_locked_coin_balance"></a>
-
-## Function `extract_locked_coin_balance`
-
-Extract required Balance from vector of LockedCoin<SUI>, transfer the remainder back to sender.
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(coins: <a href="">vector</a>&lt;<a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, amount: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_extract_locked_coin_balance">extract_locked_coin_balance</a>(
-    coins: <a href="">vector</a>&lt;LockedCoin&lt;SUI&gt;&gt;,
-    amount: <a href="_Option">option::Option</a>&lt;u64&gt;,
-    ctx: &<b>mut</b> TxContext
-): (Balance&lt;SUI&gt;, EpochTimeLock) {
-    <b>let</b> (total_balance, first_lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins));
-    <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&coins));
-    <b>while</b> (i &lt; len) {
-        <b>let</b> (<a href="balance.md#0x2_balance">balance</a>, lock) = <a href="locked_coin.md#0x2_locked_coin_into_balance">locked_coin::into_balance</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins));
-        // Make sure all time locks are the same
-        <b>assert</b>!(<a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(&lock) == <a href="epoch_time_lock.md#0x2_epoch_time_lock_epoch">epoch_time_lock::epoch</a>(&first_lock), 0);
-        <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy_unchecked">epoch_time_lock::destroy_unchecked</a>(lock);
-        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> total_balance, <a href="balance.md#0x2_balance">balance</a>);
-        i = i + 1
-    };
-    <a href="_destroy_empty">vector::destroy_empty</a>(coins);
-
-    // <b>return</b> the full amount <b>if</b> amount is not specified
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&amount)){
-        <b>let</b> amount = <a href="_destroy_some">option::destroy_some</a>(amount);
-        <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> total_balance, amount);
-        <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&total_balance) &gt; 0) {
-            <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(total_balance, first_lock, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
-        } <b>else</b> {
-            <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(total_balance);
-        };
-        (<a href="balance.md#0x2_balance">balance</a>, first_lock)
-    } <b>else</b>{
-        (total_balance, first_lock)
     }
 }
 </code></pre>

@@ -163,7 +163,7 @@ fn create_clock() -> Object {
     let move_object = unsafe {
         let has_public_transfer = false;
         MoveObject::new_from_execution(
-            Clock::type_(),
+            Clock::type_().into(),
             has_public_transfer,
             SUI_CLOCK_OBJECT_SHARED_VERSION,
             contents,
@@ -732,7 +732,7 @@ impl<'a> SuiTestAdapter<'a> {
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_)),
+            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
             sui_types::object::Data::Package(pkg) => pkg
                 .serialized_module_map()
                 .keys()

@@ -15,8 +15,9 @@ import {
   Connection,
   Coin,
   Transaction,
-  Commands,
   RawSigner,
+  FaucetResponse,
+  assert,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -78,7 +79,7 @@ export async function setup() {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   const provider = getProvider();
-  await retry(() => provider.requestSuiFromFaucet(address), {
+  const resp = await retry(() => provider.requestSuiFromFaucet(address), {
     backoff: 'EXPONENTIAL',
     // overall timeout in 60 seconds
     timeout: 1000 * 60,
@@ -86,7 +87,7 @@ export async function setup() {
     retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
     logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
   });
-
+  assert(resp, FaucetResponse);
   return new TestToolbox(keypair, provider);
 }
 
@@ -112,17 +113,18 @@ export async function publishPackage(
   );
   const tx = new Transaction();
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
-  const cap = tx.add(
-    Commands.Publish(compiledModules.map((m: any) => Array.from(fromB64(m)))),
+  const cap = tx.publish(
+    compiledModules.map((m: any) => Array.from(fromB64(m))),
   );
-  tx.add(
-    Commands.MoveCall({
-      target: '0x2::package::make_immutable',
-      arguments: [cap],
-    }),
-  );
+  tx.moveCall({
+    target: '0x2::package::make_immutable',
+    arguments: [cap],
+  });
 
-  const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx);
+  const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx, {
+    showEffects: true,
+    showEvents: true,
+  });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
   const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
@@ -133,5 +135,5 @@ export async function publishPackage(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );
 
-  return packageId;
+  return { packageId, publishTxn };
 }

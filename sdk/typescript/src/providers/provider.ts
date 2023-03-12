@@ -44,6 +44,7 @@ import {
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   CoinStruct,
+  SuiTransactionResponseOptions,
 } from '../types';
 
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
@@ -192,6 +193,11 @@ export abstract class Provider {
    */
   abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
 
+  /**
+   * Batch get details about a list of objects. If any of the object ids are duplicates the call will fail
+   * @param objectIds
+   * @param options
+   */
   abstract getObjectBatch(
     objectIds: ObjectId[],
     options?: SuiObjectDataOptions,
@@ -200,10 +206,9 @@ export abstract class Provider {
   // Transactions
   /**
    * Get transaction digests for a given range
-   *
-   * NOTE: this method may get deprecated after DevNet
+   * @deprecated this method will be removed before April 2023, please use `getTransactions` instead
    */
-  abstract getTransactionDigestsInRange(
+  abstract getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse>;
@@ -220,7 +225,6 @@ export abstract class Provider {
 
   /**
    * Get total number of transactions
-   * NOTE: this method may get deprecated after DevNet
    */
   abstract getTotalTransactionNumber(): Promise<number>;
 
@@ -228,12 +232,15 @@ export abstract class Provider {
    * Submit the transaction to fullnode for execution
    * @param txnBytes BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
    * @param signature A single signature or list of signatures(used for sponsored transactions)
+   * @param options specify which fields to return (e.g., transaction, effects, events, etc).
+   * By default, only the transaction digest will be returned.
    * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`
    */
   abstract executeTransaction(
     txnBytes: Uint8Array | string,
     signature: SerializedSignature | SerializedSignature[],
-    requestType: ExecuteTransactionRequestType,
+    options?: SuiTransactionResponseOptions,
+    requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse>;
 
   // Move info

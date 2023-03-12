@@ -12,6 +12,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 
 use crate::{
+    balance::Balance,
     base_types::{ObjectID, SequenceNumber},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
@@ -50,6 +51,13 @@ impl GAS {
     pub fn is_gas(other: &StructTag) -> bool {
         &Self::type_() == other
     }
+
+    pub fn is_gas_type(other: &TypeTag) -> bool {
+        match other {
+            TypeTag::Struct(s) => Self::is_gas(s),
+            _ => false,
+        }
+    }
 }
 
 /// Rust version of the Move sui::coin::Coin<Sui::sui::SUI> type
@@ -66,7 +74,17 @@ impl GasCoin {
     }
 
     pub fn type_() -> StructTag {
-        Coin::type_(GAS::type_())
+        Coin::type_(TypeTag::Struct(Box::new(GAS::type_())))
+    }
+
+    /// Return `true` if `s` is the type of a gas coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
+    pub fn is_gas_coin(s: &StructTag) -> bool {
+        Coin::is_coin(s) && s.type_params.len() == 1 && GAS::is_gas_type(&s.type_params[0])
+    }
+
+    /// Return `true` if `s` is the type of a gas balance (i.e., 0x2::balance::Balance<0x2::sui::SUI>)
+    pub fn is_gas_balance(s: &StructTag) -> bool {
+        Balance::is_balance(s) && s.type_params.len() == 1 && GAS::is_gas_type(&s.type_params[0])
     }
 
     pub fn id(&self) -> &ObjectID {
@@ -82,7 +100,7 @@ impl GasCoin {
     }
 
     pub fn layout() -> MoveStructLayout {
-        Coin::layout(GAS::type_())
+        Coin::layout(TypeTag::Struct(Box::new(GAS::type_())))
     }
 }
 
@@ -90,10 +108,10 @@ impl TryFrom<&MoveObject> for GasCoin {
     type Error = ExecutionError;
 
     fn try_from(value: &MoveObject) -> Result<GasCoin, ExecutionError> {
-        if value.type_ != GasCoin::type_() {
+        if !value.type_().is_gas_coin() {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::InvalidGasObject,
-                format!("Gas object type is not a gas coin: {}", value.type_),
+                format!("Gas object type is not a gas coin: {}", value.type_()),
             ));
         }
         let gas_coin: GasCoin = bcs::from_bytes(value.contents()).map_err(|err| {

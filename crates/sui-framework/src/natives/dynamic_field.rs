@@ -24,7 +24,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::dynamic_field::derive_dynamic_field_id;
+use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
@@ -44,7 +44,13 @@ macro_rules! get_or_fetch_object {
             }
         };
         let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut();
-        object_runtime.get_or_fetch_child_object($parent, $child_id, &child_ty, layout, tag)?
+        object_runtime.get_or_fetch_child_object(
+            $parent,
+            $child_id,
+            &child_ty,
+            layout,
+            MoveObjectType::from(tag),
+        )?
     }};
 }
 
@@ -103,7 +109,7 @@ pub fn add_child_object(
     let child_ty = ty_args.pop().unwrap();
     assert!(ty_args.is_empty());
     let tag = match context.type_to_type_tag(&child_ty)? {
-        TypeTag::Struct(s) => s,
+        TypeTag::Struct(s) => *s,
         _ => {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -112,7 +118,13 @@ pub fn add_child_object(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    object_runtime.add_child_object(parent, child_id, &child_ty, *tag, child)?;
+    object_runtime.add_child_object(
+        parent,
+        child_id,
+        &child_ty,
+        MoveObjectType::from(tag),
+        child,
+    )?;
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![]))
 }
 
@@ -216,8 +228,8 @@ pub fn has_child_object_with_ty(
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let ty = ty_args.pop().unwrap();
-    let tag = match context.type_to_type_tag(&ty)? {
-        TypeTag::Struct(s) => s,
+    let tag: StructTag = match context.type_to_type_tag(&ty)? {
+        TypeTag::Struct(s) => *s,
         _ => {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -226,7 +238,11 @@ pub fn has_child_object_with_ty(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let has_child = object_runtime.child_object_exists_and_has_type(parent, child_id, *tag)?;
+    let has_child = object_runtime.child_object_exists_and_has_type(
+        parent,
+        child_id,
+        &MoveObjectType::from(tag),
+    )?;
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::bool(has_child)],

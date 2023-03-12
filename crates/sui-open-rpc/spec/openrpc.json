@@ -123,7 +123,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AAMFAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ACCyS47BaP5IlvW3DMsQ8acF4GHQ/foYlhjSiw1E7++SywEAZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMBAAABAQABAgABAQEEAAEDAJsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
+              "txBytes": "AAAFAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ACCyS47BaP5IlvW3DMsQ8acF4GHQ/foYlhjSiw1E7++SywEAZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMBAAABAQABAgABAQEEAAEDAJsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
               "gas": [
                 {
                   "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
@@ -238,7 +238,7 @@
           "name": "Write API"
         }
       ],
-      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
+      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case. request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true",
       "params": [
         {
           "name": "tx_bytes",
@@ -260,9 +260,15 @@
           }
         },
         {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseOptions"
+          }
+        },
+        {
           "name": "request_type",
-          "description": "The request type",
-          "required": true,
+          "description": "The request type, derived from `SuiTransactionResponseOptions` if None",
           "schema": {
             "$ref": "#/components/schemas/ExecuteTransactionRequestType"
           }
@@ -281,13 +287,21 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AAMCACDh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpigEAEkXDG0IGiMFobLTRNW0XGA3YLpOkg8WrXwGimIeh2V4CAAAAAAAAACBVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0QEBAQEBAAEAALbEL76B7sFgNqEeISQHqNtSw954WFsAFruzZAV13qO+AVtUi2FtpjsM4H2Bbonve5o4IXe0Qiu6on9+Yl6jGaoKAgAAAAAAAAAgGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzm2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AAACACDh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpigEAEkXDG0IGiMFobLTRNW0XGA3YLpOkg8WrXwGimIeh2V4CAAAAAAAAACBVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0QEBAQEBAAEAALbEL76B7sFgNqEeISQHqNtSw954WFsAFruzZAV13qO+AVtUi2FtpjsM4H2Bbonve5o4IXe0Qiu6on9+Yl6jGaoKAgAAAAAAAAAgGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzm2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgEAAAAAAAAA6AMAAAAAAAAA"
             },
             {
               "name": "signatures",
               "value": [
-                "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                "AEDUTa46gvfXjMiVniZTIpCF/rRDdBsdXJ8k7FdTE/li/1bJ4EnfgQ76htANuKJ37H+iMq3zcaoRzg3BbxxnZwYlVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
               ]
+            },
+            {
+              "name": "options",
+              "value": {
+                "showInput": true,
+                "showEffects": true,
+                "showEvents": true
+              }
             },
             {
               "name": "request_type",
@@ -297,7 +311,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "63MjNcBWJW2e8vZFmwjQBN22ysW9s3tVRcKrCFtJGSqx",
+              "digest": "62GYZdSJGn8aRjBrvjS75xkeu8UEhFcmpwzjjCZ5pp3h",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -337,7 +351,7 @@
                   }
                 },
                 "txSignatures": [
-                  "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                  "AEDUTa46gvfXjMiVniZTIpCF/rRDdBsdXJ8k7FdTE/li/1bJ4EnfgQ76htANuKJ37H+iMq3zcaoRzg3BbxxnZwYlVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
                 ]
               },
               "effects": {
@@ -831,13 +845,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb"
+                "Transaction": "BXq18DwsDhHnQ4QjVJkXSkmzZ48YprJmhqpNEt3bamTz"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
+                "txDigest": "BXq18DwsDhHnQ4QjVJkXSkmzZ48YprJmhqpNEt3bamTz",
                 "eventSeq": 10
               }
             },
@@ -856,9 +870,9 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
+                  "txDigest": "BXq18DwsDhHnQ4QjVJkXSkmzZ48YprJmhqpNEt3bamTz",
                   "id": {
-                    "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
+                    "txDigest": "BXq18DwsDhHnQ4QjVJkXSkmzZ48YprJmhqpNEt3bamTz",
                     "eventSeq": 0
                   },
                   "event": {
@@ -1384,7 +1398,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7"
+              "value": "56bDbQKRbEGHsUH6jcmz4S5XPbojSZa1adTCnYVaLR6B"
             },
             {
               "name": "options",
@@ -1398,7 +1412,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7",
+              "digest": "56bDbQKRbEGHsUH6jcmz4S5XPbojSZa1adTCnYVaLR6B",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -1438,7 +1452,7 @@
                   }
                 },
                 "txSignatures": [
-                  "AP2VCkYKve0kNoX49RpmfMqrxybOWJj6YoY2SVeX2mhKuVdktSb2W6lNI7dPMZ7VOmAOJQBS9BpkIZd4TVyotgFQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
+                  "APR3unFDQWGRASsOWcvrSAelNlifG92BicSHOYJ3+qGBxDnbB34xnq8AaIHiR+8SLh2oAkGNJNSnRr39LBgf+wdQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
                 ]
               },
               "effects": {
@@ -1596,13 +1610,13 @@
       ]
     },
     {
-      "name": "sui_getTransactionsInRange",
+      "name": "sui_getTransactionsInRangeDeprecated",
       "tags": [
         {
           "name": "Read API"
         }
       ],
-      "description": "Return list of transaction digests within the queried range.",
+      "description": "Return list of transaction digests within the queried range. This method will be removed before April 2023, please use `getTransactions` instead",
       "params": [
         {
           "name": "start",
@@ -1634,7 +1648,8 @@
             "$ref": "#/components/schemas/TransactionDigest"
           }
         }
-      }
+      },
+      "deprecated": true
     },
     {
       "name": "sui_mergeCoins",
@@ -2625,6 +2640,45 @@
           }
         }
       ]
+    },
+    {
+      "name": "sui_tryMultiGetPastObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Note there is no software-level guarantee/SLA that objects with past versions can be retrieved by this API, even if the object and version exists/existed. The result may vary across nodes depending on their pruning policies. Return the object information for a specified version",
+      "params": [
+        {
+          "name": "past_objects",
+          "description": "a vector of object and versions to be queried",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetPastObjectRequest"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectDataOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiPastObjectResponse>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectRead"
+          }
+        }
+      }
     }
   ],
   "components": {
@@ -4150,6 +4204,31 @@
           }
         ]
       },
+      "GetPastObjectRequest": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "version"
+        ],
+        "properties": {
+          "objectId": {
+            "description": "the ID of the queried object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "version": {
+            "description": "the version of the queried object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
+      },
       "Hex": {
         "description": "Hex string encoding.",
         "type": "string"
@@ -5189,14 +5268,6 @@
                 "$ref": "#/components/schemas/ObjectID"
               }
             ]
-          },
-          "tokenLock": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       },
@@ -5864,6 +5935,7 @@
         "type": "object",
         "required": [
           "activeValidators",
+          "atRiskValidators",
           "epoch",
           "epochStartTimestampMs",
           "governanceStartEpoch",
@@ -5881,6 +5953,7 @@
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
           "storageFund",
+          "systemStateVersion",
           "totalStake",
           "validatorCandidatesId",
           "validatorCandidatesSize",
@@ -5892,6 +5965,25 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
+          },
+          "atRiskValidators": {
+            "description": "Map storing the number of epochs for which each validator has been below the low stake threshold.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/SuiAddress"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
             }
           },
           "epoch": {
@@ -6003,6 +6095,12 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "systemStateVersion": {
+            "description": "The current version of the system state data structure type.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "totalStake": {
             "description": "Total amount of stake from all active validators at the beginning of the epoch.",
             "type": "integer",
@@ -6010,7 +6108,7 @@
             "minimum": 0.0
           },
           "validatorCandidatesId": {
-            "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.",
+            "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator` structs.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ObjectID"

@@ -63,8 +63,8 @@ async function getRecentTransactions(
 ): Promise<TxnData[]> {
     // Get the latest transactions
     // Instead of getRecentTransactions, use getTransactionCount
-    // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
-    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
+    // then use getTransactionDigestsInRangeDeprecated using the totalTx as the start totalTx sequence number - txNum as the end sequence number
+    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRangeDeprecated
     const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
         generateStartEndRange(totalTx, txNum, pageNum);
 
@@ -73,12 +73,13 @@ async function getRecentTransactions(
     if (endGatewayTxSeqNumber < 0) {
         throw new Error('Invalid transaction number');
     }
-    const transactionDigests = await rpc.getTransactionDigestsInRange(
+    // TODO: migrate this to `getTransactions`
+    const transactionDigests = await rpc.getTransactionDigestsInRangeDeprecated(
         startGatewayTxSeqNumber,
         endGatewayTxSeqNumber
     );
 
-    // result returned by getTransactionDigestsInRange is in ascending order
+    // result returned by getTransactionDigestsInRangeDeprecated is in ascending order
     const transactionData = await getDataOnTxDigests(
         rpc,
         [...transactionDigests].reverse()

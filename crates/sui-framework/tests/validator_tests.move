@@ -51,7 +51,6 @@ module sui::validator_tests {
             VALID_CONSENSUS_ADDR,
             VALID_WORKER_ADDR,
             option::some(init_stake),
-            option::none(),
             1,
             0,
             true,
@@ -98,7 +97,7 @@ module sui::validator_tests {
         {
             let ctx = test_scenario::ctx(scenario);
             let new_stake = coin::into_balance(coin::mint_for_testing(30, ctx));
-            validator::request_add_stake(&mut validator, new_stake, option::none(), sender, ctx);
+            validator::request_add_stake(&mut validator, new_stake, sender, ctx);
 
             assert!(validator::total_stake(&validator) == 10, 0);
             assert!(validator::pending_stake_amount(&validator) == 30, 0);

@@ -77,6 +77,7 @@ export class Coin {
         );
     }
 
+    // TODO: we should replace this function with the SDK implementation
     /**
      * Stake `amount` of Coin<T> to `validator`. Technically it means user stakes `amount` of Coin<T> to `validator`,
      * such that `validator` will stake the `amount` of Coin<T> for the user.
@@ -101,20 +102,20 @@ export class Coin {
         try {
             const tx = new Transaction();
             tx.setGasBudget(DEFAULT_GAS_BUDGET_FOR_STAKE);
-            const stakeCoin = tx.add(
-                Transaction.Commands.SplitCoin(tx.gas, tx.input(amount))
-            );
-            tx.add(
-                Transaction.Commands.MoveCall({
-                    target: '0x2::sui_system::request_add_stake',
-                    arguments: [
-                        tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-                        stakeCoin,
-                        tx.input(validator),
-                    ],
-                })
-            );
-            return await signer.signAndExecuteTransaction(tx);
+            const stakeCoin = tx.splitCoin(tx.gas, tx.pure(amount));
+            tx.moveCall({
+                target: '0x2::sui_system::request_add_stake',
+                arguments: [
+                    tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+                    stakeCoin,
+                    tx.pure(validator),
+                ],
+            });
+            return await signer.signAndExecuteTransaction(tx, {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            });
         } finally {
             span.finish();
             transaction.finish();
@@ -130,17 +131,19 @@ export class Coin {
         try {
             const tx = new Transaction();
             tx.setGasBudget(DEFAULT_GAS_BUDGET_FOR_STAKE);
-            tx.add(
-                Transaction.Commands.MoveCall({
-                    target: '0x2::sui_system::request_withdraw_stake',
-                    arguments: [
-                        tx.input(SUI_SYSTEM_STATE_OBJECT_ID),
-                        tx.input(stake),
-                        tx.input(stakedSuiId),
-                    ],
-                })
-            );
-            return await signer.signAndExecuteTransaction(tx);
+            tx.moveCall({
+                target: '0x2::sui_system::request_withdraw_stake',
+                arguments: [
+                    tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+                    tx.object(stake),
+                    tx.object(stakedSuiId),
+                ],
+            });
+            return await signer.signAndExecuteTransaction(tx, {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            });
         } finally {
             transaction.finish();
         }

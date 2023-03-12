@@ -379,7 +379,7 @@ impl<'a> SuiGasStatus<'a> {
     /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
     /// We use initial budget, combined with remaining gas and storage cost to derive
     /// computation cost.
-    pub fn summary(&self, succeeded: bool) -> GasCostSummary {
+    pub fn summary(&self) -> GasCostSummary {
         let remaining_gas = self.gas_status.remaining_gas();
         let storage_cost = self.storage_gas_units;
         // TODO: handle underflow how?
@@ -390,20 +390,10 @@ impl<'a> SuiGasStatus<'a> {
             .checked_sub(storage_cost)
             .expect("Subtraction overflowed");
         let computation_cost_in_sui = computation_cost.mul(self.computation_gas_unit_price).into();
-        if succeeded {
-            GasCostSummary {
-                computation_cost: computation_cost_in_sui,
-                storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
-                storage_rebate: self.storage_rebate.into(),
-            }
-        } else {
-            // If execution failed, no storage creation/deletion will materialize in the store.
-            // Hence they should be 0.
-            GasCostSummary {
-                computation_cost: computation_cost_in_sui,
-                storage_cost: 0,
-                storage_rebate: 0,
-            }
+        GasCostSummary {
+            computation_cost: computation_cost_in_sui,
+            storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
+            storage_rebate: self.storage_rebate.into(),
         }
     }
 

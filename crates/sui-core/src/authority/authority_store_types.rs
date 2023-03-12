@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use std::convert::TryFrom;
+use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::{ObjectDigest, SequenceNumber, TransactionDigest};
 use sui_types::crypto::{sha3_hash, Signable};
 use sui_types::error::SuiError;
@@ -154,7 +155,7 @@ impl From<StoreMoveObject> for StoreMoveObjectWrapper {
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct StoreMoveObjectV1 {
-    pub type_: StructTag,
+    pub type_: MoveObjectType,
     has_public_transfer: bool,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
@@ -195,18 +196,18 @@ pub(crate) fn get_store_object_pair(
             if indirect_objects_threshold > 0
                 && move_obj.contents().len() >= indirect_objects_threshold
             {
+                let has_public_transfer = move_obj.has_public_transfer();
+                let version = move_obj.version();
+                let (type_, contents) = move_obj.into_inner();
                 let move_object = StoreMoveObject {
-                    type_: move_obj.type_.clone(),
-                    has_public_transfer: move_obj.has_public_transfer(),
-                    contents: move_obj.contents().to_vec(),
+                    type_,
+                    has_public_transfer,
+                    contents,
                     ref_count: 1,
                 };
                 let digest = move_object.digest();
                 indirect_object = Some(move_object);
-                StoreData::IndirectObject(IndirectObjectMetadata {
-                    version: move_obj.version(),
-                    digest,
-                })
+                StoreData::IndirectObject(IndirectObjectMetadata { version, digest })
             } else {
                 StoreData::Move(move_obj)
             }

@@ -15,8 +15,8 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
     DynamicFieldPage, EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
-    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionsPage,
 };
 use sui_types::balance::Supply;
@@ -77,6 +77,18 @@ impl ReadApi {
             .await?)
     }
 
+    pub async fn try_multi_get_parsed_past_object(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<Vec<SuiPastObjectResponse>> {
+        Ok(self
+            .api
+            .http
+            .try_multi_get_past_objects(past_objects, Some(options))
+            .await?)
+    }
+
     pub async fn get_object_with_options(
         &self,
         object_id: ObjectID,
@@ -89,16 +101,32 @@ impl ReadApi {
             .await?)
     }
 
+    pub async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<Vec<SuiObjectResponse>> {
+        Ok(self
+            .api
+            .http
+            .multi_get_object_with_options(object_ids, Some(options))
+            .await?)
+    }
+
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
         Ok(self.api.http.get_total_transaction_number().await?)
     }
 
-    pub async fn get_transactions_in_range(
+    pub async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> SuiRpcResult<Vec<TransactionDigest>> {
-        Ok(self.api.http.get_transactions_in_range(start, end).await?)
+        Ok(self
+            .api
+            .http
+            .get_transactions_in_range_deprecated(start, end)
+            .await?)
     }
 
     pub async fn get_transaction_with_options(
@@ -412,15 +440,20 @@ impl QuorumDriver {
     pub async fn execute_transaction(
         &self,
         tx: VerifiedTransaction,
+        options: SuiTransactionResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let request_type =
-            request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
+        let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .execute_transaction(tx_bytes, signatures, request_type.clone())
+            .execute_transaction(
+                tx_bytes,
+                signatures,
+                Some(options),
+                Some(request_type.clone()),
+            )
             .await?;
 
         Ok(match request_type {

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getPureSerializationType,
     getExecutionStatusType,
     getExecutionStatusError,
     Transaction,
-    Commands,
 } from '@mysten/sui.js';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
@@ -68,18 +68,34 @@ export function ModuleFunction({
         functionDetails.parameters,
         resolvedTypeArguments
     );
+
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const tx = new Transaction();
             tx.setGasBudget(2000);
-            tx.add(
-                Commands.MoveCall({
-                    target: `${packageId}::${moduleName}::${functionName}`,
-                    typeArguments: types ?? [],
-                    arguments: params?.map((param) => tx.input(param)) ?? [],
-                })
-            );
-            const result = await signAndExecuteTransaction({ transaction: tx });
+            tx.moveCall({
+                target: `${packageId}::${moduleName}::${functionName}`,
+                typeArguments: types ?? [],
+                arguments:
+                    params?.map((param, i) =>
+                        getPureSerializationType(
+                            functionDetails.parameters[i],
+                            param
+                        )
+                            ? tx.pure(param)
+                            : tx.object(param)
+                    ) ?? [],
+            });
+            const result = await signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    contentOptions: {
+                        showEffects: true,
+                        showEvents: true,
+                        showInput: true,
+                    },
+                },
+            });
             if (getExecutionStatusType(result) === 'failure') {
                 throw new Error(
                     getExecutionStatusError(result) || 'Transaction failed'

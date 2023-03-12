@@ -125,7 +125,7 @@ export default class ApiProvider {
                 new BackgroundServiceSigner(
                     address,
                     backgroundClient,
-                    this._apiFullNodeProvider
+                    this._apiFullNodeProvider!
                 )
             );
         }

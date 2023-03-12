@@ -11,18 +11,28 @@ use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
 use crate::models::recipients::Recipient;
 use crate::models::transactions::Transaction;
-
 use async_trait::async_trait;
 use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, SuiObjectData, SuiTransactionResponse,
+    Checkpoint as RpcCheckpoint, CheckpointId, EventPage, SuiObjectData, SuiTransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::event::EventID;
 use sui_types::object::ObjectRead;
+use sui_types::query::EventQuery;
 
 #[async_trait]
 pub trait IndexerStore {
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError>;
+
+    fn get_event(&self, id: EventID) -> Result<Event, IndexerError>;
+    fn get_events(
+        &self,
+        query: EventQuery,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> Result<EventPage, IndexerError>;
 
     fn get_object(
         &self,

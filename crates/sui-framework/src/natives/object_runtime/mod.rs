@@ -13,9 +13,9 @@ use move_vm_types::{
     values::{GlobalValue, Value},
 };
 use std::collections::{BTreeMap, BTreeSet};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
@@ -54,7 +54,7 @@ pub(crate) struct TestInventories {
 }
 
 pub struct RuntimeResults {
-    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, StructTag, Value)>,
+    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, MoveObjectType, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
     pub user_events: Vec<(StructTag, Value)>,
     // loaded child objects and their versions
@@ -70,16 +70,24 @@ pub(crate) struct ObjectRuntimeState {
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    transfers: LinkedHashMap<ObjectID, (Owner, Type, StructTag, Value)>,
+    transfers: LinkedHashMap<ObjectID, (Owner, Type, MoveObjectType, Value)>,
     events: Vec<(StructTag, Value)>,
 }
 
+#[derive(Clone)]
 pub(crate) struct LocalProtocolConfig {
-    pub(crate) max_num_deleted_move_object_ids: usize,
+    pub(crate) max_num_deleted_move_object_ids: u64,
+    pub(crate) max_num_deleted_move_object_ids_system_tx: u64,
     pub(crate) max_num_event_emit: u64,
-    pub(crate) max_num_new_move_object_ids: usize,
-    pub(crate) max_num_transfered_move_object_ids: usize,
+    pub(crate) max_num_new_move_object_ids: u64,
+    pub(crate) max_num_new_move_object_ids_system_tx: u64,
+    pub(crate) max_num_transfered_move_object_ids: u64,
+    pub(crate) max_num_transfered_move_object_ids_system_tx: u64,
     pub(crate) max_event_emit_size: u64,
+    pub(crate) object_runtime_max_num_cached_objects: u64,
+    pub(crate) object_runtime_max_num_cached_objects_system_tx: u64,
+    pub(crate) object_runtime_max_num_store_entries: u64,
+    pub(crate) object_runtime_max_num_store_entries_system_tx: u64,
 }
 
 impl LocalProtocolConfig {
@@ -90,6 +98,20 @@ impl LocalProtocolConfig {
             max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
             max_num_transfered_move_object_ids: constants.max_num_transfered_move_object_ids(),
             max_event_emit_size: constants.max_event_emit_size(),
+            max_num_deleted_move_object_ids_system_tx: constants
+                .max_num_deleted_move_object_ids_system_tx(),
+            max_num_new_move_object_ids_system_tx: constants
+                .max_num_new_move_object_ids_system_tx(),
+            max_num_transfered_move_object_ids_system_tx: constants
+                .max_num_transfered_move_object_ids_system_tx(),
+
+            object_runtime_max_num_cached_objects: constants
+                .object_runtime_max_num_cached_objects(),
+            object_runtime_max_num_cached_objects_system_tx: constants
+                .object_runtime_max_num_cached_objects_system_tx(),
+            object_runtime_max_num_store_entries: constants.object_runtime_max_num_store_entries(),
+            object_runtime_max_num_store_entries_system_tx: constants
+                .object_runtime_max_num_store_entries_system_tx(),
         }
     }
 }
@@ -127,7 +149,11 @@ impl<'a> ObjectRuntime<'a> {
         protocol_config: &ProtocolConfig,
     ) -> Self {
         Self {
-            object_store: ObjectStore::new(object_resolver, protocol_config, is_metered),
+            object_store: ObjectStore::new(
+                object_resolver,
+                LocalProtocolConfig::new(protocol_config),
+                is_metered,
+            ),
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects,
@@ -142,19 +168,24 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
-        // Metered transactions don't have limits for now
-        if self.is_metered
-            && (self.state.new_ids.len() >= self.constants.max_num_new_move_object_ids)
-        {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
-                    "Creating more than {} IDs is not allowed",
-                    self.constants.max_num_new_move_object_ids
-                ))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
-        }
+        // If metered, we use the metered limit (non system tx limit) as the hard limit
+        // This macro takes care of that
+        match check_limit_by_meter!(
+            self.is_metered,
+            self.state.new_ids.len(),
+            self.constants.max_num_new_move_object_ids,
+            self.constants.max_num_new_move_object_ids_system_tx
+        ) {
+            LimitThresholdCrossed::None => (),
+            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
+            LimitThresholdCrossed::Hard(_, lim) => {
+                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                    .with_message(format!("Creating more than {} IDs is not allowed", lim))
+                    .with_sub_status(
+                        VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
+                    ))
+            }
+        };
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction
@@ -168,18 +199,23 @@ impl<'a> ObjectRuntime<'a> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
         // Metered transactions don't have limits for now
-        if self.is_metered
-            && (self.state.deleted_ids.len() >= self.constants.max_num_deleted_move_object_ids)
-        {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
-                    "Deleting more than {} IDs is not allowed",
-                    self.constants.max_num_deleted_move_object_ids
-                ))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
-        }
+
+        match check_limit_by_meter!(
+            self.is_metered,
+            self.state.deleted_ids.len(),
+            self.constants.max_num_deleted_move_object_ids,
+            self.constants.max_num_deleted_move_object_ids_system_tx
+        ) {
+            LimitThresholdCrossed::None => (),
+            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
+            LimitThresholdCrossed::Hard(_, lim) => {
+                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                    .with_message(format!("Deleting more than {} IDs is not allowed", lim))
+                    .with_sub_status(
+                        VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
+                    ))
+            }
+        };
 
         let was_new = self.state.new_ids.remove(&id).is_some();
         if !was_new {
@@ -196,7 +232,7 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         owner: Owner,
         ty: Type,
-        tag: StructTag,
+        tag: MoveObjectType,
         obj: Value,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
@@ -222,19 +258,25 @@ impl<'a> ObjectRuntime<'a> {
         };
 
         // Metered transactions don't have limits for now
-        if self.is_metered
-            && (self.state.transfers.len() >= self.constants.max_num_transfered_move_object_ids)
-            && !is_framework_obj
-        {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
-                    "Transfering more than {} IDs is not allowed",
-                    self.constants.max_num_transfered_move_object_ids
-                ))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
-        }
+
+        match check_limit_by_meter!(
+            // TODO: is this not redundant? Metered TX implies framework obj cannot be transfered
+            self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
+            self.state.transfers.len(),
+            self.constants.max_num_transfered_move_object_ids,
+            self.constants.max_num_transfered_move_object_ids_system_tx
+        ) {
+            LimitThresholdCrossed::None => (),
+            LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
+            LimitThresholdCrossed::Hard(_, lim) => {
+                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                    .with_message(format!("Transfering more than {} IDs is not allowed", lim))
+                    .with_sub_status(
+                        VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
+                    ))
+            }
+        };
+
         self.state.transfers.insert(id, (owner, ty, tag, obj));
         Ok(transfer_result)
     }
@@ -263,10 +305,10 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_tag: StructTag,
+        child_type: &MoveObjectType,
     ) -> PartialVMResult<bool> {
         self.object_store
-            .object_exists_and_has_type(parent, child, child_tag)
+            .object_exists_and_has_type(parent, child, child_type)
     }
 
     pub(crate) fn get_or_fetch_child_object(
@@ -275,14 +317,14 @@ impl<'a> ObjectRuntime<'a> {
         child: ObjectID,
         child_ty: &Type,
         child_layout: MoveTypeLayout,
-        child_tag: StructTag,
+        child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
         let res = self.object_store.get_or_fetch_object(
             parent,
             child,
             child_ty,
             child_layout,
-            child_tag,
+            child_move_type,
         )?;
         Ok(match res {
             ObjectResult::MismatchedType => ObjectResult::MismatchedType,
@@ -295,11 +337,11 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_tag: StructTag,
+        child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
         self.object_store
-            .add_object(parent, child, child_ty, child_tag, child_value)
+            .add_object(parent, child, child_ty, child_move_type, child_value)
     }
 
     // returns None if a child object is still borrowed
@@ -355,7 +397,7 @@ impl ObjectRuntimeState {
                 owner: parent,
                 loaded_version,
                 ty,
-                tag,
+                move_type,
                 effect,
             } = child_object_effect;
             if let Some(v) = loaded_version {
@@ -371,13 +413,13 @@ impl ObjectRuntimeState {
                     debug_assert!(!self.new_ids.contains_key(&child));
                     debug_assert!(loaded_version.is_some());
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
                 }
 
                 Op::New(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
                 }
                 // was transferred so not actually deleted
                 Op::Delete if self.transfers.contains_key(&child) => {
@@ -492,7 +534,9 @@ fn update_owner_map(
                 let mut cur = new_owner;
                 loop {
                     if cur == id {
-                        return Err(ExecutionErrorKind::circular_object_ownership(cur).into());
+                        return Err(ExecutionError::from_kind(
+                            ExecutionErrorKind::CircularObjectOwnership { object: cur },
+                        ));
                     }
                     if let Some(parent) = object_owner_map.get(&cur) {
                         cur = *parent;

@@ -255,7 +255,7 @@ impl ValidatorService {
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         let max_tx_size = epoch_store.protocol_config().max_tx_size();
         fp_ensure!(
-            tx_size <= max_tx_size,
+            tx_size as u64 <= max_tx_size,
             tonic::Status::resource_exhausted(format!(
                 "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size}"
             ))

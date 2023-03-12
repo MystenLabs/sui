@@ -317,18 +317,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
 
     fn digest(&self) -> HeaderDigest {
         let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(&self.author);
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(self.created_at.to_le_bytes());
-        for (x, (y, z)) in self.payload.iter() {
-            hasher.update(Digest::from(*x));
-            hasher.update(y.to_le_bytes());
-            hasher.update(z.to_le_bytes());
-        }
-        for x in self.parents.iter() {
-            hasher.update(Digest::from(*x))
-        }
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
         HeaderDigest(hasher.finalize().into())
     }
 }

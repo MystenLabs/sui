@@ -23,8 +23,6 @@ pub const STAKED_SUI_STRUCT_NAME: &IdentStr = ident_str!("StakedSui");
 
 pub const ADD_STAKE_MUL_COIN_FUN_NAME: &IdentStr = ident_str!("request_add_stake_mul_coin");
 pub const ADD_STAKE_FUN_NAME: &IdentStr = ident_str!("request_add_stake_mul_coin");
-pub const ADD_STAKE_LOCKED_COIN_FUN_NAME: &IdentStr =
-    ident_str!("request_add_stake_mul_locked_coin");
 pub const WITHDRAW_STAKE_FUN_NAME: &IdentStr = ident_str!("request_withdraw_stake");
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -34,7 +32,6 @@ pub struct StakedSui {
     validator_address: SuiAddress,
     stake_activation_epoch: u64,
     principal: Balance,
-    sui_token_lock: Option<EpochId>,
 }
 
 impl StakedSui {
@@ -45,6 +42,13 @@ impl StakedSui {
             name: STAKED_SUI_STRUCT_NAME.to_owned(),
             type_params: vec![],
         }
+    }
+
+    pub fn is_staked_sui(s: &StructTag) -> bool {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == STAKING_POOL_MODULE_NAME
+            && s.name.as_ident_str() == STAKED_SUI_STRUCT_NAME
+            && s.type_params.is_empty()
     }
 
     pub fn id(&self) -> ObjectID {
@@ -66,10 +70,6 @@ impl StakedSui {
     pub fn validator_address(&self) -> SuiAddress {
         self.validator_address
     }
-
-    pub fn sui_token_lock(&self) -> Option<EpochId> {
-        self.sui_token_lock
-    }
 }
 
 impl TryFrom<&Object> for StakedSui {
@@ -77,7 +77,7 @@ impl TryFrom<&Object> for StakedSui {
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         match &object.data {
             Data::Move(o) => {
-                if o.type_ == StakedSui::type_() {
+                if o.type_().is_staked_sui() {
                     return bcs::from_bytes(o.contents()).map_err(|err| SuiError::TypeError {
                         error: format!("Unable to deserialize StakedSui object: {:?}", err),
                     });

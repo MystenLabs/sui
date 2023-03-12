@@ -42,6 +42,7 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tap::tap::TapFallible;
 use tracing::{debug, warn};
@@ -56,6 +57,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use tokio::sync::broadcast;
+use tokio::sync::oneshot::Sender;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -67,9 +69,8 @@ pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_types::TransactionsClient;
 use sui_config::node::DBCheckpointConfig;
-use sui_core::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, EpochStartConfiguration,
-};
+use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -79,6 +80,7 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
@@ -124,6 +126,8 @@ pub struct SuiNode {
 
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
+
+    _db_checkpoint_handle: Option<Sender<()>>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -261,10 +265,22 @@ impl SuiNode {
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
                 checkpoint_path: Some(config.db_checkpoint_path()),
-                ..config.db_checkpoint_config
+                ..config.db_checkpoint_config.clone()
             }
         } else {
             config.db_checkpoint_config.clone()
+        };
+
+        let db_checkpoint_handle = match db_checkpoint_config
+            .checkpoint_path
+            .as_ref()
+            .zip(db_checkpoint_config.object_store_config.as_ref())
+        {
+            Some((path, config)) => {
+                let handler = DBCheckpointHandler::new(path, config, 60)?;
+                Some(handler.start())
+            }
+            None => None,
         };
 
         let state = AuthorityState::new(
@@ -329,7 +345,6 @@ impl SuiNode {
         let accumulator = Arc::new(StateAccumulator::new(store));
 
         let authority_names_to_peer_ids = epoch_store
-            .epoch_start_configuration()
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
@@ -388,6 +403,7 @@ impl SuiNode {
             connection_monitor_status,
             trusted_peer_change_tx,
 
+            _db_checkpoint_handle: db_checkpoint_handle,
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
@@ -604,7 +620,7 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        let new_epoch_start_state = epoch_store.epoch_start_config().epoch_start_state();
+        let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
         let transactions_addr = &config
@@ -651,9 +667,7 @@ impl SuiNode {
         debug!(
             "Starting checkpoint service with epoch start timestamp {}
             and epoch duration {}",
-            epoch_store
-                .epoch_start_configuration()
-                .epoch_start_timestamp_ms(),
+            epoch_store.epoch_start_state().epoch_start_timestamp_ms(),
             config.epoch_duration_ms
         );
 
@@ -662,7 +676,7 @@ impl SuiNode {
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
             next_reconfiguration_timestamp_ms: epoch_store
-                .epoch_start_configuration()
+                .epoch_start_state()
                 .epoch_start_timestamp_ms()
                 .checked_add(config.epoch_duration_ms)
                 .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
@@ -671,7 +685,7 @@ impl SuiNode {
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
         let max_tx_per_checkpoint = max_tx_per_checkpoint(epoch_store.protocol_config());
-        let max_checkpoint_size = epoch_store.protocol_config().max_checkpoint_size();
+        let max_checkpoint_size = epoch_store.protocol_config().max_checkpoint_size() as usize;
 
         CheckpointService::spawn(
             state.clone(),
@@ -852,7 +866,7 @@ impl SuiNode {
 
             // If we eventually add tests that exercise safe mode, we will need a configurable way of
             // guarding against unexpected safe_mode.
-            debug_assert!(!new_epoch_start_state.safe_mode);
+            debug_assert!(!new_epoch_start_state.safe_mode());
 
             info!(
                 next_epoch,
@@ -871,7 +885,7 @@ impl SuiNode {
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
             let _ = self.end_of_epoch_channel.send((
                 next_epoch_committee.clone(),
-                ProtocolVersion::new(new_epoch_start_state.protocol_version),
+                new_epoch_start_state.protocol_version(),
             ));
             let _ = send_trusted_peer_change(
                 &self.config,
@@ -980,8 +994,10 @@ impl SuiNode {
             .get_epoch_last_checkpoint(cur_epoch_store.epoch())
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
-        let epoch_start_configuration =
-            EpochStartConfiguration::new(next_epoch_start_system_state, *last_checkpoint.digest());
+        let epoch_start_configuration = EpochStartConfiguration::new_v1(
+            next_epoch_start_system_state,
+            *last_checkpoint.digest(),
+        );
 
         let new_epoch_store = self
             .state
@@ -1053,7 +1069,7 @@ pub async fn build_server(
 
 #[cfg(not(test))]
 fn max_tx_per_checkpoint(protocol_config: &ProtocolConfig) -> usize {
-    protocol_config.max_transactions_per_checkpoint()
+    protocol_config.max_transactions_per_checkpoint() as usize
 }
 
 #[cfg(test)]

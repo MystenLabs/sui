@@ -1,8 +1,11 @@
 name: Simulator Tests
 
+concurrency:
+  group: ${{ github.workflow }}
+
 on:
   schedule:
-    - cron: '0 2 * * *'  # every day at 2am
+    - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
 
 env:
@@ -30,34 +33,38 @@ env:
 jobs:
   simtest:
     timeout-minutes: 120
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ self-hosted, simtest-01 ]
     env:
       RUST_LOG: off
       # Runs tests much faster - disables signing and verification
       USE_MOCK_CRYPTO: 1
+      CARGO_TERM_COLOR: always
 
     steps:
-    - name: Checkout sui repo main branch
-      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    - name: Cargo clean
+      run: |
+        cd ~/sui && cargo clean && git restore Cargo.lock
 
-    - name: Install rust toolchain
-      uses: actions-rs/toolchain@v1
+    - name: Checkout sui repo and cargo clean
+      run: |
+        cd ~/sui && git fetch origin && git rebase origin/main
 
-    - name: Install nexttest
-      uses: taiki-e/install-action@nextest
+    - name: Install simtest
+      run: |
+        cd ~/sui && ./scripts/simtest/install.sh
 
     - name: Build simtest
       run: |
-        ./scripts/simtest/cargo-simtest simtest build
-
+        cd ~/sui && ./scripts/simtest/cargo-simtest simtest build
+    
     - name: Run simtest
       run: |
-        ./scripts/simtest/simtest-run.sh
+        cd ~/sui && ./scripts/simtest/simtest-run.sh
 
   notify:
     name: Notify
     needs: [simtest]
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: [self-hosted, simtest-01]
     if: always() # always notify
 
     steps:
@@ -106,14 +113,17 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \n"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
                 }
+              },
+              {
+                "type": "divider"
               },
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<${{ env.GH_JOB_LINK }}|logs>"
+                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder"
                 }
               }
             ]

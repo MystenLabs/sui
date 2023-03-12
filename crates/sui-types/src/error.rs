@@ -5,7 +5,7 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation},
+    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation, MoveLocationOpt},
     object::Owner,
 };
 use fastcrypto::error::FastCryptoError;
@@ -638,6 +638,10 @@ impl ExecutionError {
         Self::new(kind, Some(source.into()))
     }
 
+    pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
+        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
+    }
+
     pub fn with_command_index(mut self, command: CommandIndex) -> Self {
         self.inner.command = Some(command);
         self
@@ -753,7 +757,7 @@ pub fn convert_vm_error<
                     }
                     _ => None,
                 };
-                ExecutionFailureStatus::MovePrimitiveRuntimeError(location)
+                ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(location))
             }
             StatusType::Validation
             | StatusType::Verification

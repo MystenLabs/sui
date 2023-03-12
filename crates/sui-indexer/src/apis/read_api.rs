@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, SuiTransactionResponseOptions, TransactionsPage,
@@ -269,12 +269,14 @@ where
         Ok(self.get_transactions(query, cursor, limit, descending_order)?)
     }
 
-    async fn get_transactions_in_range(
+    async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> RpcResult<Vec<TransactionDigest>> {
-        self.fullnode.get_transactions_in_range(start, end).await
+        self.fullnode
+            .get_transactions_in_range_deprecated(start, end)
+            .await
     }
 
     async fn get_transaction_with_options(
@@ -372,6 +374,16 @@ where
     ) -> RpcResult<SuiPastObjectResponse> {
         self.fullnode
             .try_get_past_object(object_id, version, options)
+            .await
+    }
+
+    async fn try_multi_get_past_objects(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiPastObjectResponse>> {
+        self.fullnode
+            .try_multi_get_past_objects(past_objects, options)
             .await
     }
 

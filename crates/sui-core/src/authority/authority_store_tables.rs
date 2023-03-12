@@ -19,6 +19,7 @@ use crate::authority::authority_store_types::{
     MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper,
     StoreObjectWrapper,
 };
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
@@ -172,6 +173,7 @@ impl AuthorityPerpetualTables {
             .epoch_start_configuration
             .get(&())?
             .expect("Must have current epoch.")
+            .epoch_start_state()
             .epoch())
     }
 

@@ -6,7 +6,6 @@ import { Transaction } from '../builder';
 import { TransactionDataBuilder } from '../builder/TransactionData';
 import { SerializedSignature } from '../cryptography/signature';
 import { Provider } from '../providers/provider';
-import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
 import {
   ExecuteTransactionRequestType,
@@ -16,6 +15,7 @@ import {
   DevInspectResults,
   DryRunTransactionResponse,
   SuiTransactionResponse,
+  SuiTransactionResponseOptions,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
@@ -58,8 +58,8 @@ export abstract class SignerWithProvider implements Signer {
     );
   }
 
-  constructor(provider?: Provider) {
-    this.provider = provider || new VoidProvider();
+  constructor(provider: Provider) {
+    this.provider = provider;
   }
 
   /**
@@ -107,10 +107,16 @@ export abstract class SignerWithProvider implements Signer {
 
   /**
    * Sign a transaction and submit to the Fullnode for execution.
+   *
+   * @param options specify which fields to return (e.g., transaction, effects, events, etc).
+   * By default, only the transaction digest will be returned.
+   * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`.
+   * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
    */
   async signAndExecuteTransaction(
     transaction: Uint8Array | Transaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
+    options?: SuiTransactionResponseOptions,
+    requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse> {
     const { transactionBytes, signature } = await this.signTransaction(
       transaction,
@@ -119,6 +125,7 @@ export abstract class SignerWithProvider implements Signer {
     return await this.provider.executeTransaction(
       transactionBytes,
       signature,
+      options,
       requestType,
     );
   }

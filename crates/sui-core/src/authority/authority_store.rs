@@ -7,7 +7,9 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObjectPair,
 };
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use either::Either;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
@@ -79,7 +81,7 @@ impl AuthorityStore {
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
-            let epoch_start_configuration = EpochStartConfiguration::new(
+            let epoch_start_configuration = EpochStartConfiguration::new_v1(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
             );
@@ -1431,6 +1433,23 @@ impl ModuleResolver for AuthorityStore {
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+}
+
+impl GetModule for AuthorityStore {
+    type Error = SuiError;
+    type Item = CompiledModule;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        Ok(self
+            .get_module(id)?
+            .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
+    }
+}
+
+impl ObjectStore for AuthorityStore {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.get_object(object_id)
     }
 }
 

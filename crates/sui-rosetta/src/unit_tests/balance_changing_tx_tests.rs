@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
 use signature::rand_core::OsRng;
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
@@ -98,7 +99,7 @@ async fn test_transfer_object() {
     let object_ref = get_random_sui(&client, sender, vec![]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object_ref);
+        builder.transfer_object(recipient, object_ref).unwrap();
         builder.finish()
     };
     test_transaction(
@@ -521,7 +522,6 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let metadata = ConstructionMetadata {
         tx_metadata: TransactionMetadata::Delegation {
             coins: vec![coin1, coin2],
-            locked_until_epoch: None,
         },
         sender,
         gas: vec![gas],
@@ -623,6 +623,7 @@ async fn test_transaction(
             Transaction::from_data(data.clone(), Intent::default(), vec![signature])
                 .verify()
                 .unwrap(),
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

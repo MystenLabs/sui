@@ -36,12 +36,17 @@ max_fields_in_struct: 32
 max_dependency_depth: 100
 max_num_event_emit: 256
 max_num_new_move_object_ids: 2048
+max_num_new_move_object_ids_system_tx: 32768
 max_num_deleted_move_object_ids: 2048
+max_num_deleted_move_object_ids_system_tx: 32768
 max_num_transfered_move_object_ids: 2048
+max_num_transfered_move_object_ids_system_tx: 32768
 max_event_emit_size: 256000
 max_move_vector_len: 262144
 object_runtime_max_num_cached_objects: 1000
+object_runtime_max_num_cached_objects_system_tx: 16000
 object_runtime_max_num_store_entries: 1000
+object_runtime_max_num_store_entries_system_tx: 16000
 base_tx_cost_fixed: 110000
 package_publish_cost_fixed: 1000
 base_tx_cost_per_byte: 0
