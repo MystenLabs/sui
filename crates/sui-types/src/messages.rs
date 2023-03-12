@@ -907,7 +907,11 @@ impl Display for Command {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Command::Publish(_bytes, _dep_ids) => write!(f, "Publish(_)"),
+            Command::Publish(_bytes, _dep_ids) => {
+                write!(f, "Publish(_,")?;
+                write_sep(f, _dep_ids, ",")?;
+                write!(f, ")")
+            }
             Command::Upgrade(_bytes, deps, ticket) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
