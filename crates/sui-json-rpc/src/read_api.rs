@@ -647,7 +647,7 @@ impl ReadApiServer for ReadApi {
         }?)
     }
 
-    async fn get_transactions(
+    async fn query_transactions(
         &self,
         query: TransactionQuery,
         // exclusive cursor if `Some`, otherwise start from the beginning

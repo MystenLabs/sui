@@ -76,7 +76,7 @@ impl RpcExampleProvider {
             self.get_objects_owned_by_address(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transactions(),
+            self.query_transactions(),
             self.get_events(),
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
@@ -355,7 +355,7 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transactions(&mut self) -> Examples {
+    fn query_transactions(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
         let has_next_page = data.len() > (9 - 5);
         data.truncate(9 - 5);
@@ -367,7 +367,7 @@ impl RpcExampleProvider {
             has_next_page,
         };
         Examples::new(
-            "sui_getTransactions",
+            "sui_queryTransactions",
             vec![ExamplePairing::new(
                 "Return the transaction digest for specified query criteria",
                 vec![

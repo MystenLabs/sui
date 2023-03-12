@@ -24,7 +24,7 @@ export function useScorecardHistory(scorecardId?: string | null) {
 
       // It's very likely to have duplicates in the `txIds`; so we need to
       // filter them out and pass a unique set.
-      const txIds = await provider.getTransactionsForObject(scorecardId);
+      const txIds = await provider.queryTransactionsForObject(scorecardId);
       const txs = await provider.getTransactionResponseBatch(
         Array.from(new Set(txIds))
       );

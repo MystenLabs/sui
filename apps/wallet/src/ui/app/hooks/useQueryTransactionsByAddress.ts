@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 const dedupe = (arr: string[]) => Array.from(new Set(arr));
 
-export function useGetTransactionsByAddress(address: SuiAddress | null) {
+export function useQueryTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpcClient();
 
     return useQuery(
@@ -15,10 +15,10 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
         async () => {
             // combine from and to transactions
             const [txnIds, fromTxnIds] = await Promise.all([
-                rpc.getTransactions({
+                rpc.queryTransactions({
                     ToAddress: address!,
                 }),
-                rpc.getTransactions({
+                rpc.queryTransactions({
                     FromAddress: address!,
                 }),
             ]);

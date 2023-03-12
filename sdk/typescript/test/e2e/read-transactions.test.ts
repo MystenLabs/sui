@@ -18,32 +18,32 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transaction', async () => {
-    const resp = await toolbox.provider.getTransactions('All', null, 1);
+    const resp = await toolbox.provider.queryTransactions('All', null, 1);
     const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionResponse(digest);
     expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
   it('Get Transactions', async () => {
-    const resp = await toolbox.provider.getTransactionsForAddress(
+    const resp = await toolbox.provider.queryTransactionsForAddress(
       toolbox.address(),
       false,
     );
     expect(resp.length).to.greaterThan(0);
 
-    const allTransactions = await toolbox.provider.getTransactions(
+    const allTransactions = await toolbox.provider.queryTransactions(
       'All',
       null,
       10,
     );
     expect(allTransactions.data.length).to.greaterThan(0);
 
-    const resp2 = await toolbox.provider.getTransactions(
+    const resp2 = await toolbox.provider.queryTransactions(
       { ToAddress: toolbox.address() },
       null,
       null,
     );
-    const resp3 = await toolbox.provider.getTransactions(
+    const resp3 = await toolbox.provider.queryTransactions(
       { FromAddress: toolbox.address() },
       null,
       null,
@@ -52,7 +52,7 @@ describe('Transaction Reading API', () => {
   });
 
   it('Genesis exists', async () => {
-    const allTransactions = await toolbox.provider.getTransactions(
+    const allTransactions = await toolbox.provider.queryTransactions(
       'All',
       null,
       1,

@@ -140,8 +140,8 @@ pub trait ReadApi {
     ) -> RpcResult<SuiMoveNormalizedFunction>;
 
     /// Return list of transactions for a specified query criteria.
-    #[method(name = "getTransactions")]
-    async fn get_transactions(
+    #[method(name = "queryTransactions")]
+    async fn query_transactions(
         &self,
         /// the transaction query criteria.
         query: TransactionQuery,

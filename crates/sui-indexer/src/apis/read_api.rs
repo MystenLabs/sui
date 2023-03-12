@@ -56,7 +56,7 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok(txn_resp)
     }
 
-    fn get_transactions(
+    fn query_transactions(
         &self,
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
@@ -250,7 +250,7 @@ where
         Ok(self.get_total_transaction_number()?)
     }
 
-    async fn get_transactions(
+    async fn query_transactions(
         &self,
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
@@ -259,14 +259,14 @@ where
     ) -> RpcResult<TransactionsPage> {
         if self
             .method_to_be_forwarded
-            .contains(&"get_transactions".to_string())
+            .contains(&"query_transactions".to_string())
         {
             return self
                 .fullnode
-                .get_transactions(query, cursor, limit, descending_order)
+                .query_transactions(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.get_transactions(query, cursor, limit, descending_order)?)
+        Ok(self.query_transactions(query, cursor, limit, descending_order)?)
     }
 
     async fn get_transactions_in_range_deprecated(

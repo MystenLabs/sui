@@ -539,7 +539,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
-  async getTransactions(
+  async queryTransactions(
     query: TransactionQuery,
     cursor: TransactionDigest | null = null,
     limit: number | null = null,
@@ -547,7 +547,7 @@ export class JsonRpcProvider extends Provider {
   ): Promise<PaginatedTransactionDigests> {
     try {
       return await this.client.requestWithType(
-        'sui_getTransactions',
+        'sui_queryTransactions',
         [query, cursor, limit, order === 'descending'],
         PaginatedTransactionDigests,
         this.options.skipDataValidation,
@@ -559,17 +559,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionsForObject(
+  async queryTransactionsForObject(
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactions',
+        method: 'sui_queryTransactions',
         args: [{ InputObject: objectID }, null, null, descendingOrder],
       },
       {
-        method: 'sui_getTransactions',
+        method: 'sui_queryTransactions',
         args: [{ MutatedObject: objectID }, null, null, descendingOrder],
       },
     ];
@@ -591,17 +591,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionsForAddress(
+  async queryTransactionsForAddress(
     addressID: SuiAddress,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactions',
+        method: 'sui_queryTransactions',
         args: [{ ToAddress: addressID }, null, null, descendingOrder],
       },
       {
-        method: 'sui_getTransactions',
+        method: 'sui_queryTransactions',
         args: [{ FromAddress: addressID }, null, null, descendingOrder],
       },
     ];

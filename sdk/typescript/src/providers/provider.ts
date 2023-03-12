@@ -216,7 +216,7 @@ export abstract class Provider {
   /**
    * Get transactions for a given query criteria
    */
-  abstract getTransactions(
+  abstract queryTransactions(
     query: TransactionQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
