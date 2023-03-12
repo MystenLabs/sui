@@ -29,7 +29,7 @@ use sui_protocol_config::ProtocolConfig;
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
-    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac, unsecure},
+    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     event::EventEmitCostParams,
 };
 
@@ -270,11 +270,6 @@ pub fn all_natives(
             "types",
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
-        ),
-        (
-            "unsecure",
-            "unsecure_verify",
-            make_native!(unsecure::unsecure_verify),
         ),
         (
             "validator",
