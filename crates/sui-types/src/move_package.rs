@@ -182,13 +182,13 @@ impl MovePackage {
     /// Create an upgraded version of the package along with this version's type origin and linkage
     /// tables.
     pub fn new_upgraded<'p>(
-        predecessor: &MovePackage,
+        &self,
         modules: Vec<CompiledModule>,
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        let type_origin_table = build_upgraded_type_origin_table(predecessor, &modules);
-        let mut new_version = SequenceNumber::from(predecessor.version().value());
+        let type_origin_table = build_upgraded_type_origin_table(self, &modules);
+        let mut new_version = self.version();
         new_version.increment();
         // TODO: compute all upgraded metadata
         Self::from_module_iter_with_type_origin_table(
