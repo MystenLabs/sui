@@ -273,6 +273,8 @@ validators:
   validator_candidates:
     id: "0x6d3ffc5213ed4df6802cd4535d3c18f66d85bab5e9f004a7087a005e2f8dc455"
     size: 0
+  at_risk_validators:
+    contents: []
 storage_fund:
   value: 0
 parameters:

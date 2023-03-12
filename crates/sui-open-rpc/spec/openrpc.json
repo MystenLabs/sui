@@ -5935,6 +5935,7 @@
         "type": "object",
         "required": [
           "activeValidators",
+          "atRiskValidators",
           "epoch",
           "epochStartTimestampMs",
           "governanceStartEpoch",
@@ -5964,6 +5965,25 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
+          },
+          "atRiskValidators": {
+            "description": "Map storing the number of epochs for which each validator has been below the low stake threshold.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/SuiAddress"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
             }
           },
           "epoch": {
@@ -6088,7 +6108,7 @@
             "minimum": 0.0
           },
           "validatorCandidatesId": {
-            "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.",
+            "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator` structs.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ObjectID"

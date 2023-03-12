@@ -170,6 +170,7 @@ export const SuiSystemStateSummary = object({
   inactivePoolsSize: number(),
   validatorCandidatesId: string(),
   validatorCandidatesSize: number(),
+  atRiskValidators: array(tuple([SuiAddress, number()])),
   validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 

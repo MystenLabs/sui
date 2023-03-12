@@ -60,6 +60,9 @@ module sui::validator_set {
         /// When the candidate has met the min stake requirement, they can call `request_add_validator` to
         /// officially add them to the active validator set `active_validators` next epoch.
         validator_candidates: Table<address, Validator>,
+
+        /// Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+        at_risk_validators: VecMap<address, u64>,
     }
 
     /// Event containing staking and rewards related information of
@@ -90,6 +93,7 @@ module sui::validator_set {
         epoch: u64,
         validator_address: address,
         staking_pool_id: ID,
+        is_voluntary: bool,
     }
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
@@ -125,6 +129,7 @@ module sui::validator_set {
             staking_pool_mappings,
             inactive_validators: table::new(ctx),
             validator_candidates: table::new(ctx),
+            at_risk_validators: vec_map::empty(),
         };
         voting_power::set_voting_power(&mut validators.active_validators);
         validators
@@ -281,6 +286,10 @@ module sui::validator_set {
         storage_fund_reward: &mut Balance<SUI>,
         validator_report_records: &mut VecMap<address, VecSet<address>>,
         reward_slashing_rate: u64,
+        low_stake_threshold: u64,
+        very_low_stake_threshold: u64,
+        low_stake_grace_period: u64,
+        governance_start_epoch: u64,
         ctx: &mut TxContext,
     ) {
         let new_epoch = tx_context::epoch(ctx) + 1;
@@ -353,6 +362,12 @@ module sui::validator_set {
 
         process_pending_removals(self, validator_report_records, ctx);
 
+        // kick low stake validators out.
+        if (tx_context::epoch(ctx) >= governance_start_epoch) {
+            update_and_process_low_stake_departures(
+                self, low_stake_threshold, very_low_stake_threshold, low_stake_grace_period, validator_report_records, ctx);
+        };
+
         self.total_stake = calculate_total_stakes(&self.active_validators);
 
         voting_power::set_voting_power(&mut self.active_validators);
@@ -360,6 +375,51 @@ module sui::validator_set {
         // At this point, self.active_validators are updated for next epoch.
         // Now we process the staged validator metadata.
         effectuate_staged_metadata(self);
+    }
+
+    fun update_and_process_low_stake_departures(
+        self: &mut ValidatorSet,
+        low_stake_threshold: u64,
+        very_low_stake_threshold: u64,
+        low_stake_grace_period: u64,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
+        ctx: &mut TxContext
+    ) {
+        // Iterate through all the active validators, record their low stake status, and kick them out if the condition is met.
+        let i = vector::length(&self.active_validators);
+        while (i > 0) {
+            i = i - 1;
+            let validator_ref = vector::borrow(&self.active_validators, i);
+            let validator_address = validator::sui_address(validator_ref);
+            let stake = validator::total_stake_amount(validator_ref);
+            if (stake >= low_stake_threshold) {
+                // The validator is safe. We remove their entry from the at_risk map if there exists one.
+                if (vec_map::contains(&self.at_risk_validators, &validator_address)) {
+                    vec_map::remove(&mut self.at_risk_validators, &validator_address);
+                }
+            } else if (stake >= very_low_stake_threshold) {
+                // The stake is a bit below the threshold so we increment the entry of the validator in the map.
+                let new_low_stake_period =
+                    if (vec_map::contains(&self.at_risk_validators, &validator_address)) {
+                        let num_epochs = vec_map::get_mut(&mut self.at_risk_validators, &validator_address);
+                        *num_epochs = *num_epochs + 1;
+                        *num_epochs
+                    } else {
+                        vec_map::insert(&mut self.at_risk_validators, validator_address, 1);
+                        1
+                    };
+
+                // If the grace period has passed, the validator has to leave us.
+                if (new_low_stake_period > low_stake_grace_period) {
+                    let validator = vector::remove(&mut self.active_validators, i);
+                    process_validator_departure(self, validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
+                }
+            } else {
+                // The validator's stake is lower than the very low threshold so we kick them out immediately.
+                let validator = vector::remove(&mut self.active_validators, i);
+                process_validator_departure(self, validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
+            }
+        }
     }
 
     /// Effectutate pending next epoch metadata if they are staged.
@@ -642,30 +702,47 @@ module sui::validator_set {
         validator_report_records: &mut VecMap<address, VecSet<address>>,
         ctx: &mut TxContext,
     ) {
-        let new_epoch = tx_context::epoch(ctx) + 1;
         sort_removal_list(&mut self.pending_removals);
         while (!vector::is_empty(&self.pending_removals)) {
             let index = vector::pop_back(&mut self.pending_removals);
             let validator = vector::remove(&mut self.active_validators, index);
-            let validator_pool_id = staking_pool_id(&validator);
-            table::remove(&mut self.staking_pool_mappings, validator_pool_id);
-            self.total_stake = self.total_stake - validator::total_stake_amount(&validator);
-
-            clean_report_records_leaving_validator(
-                validator_report_records, validator::sui_address(&validator));
-
-            event::emit(
-                ValidatorLeaveEvent {
-                    epoch: new_epoch,
-                    validator_address: validator::sui_address(&validator),
-                    staking_pool_id: staking_pool_id(&validator),
-                }
-            );
-
-            // Deactivate the validator and its staking pool
-            validator::deactivate(&mut validator, new_epoch);
-            table::add(&mut self.inactive_validators, validator_pool_id, validator);
+            process_validator_departure(self, validator, validator_report_records, true /* the validator removes itself voluntarily */, ctx);
         }
+    }
+
+    fun process_validator_departure(
+        self: &mut ValidatorSet,
+        validator: Validator,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
+        is_voluntary: bool,
+        ctx: &mut TxContext,
+    ) {
+        let new_epoch = tx_context::epoch(ctx) + 1;
+        let validator_address = validator::sui_address(&validator);
+        let validator_pool_id = staking_pool_id(&validator);
+
+        // Remove the validator from our tables.
+        table::remove(&mut self.staking_pool_mappings, validator_pool_id);
+        if (vec_map::contains(&self.at_risk_validators, &validator_address)) {
+            vec_map::remove(&mut self.at_risk_validators, &validator_address);
+        };
+
+        self.total_stake = self.total_stake - validator::total_stake_amount(&validator);
+
+        clean_report_records_leaving_validator(validator_report_records, validator_address);
+
+        event::emit(
+            ValidatorLeaveEvent {
+                epoch: new_epoch,
+                validator_address,
+                staking_pool_id: staking_pool_id(&validator),
+                is_voluntary,
+            }
+        );
+
+        // Deactivate the validator and its staking pool
+        validator::deactivate(&mut validator, new_epoch);
+        table::add(&mut self.inactive_validators, validator_pool_id, validator);
     }
 
     fun clean_report_records_leaving_validator(
@@ -1039,6 +1116,20 @@ module sui::validator_set {
     /// Returns true if the staking pool identified by `staking_pool_id` is of an inactive validator.
     public fun is_inactive_validator(self: &ValidatorSet, staking_pool_id: ID): bool {
         table::contains(&self.inactive_validators, staking_pool_id)
+    }
+
+    #[test_only]
+    public fun active_validator_addresses(self: &ValidatorSet): vector<address> {
+        let vs = &self.active_validators;
+        let res = vector[];
+        let i = 0;
+        let length = vector::length(vs);
+        while (i < length) {
+            let validator_address = validator::sui_address(vector::borrow(vs, i));
+            vector::push_back(&mut res, validator_address);
+            i = i + 1;
+        };
+        res
     }
 
     // TODO: investigate prover failure and turn verification back on.
