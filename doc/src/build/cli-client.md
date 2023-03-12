@@ -182,7 +182,8 @@ sui client objects
 ```
 
 The response resembles the following:
-```                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+```
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x1aa482ad8c6240cda3097a4aa13ad5bfb27bf6052133c01f79c8b4ea0aaa0601 |     1      | OpU8HmueEaLzK6hkNSQkcahG8qo73ag4vJPG+g8EQBs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
  0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d |     1      | lRamSZkLHnfN9mcrkoVzmXwHxE7GnFHNnqe8dzWEUA8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
