@@ -3,6 +3,7 @@
 
 use crate::batch_bls_verifier::*;
 use crate::test_utils::{make_cert_with_large_committee, make_dummy_tx};
+use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use prometheus::Registry;
 use rand::{thread_rng, Rng};
@@ -10,7 +11,11 @@ use std::sync::Arc;
 use sui_macros::sim_test;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
+use sui_types::gas::GasCostSummary;
 use sui_types::messages::CertifiedTransaction;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
+};
 
 fn gen_certs(
     committee: &Committee,
@@ -34,13 +39,49 @@ fn gen_certs(
         .collect()
 }
 
+fn gen_ckpts(
+    committee: &Committee,
+    key_pairs: &[AuthorityKeyPair],
+    count: usize,
+) -> Vec<SignedCheckpointSummary> {
+    (0..count)
+        .into_iter()
+        .map(|i| {
+            let k = &key_pairs[i % key_pairs.len()];
+            let name = k.public().into();
+            SignedCheckpointSummary::new(
+                committee.epoch,
+                CheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    0,
+                    &CheckpointContents::new_with_causally_ordered_transactions(vec![]),
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                    0,
+                ),
+                k,
+                name,
+            )
+        })
+        .collect()
+}
+
 #[sim_test]
 async fn test_batch_verify() {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
 
     let certs = gen_certs(&committee, &key_pairs, 16);
+    let ckpts = gen_ckpts(&committee, &key_pairs, 16);
 
-    batch_verify_all_certificates(&committee, &certs).unwrap();
+    batch_verify_all_certificates_and_checkpoints(&committee, &certs, &ckpts).unwrap();
+
+    {
+        let mut ckpts = gen_ckpts(&committee, &key_pairs, 16);
+        *ckpts[0].auth_sig_mut_for_testing() = ckpts[1].auth_sig().clone();
+        batch_verify_all_certificates_and_checkpoints(&committee, &certs, &ckpts).unwrap_err();
+    }
 
     let (other_sender, other_sender_sec): (_, AccountKeyPair) = get_key_pair();
     // this test is a bit much for the current implementation - it was originally written to verify
@@ -51,7 +92,7 @@ async fn test_batch_verify() {
         let other_tx = make_dummy_tx(receiver, other_sender, &other_sender_sec);
         let other_cert = make_cert_with_large_committee(&committee, &key_pairs, &other_tx);
         *certs[i].auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
-        batch_verify_all_certificates(&committee, &certs).unwrap_err();
+        batch_verify_all_certificates_and_checkpoints(&committee, &certs, &ckpts).unwrap_err();
 
         let results = batch_verify_certificates(&committee, &certs);
         results[i].as_ref().unwrap_err();

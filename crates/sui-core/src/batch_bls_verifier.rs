@@ -6,7 +6,7 @@ use itertools::izip;
 use lru::LruCache;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::Intent;
 use std::sync::Arc;
 use sui_types::{
     committee::Committee,
@@ -15,6 +15,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     message_envelope::Message,
     messages::{CertifiedTransaction, VerifiedCertificate},
+    messages_checkpoint::SignedCheckpointSummary,
 };
 
 use tap::TapFallible;
@@ -87,17 +88,24 @@ impl BatchCertificateVerifier {
     }
 
     /// Verifies all certs, returns Ok only if all are valid.
-    pub fn verify_cert_batch(&self, certs: Vec<CertifiedTransaction>) -> SuiResult {
+    pub fn verify_certs_and_checkpoints(
+        &self,
+        certs: Vec<CertifiedTransaction>,
+        checkpoints: Vec<SignedCheckpointSummary>,
+    ) -> SuiResult {
         let certs: Vec<_> = certs
             .into_iter()
             .filter(|cert| !self.cache.is_cert_verified(&cert.certificate_digest()))
             .collect();
 
         // Note: this verifies user sigs
-        batch_verify_all_certificates(&self.committee, &certs).tap_ok(|_| {
-            self.cache
-                .cache_certs_verified(certs.into_iter().map(|c| c.certificate_digest()).collect())
-        })
+        batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints).tap_ok(
+            |_| {
+                self.cache.cache_certs_verified(
+                    certs.into_iter().map(|c| c.certificate_digest()).collect(),
+                )
+            },
+        )
     }
 
     /// Verifies one cert asynchronously, in a batch.
@@ -257,15 +265,19 @@ impl BatchCertificateVerifierMetrics {
 }
 
 /// Verifies all certificates - if any fail return error.
-pub fn batch_verify_all_certificates(
+pub fn batch_verify_all_certificates_and_checkpoints(
     committee: &Committee,
     certs: &[CertifiedTransaction],
+    checkpoints: &[SignedCheckpointSummary],
 ) -> SuiResult {
     for cert in certs {
         cert.verify_sender_signatures()?;
     }
+    for ckpt in checkpoints {
+        ckpt.data().verify(Some(committee.epoch()))?;
+    }
 
-    batch_verify_certificates_impl(committee, certs)
+    batch_verify_certificates_impl(committee, certs, checkpoints)
 }
 
 /// Verifies certificates in batch mode, but returns a separate result for each cert.
@@ -273,7 +285,7 @@ pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
-    match batch_verify_certificates_impl(committee, certs) {
+    match batch_verify_certificates_impl(committee, certs, &[]) {
         Ok(_) => certs
             .iter()
             .map(|c| {
@@ -300,6 +312,7 @@ pub fn batch_verify_certificates(
 fn batch_verify_certificates_impl(
     committee: &Committee,
     certs: &[CertifiedTransaction],
+    checkpoints: &[SignedCheckpointSummary],
 ) -> SuiResult {
     let mut obligation = VerificationObligation::default();
 
@@ -307,9 +320,19 @@ fn batch_verify_certificates_impl(
         let idx = obligation.add_message(
             cert.data(),
             cert.epoch(),
-            Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+            Intent::default().with_scope(cert.scope()),
         );
         cert.auth_sig()
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+    }
+
+    for ckpt in checkpoints {
+        let idx = obligation.add_message(
+            ckpt.data(),
+            ckpt.epoch(),
+            Intent::default().with_scope(ckpt.scope()),
+        );
+        ckpt.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
     }
 
