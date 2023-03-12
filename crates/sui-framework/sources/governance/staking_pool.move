@@ -51,10 +51,10 @@ module sui::staking_pool {
         /// Total number of pool tokens issued by the pool.
         pool_token_balance: u64,
         /// Exchange rate history of previous epochs. Key is the epoch number.
-        /// The entries start from the `starting_epoch` of this pool and contain exchange rates at the beginning of each epoch,
+        /// The entries start from the `activation_epoch` of this pool and contains exchange rates at the beginning of each epoch,
         /// i.e., right after the rewards for the previous epoch have been deposited into the pool.
         exchange_rates: Table<u64, PoolTokenExchangeRate>,
-        /// Pending stake amount for this epoch.
+        /// Pending stake amount for this epoch, emptied at epoch boundaries.
         pending_stake: u64,
         /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
         /// This includes both the principal and rewards SUI withdrawn.
@@ -126,9 +126,9 @@ module sui::staking_pool {
         transfer::transfer(staked_sui, staker);
     }
 
-    /// Request to withdraw `principal_withdraw_amount` of stake plus rewards from a staking pool.
-    /// This amount of principal and corresponding rewards in SUI are withdrawn and transferred to the staker.
-    /// A proportional amount of pool tokens is burnt.
+    /// Request to withdraw the given stake plus rewards from a staking pool.
+    /// Both the principal and corresponding rewards in SUI are withdrawn and transferred to the staker.
+    /// A proportional amount of pool token withdraw is recorded and processed at epoch change time.
     public(friend) fun request_withdraw_stake(
         pool: &mut StakingPool,
         staked_sui: StakedSui,
@@ -139,7 +139,7 @@ module sui::staking_pool {
         let staker = tx_context::sender(ctx);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
 
-        let rewards_withdraw = withdraw_rewards_and_burn_pool_tokens(
+        let rewards_withdraw = withdraw_rewards(
             pool, principal_withdraw_amount, pool_token_withdraw_amount, tx_context::epoch(ctx)
         );
         let total_sui_withdraw_amount = principal_withdraw_amount + balance::value(&rewards_withdraw);
@@ -235,8 +235,7 @@ module sui::staking_pool {
     ///        stake we should withdraw.
     ///     3. Withdraws the rewards portion from the rewards pool at the current exchange rate. We only withdraw the rewards
     ///        portion because the principal portion was already taken out of the staker's self custodied StakedSui.
-    ///     4. Since SUI tokens are withdrawn, we need to burn the corresponding pool tokens to keep the exchange rate the same.
-    fun withdraw_rewards_and_burn_pool_tokens(
+    fun withdraw_rewards(
         pool: &mut StakingPool,
         principal_withdraw_amount: u64,
         pool_token_withdraw_amount: u64,
@@ -257,7 +256,7 @@ module sui::staking_pool {
 
     // ==== preactive pool related ====
 
-    // Called by `validator` module to activate a staking pool.
+    /// Called by `validator` module to activate a staking pool.
     public(friend) fun activate_staking_pool(pool: &mut StakingPool, activation_epoch: u64) {
         // Add the initial exchange rate to the table.
         table::add(
@@ -272,6 +271,7 @@ module sui::staking_pool {
         option::fill(&mut pool.activation_epoch, activation_epoch);
     }
 
+    /// Withdraw stake from a preactive staking pool.
     public(friend) fun request_withdraw_stake_preactive(
         pool: &mut StakingPool,
         staked_sui: StakedSui,
@@ -286,6 +286,8 @@ module sui::staking_pool {
 
         let principal = unwrap_staked_sui(staked_sui);
         let withdraw_amount = balance::value(&principal);
+        // The exchange rate is always 1:1 for a preactive pool so we decrement the
+        // same amount for both sui_balance and pool_token_balance.
         pool.sui_balance = pool.sui_balance - withdraw_amount;
         pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
@@ -389,12 +391,12 @@ module sui::staking_pool {
         initial_exchange_rate()
     }
 
-    /// Calculate the total value of the pending staking requests for this staking pool.
+    /// Returns the total value of the pending staking requests for this staking pool.
     public fun pending_stake_amount(staking_pool: &StakingPool): u64 {
         staking_pool.pending_stake
     }
 
-    /// Calculate the current the total withdrawal from the staking pool this epoch.
+    /// Returns the total withdrawal from the staking pool this epoch.
     public fun pending_stake_withdraw_amount(staking_pool: &StakingPool): u64 {
         staking_pool.pending_total_sui_withdraw
     }
