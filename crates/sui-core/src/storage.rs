@@ -114,7 +114,7 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, Self::Error> {
-        self.authority_store.perpetual_tables.events.get(digest)
+        self.authority_store.get_events(digest)
     }
 }
 
