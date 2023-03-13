@@ -177,6 +177,13 @@ impl IndexerStore for InMemoryIndexerStore {
         todo!()
     }
 
+    fn multi_get_transactions_by_digests(
+        &self,
+        _txn_digests: &[String],
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        todo!()
+    }
+
     fn read_transactions(
         &self,
         _last_processed_id: i64,

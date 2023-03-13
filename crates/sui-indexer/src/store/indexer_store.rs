@@ -44,6 +44,10 @@ pub trait IndexerStore {
 
     // TODO: combine all get_transaction* methods
     fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError>;
+    fn multi_get_transactions_by_digests(
+        &self,
+        txn_digests: &[String],
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
     fn get_all_transaction_digest_page(
         &self,
