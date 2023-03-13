@@ -258,7 +258,8 @@ module sui::kiosk {
         id: ID,
         price: u64,
     ) {
-        // TODO
+        // A non exclusive listing is attached to the publisher entity.
+        // This means that no specific UID is needed to get the NFT.
         let entity_id = object::uid_to_inner(&kiosk_publisher.id);
         nft_safe::list_nft(&kiosk_publisher.inner, self, cap, entity_id, id);
 
@@ -326,8 +327,9 @@ module sui::kiosk {
         min_price: u64,
         ctx: &mut TxContext,
     ): PurchaseCap<T> {
+        // For exclusive listing, we require that the purchase cap UID is used
+        // to claim the NFT.
         let purchase_cap_uid = object::new(ctx);
-        // TODO
         nft_safe::exclusively_list_nft(
             &kiosk_publisher.inner, self, cap, &purchase_cap_uid, id
         );
