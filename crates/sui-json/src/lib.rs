@@ -109,7 +109,7 @@ impl SuiJsonValue {
     }
 
     pub fn from_object_id(id: ObjectID) -> SuiJsonValue {
-        Self(JsonValue::String(id.to_hex_literal()))
+        Self(JsonValue::String(id.to_hex_uncompressed()))
     }
 
     pub fn to_bcs_bytes(&self, ty: &MoveTypeLayout) -> Result<Vec<u8>, anyhow::Error> {

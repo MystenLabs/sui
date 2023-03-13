@@ -339,7 +339,7 @@ impl SimpleFaucet {
                 warn!(?uuid, ?coin_id, "Insufficient balance, removing from pool");
                 self.metrics.total_discarded_coins.inc();
                 Err(FaucetError::GasCoinWithInsufficientBalance(
-                    coin_id.to_hex_literal(),
+                    coin_id.to_hex_uncompressed(),
                 ))
             }
 
@@ -347,7 +347,7 @@ impl SimpleFaucet {
                 // The coin does not exist, or does not belong to the current active address.
                 warn!(?uuid, ?coin_id, "Invalid, removing from pool");
                 self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::InvalidGasCoin(coin_id.to_hex_literal()))
+                Err(FaucetError::InvalidGasCoin(coin_id.to_hex_uncompressed()))
             }
 
             GasCoinResponse::NoGasCoinAvailable => Err(FaucetError::NoGasCoinAvailable),
