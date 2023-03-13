@@ -3,12 +3,11 @@
 
 import { useSystemState } from './useSystemState';
 
-// Get start time for the current epoch and specified epoch
+// Get time between current epoch and specified epoch
 // Get the period between the current epoch and next epoch
 export function useGetTimeBeforeEpochNumber(epoch: number) {
-    // Get current epoch
     const data = useSystemState();
-    // Get current epoch
+    // Current epoch
     const currentEpoch = data.data?.epoch || 0;
     const currentEpochStartTime = data.data?.epochStartTimestampMs || 0;
     // TODO: Get the period between epochs from system state
