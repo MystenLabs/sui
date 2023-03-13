@@ -35,16 +35,10 @@ pub struct SharedCounterTestPayload {
 }
 
 impl Payload for SharedCounterTestPayload {
-    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
-        Box::new(SharedCounterTestPayload {
-            package_id: self.package_id,
-            counter_id: self.counter_id,
-            counter_initial_shared_version: self.counter_initial_shared_version,
-            gas: (effects.gas_object().0, self.gas.1, self.gas.2),
-            system_state_observer: self.system_state_observer,
-        })
+    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        self.gas.0 = effects.gas_object().0;
     }
-    fn make_transaction(&self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> VerifiedTransaction {
         make_counter_increment_transaction(
             self.gas.0,
             self.package_id,
@@ -222,9 +216,5 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::SharedCounter
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self as &SharedCounterWorkload)
     }
 }

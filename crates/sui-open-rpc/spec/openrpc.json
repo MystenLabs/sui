@@ -123,7 +123,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AAMFAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ACCyS47BaP5IlvW3DMsQ8acF4GHQ/foYlhjSiw1E7++SywEAZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMBAAABAQABAgABAQEEAAEDAJsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
+              "txBytes": "AAAFAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5ACCyS47BaP5IlvW3DMsQ8acF4GHQ/foYlhjSiw1E7++SywEAZy8NvhKfHjkRP59hZOooZ/jezPPDxRjxRt6VVPA/J6gBAAAAAAAAACA9WxGF855x7zV+K9nhOWJRawpBQDJ2Q3sl8P++iXz0dgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMBAAABAQABAgABAQEEAAEDAJsHgV8ESX4uBdIsrDqgYUELIIaMxhkVTEKhxhvpkCcXAfRLWB8jIiwQkWsXo2m02gOdB1lStYA28qe1YURlkkA8AQAAAAAAAAAgwHd+nSRv85dKxfGzUKoWxC6g1xF7MMjIQ2znqSVLMNKbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAA6AMAAAAAAAAA",
               "gas": [
                 {
                   "objectId": "0xf44b581f23222c10916b17a369b4da039d075952b58036f2a7b561446592403c",
@@ -238,7 +238,7 @@
           "name": "Write API"
         }
       ],
-      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
+      "description": "Execute the transaction and wait for results if desired. Request types: 1. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 2. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case. request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true",
       "params": [
         {
           "name": "tx_bytes",
@@ -260,9 +260,15 @@
           }
         },
         {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseOptions"
+          }
+        },
+        {
           "name": "request_type",
-          "description": "The request type",
-          "required": true,
+          "description": "The request type, derived from `SuiTransactionResponseOptions` if None",
           "schema": {
             "$ref": "#/components/schemas/ExecuteTransactionRequestType"
           }
@@ -281,13 +287,23 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "AAMCACDh/BfIFHCJ3EMY/dQA22c2TvNQyVJnbYV9w3+ufZMpigEAEkXDG0IGiMFobLTRNW0XGA3YLpOkg8WrXwGimIeh2V4CAAAAAAAAACBVfcQqrv7rjBVNfdxFa4rqoxMsdANTHcmOg/bhmNLX0QEBAQEBAAEAALbEL76B7sFgNqEeISQHqNtSw954WFsAFruzZAV13qO+AVtUi2FtpjsM4H2Bbonve5o4IXe0Qiu6on9+Yl6jGaoKAgAAAAAAAAAgGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzm2xC++ge7BYDahHiEkB6jbUsPeeFhbABa7s2QFdd6jvgEAAAAAAAAA6AMAAAAAAAAA"
+              "value": "AAACACBbVIthbaY7DOB9gW6J73uaOCF3tEIruqJ/fmJeoxmqCgEAGEhmb/7SKRriSj+BdzU6BSINdlypxCGjaAg/GP5HLzkCAAAAAAAAACBPgvHIWHuY1kwAv7RsOEO9i/bM+nxlqGE4aYzR/crD3AEBAQEBAAEAAJvxohJB+N7TzSSNqQb7hGcOc/bppzx3XwnKm1SDCZpQAVV9xCqu/uuMFU193EVriuqjEyx0A1MdyY6D9uGY0tfRAgAAAAAAAAAge6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YCb8aISQfje080kjakG+4RnDnP26ac8d18JyptUgwmaUAEAAAAAAAAA6AMAAAAAAAAA"
             },
             {
               "name": "signatures",
               "value": [
-                "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                "AGyI24aNOgf5dm06gC1hJcOKbEUxzilU8m958JUmc2fjmzLZoYB2RAtg+oKxtKGP8P70/FNC0r3QCkLwjFx/2AePzAHpyxY0YA6/WHSGiJpFTzhYtad9cNxpF+agpzFFbg=="
               ]
+            },
+            {
+              "name": "options",
+              "value": {
+                "showInput": true,
+                "showEffects": true,
+                "showEvents": true,
+                "showObjectChanges": true,
+                "showBalanceChanges": true
+              }
             },
             {
               "name": "request_type",
@@ -297,15 +313,15 @@
           "result": {
             "name": "Result",
             "value": {
-              "digest": "63MjNcBWJW2e8vZFmwjQBN22ysW9s3tVRcKrCFtJGSqx",
+              "digest": "AsxnmBWq3TwoLrSALGq5A4CF8o8CMTZg6kUpH1MWsgaQ",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
                   "transaction": {
                     "kind": "ProgrammableTransaction",
                     "inputs": [
-                      "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a",
-                      "1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e"
+                      "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a",
+                      "1848666ffed2291ae24a3f8177353a05220d765ca9c421a368083f18fe472f39"
                     ],
                     "commands": [
                       {
@@ -322,22 +338,22 @@
                       }
                     ]
                   },
-                  "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
+                  "sender": "0x9bf1a21241f8ded3cd248da906fb84670e73f6e9a73c775f09ca9b5483099a50",
                   "gasData": {
                     "payment": [
                       {
-                        "objectId": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a",
+                        "objectId": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1",
                         "version": 2,
-                        "digest": "2dnpKMuvbtsQSofMivyT1AdcA4WJanK8C5aSfJHt3Tya"
+                        "digest": "9KiiSPVAMRLw8dhc1gq9SngDDhBZG5JfHXw9CyshyLkP"
                       }
                     ],
-                    "owner": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
+                    "owner": "0x9bf1a21241f8ded3cd248da906fb84670e73f6e9a73c775f09ca9b5483099a50",
                     "price": 1,
                     "budget": 1000
                   }
                 },
                 "txSignatures": [
-                  "AA9tNqi8gJ0UsWVhKjjrUWyCHKZaF/8fPInGM6vIsoTn7dcg58y4Ix7v3UjxtUilrT1SHuMysjm4Bc5oj8XPyQ0lVGRdA7hw4S62EKbvrTzoAfsk9oO2PfKUXStkY7jELA=="
+                  "AGyI24aNOgf5dm06gC1hJcOKbEUxzilU8m958JUmc2fjmzLZoYB2RAtg+oKxtKGP8P70/FNC0r3QCkLwjFx/2AePzAHpyxY0YA6/WHSGiJpFTzhYtad9cNxpF+agpzFFbg=="
                 ]
               },
               "effects": {
@@ -351,40 +367,40 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "9KiiSPVAMRLw8dhc1gq9SngDDhBZG5JfHXw9CyshyLkP",
+                "transactionDigest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt",
                 "mutated": [
                   {
                     "owner": {
-                      "AddressOwner": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be"
+                      "AddressOwner": "0x9bf1a21241f8ded3cd248da906fb84670e73f6e9a73c775f09ca9b5483099a50"
                     },
                     "reference": {
-                      "objectId": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a",
+                      "objectId": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1",
                       "version": 2,
-                      "digest": "2dnpKMuvbtsQSofMivyT1AdcA4WJanK8C5aSfJHt3Tya"
+                      "digest": "9KiiSPVAMRLw8dhc1gq9SngDDhBZG5JfHXw9CyshyLkP"
                     }
                   },
                   {
                     "owner": {
-                      "AddressOwner": "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a"
+                      "AddressOwner": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a"
                     },
                     "reference": {
-                      "objectId": "0x1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e",
+                      "objectId": "0x1848666ffed2291ae24a3f8177353a05220d765ca9c421a368083f18fe472f39",
                       "version": 2,
-                      "digest": "6kitCD3vFG15poaXqubfXki4PhFpMcgRULYxTU1yJDYt"
+                      "digest": "6MP1w4WAxmKG85kRuPYqFDYXdW7JbartrLnPrm6L8tfm"
                     }
                   }
                 ],
                 "gasObject": {
                   "owner": {
-                    "ObjectOwner": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be"
+                    "ObjectOwner": "0x9bf1a21241f8ded3cd248da906fb84670e73f6e9a73c775f09ca9b5483099a50"
                   },
                   "reference": {
-                    "objectId": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a",
+                    "objectId": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1",
                     "version": 2,
-                    "digest": "2dnpKMuvbtsQSofMivyT1AdcA4WJanK8C5aSfJHt3Tya"
+                    "digest": "9KiiSPVAMRLw8dhc1gq9SngDDhBZG5JfHXw9CyshyLkP"
                   }
                 },
-                "eventsDigest": "6MP1w4WAxmKG85kRuPYqFDYXdW7JbartrLnPrm6L8tfm"
+                "eventsDigest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
               },
               "events": [
                 {
@@ -392,13 +408,27 @@
                   "content": {
                     "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xb6c42fbe81eec16036a11e212407a8db52c3de78585b0016bbb3640575dea3be",
+                    "sender": "0x9bf1a21241f8ded3cd248da906fb84670e73f6e9a73c775f09ca9b5483099a50",
                     "recipient": {
-                      "AddressOwner": "0xe1fc17c8147089dc4318fdd400db67364ef350c952676d857dc37fae7d93298a"
+                      "AddressOwner": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a"
                     },
                     "objectType": "0x2::example::Object",
-                    "objectId": "0x1245c31b420688c1686cb4d1356d17180dd82e93a483c5ab5f01a29887a1d95e",
+                    "objectId": "0x1848666ffed2291ae24a3f8177353a05220d765ca9c421a368083f18fe472f39",
                     "version": 2
+                  }
+                }
+              ],
+              "objectChanges": [
+                {
+                  "transferred": {
+                    "sender": "0x9bf1a21241f8ded3cd248da906fb84670e73f6e9a73c775f09ca9b5483099a50",
+                    "recipient": {
+                      "AddressOwner": "0x5b548b616da63b0ce07d816e89ef7b9a382177b4422bbaa27f7e625ea319aa0a"
+                    },
+                    "object_type": "0x2::example::Object",
+                    "object_id": "0x1848666ffed2291ae24a3f8177353a05220d765ca9c421a368083f18fe472f39",
+                    "version": 2,
+                    "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9"
                   }
                 }
               ]
@@ -551,9 +581,9 @@
             "value": {
               "epoch": 5000,
               "sequenceNumber": 1000,
-              "digest": "GfwJqw63FK6AVQnKKkQprvrk3cVLziMBqhMfNkDuCHj9",
+              "digest": "B3xLC8EbyvTxy5pgiwTNUzHLa6kS7uwD6sZdErKB8F8f",
               "networkTotalTransactions": 792385,
-              "previousDigest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt",
+              "previousDigest": "8UExPV121BEfWkbymSPDYhh23rVNh3MSWtC5juJ9JGMJ",
               "epochRollingGasCostSummary": {
                 "computationCost": 0,
                 "storageCost": 0,
@@ -562,7 +592,7 @@
               "timestampMs": 1676911928,
               "endOfEpochData": null,
               "transactions": [
-                "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
+                "55TNn3v5vpuXjQfjqamw76P9GZD522pumo4NuT7RYeFB"
               ],
               "checkpointCommitments": []
             }
@@ -831,13 +861,13 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb"
+                "Transaction": "D5hadqk2GFGhpLcFQvfar3dnnAqxR3A2ftaPhvCH9sv1"
               }
             },
             {
               "name": "cursor",
               "value": {
-                "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
+                "txDigest": "D5hadqk2GFGhpLcFQvfar3dnnAqxR3A2ftaPhvCH9sv1",
                 "eventSeq": 10
               }
             },
@@ -856,9 +886,9 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
+                  "txDigest": "D5hadqk2GFGhpLcFQvfar3dnnAqxR3A2ftaPhvCH9sv1",
                   "id": {
-                    "txDigest": "H5K1fb6uSmipaeHVuVjNaVuy9EF564BHFL9qTxe5bECb",
+                    "txDigest": "D5hadqk2GFGhpLcFQvfar3dnnAqxR3A2ftaPhvCH9sv1",
                     "eventSeq": 0
                   },
                   "event": {
@@ -866,12 +896,12 @@
                     "content": {
                       "packageId": "0x0000000000000000000000000000000000000000000000000000000000000002",
                       "transactionModule": "native",
-                      "sender": "0x9100ecbc36623d5703ab2951bbc49fb2f6d742b1f4dc4bc4d349c7217f4c90a0",
+                      "sender": "0x6a95dff693391f2fd199a51cd772be5c789e3f08307c2bce8fecfd9cc7d75a01",
                       "recipient": {
-                        "AddressOwner": "0x0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8fc00ffcda00afc5e"
+                        "AddressOwner": "0xa9e39cb2f232525cdceea35a433a7b0f50e8dfb2e21ba497c54ab30a3d9adc07"
                       },
                       "objectType": "0x2::example::Object",
-                      "objectId": "0xa9e39cb2f232525cdceea35a433a7b0f50e8dfb2e21ba497c54ab30a3d9adc07",
+                      "objectId": "0xc1429c4d6bbecaf9457c9af77a91f631760853934d383634bcf7c32655009a61",
                       "version": 2
                     }
                   }
@@ -1384,21 +1414,23 @@
           "params": [
             {
               "name": "digest",
-              "value": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7"
+              "value": "56bDbQKRbEGHsUH6jcmz4S5XPbojSZa1adTCnYVaLR6B"
             },
             {
               "name": "options",
               "value": {
                 "showInput": true,
                 "showEffects": true,
-                "showEvents": true
+                "showEvents": true,
+                "showObjectChanges": false,
+                "showBalanceChanges": false
               }
             }
           ],
           "result": {
             "name": "Result",
             "value": {
-              "digest": "ABJjcDw7kQ9Wfh5RkhKouu9nhvqDsBnXoe9HdLsyZhC7",
+              "digest": "56bDbQKRbEGHsUH6jcmz4S5XPbojSZa1adTCnYVaLR6B",
               "transaction": {
                 "data": {
                   "messageVersion": "v1",
@@ -1438,7 +1470,7 @@
                   }
                 },
                 "txSignatures": [
-                  "AP2VCkYKve0kNoX49RpmfMqrxybOWJj6YoY2SVeX2mhKuVdktSb2W6lNI7dPMZ7VOmAOJQBS9BpkIZd4TVyotgFQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
+                  "APR3unFDQWGRASsOWcvrSAelNlifG92BicSHOYJ3+qGBxDnbB34xnq8AaIHiR+8SLh2oAkGNJNSnRr39LBgf+wdQKU4RyKWd3xUxrXzYXuLAWeHGehyEWP1S9XPAYKkWZw=="
                 ]
               },
               "effects": {
@@ -1452,7 +1484,7 @@
                   "storageCost": 100,
                   "storageRebate": 10
                 },
-                "transactionDigest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN",
+                "transactionDigest": "64UQ3a7m1mjWuzgyGoH8RnMyPGDN4XYTC9dS4qiSfdK4",
                 "mutated": [
                   {
                     "owner": {
@@ -1485,7 +1517,7 @@
                     "digest": "2mSugTSEhVgVmbVxjz9r61odXT3pBhqb1C6xk4AGguYL"
                   }
                 },
-                "eventsDigest": "64UQ3a7m1mjWuzgyGoH8RnMyPGDN4XYTC9dS4qiSfdK4"
+                "eventsDigest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi"
               },
               "events": [
                 {
@@ -1502,6 +1534,20 @@
                     "version": 2
                   }
                 }
+              ],
+              "objectChanges": [
+                {
+                  "transferred": {
+                    "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
+                    "recipient": {
+                      "AddressOwner": "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653"
+                    },
+                    "object_type": "0x2::example::Object",
+                    "object_id": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb",
+                    "version": 2,
+                    "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
+                  }
+                }
               ]
             }
           }
@@ -1509,100 +1555,13 @@
       ]
     },
     {
-      "name": "sui_getTransactions",
+      "name": "sui_getTransactionsInRangeDeprecated",
       "tags": [
         {
           "name": "Read API"
         }
       ],
-      "description": "Return list of transactions for a specified query criteria.",
-      "params": [
-        {
-          "name": "query",
-          "description": "the transaction query criteria.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionQuery"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "Optional paging cursor",
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.",
-          "schema": {
-            "type": "boolean"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionsPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_TransactionDigest_and_TransactionDigest"
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified query criteria",
-          "params": [
-            {
-              "name": "query",
-              "value": {
-                "InputObject": "0x6e1e02f6658d21bce9b88bdceee1294144eec47cf39388bb680f69b7426bc529"
-              }
-            },
-            {
-              "name": "cursor",
-              "value": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
-            },
-            {
-              "name": "limit",
-              "value": 100
-            },
-            {
-              "name": "descending_order",
-              "value": false
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": {
-              "data": [
-                "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
-                "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd",
-                "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD",
-                "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
-              ],
-              "nextCursor": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2",
-              "hasNextPage": false
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getTransactionsInRange",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return list of transaction digests within the queried range.",
+      "description": "Return list of transaction digests within the queried range. This method will be removed before April 2023, please use `queryTransactions` instead",
       "params": [
         {
           "name": "start",
@@ -1634,7 +1593,8 @@
             "$ref": "#/components/schemas/TransactionDigest"
           }
         }
-      }
+      },
+      "deprecated": true
     },
     {
       "name": "sui_mergeCoins",
@@ -2122,6 +2082,101 @@
           "$ref": "#/components/schemas/TransactionBytes"
         }
       }
+    },
+    {
+      "name": "sui_queryTransactions",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return list of transactions for a specified query criteria.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the transaction query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "Optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"
+        }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified query criteria",
+          "params": [
+            {
+              "name": "query",
+              "value": {
+                "InputObject": "0x29692fdc7d2ff374c3f870f36fb728ab4187831206d15181ff7c50772417586a"
+              }
+            },
+            {
+              "name": "cursor",
+              "value": "AvLgYFSEW12Ac2uBFYcbznKdBj9CowNrpBuHMq53f8mu"
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "descending_order",
+              "value": false
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "digest": "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd"
+                },
+                {
+                  "digest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                },
+                {
+                  "digest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+                },
+                {
+                  "digest": "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk"
+                }
+              ],
+              "nextCursor": "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk",
+              "hasNextPage": false
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_requestAddStake",
@@ -2625,6 +2680,45 @@
           }
         }
       ]
+    },
+    {
+      "name": "sui_tryMultiGetPastObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Note there is no software-level guarantee/SLA that objects with past versions can be retrieved by this API, even if the object and version exists/existed. The result may vary across nodes depending on their pruning policies. Return the object information for a specified version",
+      "params": [
+        {
+          "name": "past_objects",
+          "description": "a vector of object and versions to be queried",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetPastObjectRequest"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "description": "options for specifying the content to be returned",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectDataOptions"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiPastObjectResponse>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectRead"
+          }
+        }
+      }
     }
   ],
   "components": {
@@ -2666,6 +2760,32 @@
             "type": "integer",
             "format": "uint128",
             "minimum": 0.0
+          }
+        }
+      },
+      "BalanceChange": {
+        "type": "object",
+        "required": [
+          "amount",
+          "coinType",
+          "owner"
+        ],
+        "properties": {
+          "amount": {
+            "description": "The amount indicate the balance value changes, negative amount means spending coin value and positive means receiving coin value.",
+            "type": "integer",
+            "format": "int128"
+          },
+          "coinType": {
+            "type": "string"
+          },
+          "owner": {
+            "description": "Owner of the balance change",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Owner"
+              }
+            ]
           }
         }
       },
@@ -4150,6 +4270,31 @@
           }
         ]
       },
+      "GetPastObjectRequest": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "version"
+        ],
+        "properties": {
+          "objectId": {
+            "description": "the ID of the queried object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "version": {
+            "description": "the version of the queried object.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
+      },
       "Hex": {
         "description": "Hex string encoding.",
         "type": "string"
@@ -4427,6 +4572,236 @@
             "minimum": 0.0
           }
         }
+      },
+      "ObjectChange": {
+        "description": "ObjectChange are derived from the object mutations in the TransactionEffect to provide richer object information.",
+        "oneOf": [
+          {
+            "description": "Module published",
+            "type": "object",
+            "required": [
+              "published"
+            ],
+            "properties": {
+              "published": {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "modules",
+                  "package_id",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "modules": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "package_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object",
+            "type": "object",
+            "required": [
+              "transferred"
+            ],
+            "properties": {
+              "transferred": {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "object_id",
+                  "object_type",
+                  "recipient",
+                  "sender",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "object_type": {
+                    "type": "string"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Object mutated.",
+            "type": "object",
+            "required": [
+              "mutated"
+            ],
+            "properties": {
+              "mutated": {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "object_id",
+                  "object_type",
+                  "owner",
+                  "sender",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "object_type": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Delete object",
+            "type": "object",
+            "required": [
+              "deleted"
+            ],
+            "properties": {
+              "deleted": {
+                "type": "object",
+                "required": [
+                  "object_id",
+                  "object_type",
+                  "sender",
+                  "version"
+                ],
+                "properties": {
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "object_type": {
+                    "type": "string"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Wrapped object",
+            "type": "object",
+            "required": [
+              "wrapped"
+            ],
+            "properties": {
+              "wrapped": {
+                "type": "object",
+                "required": [
+                  "object_id",
+                  "object_type",
+                  "sender",
+                  "version"
+                ],
+                "properties": {
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "object_type": {
+                    "type": "string"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New object creation",
+            "type": "object",
+            "required": [
+              "created"
+            ],
+            "properties": {
+              "created": {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "object_id",
+                  "object_type",
+                  "owner",
+                  "sender",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "object_type": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "ObjectData": {
         "type": "object",
@@ -4783,7 +5158,7 @@
         ]
       },
       "Page_for_Coin_and_ObjectID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4812,7 +5187,7 @@
         }
       },
       "Page_for_DynamicFieldInfo_and_ObjectID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4841,7 +5216,7 @@
         }
       },
       "Page_for_EventEnvelope_and_EventID": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4869,8 +5244,8 @@
           }
         }
       },
-      "Page_for_TransactionDigest_and_TransactionDigest": {
-        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor`, if `next_cursor` is `Some`, otherwise it will start from the first item.",
+      "Page_for_TransactionResponse_and_TransactionDigest": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
           "data",
@@ -4880,7 +5255,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TransactionDigest"
+              "$ref": "#/components/schemas/TransactionResponse"
             }
           },
           "hasNextPage": {
@@ -5189,14 +5564,6 @@
                 "$ref": "#/components/schemas/ObjectID"
               }
             ]
-          },
-          "tokenLock": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       },
@@ -5434,7 +5801,7 @@
                 "type": "array",
                 "items": [
                   {
-                    "$ref": "#/components/schemas/SuiArgument"
+                    "$ref": "#/components/schemas/MovePackage"
                   },
                   {
                     "type": "array",
@@ -5443,7 +5810,7 @@
                     }
                   },
                   {
-                    "$ref": "#/components/schemas/MovePackage"
+                    "$ref": "#/components/schemas/SuiArgument"
                   }
                 ],
                 "maxItems": 3,
@@ -5864,6 +6231,7 @@
         "type": "object",
         "required": [
           "activeValidators",
+          "atRiskValidators",
           "epoch",
           "epochStartTimestampMs",
           "governanceStartEpoch",
@@ -5881,6 +6249,7 @@
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
           "storageFund",
+          "systemStateVersion",
           "totalStake",
           "validatorCandidatesId",
           "validatorCandidatesSize",
@@ -5892,6 +6261,25 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
+          },
+          "atRiskValidators": {
+            "description": "Map storing the number of epochs for which each validator has been below the low stake threshold.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/SuiAddress"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
             }
           },
           "epoch": {
@@ -6003,6 +6391,12 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "systemStateVersion": {
+            "description": "The current version of the system state data structure type.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "totalStake": {
             "description": "Total amount of stake from all active validators at the beginning of the epoch.",
             "type": "integer",
@@ -6010,7 +6404,7 @@
             "minimum": 0.0
           },
           "validatorCandidatesId": {
-            "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.",
+            "description": "ID of the object that stores preactive validators, mapping their addresses to their `Validator` structs.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ObjectID"
@@ -6548,6 +6942,95 @@
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Sha3Digest"
       },
+      "TransactionFilter": {
+        "oneOf": [
+          {
+            "description": "Query by move function.",
+            "type": "object",
+            "required": [
+              "MoveFunction"
+            ],
+            "properties": {
+              "MoveFunction": {
+                "type": "object",
+                "required": [
+                  "package"
+                ],
+                "properties": {
+                  "function": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "module": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "package": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by input object.",
+            "type": "object",
+            "required": [
+              "InputObject"
+            ],
+            "properties": {
+              "InputObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by mutated object.",
+            "type": "object",
+            "required": [
+              "MutatedObject"
+            ],
+            "properties": {
+              "MutatedObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by sender address.",
+            "type": "object",
+            "required": [
+              "FromAddress"
+            ],
+            "properties": {
+              "FromAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by recipient address.",
+            "type": "object",
+            "required": [
+              "ToAddress"
+            ],
+            "properties": {
+              "ToAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "TransactionKind": {
         "oneOf": [
           {
@@ -6683,108 +7166,21 @@
           }
         ]
       },
-      "TransactionQuery": {
-        "oneOf": [
-          {
-            "description": "All transaction hashes.",
-            "type": "string",
-            "enum": [
-              "All"
-            ]
-          },
-          {
-            "description": "Query by move function.",
-            "type": "object",
-            "required": [
-              "MoveFunction"
-            ],
-            "properties": {
-              "MoveFunction": {
-                "type": "object",
-                "required": [
-                  "package"
-                ],
-                "properties": {
-                  "function": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "module": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "package": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by input object.",
-            "type": "object",
-            "required": [
-              "InputObject"
-            ],
-            "properties": {
-              "InputObject": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by mutated object.",
-            "type": "object",
-            "required": [
-              "MutatedObject"
-            ],
-            "properties": {
-              "MutatedObject": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by sender address.",
-            "type": "object",
-            "required": [
-              "FromAddress"
-            ],
-            "properties": {
-              "FromAddress": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by recipient address.",
-            "type": "object",
-            "required": [
-              "ToAddress"
-            ],
-            "properties": {
-              "ToAddress": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "TransactionResponse": {
         "type": "object",
         "required": [
           "digest"
         ],
         "properties": {
+          "balanceChanges": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
           "checkpoint": {
             "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
             "type": [
@@ -6828,6 +7224,15 @@
               "$ref": "#/components/schemas/Event"
             }
           },
+          "objectChanges": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ObjectChange"
+            }
+          },
           "timestampMs": {
             "type": [
               "integer",
@@ -6852,6 +7257,11 @@
       "TransactionResponseOptions": {
         "type": "object",
         "properties": {
+          "showBalanceChanges": {
+            "description": "Whether to show balance_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
           "showEffects": {
             "description": "Whether to show transaction effects. Default to be False",
             "default": false,
@@ -6866,6 +7276,40 @@
             "description": "Whether to show transaction input data. Default to be False",
             "default": false,
             "type": "boolean"
+          },
+          "showObjectChanges": {
+            "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "TransactionResponseQuery": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "description": "If None, no filter will be applied",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "description": "config which fields to include in the response, by default only digest is included",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionResponseOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

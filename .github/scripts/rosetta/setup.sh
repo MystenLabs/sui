@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 echo "Install binaries"
-cargo install --bin sui --path crates/sui
-cargo install --bin sui-rosetta --path crates/sui-rosetta
+cargo install --locked --bin sui --path crates/sui
+cargo install --locked --bin sui-rosetta --path crates/sui-rosetta
 
 echo "run Sui genesis"
 sui genesis

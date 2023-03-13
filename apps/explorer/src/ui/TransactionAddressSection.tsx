@@ -58,8 +58,11 @@ export function RecipientTransactionAddresses({
             title={recipients.length > 1 ? 'Recipients' : 'Recipient'}
         >
             <div className="flex flex-col gap-4">
-                {recipients.map(({ address, amount, coinType }) => (
-                    <div className="flex flex-col gap-0.5" key={address}>
+                {recipients.map(({ address, amount, coinType }, i) => (
+                    <div
+                        className="flex flex-col gap-0.5"
+                        key={`${address}-${i}`}
+                    >
                         <TransactionAddress
                             icon={<CheckFill16 className="text-success" />}
                             address={address}

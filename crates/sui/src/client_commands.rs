@@ -32,12 +32,13 @@ use sui_types::error::SuiError;
 
 use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::{
-    build_from_resolution_graph, ensure_published_dependencies, BuildConfig,
+    build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
+    gather_dependencies, BuildConfig,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiObjectData, SuiObjectInfo, SuiObjectResponse, SuiRawData,
-    SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -479,9 +480,12 @@ impl SuiClientCommands {
                 };
 
                 let resolution_graph = config.resolution_graph(&package_path)?;
+                let dependencies = gather_dependencies(&resolution_graph);
+
+                check_invalid_dependencies(dependencies.invalid)?;
 
                 if !with_unpublished_dependencies {
-                    ensure_published_dependencies(&resolution_graph)?;
+                    check_unpublished_dependencies(dependencies.unpublished)?;
                 };
 
                 let compiled_package = build_from_resolution_graph(
@@ -1170,21 +1174,25 @@ impl WalletContext {
             .read_api()
             .get_objects_owned_by_address(address)
             .await?;
-
+        let o_ref_clone = object_refs.clone();
         // TODO: We should ideally fetch the objects from local cache
-        // TODO: replace with multi-get
         let mut values_objects = Vec::new();
-        for oref in object_refs {
-            let response = client
-                .read_api()
-                .get_object_with_options(oref.object_id, SuiObjectDataOptions::full_content())
-                .await?;
+        let oref_ids: Vec<ObjectID> = object_refs.into_iter().map(|oref| oref.object_id).collect();
+
+        let responses = client
+            .read_api()
+            .multi_get_object_with_options(oref_ids, SuiObjectDataOptions::full_content())
+            .await?;
+
+        let pairs: Vec<_> = responses.iter().zip(o_ref_clone.into_iter()).collect();
+
+        for (response, oref) in pairs {
             match response {
                 SuiObjectResponse::Exists(o) => {
                     if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
                         // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o, oref));
+                        let gas_coin = GasCoin::try_from(o)?;
+                        values_objects.push((gas_coin.value(), o.clone(), oref));
                     }
                 }
                 _ => continue,
@@ -1244,6 +1252,10 @@ impl WalletContext {
             .quorum_driver()
             .execute_transaction(
                 tx,
+                SuiTransactionResponseOptions::new()
+                    .with_effects()
+                    .with_events()
+                    .with_input(),
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)

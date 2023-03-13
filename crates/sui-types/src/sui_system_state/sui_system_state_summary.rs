@@ -24,6 +24,8 @@ pub struct SuiSystemStateSummary {
     pub epoch: u64,
     /// The current protocol version, starting from 1.
     pub protocol_version: u64,
+    /// The current version of the system state data structure type.
+    pub system_state_version: u64,
     /// The storage fund balance.
     pub storage_fund: u64,
     /// The reference gas price for the current epoch.
@@ -69,10 +71,12 @@ pub struct SuiSystemStateSummary {
     pub inactive_pools_id: ObjectID,
     /// Number of inactive staking pools.
     pub inactive_pools_size: u64,
-    /// ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.
+    /// ID of the object that stores preactive validators, mapping their addresses to their `Validator` structs.
     pub validator_candidates_id: ObjectID,
     /// Number of preactive validators.
     pub validator_candidates_size: u64,
+    /// Map storing the number of epochs for which each validator has been below the low stake threshold.
+    pub at_risk_validators: Vec<(SuiAddress, u64)>,
     /// A map storing the records of validator reporting each other.
     pub validator_report_records: Vec<(SuiAddress, Vec<SuiAddress>)>,
 }

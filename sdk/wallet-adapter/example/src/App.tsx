@@ -3,21 +3,19 @@
 
 import "./App.css";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { Commands, Transaction } from "@mysten/sui.js";
+import { Transaction } from "@mysten/sui.js";
 import { useEffect } from "react";
 
 const transaction = new Transaction();
 transaction.setGasBudget(2000);
-transaction.add(
-  Commands.MoveCall({
-    target: `0x2::devnet_nft::mint`,
-    arguments: [
-      transaction.input("foo"),
-      transaction.input("bar"),
-      transaction.input("baz"),
-    ],
-  })
-);
+transaction.moveCall({
+  target: `0x2::devnet_nft::mint`,
+  arguments: [
+    transaction.pure("foo"),
+    transaction.pure("bar"),
+    transaction.pure("baz"),
+  ],
+});
 
 function App() {
   const {
@@ -46,7 +44,12 @@ function App() {
       <div>
         <button
           onClick={async () => {
-            console.log(await signAndExecuteTransaction({ transaction }));
+            console.log(
+              await signAndExecuteTransaction({
+                transaction,
+                options: { contentOptions: { showEffects: true } },
+              })
+            );
           }}
         >
           Sign + Execute Transaction

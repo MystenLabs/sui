@@ -31,7 +31,7 @@ use fastcrypto::{
 };
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
-use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
+use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_binary_format::CompiledModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
@@ -383,6 +383,8 @@ impl GenesisObject {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
+    /// A transaction that allows the interleaving of native commands and Move calls
+    ProgrammableTransaction(ProgrammableTransaction),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -394,8 +396,6 @@ pub enum TransactionKind {
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
-    /// A transaction that allows the interleaving of native commands and Move calls
-    ProgrammableTransaction(ProgrammableTransaction),
     // .. more transaction types go here
 }
 
@@ -453,6 +453,14 @@ impl CallArg {
             CallArg::Object(_) => (),
         }
         Ok(())
+    }
+}
+
+impl ObjectArg {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            ObjectArg::ImmOrOwnedObject((id, _, _)) | ObjectArg::SharedObject { id, .. } => *id,
+        }
     }
 }
 
@@ -534,7 +542,7 @@ pub enum Command {
     /// the type tag must be specified.
     MakeMoveVec(Option<TypeTag>, Vec<Argument>),
     /// Upgrades a Move package
-    Upgrade(Argument, Vec<ObjectID>, Vec<Vec<u8>>),
+    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, Argument),
 }
 
 /// An argument to a programmable transaction command
@@ -625,7 +633,7 @@ impl Command {
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
-            Command::Upgrade(_, _, modules) | Command::Publish(modules) => {
+            Command::Upgrade(modules, _, _) | Command::Publish(modules) => {
                 Self::publish_command_input_objects(modules)
             }
             Command::MoveCall(c) => c.input_objects(),
@@ -721,7 +729,7 @@ impl Command {
                 );
             }
             Command::SplitCoin(_, _) => (),
-            Command::Upgrade(_, _, modules) => {
+            Command::Upgrade(modules, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -883,10 +891,10 @@ impl Display for Command {
                 write!(f, ")")
             }
             Command::Publish(_bytes) => write!(f, "Publish(_)"),
-            Command::Upgrade(ticket, deps, _bytes) => {
-                write!(f, "Upgrade({ticket},")?;
+            Command::Upgrade(_bytes, deps, ticket) => {
+                write!(f, "Upgrade(_,")?;
                 write_sep(f, deps, ",")?;
-                write!(f, ", _")?;
+                write!(f, ", {ticket}")?;
                 write!(f, ")")
             }
         }
@@ -1313,7 +1321,7 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_object(recipient, object_ref);
+            builder.transfer_object(recipient, object_ref).unwrap();
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
@@ -1468,7 +1476,8 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.publish(modules);
+            let upgrade_cap = builder.publish_upgradeable(modules);
+            builder.transfer_arg(sender, upgrade_cap);
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
@@ -2256,124 +2265,120 @@ pub enum ExecutionStatus {
 
 pub type CommandIndex = usize;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error)]
 pub enum ExecutionFailureStatus {
     //
     // General transaction errors
     //
+    #[error("Insufficient Gas.")]
     InsufficientGas,
+    #[error("Invalid Gas Object. Possibly not address-owned or possibly not a SUI coin.")]
     InvalidGasObject,
-    InvalidTransactionUpdate,
-    FunctionNotFound,
+    #[error("INVARIANT VIOLATION.")]
     InvariantViolation,
+    #[error("Attempted to used feature that is not supported yet")]
+    FeatureNotYetSupported,
+    #[error(
+        "Move object with size {object_size} is larger \
+        than the maximum object size {max_object_size}"
+    )]
     MoveObjectTooBig {
         object_size: u64,
         max_object_size: u64,
     },
+    #[error(
+        "Move package with size {object_size} is larger than the \
+        maximum object size {max_object_size}"
+    )]
     MovePackageTooBig {
         object_size: u64,
         max_object_size: u64,
     },
+    #[error("Circular Object Ownership, including object {object}.")]
+    CircularObjectOwnership { object: ObjectID },
 
     //
-    // Transfer errors
+    // Coin errors
     //
-    InvalidTransferObject,
-    InvalidTransferSui,
-    InvalidTransferSuiInsufficientBalance,
-    InvalidCoinObject,
+    #[error("Insufficient coin balance for operation.")]
+    InsufficientCoinBalance,
+    #[error("The coin balance overflows u64")]
+    CoinBalanceOverflow,
 
     //
-    // Pay errors
+    // Publish errors
     //
-    /// Supplied 0 input coins
-    EmptyInputCoins,
-    /// Supplied an empty list of recipient addresses for the payment
-    EmptyRecipients,
-    /// Supplied a different number of recipient addresses and recipient amounts
-    RecipientsAmountsArityMismatch,
-    /// Not enough funds to perform the requested payment
-    InsufficientBalance,
-    /// Coin type check failed in pay/pay_sui/pay_all_sui transaction.
-    /// In pay transaction, it means the input coins' types are not the same;
-    /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
-    CoinTypeMismatch,
-    CoinTooLarge,
-
-    //
-    // MoveCall errors
-    //
-    NonEntryFunctionInvoked,
-    EntryTypeArityMismatch,
-    EntryArgumentError(EntryArgumentError),
-    EntryTypeArgumentError(EntryTypeArgumentError),
-    CircularObjectOwnership(CircularObjectOwnership),
-    InvalidChildObjectArgument(InvalidChildObjectArgument),
-    InvalidSharedByValue(InvalidSharedByValue),
-    TooManyChildObjects {
-        object: ObjectID,
-    },
-    InvalidParentDeletion {
-        parent: ObjectID,
-        kind: Option<DeleteKind>,
-    },
-    InvalidParentFreezing {
-        parent: ObjectID,
-    },
-
-    //
-    // MovePublish errors
-    //
-    PublishErrorEmptyPackage,
+    #[error(
+        "Publish Error, Non-zero Address. \
+        The modules in the package must have their address set to zero."
+    )]
     PublishErrorNonZeroAddress,
-    PublishErrorDuplicateModule,
+    #[error(
+        "Sui Move Bytecode Verification Error. \
+        Please run the Sui Move Verifier for more information."
+    )]
     SuiMoveVerificationError,
 
     //
     // Errors from the Move VM
     //
     // Indicates an error from a non-abort instruction
-    MovePrimitiveRuntimeError(Option<MoveLocation>),
-    /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
-    /// abort code
-    MoveAbort(MoveLocation, u64), // TODO func def + offset?
+    #[error(
+        "Move Primitive Runtime Error. Location: {0}. \
+        Arithmetic error, stack overflow, max value depth, etc."
+    )]
+    MovePrimitiveRuntimeError(MoveLocationOpt),
+    #[error("Move Runtime Abort. Location: {0}, Abort Code: {1}")]
+    MoveAbort(MoveLocation, u64),
+    #[error(
+        "Move Bytecode Verification Error. \
+        Please run the Bytecode Verifier for more information."
+    )]
     VMVerificationOrDeserializationError,
+    #[error("MOVE VM INVARIANT VIOLATION.")]
     VMInvariantViolation,
-
-    /// The total amount of coins to be paid is larger than the maximum value of u64.
-    TotalPaymentAmountOverflow,
-    /// The total balance of coins is larger than the maximum value of u64.
-    TotalCoinBalanceOverflow,
 
     //
     // Programmable Transaction Errors
     //
+    #[error("Function Not Found.")]
+    FunctionNotFound,
+    #[error(
+        "Arity mismatch for Move function. \
+        The number of arguments does not match the number of parameters"
+    )]
+    ArityMismatch,
+    #[error(
+        "Type arity mismatch for Move function. \
+        Mismatch between the number of actual versus expected type arguments."
+    )]
+    TypeArityMismatch,
+    #[error("Non Entry Function Invoked. Move Call must start with an entry function")]
+    NonEntryFunctionInvoked,
+    #[error("Invalid command argument at {arg_idx}. {kind}")]
     CommandArgumentError {
         arg_idx: u16,
         kind: CommandArgumentError,
     },
-    UnusedValueWithoutDrop {
-        result_idx: u16,
-        secondary_idx: u16,
+    #[error("Error for type argument at index {argument_idx}: {kind}")]
+    TypeArgumentError {
+        argument_idx: TypeParameterIndex,
+        kind: TypeArgumentError,
     },
-    InvalidPublicFunctionReturnType {
-        idx: u16,
-    },
-    ArityMismatch,
-
-    FeatureNotYetSupported,
-
-    // Package Upgrade Errors
-    PackageUpgradeError(PackageUpgradeError),
+    #[error(
+        "Unused result without the drop ability. \
+        Command result {result_idx}, return value {secondary_idx}"
+    )]
+    UnusedValueWithoutDrop { result_idx: u16, secondary_idx: u16 },
+    #[error(
+        "Invalid public Move function signature. \
+        Unsupported return type for return value {idx}"
+    )]
+    InvalidPublicFunctionReturnType { idx: u16 },
+    #[error("Invalid Transfer Object, object does not have public transfer.")]
+    InvalidTransferObject,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub enum PackageUpgradeError {
-    UnableToFetchPackage(ObjectID),
-    NotAPackage(ObjectID),
-    IncompatibleUpgrade,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
@@ -2384,51 +2389,8 @@ pub struct MoveLocation {
     pub function_name: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct EntryArgumentError {
-    pub argument_idx: LocalIndex,
-    pub kind: EntryArgumentErrorKind,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub enum EntryArgumentErrorKind {
-    TypeMismatch,
-    InvalidObjectByValue,
-    InvalidObjectByMuteRef,
-    ObjectKindMismatch,
-    UnsupportedPureArg,
-    ArityMismatch,
-    ObjectMutabilityMismatch,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct EntryTypeArgumentError {
-    pub argument_idx: TypeParameterIndex,
-    pub kind: EntryTypeArgumentErrorKind,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub enum EntryTypeArgumentErrorKind {
-    TypeNotFound,
-    ArityMismatch,
-    ConstraintNotSatisfied,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct CircularObjectOwnership {
-    pub object: ObjectID,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct InvalidChildObjectArgument {
-    pub child: ObjectID,
-    pub parent: SuiAddress,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct InvalidSharedByValue {
-    pub object: ObjectID,
-}
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
+pub struct MoveLocationOpt(pub Option<MoveLocation>);
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
 pub enum CommandArgumentError {
@@ -2477,252 +2439,25 @@ pub enum CommandArgumentError {
     InvalidObjectByMutRef,
 }
 
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum TypeArgumentError {
+    #[error("A type was not found in the module specified.")]
+    TypeNotFound,
+    #[error("A type provided did not match the specified constraints.")]
+    ConstraintNotSatisfied,
+}
+
 impl ExecutionFailureStatus {
-    pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
-        EntryArgumentError { argument_idx, kind }.into()
-    }
-
-    pub fn entry_type_argument_error(
-        argument_idx: TypeParameterIndex,
-        kind: EntryTypeArgumentErrorKind,
-    ) -> Self {
-        EntryTypeArgumentError { argument_idx, kind }.into()
-    }
-
-    pub fn circular_object_ownership(object: ObjectID) -> Self {
-        CircularObjectOwnership { object }.into()
-    }
-
-    pub fn invalid_child_object_argument(child: ObjectID, parent: SuiAddress) -> Self {
-        InvalidChildObjectArgument { child, parent }.into()
-    }
-
-    pub fn invalid_shared_by_value(object: ObjectID) -> Self {
-        InvalidSharedByValue { object }.into()
-    }
-
     pub fn command_argument_error(kind: CommandArgumentError, arg_idx: u16) -> Self {
         Self::CommandArgumentError { arg_idx, kind }
     }
 }
 
-impl Display for ExecutionFailureStatus {
+impl Display for MoveLocationOpt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExecutionFailureStatus::CoinTypeMismatch => {
-                write!(
-                    f,
-                    "Coin type check failed in pay/pay_sui/pay_all_sui transaction"
-                )
-            }
-            ExecutionFailureStatus::CoinTooLarge => {
-                write!(f, "Coin exceeds maximum value for a single coin")
-            }
-            ExecutionFailureStatus::EmptyInputCoins => {
-                write!(f, "Expected a non-empty list of input Coin objects")
-            }
-            ExecutionFailureStatus::EmptyRecipients => {
-                write!(f, "Expected a non-empty list of recipient addresses")
-            }
-            ExecutionFailureStatus::InsufficientBalance => write!(
-                f,
-                "Value of input coins is insufficient to cover outgoing amounts"
-            ),
-            ExecutionFailureStatus::InsufficientGas => write!(f, "Insufficient Gas."),
-            ExecutionFailureStatus::InvalidGasObject => {
-                write!(
-                    f,
-                    "Invalid Gas Object. Possibly not address-owned or possibly not a SUI coin."
-                )
-            }
-            ExecutionFailureStatus::InvalidTransactionUpdate => {
-                write!(f, "Invalid Transaction Update.")
-            }
-            ExecutionFailureStatus::MoveObjectTooBig {
-                object_size,
-                max_object_size,
-            } => write!(
-                f,
-                "Move object with size {object_size} is larger \
-                than the maximum object size {max_object_size}"
-            ),
-            ExecutionFailureStatus::MovePackageTooBig {
-                object_size,
-                max_object_size,
-            } => write!(
-                f,
-                "Move package with size {object_size} is larger than the \
-                maximum object size {max_object_size}"
-            ),
-            ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
-            ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
-            ExecutionFailureStatus::InvalidTransferObject => write!(
-                f,
-                "Invalid Transfer Object Transaction. \
-                Possibly not address-owned or possibly does not have public transfer."
-            ),
-            ExecutionFailureStatus::InvalidCoinObject => {
-                write!(f, "Invalid coin::Coin object bytes.")
-            }
-            ExecutionFailureStatus::InvalidTransferSui => write!(
-                f,
-                "Invalid Transfer SUI. \
-                Possibly not address-owned or possibly not a SUI coin."
-            ),
-            ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance => {
-                write!(f, "Invalid Transfer SUI, Insufficient Balance.")
-            }
-            ExecutionFailureStatus::NonEntryFunctionInvoked => write!(
-                f,
-                "Non Entry Function Invoked. Move Call must start with an entry function"
-            ),
-            ExecutionFailureStatus::EntryTypeArityMismatch => write!(
-                f,
-                "Number of type arguments does not match the expected value",
-            ),
-            ExecutionFailureStatus::EntryArgumentError(data) => {
-                write!(f, "Entry Argument Error. {data}")
-            }
-            ExecutionFailureStatus::EntryTypeArgumentError(data) => {
-                write!(f, "Entry Type Argument Error. {data}")
-            }
-            ExecutionFailureStatus::CircularObjectOwnership(data) => {
-                write!(f, "Circular  Object Ownership. {data}")
-            }
-            ExecutionFailureStatus::InvalidChildObjectArgument(data) => {
-                write!(f, "Invalid Object Owned Argument. {data}")
-            }
-            ExecutionFailureStatus::InvalidSharedByValue(data) => {
-                write!(f, "Invalid Shared Object By-Value Usage. {data}.")
-            }
-            ExecutionFailureStatus::RecipientsAmountsArityMismatch => write!(
-                f,
-                "Expected recipient and amounts lists to be the same length"
-            ),
-            ExecutionFailureStatus::TooManyChildObjects { object } => {
-                write!(
-                    f,
-                    "Object {object} has too many child objects. \
-                    The number of child objects cannot exceed 2^32 - 1."
-                )
-            }
-            ExecutionFailureStatus::InvalidParentDeletion { parent, kind } => {
-                let method = match kind {
-                    Some(DeleteKind::Normal) => "deleted",
-                    Some(DeleteKind::UnwrapThenDelete) => "unwrapped then deleted",
-                    Some(DeleteKind::Wrap) => "wrapped in another object",
-                    None => "created and destroyed",
-                };
-                write!(
-                    f,
-                    "Invalid Deletion of Parent Object with Children. Parent object {parent} was \
-                    {method} before its children were deleted or transferred."
-                )
-            }
-            ExecutionFailureStatus::InvalidParentFreezing { parent } => {
-                write!(
-                    f,
-                    "Invalid Freezing of Parent Object with Children. Parent object {parent} was \
-                    made immutable before its children were deleted or transferred."
-                )
-            }
-            ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
-                f,
-                "Publish Error, Empty Package. A package must have at least one module."
-            ),
-            ExecutionFailureStatus::PublishErrorNonZeroAddress => write!(
-                f,
-                "Publish Error, Non-zero Address. \
-                The modules in the package must have their address set to zero."
-            ),
-            ExecutionFailureStatus::PublishErrorDuplicateModule => write!(
-                f,
-                "Publish Error, Duplicate Module. More than one module with a given name."
-            ),
-            ExecutionFailureStatus::SuiMoveVerificationError => write!(
-                f,
-                "Sui Move Bytecode Verification Error. \
-                Please run the Sui Move Verifier for more information."
-            ),
-            ExecutionFailureStatus::MovePrimitiveRuntimeError(location) => {
-                write!(f, "Move Primitive Runtime Error. Location: ")?;
-                match location {
-                    None => write!(f, "UNKNOWN")?,
-                    Some(l) => write!(f, "{l}")?,
-                }
-                write!(
-                    f,
-                    ". Arithmetic error, stack overflow, max value depth, etc."
-                )
-            }
-            ExecutionFailureStatus::MoveAbort(location, c) => {
-                write!(
-                    f,
-                    "Move Runtime Abort. Location: {}, Abort Code: {}",
-                    location, c
-                )
-            }
-            ExecutionFailureStatus::VMVerificationOrDeserializationError => write!(
-                f,
-                "Move Bytecode Verification Error. \
-                Please run the Bytecode Verifier for more information."
-            ),
-            ExecutionFailureStatus::VMInvariantViolation => {
-                write!(f, "MOVE VM INVARIANT VIOLATION.")
-            }
-            ExecutionFailureStatus::TotalPaymentAmountOverflow => {
-                write!(f, "The total amount of coins to be paid overflows of u64")
-            }
-            ExecutionFailureStatus::TotalCoinBalanceOverflow => {
-                write!(f, "The total balance of coins overflows u64")
-            }
-            ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => {
-                write!(f, "Invalid command argument at {arg_idx}. {kind}")
-            }
-            ExecutionFailureStatus::UnusedValueWithoutDrop {
-                result_idx,
-                secondary_idx,
-            } => {
-                write!(
-                    f,
-                    "Unused result without the drop ability. \
-                    Command result {result_idx}, return value {secondary_idx}"
-                )
-            }
-            ExecutionFailureStatus::InvalidPublicFunctionReturnType { idx } => {
-                write!(
-                    f,
-                    "Invalid public Move function signature. \
-                    Unsupported return type for return value {idx}"
-                )
-            }
-            ExecutionFailureStatus::ArityMismatch => {
-                write!(
-                    f,
-                    "Arity mismatch for Move function. \
-                    The number of arguments does not match the number of parameters"
-                )
-            }
-            ExecutionFailureStatus::FeatureNotYetSupported => {
-                write!(f, "Attempted to used feature that is not supported yet")
-            }
-            ExecutionFailureStatus::PackageUpgradeError(pkg_error) => {
-                write!(f, "Invalid package upgrade. {pkg_error}")
-            }
-        }
-    }
-}
-
-impl Display for PackageUpgradeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnableToFetchPackage(package_id) => {
-                write!(f, "Unable to fetch package at {package_id}")
-            }
-            Self::NotAPackage(object_id) => write!(f, "Object {object_id} is not a package"),
-            Self::IncompatibleUpgrade => {
-                write!(f, "New package is incompatible with previous version")
-            }
+        match &self.0 {
+            None => write!(f, "UNKNOWN"),
+            Some(l) => write!(f, "{l}"),
         }
     }
 }
@@ -2748,107 +2483,6 @@ impl Display for MoveLocation {
         }
     }
 }
-
-impl Display for EntryArgumentError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let EntryArgumentError { argument_idx, kind } = self;
-        write!(f, "Error for argument at index {argument_idx}: {kind}",)
-    }
-}
-
-impl Display for EntryArgumentErrorKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EntryArgumentErrorKind::TypeMismatch => write!(f, "Type mismatch."),
-            EntryArgumentErrorKind::InvalidObjectByValue => {
-                write!(f, "Immutable and shared objects cannot be passed by-value.")
-            }
-            EntryArgumentErrorKind::InvalidObjectByMuteRef => {
-                write!(
-                    f,
-                    "Immutable objects cannot be passed by mutable reference, &mut."
-                )
-            }
-            EntryArgumentErrorKind::ObjectKindMismatch => {
-                write!(f, "Mismatch with object argument kind and its actual kind.")
-            }
-            EntryArgumentErrorKind::UnsupportedPureArg => write!(
-                f,
-                "Unsupported non-object argument; if it is an object, it must be \
-                populated by an object ID."
-            ),
-            EntryArgumentErrorKind::ArityMismatch => {
-                write!(
-                    f,
-                    "Mismatch between the number of actual versus expected arguments."
-                )
-            }
-            EntryArgumentErrorKind::ObjectMutabilityMismatch => {
-                write!(
-                    f,
-                    "Mismatch between the mutability of actual versus expected arguments."
-                )
-            }
-        }
-    }
-}
-
-impl Display for EntryTypeArgumentError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let EntryTypeArgumentError { argument_idx, kind } = self;
-        write!(f, "Error for type argument at index {argument_idx}: {kind}",)
-    }
-}
-
-impl Display for EntryTypeArgumentErrorKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EntryTypeArgumentErrorKind::TypeNotFound => {
-                write!(f, "A type was not found in the module specified",)
-            }
-            EntryTypeArgumentErrorKind::ArityMismatch => write!(
-                f,
-                "Mismatch between the number of actual versus expected type arguments."
-            ),
-            EntryTypeArgumentErrorKind::ConstraintNotSatisfied => write!(
-                f,
-                "A type provided did not match the specified constraints."
-            ),
-        }
-    }
-}
-
-impl Display for CircularObjectOwnership {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let CircularObjectOwnership { object } = self;
-        write!(f, "Circular object ownership, including object {object}.")
-    }
-}
-
-impl Display for InvalidChildObjectArgument {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let InvalidChildObjectArgument { child, parent } = self;
-        write!(
-            f,
-            "Object {child} is owned by object {parent}. \
-            Objects owned by other objects cannot be used as input arguments."
-        )
-    }
-}
-
-impl Display for InvalidSharedByValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let InvalidSharedByValue { object } = self;
-        write!(
-            f,
-        "When a shared object is passed as an owned Move value in an entry function, either the \
-        the shared object's type must be defined in the same module as the called function. The \
-        shared object {object} is not defined in this module",
-        )
-    }
-}
-
-impl std::error::Error for ExecutionFailureStatus {}
 
 impl ExecutionStatus {
     pub fn new_failure(
@@ -2882,36 +2516,6 @@ impl ExecutionStatus {
             }
             ExecutionStatus::Failure { error, command } => (error, command),
         }
-    }
-}
-
-impl From<EntryArgumentError> for ExecutionFailureStatus {
-    fn from(error: EntryArgumentError) -> Self {
-        Self::EntryArgumentError(error)
-    }
-}
-
-impl From<EntryTypeArgumentError> for ExecutionFailureStatus {
-    fn from(error: EntryTypeArgumentError) -> Self {
-        Self::EntryTypeArgumentError(error)
-    }
-}
-
-impl From<CircularObjectOwnership> for ExecutionFailureStatus {
-    fn from(error: CircularObjectOwnership) -> Self {
-        Self::CircularObjectOwnership(error)
-    }
-}
-
-impl From<InvalidChildObjectArgument> for ExecutionFailureStatus {
-    fn from(error: InvalidChildObjectArgument) -> Self {
-        Self::InvalidChildObjectArgument(error)
-    }
-}
-
-impl From<InvalidSharedByValue> for ExecutionFailureStatus {
-    fn from(error: InvalidSharedByValue) -> Self {
-        Self::InvalidSharedByValue(error)
     }
 }
 

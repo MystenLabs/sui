@@ -54,10 +54,6 @@ ChangeEpoch:
             - TYPENAME: SequenceNumber
             - SEQ:
                 SEQ: U8
-CircularObjectOwnership:
-  STRUCT:
-    - object:
-        TYPENAME: ObjectID
 Command:
   ENUM:
     0:
@@ -96,11 +92,11 @@ Command:
     6:
       Upgrade:
         TUPLE:
-          - TYPENAME: Argument
-          - SEQ:
-              TYPENAME: ObjectID
           - SEQ:
               SEQ: U8
+          - SEQ:
+              TYPENAME: ObjectID
+          - TYPENAME: Argument
 CommandArgumentError:
   ENUM:
     0:
@@ -157,40 +153,6 @@ DeleteKind:
       UnwrapThenDelete: UNIT
     2:
       Wrap: UNIT
-EntryArgumentError:
-  STRUCT:
-    - argument_idx: U8
-    - kind:
-        TYPENAME: EntryArgumentErrorKind
-EntryArgumentErrorKind:
-  ENUM:
-    0:
-      TypeMismatch: UNIT
-    1:
-      InvalidObjectByValue: UNIT
-    2:
-      InvalidObjectByMuteRef: UNIT
-    3:
-      ObjectKindMismatch: UNIT
-    4:
-      UnsupportedPureArg: UNIT
-    5:
-      ArityMismatch: UNIT
-    6:
-      ObjectMutabilityMismatch: UNIT
-EntryTypeArgumentError:
-  STRUCT:
-    - argument_idx: U16
-    - kind:
-        TYPENAME: EntryTypeArgumentErrorKind
-EntryTypeArgumentErrorKind:
-  ENUM:
-    0:
-      TypeNotFound: UNIT
-    1:
-      ArityMismatch: UNIT
-    2:
-      ConstraintNotSatisfied: UNIT
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -198,132 +160,76 @@ ExecutionFailureStatus:
     1:
       InvalidGasObject: UNIT
     2:
-      InvalidTransactionUpdate: UNIT
-    3:
-      FunctionNotFound: UNIT
-    4:
       InvariantViolation: UNIT
-    5:
+    3:
+      FeatureNotYetSupported: UNIT
+    4:
       MoveObjectTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    6:
+    5:
       MovePackageTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    7:
-      InvalidTransferObject: UNIT
-    8:
-      InvalidTransferSui: UNIT
-    9:
-      InvalidTransferSuiInsufficientBalance: UNIT
-    10:
-      InvalidCoinObject: UNIT
-    11:
-      EmptyInputCoins: UNIT
-    12:
-      EmptyRecipients: UNIT
-    13:
-      RecipientsAmountsArityMismatch: UNIT
-    14:
-      InsufficientBalance: UNIT
-    15:
-      CoinTypeMismatch: UNIT
-    16:
-      CoinTooLarge: UNIT
-    17:
-      NonEntryFunctionInvoked: UNIT
-    18:
-      EntryTypeArityMismatch: UNIT
-    19:
-      EntryArgumentError:
-        NEWTYPE:
-          TYPENAME: EntryArgumentError
-    20:
-      EntryTypeArgumentError:
-        NEWTYPE:
-          TYPENAME: EntryTypeArgumentError
-    21:
+    6:
       CircularObjectOwnership:
-        NEWTYPE:
-          TYPENAME: CircularObjectOwnership
-    22:
-      InvalidChildObjectArgument:
-        NEWTYPE:
-          TYPENAME: InvalidChildObjectArgument
-    23:
-      InvalidSharedByValue:
-        NEWTYPE:
-          TYPENAME: InvalidSharedByValue
-    24:
-      TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    25:
-      InvalidParentDeletion:
-        STRUCT:
-          - parent:
-              TYPENAME: ObjectID
-          - kind:
-              OPTION:
-                TYPENAME: DeleteKind
-    26:
-      InvalidParentFreezing:
-        STRUCT:
-          - parent:
-              TYPENAME: ObjectID
-    27:
-      PublishErrorEmptyPackage: UNIT
-    28:
+    7:
+      InsufficientCoinBalance: UNIT
+    8:
+      CoinBalanceOverflow: UNIT
+    9:
       PublishErrorNonZeroAddress: UNIT
-    29:
-      PublishErrorDuplicateModule: UNIT
-    30:
+    10:
       SuiMoveVerificationError: UNIT
-    31:
+    11:
       MovePrimitiveRuntimeError:
         NEWTYPE:
-          OPTION:
-            TYPENAME: MoveLocation
-    32:
+          TYPENAME: MoveLocationOpt
+    12:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    33:
+    13:
       VMVerificationOrDeserializationError: UNIT
-    34:
+    14:
       VMInvariantViolation: UNIT
-    35:
-      TotalPaymentAmountOverflow: UNIT
-    36:
-      TotalCoinBalanceOverflow: UNIT
-    37:
+    15:
+      FunctionNotFound: UNIT
+    16:
+      ArityMismatch: UNIT
+    17:
+      TypeArityMismatch: UNIT
+    18:
+      NonEntryFunctionInvoked: UNIT
+    19:
       CommandArgumentError:
         STRUCT:
           - arg_idx: U16
           - kind:
               TYPENAME: CommandArgumentError
-    38:
+    20:
+      TypeArgumentError:
+        STRUCT:
+          - argument_idx: U16
+          - kind:
+              TYPENAME: TypeArgumentError
+    21:
       UnusedValueWithoutDrop:
         STRUCT:
           - result_idx: U16
           - secondary_idx: U16
-    39:
+    22:
       InvalidPublicFunctionReturnType:
         STRUCT:
           - idx: U16
-    40:
-      ArityMismatch: UNIT
-    41:
-      FeatureNotYetSupported: UNIT
-    42:
-      PackageUpgradeError:
-        NEWTYPE:
-          TYPENAME: PackageUpgradeError
+    23:
+      InvalidTransferObject: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -351,16 +257,6 @@ GenesisTransaction:
           TYPENAME: GenesisObject
 Identifier:
   NEWTYPESTRUCT: STR
-InvalidChildObjectArgument:
-  STRUCT:
-    - child:
-        TYPENAME: ObjectID
-    - parent:
-        TYPENAME: SuiAddress
-InvalidSharedByValue:
-  STRUCT:
-    - object:
-        TYPENAME: ObjectID
 ModuleId:
   STRUCT:
     - address:
@@ -381,14 +277,32 @@ MoveLocation:
     - instruction: U16
     - function_name:
         OPTION: STR
+MoveLocationOpt:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: MoveLocation
 MoveObject:
   STRUCT:
     - type_:
-        TYPENAME: StructTag
+        TYPENAME: MoveObjectType
     - has_public_transfer: BOOL
     - version:
         TYPENAME: SequenceNumber
     - contents: BYTES
+MoveObjectType:
+  ENUM:
+    0:
+      Other:
+        NEWTYPE:
+          TYPENAME: StructTag
+    1:
+      GasCoin: UNIT
+    2:
+      StakedSui: UNIT
+    3:
+      Coin:
+        NEWTYPE:
+          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:
@@ -495,18 +409,6 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
-PackageUpgradeError:
-  ENUM:
-    0:
-      UnableToFetchPackage:
-        NEWTYPE:
-          TYPENAME: ObjectID
-    1:
-      NotAPackage:
-        NEWTYPE:
-          TYPENAME: ObjectID
-    2:
-      IncompatibleUpgrade: UNIT
 ProgrammableMoveCall:
   STRUCT:
     - package:
@@ -560,21 +462,27 @@ TransactionEffectsDigest:
 TransactionKind:
   ENUM:
     0:
-      ChangeEpoch:
-        NEWTYPE:
-          TYPENAME: ChangeEpoch
-    1:
-      Genesis:
-        NEWTYPE:
-          TYPENAME: GenesisTransaction
-    2:
-      ConsensusCommitPrologue:
-        NEWTYPE:
-          TYPENAME: ConsensusCommitPrologue
-    3:
       ProgrammableTransaction:
         NEWTYPE:
           TYPENAME: ProgrammableTransaction
+    1:
+      ChangeEpoch:
+        NEWTYPE:
+          TYPENAME: ChangeEpoch
+    2:
+      Genesis:
+        NEWTYPE:
+          TYPENAME: GenesisTransaction
+    3:
+      ConsensusCommitPrologue:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologue
+TypeArgumentError:
+  ENUM:
+    0:
+      TypeNotFound: UNIT
+    1:
+      ConstraintNotSatisfied: UNIT
 TypeTag:
   ENUM:
     0:

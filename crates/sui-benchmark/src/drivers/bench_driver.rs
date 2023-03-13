@@ -358,7 +358,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
 
                             // If a retry is available send that
                             // (sending retries here subjects them to our rate limit)
-                            if let Some(b) = retry_queue.pop_front() {
+                            if let Some(mut b) = retry_queue.pop_front() {
                                 num_error += 1;
                                 num_submitted += 1;
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
@@ -389,11 +389,11 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 if let Some(sig_info) = effects.quorum_sig() {
                                                     sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
                                                 }
+                                                b.1.make_new_payload(&effects);
                                                 NextOp::Response(Some((
                                                     latency,
-                                                    b.1.make_new_payload(&effects),
-                                                ),
-                                                ))
+                                                    b.1,
+                                                )))
                                             }
                                             Err(err) => {
                                                 error!("{}", err);
@@ -410,7 +410,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             if free_pool.is_empty() {
                                 num_no_gas += 1;
                             } else {
-                                let payload = free_pool.pop().unwrap();
+                                let mut payload = free_pool.pop().unwrap();
                                 num_in_flight += 1;
                                 num_submitted += 1;
                                 metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
@@ -441,9 +441,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                             // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
+                                            payload.make_new_payload(&effects);
                                             NextOp::Response(Some((
                                                 latency,
-                                                payload.make_new_payload(&effects),
+                                                payload,
                                             )))
                                         }
                                         Err(err) => {

@@ -34,7 +34,6 @@ export const StakeObject = object({
   stakeRequestEpoch: EpochId,
   stakeActiveEpoch: EpochId,
   principal: number(),
-  tokenLock: nullable(EpochId),
   status: union([literal('Active'), literal('Pending')]),
   estimatedReward: optional(number()),
 });
@@ -151,6 +150,7 @@ export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
 export const SuiSystemStateSummary = object({
   epoch: number(),
   protocolVersion: number(),
+  systemStateVersion: number(),
   storageFund: number(),
   referenceGasPrice: number(),
   safeMode: boolean(),
@@ -170,6 +170,7 @@ export const SuiSystemStateSummary = object({
   inactivePoolsSize: number(),
   validatorCandidatesId: string(),
   validatorCandidatesSize: number(),
+  atRiskValidators: array(tuple([SuiAddress, number()])),
   validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 

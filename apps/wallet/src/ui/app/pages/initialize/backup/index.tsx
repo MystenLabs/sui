@@ -14,6 +14,7 @@ import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import { loadEntropyFromKeyring } from '_redux/slices/account';
 import { entropyToMnemonic, toEntropy } from '_shared/utils/bip39';
+import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 
 export type BackupPageProps = {
     mode?: 'created' | 'imported';
@@ -22,7 +23,7 @@ export type BackupPageProps = {
 const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     const guardsLoading = useLockedGuard(false);
     const [loading, setLoading] = useState(true);
-    const [mnemonic, setLocalMnemonic] = useState<string | null>(null);
+    const [mnemonic, setLocalMnemonic] = useState<string[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [passwordCopied, setPasswordCopied] = useState(false);
     const navigate = useNavigate();
@@ -39,7 +40,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                         toEntropy(
                             await dispatch(loadEntropyFromKeyring({})).unwrap()
                         )
-                    )
+                    ).split(' ')
                 );
             } catch (e) {
                 setError(
@@ -85,9 +86,10 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                             </div>
                             <Loading loading={loading}>
                                 {mnemonic ? (
-                                    <div className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-15 bg-white border border-solid border-gray-45 shadow-button leading-snug">
-                                        {mnemonic}
-                                    </div>
+                                    <HideShowDisplayBox
+                                        value={mnemonic}
+                                        hideCopy
+                                    />
                                 ) : (
                                     <Alert>{error}</Alert>
                                 )}

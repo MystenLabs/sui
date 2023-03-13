@@ -34,6 +34,7 @@ sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
 sui-keys = { path = "../sui-keys" }
 sui-protocol-config = { path = "../sui-protocol-config" }
+sui-storage = { path = "../sui-storage" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 shared-crypto = { path = "../shared-crypto" }
 [target.'cfg(msim)'.dependencies]

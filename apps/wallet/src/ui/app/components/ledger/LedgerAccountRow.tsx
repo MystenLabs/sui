@@ -6,21 +6,21 @@ import { CheckFill16 } from '@mysten/icons';
 import { formatAddress, type SuiAddress, SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
 
+import { useGetCoinBalance } from '../../hooks';
 import { Text } from '_src/ui/app/shared/text';
 
-type LedgerAccountProps = {
+type LedgerAccountRowProps = {
     isSelected: boolean;
     address: SuiAddress;
-    balance: number;
 };
 
-export function LedgerAccount({
+export function LedgerAccountRow({
     isSelected,
     address,
-    balance,
-}: LedgerAccountProps) {
+}: LedgerAccountRowProps) {
+    const { data: coinBalance } = useGetCoinBalance(SUI_TYPE_ARG, address);
     const [totalAmount, totalAmountSymbol] = useFormatCoin(
-        balance,
+        coinBalance?.totalBalance ?? 0,
         SUI_TYPE_ARG
     );
 
@@ -35,13 +35,13 @@ export function LedgerAccount({
             <Text
                 mono
                 variant="bodySmall"
-                weight="bold"
+                weight="semibold"
                 color={isSelected ? 'steel-darker' : 'steel-dark'}
             >
                 {formatAddress(address)}
             </Text>
             <div className="ml-auto">
-                <Text variant="bodySmall" color="steel" weight="bold" mono>
+                <Text variant="bodySmall" color="steel" weight="semibold" mono>
                     {totalAmount} {totalAmountSymbol}
                 </Text>
             </div>

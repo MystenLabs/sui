@@ -328,8 +328,7 @@ impl CheckpointStore {
         &self,
         contents: CheckpointContents,
     ) -> Result<(), TypedStoreError> {
-        self.checkpoint_content
-            .insert(&contents.digest(), &contents)
+        self.checkpoint_content.insert(contents.digest(), &contents)
     }
 
     pub fn get_epoch_last_checkpoint(

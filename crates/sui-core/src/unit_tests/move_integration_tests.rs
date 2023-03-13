@@ -18,7 +18,9 @@ use move_core_types::{
     value::{MoveStruct, MoveValue},
 };
 use move_package::source_package::manifest_parser;
-use sui_framework_build::compiled_package::{ensure_published_dependencies, BuildConfig};
+use sui_framework_build::compiled_package::{
+    check_unpublished_dependencies, gather_dependencies, BuildConfig,
+};
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -41,22 +43,15 @@ async fn test_publishing_with_unpublished_deps() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let effects = build_and_try_publish_test_package(
+    let package = build_and_publish_test_package(
         &authority,
         &sender,
         &sender_key,
         &gas,
         "depends_on_basics",
-        MAX_GAS,
         /* with_unpublished_deps */ true,
     )
-    .await
-    .1
-    .into_data();
-
-    assert!(effects.status().is_ok());
-    assert_eq!(effects.created().len(), 1);
-    let package = effects.created()[0].0;
+    .await;
 
     let ObjectRead::Exists(read_ref, package_obj, _) = authority
         .get_object_read(&package.0)
@@ -108,14 +103,93 @@ async fn test_publishing_with_unpublished_deps() {
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
+async fn test_publish_empty_package() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+
+    // empty package
+    let data =
+        TransactionData::new_module_with_dummy_gas_price(sender, gas_object_ref, vec![], MAX_GAS);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let err = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::EmptyCommandInput
+        }
+    );
+
+    // empty module
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        sender,
+        gas_object_ref,
+        vec![vec![]],
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    )
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publish_duplicate_modules() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let gas_object = authority.get_object(&gas).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+
+    // empty package
+    let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ false);
+    assert_eq!(modules.len(), 1);
+    modules.push(modules[0].clone());
+    let data =
+        TransactionData::new_module_with_dummy_gas_price(sender, gas_object_ref, modules, MAX_GAS);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError,
+            command: Some(0)
+        }
+    )
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
 async fn test_object_wrapping_unwrapping() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_wrapping")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_wrapping",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     let gas_version = authority.get_object(&gas).await.unwrap().unwrap().version();
     let create_child_version = SequenceNumber::lamport_increment([gas_version]);
@@ -315,9 +389,15 @@ async fn test_object_owning_another_object() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent.
     let effects = call_move(
@@ -334,7 +414,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -360,7 +440,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -460,7 +540,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -488,14 +568,13 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 7);
-    // TODO: figure out why an extra event is emitted.
-    // assert_eq!(events.len(), 6);
+
+    assert_eq!(events.len(), 6);
     let num_transfers = events
         .iter()
         .filter(|e| matches!(e.event_type(), EventType::TransferObject { .. }))
@@ -565,9 +644,15 @@ async fn test_create_then_delete_parent_child() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent and a child together
     let effects = call_move(
@@ -584,7 +669,7 @@ async fn test_create_then_delete_parent_child() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -627,9 +712,15 @@ async fn test_create_then_delete_parent_child_wrap() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent and a child together
     let effects = call_move(
@@ -646,7 +737,7 @@ async fn test_create_then_delete_parent_child_wrap() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -690,7 +781,7 @@ async fn test_create_then_delete_parent_child_wrap() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -724,9 +815,15 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent.
     let effects = call_move(
@@ -743,7 +840,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -769,7 +866,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -795,16 +892,14 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
     assert!(effects.status().is_ok());
     assert_eq!(effects.created().len(), 1);
     assert_eq!(effects.wrapped().len(), 1);
-    // assert_eq!(events.len(), 4);
-    // TODO: figure out why an extra event is being emitted here.
-    assert_eq!(events.len(), 5);
+    assert_eq!(events.len(), 4);
 
     // Delete the parent and child altogether.
     let effects = call_move(
@@ -821,7 +916,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
     let events = if let Some(digest) = &effects.events_digest() {
-        authority.database.get_events(digest).unwrap().data
+        authority.get_transaction_events(digest).unwrap().data
     } else {
         vec![]
     };
@@ -846,6 +941,7 @@ async fn test_entry_point_vector_empty() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -956,6 +1052,7 @@ async fn test_entry_point_vector_primitive() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -995,6 +1092,7 @@ async fn test_entry_point_vector() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1115,6 +1213,7 @@ async fn test_entry_point_vector_error() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1374,6 +1473,7 @@ async fn test_entry_point_vector_any() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1497,6 +1597,7 @@ async fn test_entry_point_vector_any_error() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1758,6 +1859,7 @@ async fn test_entry_point_string() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1837,6 +1939,7 @@ async fn test_entry_point_string_vec() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1895,6 +1998,7 @@ async fn test_entry_point_string_error() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1979,6 +2083,7 @@ async fn test_entry_point_string_vec_error() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -2125,7 +2230,7 @@ async fn test_custom_property_parse_published_at() {
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
-async fn test_custom_property_ensure_published_at() {
+async fn test_custom_property_check_unpublished_dependencies() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend([
@@ -2140,21 +2245,30 @@ async fn test_custom_property_ensure_published_at() {
         .resolution_graph_for_package(&path, &mut std::io::sink())
         .expect("Could not build resolution graph.");
 
-    let error_message = if let SuiError::ModulePublishFailure { error } =
-        ensure_published_dependencies(&resolution_graph)
+    let SuiError::ModulePublishFailure { error } =
+        check_unpublished_dependencies(gather_dependencies(&resolution_graph).unpublished)
             .err()
             .unwrap()
-    {
-        error
-    } else {
-        "Expected ModulePublishFailure".into()
+     else {
+        panic!("Expected ModulePublishFailure")
     };
 
     let expected = expect![[r#"
-        Package dependency "CustomPropertiesInManifestDependencyInvalidPublishedAt" does not specify a valid published address: could not parse value "mystery" for published-at field.
         Package dependency "CustomPropertiesInManifestDependencyMissingPublishedAt" does not specify a published address (the Move.toml manifest for "CustomPropertiesInManifestDependencyMissingPublishedAt" does not contain a published-at field).
         If this is intentional, you may use the --with-unpublished-dependencies flag to continue publishing these dependencies as part of your package (they won't be linked against existing packages on-chain)."#]];
-    expected.assert_eq(&error_message)
+    expected.assert_eq(&error)
+}
+
+pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src");
+    path.push("unit_tests");
+    path.push("data");
+    path.push(test_dir);
+    sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_package_bytes(with_unpublished_deps)
 }
 
 pub async fn build_and_try_publish_test_package(
@@ -2166,13 +2280,7 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let build_config = BuildConfig::new_for_testing();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/");
-    path.push(test_dir);
-    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes(with_unpublished_deps);
+    let all_module_bytes = build_test_package(test_dir, with_unpublished_deps);
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -2200,7 +2308,28 @@ pub async fn build_and_publish_test_package(
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
+    with_unpublished_deps: bool,
 ) -> ObjectRef {
+    build_and_publish_test_package_with_upgrade_cap(
+        authority,
+        sender,
+        sender_key,
+        gas_object_id,
+        test_dir,
+        with_unpublished_deps,
+    )
+    .await
+    .0
+}
+
+pub async fn build_and_publish_test_package_with_upgrade_cap(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    test_dir: &str,
+    with_unpublished_deps: bool,
+) -> (ObjectRef, ObjectRef) {
     let effects = build_and_try_publish_test_package(
         authority,
         sender,
@@ -2208,7 +2337,7 @@ pub async fn build_and_publish_test_package(
         gas_object_id,
         test_dir,
         MAX_GAS,
-        /* with_unpublished_deps */ false,
+        with_unpublished_deps,
     )
     .await
     .1
@@ -2218,7 +2347,19 @@ pub async fn build_and_publish_test_package(
         "{:?}",
         effects.status()
     );
-    effects.created()[0].0
+
+    let package = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap();
+    let upgrade_cap = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    (package.0, upgrade_cap.0)
 }
 
 async fn check_latest_object_ref(

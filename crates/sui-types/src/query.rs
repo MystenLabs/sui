@@ -11,9 +11,7 @@ use crate::object::Owner;
 use crate::ObjectID;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
-pub enum TransactionQuery {
-    /// All transaction hashes.
-    All,
+pub enum TransactionFilter {
     /// Query by move function.
     MoveFunction {
         package: ObjectID,

@@ -3,12 +3,10 @@
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
-use sui_json_rpc_types::SuiTransactionEffectsAPI;
+use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponseOptions};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{
-    ExecuteTransactionRequestType, Transaction, TransactionData, TransactionDataAPI,
-};
+use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
 use crate::errors::Error;
@@ -128,7 +126,11 @@ pub async fn submit(
         .quorum_driver()
         .execute_transaction(
             signed_tx,
-            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+            SuiTransactionResponseOptions::new()
+                .with_input()
+                .with_effects()
+                .with_balance_changes(),
+            None,
         )
         .await?;
 
@@ -228,12 +230,11 @@ pub async fn metadata(
             sender,
             validator,
             amount,
-            locked_until_epoch,
         } => {
             let coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, *amount, *locked_until_epoch, vec![])
+                .select_coins(*sender, None, *amount, None, vec![])
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
@@ -253,10 +254,7 @@ pub async fn metadata(
                 .await?;
 
             (
-                TransactionMetadata::Delegation {
-                    coins,
-                    locked_until_epoch: *locked_until_epoch,
-                },
+                TransactionMetadata::Delegation { coins },
                 data.gas().to_vec(),
                 13000,
             )

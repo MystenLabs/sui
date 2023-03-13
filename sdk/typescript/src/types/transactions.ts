@@ -155,7 +155,6 @@ export const ExecutionStatus = object({
 });
 export type ExecutionStatus = Infer<typeof ExecutionStatus>;
 
-// TODO: change the tuple to struct from the server end
 export const OwnedObjectRef = object({
   owner: ObjectOwner,
   reference: SuiObjectRef,
@@ -236,17 +235,12 @@ export type GatewayTxSeqNumber = number;
 export const GetTxnDigestsResponse = array(TransactionDigest);
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 
-export const PaginatedTransactionDigests = object({
-  data: array(TransactionDigest),
-  nextCursor: union([TransactionDigest, literal(null)]),
-  hasNextPage: boolean(),
-});
-export type PaginatedTransactionDigests = Infer<
-  typeof PaginatedTransactionDigests
->;
+export type SuiTransactionResponseQuery = {
+  filter?: TransactionFilter;
+  options?: SuiTransactionResponseOptions;
+};
 
-export type TransactionQuery =
-  | 'All'
+export type TransactionFilter =
   | {
       MoveFunction: {
         package: ObjectId;
@@ -293,6 +287,15 @@ export const SuiTransactionResponseOptions = object({
 
 export type SuiTransactionResponseOptions = Infer<
   typeof SuiTransactionResponseOptions
+>;
+
+export const PaginatedTransactionResponse = object({
+  data: array(SuiTransactionResponse),
+  nextCursor: union([TransactionDigest, literal(null)]),
+  hasNextPage: boolean(),
+});
+export type PaginatedTransactionResponse = Infer<
+  typeof PaginatedTransactionResponse
 >;
 
 /* -------------------------------------------------------------------------- */

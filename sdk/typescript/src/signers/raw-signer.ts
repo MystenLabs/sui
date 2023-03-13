@@ -13,7 +13,7 @@ import { SignerWithProvider } from './signer-with-provider';
 export class RawSigner extends SignerWithProvider {
   private readonly keypair: Keypair;
 
-  constructor(keypair: Keypair, provider?: Provider) {
+  constructor(keypair: Keypair, provider: Provider) {
     super(provider);
     this.keypair = keypair;
   }

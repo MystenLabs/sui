@@ -30,8 +30,8 @@ import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 3;
 
-// This constant needs to match the constant in the on-chain smart contract sui_system::MIN_VALIDATOR_STAKE。
-const MIN_VALIDATOR_STAKE = 25_000_000_000_000_000;
+// This constant needs to match the constant in the on-chain smart contract sui_system::VALIDATOR_LOW_STAKE_THRESHOLD.
+const VALIDATOR_LOW_STAKE_THRESHOLD = 25_000_000_000_000_000;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
@@ -62,7 +62,7 @@ export function validatorsTableData(
                 img: img,
                 address: validator.suiAddress,
                 lastReward: event?.fields.stake_rewards || 0,
-                atRisk: totalStake < MIN_VALIDATOR_STAKE,
+                atRisk: totalStake < VALIDATOR_LOW_STAKE_THRESHOLD,
             };
         }),
         columns: [

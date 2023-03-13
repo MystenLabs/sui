@@ -12,7 +12,7 @@ describe('Test Object Display Standard', () => {
   beforeAll(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/display_test';
-    packageId = await publishPackage(packagePath, toolbox);
+    ({ packageId } = await publishPackage(packagePath, toolbox));
   });
 
   it('Test getting Display fields', async () => {

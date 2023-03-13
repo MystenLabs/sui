@@ -10,7 +10,7 @@ import {
   getObjectReference,
   GetTxnDigestsResponse,
   ObjectId,
-  PaginatedTransactionDigests,
+  PaginatedTransactionResponse,
   SubscriptionId,
   SuiAddress,
   SuiEventEnvelope,
@@ -24,7 +24,7 @@ import {
   SuiObjectRef,
   SuiTransactionResponse,
   TransactionDigest,
-  TransactionQuery,
+  SuiTransactionResponseQuery,
   SUI_TYPE_ARG,
   RpcApiVersion,
   parseVersionFromString,
@@ -515,18 +515,20 @@ export class JsonRpcProvider extends Provider {
     options?: SuiObjectDataOptions,
   ): Promise<SuiObjectResponse[]> {
     try {
-      const requests = objectIds.map((id) => {
+      objectIds.forEach((id) => {
         if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
           throw new Error(`Invalid Sui Object id ${id}`);
         }
-        return {
-          method: 'sui_getObject',
-          args: [id, options],
-        };
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        SuiObjectResponse,
+      const hasDuplicates = objectIds.length !== new Set(objectIds).size;
+      if (hasDuplicates) {
+        throw new Error(`Duplicate object ids in batch call ${objectIds}`);
+      }
+
+      return await this.client.requestWithType(
+        'sui_multiGetObjects',
+        [objectIds, options],
+        array(SuiObjectResponse),
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -537,17 +539,17 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
-  async getTransactions(
-    query: TransactionQuery,
+  async queryTransactions(
+    query: SuiTransactionResponseQuery,
     cursor: TransactionDigest | null = null,
     limit: number | null = null,
     order: Order = 'descending',
-  ): Promise<PaginatedTransactionDigests> {
+  ): Promise<PaginatedTransactionResponse> {
     try {
       return await this.client.requestWithType(
-        'sui_getTransactions',
+        'sui_queryTransactions',
         [query, cursor, limit, order === 'descending'],
-        PaginatedTransactionDigests,
+        PaginatedTransactionResponse,
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -557,18 +559,32 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionsForObject(
+  /**
+   * @deprecated this method will be removed by April 2023.
+   * Use `queryTransactions` instead
+   */
+  async queryTransactionsForObjectDeprecated(
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { InputObject: objectID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
       {
-        method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { MutatedObject: objectID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
     ];
 
@@ -578,10 +594,13 @@ export class JsonRpcProvider extends Provider {
       }
       const results = await this.client.batchRequestWithType(
         requests,
-        PaginatedTransactionDigests,
+        PaginatedTransactionResponse,
         this.options.skipDataValidation,
       );
-      return [...results[0].data, ...results[1].data];
+      return [
+        ...results[0].data.map((r) => r.digest),
+        ...results[1].data.map((r) => r.digest),
+      ];
     } catch (err) {
       throw new Error(
         `Error getting transactions for object: ${err} for id ${objectID}`,
@@ -589,18 +608,32 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionsForAddress(
+  /**
+   * @deprecated this method will be removed by April 2023.
+   * Use `queryTransactions` instead
+   */
+  async queryTransactionsForAddressDeprecated(
     addressID: SuiAddress,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { ToAddress: addressID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
       {
-        method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { FromAddress: addressID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
     ];
     try {
@@ -609,10 +642,13 @@ export class JsonRpcProvider extends Provider {
       }
       const results = await this.client.batchRequestWithType(
         requests,
-        PaginatedTransactionDigests,
+        PaginatedTransactionResponse,
         this.options.skipDataValidation,
       );
-      return [...results[0].data, ...results[1].data];
+      return [
+        ...results[0].data.map((r) => r.digest),
+        ...results[1].data.map((r) => r.digest),
+      ];
     } catch (err) {
       throw new Error(
         `Error getting transactions for address: ${err} for id ${addressID}`,
@@ -647,18 +683,21 @@ export class JsonRpcProvider extends Provider {
     options?: SuiTransactionResponseOptions,
   ): Promise<SuiTransactionResponse[]> {
     try {
-      const requests = digests.map((d) => {
+      digests.forEach((d) => {
         if (!isValidTransactionDigest(d)) {
           throw new Error(`Invalid Transaction digest ${d}`);
         }
-        return {
-          method: 'sui_getTransaction',
-          args: [d, options],
-        };
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        SuiTransactionResponse,
+
+      const hasDuplicates = digests.length !== new Set(digests).size;
+      if (hasDuplicates) {
+        throw new Error(`Duplicate digests in batch call ${digests}`);
+      }
+
+      return await this.client.requestWithType(
+        'sui_multiGetTransactions',
+        [digests, options],
+        array(SuiTransactionResponse),
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -671,7 +710,8 @@ export class JsonRpcProvider extends Provider {
   async executeTransaction(
     txnBytes: Uint8Array | string,
     signature: SerializedSignature | SerializedSignature[],
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
+    options?: SuiTransactionResponseOptions,
+    requestType?: ExecuteTransactionRequestType,
   ): Promise<SuiTransactionResponse> {
     try {
       return await this.client.requestWithType(
@@ -679,6 +719,7 @@ export class JsonRpcProvider extends Provider {
         [
           typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
           Array.isArray(signature) ? signature : [signature],
+          options,
           requestType,
         ],
         SuiTransactionResponse,
@@ -703,13 +744,13 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionDigestsInRange(
+  async getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
     try {
       return await this.client.requestWithType(
-        'sui_getTransactionsInRange',
+        'sui_getTransactionsInRangeDeprecated',
         [start, end],
         GetTxnDigestsResponse,
         this.options.skipDataValidation,

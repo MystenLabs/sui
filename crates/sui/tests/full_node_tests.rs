@@ -15,7 +15,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletCont
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
     SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionEffectsAPI,
-    SuiTransactionResponse,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -32,7 +32,7 @@ use sui_types::messages::{
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::query::{EventQuery, TransactionFilter};
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -127,7 +127,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     // Construct the sponsored transction
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(another_addr, object_ref);
+        builder.transfer_object(another_addr, object_ref).unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -172,11 +172,11 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
     let txes = node.state().get_transactions(
-        TransactionQuery::MoveFunction {
+        Some(TransactionFilter::MoveFunction {
             package: package_ref.0,
             module: Some("counter".to_string()),
             function: Some("increment".to_string()),
-        },
+        }),
         None,
         None,
         false,
@@ -186,11 +186,11 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
-        TransactionQuery::MoveFunction {
+        Some(TransactionFilter::MoveFunction {
             package: package_ref.0,
             module: None,
             function: None,
-        },
+        }),
         None,
         None,
         false,
@@ -202,11 +202,11 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     eprint!("start...");
     let txes = node.state().get_transactions(
-        TransactionQuery::MoveFunction {
+        Some(TransactionFilter::MoveFunction {
             package: package_ref.0,
             module: Some("counter".to_string()),
             function: None,
-        },
+        }),
         None,
         None,
         false,
@@ -235,7 +235,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     let txes = node.state().get_transactions(
-        TransactionQuery::InputObject(transferred_object),
+        Some(TransactionFilter::InputObject(transferred_object)),
         None,
         None,
         false,
@@ -245,7 +245,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
-        TransactionQuery::MutatedObject(transferred_object),
+        Some(TransactionFilter::MutatedObject(transferred_object)),
         None,
         None,
         false,
@@ -253,29 +253,38 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
-    let txes =
-        node.state()
-            .get_transactions(TransactionQuery::FromAddress(sender), None, None, false)?;
+    let txes = node.state().get_transactions(
+        Some(TransactionFilter::FromAddress(sender)),
+        None,
+        None,
+        false,
+    )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes =
-        node.state()
-            .get_transactions(TransactionQuery::ToAddress(receiver), None, None, false)?;
+    let txes = node.state().get_transactions(
+        Some(TransactionFilter::ToAddress(receiver)),
+        None,
+        None,
+        false,
+    )?;
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes =
-        node.state()
-            .get_transactions(TransactionQuery::ToAddress(sender), None, None, false)?;
+    let txes = node.state().get_transactions(
+        Some(TransactionFilter::ToAddress(sender)),
+        None,
+        None,
+        false,
+    )?;
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1], digest);
 
     // No transactions have originated from the receiver
     let txes = node.state().get_transactions(
-        TransactionQuery::FromAddress(receiver),
+        Some(TransactionFilter::FromAddress(receiver)),
         None,
         None,
         false,
@@ -683,7 +692,7 @@ async fn test_full_node_event_read_api_ok() {
     let txes = node
         .state()
         .get_transactions(
-            TransactionQuery::InputObject(transferred_object),
+            Some(TransactionFilter::InputObject(transferred_object)),
             None,
             None,
             false,
@@ -1000,6 +1009,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
         let params = rpc_params![
             tx_bytes,
             signatures,
+            SuiTransactionResponseOptions::new(),
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
         let response: SuiTransactionResponse = jsonrpc_client
@@ -1040,6 +1050,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let params = rpc_params![
         tx_bytes,
         signatures,
+        SuiTransactionResponseOptions::new(),
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
     let response: SuiTransactionResponse = jsonrpc_client
@@ -1065,6 +1076,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let params = rpc_params![
         tx_bytes,
         signatures,
+        SuiTransactionResponseOptions::new().with_effects(),
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
     let response: SuiTransactionResponse = jsonrpc_client

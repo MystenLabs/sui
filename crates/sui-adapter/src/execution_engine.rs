@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
@@ -19,8 +20,9 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
 };
-use sui_types::storage::SingleTxContext;
-use sui_types::storage::{ChildObjectResolver, ParentSync, WriteKind};
+use sui_types::storage::{
+    ChildObjectResolver, ObjectStore, ParentSync, SingleTxContext, WriteKind,
+};
 use sui_types::sui_system_state::{
     get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
     CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
@@ -45,7 +47,7 @@ use sui_types::temporary_store::TemporaryStore;
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<
     Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
@@ -125,7 +127,7 @@ fn charge_gas_for_object_read<S>(
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<
     Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     temporary_store: &mut TemporaryStore<S>,
     transaction_kind: TransactionKind,
@@ -144,7 +146,7 @@ fn execute_transaction<
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
-
+    let is_system = transaction_kind.is_system_tx();
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -178,13 +180,21 @@ fn execute_transaction<
         temporary_store.charge_gas(sender, gas_object_ref.0, &mut gas_status, &mut result, gas);
     }
 
-    let cost_summary = gas_status.summary(result.is_ok());
+    if !is_system {
+        #[cfg(debug_assertions)]
+        {
+            // ensure that this transaction did not create or destroy SUI
+            temporary_store.check_sui_conserved();
+        }
+    }
+
+    let cost_summary = gas_status.summary();
     (cost_summary, result)
 }
 
 fn execution_loop<
     Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     temporary_store: &mut TemporaryStore<S>,
     transaction_kind: TransactionKind,

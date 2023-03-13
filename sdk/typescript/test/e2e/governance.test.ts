@@ -63,5 +63,7 @@ async function addStake(signer: RawSigner) {
 
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
 
-  return await signer.signAndExecuteTransaction(tx);
+  return await signer.signAndExecuteTransaction(tx, {
+    showEffects: true,
+  });
 }

@@ -14,7 +14,7 @@ describe('CoinRead API', () => {
   beforeAll(async () => {
     [toolbox, publishToolbox] = await Promise.all([setup(), setup()]);
     const packagePath = __dirname + '/./data/coin_metadata';
-    packageId = await publishPackage(packagePath, publishToolbox);
+    ({ packageId } = await publishPackage(packagePath, publishToolbox));
     testType = packageId + '::test::TEST';
   });
 

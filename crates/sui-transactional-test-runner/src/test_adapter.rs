@@ -163,7 +163,7 @@ fn create_clock() -> Object {
     let move_object = unsafe {
         let has_public_transfer = false;
         MoveObject::new_from_execution(
-            Clock::type_(),
+            Clock::type_().into(),
             has_public_transfer,
             SUI_CLOCK_OBJECT_SHARED_VERSION,
             contents,
@@ -317,7 +317,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let cap = builder.publish_upgradeable(vec![module_bytes]);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish(vec![module_bytes]);
+                builder.publish_immutable(vec![module_bytes]);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
@@ -732,7 +732,7 @@ impl<'a> SuiTestAdapter<'a> {
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_)),
+            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
             sui_types::object::Data::Package(pkg) => pkg
                 .serialized_module_map()
                 .keys()

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { Commands, SuiEventEnvelope, Transaction } from '../../src';
+import { SuiEventEnvelope, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   DEFAULT_RECIPIENT,
@@ -29,8 +29,12 @@ describe('Event Subscription API', () => {
 
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.add(Commands.TransferObjects([tx.gas], tx.input(DEFAULT_RECIPIENT)));
-    await toolbox.signer.signAndExecuteTransaction(tx);
+    tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
+    await toolbox.signer.signAndExecuteTransaction(
+      tx,
+      {},
+      'WaitForLocalExecution',
+    );
 
     const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent(
       subscriptionId,

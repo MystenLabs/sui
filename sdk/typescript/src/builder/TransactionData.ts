@@ -8,6 +8,7 @@ import {
   define,
   Infer,
   integer,
+  is,
   literal,
   nullable,
   object,
@@ -19,7 +20,7 @@ import { sha256Hash } from '../cryptography/hash';
 import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
-import { BuilderCallArg } from './Inputs';
+import { BuilderCallArg, PureCallArg } from './Inputs';
 import { create } from './utils';
 
 export const TransactionExpiration = optional(
@@ -86,7 +87,15 @@ export class TransactionDataBuilder {
         expiration: data.V1.expiration,
         gasConfig: data.V1.gasData,
         inputs: programmableTx.inputs.map((value: unknown, index: number) =>
-          create({ kind: 'Input', value, index }, TransactionInput),
+          create(
+            {
+              kind: 'Input',
+              value,
+              index,
+              type: is(value, PureCallArg) ? 'pure' : 'object',
+            },
+            TransactionInput,
+          ),
         ),
         commands: programmableTx.commands,
       },

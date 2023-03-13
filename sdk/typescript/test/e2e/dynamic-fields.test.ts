@@ -12,7 +12,7 @@ describe('Dynamic Fields Reading API', () => {
   beforeAll(async () => {
     toolbox = await setup();
     const packagePath = __dirname + '/./data/dynamic_fields';
-    packageId = await publishPackage(packagePath, toolbox);
+    ({ packageId } = await publishPackage(packagePath, toolbox));
 
     await toolbox.provider
       .getObjectsOwnedByAddress(toolbox.address())

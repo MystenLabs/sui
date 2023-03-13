@@ -400,7 +400,8 @@ impl InMemoryStore {
                 .insert(tx.effects.digest(), tx.effects.to_owned());
         }
         let contents = contents.into_inner().into_checkpoint_contents();
-        self.checkpoint_contents.insert(contents.digest(), contents);
+        self.checkpoint_contents
+            .insert(*contents.digest(), contents);
     }
 
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
@@ -667,5 +668,11 @@ impl ObjectStore for &[Object] {
 impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.get(object_id).map(|(_, obj, _)| obj).cloned())
+    }
+}
+
+impl<T: ObjectStore> ObjectStore for Arc<T> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.as_ref().get_object(object_id)
     }
 }

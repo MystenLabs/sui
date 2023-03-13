@@ -4,6 +4,7 @@
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
+use crate::models::events::Event;
 use crate::models::objects::Object;
 use crate::models::transactions::Transaction;
 
@@ -27,11 +28,16 @@ use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json_rpc_types::CheckpointId;
+use sui_json_rpc_types::{CheckpointId, EventPage, SuiEventEnvelope};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::object::ObjectRead;
 use tracing::{error, info};
+
+use sui_types::event::EventID;
+use sui_types::query::EventQuery;
+
+const MAX_EVENT_PAGE_SIZE: usize = 1000;
 
 const GET_PARTITION_SQL: &str = r#"
 SELECT parent.relname                           AS table_name,
@@ -106,6 +112,125 @@ impl IndexerStore for PgIndexerStore {
                     e
                 ))
             })
+    }
+
+    fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                events::table
+                    .filter(events::dsl::transaction_digest.eq(id.tx_digest.base58_encode()))
+                    .filter(events::dsl::event_sequence.eq(id.event_seq))
+                    .first::<Event>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading event in PostgresDB with error {:?}",
+                    e
+                ))
+            })
+    }
+
+    fn get_events(
+        &self,
+        query: EventQuery,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> Result<EventPage, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let mut boxed_query = events::table.into_boxed();
+        match query {
+            EventQuery::All => {}
+            EventQuery::Transaction(digest) => {
+                boxed_query =
+                    boxed_query.filter(events::dsl::transaction_digest.eq(digest.base58_encode()));
+            }
+            EventQuery::MoveModule { package, module } => {
+                boxed_query = boxed_query
+                    .filter(events::dsl::package.eq(package.to_string()))
+                    .filter(events::dsl::module.eq(module));
+            }
+            EventQuery::MoveEvent(struct_name) => {
+                boxed_query = boxed_query.filter(events::dsl::event_type.eq(struct_name));
+            }
+            EventQuery::Sender(sender) => {
+                boxed_query = boxed_query.filter(events::dsl::sender.eq(sender.to_string()));
+            }
+            EventQuery::TimeRange {
+                start_time,
+                end_time,
+            } => {
+                boxed_query = boxed_query
+                    .filter(events::dsl::event_time_ms.ge(start_time as i64))
+                    .filter(events::dsl::event_time_ms.lt(end_time as i64));
+            }
+            EventQuery::EventType(_) => {}
+            _ => {
+                return Err(IndexerError::NotImplementedError(
+                    "Querying events by Recipient and Object is deprecated.".to_string(),
+                ));
+            }
+        }
+
+        let mut page_limit = limit.unwrap_or(MAX_EVENT_PAGE_SIZE);
+        if page_limit > MAX_EVENT_PAGE_SIZE {
+            Err(IndexerError::InvalidArgumentError(format!(
+                "Limit {} exceeds the maximum page size {}",
+                page_limit, MAX_EVENT_PAGE_SIZE
+            )))?;
+        }
+        // fetch one more item to tell if there is next page
+        page_limit += 1;
+
+        let pg_cursor = cursor
+            .map(|c| {
+                self.get_event(c)?
+                    .id
+                    .ok_or_else(|| IndexerError::PostgresReadError("Event ID is None".to_string()))
+            })
+            .transpose()?;
+        let events_vec: Vec<Event> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if let Some(pg_cursor) = pg_cursor {
+                    if descending_order {
+                        boxed_query = boxed_query.filter(events::dsl::id.lt(pg_cursor));
+                    } else {
+                        boxed_query = boxed_query.filter(events::dsl::id.gt(pg_cursor));
+                    }
+                }
+                if descending_order {
+                    boxed_query = boxed_query.order(events::id.desc());
+                } else {
+                    boxed_query = boxed_query.order(events::id.asc());
+                }
+                boxed_query.load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading events in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let mut event_envelope_vec: Vec<SuiEventEnvelope> = events_vec
+            .into_iter()
+            .map(|event| event.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        // reset to original limit for checking and truncating
+        page_limit -= 1;
+        let has_next_page = event_envelope_vec.len() > page_limit;
+        event_envelope_vec.truncate(page_limit);
+        let next_cursor = event_envelope_vec.last().map(|e| e.id.clone());
+        Ok(EventPage {
+            data: event_envelope_vec,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {

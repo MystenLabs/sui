@@ -466,7 +466,7 @@ Sui is [DAG](https://cointelegraph.com/explained/what-is-a-directed-acyclic-grap
     {
       "jsonrpc": "2.0",
       "id": 1,
-      "method": "sui_getTransactions",
+      "method": "sui_queryTransactions",
       "params": [
         "All",
         <last known transaction digest>,

@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 const dedupe = (arr: string[]) => Array.from(new Set(arr));
 
-export function useGetTransactionsByAddress(address: SuiAddress | null) {
+export function useQueryTransactionsByAddress(address: SuiAddress | null) {
     const rpc = useRpcClient();
 
     return useQuery(
@@ -15,15 +15,23 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
         async () => {
             // combine from and to transactions
             const [txnIds, fromTxnIds] = await Promise.all([
-                rpc.getTransactions({
-                    ToAddress: address!,
+                rpc.queryTransactions({
+                    filter: {
+                        ToAddress: address!,
+                    },
                 }),
-                rpc.getTransactions({
-                    FromAddress: address!,
+                rpc.queryTransactions({
+                    filter: {
+                        FromAddress: address!,
+                    },
                 }),
             ]);
+            // TODO: replace this with queryTransactions
+            // It seems to be expensive to fetch all transaction data at once though
             const resp = await rpc.getTransactionResponseBatch(
-                dedupe([...txnIds.data, ...fromTxnIds.data]),
+                dedupe(
+                    [...txnIds.data, ...fromTxnIds.data].map((x) => x.digest)
+                ),
                 {
                     showInput: true,
                     showEffects: true,

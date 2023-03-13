@@ -4,7 +4,7 @@
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::events::Event;
+use crate::models::events::compose_event;
 use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
@@ -14,16 +14,15 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
-use chrono::NaiveDateTime;
 use futures::future::join_all;
 use futures::FutureExt;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiCommand, SuiObjectData, SuiObjectDataOptions, SuiRawData,
-    SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    OwnedObjectRef, SuiCommand, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
+    SuiRawData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
@@ -140,7 +139,10 @@ where
                     .read_api()
                     .multi_get_transactions_with_options(
                         digests.to_vec(),
-                        SuiTransactionResponseOptions::full_content(),
+                        SuiTransactionResponseOptions::new()
+                            .with_effects()
+                            .with_input()
+                            .with_events(),
                     )
             },
         ))
@@ -171,19 +173,39 @@ where
                 },
             );
 
-        // TODO: Use multi get objects
         let rpc = self.rpc_client.clone();
-        let all_mutated_objects = join_all(all_mutated.into_iter().map(|(id, version, status)| {
-            rpc.read_api()
-                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::bcs_lossless())
-                .map(move |resp| (resp, status))
-        }))
-        .await
-        .into_iter()
-        .try_fold(vec![], |mut acc, (response, status)| {
-            acc.push((status, response?.into_object()?));
-            Ok::<_, Error>(acc)
-        })?;
+        let all_mutated_objects =
+            join_all(all_mutated.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
+                let wanted_past_object_statuses: Vec<ObjectStatus> =
+                    objects.iter().map(|(_, _, status)| *status).collect();
+
+                let wanted_past_object_request = objects
+                    .iter()
+                    .map(|(id, seq_num, _)| SuiGetPastObjectRequest {
+                        object_id: *id,
+                        version: *seq_num,
+                    })
+                    .collect();
+
+                rpc.read_api()
+                    .try_multi_get_parsed_past_object(
+                        wanted_past_object_request,
+                        SuiObjectDataOptions::bcs_lossless(),
+                    )
+                    .map(move |resp| (resp, wanted_past_object_statuses))
+            }))
+            .await
+            .into_iter()
+            .try_fold(vec![], |mut acc, chunk| {
+                let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
+                    let object_data = resp.into_object()?;
+                    acc.push(object_data);
+                    Ok::<Vec<SuiObjectData>, Error>(acc)
+                })?;
+                let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
+                acc.extend(mutated_object_chunk);
+                Ok::<_, Error>(acc)
+            })?;
 
         Ok(CheckpointData {
             checkpoint,
@@ -219,33 +241,15 @@ where
         let events = transactions
             .iter()
             .flat_map(|tx| {
-                let mut event_sequence = 0;
                 tx.events
                     .as_ref()
                     .expect("Events can only be None if there's an error in fetching or converting events")
                     .data
                     .iter()
-                    .map(move |event| {
-                        // TODO: we should rethink how we store the raw event in DB
-                        let event_content = serde_json::to_string(event).map_err(|err| {
-                            IndexerError::InsertableParsingError(format!(
-                                "Failed converting event to JSON with error: {:?}",
-                                err
-                            ))
-                        })?;
-                        let event = Event {
-                            id: None,
-                            transaction_digest: tx.digest.to_string(),
-                            event_sequence,
-                            event_time: tx
-                                .timestamp_ms
-                                .and_then(|t| NaiveDateTime::from_timestamp_millis(t as i64)),
-                            event_type: event.get_event_type(),
-                            event_content,
-                        };
-                        event_sequence += 1;
-                        Ok::<_, IndexerError>(event)
-                    })
+                    .enumerate()
+                    .filter_map(
+                        move |(seq, event)| compose_event(event, tx.digest.to_string(), seq, tx.timestamp_ms.map(|t| t as i64))
+                    )
             })
             .collect::<Result<Vec<_>, _>>()?;
 

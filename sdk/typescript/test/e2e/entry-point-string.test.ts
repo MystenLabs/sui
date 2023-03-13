@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  Commands,
-  getExecutionStatusType,
-  ObjectId,
-  Transaction,
-} from '../../src';
+import { getExecutionStatusType, ObjectId, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -22,13 +17,13 @@ describe('Test Move call with strings', () => {
   async function callWithString(str: string | string[], funcName: string) {
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::entry_point_string::${funcName}`,
-        arguments: [tx.input(str)],
-      }),
-    );
-    const result = await toolbox.signer.signAndExecuteTransaction(tx);
+    tx.moveCall({
+      target: `${packageId}::entry_point_string::${funcName}`,
+      arguments: [tx.pure(str)],
+    });
+    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
+      showEffects: true,
+    });
     expect(getExecutionStatusType(result)).toEqual('success');
   }
 
@@ -37,7 +32,7 @@ describe('Test Move call with strings', () => {
     const packagePath =
       __dirname +
       '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
-    packageId = await publishPackage(packagePath);
+    ({ packageId } = await publishPackage(packagePath));
   });
 
   it('Test ascii', async () => {

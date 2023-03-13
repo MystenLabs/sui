@@ -26,21 +26,23 @@ export async function mint(address: string) {
     const signer = new RawSigner(keypair, provider);
 
     const tx = new Transaction();
-    tx.add(
-        Transaction.Commands.MoveCall({
-            target: '0x2::devnet_nft::mint',
-            arguments: [
-                tx.input('Example NFT'),
-                tx.input('An example NFT.'),
-                tx.input(
-                    'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty'
-                ),
-            ],
-        })
-    );
+    tx.moveCall({
+        target: '0x2::devnet_nft::mint',
+        arguments: [
+            tx.pure('Example NFT'),
+            tx.pure('An example NFT.'),
+            tx.pure(
+                'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty'
+            ),
+        ],
+    });
     tx.setGasBudget(30000);
 
-    const result = await signer.signAndExecuteTransaction(tx);
+    const result = await signer.signAndExecuteTransaction(tx, {
+        showInput: true,
+        showEffects: true,
+        showEvents: true,
+    });
 
     return result;
 }

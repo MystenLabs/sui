@@ -1,14 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use axum::{
+    extract::Extension,
+    http::{header, StatusCode},
+    routing::get,
+    Router,
+};
 
-use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
-    IntGaugeVec, Registry, TextEncoder,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, Encoder,
+    IntCounterVec, IntGaugeVec, Registry, TextEncoder, PROTOBUF_FORMAT,
 };
+
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_network::tonic::Code;
 
 use mysten_metrics::RegistryService;
@@ -92,7 +98,6 @@ impl MetricsPushClient {
 /// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
 /// is configured.
 pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: RegistryService) {
-    use anyhow::Context;
     use fastcrypto::traits::KeyPair;
     use sui_config::node::MetricsConfig;
 
@@ -119,21 +124,41 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         url: &reqwest::Url,
         registry: &RegistryService,
     ) -> Result<(), anyhow::Error> {
-        let metrics = TextEncoder
-            .encode_to_string(&registry.gather_all())
-            .context("encoding metrics")?;
+        // now represents a collection timestamp for all of the metrics we send to the proxy
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        let mut metric_families = registry.gather_all();
+        for mf in metric_families.iter_mut() {
+            for m in mf.mut_metric() {
+                m.set_timestamp_ms(now);
+            }
+        }
+
+        let mut buf: Vec<u8> = vec![];
+        let encoder = prometheus::ProtobufEncoder::new();
+        encoder.encode(&metric_families, &mut buf)?;
 
         let response = client
             .client()
             .post(url.to_owned())
-            .body(metrics)
+            .header(header::CONTENT_TYPE, PROTOBUF_FORMAT)
+            .body(buf)
             .send()
             .await?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            let body = match response.text().await {
+                Ok(body) => body,
+                Err(error) => format!("couldn't decode response body; {error}"),
+            };
             return Err(anyhow::anyhow!(
-                "metrics push failed with status: {}",
-                response.status()
+                "metrics push failed: [{}]:{}",
+                status,
+                body
             ));
         }
 
