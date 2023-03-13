@@ -980,6 +980,112 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
 }
 
+fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let module_id = &s.module;
+    let struct_name = &s.name;
+    (
+        module_id.address(),
+        module_id.name(),
+        struct_name.as_ident_str(),
+    )
+}
+
+// Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
+// a MutableReference, and Immutable otherwise.
+// Returns None for all other types
+pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    t: &Type,
+) -> Result<TxContextKind, ExecutionError> {
+    let (is_mut, inner) = match t {
+        Type::MutableReference(inner) => (true, inner),
+        Type::Reference(inner) => (false, inner),
+        _ => return Ok(TxContextKind::None),
+    };
+    let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
+    let Some(s) = context.session.get_struct_type(*idx) else {
+        invariant_violation!("Loaded struct not found")
+    };
+    let (module_addr, module_name, struct_name) = get_struct_ident(&s);
+    let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
+        && module_name == TX_CONTEXT_MODULE_NAME
+        && struct_name == TX_CONTEXT_STRUCT_NAME;
+    Ok(if is_tx_context_type {
+        if is_mut {
+            TxContextKind::Mutable
+        } else {
+            TxContextKind::Immutable
+        }
+    } else {
+        TxContextKind::None
+    })
+}
+
+/// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
+fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    param_ty: &Type,
+) -> Result<bool, ExecutionError> {
+    let mut stack = vec![param_ty];
+    while let Some(cur) = stack.pop() {
+        match cur {
+            Type::Signer => return Ok(false),
+            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => return Ok(false),
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address => (),
+            Type::Vector(inner) => stack.push(&**inner),
+            Type::Struct(idx) => {
+                let Some(s) = context.session.get_struct_type(*idx) else {
+                    invariant_violation!("Loaded struct not found")
+                };
+                let resolved_struct = get_struct_ident(&s);
+                if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
+                    .contains(&resolved_struct)
+                {
+                    return Ok(false);
+                }
+            }
+            Type::StructInstantiation(idx, targs) => {
+                let Some(s) = context.session.get_struct_type(*idx) else {
+                    invariant_violation!("Loaded struct not found")
+                };
+                let resolved_struct = get_struct_ident(&s);
+                // is option of a primitive
+                let is_valid = resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1;
+                if !is_valid {
+                    return Ok(false);
+                }
+                stack.extend(targs)
+            }
+        }
+    }
+    Ok(true)
+}
+
+/***************************************************************************************************
+ * Special serialization formats
+ **************************************************************************************************/
+
+/// Special enum for values that need additional validation, in other words
+/// There is validation to do on top of the BCS layout. Currently only needed for
+/// strings
+pub enum SpecialArgumentLayout {
+    /// An option
+    Option(Box<SpecialArgumentLayout>),
+    /// A vector
+    Vector(Box<SpecialArgumentLayout>),
+    /// An ASCII encoded string
+    Ascii,
+    /// A UTF8 encoded string
+    UTF8,
+}
+
 /// If the type is a string, returns the name of the string type and the layout
 /// Otherwise, returns None
 fn additional_validation_layout<E: fmt::Debug, S: StorageView<E>>(
@@ -1033,104 +1139,8 @@ fn additional_validation_layout<E: fmt::Debug, S: StorageView<E>>(
     }
 }
 
-/// Special enum for values that need additional validation, in other words
-/// There is validation to do on top of the BCS layout. Currently only needed for
-/// strings
-pub enum SpecialArgumentLayout {
-    Option(Box<SpecialArgumentLayout>),
-    Vector(Box<SpecialArgumentLayout>),
-    Ascii,
-    UTF8,
-}
-
-// Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
-// a MutableReference, and Immutable otherwise.
-// Returns None for all other types
-pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
-    t: &Type,
-) -> Result<TxContextKind, ExecutionError> {
-    let (is_mut, inner) = match t {
-        Type::MutableReference(inner) => (true, inner),
-        Type::Reference(inner) => (false, inner),
-        _ => return Ok(TxContextKind::None),
-    };
-    let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
-    let Some(s) = context.session.get_struct_type(*idx) else {
-        invariant_violation!("Loaded struct not found")
-    };
-    let (module_addr, module_name, struct_name) = get_struct_ident(&s);
-    let is_tx_context_type = module_addr == &SUI_FRAMEWORK_ADDRESS
-        && module_name == TX_CONTEXT_MODULE_NAME
-        && struct_name == TX_CONTEXT_STRUCT_NAME;
-    Ok(if is_tx_context_type {
-        if is_mut {
-            TxContextKind::Mutable
-        } else {
-            TxContextKind::Immutable
-        }
-    } else {
-        TxContextKind::None
-    })
-}
-
-fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
-}
-
-/// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
-fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
-    param_ty: &Type,
-) -> Result<bool, ExecutionError> {
-    let mut stack = vec![param_ty];
-    while let Some(cur) = stack.pop() {
-        match cur {
-            Type::Signer => return Ok(false),
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => return Ok(false),
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address => (),
-            Type::Vector(inner) => stack.push(&**inner),
-            Type::Struct(idx) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
-                    .contains(&resolved_struct)
-                {
-                    return Ok(false);
-                }
-            }
-            Type::StructInstantiation(idx, targs) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                // is option of a primitive
-                let is_valid = resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1;
-                if !is_valid {
-                    return Ok(false);
-                }
-                stack.extend(targs)
-            }
-        }
-    }
-    Ok(true)
-}
-
+/// Checks the bytes against the `SpecialArgumentLayout` using `bcs`. It does not actually generate
+/// the deserialized value, only walks the bytes
 pub fn special_argument_validate(
     bytes: &[u8],
     idx: u16,
