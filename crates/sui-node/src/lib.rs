@@ -15,7 +15,6 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
-use dashmap::DashMap;
 use futures::TryFutureExt;
 use prometheus::Registry;
 use tap::tap::TapFallible;

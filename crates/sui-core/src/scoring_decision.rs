@@ -95,9 +95,8 @@ pub fn update_low_scoring_authorities(
         .iter()
         .for_each(|(a, s)| {
             let name = AuthorityName::from(a);
-            if !low_scoring_authorities.load().contains_key(&name) {
-                debug!("authority {} has score {}", name, s);
-            }
+            debug!("authority {} has score {}", name, s);
+            metrics.consensus_handler_scores.observe(*s as f64);
         });
 
     // make sure the rest have at least quorum
@@ -148,7 +147,7 @@ pub fn test_update_low_scoring_authorities() {
     authorities.insert(a2, 1);
     authorities.insert(a3, 1);
     authorities.insert(a4, 1);
-    let committee = Arc::new(Committee::new(0, authorities).unwrap());
+    let committee = Arc::new(Committee::new(0, authorities));
 
     let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
 
@@ -274,7 +273,7 @@ pub fn test_update_low_scoring_authorities() {
         authorities.insert(a, 1);
     }
 
-    let committee = Arc::new(Committee::new(0, authorities).unwrap());
+    let committee = Arc::new(Committee::new(0, authorities));
     let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
     let mut scores = HashMap::new();
     // scores clustered between 100 - 110
