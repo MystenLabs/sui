@@ -166,9 +166,7 @@ This should be given as the first parameter to <code>prepare_verifying_key</code
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): u8 {
-    0
-}
+<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): u8 { 0 }
 </code></pre>
 
 
@@ -192,9 +190,7 @@ This should be given as the first parameter to <code>prepare_verifying_key</code
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): u8 {
-    1
-}
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): u8 { 1 }
 </code></pre>
 
 
@@ -315,7 +311,7 @@ Creates a Groth16 <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints
 
 ## Function `prepare_verifying_key`
 
-@param curve: What elliptic curve construction to use where 0 => BLS12-831 and 1 => BN254.
+@param curve: What elliptic curve construction to use. See <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code>.
 @param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
 
 Returns four vectors of bytes representing the four components of a prepared verifying key.
@@ -356,7 +352,7 @@ This can be used as inputs for the <code>verify_groth16_proof</code> function.
 
 ## Function `verify_groth16_proof`
 
-@param curve: What elliptic curve construction to use where 0 => BLS12-831 and 1 => BN254.
+@param curve: What elliptic curve construction to use. See <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code>.
 @param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
 @param public_proof_inputs: Represent inputs that are public.
 @param proof_points: Represent three proof points.
