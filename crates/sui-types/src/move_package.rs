@@ -199,7 +199,7 @@ impl MovePackage {
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
         let self_id = ObjectID::from(*module.address());
-        let type_origin_table = build_upgraded_type_origin_table(self, &modules, storage_id);
+        let type_origin_table = build_upgraded_type_origin_table(self, &modules, storage_id)?;
         let mut new_version = self.version();
         new_version.increment();
         Self::from_module_iter_with_type_origin_table(
@@ -518,7 +518,7 @@ fn build_upgraded_type_origin_table(
     predecessor: &MovePackage,
     modules: &[CompiledModule],
     storage_id: ObjectID,
-) -> BTreeMap<ModuleStruct, ObjectID> {
+) -> Result<BTreeMap<ModuleStruct, ObjectID>, ExecutionError> {
     let mut new_table = BTreeMap::new();
     let mut existing_table = predecessor.type_origin_table.clone();
     for m in modules {
@@ -536,11 +536,12 @@ fn build_upgraded_type_origin_table(
             new_table.insert(mod_struct, id);
         }
     }
+
     if !existing_table.is_empty() {
-        {
-            // panic as it should be caught by compatibility check
-            panic!("Earlier package version contains a type missing from the upgraded one");
-        }
+        Err(ExecutionError::invariant_violation(
+            "Package upgrade missing type from previous version.",
+        ))
+    } else {
+        Ok(new_table)
     }
-    new_table
 }
