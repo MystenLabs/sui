@@ -254,6 +254,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-bn254"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a22f4561524cd949590d78d7d4c5df8f592430d221f7f3c9497bbafd8972120f"
+dependencies = [
+ "ark-ec 0.4.1",
+ "ark-ff 0.4.1",
+ "ark-std 0.4.0",
+]
+
+[[package]]
 name = "ark-crypto-primitives"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3007,7 +3018,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9fbe55e9d477eac6a6d13e872e1dee19b0c83f53#9fbe55e9d477eac6a6d13e872e1dee19b0c83f53"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3055,7 +3066,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9fbe55e9d477eac6a6d13e872e1dee19b0c83f53#9fbe55e9d477eac6a6d13e872e1dee19b0c83f53"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.51",
@@ -3066,9 +3077,10 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=5454b7f65632b35cb9503fb14ac0aca3823b5706#5454b7f65632b35cb9503fb14ac0aca3823b5706"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9fbe55e9d477eac6a6d13e872e1dee19b0c83f53#9fbe55e9d477eac6a6d13e872e1dee19b0c83f53"
 dependencies = [
  "ark-bls12-381",
+ "ark-bn254",
  "ark-crypto-primitives",
  "ark-ec 0.4.1",
  "ark-ff 0.4.1",
@@ -11585,6 +11597,7 @@ dependencies = [
  "arc-swap",
  "ark-bls12-377",
  "ark-bls12-381",
+ "ark-bn254",
  "ark-crypto-primitives",
  "ark-ec 0.3.0",
  "ark-ec 0.4.1",
