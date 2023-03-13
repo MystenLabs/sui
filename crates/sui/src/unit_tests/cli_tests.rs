@@ -406,8 +406,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Certain prep work
     // Get a gas object
-    let gas = object_refs.first().unwrap().object_id;
-    let obj = object_refs.get(1).unwrap().object_id;
+    let coins: Vec<_> = object_refs
+        .iter()
+        .filter(|object_ref| object_ref.type_ == "0x2::coin::Coin<0x2::sui::SUI>")
+        .collect();
+    let gas = coins.first().unwrap().object_id;
+    let obj = coins.get(1).unwrap().object_id;
 
     // Create the args
     let args = vec![
