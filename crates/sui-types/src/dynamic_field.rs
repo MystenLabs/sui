@@ -6,7 +6,7 @@ use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
 use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
-use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
+use crate::{MoveTypeTag, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base58;
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -228,16 +228,6 @@ where
     Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
 }
 
-pub trait MoveTypeTagTrait {
-    fn get_type_tag() -> TypeTag;
-}
-
-impl MoveTypeTagTrait for u64 {
-    fn get_type_tag() -> TypeTag {
-        TypeTag::U64
-    }
-}
-
 /// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field
 /// from the `object_store`. The key type `K` must implement `MoveTypeTagTrait` which has an associated
 /// function that returns the Move type tag. This is needed to properly derive the field object ID.
@@ -248,13 +238,13 @@ pub fn get_dynamic_field_from_store<S, K, V>(
 ) -> Result<V, SuiError>
 where
     S: ObjectStore,
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned,
+    K: MoveTypeTag + Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
     let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
     let object = object_store.get_object(&id)?.ok_or_else(|| {
-        SuiError::DynamicFieldReadError("Dynamic field not found in the table".to_owned())
+        SuiError::DynamicFieldReadError("Dynamic field not found on parent".to_owned())
     })?;
     let move_object = object.data.try_as_move().ok_or_else(|| {
         SuiError::DynamicFieldReadError("Dynamic field is not a Move object".to_owned())

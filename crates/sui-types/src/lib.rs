@@ -106,3 +106,13 @@ fn resolve_address(addr: &str) -> Option<AccountAddress> {
         _ => None,
     }
 }
+
+pub trait MoveTypeTag {
+    fn get_type_tag() -> TypeTag;
+}
+
+impl MoveTypeTag for u64 {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::U64
+    }
+}
