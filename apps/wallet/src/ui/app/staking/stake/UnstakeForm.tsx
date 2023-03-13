@@ -115,8 +115,7 @@ export function UnStakeForm({
                             weight="medium"
                             color="steel-darker"
                         >
-                            {tokenBalance}
-                            {symbol}
+                            {tokenBalance} {symbol}
                         </Text>
                     </div>
                     <div className="flex gap-0.5 justify-between w-full">
