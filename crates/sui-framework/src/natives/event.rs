@@ -37,17 +37,17 @@ pub fn emit(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    native_charge_gas_early_exit!(
-        context,
-        gas_left,
-        event_emit_cost_params.event_emit_cost_base
-    );
-
     let mut gas_left = context.gas_budget();
     let event_emit_cost_params = {
         let natvies_cost_table: &NativesCostTable = context.extensions().get();
         natvies_cost_table.event_emit_cost_params.clone()
     };
+
+    native_charge_gas_early_exit!(
+        context,
+        gas_left,
+        event_emit_cost_params.event_emit_cost_base
+    );
 
     let ty = ty_args.pop().unwrap();
     let event_value = args.pop_back().unwrap();

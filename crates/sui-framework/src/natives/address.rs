@@ -16,7 +16,7 @@ use std::{collections::VecDeque, ops::Mul};
 const E_ADDRESS_PARSE_ERROR: u64 = 0;
 
 pub struct AddressFromBytesCostParams {
-    pub address_from_bytes_cost_base: InternGas,
+    pub address_from_bytes_cost_base: InternalGas,
     pub copy_bytes_to_address_cost_per_byte: InternalGas,
 }
 /***************************************************************************************************
