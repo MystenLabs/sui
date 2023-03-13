@@ -49,7 +49,7 @@ impl GovernanceReadApi {
             return Ok(vec![]);
         }
 
-        Ok(self.get_delegated_stakes_internal(stakes).await?)
+        self.get_delegated_stakes_internal(stakes).await
     }
 
     async fn get_delegated_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
@@ -58,7 +58,7 @@ impl GovernanceReadApi {
             return Ok(vec![]);
         }
 
-        Ok(self.get_delegated_stakes_internal(stakes).await?)
+        self.get_delegated_stakes_internal(stakes).await
     }
 
     async fn get_delegated_stakes_internal(
