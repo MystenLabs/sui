@@ -28,14 +28,13 @@ use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json_rpc_types::{CheckpointId, EventPage, SuiEvent};
+use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::object::ObjectRead;
 use tracing::{error, info};
 
 use sui_types::event::EventID;
-use sui_types::query::EventQuery;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 
@@ -137,7 +136,7 @@ impl IndexerStore for PgIndexerStore {
 
     fn get_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: bool,
@@ -145,29 +144,36 @@ impl IndexerStore for PgIndexerStore {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         let mut boxed_query = events::table.into_boxed();
         match query {
-            EventQuery::All => {}
-            EventQuery::Transaction(digest) => {
+            EventFilter::All(..) => {}
+            EventFilter::Transaction(digest) => {
                 boxed_query =
                     boxed_query.filter(events::dsl::transaction_digest.eq(digest.base58_encode()));
             }
-            EventQuery::MoveModule { package, module } => {
+            EventFilter::MoveModule { package, module } => {
                 boxed_query = boxed_query
                     .filter(events::dsl::package.eq(package.to_string()))
-                    .filter(events::dsl::module.eq(module));
+                    .filter(events::dsl::module.eq(module.to_string()));
             }
-            EventQuery::MoveEvent(struct_name) => {
-                boxed_query = boxed_query.filter(events::dsl::event_type.eq(struct_name));
+            EventFilter::MoveEventType(struct_name) => {
+                boxed_query =
+                    boxed_query.filter(events::dsl::event_type.eq(struct_name.to_string()));
             }
-            EventQuery::Sender(sender) => {
+            EventFilter::Sender(sender) => {
                 boxed_query = boxed_query.filter(events::dsl::sender.eq(sender.to_string()));
             }
-            EventQuery::TimeRange {
+            EventFilter::TimeRange {
                 start_time,
                 end_time,
             } => {
                 boxed_query = boxed_query
                     .filter(events::dsl::event_time_ms.ge(start_time as i64))
                     .filter(events::dsl::event_time_ms.lt(end_time as i64));
+            }
+            // TODO: Implement EventFilter to SQL
+            _ => {
+                return Err(IndexerError::NotImplementedError(format!(
+                    "Filter type [{query:?}] not supported by the Indexer."
+                )))
             }
         }
 

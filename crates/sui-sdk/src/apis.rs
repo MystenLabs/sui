@@ -28,7 +28,6 @@ use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::query::EventQuery;
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
@@ -383,7 +382,7 @@ impl EventApi {
 
     pub async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: bool,
@@ -397,7 +396,7 @@ impl EventApi {
 
     pub fn get_events_stream(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         descending_order: bool,
     ) -> impl Stream<Item = SuiEvent> + '_ {

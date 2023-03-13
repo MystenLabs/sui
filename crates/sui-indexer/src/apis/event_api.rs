@@ -18,7 +18,6 @@ use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_open_rpc::Module;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
-use sui_types::query::EventQuery;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
@@ -43,7 +42,7 @@ impl<S: IndexerStore> EventReadApi<S> {
 
     pub fn get_events_internal(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -60,7 +59,7 @@ where
 {
     async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<EventID>,
         limit: Option<usize>,

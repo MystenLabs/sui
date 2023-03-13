@@ -2020,7 +2020,7 @@
           "description": "the event query criteria.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/EventQuery"
+            "$ref": "#/components/schemas/EventFilter"
           }
         },
         {
@@ -3345,6 +3345,33 @@
       "EventFilter": {
         "oneOf": [
           {
+            "description": "Query by sender address.",
+            "type": "object",
+            "required": [
+              "Sender"
+            ],
+            "properties": {
+              "Sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events emitted by the given transaction.",
+            "type": "object",
+            "required": [
+              "Transaction"
+            ],
+            "properties": {
+              "Transaction": {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events emitted in a specified Package.",
             "type": "object",
             "required": [
               "Package"
@@ -3357,18 +3384,38 @@
             "additionalProperties": false
           },
           {
+            "description": "Return events emitted in a specified Move module.",
             "type": "object",
             "required": [
-              "Module"
+              "MoveModule"
             ],
             "properties": {
-              "Module": {
-                "type": "string"
+              "MoveModule": {
+                "type": "object",
+                "required": [
+                  "module",
+                  "package"
+                ],
+                "properties": {
+                  "module": {
+                    "description": "the module name",
+                    "type": "string"
+                  },
+                  "package": {
+                    "description": "the Move package ID",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/ObjectID"
+                      }
+                    ]
+                  }
+                }
               }
             },
             "additionalProperties": false
           },
           {
+            "description": "Return events with the given move event struct name",
             "type": "object",
             "required": [
               "MoveEventType"
@@ -3403,13 +3450,32 @@
             "additionalProperties": false
           },
           {
+            "description": "Return events emitted in [start_time, end_time] interval",
             "type": "object",
             "required": [
-              "SenderAddress"
+              "TimeRange"
             ],
             "properties": {
-              "SenderAddress": {
-                "$ref": "#/components/schemas/SuiAddress"
+              "TimeRange": {
+                "type": "object",
+                "required": [
+                  "endTime",
+                  "startTime"
+                ],
+                "properties": {
+                  "endTime": {
+                    "description": "right endpoint of time interval, milliseconds since epoch, exclusive",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "startTime": {
+                    "description": "left endpoint of time interval, milliseconds since epoch, inclusive",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -3507,118 +3573,6 @@
             "$ref": "#/components/schemas/TransactionDigest"
           }
         }
-      },
-      "EventQuery": {
-        "oneOf": [
-          {
-            "description": "Return all events.",
-            "type": "string",
-            "enum": [
-              "All"
-            ]
-          },
-          {
-            "description": "Return events emitted by the given transaction.",
-            "type": "object",
-            "required": [
-              "Transaction"
-            ],
-            "properties": {
-              "Transaction": {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Return events emitted in a specified Move module",
-            "type": "object",
-            "required": [
-              "MoveModule"
-            ],
-            "properties": {
-              "MoveModule": {
-                "type": "object",
-                "required": [
-                  "module",
-                  "package"
-                ],
-                "properties": {
-                  "module": {
-                    "description": "the module name",
-                    "type": "string"
-                  },
-                  "package": {
-                    "description": "the Move package ID",
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/ObjectID"
-                      }
-                    ]
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Return events with the given move event struct name",
-            "type": "object",
-            "required": [
-              "MoveEvent"
-            ],
-            "properties": {
-              "MoveEvent": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Query by sender address.",
-            "type": "object",
-            "required": [
-              "Sender"
-            ],
-            "properties": {
-              "Sender": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Return events emitted in [start_time, end_time] interval",
-            "type": "object",
-            "required": [
-              "TimeRange"
-            ],
-            "properties": {
-              "TimeRange": {
-                "type": "object",
-                "required": [
-                  "endTime",
-                  "startTime"
-                ],
-                "properties": {
-                  "endTime": {
-                    "description": "right endpoint of time interval, milliseconds since epoch, exclusive",
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  },
-                  "startTime": {
-                    "description": "left endpoint of time interval, milliseconds since epoch, inclusive",
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
       },
       "ExecuteTransactionRequestType": {
         "type": "string",

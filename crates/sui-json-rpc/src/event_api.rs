@@ -19,7 +19,6 @@ use sui_open_rpc::Module;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::messages::TransactionEffectsAPI;
-use sui_types::query::EventQuery;
 
 use crate::api::cap_page_limit;
 use crate::api::EventReadApiServer;
@@ -86,7 +85,7 @@ impl EventReadApiServer for EventReadApi {
 
     async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<EventID>,
         limit: Option<usize>,
