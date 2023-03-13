@@ -1190,6 +1190,13 @@ impl AuthorityStore {
                 &self.perpetual_tables.executed_effects,
                 iter::once(tx_digest),
             )?;
+        if let Some(events_digest) = effects.events_digest() {
+            write_batch = write_batch.delete_range(
+                &self.perpetual_tables.events,
+                &(*events_digest, usize::MIN),
+                &(*events_digest, usize::MAX),
+            )?;
+        }
 
         let all_new_refs = effects
             .mutated()
