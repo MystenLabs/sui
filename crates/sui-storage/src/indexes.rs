@@ -272,7 +272,7 @@ impl IndexStore {
                 .data
                 .iter()
                 .enumerate()
-                .map(|(i, e)| ((sequence, i), (event_digest, *digest, timestamp_ms))),
+                .map(|(i, _)| ((sequence, i), (event_digest, *digest, timestamp_ms))),
         )?;
         let batch = batch.insert_batch(
             &self.tables.event_by_move_module,
