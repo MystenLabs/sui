@@ -1,0 +1,6 @@
+[package]
+name = "C"
+version = "0.0.1"
+
+[addresses]
+c = "0xc1"
