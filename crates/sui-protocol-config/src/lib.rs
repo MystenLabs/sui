@@ -147,6 +147,15 @@ pub struct ProtocolConfig {
     /// Maximum number of individual transactions in a Batch transaction.
     max_tx_in_batch: Option<u32>,
 
+    /// Maximum number of input objects.
+    max_input_objects: Option<u64>,
+
+    /// Maximum size of serialized transaction effects.
+    max_serialized_tx_effects_size_bytes: Option<u64>,
+
+    /// Maximum size of serialized transaction effects for system transactions.
+    max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
+
     /// Maximum number of gas payment objets for a transaction.
     max_gas_payment_objects: Option<u32>,
 
@@ -404,6 +413,17 @@ impl ProtocolConfig {
     }
     pub fn max_tx_in_batch(&self) -> u32 {
         self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_input_objects(&self) -> u64 {
+        self.max_input_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes_system_tx(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes_system_tx
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_gas_payment_objects(&self) -> u32 {
         self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
@@ -728,7 +748,11 @@ impl ProtocolConfig {
 
                 max_tx_size: Some(64 * 1024),
                 max_tx_in_batch: Some(10),
-                max_gas_payment_objects: Some(32),
+                // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
+                max_input_objects: Some(2048),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
+                max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
+                max_gas_payment_objects: Some(256),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),
                 max_type_arguments: Some(16),

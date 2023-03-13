@@ -230,6 +230,11 @@ ExecutionFailureStatus:
           - idx: U16
     23:
       InvalidTransferObject: UNIT
+    24:
+      EffectsTooLarge:
+        STRUCT:
+          - current_size: U64
+          - max_size: U64
 ExecutionStatus:
   ENUM:
     0:
