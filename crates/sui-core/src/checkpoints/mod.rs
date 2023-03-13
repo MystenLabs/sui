@@ -188,6 +188,13 @@ impl CheckpointStore {
         Ok(checkpoints)
     }
 
+    pub fn multi_get_checkpoint_content(
+        &self,
+        contents_digest: &[CheckpointContentsDigest],
+    ) -> Result<Vec<Option<CheckpointContents>>, TypedStoreError> {
+        self.checkpoint_content.multi_get(contents_digest)
+    }
+
     pub fn get_highest_verified_checkpoint(
         &self,
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {

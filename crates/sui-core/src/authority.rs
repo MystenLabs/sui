@@ -24,6 +24,21 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use shared_crypto::intent::{Intent, IntentScope};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::time::Duration;
+use sui_json_rpc_types::Checkpoint;
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
+use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_types::crypto::AuthoritySignInfo;
+use sui_types::error::UserInputError;
+use sui_types::message_envelope::Message;
+use sui_types::parse_sui_struct_tag;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::MOVE_STDLIB_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -2421,6 +2436,46 @@ impl AuthorityState {
                 sequence_number
             )),
         }
+    }
+
+    pub fn get_checkpoints(&self, reverse: bool) -> Result<Vec<Checkpoint>, anyhow::Error> {
+        let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
+
+        let values = (0..=max_checkpoint).collect::<Vec<_>>();
+        let mut checkpoint_numbers = values;
+
+        if reverse {
+            checkpoint_numbers.reverse();
+        }
+
+        let verified_checkpoints = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_by_sequence_number(checkpoint_numbers.as_slice())?;
+
+        // let checks: Vec<VerifiedCheckpoint> = verified_checkpoints.into_iter().flatten().collect();
+        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
+            .into_iter()
+            .flatten()
+            .map(|check| check.into_summary_and_sequence().1)
+            .collect();
+
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
+            .iter()
+            .map(|chsummary| chsummary.content_digest)
+            .collect();
+
+        let checkpoint_contents = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
+        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
+
+        let mut checkpoints: Vec<Checkpoint> = vec![];
+
+        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
+            checkpoints.push(Checkpoint::from((summary, content)));
+        }
+
+        Ok(checkpoints)
     }
 
     pub async fn get_timestamp_ms(

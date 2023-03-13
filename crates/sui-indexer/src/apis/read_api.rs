@@ -15,7 +15,7 @@ use sui_json_rpc_types::{
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    TransactionsPage, CheckpointPage
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -433,6 +433,24 @@ where
             return self.fullnode.get_checkpoint(id).await;
         }
         Ok(self.get_checkpoint_internal(id)?)
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<usize>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        if self
+            .method_to_be_forwarded
+            .contains(&"get_checkpoints".to_string())
+        {
+            return self
+                .fullnode
+                .get_checkpoints(cursor, limit, descending_order)
+                .await;
+        }
+        self.get_checkpoints(cursor, limit, descending_order).await
     }
 }
 
