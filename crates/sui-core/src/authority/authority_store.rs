@@ -41,7 +41,6 @@ use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 
 const NUM_SHARDS: usize = 4096;
-const SHARD_SIZE: usize = 128;
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -136,13 +135,13 @@ impl AuthorityStore {
         let epoch = committee.epoch;
 
         let store = Self {
-            mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
+            mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
-            objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS, SHARD_SIZE)),
+            objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
         };
         // Only initialize an empty database.

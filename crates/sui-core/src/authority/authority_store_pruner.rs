@@ -396,7 +396,7 @@ mod tests {
     }
 
     fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
-        Arc::new(RwLockTable::new(1, 10))
+        Arc::new(RwLockTable::new(1))
     }
 
     async fn run_pruner(
