@@ -3,7 +3,7 @@
 
 import { fromB64 } from '@mysten/bcs';
 import { is } from 'superstruct';
-import { Provider } from '../providers/provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import {
   extractMutableReference,
   extractStructTag,
@@ -85,7 +85,9 @@ function createTransactionResult(index: number): TransactionResult {
   }) as TransactionResult;
 }
 
-function expectProvider(provider: Provider | undefined): Provider {
+function expectProvider(
+  provider: JsonRpcProvider | undefined,
+): JsonRpcProvider {
   if (!provider) {
     throw new Error(
       `No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
@@ -279,7 +281,7 @@ export class Transaction {
     provider,
     onlyTransactionKind,
   }: {
-    provider?: Provider;
+    provider?: JsonRpcProvider;
     onlyTransactionKind?: boolean;
   } = {}): Promise<Uint8Array> {
     await this.#prepare(provider);
@@ -290,7 +292,7 @@ export class Transaction {
   async getDigest({
     provider,
   }: {
-    provider?: Provider;
+    provider?: JsonRpcProvider;
   } = {}): Promise<string> {
     await this.#prepare(provider);
     return this.#transactionData.getDigest();
@@ -300,7 +302,7 @@ export class Transaction {
    * Prepare the transaction by valdiating the transaction data and resolving all inputs
    * so that it can be built into bytes.
    */
-  async #prepare(provider?: Provider) {
+  async #prepare(provider?: JsonRpcProvider) {
     if (!this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
     }
