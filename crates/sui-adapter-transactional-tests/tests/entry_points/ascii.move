@@ -22,6 +22,7 @@ module Test::M {
         };
         assert!(l == 10, 0);
     }
+
 }
 
 // string of ASCII characters as byte string
