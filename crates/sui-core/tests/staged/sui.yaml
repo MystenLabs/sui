@@ -153,6 +153,8 @@ DeleteKind:
       UnwrapThenDelete: UNIT
     2:
       Wrap: UNIT
+Digest:
+  NEWTYPESTRUCT: BYTES
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -385,7 +387,7 @@ ObjectArg:
           - mutable: BOOL
 ObjectDigest:
   NEWTYPESTRUCT:
-    TYPENAME: Sha3Digest
+    TYPENAME: Digest
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
@@ -440,8 +442,6 @@ ProtocolVersion:
   NEWTYPESTRUCT: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
-Sha3Digest:
-  NEWTYPESTRUCT: BYTES
 StructTag:
   STRUCT:
     - address:
@@ -460,10 +460,10 @@ SuiAddress:
       SIZE: 32
 TransactionDigest:
   NEWTYPESTRUCT:
-    TYPENAME: Sha3Digest
+    TYPENAME: Digest
 TransactionEffectsDigest:
   NEWTYPESTRUCT:
-    TYPENAME: Sha3Digest
+    TYPENAME: Digest
 TransactionKind:
   ENUM:
     0:
