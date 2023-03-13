@@ -61,6 +61,7 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
+    use sui_framework::make_std_sui_move_pkgs;
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
