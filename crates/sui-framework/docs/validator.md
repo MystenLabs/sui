@@ -8,6 +8,7 @@
 -  [Struct `ValidatorMetadata`](#0x2_validator_ValidatorMetadata)
 -  [Struct `Validator`](#0x2_validator_Validator)
 -  [Struct `StakingRequestEvent`](#0x2_validator_StakingRequestEvent)
+-  [Struct `UnstakingRequestEvent`](#0x2_validator_UnstakingRequestEvent)
 -  [Constants](#@Constants_0)
 -  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
@@ -370,6 +371,70 @@ Event emitted when a new stake request is received.
 </dd>
 <dt>
 <code>amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_UnstakingRequestEvent"></a>
+
+## Struct `UnstakingRequestEvent`
+
+Event emitted when a new unstake request is received.
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_UnstakingRequestEvent">UnstakingRequestEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>pool_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>staker_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_activation_epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>unstaking_epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>principal_amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>reward_amount: u64</code>
 </dt>
 <dd>
 
@@ -798,9 +863,23 @@ Request to withdraw stake from the validator's staking pool, processed at the en
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> principal_amount = <a href="staking_pool.md#0x2_staking_pool_staked_sui_amount">staking_pool::staked_sui_amount</a>(&staked_sui);
+    <b>let</b> stake_activation_epoch = <a href="staking_pool.md#0x2_staking_pool_stake_activation_epoch">staking_pool::stake_activation_epoch</a>(&staked_sui);
     <b>let</b> withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake">staking_pool::request_withdraw_stake</a>(
             &<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, staked_sui, ctx);
+    <b>let</b> reward_amount = withdraw_amount - principal_amount;
     self.next_epoch_stake = self.next_epoch_stake - withdraw_amount;
+    <a href="event.md#0x2_event_emit">event::emit</a>(
+        <a href="validator.md#0x2_validator_UnstakingRequestEvent">UnstakingRequestEvent</a> {
+            pool_id: <a href="validator.md#0x2_validator_staking_pool_id">staking_pool_id</a>(self),
+            validator_address: self.metadata.sui_address,
+            staker_address: <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx),
+            stake_activation_epoch,
+            unstaking_epoch: <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+            principal_amount,
+            reward_amount,
+        }
+    )
 }
 </code></pre>
 

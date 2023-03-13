@@ -8,7 +8,7 @@
 -  [Struct `SystemParameters`](#0x2_sui_system_SystemParameters)
 -  [Struct `SuiSystemStateInner`](#0x2_sui_system_SuiSystemStateInner)
 -  [Resource `SuiSystemState`](#0x2_sui_system_SuiSystemState)
--  [Struct `SystemEpochInfo`](#0x2_sui_system_SystemEpochInfo)
+-  [Struct `SystemEpochInfoEvent`](#0x2_sui_system_SystemEpochInfoEvent)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0x2_sui_system_create)
 -  [Function `request_add_validator_candidate`](#0x2_sui_system_request_add_validator_candidate)
@@ -261,15 +261,15 @@ The top-level object containing all information of the Sui system.
 
 </details>
 
-<a name="0x2_sui_system_SystemEpochInfo"></a>
+<a name="0x2_sui_system_SystemEpochInfoEvent"></a>
 
-## Struct `SystemEpochInfo`
+## Struct `SystemEpochInfoEvent`
 
 Event containing system-level epoch information, emitted during
 the epoch advancement transaction.
 
 
-<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SystemEpochInfoEvent">SystemEpochInfoEvent</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -304,13 +304,19 @@ the epoch advancement transaction.
 
 </dd>
 <dt>
-<code>storage_fund_inflows: u64</code>
+<code>storage_fund_reinvestment: u64</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>storage_fund_outflows: u64</code>
+<code>storage_charge: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_rebate: u64</code>
 </dt>
 <dd>
 
@@ -334,7 +340,13 @@ the epoch advancement transaction.
 
 </dd>
 <dt>
-<code>total_stake_rewards: u64</code>
+<code>total_stake_rewards_distributed: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>leftover_storage_fund_inflow: u64</code>
 </dt>
 <dd>
 
@@ -1805,8 +1817,9 @@ gas coins.
     self.epoch = self.epoch + 1;
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
     <b>assert</b>!(new_epoch == self.epoch, 0);
-    <b>let</b> total_rewards_amount =
-        <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward)+ <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
+
+    <b>let</b> computation_reward_amount_before_distribution = <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward);
+    <b>let</b> storage_fund_reward_amount_before_distribution = <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
 
     <a href="validator_set.md#0x2_validator_set_advance_epoch">validator_set::advance_epoch</a>(
         &<b>mut</b> self.validators,
@@ -1821,6 +1834,11 @@ gas coins.
         ctx,
     );
 
+    <b>let</b> computation_reward_amount_after_distribution = <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward);
+    <b>let</b> storage_fund_reward_amount_after_distribution = <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
+    <b>let</b> computation_reward_distributed = computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
+    <b>let</b> storage_fund_reward_distributed = storage_fund_reward_amount_before_distribution - storage_fund_reward_amount_after_distribution;
+
     self.protocol_version = next_protocol_version;
 
     // Derive the reference gas price for the new epoch
@@ -1828,6 +1846,7 @@ gas coins.
     // Because of precision issues <b>with</b> integer divisions, we expect that there will be some
     // remaining <a href="balance.md#0x2_balance">balance</a> in `storage_fund_reward` and `computation_reward`.
     // All of these go <b>to</b> the storage fund.
+    <b>let</b> leftover_storage_fund_inflow = <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward) + <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
 
@@ -1838,17 +1857,19 @@ gas coins.
     <b>let</b> new_total_stake = <a href="validator_set.md#0x2_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
 
     <a href="event.md#0x2_event_emit">event::emit</a>(
-        <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> {
+        <a href="sui_system.md#0x2_sui_system_SystemEpochInfoEvent">SystemEpochInfoEvent</a> {
             epoch: self.epoch,
             protocol_version: self.protocol_version,
             reference_gas_price: self.reference_gas_price,
             total_stake: new_total_stake,
-            storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount <b>as</b> u64),
-            storage_fund_outflows: storage_rebate,
+            storage_charge,
+            storage_fund_reinvestment: (storage_fund_reinvestment_amount <b>as</b> u64),
+            storage_rebate,
             storage_fund_balance: <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund),
             stake_subsidy_amount,
             total_gas_fees: computation_charge,
-            total_stake_rewards: total_rewards_amount,
+            total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
+            leftover_storage_fund_inflow,
         }
     );
     self.safe_mode = <b>false</b>;

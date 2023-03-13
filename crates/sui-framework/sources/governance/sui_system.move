@@ -99,17 +99,19 @@ module sui::sui_system {
 
     /// Event containing system-level epoch information, emitted during
     /// the epoch advancement transaction.
-    struct SystemEpochInfo has copy, drop {
+    struct SystemEpochInfoEvent has copy, drop {
         epoch: u64,
         protocol_version: u64,
         reference_gas_price: u64,
         total_stake: u64,
-        storage_fund_inflows: u64,
-        storage_fund_outflows: u64,
+        storage_fund_reinvestment: u64,
+        storage_charge: u64,
+        storage_rebate: u64,
         storage_fund_balance: u64,
         stake_subsidy_amount: u64,
         total_gas_fees: u64,
-        total_stake_rewards: u64,
+        total_stake_rewards_distributed: u64,
+        leftover_storage_fund_inflow: u64,
     }
 
     // Errors
@@ -735,8 +737,9 @@ module sui::sui_system {
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
-        let total_rewards_amount =
-            balance::value(&computation_reward)+ balance::value(&storage_fund_reward);
+
+        let computation_reward_amount_before_distribution = balance::value(&computation_reward);
+        let storage_fund_reward_amount_before_distribution = balance::value(&storage_fund_reward);
 
         validator_set::advance_epoch(
             &mut self.validators,
@@ -751,6 +754,11 @@ module sui::sui_system {
             ctx,
         );
 
+        let computation_reward_amount_after_distribution = balance::value(&computation_reward);
+        let storage_fund_reward_amount_after_distribution = balance::value(&storage_fund_reward);
+        let computation_reward_distributed = computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
+        let storage_fund_reward_distributed = storage_fund_reward_amount_before_distribution - storage_fund_reward_amount_after_distribution;
+
         self.protocol_version = next_protocol_version;
 
         // Derive the reference gas price for the new epoch
@@ -758,6 +766,7 @@ module sui::sui_system {
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `storage_fund_reward` and `computation_reward`.
         // All of these go to the storage fund.
+        let leftover_storage_fund_inflow = balance::value(&storage_fund_reward) + balance::value(&computation_reward);
         balance::join(&mut self.storage_fund, storage_fund_reward);
         balance::join(&mut self.storage_fund, computation_reward);
 
@@ -768,17 +777,19 @@ module sui::sui_system {
         let new_total_stake = validator_set::total_stake(&self.validators);
 
         event::emit(
-            SystemEpochInfo {
+            SystemEpochInfoEvent {
                 epoch: self.epoch,
                 protocol_version: self.protocol_version,
                 reference_gas_price: self.reference_gas_price,
                 total_stake: new_total_stake,
-                storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
-                storage_fund_outflows: storage_rebate,
+                storage_charge,
+                storage_fund_reinvestment: (storage_fund_reinvestment_amount as u64),
+                storage_rebate,
                 storage_fund_balance: balance::value(&self.storage_fund),
                 stake_subsidy_amount,
                 total_gas_fees: computation_charge,
-                total_stake_rewards: total_rewards_amount,
+                total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
+                leftover_storage_fund_inflow,
             }
         );
         self.safe_mode = false;
