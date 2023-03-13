@@ -22,7 +22,7 @@ function CheckpointDetail() {
     const rpc = useRpcClient();
 
     const { data, isError, isLoading } = useQuery(['checkpoints', digest], () =>
-        rpc.getCheckpoint(digest!)
+        rpc.getCheckpoint({ id: digest! })
     );
 
     if (isError)

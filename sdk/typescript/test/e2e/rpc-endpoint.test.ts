@@ -12,9 +12,9 @@ describe('Invoke any RPC endpoint', () => {
   });
 
   it('sui_getObjectsOwnedByAddress', async () => {
-    const gasObjectsExpected = await toolbox.provider.getObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const gasObjectsExpected = await toolbox.provider.getObjectsOwnedByAddress({
+      owner: toolbox.address(),
+    });
     const gasObjects = await toolbox.provider.call(
       'sui_getObjectsOwnedByAddress',
       [toolbox.address()],

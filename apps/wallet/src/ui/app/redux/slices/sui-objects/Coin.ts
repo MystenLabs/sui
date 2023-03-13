@@ -111,10 +111,13 @@ export class Coin {
                     tx.pure(validator),
                 ],
             });
-            return await signer.signAndExecuteTransaction(tx, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            return await signer.signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             });
         } finally {
             span.finish();
@@ -139,10 +142,13 @@ export class Coin {
                     tx.object(stakedSuiId),
                 ],
             });
-            return await signer.signAndExecuteTransaction(tx, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            return await signer.signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             });
         } finally {
             transaction.finish();

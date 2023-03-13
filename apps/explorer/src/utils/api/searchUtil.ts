@@ -14,10 +14,13 @@ export const navigateWithUnknown = async (
     if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
-                .getTransactionResponse(input, {
-                    showInput: true,
-                    showEffects: true,
-                    showEvents: true,
+                .getTransaction({
+                    digest: input,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 })
                 .then((data) => ({
                     category: 'transaction',
@@ -32,7 +35,7 @@ export const navigateWithUnknown = async (
     else if (isValidSuiAddress(input) || isGenesisLibAddress(input)) {
         const addrObjPromise = Promise.allSettled([
             rpc(network)
-                .getObjectsOwnedByAddress(input)
+                .getObjectsOwnedByAddress({ owner: input })
                 .then((data) => {
                     if (data.length <= 0)
                         throw new Error('No objects for Address');
@@ -43,12 +46,15 @@ export const navigateWithUnknown = async (
                     };
                 }),
             rpc(network)
-                .getObject(input, {
-                    showType: true,
-                    showContent: true,
-                    showOwner: true,
-                    showPreviousTransaction: true,
-                    showStorageRebate: true,
+                .getObject({
+                    id: input,
+                    options: {
+                        showType: true,
+                        showContent: true,
+                        showOwner: true,
+                        showPreviousTransaction: true,
+                        showStorageRebate: true,
+                    },
                 })
                 .then((data) => {
                     if (data.status !== 'Exists') {

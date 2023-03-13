@@ -406,11 +406,11 @@ export class Transaction {
 
           const normalized = await expectProvider(
             provider,
-          ).getNormalizedMoveFunction(
-            normalizeSuiObjectId(packageId),
-            moduleName,
-            functionName,
-          );
+          ).getNormalizedMoveFunction({
+            package: normalizeSuiObjectId(packageId),
+            module: moduleName,
+            function: functionName,
+          });
 
           // Entry functions can have a mutable reference to an instance of the TxContext
           // struct defined in the TxContext module as the last parameter. The caller of
@@ -479,10 +479,10 @@ export class Transaction {
 
     if (objectsToResolve.length) {
       const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
-      const objects = await expectProvider(provider).getObjectBatch(
-        dedupedIds,
-        { showOwner: true },
-      );
+      const objects = await expectProvider(provider).multiGetObjects({
+        ids: dedupedIds,
+        options: { showOwner: true },
+      });
       let objectsById = new Map(
         dedupedIds.map((id, index) => {
           return [id, objects[index]];

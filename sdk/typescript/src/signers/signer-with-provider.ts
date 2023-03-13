@@ -65,13 +65,13 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a message using the keypair, with the `PersonalMessage` intent.
    */
-  async signMessage(message: Uint8Array): Promise<SignedMessage> {
+  async signMessage(input: { message: Uint8Array }): Promise<SignedMessage> {
     const signature = await this.signData(
-      messageWithIntent(IntentScope.PersonalMessage, message),
+      messageWithIntent(IntentScope.PersonalMessage, input.message),
     );
 
     return {
-      messageBytes: toB64(message),
+      messageBytes: toB64(input.message),
       signature,
     };
   }
@@ -79,16 +79,18 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a transaction.
    */
-  async signTransaction(
-    transaction: Uint8Array | Transaction,
-  ): Promise<SignedTransaction> {
+  async signTransaction(input: {
+    transaction: Uint8Array | Transaction;
+  }): Promise<SignedTransaction> {
     let transactionBytes;
 
-    if (Transaction.is(transaction)) {
-      transaction.setSender(await this.getAddress());
-      transactionBytes = await transaction.build({ provider: this.provider });
-    } else if (transaction instanceof Uint8Array) {
-      transactionBytes = transaction;
+    if (Transaction.is(input.transaction)) {
+      input.transaction.setSender(await this.getAddress());
+      transactionBytes = await input.transaction.build({
+        provider: this.provider,
+      });
+    } else if (input.transaction instanceof Uint8Array) {
+      transactionBytes = input.transaction;
     } else {
       throw new Error('Unknown transaction format');
     }
@@ -113,21 +115,25 @@ export abstract class SignerWithProvider implements Signer {
    * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`.
    * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
    */
-  async signAndExecuteTransaction(
-    transaction: Uint8Array | Transaction,
-    options?: SuiTransactionResponseOptions,
-    requestType?: ExecuteTransactionRequestType,
-  ): Promise<SuiTransactionResponse> {
-    const { transactionBytes, signature } = await this.signTransaction(
-      transaction,
-    );
+  async signAndExecuteTransaction(input: {
+    transaction: Uint8Array | Transaction;
+    /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
+    options?: SuiTransactionResponseOptions;
+    /** `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
+     * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
+     */
+    requestType?: ExecuteTransactionRequestType;
+  }): Promise<SuiTransactionResponse> {
+    const { transactionBytes, signature } = await this.signTransaction({
+      transaction: input.transaction,
+    });
 
-    return await this.provider.executeTransaction(
-      transactionBytes,
+    return await this.provider.executeTransaction({
+      transaction: transactionBytes,
       signature,
-      options,
-      requestType,
-    );
+      options: input.options,
+      requestType: input.requestType,
+    });
   }
 
   /**
@@ -150,42 +156,38 @@ export abstract class SignerWithProvider implements Signer {
    * Runs the transaction in dev-inpsect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
-   *
-   * @param tx the transaction as SignableTransaction or string (in base64) that will dry run
-   * @param gas_price optional. Default to use the network reference gas price stored
-   * in the Sui System State object
-   * @param epoch optional. Default to use the current epoch number stored
-   * in the Sui System State object
    */
   async devInspectTransaction(
-    tx: Transaction | string | Uint8Array,
-    gasPrice: number | null = null,
-    epoch: number | null = null,
+    input: Omit<
+      Parameters<JsonRpcProvider['devInspectTransaction']>[0],
+      'sender'
+    >,
   ): Promise<DevInspectResults> {
     const address = await this.getAddress();
-    return this.provider.devInspectTransaction(address, tx, gasPrice, epoch);
+    return this.provider.devInspectTransaction({ sender: address, ...input });
   }
 
   /**
    * Dry run a transaction and return the result.
-   * @param tx the transaction as SignableTransaction or string (in base64) that will dry run
-   * @returns The transaction effects
    */
-  async dryRunTransaction(
-    tx: Transaction | string | Uint8Array,
-  ): Promise<DryRunTransactionResponse> {
+  async dryRunTransaction(input: {
+    transaction: Transaction | string | Uint8Array;
+  }): Promise<DryRunTransactionResponse> {
     let dryRunTxBytes: Uint8Array;
-    if (Transaction.is(tx)) {
-      tx.setSender(await this.getAddress());
-      dryRunTxBytes = await tx.build({ provider: this.provider });
-    } else if (typeof tx === 'string') {
-      dryRunTxBytes = fromB64(tx);
-    } else if (tx instanceof Uint8Array) {
-      dryRunTxBytes = tx;
+    if (Transaction.is(input.transaction)) {
+      input.transaction.setSender(await this.getAddress());
+      dryRunTxBytes = await input.transaction.build({
+        provider: this.provider,
+      });
+    } else if (typeof input.transaction === 'string') {
+      dryRunTxBytes = fromB64(input.transaction);
+    } else if (input.transaction instanceof Uint8Array) {
+      dryRunTxBytes = input.transaction;
     } else {
       throw new Error('Unknown transaction format');
     }
-    return this.provider.dryRunTransaction(dryRunTxBytes);
+
+    return this.provider.dryRunTransaction({ transaction: dryRunTxBytes });
   }
 
   /**

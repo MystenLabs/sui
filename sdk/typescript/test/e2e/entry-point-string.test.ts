@@ -25,8 +25,11 @@ describe('Test Move call with strings', () => {
       target: `${packageId}::entry_point_string::${funcName}`,
       arguments: [tx.pure(str), tx.pure(len)],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
-      showEffects: true,
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
   }

@@ -70,9 +70,9 @@ export function Setup() {
           { pkg: config.VITE_OLD_PKG, registry: config.VITE_OLD_REGISTRY },
           { pkg: config.VITE_PKG, registry: config.VITE_REGISTRY },
         ].map(({ pkg, registry }) =>
-          provider.devInspectTransaction(
-            currentAccount.address,
-            {
+          provider.devInspectTransaction({
+            sender: currentAccount.address,
+            transaction: {
               kind: "moveCall",
               data: {
                 packageObjectId: pkg,
@@ -82,8 +82,8 @@ export function Setup() {
                 arguments: [registry, username],
               },
             },
-            gasPrice
-          )
+            gasPrice,
+          })
         )
       );
 

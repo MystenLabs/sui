@@ -75,14 +75,11 @@ export function RecentModulesCard() {
     const { data, isLoading, isSuccess, isError } = useQuery(
         ['recentPackage'],
         async () => {
-            const recentPublishMod: PaginatedEvents = await rpc.getEvents(
-                {
-                    EventType: 'Publish',
-                },
-                null,
-                RECENT_MODULES_COUNT,
-                'descending'
-            );
+            const recentPublishMod: PaginatedEvents = await rpc.getEvents({
+                query: { EventType: 'Publish' },
+                limit: RECENT_MODULES_COUNT,
+                order: 'descending',
+            });
 
             return recentPublishMod.data;
         },

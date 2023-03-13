@@ -18,7 +18,7 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('gets checkpoint by id', async () => {
-    const resp = await toolbox.provider.getCheckpoint(0);
+    const resp = await toolbox.provider.getCheckpoint({ id: 0 });
     expect(resp.digest.length).greaterThan(0);
     expect(resp.transactions.length).greaterThan(0);
     expect(resp.epoch).not.toBeNull();
@@ -29,9 +29,9 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('get checkpoint contents by digest', async () => {
-    const checkpoint_resp = await toolbox.provider.getCheckpoint(0);
+    const checkpoint_resp = await toolbox.provider.getCheckpoint({ id: 0 });
     const digest = checkpoint_resp.digest;
-    const resp = await toolbox.provider.getCheckpoint(digest);
+    const resp = await toolbox.provider.getCheckpoint({ id: digest });
     expect(checkpoint_resp).toEqual(resp);
   });
 });

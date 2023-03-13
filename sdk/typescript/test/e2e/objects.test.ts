@@ -13,9 +13,9 @@ describe('Object Reading API', () => {
   });
 
   it('Get Owned Objects', async () => {
-    const gasObjects = await toolbox.provider.getObjectsOwnedByAddress(
-      toolbox.address(),
-    );
+    const gasObjects = await toolbox.provider.getObjectsOwnedByAddress({
+      owner: toolbox.address(),
+    });
     expect(gasObjects.length).to.greaterThan(0);
   });
 
@@ -24,7 +24,10 @@ describe('Object Reading API', () => {
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
       gasObjects.map((gasObject) =>
-        toolbox.provider.getObject(gasObject['objectId'], { showType: true }),
+        toolbox.provider.getObject({
+          id: gasObject['objectId'],
+          options: { showType: true },
+        }),
       ),
     );
     objectInfos.forEach((objectInfo) =>
@@ -38,8 +41,11 @@ describe('Object Reading API', () => {
     const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
     expect(gasObjects.length).to.greaterThan(0);
     const gasObjectIds = gasObjects.map((gasObject) => gasObject['objectId']);
-    const objectInfos = await toolbox.provider.getObjectBatch(gasObjectIds, {
-      showType: true,
+    const objectInfos = await toolbox.provider.multiGetObjects({
+      ids: gasObjectIds,
+      options: {
+        showType: true,
+      },
     });
 
     expect(gasObjects.length).to.equal(objectInfos.length);

@@ -51,9 +51,9 @@ export class TestToolbox {
   }
 
   async getGasObjectsOwnedByAddress() {
-    const objects = await this.provider.getObjectsOwnedByAddress(
-      this.address(),
-    );
+    const objects = await this.provider.getObjectsOwnedByAddress({
+      owner: this.address(),
+    });
 
     return objects.filter((obj) => Coin.isSUI(obj));
   }
@@ -120,9 +120,12 @@ export async function publishPackage(
   // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
   tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
 
-  const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx, {
-    showEffects: true,
-    showEvents: true,
+  const publishTxn = await toolbox.signer.signAndExecuteTransaction({
+    transaction: tx,
+    options: {
+      showEffects: true,
+      showEvents: true,
+    },
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
