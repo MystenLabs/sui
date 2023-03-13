@@ -38,6 +38,7 @@ pub struct OurDigestMessage {
 pub mod proposer_tests;
 
 const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_DIGESTS_QUEUE_LEN_MULTIPLIER: usize = 5;
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
@@ -139,7 +140,9 @@ impl Proposer {
                     round: 0,
                     last_parents: genesis,
                     last_leader: None,
-                    digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
+                    digests: VecDeque::with_capacity(
+                        MAX_DIGESTS_QUEUE_LEN_MULTIPLIER * max_header_num_of_batches,
+                    ),
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
                     metrics,
@@ -326,7 +329,7 @@ impl Proposer {
 
     // Limit the size of digests queue.
     fn max_digests_queue_len(&self) -> usize {
-        self.max_header_num_of_batches * 2
+        MAX_DIGESTS_QUEUE_LEN_MULTIPLIER * self.max_header_num_of_batches
     }
 
     fn min_delay(&self) -> Duration {

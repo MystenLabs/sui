@@ -173,7 +173,7 @@ fn parameters_import_snapshot_matches() {
     // GIVEN
     let input = r#"{
          "header_num_of_batches_threshold": 32,
-         "max_header_num_of_batches": 1000,
+         "max_header_num_of_batches": 200,
          "gc_depth": 50,
          "sync_retry_delay": "5s",
          "sync_retry_nodes": 3,

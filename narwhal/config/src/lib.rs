@@ -182,7 +182,7 @@ impl Parameters {
     }
 
     fn default_max_header_num_of_batches() -> usize {
-        1_000
+        200
     }
 
     fn default_max_header_delay() -> Duration {
