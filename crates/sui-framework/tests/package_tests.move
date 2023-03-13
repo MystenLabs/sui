@@ -4,7 +4,6 @@
 #[test_only]
 module sui::package_tests {
     use std::ascii;
-    use std::hash;
     use sui::address;
     use sui::object::id_from_address as id;
     use sui::package;
@@ -70,7 +69,7 @@ module sui::package_tests {
         let ticket = package::authorize_upgrade(
             &mut cap,
             package::dep_only_policy(),
-            hash::sha3_256(b"package contents"),
+            sui::hash::blake2b256(&b"package contents"),
         );
 
         let receipt = package::test_upgrade(ticket);
@@ -104,7 +103,7 @@ module sui::package_tests {
         let _ticket = package::authorize_upgrade(
             &mut cap,
             package::compatible_policy(),
-            hash::sha3_256(b"package contents"),
+            sui::hash::blake2b256(&b"package contents"),
         );
 
         abort 0
@@ -119,7 +118,7 @@ module sui::package_tests {
         let _ticket0 = package::authorize_upgrade(
             &mut cap,
             package::compatible_policy(),
-            hash::sha3_256(b"package contents 0"),
+            sui::hash::blake2b256(&b"package contents 0"),
         );
 
         // It's an error to try and issue more than one simultaneous
@@ -127,7 +126,7 @@ module sui::package_tests {
         let _ticket1 = package::authorize_upgrade(
             &mut cap,
             package::compatible_policy(),
-            hash::sha3_256(b"package contents 1"),
+            sui::hash::blake2b256(&b"package contents 1"),
         );
 
         abort 0
@@ -143,7 +142,7 @@ module sui::package_tests {
         let ticket1 = package::authorize_upgrade(
             &mut cap1,
             package::dep_only_policy(),
-            hash::sha3_256(b"package contents 1"),
+            sui::hash::blake2b256(&b"package contents 1"),
         );
 
         let receipt1 = package::test_upgrade(ticket1);

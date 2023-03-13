@@ -59,7 +59,7 @@ use sui_storage::{
 };
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::AuthoritySignInfo;
-use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
+use sui_types::crypto::{user_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::error::UserInputError;
@@ -1126,7 +1126,7 @@ impl AuthorityState {
             gas_price,
             gas_budget,
         );
-        let transaction_digest = TransactionDigest::new(sha3_hash(&data));
+        let transaction_digest = TransactionDigest::new(user_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(

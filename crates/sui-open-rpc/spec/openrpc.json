@@ -2919,7 +2919,7 @@
         "description": "Representation of a Checkpoint's digest",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Sha3Digest"
+            "$ref": "#/components/schemas/Digest"
           }
         ]
       },
@@ -3164,6 +3164,14 @@
             ]
           }
         }
+      },
+      "Digest": {
+        "description": "A representation of a 32 byte digest",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base58"
+          }
+        ]
       },
       "DryRunTransactionResponse": {
         "type": "object",
@@ -4943,7 +4951,7 @@
         }
       },
       "ObjectDigest": {
-        "$ref": "#/components/schemas/Sha3Digest"
+        "$ref": "#/components/schemas/Digest"
       },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
@@ -5448,14 +5456,6 @@
         "type": "integer",
         "format": "uint64",
         "minimum": 0.0
-      },
-      "Sha3Digest": {
-        "description": "A representation of a SHA3-256 Digest",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Base58"
-          }
-        ]
       },
       "Signature": {
         "oneOf": [
@@ -6811,7 +6811,7 @@
         "description": "A transaction will have a (unique) digest.",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Sha3Digest"
+            "$ref": "#/components/schemas/Digest"
           }
         ]
       },
@@ -6940,7 +6940,7 @@
         ]
       },
       "TransactionEventsDigest": {
-        "$ref": "#/components/schemas/Sha3Digest"
+        "$ref": "#/components/schemas/Digest"
       },
       "TransactionFilter": {
         "oneOf": [

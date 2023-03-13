@@ -6,8 +6,9 @@ use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
+    internal_hash, user_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    Ed25519SuiSignature, EmptySignInfo, InternalHash, Signature, Signer, SuiSignatureInner,
+    ToFromBytes,
 };
 use crate::digests::{CertificateDigest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
@@ -25,10 +26,7 @@ use crate::{
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
-use fastcrypto::{
-    encoding::Base64,
-    hash::{HashFunction, Sha3_256},
-};
+use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
@@ -1811,7 +1809,7 @@ impl Message for SenderSignedData {
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(sha3_hash(&self.intent_message.value))
+        TransactionDigest::new(user_hash(&self.intent_message.value))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
@@ -2038,7 +2036,7 @@ pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorum
 
 impl CertifiedTransaction {
     pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = Sha3_256::default();
+        let mut digest = InternalHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
@@ -2905,7 +2903,7 @@ pub struct TransactionEvents {
 
 impl TransactionEvents {
     pub fn digest(&self) -> TransactionEventsDigest {
-        TransactionEventsDigest::new(sha3_hash(self))
+        TransactionEventsDigest::new(internal_hash(self))
     }
 }
 
@@ -2914,7 +2912,7 @@ impl Message for TransactionEffects {
     const SCOPE: IntentScope = IntentScope::TransactionEffects;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest::new(sha3_hash(self))
+        TransactionEffectsDigest::new(internal_hash(self))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
