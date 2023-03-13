@@ -246,10 +246,6 @@ fn to_external(internal_units: InternalGas) -> GasUnits {
     InternalGas::to_unit_round_down(internal_units)
 }
 
-fn to_internal(external_units: GasUnits) -> InternalGas {
-    GasUnits::to_unit(external_units)
-}
-
 #[derive(Debug)]
 pub struct SuiGasStatus<'a> {
     gas_status: GasStatus<'a>,
@@ -267,6 +263,10 @@ pub struct SuiGasStatus<'a> {
     storage_rebate: SuiGas,
 
     cost_table: SuiCostTable,
+}
+
+fn to_internal(external_units: GasUnits) -> InternalGas {
+    GasUnits::to_unit(external_units)
 }
 
 impl<'a> SuiGasStatus<'a> {
@@ -303,6 +303,18 @@ impl<'a> SuiGasStatus<'a> {
         !self.charge
     }
 
+    pub fn computation_gas_remaining(&self) -> u64 {
+        self.gas_status.remaining_gas().into()
+    }
+
+    pub fn storage_rebate(&self) -> u64 {
+        self.storage_rebate.into()
+    }
+
+    pub fn storage_gas_units(&self) -> u64 {
+        self.storage_gas_units.into()
+    }
+
     pub fn max_gax_budget_in_balance(&self) -> u64 {
         let max_gas_unit_price =
             std::cmp::max(self.computation_gas_unit_price, self.storage_gas_unit_price);
@@ -317,6 +329,11 @@ impl<'a> SuiGasStatus<'a> {
         // Disable flat fee for now
         // self.deduct_computation_cost(&VM_FLAT_FEE.to_unit())
         Ok(())
+    }
+
+    pub fn reset_storage_cost_and_rebate(&mut self) {
+        self.storage_gas_units = GasQuantity::zero();
+        self.storage_rebate = GasQuantity::zero();
     }
 
     /// Try to charge the minimal amount of gas from the gas object.
@@ -340,9 +357,16 @@ impl<'a> SuiGasStatus<'a> {
         self.deduct_computation_cost(&cost)
     }
 
+    pub fn charge_computation_gas_for_storage_mutation(
+        &mut self,
+        size: u64,
+    ) -> Result<(), ExecutionError> {
+        let cost = NumBytes::new(size).mul(*self.cost_table.object_mutation_per_byte_cost);
+        self.deduct_computation_cost(&cost)
+    }
+
     pub fn charge_storage_mutation(
         &mut self,
-        old_size: usize,
         new_size: usize,
         storage_rebate: SuiGas,
     ) -> Result<u64, ExecutionError> {
@@ -350,19 +374,12 @@ impl<'a> SuiGasStatus<'a> {
             return Ok(0);
         }
 
-        // Computation cost of a mutation is charged based on the sum of the old and new size.
-        // This is because to update an object in the store, we have to erase the old one and
-        // write a new one.
-        let cost = NumBytes::new((old_size + new_size) as u64)
-            .mul(*self.cost_table.object_mutation_per_byte_cost);
-        self.deduct_computation_cost(&cost)?;
-
-        self.storage_rebate += storage_rebate;
-
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*self.cost_table.storage_per_byte_cost);
-
-        self.deduct_storage_cost(&storage_cost).map(|q| q.into())
+        self.deduct_storage_cost(&storage_cost).map(|gu| {
+            self.storage_rebate += storage_rebate;
+            gu.into()
+        })
     }
 
     /// This function is only called during testing, where we need to mock

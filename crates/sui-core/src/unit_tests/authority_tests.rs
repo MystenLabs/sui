@@ -2542,7 +2542,6 @@ async fn test_move_call_mutable_object_not_mutated() {
 }
 
 // skipped because it violates SUI conservation checks
-#[ignore]
 #[tokio::test]
 async fn test_move_call_insufficient_gas() {
     // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
@@ -5214,7 +5213,6 @@ fn test_choose_next_system_packages() {
 }
 
 // skipped because it violates SUI conservation checks
-#[ignore]
 #[tokio::test]
 async fn test_gas_smashing() {
     // run a create move object transaction with a given set o gas coins and a budget
@@ -5306,7 +5304,7 @@ async fn test_gas_smashing() {
         gas_used
     }
 
-    // 1. get the cost of the transaction so we can play with multiple gas coins
+    // get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
     let gas_used = run_and_check(100_000, 1, 100_000, true).await;
 
@@ -5316,7 +5314,7 @@ async fn test_gas_smashing() {
     run_and_check(reference_gas_used, 10, reference_gas_used - 100, true).await;
 
     // make less then required to succeed
-    let reference_gas_used = gas_used - 10;
+    let reference_gas_used = gas_used - 1;
     run_and_check(reference_gas_used, 2, reference_gas_used - 10, false).await;
     run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
     // use a small amount less than what 3 coins above reported (with success)
