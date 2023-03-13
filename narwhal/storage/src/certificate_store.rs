@@ -79,11 +79,23 @@ impl CertificateStore {
         // Index the certificate id by its round and origin.
         batch = batch.insert_batch(
             &self.certificate_id_by_round,
-            iter::once(((certificate.round(), PublicKeyBytes::from(&certificate.origin())), id)),
+            iter::once((
+                (
+                    certificate.round(),
+                    PublicKeyBytes::from(&certificate.origin()),
+                ),
+                id,
+            )),
         )?;
         batch = batch.insert_batch(
             &self.certificate_id_by_origin,
-            iter::once(((PublicKeyBytes::from(&certificate.origin()), certificate.round()), id)),
+            iter::once((
+                (
+                    PublicKeyBytes::from(&certificate.origin()),
+                    certificate.round(),
+                ),
+                id,
+            )),
         )?;
 
         // execute the batch (atomically) and return the result
@@ -288,7 +300,10 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKeyBytes::from(&PublicKey::insecure_default())))?;
+            iter = iter.skip_to(&(
+                round - 1,
+                PublicKeyBytes::from(&PublicKey::insecure_default()),
+            ))?;
         }
 
         let mut digests = Vec::new();
@@ -327,7 +342,10 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKeyBytes::from(&PublicKey::insecure_default())))?;
+            iter = iter.skip_to(&(
+                round - 1,
+                PublicKeyBytes::from(&PublicKey::insecure_default()),
+            ))?;
         }
 
         let mut result = BTreeMap::<Round, Vec<PublicKeyBytes>>::new();
@@ -617,7 +635,10 @@ mod test {
         // THEN
         let mut i = 0;
         let mut current_round = 0;
-        while let Some(r) = store.next_round_number(&PublicKeyBytes::from(&origin), current_round).unwrap() {
+        while let Some(r) = store
+            .next_round_number(&PublicKeyBytes::from(&origin), current_round)
+            .unwrap()
+        {
             assert_eq!(rounds[i], r);
             i += 1;
             current_round = r;

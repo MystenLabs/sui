@@ -230,10 +230,13 @@ impl CertificateFetcher {
         };
 
         self.targets.retain(|origin, target_round| {
-            let last_written_round = written_rounds.get(&PublicKeyBytes::from(origin)).map_or(gc_round, |rounds| {
-                // TODO: switch to last() after it stabilizes for BTreeSet.
-                rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
-            });
+            let last_written_round =
+                written_rounds
+                    .get(&PublicKeyBytes::from(origin))
+                    .map_or(gc_round, |rounds| {
+                        // TODO: switch to last() after it stabilizes for BTreeSet.
+                        rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
+                    });
             // Drop sync target when cert store already has an equal or higher round for the origin.
             // This applies GC to targets as well.
             //
