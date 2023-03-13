@@ -153,7 +153,7 @@ where
             Ok::<_, Error>(acc)
         })?;
 
-        let all_mutated = transactions
+        let object_changes = transactions
             .iter()
             .flat_map(|tx| {
                 let effects = tx.effects.as_ref().expect("effects should not be empty");
@@ -174,8 +174,8 @@ where
             );
 
         let rpc = self.rpc_client.clone();
-        let all_mutated_objects =
-            join_all(all_mutated.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
+        let changed_objects =
+            join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
                 let wanted_past_object_statuses: Vec<ObjectStatus> =
                     objects.iter().map(|(_, _, status)| *status).collect();
 
@@ -210,7 +210,7 @@ where
         Ok(CheckpointData {
             checkpoint,
             transactions,
-            all_mutated_objects,
+            changed_objects,
         })
     }
 
@@ -221,7 +221,7 @@ where
         let CheckpointData {
             checkpoint,
             transactions,
-            all_mutated_objects,
+            changed_objects,
         } = data;
 
         let previous_cp = if checkpoint.sequence_number == 0 {
@@ -254,7 +254,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Index objects
-        let tx_objects = all_mutated_objects
+        let tx_objects = changed_objects
             .iter()
             // Unwrap safe here as we requested previous tx data in the request.
             .fold(BTreeMap::<_, Vec<_>>::new(), |mut acc, (status, o)| {
@@ -267,7 +267,7 @@ where
         let objects_changes = transactions
             .iter()
             .map(|tx| {
-                let all_mutated_objects = tx_objects
+                let changed_objects = tx_objects
                     .get(&tx.digest)
                     .unwrap_or(&vec![])
                     .iter()
@@ -297,7 +297,7 @@ where
                     })
                     .collect();
                 TransactionObjectChanges {
-                    mutated_objects: all_mutated_objects,
+                    mutated_objects: changed_objects,
                     deleted_objects: all_deleted_objects,
                 }
             })
@@ -310,7 +310,7 @@ where
             .collect();
 
         // Index packages
-        let packages = Self::index_packages(&transactions, &all_mutated_objects)?;
+        let packages = Self::index_packages(&transactions, &changed_objects)?;
 
         let move_calls: Vec<MoveCall> = transactions
             .iter()
@@ -409,9 +409,9 @@ where
 
     fn index_packages(
         transactions: &[SuiTransactionResponse],
-        all_mutated_objects: &[(ObjectStatus, SuiObjectData)],
+        changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
-        let object_map = all_mutated_objects
+        let object_map = changed_objects
             .iter()
             .filter_map(|(_, o)| {
                 if let SuiRawData::Package(p) = &o

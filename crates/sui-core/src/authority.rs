@@ -1200,7 +1200,7 @@ impl AuthorityState {
                 .iter()
                 .map(|o| o.object_id()),
             effects
-                .all_mutated()
+                .all_changed_objects()
                 .into_iter()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
@@ -1246,7 +1246,7 @@ impl AuthorityState {
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
 
-        for (oref, owner, kind) in effects.all_mutated() {
+        for (oref, owner, kind) in effects.all_changed_objects() {
             let id = &oref.0;
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {

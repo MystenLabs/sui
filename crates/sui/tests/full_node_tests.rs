@@ -245,7 +245,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
-        Some(TransactionFilter::MutatedObject(transferred_object)),
+        Some(TransactionFilter::ChangedObject(transferred_object)),
         None,
         None,
         false,

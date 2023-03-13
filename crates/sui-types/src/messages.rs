@@ -2695,8 +2695,9 @@ pub trait TransactionEffectsAPI {
     fn gas_object(&self) -> &(ObjectRef, Owner);
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
-
-    fn all_mutated(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)>;
+    // All changed objects include created, mutated and unwrapped objects,
+    // they do NOT include wrapped and deleted.
+    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)>;
 
     fn all_deleted(&self) -> Vec<(&ObjectRef, DeleteKind)>;
 
@@ -2763,11 +2764,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         self.executed_epoch
     }
 
-    /// Return an iterator that iterates through all mutated objects, including mutated,
+    /// Return an iterator that iterates through all changed objects, including mutated,
     /// created and unwrapped objects. In other words, all objects that still exist
     /// in the object state after this transaction.
     /// It doesn't include deleted/wrapped objects.
-    fn all_mutated(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)> {
+    fn all_changed_objects(&self) -> Vec<(&ObjectRef, &Owner, WriteKind)> {
         self.mutated
             .iter()
             .map(|(r, o)| (r, o, WriteKind::Mutate))

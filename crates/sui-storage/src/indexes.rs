@@ -381,7 +381,7 @@ impl IndexStore {
             Some(TransactionFilter::InputObject(object_id)) => {
                 self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?
             }
-            Some(TransactionFilter::MutatedObject(object_id)) => {
+            Some(TransactionFilter::ChangedObject(object_id)) => {
                 self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?
             }
             Some(TransactionFilter::FromAddress(address)) => {

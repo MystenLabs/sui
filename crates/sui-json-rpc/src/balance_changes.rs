@@ -35,7 +35,7 @@ pub async fn get_balance_change_from_effect<P: ObjectProvider<Error = E>, E>(
         }]);
     }
 
-    let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_mutated();
+    let all_mutated: Vec<(&ObjectRef, &Owner, WriteKind)> = effects.all_changed_objects();
     let all_mutated = all_mutated
         .iter()
         .map(|((id, version, _), _, _)| (*id, *version))

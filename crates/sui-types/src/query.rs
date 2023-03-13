@@ -20,8 +20,8 @@ pub enum TransactionFilter {
     },
     /// Query by input object.
     InputObject(ObjectID),
-    /// Query by mutated object.
-    MutatedObject(ObjectID),
+    /// Query by changed object, including created, mutated and unwrapped objects.
+    ChangedObject(ObjectID),
     /// Query by sender address.
     FromAddress(SuiAddress),
     /// Query by recipient address.
