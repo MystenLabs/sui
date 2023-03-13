@@ -4,9 +4,8 @@
 use futures::StreamExt;
 use std::future;
 use sui::client_commands::SuiClientCommands;
-use sui_json_rpc_types::SuiTransactionResponseQuery;
+use sui_json_rpc_types::{EventFilter, SuiTransactionResponseQuery};
 use sui_sdk::{SuiClientBuilder, SUI_COIN_TYPE};
-use sui_types::query::EventQuery;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -55,7 +54,7 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
     let client = SuiClientBuilder::default().build(rpc_url).await?;
     let events = client
         .event_api()
-        .get_events_stream(EventQuery::All, None, true)
+        .get_events_stream(EventFilter::All(vec![]), None, true)
         .collect::<Vec<_>>()
         .await;
 
@@ -74,7 +73,7 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
 
     let events = client
         .event_api()
-        .get_events_stream(EventQuery::All, None, true)
+        .get_events_stream(EventFilter::All(vec![]), None, true)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(starting_event_count + 1, events.len());

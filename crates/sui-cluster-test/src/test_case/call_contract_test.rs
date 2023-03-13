@@ -75,10 +75,11 @@ impl TestCaseImpl for CallContractTest {
         // Examine effects
         let events = &response.events.as_ref().unwrap().data;
         let object_changes = response.object_changes.as_ref().unwrap();
+        // Only one move event emitted
         assert_eq!(
             events.len(),
-            3,
-            "Expect three event emitted, but got {}",
+            1,
+            "Expect 1 event emitted, but got {}",
             events.len()
         );
 

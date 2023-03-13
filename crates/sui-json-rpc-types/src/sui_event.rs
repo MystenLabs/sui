@@ -110,12 +110,25 @@ impl SuiEvent {
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum EventFilter {
+    /// Query by sender address.
+    Sender(SuiAddress),
+    /// Return events emitted by the given transaction.
+    Transaction(
+        ///digest of the transaction, as base-64 encoded string
+        TransactionDigest,
+    ),
+    /// Return events emitted in a specified Package.
     Package(ObjectID),
-    Module(
+    /// Return events emitted in a specified Move module.
+    MoveModule {
+        /// the Move package ID
+        package: ObjectID,
+        /// the module name
         #[schemars(with = "String")]
         #[serde_as(as = "DisplayFromStr")]
-        Identifier,
-    ),
+        module: Identifier,
+    },
+    /// Return events with the given move event struct name
     MoveEventType(
         #[schemars(with = "String")]
         #[serde_as(as = "DisplayFromStr")]
@@ -125,7 +138,14 @@ pub enum EventFilter {
         path: String,
         value: Value,
     },
-    SenderAddress(SuiAddress),
+    /// Return events emitted in [start_time, end_time] interval
+    #[serde(rename_all = "camelCase")]
+    TimeRange {
+        /// left endpoint of time interval, milliseconds since epoch, inclusive
+        start_time: u64,
+        /// right endpoint of time interval, milliseconds since epoch, exclusive
+        end_time: u64,
+    },
 
     All(Vec<EventFilter>),
     Any(Vec<EventFilter>),
@@ -140,9 +160,11 @@ impl EventFilter {
             EventFilter::MoveEventField { path, value } => {
                 matches!(item.parsed_json.pointer(path), Some(v) if v == value)
             }
-            EventFilter::SenderAddress(sender) => &item.sender == sender,
+            EventFilter::Sender(sender) => &item.sender == sender,
             EventFilter::Package(object_id) => &item.package_id == object_id,
-            EventFilter::Module(module) => &item.transaction_module == module,
+            EventFilter::MoveModule { package, module } => {
+                &item.transaction_module == module && &item.package_id == package
+            }
             EventFilter::All(filters) => filters.iter().all(|f| f.matches(item)),
             EventFilter::Any(filters) => filters.iter().any(|f| f.matches(item)),
             EventFilter::And(f1, f2) => {
@@ -150,6 +172,18 @@ impl EventFilter {
             }
             EventFilter::Or(f1, f2) => {
                 EventFilter::Any(vec![*(*f1).clone(), *(*f2).clone()]).matches(item)
+            }
+            EventFilter::Transaction(digest) => digest == &item.id.tx_digest,
+
+            EventFilter::TimeRange {
+                start_time,
+                end_time,
+            } => {
+                if let Some(timestamp) = &item.timestamp_ms {
+                    start_time <= timestamp && end_time > timestamp
+                } else {
+                    false
+                }
             }
         })
     }

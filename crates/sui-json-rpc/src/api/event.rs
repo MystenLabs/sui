@@ -9,8 +9,6 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 
-use sui_types::query::EventQuery;
-
 #[open_rpc(namespace = "sui", tag = "Event Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventReadApi {
@@ -27,7 +25,7 @@ pub trait EventReadApi {
     async fn query_events(
         &self,
         /// the event query criteria.
-        query: EventQuery,
+        query: EventFilter,
         /// optional paging cursor
         cursor: Option<EventID>,
         /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.

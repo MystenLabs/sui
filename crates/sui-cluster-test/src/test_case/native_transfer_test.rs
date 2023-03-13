@@ -81,15 +81,19 @@ impl NativeTransferTest {
             "Expect 2 balance changes emitted, but got {}",
             balance_changes.len()
         );
-        BalanceChangeChecker::new()
-            .owner(Owner::AddressOwner(signer))
-            .coin_type("0x2::sui::SUI")
-            .check(&balance_changes.remove(0));
+        // Order of balance change is not fixed so need to check who's balance come first.
+        // this make sure recipient always come first
+        if balance_changes[0].owner.get_owner_address().unwrap() == signer {
+            balance_changes.reverse()
+        }
         BalanceChangeChecker::new()
             .owner(Owner::AddressOwner(recipient))
             .coin_type("0x2::sui::SUI")
             .check(&balance_changes.remove(0));
-
+        BalanceChangeChecker::new()
+            .owner(Owner::AddressOwner(signer))
+            .coin_type("0x2::sui::SUI")
+            .check(&balance_changes.remove(0));
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync(vec![response.digest], 5).await;
 
