@@ -2,9 +2,9 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
-# NUM_CPUS=$(sysctl -n hw.ncpu) # mac
-# NUM_CPUS=64 # We can increase this later if needed
+if [ -z "$NUM_CPUS" ]; then
+  NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
+fi
 
 # filter out some tests that give spurious failures.
 TEST_FILTER="(not test(~cli_tests))"
@@ -21,6 +21,7 @@ MSIM_WATCHDOG_TIMEOUT_MS=60000 \
 MSIM_TEST_NUM=30 \
 scripts/simtest/cargo-simtest simtest \
   --package sui \
+  --test-threads "$NUM_CPUS" \
   --package sui-core \
   --profile simtestnightly \
   -E "$TEST_FILTER"
@@ -45,7 +46,7 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
     --profile simtestnightly \
     -E "$TEST_FILTER" > "$LOG_FILE" 2>&1 &
 
-    grep -Hn FAIL "$LOG_FILE"
+  grep -Hn FAIL "$LOG_FILE"
 done
 
 # wait for all the jobs to end
