@@ -53,7 +53,10 @@ fn gen_ckpts(
                 committee.epoch,
                 CheckpointSummary::new(
                     committee.epoch,
-                    1,
+                    // insert different data for each checkpoint so that we can swap sigs later
+                    // and get a failure. (otherwise every checkpoint is the same so the
+                    // AuthoritySignInfos are interchangeable).
+                    i as u64,
                     0,
                     &CheckpointContents::new_with_causally_ordered_transactions(vec![]),
                     None,
