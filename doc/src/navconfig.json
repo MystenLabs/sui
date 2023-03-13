@@ -200,7 +200,7 @@
 					},
 					{
 						"label": "Sui Validator node",
-						"fileName": "build/validator-node.md"
+						"fileName": "build/validator-node"
 					},
 					{
 						"label": "Event Query and Subscription",
