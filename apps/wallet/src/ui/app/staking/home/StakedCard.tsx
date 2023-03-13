@@ -6,7 +6,10 @@ import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
 import { cx, cva, type VariantProps } from 'class-variance-authority';
 import { Link } from 'react-router-dom';
 
+import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
+import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
@@ -66,6 +69,7 @@ export interface StakeCardContentProps extends VariantProps<typeof cardStyle> {
     statusText: string;
     children?: ReactNode;
     earnColor?: boolean;
+    earningRewardEpoch?: number | null;
 }
 
 function StakeCardContent({
@@ -74,7 +78,11 @@ function StakeCardContent({
     statusText,
     variant,
     earnColor,
+    earningRewardEpoch,
 }: StakeCardContentProps) {
+    const { data: rewardEpochTime } = useGetTimeBeforeEpochNumber(
+        earningRewardEpoch || 0
+    );
     return (
         <div className={cardStyle({ variant })}>
             {children}
@@ -86,7 +94,15 @@ function StakeCardContent({
                         earnColor ? 'text-success-dark' : ''
                     )}
                 >
-                    {statusText}
+                    {earningRewardEpoch && rewardEpochTime > 0 ? (
+                        <CountDownTimer
+                            timestamp={rewardEpochTime}
+                            variant="bodySmall"
+                            label="in"
+                        />
+                    ) : (
+                        statusText
+                    )}
                 </div>
             </div>
         </div>
@@ -117,8 +133,8 @@ export function StakeCard({
     // TODO: Once two step withdraw is available, add cool down and withdraw now logic
     // For cool down epoch, show Available to withdraw add rewards to principal
     // Reward earning epoch is 2 epochs after stake request epoch
-    const rewardEarningEpoch = stakeRequestEpoch + 2;
-    const isEarnedRewards = currentEpoch >= rewardEarningEpoch;
+    const earningRewardsEpoch = stakeRequestEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
+    const isEarnedRewards = currentEpoch >= earningRewardsEpoch;
     const delegationState = inActiveValidator
         ? StakeState.IN_ACTIVE
         : isEarnedRewards
@@ -130,9 +146,13 @@ export function StakeCard({
     const [rewardsStaked] = useFormatCoin(rewards, SUI_TYPE_ARG);
     const isEarning = delegationState === StakeState.EARNING && rewards > 0;
 
+    // Applicable only for warm up
+    const epochBeforeRewards =
+        delegationState === StakeState.WARM_UP ? earningRewardsEpoch : null;
+
     const statusText = {
         // Epoch time before earning
-        [StakeState.WARM_UP]: `Epoch #${rewardEarningEpoch}`,
+        [StakeState.WARM_UP]: `Epoch #${earningRewardsEpoch}`,
         [StakeState.EARNING]: `${rewardsStaked} ${symbol}`,
         // Epoch time before redrawing
         [StakeState.COOL_DOWN]: `Epoch #`,
@@ -153,6 +173,7 @@ export function StakeCard({
                 statusLabel={STATUS_COPY[delegationState]}
                 statusText={statusText[delegationState]}
                 earnColor={isEarning}
+                earningRewardEpoch={epochBeforeRewards}
             >
                 <div className="flex justify-between items-start mb-1 ">
                     <ValidatorLogo

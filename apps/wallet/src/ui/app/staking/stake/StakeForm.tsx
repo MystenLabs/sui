@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect } from 'react';
 
 import Loading from '../../components/loading';
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
+import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
@@ -15,6 +16,8 @@ import {
     DEFAULT_GAS_BUDGET_FOR_PAY,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
 } from '_redux/slices/sui-objects/Coin';
+import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
 import type { FormValues } from './StakingCard';
 
@@ -57,6 +60,14 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
         );
     }, [setFieldValue, gasBudgetInMist, isLoading]);
 
+    // Reward will be available after 2 epochs
+    const startEarningRewardsEpoch = epoch
+        ? Number(epoch) + NUM_OF_EPOCH_BEFORE_EARNING
+        : 0;
+    const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
+        startEarningRewardsEpoch
+    );
+
     return (
         <Form
             className="flex flex-1 flex-col flex-nowrap items-center"
@@ -83,6 +94,7 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                                 className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
                                 decimals
                                 suffix={` ${symbol}`}
+                                autoFocus
                             />
                             {!HIDE_MAX ? (
                                 <button
@@ -123,13 +135,25 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                         >
                             Staking Rewards Start
                         </Text>
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {epoch ? `Epoch #${+epoch + 2}` : '--'}
-                        </Text>
+                        {timeToEarnStakeRewards > 0 ? (
+                            <CountDownTimer
+                                timestamp={timeToEarnStakeRewards}
+                                variant="body"
+                                color="steel-darker"
+                                weight="semibold"
+                                label="in"
+                            />
+                        ) : (
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                {epoch
+                                    ? `Epoch #${+startEarningRewardsEpoch}`
+                                    : '--'}
+                            </Text>
+                        )}
                     </div>
                 </Card>
             </Loading>

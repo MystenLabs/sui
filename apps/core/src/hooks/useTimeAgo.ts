@@ -72,19 +72,25 @@ const ONE_DAY = ONE_HOUR * 24;
  */
 export function useTimeAgo(
     timeFrom?: number | null,
-    shortedTimeLabel?: boolean
+    shortedTimeLabel?: boolean,
+    shouldEnd?: boolean
 ) {
     const [now, setNow] = useState(() => Date.now());
+
+    // end interval when the difference between now and timeFrom is less than or equal to 0
+    const endInterval = !(shouldEnd && now - (timeFrom || now) >= 0);
+    const intervalEnabled =
+        !!timeFrom &&
+        Math.abs(now - (timeFrom || now)) < ONE_HOUR &&
+        endInterval;
+
     const formattedTime = useMemo(
         () => timeAgo(timeFrom, now, shortedTimeLabel),
         [now, timeFrom, shortedTimeLabel]
     );
 
-    const intervalEnabled = !!timeFrom && Math.abs(now - timeFrom) < ONE_HOUR;
-
     useEffect(() => {
         if (!timeFrom || !intervalEnabled) return;
-
         const timeout = setInterval(() => setNow(Date.now()), ONE_SECOND);
         return () => clearTimeout(timeout);
     }, [intervalEnabled, timeFrom]);

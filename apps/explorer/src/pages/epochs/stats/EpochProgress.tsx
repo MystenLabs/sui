@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { formatDate } from '@mysten/core';
+
 import { useEpochProgress } from '../useEpochProgress';
 
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { ProgressBar } from '~/ui/ProgressBar';
 import { Text } from '~/ui/Text';
-import { formatDate } from '~/utils/timeUtils';
 
 export interface EpochProgressProps {
     epoch?: number;

@@ -9,9 +9,11 @@ import { useEffect } from 'react';
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { Heading } from '../../shared/heading';
+import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
+import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
 import type { FormValues } from './StakingCard';
 
@@ -19,7 +21,7 @@ export type StakeFromProps = {
     coinBalance: bigint;
     coinType: string;
     stakingReward?: number;
-    epoch: string | number;
+    epoch: number;
 };
 
 export function UnStakeForm({
@@ -39,6 +41,10 @@ export function UnStakeForm({
         SUI_TYPE_ARG
     );
     const [tokenBalance] = useFormatCoin(coinBalance, coinType);
+
+    const { data: currentEpochEndTime } = useGetTimeBeforeEpochNumber(
+        epoch + 1 || 0
+    );
 
     useEffect(() => {
         setFieldValue(
@@ -66,13 +72,22 @@ export function UnStakeForm({
                             Current Epoch Ends
                         </Text>
                         <div className="flex gap-0.5 items-end">
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-dark"
-                            >
-                                Epoch #{epoch}
-                            </Text>
+                            {currentEpochEndTime > 0 ? (
+                                <CountDownTimer
+                                    timestamp={currentEpochEndTime}
+                                    variant="body"
+                                    color="steel-dark"
+                                    weight="medium"
+                                />
+                            ) : (
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-dark"
+                                >
+                                    Epoch #{epoch}
+                                </Text>
+                            )}
                         </div>
                     </div>
                 }
