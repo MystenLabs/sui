@@ -8,7 +8,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use sui_config::{
-    genesis::{Builder, GenesisTuple},
+    genesis::{Builder, UnsignedGenesis},
     SUI_GENESIS_FILENAME,
 };
 use sui_types::{
@@ -17,6 +17,7 @@ use sui_types::{
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
+    message_envelope::Message,
     object::Object,
 };
 
@@ -173,11 +174,10 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
             let mut builder = Builder::load(&dir)?;
-            let GenesisTuple(_, unsigned_checkpoint, ..) =
-                builder.build_unsigned_genesis_checkpoint();
+            let UnsignedGenesis { checkpoint, .. } = builder.build_unsigned_genesis_checkpoint();
             println!(
                 "Successfully built unsigned checkpoint: {}",
-                unsigned_checkpoint.digest()
+                checkpoint.digest()
             );
 
             builder.save(dir)?;
@@ -185,8 +185,14 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::ExamineGenesisCheckpoint => {
             let builder = Builder::load(&dir)?;
-            let genesis = builder.build();
-            examine_genesis_checkpoint(genesis);
+
+            let Some(unsigned_genesis) = builder.unsigned_genesis_checkpoint() else {
+                return Err(anyhow::anyhow!(
+                    "Unable to examine genesis checkpoint; it hasn't been built yet"
+                ));
+            };
+
+            examine_genesis_checkpoint(unsigned_genesis);
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {
@@ -204,7 +210,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             }
 
             builder = builder.add_validator_signature(&keypair);
-            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().1;
+            let UnsignedGenesis { checkpoint, .. } = builder.unsigned_genesis_checkpoint().unwrap();
             builder.save(dir)?;
 
             println!(

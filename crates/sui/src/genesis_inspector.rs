@@ -3,7 +3,7 @@
 
 use inquire::Select;
 use std::collections::BTreeMap;
-use sui_config::genesis::Genesis;
+use sui_config::genesis::UnsignedGenesis;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     coin::CoinMetadata,
@@ -29,7 +29,7 @@ const STR_OBJECTS: &str = "Objects";
 const STR_VALIDATORS: &str = "Validators";
 
 #[allow(clippy::or_fun_call)]
-pub(crate) fn examine_genesis_checkpoint(genesis: Genesis) {
+pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
     // Prepare Validator info
     let summary_set = genesis.validator_summary_set();
     let validator_map = summary_set
@@ -48,7 +48,7 @@ pub(crate) fn examine_genesis_checkpoint(genesis: Genesis) {
     validator_options.extend_from_slice(&[STR_ALL, STR_EXIT]);
     println!(
         "Total Number of Validators: {}",
-        genesis.validator_set().len()
+        genesis.validator_summary_set().len()
     );
 
     // Prepare Sui distribution info
