@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
-import { useRpcClient } from '@mysten/core';
+import { useRpcClient, convertNumberToDate } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useParams } from 'react-router-dom';
 
@@ -15,7 +15,6 @@ import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
-import { convertNumberToDate } from '~/utils/timeUtils';
 
 function CheckpointDetail() {
     const { digest } = useParams<{ digest: string }>();
