@@ -10,7 +10,7 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::SuiCommittee;
 use sui_open_rpc::Module;
-use sui_types::base_types::{EpochId, SuiAddress, ObjectID};
+use sui_types::base_types::{EpochId, ObjectID, SuiAddress};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 pub(crate) struct GovernanceReadApi {
