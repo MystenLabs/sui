@@ -290,7 +290,11 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_events()),
+            Some(
+                SuiTransactionResponseOptions::new()
+                    .with_object_changes()
+                    .with_events(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
@@ -347,7 +351,11 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_events()),
+            Some(
+                SuiTransactionResponseOptions::new()
+                    .with_object_changes()
+                    .with_events(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
