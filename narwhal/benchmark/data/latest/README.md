@@ -41,7 +41,7 @@ We set the following `node_params` in our [fabfile](https://github.com/MystenLab
 ```python
 node_params = {
     'header_num_of_batches_threshold': 32, # number of batches
-    'max_header_num_of_batches': 1000, # number of batches
+    'max_header_num_of_batches': 200, # number of batches
     'max_header_delay': 200,  # ms
     'gc_depth': 50,  # rounds
     'sync_retry_delay': 10_000,  # ms
