@@ -28,14 +28,21 @@ const timeStyle = cva([], {
 
 export interface CountDownTimerProps extends VariantProps<typeof timeStyle> {
     timestamp: number | undefined;
+    label?: string;
 }
 
-export function CountDownTimer({ timestamp, ...styles }: CountDownTimerProps) {
+export function CountDownTimer({
+    timestamp,
+    label,
+    ...styles
+}: CountDownTimerProps) {
     const timeAgo = useTimeAgo(timestamp, false, true);
 
     return (
         <section>
-            <div className={timeStyle(styles)}>in {timeAgo}</div>
+            <div className={timeStyle(styles)}>
+                {label} {timeAgo}
+            </div>
         </section>
     );
 }

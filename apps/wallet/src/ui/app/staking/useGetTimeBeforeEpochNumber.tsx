@@ -17,6 +17,7 @@ export function useGetTimeBeforeEpochNumber(epoch: number) {
         epoch > currentEpoch && epoch > 0 && epochPeriod > 0
             ? currentEpochStartTime + (epoch - currentEpoch) * epochPeriod
             : 0;
+
     return {
         ...data,
         data: timeBeforeSpecifiedEpoch,

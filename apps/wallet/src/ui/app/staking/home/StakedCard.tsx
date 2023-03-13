@@ -97,6 +97,7 @@ function StakeCardContent({
                         <CountDownTimer
                             timestamp={rewardEpochTime}
                             variant="bodySmall"
+                            label="in"
                         />
                     ) : (
                         statusText

@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect } from 'react';
 
 import Loading from '../../components/loading';
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
+import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
@@ -15,6 +16,7 @@ import {
     DEFAULT_GAS_BUDGET_FOR_PAY,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
 } from '_redux/slices/sui-objects/Coin';
+import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
 import type { FormValues } from './StakingCard';
 
@@ -56,6 +58,12 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
             isLoading ? '' : (gasBudgetInMist || 0).toString()
         );
     }, [setFieldValue, gasBudgetInMist, isLoading]);
+
+    // Reward will be available after 2 epochs
+    const startEarningRewardsEpoch = epoch ? Number(epoch) + 2 : 0;
+    const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
+        startEarningRewardsEpoch
+    );
 
     return (
         <Form
@@ -123,13 +131,23 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                         >
                             Staking Rewards Start
                         </Text>
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {epoch ? `Epoch #${+epoch + 2}` : '--'}
-                        </Text>
+                        {timeToEarnStakeRewards > 0 ? (
+                            <CountDownTimer
+                                timestamp={timeToEarnStakeRewards}
+                                variant="body"
+                                color="steel-darker"
+                                weight="semibold"
+                                label="in"
+                            />
+                        ) : (
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                {epoch ? `Epoch #${+epoch + 2}` : '--'}
+                            </Text>
+                        )}
                     </div>
                 </Card>
             </Loading>
