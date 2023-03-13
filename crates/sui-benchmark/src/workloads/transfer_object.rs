@@ -32,7 +32,7 @@ pub struct TransferObjectTestPayload {
 }
 
 impl Payload for TransferObjectTestPayload {
-    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
+    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         let recipient = self
             .gas
             .iter()
@@ -41,33 +41,30 @@ impl Payload for TransferObjectTestPayload {
             .1;
         let updated_gas: Vec<Gas> = self
             .gas
-            .into_iter()
+            .iter()
             .map(|x| {
                 if x.1.get_owner_address().unwrap() == self.transfer_from {
                     (
                         effects.gas_object().0,
                         Owner::AddressOwner(self.transfer_from),
-                        x.2,
+                        x.2.clone(),
                     )
                 } else {
-                    x
+                    x.clone()
                 }
             })
             .collect();
-        Box::new(TransferObjectTestPayload {
-            transfer_object: effects
-                .mutated()
-                .iter()
-                .find(|(object_ref, _)| object_ref.0 == self.transfer_object.0)
-                .map(|x| x.0)
-                .unwrap(),
-            transfer_from: self.transfer_to,
-            transfer_to: recipient.get_owner_address().unwrap(),
-            gas: updated_gas,
-            system_state_observer: self.system_state_observer,
-        })
+        self.transfer_object = effects
+            .mutated()
+            .iter()
+            .find(|(object_ref, _)| object_ref.0 == self.transfer_object.0)
+            .map(|x| x.0)
+            .unwrap();
+        self.transfer_from = self.transfer_to;
+        self.transfer_to = recipient.get_owner_address().unwrap();
+        self.gas = updated_gas;
     }
-    fn make_transaction(&self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> VerifiedTransaction {
         let (gas_obj, _, keypair) = self
             .gas
             .iter()
@@ -196,9 +193,5 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::TransferObject
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self as &TransferObjectWorkload)
     }
 }
