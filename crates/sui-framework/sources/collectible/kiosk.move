@@ -486,7 +486,7 @@ module sui::kiosk_transfer_caps {
     /// Custom key to wrap this logic.
     struct CapKey has copy, store, drop { for: ID }
 
-    /// Issue a `TransferCap` backed by the `PurchaseCap` with `min_price` set to `min_price`.
+    /// Issue a `TransferCap` backed by the `PurchaseCap` with `min_price` set to `0`.
     public fun issue_transfer_cap<T: key + store>(
         self: &mut Kiosk, for: ID, cap: &KioskOwnerCap, ctx: &mut TxContext
     ): TransferCap<T> {
