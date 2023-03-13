@@ -2,7 +2,7 @@
 title: Additional Resources
 ---
 
-To find out more about Sui Move and its usage, check out these links:
+To find out more about Sui Move and its usage, see:
 
 - [Sui Move examples in 'mystenLabs/sui' repo](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples)
 - [How Sui Move differs from Core Move](../../learn/sui-move-diffs.md)

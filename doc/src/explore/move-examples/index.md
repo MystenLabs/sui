@@ -11,4 +11,4 @@ All code samples are written with the assumption that you use *Sui Move*, which 
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "main" sui
 ```
 
-Keep in mind that the branch is set to `main`. If you're developing with our [devnet](../../build/devnet.md) or need more details, follow the instructions at [install Sui](../../build/install.md#install-or-update-sui-binaries).
+Keep in mind that the branch is set to `main`. If you're developing with [devnet](../../build/devnet.md) or need more details, follow the instructions at [install Sui](../../build/install.md#install-or-update-sui-binaries).

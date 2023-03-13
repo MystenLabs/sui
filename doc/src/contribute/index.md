@@ -14,13 +14,6 @@ To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 
 To report an issue with Sui, [create an issue](https://github.com/MystenLabs/sui/issues/new/choose) in the GitHub repo. Click **Get started** to open a template for the type of issue to create.
 
-
-## Updates to docs
-
-To request an update to a specific topic, click the **Source Code** link near the bottom of the page to open the source file in the GitHub repo. To submit a request, first choose the **Latest build** version of the doc site. This opens the main branch of the repo, which may contain a newer version of the topic than the one on **Devnet**.
-
-Click **Edit this file**, make your changes, and then click **Propose changes** to create a pull request that includes your changes in a new branch.
-
 ## Install Sui to contribute
 
 To contribute to Sui source code or documentation, you need only a GitHub account. You can commit updates and then submit a PR directly from the Github website, or create a fork of the repo to your local environment and use your favorite tools to make changes. Always submit PRs to the `main` branch.
@@ -63,7 +56,6 @@ You now have a fork of the Sui repo set up in your local workspace. You can make
 
 ## Further reading
 
-* Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
 * Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
 * Implementing [logging](../contribute/observability.md) in Sui to observe the behavior of your development.
 * Find related [research papers](../contribute/research-papers.md).

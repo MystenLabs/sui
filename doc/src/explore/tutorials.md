@@ -2,14 +2,13 @@
 title: End-to-End Tutorial to Set Up and Play TicTacToe on Sui
 ---
 
-In this tutorial, we demonstrate the end-to-end process for starting a
-Sui network locally, connecting to it through our [CLI client](../build/cli-client.md)
-app, publishing a TicTacToe game written in [Move](../build/move/index.md) on Sui,
+This tutorial demonstrates the end-to-end process for starting a
+Sui network locally, connecting to it through the [Sui CLI client](../build/cli-client.md), publishing a TicTacToe game written in [Move](../build/move/index.md) on Sui,
 and playing it to the end.
 
 ## Set up
 
-1. [Install Sui binaries](../build/install.md#install-or-update-sui-binaries) and
+1. [Install Sui binaries](../build/install.md#install-sui-binaries) and
    [download Sui source code](../build/install.md#source-code).
 1. [Create Sui genesis](../build/cli-client.md#genesis) by running the
    `sui genesis` command.
