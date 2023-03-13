@@ -395,7 +395,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
         let gas_summary = effect.gas_used();
         let gas_used = gas_summary.storage_rebate as i128
             - gas_summary.storage_cost as i128
-            - gas_summary.computation_cost as i128;
+            - gas_summary.transaction_cost as i128;
 
         let status = Some(effect.into_status().into());
         let ops: Operations = response

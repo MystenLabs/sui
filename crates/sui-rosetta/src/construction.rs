@@ -274,7 +274,7 @@ pub async fn metadata(
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
     let budget =
-        dry_run.effects.gas_used().computation_cost + dry_run.effects.gas_used().storage_cost;
+        dry_run.effects.gas_used().transaction_cost + dry_run.effects.gas_used().storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

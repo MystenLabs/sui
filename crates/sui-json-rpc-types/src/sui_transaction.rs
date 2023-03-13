@@ -691,7 +691,7 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "GasCostSummary", rename_all = "camelCase")]
 pub struct SuiGasCostSummary {
-    pub computation_cost: u64,
+    pub transaction_cost: u64,
     pub storage_cost: u64,
     pub storage_rebate: u64,
 }
@@ -699,7 +699,7 @@ pub struct SuiGasCostSummary {
 impl From<GasCostSummary> for SuiGasCostSummary {
     fn from(s: GasCostSummary) -> Self {
         Self {
-            computation_cost: s.computation_cost,
+            transaction_cost: s.transaction_cost,
             storage_cost: s.storage_cost,
             storage_rebate: s.storage_rebate,
         }

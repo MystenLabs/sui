@@ -365,7 +365,7 @@ impl CheckpointStore {
                 - prev_epoch_network_transactions,
             total_gas_reward: last_checkpoint
                 .epoch_rolling_gas_cost_summary
-                .computation_cost,
+                .transaction_cost,
         })
     }
 
@@ -798,7 +798,7 @@ impl CheckpointBuilder {
         if previous_epoch == self.epoch_store.epoch() {
             // sum only when we are within the same epoch
             GasCostSummary::new(
-                previous_gas_costs.computation_cost + current_gas_costs.computation_cost,
+                previous_gas_costs.transaction_cost + current_gas_costs.transaction_cost,
                 previous_gas_costs.storage_cost + current_gas_costs.storage_cost,
                 previous_gas_costs.storage_rebate + current_gas_costs.storage_rebate,
             )

@@ -178,7 +178,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
         let gas_object_digest = gas_object_ref.digest.base58_encode();
 
         let gas_summary = effects.gas_used();
-        let computation_cost = gas_summary.computation_cost;
+        let computation_cost = gas_summary.transaction_cost;
         let storage_cost = gas_summary.storage_cost;
         let storage_rebate = gas_summary.storage_rebate;
 
@@ -200,7 +200,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             gas_object_sequence: gas_object_seq.value() as i64,
             gas_object_digest,
             // NOTE: cast u64 to i64 here is safe because
-            // max value of i64 is 9223372036854775807 MISTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
+            // max value of i64 is 9223372036854775807 MISSTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
             gas_budget: gas_budget as i64,
             gas_price: gas_price as i64,
             total_gas_cost: (computation_cost + storage_cost) as i64 - (storage_rebate as i64),

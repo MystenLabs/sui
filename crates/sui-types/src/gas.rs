@@ -52,22 +52,22 @@ macro_rules! ok_or_gas_balance_error {
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GasCostSummary {
-    pub computation_cost: u64,
+    pub transaction_cost: u64,
     pub storage_cost: u64,
     pub storage_rebate: u64,
 }
 
 impl GasCostSummary {
-    pub fn new(computation_cost: u64, storage_cost: u64, storage_rebate: u64) -> GasCostSummary {
+    pub fn new(transaction_cost: u64, storage_cost: u64, storage_rebate: u64) -> GasCostSummary {
         GasCostSummary {
-            computation_cost,
+            transaction_cost,
             storage_cost,
             storage_rebate,
         }
     }
 
     pub fn gas_used(&self) -> u64 {
-        self.computation_cost + self.storage_cost
+        self.transaction_cost + self.storage_cost
     }
 
     /// Portion of the storage rebate that gets passed on to the transaction sender. The remainder
@@ -101,7 +101,7 @@ impl GasCostSummary {
                 .map(|e| {
                     (
                         e.gas_cost_summary().storage_cost,
-                        e.gas_cost_summary().computation_cost,
+                        e.gas_cost_summary().transaction_cost,
                         e.gas_cost_summary().storage_rebate,
                     )
                 })
@@ -109,7 +109,7 @@ impl GasCostSummary {
 
         GasCostSummary {
             storage_cost: storage_costs.iter().sum(),
-            computation_cost: computation_costs.iter().sum(),
+            transaction_cost: computation_costs.iter().sum(),
             storage_rebate: storage_rebates.iter().sum(),
         }
     }
@@ -391,7 +391,7 @@ impl<'a> SuiGasStatus<'a> {
             .expect("Subtraction overflowed");
         let computation_cost_in_sui = computation_cost.mul(self.computation_gas_unit_price).into();
         GasCostSummary {
-            computation_cost: computation_cost_in_sui,
+            transaction_cost: computation_cost_in_sui,
             storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
             storage_rebate: self.storage_rebate.into(),
         }

@@ -71,7 +71,7 @@ pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
 // Approximate size of `EpochId` type in bytes
 pub const APPROX_SIZE_OF_EPOCH_ID: usize = 10;
 // Approximate size of `GasCostSummary` type in bytes
-pub const APPROX_SIZE_OF_GAS_COST_SUMARY: usize = 30;
+pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 30;
 // Approximate size of `Option<TransactionEventsDigest>` type in bytes
 pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
 // Approximate size of `TransactionDigest` type in bytes
@@ -2692,7 +2692,7 @@ impl TransactionEffects {
     ) -> usize {
         let fixed_sizes = APPROX_SIZE_OF_EXECUTION_STATUS
             + APPROX_SIZE_OF_EPOCH_ID
-            + APPROX_SIZE_OF_GAS_COST_SUMARY
+            + APPROX_SIZE_OF_GAS_COST_SUMMARY
             + APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST;
 
         // Each write or delete contributes at roughly this amount because:
@@ -2972,7 +2972,7 @@ impl Default for TransactionEffectsV1 {
             status: ExecutionStatus::Success,
             executed_epoch: 0,
             gas_used: GasCostSummary {
-                computation_cost: 0,
+                transaction_cost: 0,
                 storage_cost: 0,
                 storage_rebate: 0,
             },

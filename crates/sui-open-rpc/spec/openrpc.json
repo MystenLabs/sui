@@ -363,7 +363,7 @@
                 },
                 "executedEpoch": 0,
                 "gasUsed": {
-                  "computationCost": 100,
+                  "transactionCost": 100,
                   "storageCost": 100,
                   "storageRebate": 10
                 },
@@ -585,7 +585,7 @@
               "networkTotalTransactions": 792385,
               "previousDigest": "8UExPV121BEfWkbymSPDYhh23rVNh3MSWtC5juJ9JGMJ",
               "epochRollingGasCostSummary": {
-                "computationCost": 0,
+                "transactionCost": 0,
                 "storageCost": 0,
                 "storageRebate": 0
               },
@@ -1480,7 +1480,7 @@
                 },
                 "executedEpoch": 0,
                 "gasUsed": {
-                  "computationCost": 100,
+                  "transactionCost": 100,
                   "storageCost": 100,
                   "storageRebate": 10
                 },
@@ -4189,22 +4189,22 @@
       "GasCostSummary": {
         "type": "object",
         "required": [
-          "computationCost",
           "storageCost",
-          "storageRebate"
+          "storageRebate",
+          "transactionCost"
         ],
         "properties": {
-          "computationCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
           "storageCost": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
           "storageRebate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "transactionCost": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

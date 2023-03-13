@@ -86,7 +86,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
         .into_effects_for_testing()
         .into_data();
     let gas_cost = effects.gas_cost_summary();
-    assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
+    assert!(gas_cost.transaction_cost > *MIN_GAS_BUDGET);
     assert!(gas_cost.storage_cost > 0);
     // Removing genesis object does not have rebate.
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -149,8 +149,8 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_summary_2 = effects.gas_cost_summary();
 
     assert_eq!(
-        gas_summary_1.computation_cost * 2,
-        gas_summary_2.computation_cost
+        gas_summary_1.transaction_cost * 2,
+        gas_summary_2.transaction_cost
     );
 
     // test overflow with insufficient gas
@@ -338,12 +338,12 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // Actual gas cost will be greater than the expected summary because of the cost to discard the
     // `UpgradeCap`.
     let gas_summary = gas_status.summary();
-    assert!(gas_cost.computation_cost >= gas_summary.computation_cost);
+    assert!(gas_cost.transaction_cost >= gas_summary.transaction_cost);
     assert_eq!(gas_cost.storage_cost, gas_summary.storage_cost);
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.gas_used();
-    let computation_cost = gas_cost.computation_cost;
+    let transaction_cost = gas_cost.transaction_cost;
     const DELTA: u64 = 1;
     let budget = total_gas_used - DELTA;
     // Run the transaction again with 1 less than the required budget.
@@ -366,7 +366,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // Make sure that we are not charging storage cost at failure.
     assert_eq!(gas_cost.storage_cost, 0);
     // Upon failure, we should only be charging the expected computation cost.
-    assert_eq!(gas_cost.gas_used(), computation_cost);
+    assert_eq!(gas_cost.gas_used(), transaction_cost);
 
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.gas_used();
@@ -555,7 +555,7 @@ async fn test_storage_gas_unit_price() -> SuiResult {
     gas_status2.charge_storage_mutation(100, 200, 5.into())?;
     let gas_cost2 = gas_status2.summary();
     // Computation unit price is the same, hence computation cost should be the same.
-    assert_eq!(gas_cost1.computation_cost, gas_cost2.computation_cost);
+    assert_eq!(gas_cost1.transaction_cost, gas_cost2.transaction_cost);
     // Storage unit prices is 3X, so will be the storage cost.
     assert_eq!(gas_cost1.storage_cost * 3, gas_cost2.storage_cost);
     // Storage rebate should not be affected by the price.

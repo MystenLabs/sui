@@ -85,7 +85,7 @@ pub fn execute_transaction_to_effects<
         }
     };
     debug!(
-        computation_gas_cost = gas_cost_summary.computation_cost,
+        computation_gas_cost = gas_cost_summary.transaction_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
         storage_gas_rebate = gas_cost_summary.storage_rebate,
         "Finished execution of transaction with status {:?}",

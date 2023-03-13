@@ -512,7 +512,7 @@ fn test_digest_caching() {
     signed_effects
         .data_mut_for_testing()
         .gas_cost_summary_mut_for_testing()
-        .computation_cost += 1;
+        .transaction_cost += 1;
 
     // digest is cached
     assert_eq!(initial_effects_digest, *signed_effects.digest());
@@ -1309,8 +1309,8 @@ fn check_approx_effects_components_size() {
     use std::mem::size_of;
 
     assert!(
-        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMARY,
-        "Update APPROX_SIZE_OF_GAS_COST_SUMARY constant"
+        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMMARY,
+        "Update APPROX_SIZE_OF_GAS_COST_SUMMARY constant"
     );
     assert!(
         size_of::<EpochId>() < APPROX_SIZE_OF_EPOCH_ID,

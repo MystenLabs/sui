@@ -94,7 +94,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
             previous_digest: parsed_previous_digest,
             end_of_epoch_data: data,
             epoch_rolling_gas_cost_summary: GasCostSummary {
-                computation_cost: checkpoint.total_computation_cost as u64,
+                transaction_cost: checkpoint.total_computation_cost as u64,
                 storage_cost: checkpoint.total_storage_cost as u64,
                 storage_rebate: checkpoint.total_storage_rebate as u64,
             },
@@ -113,7 +113,7 @@ impl Checkpoint {
     ) -> Result<Self, IndexerError> {
         let total_gas_cost = rpc_checkpoint
             .epoch_rolling_gas_cost_summary
-            .computation_cost
+            .transaction_cost
             + rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost
             - rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate;
 
@@ -189,7 +189,7 @@ impl Checkpoint {
             total_gas_cost: total_gas_cost as i64,
             total_computation_cost: rpc_checkpoint
                 .epoch_rolling_gas_cost_summary
-                .computation_cost as i64,
+                .transaction_cost as i64,
             total_storage_cost: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64,
             total_storage_rebate: rpc_checkpoint.epoch_rolling_gas_cost_summary.storage_rebate
                 as i64,

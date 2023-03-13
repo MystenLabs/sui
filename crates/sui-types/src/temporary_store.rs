@@ -962,7 +962,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         // computation gas fees, this quantity is burned, then re-minted at epoch boundaries.
         assert_eq!(
             input_sui + dynamic_field_input_sui,
-            output_sui + gas_summary.computation_cost + storage_fund_rebate_inflow
+            output_sui + gas_summary.transaction_cost + storage_fund_rebate_inflow
         )
     }
 }
