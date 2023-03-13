@@ -186,7 +186,9 @@ fn test_upgrade_upgrades_linkage() {
     .unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
-    let b_new = b_pkg.new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_new]).unwrap();
+    let b_new = b_pkg
+        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_new])
+        .unwrap();
 
     assert_eq!(
         b_pkg.linkage_table(),
@@ -228,7 +230,9 @@ fn test_upgrade_downngrades_linkage() {
     .unwrap();
 
     let b_id2 = ObjectID::from_single_byte(0xb2);
-    let b_new = b_pkg.new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_pkg]).unwrap();
+    let b_new = b_pkg
+        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_pkg])
+        .unwrap();
 
     assert_eq!(
         b_pkg.linkage_table(),
