@@ -300,7 +300,7 @@ pub async fn parse(
 
     let data = if request.signed {
         let tx: Transaction = bcs::from_bytes(&request.transaction.to_vec()?)?;
-        tx.into_data().intent_message.value
+        tx.into_data().intent_message().value.clone()
     } else {
         let intent: IntentMessage<TransactionData> =
             bcs::from_bytes(&request.transaction.to_vec()?)?;

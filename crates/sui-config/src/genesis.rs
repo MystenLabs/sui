@@ -901,7 +901,7 @@ fn create_genesis_transaction(
                 .expect("We defined natives to not fail here"),
         );
 
-        let transaction_data = &genesis_transaction.data().intent_message.value;
+        let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<
@@ -1256,7 +1256,7 @@ mod test {
                 .expect("We defined natives to not fail here"),
         );
 
-        let transaction_data = &genesis_transaction.data().intent_message.value;
+        let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (_inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<

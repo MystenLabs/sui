@@ -427,7 +427,7 @@ impl RpcExampleProvider {
 
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
-        let signatures = tx.into_inner().tx_signatures.clone();
+        let signatures = tx.into_inner().tx_signatures().to_vec();
 
         let tx_digest = tx1.digest();
         let sui_event = SuiEvent::TransferObject {

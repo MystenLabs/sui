@@ -238,7 +238,7 @@ async fn test_dry_run_transaction() {
 
     let response = fullnode
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await
@@ -262,7 +262,7 @@ async fn test_dry_run_transaction() {
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
 
-    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = &transaction.data().intent_message().value;
     let txn_data = TransactionData::new_with_gas_coins(
         txn_data.kind().clone(),
         txn_data.sender(),
@@ -900,7 +900,7 @@ async fn test_dry_run_on_validator() {
     let transaction_digest = *transaction.digest();
     let response = validator
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await;
@@ -950,11 +950,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
-    bad_signature_transfer_transaction
+    *bad_signature_transfer_transaction
         .data_mut_for_testing()
-        .tx_signatures =
+        .tx_signatures_mut_for_testing() =
         vec![
-            Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into(),
+            Signature::new_secure(transfer_transaction.data().intent_message(), &unknown_key)
+                .into(),
         ];
 
     assert!(client
@@ -1240,8 +1241,8 @@ async fn test_handle_transfer_transaction_ok() {
     };
 
     assert_eq!(
-        envelope.data().intent_message.value,
-        transfer_transaction.data().intent_message.value
+        envelope.data().intent_message().value,
+        transfer_transaction.data().intent_message().value
     );
 }
 
