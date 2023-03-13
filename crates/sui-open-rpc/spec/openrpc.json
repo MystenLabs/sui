@@ -6998,13 +6998,13 @@
             "additionalProperties": false
           },
           {
-            "description": "Query by mutated object.",
+            "description": "Query by changed object, including created, mutated and unwrapped objects.",
             "type": "object",
             "required": [
-              "MutatedObject"
+              "ChangedObject"
             ],
             "properties": {
-              "MutatedObject": {
+              "ChangedObject": {
                 "$ref": "#/components/schemas/ObjectID"
               }
             },

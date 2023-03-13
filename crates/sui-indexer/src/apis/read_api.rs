@@ -123,7 +123,7 @@ impl<S: IndexerStore> ReadApi<S> {
             // serialized transaction and retrive from there.
             // This is now blocked by the endpoint on FN side.
             Some(TransactionFilter::InputObject(_input_obj_id)) => Ok(vec![]),
-            Some(TransactionFilter::MutatedObject(mutated_obj_id)) => {
+            Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
