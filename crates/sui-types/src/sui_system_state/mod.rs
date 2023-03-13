@@ -3,11 +3,11 @@
 
 use crate::base_types::ObjectID;
 use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
-use crate::dynamic_field::{get_dynamic_field_from_store, MoveTypeTagTrait};
+use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use crate::{id::UID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
+use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};

@@ -126,7 +126,7 @@ impl GovernanceReadApi {
                 system_state.system_state_version,
                 self.state.db().as_ref(),
                 system_state.inactive_pools_id,
-                &ID { bytes: *pool_id },
+                &ID::new(*pool_id),
             )?;
 
             Ok(validator.exchange_rates_id)

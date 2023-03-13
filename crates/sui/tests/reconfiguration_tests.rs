@@ -381,9 +381,7 @@ async fn test_inactive_validator_pool_read() {
             version,
             node.state().db().as_ref(),
             inactive_pool_id,
-            &ID {
-                bytes: staking_pool_id,
-            },
+            &ID::new(staking_pool_id),
         )
         .unwrap();
         assert_eq!(validator.sui_address, address);
