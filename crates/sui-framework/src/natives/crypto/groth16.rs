@@ -113,13 +113,7 @@ pub fn verify_groth16_proof_internal(
     }
 
     match result {
-        Ok(res) => {
-            if res {
-                Ok(NativeResult::ok(cost, smallvec![Value::bool(true)]))
-            } else {
-                Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]))
-            }
-        }
+        Ok(res) => Ok(NativeResult::ok(cost, smallvec![Value::bool(res)])),
         Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     }
 }
