@@ -921,6 +921,13 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         staked_sui[0].stakes[0].status,
         StakeStatus::Pending
     ));
+    let staked_sui_copy = http_client
+        .get_stakes(vec![staked_sui[0].stakes[0].staked_sui_id])
+        .await?;
+    assert_eq!(
+        staked_sui[0].stakes[0].staked_sui_id,
+        staked_sui_copy[0].stakes[0].staked_sui_id
+    );
     Ok(())
 }
 

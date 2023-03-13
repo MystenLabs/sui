@@ -6,7 +6,7 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress};
 
 use sui_types::committee::EpochId;
 
@@ -15,6 +15,10 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait GovernanceReadApi {
+    /// Return one or more [DelegatedStake]
+    #[method(name = "getStakes")]
+    async fn get_stakes(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>>;
+
     /// Return all [DelegatedStake].
     #[method(name = "getDelegatedStakes")]
     async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
