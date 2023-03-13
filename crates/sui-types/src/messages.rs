@@ -139,18 +139,6 @@ fn type_tag_validity_check(
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct SuiMovePackageDependencies {
-    pub modules: Vec<ObjectRef>,
-}
-
-impl SuiMovePackageDependencies {
-    pub fn validity_check(&self, _config: &ProtocolConfig) -> UserInputResult {
-        // TODO fp_ensure!(...)
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
@@ -2176,31 +2164,32 @@ pub enum ExecutionFailureStatus {
     //
     #[error(
         "Publish Error, Non-zero Address. \
-        The modules in the package must have their address set to zero."
+        The modules in the package must have their self-addresses set to zero."
     )]
     PublishErrorNonZeroAddress,
     #[error(
         "Publish/Upgrade Error, Missing immediate dependency. \
-         Immediate dependencies of a package published/upgraded must be present \
-         on a list provided on command line when publishing/upgrading a package."
+         Immediate dependency of published or upgraded package has not been assigned an on-chain \
+         address."
     )]
     PublishUpgradeMissingImmediateDependency,
 
     #[error(
         "Publish/Upgrade Error, Missing indirect dependency. \
-         Indirect (transitive) dependencies of a package published/upgraded must be present \
-         on a list provided on command line when publishing/upgrading a package."
+         Indirect (transitive) dependency of published or upgraded package has not been assigned an \
+         on-chain address."
     )]
     PublishUpgradeMissingIndirectDependency,
 
     #[error(
         "Publish/Upgrade Error, Dependency downgrade. \
-         A version of dependency specified on command line when publishing/upgrading a package \
-         must be equal or greater than versions of all indirect dependencies of this package."
+         Indirect (transitive) dependency of published or upgraded package has been assigned an \
+         on-chain version that is less than the version required by one of the package's \
+         transitive dependencies."
     )]
     PublishUpgradeDependencyDowngrade,
 
-    #[error("Could not resolve package dependency for {object}.")]
+    #[error("Could not resolve dependency of package at {object}.")]
     PublishUnresolvedPackageDependency { object: ObjectID },
 
     #[error(

@@ -28,12 +28,12 @@ use move_transactional_test_runner::{
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::fmt::Write;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
     sync::Arc,
 };
+use std::{fmt::Write, str::FromStr};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
@@ -293,7 +293,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiPublishArgs {
             sender,
             upgradeable,
-            dependencies: _,
+            dependencies,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -302,13 +302,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             buf
         };
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+        let dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| ObjectID::from_str(&d))
+            .collect::<Result<_, _>>()?;
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes], vec![]);
+                let cap = builder.publish_upgradeable(vec![module_bytes], dependencies);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish_immutable(vec![module_bytes], vec![]);
+                builder.publish_immutable(vec![module_bytes], dependencies);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
