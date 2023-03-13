@@ -5219,11 +5219,14 @@
                     }
                   },
                   {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
                     "$ref": "#/components/schemas/SuiArgument"
                   }
                 ],
-                "maxItems": 3,
-                "minItems": 3
+                "maxItems": 4,
+                "minItems": 4
               }
             },
             "additionalProperties": false
