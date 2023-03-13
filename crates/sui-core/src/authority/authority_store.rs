@@ -374,7 +374,15 @@ impl AuthorityStore {
         protocol_config: &ProtocolConfig,
     ) -> Result<Vec<Object>, SuiError> {
         let mut result = Vec::new();
-        let mut num_mutable_input_objects = 0;
+
+        fp_ensure!(
+            objects.len() <= protocol_config.max_input_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum input objects in a transaction".to_string(),
+                value: protocol_config.max_input_objects().to_string()
+            }
+            .into()
+        );
 
         for kind in objects {
             let obj = match kind {
@@ -386,18 +394,6 @@ impl AuthorityStore {
                 }
             }
             .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-            if !obj.is_immutable() {
-                num_mutable_input_objects += 1;
-            }
-
-            fp_ensure!(
-                num_mutable_input_objects <= protocol_config.max_mutable_inputs(),
-                UserInputError::SizeLimitExceeded {
-                    limit: "maximum input objects in a transaction".to_string(),
-                    value: protocol_config.max_mutable_inputs().to_string()
-                }
-                .into()
-            );
             result.push(obj);
         }
         Ok(result)

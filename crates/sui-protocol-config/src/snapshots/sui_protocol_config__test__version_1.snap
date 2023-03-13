@@ -7,7 +7,7 @@ feature_flags:
   package_upgrades: false
 max_tx_size: 65536
 max_tx_in_batch: 10
-max_mutable_inputs: 1024
+max_input_objects: 2048
 max_serialized_tx_effects_size_bytes: 524288
 max_serialized_tx_effects_size_bytes_system_tx: 8388608
 max_gas_payment_objects: 256
