@@ -736,6 +736,11 @@ impl<S> TemporaryStore<S> {
         assert!(gas_status.storage_rebate() == 0);
         assert!(gas_status.storage_gas_units() == 0);
 
+        if let Err(err) = gas_status.bucketize_computation() {
+            if execution_result.is_ok() {
+                *execution_result = Err(err);
+            }
+        }
         if execution_result.is_err() {
             // Tx execution aborted--need to dump writes, deletes, etc before charging storage gas
             self.reset(sender, gas, gas_status);

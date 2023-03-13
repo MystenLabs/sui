@@ -15,6 +15,7 @@ use move_core_types::{
     gas_algebra::{GasQuantity, InternalGas, InternalGasPerByte, NumBytes, UnitDiv},
     vm_status::StatusCode,
 };
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -26,6 +27,53 @@ use sui_cost_tables::{
     units_types::GasUnit,
 };
 use sui_protocol_config::*;
+
+// A bucket defines a range of units that will be priced the same.
+// A cost for the bucket is defined to make the step function non linear.
+#[allow(dead_code)]
+struct ComputationBucket {
+    min: u64,
+    max: u64,
+    cost: u64,
+}
+
+impl ComputationBucket {
+    fn new(min: u64, max: u64, cost: u64) -> Self {
+        ComputationBucket { min, max, cost }
+    }
+
+    fn simple(min: u64, max: u64) -> Self {
+        ComputationBucket {
+            min,
+            max,
+            cost: max,
+        }
+    }
+}
+
+fn get_bucket_cost(table: &[ComputationBucket], computation_cost: u64) -> u64 {
+    for bucket in table {
+        if bucket.max >= computation_cost {
+            return bucket.cost;
+        }
+    }
+    MAX_BUCKET_COST
+}
+
+// for a RPG of 1000 this amounts to about 1 SUI
+const MAX_BUCKET_COST: u64 = 1_000_000;
+
+// define the bucket table for computation charging
+static COMPUTATION_BUCKETS: Lazy<Vec<ComputationBucket>> = Lazy::new(|| {
+    vec![
+        ComputationBucket::simple(0, 1_000),
+        ComputationBucket::simple(1_001, 5_000),
+        ComputationBucket::simple(5_001, 10_000),
+        ComputationBucket::simple(10_001, 20_000),
+        ComputationBucket::simple(20_001, 50_000),
+        ComputationBucket::new(50_001, u64::MAX, MAX_BUCKET_COST),
+    ]
+});
 
 pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}
@@ -325,6 +373,13 @@ impl<'a> SuiGasStatus<'a> {
         &mut self.gas_status
     }
 
+    pub fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
+        let computation_cost: u64 = self.gas_used().into();
+        let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, computation_cost);
+        let charge = bucket_cost - computation_cost;
+        self.deduct_computation_cost(&charge.into())
+    }
+
     pub fn charge_vm_gas(&mut self) -> Result<(), ExecutionError> {
         // Disable flat fee for now
         // self.deduct_computation_cost(&VM_FLAT_FEE.to_unit())
@@ -406,6 +461,7 @@ impl<'a> SuiGasStatus<'a> {
             .expect("Subtraction overflowed")
             .checked_sub(storage_cost)
             .expect("Subtraction overflowed");
+
         let computation_cost_in_sui = computation_cost.mul(self.computation_gas_unit_price).into();
         GasCostSummary {
             computation_cost: computation_cost_in_sui,
@@ -461,6 +517,13 @@ impl<'a> SuiGasStatus<'a> {
             self.storage_gas_units = self.storage_gas_units.add(ext_cost);
             Ok(ext_cost.mul(self.storage_gas_unit_price))
         }
+    }
+
+    fn gas_used(&self) -> GasUnits {
+        let remaining_gas = self.gas_status.remaining_gas();
+        self.init_budget
+            .checked_sub(remaining_gas)
+            .expect("Subtraction overflowed")
     }
 }
 

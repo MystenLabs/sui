@@ -19,7 +19,7 @@ max_programmable_tx_commands: 1024
 move_binary_format_version: 6
 max_move_object_size: 256000
 max_move_package_size: 102400
-max_tx_gas: 1000000000
+max_tx_gas: 10000000000
 max_loop_depth: 5
 max_generic_instantiation_length: 32
 max_function_parameters: 128
@@ -71,4 +71,3 @@ copy_convert_to_address_cost_per_byte: 10
 event_value_size_derivation_cost_per_byte: 1000
 event_tag_size_derivation_cost_per_byte: 1000
 event_emit_cost_per_byte: 1000
-
