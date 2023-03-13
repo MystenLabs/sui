@@ -2,12 +2,9 @@
 /// Based on this token the safe owner grants redeem rights for specific NFT.
 /// An entity that has been granted redeem rights can call `get_nft`.
 module sui::nft_safe {
-    use std::ascii;
-    use std::option::{Self, Option};
     use std::type_name::{Self, TypeName};
 
     use sui::dynamic_object_field::{Self as dof};
-    use sui::event;
     use sui::object::{Self, ID, UID};
     use sui::package::{Self, Publisher};
     use sui::tx_context::TxContext;
@@ -26,6 +23,8 @@ module sui::nft_safe {
     const ENftAlreadyListed: u64 = 3;
     /// The provided `Publisher` must match the package of the inner type.
     const EPublisherInnerTypeMismatch: u64 = 4;
+    /// The logic requires that no NFTs are stored in the safe.
+    const EMustBeEmpty: u64 = 5;
 
     // === Structs ===
 
@@ -57,23 +56,6 @@ module sui::nft_safe {
 
     // === Events ===
 
-    struct DepositEvent has copy, drop {
-        safe: ID,
-        nft: ID,
-        /// The type of the transferred object. 
-        nft_type: ascii::String,
-    }
-
-    struct TransferEvent has copy, drop {
-        safe: ID,
-        nft: ID,
-        /// The type of the transferred object. 
-        nft_type: ascii::String,
-        /// Entity which authorized the transfer.
-        /// If None then by the owner of the safe.
-        by_entity: Option<ID>,
-    }
-
     public fun new<I: store>(
         inner: I, ctx: &mut TxContext
     ): (NftSafe<I>, OwnerCap) {
@@ -91,6 +73,28 @@ module sui::nft_safe {
         (safe, cap)
     }
 
+    /// Given object is added to the safe and can be listed from now on.
+    public fun deposit_nft<I: store, NFT: key + store>(
+        inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
+        nft: NFT,
+    ) {
+        assert_from_package<I>(inner_publisher);
+
+        let nft_id = object::id(&nft);
+        let object_type = type_name::get<NFT>();
+
+        // aborts if key already exists
+        vec_map::insert(&mut self.refs, nft_id, NftRef {
+            listed_with: vec_set::empty(),
+            is_exclusively_listed: false,
+            object_type,
+        });
+
+        dof::add(&mut self.id, nft_id, nft);
+    }
+
+
     /// Multiples entities can have redeem rights for the same NFT.
     /// Additionally, the owner can remove redeem rights for a specific entity
     /// at any time.
@@ -98,8 +102,8 @@ module sui::nft_safe {
     /// # Aborts
     /// * If the NFT has already given exclusive redeem rights.
     public fun list_nft<I: store>(
-        self: &mut NftSafe<I>,
         inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
         owner_cap: &OwnerCap,
         entity_id: ID,
         nft_id: ID,
@@ -127,9 +131,9 @@ module sui::nft_safe {
     /// # Aborts
     /// * If the NFT already has given up redeem rights (not necessarily exclusive)
     public fun exclusively_list_nft<I: store>(
+        inner_publisher: &Publisher,
         self: &mut NftSafe<I>,
         owner_cap: &OwnerCap,
-        inner_publisher: &Publisher,
         entity_id: &UID,
         nft_id: ID,
     ) {
@@ -144,41 +148,12 @@ module sui::nft_safe {
         ref.is_exclusively_listed = true;
     }
 
-    /// Given object is added to the safe and can be listed from now on.
-    public fun deposit_nft<I: store, NFT: key + store>(
-        self: &mut NftSafe<I>,
-        inner_publisher: &Publisher,
-        nft: NFT,
-    ) {
-        assert_from_package<I>(inner_publisher);
-
-        let nft_id = object::id(&nft);
-        let object_type = type_name::get<NFT>();
-
-        // aborts if key already exists
-        vec_map::insert(&mut self.refs, nft_id, NftRef {
-            listed_with: vec_set::empty(),
-            is_exclusively_listed: false,
-            object_type,
-        });
-
-        event::emit(
-            DepositEvent {
-                safe: object::id(self),
-                nft: nft_id,
-                nft_type: type_name::into_string(object_type),
-            }
-        );
-
-        dof::add(&mut self.id, nft_id, nft);
-    }
-
     /// An entity uses the `&UID` as a token which has been granted a permission 
     /// for transfer of the specific NFT.
     /// With this token, a transfer can be performed.
     public fun get_nft<I: store, NFT: key + store>(
-        self: &mut NftSafe<I>,
         inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
         entity_id: &UID,
         nft_id: ID,
     ): NFT {
@@ -191,14 +166,23 @@ module sui::nft_safe {
         let entity_auth = object::uid_to_inner(entity_id);
         vec_set::remove(&mut ref.listed_with, &entity_auth);
 
-        event::emit(
-            TransferEvent {
-                safe: object::id(self),
-                nft: nft_id,
-                nft_type: type_name::into_string(ref.object_type),
-                by_entity: option::some(entity_auth),
-            }
-        );
+        dof::remove<ID, NFT>(&mut self.id, nft_id)
+    }
+
+    /// Get an NFT out of the safe as the owner.
+    public fun get_nft_as_owner<I: store, NFT: key + store>(
+        inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
+        owner_cap: &OwnerCap,
+        nft_id: ID,
+    ): NFT {
+        assert_from_package<I>(inner_publisher);
+        assert_owner_cap(self, owner_cap);
+        assert_has_nft(self, &nft_id);
+
+        // NFT is being transferred - destroy the ref
+        let (_, ref) = vec_map::remove(&mut self.refs, &nft_id);
+        assert_ref_not_exclusively_listed(&ref);
 
         dof::remove<ID, NFT>(&mut self.id, nft_id)
     }
@@ -210,8 +194,8 @@ module sui::nft_safe {
     /// # Aborts
     /// * If the entity is not listed as an auth for this NFT.
     public fun remove_entity_from_nft_listing<I: store>(
-        self: &mut NftSafe<I>,
         inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
         entity_id: &UID,
         nft_id: &ID,
     ) {
@@ -234,8 +218,8 @@ module sui::nft_safe {
     /// * If the NFT is exclusively listed.
     /// * If the entity is not listed as an auth for this NFT.
     public fun remove_entity_from_nft_listing_as_owner<I: store>(
-        self: &mut NftSafe<I>,
         inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
         owner_cap: &OwnerCap,
         entity_id: &ID,
         nft_id: &ID,
@@ -257,8 +241,8 @@ module sui::nft_safe {
     /// # Aborts
     /// * If the NFT is exclusively listed.
    public fun delist_nft<I: store>(
-        self: &mut NftSafe<I>,
         inner_publisher: &Publisher,
+        self: &mut NftSafe<I>,
         owner_cap: &OwnerCap,
         nft_id: &ID,
     ) {
@@ -271,7 +255,37 @@ module sui::nft_safe {
         ref.listed_with = vec_set::empty();
     }
 
+    /// If there are no deposited NFTs in the safe, the safe is destroyed.
+    /// Only works for non-shared safes.
+    public fun destroy_empty<I: store>(
+        inner_publisher: &Publisher,
+        self: NftSafe<I>,
+        owner_cap: OwnerCap,
+    ): I {
+        assert_from_package<I>(inner_publisher);
+        assert_owner_cap(&self, &owner_cap);
+        assert!(vec_map::is_empty(&self.refs), EMustBeEmpty);
+
+        let NftSafe { id, refs, inner } = self;
+        let OwnerCap { id: cap_id, safe: _ } = owner_cap;
+        vec_map::destroy_empty(refs);
+        object::delete(id);
+        object::delete(cap_id);
+
+        inner
+    }
+
     // === Getters ===
+
+    public fun borrow_inner<I: store>(self: &NftSafe<I>): &I { &self.inner }
+
+    public fun borrow_inner_mut<I: store>(self: &mut NftSafe<I>): &mut I {
+        &mut self.inner
+    }
+
+    public fun nfts_count<I: store>(self: &NftSafe<I>): u64 {
+        vec_map::size(&self.refs)
+    }
 
     public fun borrow_nft<I: store, NFT: key + store>(
         self: &NftSafe<I>, nft_id: ID,
