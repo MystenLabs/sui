@@ -146,7 +146,9 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {epoch ? `Epoch #${+epoch + 2}` : '--'}
+                                {epoch
+                                    ? `Epoch #${+startEarningRewardsEpoch}`
+                                    : '--'}
                             </Text>
                         )}
                     </div>
