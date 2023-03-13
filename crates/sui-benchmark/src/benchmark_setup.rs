@@ -241,7 +241,7 @@ impl Env {
             proxies
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for reconfiguration")?
-                .get_current_epoch(),
+                .get_current_epoch_id(),
         );
 
         let mut proxy_gas_and_coins = vec![];

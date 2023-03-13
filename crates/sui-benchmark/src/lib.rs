@@ -133,7 +133,7 @@ pub trait ValidatorProxy {
 
     fn clone_committee(&self) -> Committee;
 
-    fn get_current_epoch(&self) -> EpochId;
+    fn get_current_epoch_id(&self) -> EpochId;
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync>;
 
@@ -462,7 +462,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         self.qd.clone_committee()
     }
 
-    fn get_current_epoch(&self) -> EpochId {
+    fn get_current_epoch_id(&self) -> EpochId {
         self.qd.current_epoch()
     }
 
@@ -580,7 +580,7 @@ impl ValidatorProxy for FullNodeProxy {
         self.committee.clone()
     }
 
-    fn get_current_epoch(&self) -> EpochId {
+    fn get_current_epoch_id(&self) -> EpochId {
         self.committee.epoch
     }
 
