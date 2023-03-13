@@ -7,6 +7,9 @@ module sui::groth16 {
     // Error for input is not a valid Arkwork representation of a verifying key.
     const EInvalidVerifyingKey: u64 = 0;
 
+    // Error if the given curve is not supported
+    const EInvalidCurve: u64 = 1;
+
     /// A `PreparedVerifyingKey` consisting of four components in serialized form.
     struct PreparedVerifyingKey has store, copy, drop {
         vk_gamma_abc_g1_bytes: vector<u8>,
@@ -55,20 +58,23 @@ module sui::groth16 {
         ProofPoints { bytes }
     }
 
+    /// @param curve: What elliptic curve construction to use where 0 => BLS12-831 and 1 => BN254.
     /// @param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
     ///
     /// Returns four vectors of bytes representing the four components of a prepared verifying key.
     /// This step computes one pairing e(P, Q), and binds the verification to one particular proof statement.
     /// This can be used as inputs for the `verify_groth16_proof` function.
-    public native fun prepare_verifying_key(verifying_key: &vector<u8>): PreparedVerifyingKey;
+    public native fun prepare_verifying_key(curve: u8, verifying_key: &vector<u8>): PreparedVerifyingKey;
 
+    /// @param curve: What elliptic curve construction to use where 0 => BLS12-831 and 1 => BN254.
     /// @param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
     /// @param public_proof_inputs: Represent inputs that are public.
     /// @param proof_points: Represent three proof points.
     ///
     /// Returns a boolean indicating whether the proof is valid.
-    public fun verify_groth16_proof(prepared_verifying_key: &PreparedVerifyingKey, public_proof_inputs: &PublicProofInputs, proof_points: &ProofPoints): bool {
+    public fun verify_groth16_proof(curve: u8, prepared_verifying_key: &PreparedVerifyingKey, public_proof_inputs: &PublicProofInputs, proof_points: &ProofPoints): bool {
         verify_groth16_proof_internal(
+            curve,
             &prepared_verifying_key.vk_gamma_abc_g1_bytes,
             &prepared_verifying_key.alpha_g1_beta_g2_bytes,
             &prepared_verifying_key.gamma_g2_neg_pc_bytes,
@@ -79,5 +85,5 @@ module sui::groth16 {
     }
 
     /// Native functions that flattens the inputs into arrays of vectors and passed to the Rust native function.
-    public native fun verify_groth16_proof_internal(vk_gamma_abc_g1_bytes: &vector<u8>, alpha_g1_beta_g2_bytes: &vector<u8>, gamma_g2_neg_pc_bytes: &vector<u8>, delta_g2_neg_pc_bytes: &vector<u8>, public_proof_inputs: &vector<u8>, proof_points: &vector<u8>): bool;
+    public native fun verify_groth16_proof_internal(curve: u8, vk_gamma_abc_g1_bytes: &vector<u8>, alpha_g1_beta_g2_bytes: &vector<u8>, gamma_g2_neg_pc_bytes: &vector<u8>, delta_g2_neg_pc_bytes: &vector<u8>, public_proof_inputs: &vector<u8>, proof_points: &vector<u8>): bool;
 }
