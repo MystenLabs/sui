@@ -511,7 +511,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_get_checkpoint() -> Result<(), anyhow::Error> {
+async fn test_get_checkpoints() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
