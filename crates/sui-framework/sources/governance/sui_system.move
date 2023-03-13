@@ -45,6 +45,9 @@ module sui::sui_system {
         /// - TODO validators with stake less than a 'validator_stake_threshold' are
         ///   kicked from the validator set
         governance_start_epoch: u64,
+
+        /// The duration of an epoch, in milliseconds.
+        epoch_duration_ms: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -147,6 +150,7 @@ module sui::sui_system {
         protocol_version: u64,
         system_state_version: u64,
         epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
         ctx: &mut TxContext,
     ) {
         let validators = validator_set::new(validators, ctx);
@@ -159,6 +163,7 @@ module sui::sui_system {
             storage_fund,
             parameters: SystemParameters {
                 governance_start_epoch,
+                epoch_duration_ms,
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),

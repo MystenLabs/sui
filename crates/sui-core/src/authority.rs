@@ -1583,7 +1583,6 @@ impl AuthorityState {
         prometheus_registry: &Registry,
         pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
-        epoch_duration_ms: u64,
         db_checkpoint_config: &DBCheckpointConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
@@ -1605,7 +1604,7 @@ impl AuthorityState {
             checkpoint_store.clone(),
             store.objects_lock_table.clone(),
             pruning_config,
-            epoch_duration_ms,
+            epoch_store.epoch_start_state().epoch_duration_ms(),
         );
         let state = Arc::new(AuthorityState {
             name,
@@ -1713,7 +1712,6 @@ impl AuthorityState {
             &registry,
             AuthorityStorePruningConfig::default(),
             genesis.objects(),
-            10000,
             &DBCheckpointConfig::default(),
         )
         .await;

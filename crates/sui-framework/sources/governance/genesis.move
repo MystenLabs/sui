@@ -44,6 +44,7 @@ module sui::genesis {
         protocol_version: u64,
         system_state_version: u64,
         epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
@@ -115,6 +116,7 @@ module sui::genesis {
             protocol_version,
             system_state_version,
             epoch_start_timestamp_ms,
+            epoch_duration_ms,
             ctx,
         );
 

@@ -279,6 +279,7 @@ storage_fund:
   value: 0
 parameters:
   governance_start_epoch: 0
+  epoch_duration_ms: 10000
 reference_gas_price: 1
 validator_report_records:
   contents: []

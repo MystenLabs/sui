@@ -2898,7 +2898,6 @@ async fn test_authority_persist() {
             &registry,
             AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
-            10000,
             &DBCheckpointConfig::default(),
         )
         .await

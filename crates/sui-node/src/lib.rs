@@ -278,7 +278,6 @@ impl SuiNode {
             &prometheus_registry,
             config.authority_store_pruning_config,
             genesis.objects(),
-            config.epoch_duration_ms,
             &db_checkpoint_config,
         )
         .await;
@@ -646,21 +645,21 @@ impl SuiNode {
         accumulator: Arc<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> (Arc<CheckpointService>, watch::Sender<()>) {
+        let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
+        let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
+
         debug!(
             "Starting checkpoint service with epoch start timestamp {}
             and epoch duration {}",
-            epoch_store.epoch_start_state().epoch_start_timestamp_ms(),
-            config.epoch_duration_ms
+            epoch_start_timestamp_ms, epoch_duration_ms
         );
 
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {
             sender: consensus_adapter,
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
-            next_reconfiguration_timestamp_ms: epoch_store
-                .epoch_start_state()
-                .epoch_start_timestamp_ms()
-                .checked_add(config.epoch_duration_ms)
+            next_reconfiguration_timestamp_ms: epoch_start_timestamp_ms
+                .checked_add(epoch_duration_ms)
                 .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
             metrics: checkpoint_metrics.clone(),
         });

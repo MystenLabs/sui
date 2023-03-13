@@ -339,9 +339,9 @@ async fn genesis(
     }
 
     let validator_info = genesis_conf.validator_config_info.take();
-    let mut builder = ConfigBuilder::new(sui_config_dir);
+    let builder = ConfigBuilder::new(sui_config_dir);
     if let Some(epoch_duration_ms) = epoch_duration_ms {
-        builder = builder.with_epoch_duration(epoch_duration_ms);
+        genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
     let mut network_config = if let Some(validators) = validator_info {
         builder

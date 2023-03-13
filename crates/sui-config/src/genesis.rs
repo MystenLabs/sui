@@ -409,6 +409,10 @@ pub struct GenesisChainParameters {
     ///   kicked from the validator set
     #[serde(default)]
     pub governance_start_epoch: u64,
+
+    /// The duration of an epoch, in milliseconds.
+    #[serde(default = "GenesisChainParameters::test_epoch_duration_ms")]
+    pub epoch_duration_ms: u64,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
@@ -421,6 +425,7 @@ impl GenesisChainParameters {
             initial_sui_custody_account_address: SuiAddress::default(),
             initial_validator_stake_mist: Self::test_initial_validator_stake_mist(),
             governance_start_epoch: 0,
+            epoch_duration_ms: Self::test_epoch_duration_ms(),
         }
     }
 
@@ -437,6 +442,10 @@ impl GenesisChainParameters {
 
     fn test_initial_validator_stake_mist() -> u64 {
         sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI
+    }
+
+    fn test_epoch_duration_ms() -> u64 {
+        10000
     }
 }
 
@@ -1129,6 +1138,7 @@ pub fn generate_genesis_system_object(
                     CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&parameters.epoch_duration_ms).unwrap()),
                 ],
             )
             .unwrap();

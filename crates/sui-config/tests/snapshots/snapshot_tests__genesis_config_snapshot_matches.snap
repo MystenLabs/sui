@@ -10,6 +10,7 @@ parameters:
   initial_sui_custody_account_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
   initial_validator_stake_mist: 25000000000000000
   governance_start_epoch: 0
+  epoch_duration_ms: 10000
 committee_size: 4
 grpc_load_shed: ~
 grpc_concurrency_limit: 20000000000
