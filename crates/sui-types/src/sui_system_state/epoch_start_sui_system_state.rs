@@ -133,9 +133,6 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .map(|validator| (validator.authority_name(), validator.voting_power))
             .collect();
         Committee::new(self.epoch, voting_rights)
-            // unwrap is safe because we should have verified the committee on-chain.
-            // MUSTFIX: Make sure we always have a valid committee.
-            .unwrap()
     }
 
     #[allow(clippy::mutable_key_type)]

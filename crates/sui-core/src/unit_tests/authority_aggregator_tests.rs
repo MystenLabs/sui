@@ -629,7 +629,7 @@ fn get_genesis_agg<A>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, authorities);
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -653,7 +653,7 @@ where
     A: Clone,
 {
     let mut agg = get_genesis_agg(authorities.clone(), clients);
-    let committee = Committee::new(epoch, authorities).unwrap();
+    let committee = Committee::new(epoch, authorities);
     agg.committee_store
         .insert_new_committee(&committee)
         .unwrap();
@@ -825,7 +825,7 @@ async fn test_handle_transaction_response() {
     println!("Case 2 - Retryable Transaction (WrongEpoch Error)");
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -879,7 +879,7 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1159,7 +1159,7 @@ async fn test_handle_transaction_response() {
 
     println!("Case 7.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store, now SafeClient will pass
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1731,7 +1731,7 @@ async fn test_handle_conflicting_transaction_response() {
 
     println!("Case 5.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store to epoch 2, now SafeClient will pass
-    let committee_2 = Committee::new(2, authorities.clone()).unwrap();
+    let committee_2 = Committee::new(2, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_2)
         .unwrap();
