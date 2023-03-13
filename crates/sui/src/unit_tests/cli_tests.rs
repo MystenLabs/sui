@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use expect_test::expect;
 use move_package::BuildConfig;
 use serde_json::json;
+use sui_types::object::Owner;
 use tokio::time::sleep;
 
 use sui::client_commands::SwitchResponse;
@@ -22,7 +23,8 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiTransactionEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -368,7 +370,20 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
 
     let package = if let SuiClientCommandResult::Publish(response) = resp {
-        response.effects.unwrap().created()[0].reference.object_id
+        response
+            .effects
+            .unwrap()
+            .created()
+            .iter()
+            .find(
+                |OwnedObjectRef {
+                     owner,
+                     reference: _,
+                 }| matches!(owner, Owner::Immutable),
+            )
+            .unwrap()
+            .reference
+            .object_id
     } else {
         unreachable!("Invalid response");
     };
