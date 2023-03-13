@@ -25,6 +25,15 @@ use tokio::{
 };
 use tracing::error;
 
+// Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
+const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
+
+// Maximum size of batch to verify. Increasing this value will slightly improve CPU utilization
+// (batching starts to hit steeply diminishing marginal returns around batch sizes of 16), at the
+// cost of slightly increasing latency (BATCH_TIMEOUT_MS will be hit more frequently if system is
+// not heavily loaded).
+const MAX_BATCH_SIZE: usize = 8;
+
 type Sender = oneshot::Sender<SuiResult<VerifiedCertificate>>;
 
 struct CertBuffer {
@@ -74,17 +83,21 @@ pub struct BatchCertificateVerifier {
 }
 
 impl BatchCertificateVerifier {
-    pub fn new(
+    pub fn new_with_batch_size(
         committee: Arc<Committee>,
-        capacity: usize,
+        batch_size: usize,
         metrics: Arc<BatchCertificateVerifierMetrics>,
     ) -> Self {
         Self {
             committee,
             cache: VerifiedCertificateCache::new(metrics.clone()),
-            queue: Mutex::new(CertBuffer::new(capacity)),
+            queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
         }
+    }
+
+    pub fn new(committee: Arc<Committee>, metrics: Arc<BatchCertificateVerifierMetrics>) -> Self {
+        Self::new_with_batch_size(committee, MAX_BATCH_SIZE, metrics)
     }
 
     /// Verifies all certs, returns Ok only if all are valid.
@@ -156,7 +169,7 @@ impl BatchCertificateVerifier {
             queue.id
         };
 
-        if let Ok(res) = timeout(Duration::from_millis(10), &mut rx).await {
+        if let Ok(res) = timeout(BATCH_TIMEOUT_MS, &mut rx).await {
             // unwrap ok - tx cannot have been dropped without sending a result.
             return res.unwrap();
         }

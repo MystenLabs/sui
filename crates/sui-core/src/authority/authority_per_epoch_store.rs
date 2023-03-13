@@ -373,7 +373,7 @@ impl AuthorityPerEpochStore {
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
         let batch_verifier =
-            BatchCertificateVerifier::new(committee.clone(), 8, batch_verifier_metrics);
+            BatchCertificateVerifier::new(committee.clone(), batch_verifier_metrics);
         Arc::new(Self {
             committee,
             protocol_config,

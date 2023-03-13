@@ -110,11 +110,7 @@ async fn test_async_verifier() {
 
     let registry = Registry::new();
     let metrics = BatchCertificateVerifierMetrics::new(&registry);
-    let verifier = Arc::new(BatchCertificateVerifier::new(
-        committee.clone(),
-        16,
-        metrics,
-    ));
+    let verifier = Arc::new(BatchCertificateVerifier::new(committee.clone(), metrics));
 
     let tasks: Vec<_> = (0..32)
         .into_iter()

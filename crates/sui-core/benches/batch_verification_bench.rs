@@ -72,7 +72,7 @@ fn async_verifier_bench(c: &mut Criterion) {
                         .enable_time()
                         .build()
                         .unwrap();
-                    let batch_verifier = Arc::new(BatchCertificateVerifier::new(
+                    let batch_verifier = Arc::new(BatchCertificateVerifier::new_with_batch_size(
                         committee.clone(),
                         batch_size,
                         metrics.clone(),
