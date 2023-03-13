@@ -12,5 +12,4 @@ created: object(107), object(108), object(109)
 written: object(106)
 
 task 3 'run'. lines 35-35:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::add (function index 0) at offset 15, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 0, instruction: 15, function_name: Some("add") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("sui::dynamic_field::add at offset 15"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: sui, name: Identifier("dynamic_object_field") }), FunctionDefinitionIndex(0), 9), (Some(ModuleId { address: a, name: Identifier("m") }), FunctionDefinitionIndex(1), 6)] }), location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 15)] }), command: Some(0) } }
+Error: Object 0x10657ef7b778bf4c19b3a32a445a7634f0388b82b53799c7deabda07d101d337 is owned by object 0xf2c06d97f4ad9da4a8a6cfb80dd73173302be0c6c245c62279a4bc86a366f33c. Objects owned by other objects cannot be used as input arguments.

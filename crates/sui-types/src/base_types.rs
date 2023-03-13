@@ -8,6 +8,7 @@ use crate::coin::LockedCoin;
 use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
+use crate::crypto::InternalHash;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
     SuiPublicKey, SuiSignature, UserHash,
@@ -50,6 +51,7 @@ use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shared_crypto::intent::HashingIntentScope;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -890,9 +892,8 @@ impl ObjectID {
     /// Create an ObjectID from `TransactionDigest` and `creation_num`.
     /// Caller is responsible for ensuring that `creation_num` is fresh
     pub fn derive_id(digest: TransactionDigest, creation_num: u64) -> Self {
-        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
-
-        let mut hasher = UserHash::default();
+        let mut hasher = InternalHash::default();
+        hasher.update([HashingIntentScope::RegularObjectId as u8]);
         hasher.update(digest);
         hasher.update(creation_num.to_le_bytes());
         let hash = hasher.finalize();
