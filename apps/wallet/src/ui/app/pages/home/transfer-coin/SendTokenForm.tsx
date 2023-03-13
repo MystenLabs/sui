@@ -260,6 +260,7 @@ export function SendTokenForm({
                                         </div>
 
                                         <InputWithAction
+                                            type="numberInput"
                                             name="amount"
                                             placeholder="0.00"
                                             prefix={
@@ -267,10 +268,9 @@ export function SendTokenForm({
                                             }
                                             actionText="Max"
                                             suffix={` ${symbol}`}
-                                            type="number"
                                             actionType="button"
                                             allowNegative={false}
-                                            allowDecimals
+                                            decimals
                                             rounded="lg"
                                             dark
                                             onActionClicked={() =>
