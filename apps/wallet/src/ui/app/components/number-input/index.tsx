@@ -13,6 +13,7 @@ export interface NumberInputProps<Values> extends FieldProps<string, Values> {
     decimals?: boolean;
     suffix?: string;
     prefix?: string;
+    autoFocus?: boolean;
 }
 
 function NumberInput<FormValues>({
@@ -25,6 +26,7 @@ function NumberInput<FormValues>({
     form: { isSubmitting, setFieldValue },
     prefix,
     suffix,
+    autoFocus,
 }: NumberInputProps<FormValues>) {
     const disabled =
         forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
@@ -44,6 +46,7 @@ function NumberInput<FormValues>({
                 onValueChange: (values) => setFieldValue(name, values.value),
                 prefix,
                 suffix,
+                autoFocus,
             }}
         />
     );

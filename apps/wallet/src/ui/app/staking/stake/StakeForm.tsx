@@ -91,6 +91,7 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                                 className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
                                 decimals
                                 suffix={` ${symbol}`}
+                                autoFocus
                             />
                             {!HIDE_MAX ? (
                                 <button
