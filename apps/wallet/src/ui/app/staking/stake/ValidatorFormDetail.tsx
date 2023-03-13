@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { calculateAPY } from '../calculateAPY';
+import { calculateStakeShare } from '../calculateStakeShare';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
@@ -38,7 +39,7 @@ export function ValidatorFormDetail({
     } = useSystemState();
 
     const {
-        data: allDelegation,
+        data: stakeData,
         isLoading,
         isError,
         error,
@@ -55,11 +56,27 @@ export function ValidatorFormDetail({
     const totalValidatorStake = validatorData?.stakingPoolSuiBalance || 0;
 
     const totalStake = useMemo(() => {
-        if (!allDelegation) return 0n;
-        return stakeIdParams
-            ? getStakeSuiBySuiId(allDelegation, stakeIdParams)
-            : getTokenStakeSuiForValidator(allDelegation, validatorAddress);
-    }, [allDelegation, stakeIdParams, validatorAddress]);
+        if (!stakeData) return 0n;
+        return unstake
+            ? getStakeSuiBySuiId(stakeData, stakeIdParams)
+            : getTokenStakeSuiForValidator(stakeData, validatorAddress);
+    }, [stakeData, stakeIdParams, unstake, validatorAddress]);
+
+    const totalValidatorsStake = useMemo(() => {
+        if (!system) return 0;
+        return system.activeValidators.reduce(
+            (acc, curr) => (acc += BigInt(curr.stakingPoolSuiBalance)),
+            0n
+        );
+    }, [system]);
+
+    const totalStakePercentage = useMemo(() => {
+        if (!system || !stakeData) return 0;
+        return calculateStakeShare(
+            getTokenStakeSuiForValidator(stakeData, validatorAddress),
+            BigInt(totalValidatorsStake)
+        );
+    }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;
@@ -92,7 +109,7 @@ export function ValidatorFormDetail({
                 <Card
                     titleDivider
                     header={
-                        <div className="flex py-2.5 gap-2 items-center">
+                        <div className="flex py-2.5 px-3.75 gap-2 items-center">
                             <ValidatorLogo
                                 validatorAddress={validatorAddress}
                                 iconSize="sm"
@@ -120,7 +137,7 @@ export function ValidatorFormDetail({
                     }
                 >
                     <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5">
-                        <div className="flex gap-2 items-center justify-between ">
+                        <div className="flex gap-2 items-center justify-between">
                             <div className="flex gap-1 items-baseline text-steel">
                                 <Text
                                     variant="body"
@@ -140,6 +157,29 @@ export function ValidatorFormDetail({
                                 {apy > 0 ? `${apy}%` : '--'}
                             </Text>
                         </div>
+                        <div className="flex gap-2 items-center justify-between">
+                            <div className="flex gap-1 items-baseline text-steel">
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    Staking Share
+                                </Text>
+                                <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
+                            </div>
+
+                            <Text
+                                variant="body"
+                                weight="semibold"
+                                color="gray-90"
+                            >
+                                {totalStakePercentage > 0
+                                    ? `${totalStakePercentage}%`
+                                    : '--'}
+                            </Text>
+                        </div>
+
                         {!unstake && (
                             <div className="flex gap-2 items-center justify-between mb-3.5">
                                 <div className="flex gap-1 items-baseline text-steel">

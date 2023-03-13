@@ -33,19 +33,25 @@ export function getEventsSummary(
         if (
             event.type === 'coinBalanceChange' &&
             event?.content?.changeType &&
-            ['Receive', 'Pay'].includes(event?.content?.changeType) &&
-            event?.content?.transactionModule !== 'gas'
+            ['Receive', 'Pay'].includes(event?.content?.changeType)
         ) {
             const coinBalanceChange = getCoinBalanceChangeEvent(event)!;
             const { coinType, amount, owner, sender } = coinBalanceChange;
-            const { AddressOwner } = owner as { AddressOwner: string };
+
+            const AddressOwner =
+                owner !== 'Immutable' && 'AddressOwner' in owner
+                    ? owner.AddressOwner
+                    : null;
 
             // ChangeEpoch txn includes coinBalanceChange event for other addresses
-            if (AddressOwner === address || address === sender) {
+            if (
+                AddressOwner === address ||
+                (address === sender && AddressOwner)
+            ) {
                 coinsMeta[`${AddressOwner}${coinType}`] = {
                     amount:
                         (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
-                        amount,
+                        +amount,
                     coinType: coinType,
                     receiverAddress: AddressOwner,
                 };

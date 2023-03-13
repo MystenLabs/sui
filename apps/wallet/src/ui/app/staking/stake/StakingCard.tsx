@@ -83,6 +83,8 @@ function StakingCard() {
     const suiEarned = stakeData?.estimatedReward || 0;
 
     const [coinDecimals] = useCoinDecimals(coinType);
+    // set minimum stake amount to 1 SUI
+    const minimumStake = parseAmount('1', coinDecimals);
 
     const validationSchema = useMemo(
         () =>
@@ -90,9 +92,10 @@ function StakingCard() {
                 coinBalance,
                 coinSymbol,
                 coinDecimals,
-                unstake
+                unstake,
+                minimumStake
             ),
-        [coinBalance, coinSymbol, coinDecimals, unstake]
+        [coinBalance, coinSymbol, coinDecimals, unstake, minimumStake]
     );
 
     const queryClient = useQueryClient();
@@ -124,14 +127,8 @@ function StakingCard() {
         },
     });
     const unStakeToken = useMutation({
-        mutationFn: async ({
-            delegationId,
-            stakeSuId,
-        }: {
-            delegationId: string;
-            stakeSuId: string;
-        }) => {
-            if (!delegationId || !stakeSuId || !signer) {
+        mutationFn: async ({ stakeSuId }: { stakeSuId: string }) => {
+            if (!stakeSuId || !signer) {
                 throw new Error(
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
                 );
@@ -139,7 +136,7 @@ function StakingCard() {
 
             trackEvent('Unstake');
 
-            return Coin.unStakeCoin(signer, delegationId, stakeSuId);
+            return Coin.unStakeCoin(signer, stakeSuId);
         },
     });
 
@@ -165,7 +162,6 @@ function StakingCard() {
                         return;
                     }
                     response = await unStakeToken.mutateAsync({
-                        delegationId: stakeData.stakedSuiId,
                         stakeSuId: stakeSuiIdParams,
                     });
 
@@ -258,6 +254,7 @@ function StakingCard() {
                                         coinBalance={totalTokenBalance}
                                         coinType={coinType}
                                         stakingReward={suiEarned}
+                                        epoch={system?.epoch || 0}
                                     />
                                 ) : (
                                     <StakeForm
