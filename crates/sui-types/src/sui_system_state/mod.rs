@@ -64,6 +64,7 @@ pub trait SuiSystemStateTrait {
     fn protocol_version(&self) -> u64;
     fn system_state_version(&self) -> u64;
     fn epoch_start_timestamp_ms(&self) -> u64;
+    fn epoch_duration_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
     fn into_epoch_start_state(self) -> EpochStartSystemState;

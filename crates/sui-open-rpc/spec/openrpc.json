@@ -6233,6 +6233,7 @@
           "activeValidators",
           "atRiskValidators",
           "epoch",
+          "epochDurationMs",
           "epochStartTimestampMs",
           "governanceStartEpoch",
           "inactivePoolsId",
@@ -6284,6 +6285,12 @@
           },
           "epoch": {
             "description": "The current epoch ID, starting from 0.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epochDurationMs": {
+            "description": "The duration of an epoch, in milliseconds.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

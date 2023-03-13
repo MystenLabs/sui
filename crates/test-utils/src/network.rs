@@ -207,7 +207,6 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    epoch_duration_ms: Option<u64>,
     initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
     db_checkpoint_config_validators: DBCheckpointConfig,
@@ -222,7 +221,6 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            epoch_duration_ms: None,
             initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
@@ -274,7 +272,11 @@ impl TestClusterBuilder {
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
-        self.epoch_duration_ms = Some(epoch_duration_ms);
+        let mut genesis_config = self
+            .genesis_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        genesis_config.parameters.epoch_duration_ms = epoch_duration_ms;
+        self.genesis_config = Some(genesis_config);
         self
     }
 
@@ -363,10 +365,6 @@ impl TestClusterBuilder {
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.initial_accounts_config(genesis_config);
-        }
-
-        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
-            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         let mut swarm = builder.build();

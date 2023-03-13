@@ -68,6 +68,7 @@ module sui::governance_test_utils {
             1, // protocol version
             1, // system state version
             0, // epoch_start_timestamp_ms
+            42, // epoch_duration_ms, doesn't matter what number we put here
             ctx,
         )
     }

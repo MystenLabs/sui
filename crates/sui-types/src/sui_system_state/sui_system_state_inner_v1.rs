@@ -35,6 +35,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 #[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
+    pub epoch_duration_ms: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -445,6 +446,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         self.epoch_start_timestamp_ms
     }
 
+    fn epoch_duration_ms(&self) -> u64 {
+        self.parameters.epoch_duration_ms
+    }
+
     fn safe_mode(&self) -> bool {
         self.safe_mode
     }
@@ -479,6 +484,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             self.reference_gas_price,
             self.safe_mode,
             self.epoch_start_timestamp_ms,
+            self.parameters.epoch_duration_ms,
             self.validators
                 .active_validators
                 .iter()
@@ -542,9 +548,11 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         },
                 },
             storage_fund,
-            parameters: SystemParametersV1 {
-                governance_start_epoch,
-            },
+            parameters:
+                SystemParametersV1 {
+                    governance_start_epoch,
+                    epoch_duration_ms,
+                },
             reference_gas_price,
             validator_report_records:
                 VecMap {
@@ -568,6 +576,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             safe_mode,
             epoch_start_timestamp_ms,
             governance_start_epoch,
+            epoch_duration_ms,
             stake_subsidy_epoch_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
             stake_subsidy_current_epoch_amount,
@@ -618,6 +627,7 @@ impl Default for SuiSystemStateInnerV1 {
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {
                 governance_start_epoch: 0,
+                epoch_duration_ms: 10000,
             },
             reference_gas_price: 1,
             validator_report_records: VecMap { contents: vec![] },
