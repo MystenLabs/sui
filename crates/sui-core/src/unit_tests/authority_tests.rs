@@ -3920,6 +3920,7 @@ async fn test_iter_live_object_set() {
         &sender_key,
         &gas,
         "object_wrapping",
+        /* with_unpublished_deps */ false,
     )
     .await;
 

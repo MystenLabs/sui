@@ -43,22 +43,15 @@ async fn test_publishing_with_unpublished_deps() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let effects = build_and_try_publish_test_package(
+    let package = build_and_publish_test_package(
         &authority,
         &sender,
         &sender_key,
         &gas,
         "depends_on_basics",
-        MAX_GAS,
         /* with_unpublished_deps */ true,
     )
-    .await
-    .1
-    .into_data();
-
-    assert!(effects.status().is_ok());
-    assert_eq!(effects.created().len(), 2);
-    let package = effects.created()[0].0;
+    .await;
 
     let ObjectRead::Exists(read_ref, package_obj, _) = authority
         .get_object_read(&package.0)
@@ -162,7 +155,7 @@ async fn test_publish_duplicate_modules() {
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     // empty package
-    let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ true);
+    let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ false);
     assert_eq!(modules.len(), 1);
     modules.push(modules[0].clone());
     let data =
@@ -188,9 +181,15 @@ async fn test_object_wrapping_unwrapping() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_wrapping")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_wrapping",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     let gas_version = authority.get_object(&gas).await.unwrap().unwrap().version();
     let create_child_version = SequenceNumber::lamport_increment([gas_version]);
@@ -390,9 +389,15 @@ async fn test_object_owning_another_object() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent.
     let effects = call_move(
@@ -639,9 +644,15 @@ async fn test_create_then_delete_parent_child() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent and a child together
     let effects = call_move(
@@ -701,9 +712,15 @@ async fn test_create_then_delete_parent_child_wrap() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent and a child together
     let effects = call_move(
@@ -798,9 +815,15 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
-            .await;
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a parent.
     let effects = call_move(
@@ -918,6 +941,7 @@ async fn test_entry_point_vector_empty() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1028,6 +1052,7 @@ async fn test_entry_point_vector_primitive() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1067,6 +1092,7 @@ async fn test_entry_point_vector() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1187,6 +1213,7 @@ async fn test_entry_point_vector_error() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1446,6 +1473,7 @@ async fn test_entry_point_vector_any() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1569,6 +1597,7 @@ async fn test_entry_point_vector_any_error() {
         &sender_key,
         &gas,
         "entry_point_vector",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1830,6 +1859,7 @@ async fn test_entry_point_string() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1909,6 +1939,7 @@ async fn test_entry_point_string_vec() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -1967,6 +1998,7 @@ async fn test_entry_point_string_error() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -2051,6 +2083,7 @@ async fn test_entry_point_string_vec_error() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -2275,6 +2308,7 @@ pub async fn build_and_publish_test_package(
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
+    with_unpublished_deps: bool,
 ) -> ObjectRef {
     build_and_publish_test_package_with_upgrade_cap(
         authority,
@@ -2282,6 +2316,7 @@ pub async fn build_and_publish_test_package(
         sender_key,
         gas_object_id,
         test_dir,
+        with_unpublished_deps,
     )
     .await
     .0
@@ -2293,6 +2328,7 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
+    with_unpublished_deps: bool,
 ) -> (ObjectRef, ObjectRef) {
     let effects = build_and_try_publish_test_package(
         authority,
@@ -2301,7 +2337,7 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
         gas_object_id,
         test_dir,
         MAX_GAS,
-        /* with_unpublished_deps */ false,
+        with_unpublished_deps,
     )
     .await
     .1
