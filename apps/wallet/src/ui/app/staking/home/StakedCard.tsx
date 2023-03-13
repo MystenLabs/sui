@@ -45,7 +45,7 @@ interface DelegationObjectWithValidator extends StakeObject {
 
 const cardStyle = cva(
     [
-        'group flex no-underline flex-col p-3.75 pr-2 pt-3 box-border h-36 w-full rounded-2xl border border-solid ',
+        'group flex no-underline flex-col p-3.75 pr-2 pt-3 box-border h-36 w-full rounded-2xl border border-solid',
     ],
     {
         variants: {
@@ -112,7 +112,7 @@ function StakeCardContent({
 interface StakeCardProps {
     delegationObject: DelegationObjectWithValidator;
     currentEpoch: number;
-    inActiveValidator?: boolean;
+    inactiveValidator?: boolean;
 }
 
 // For delegationsRequestEpoch n  through n + 2, show Start Earning
@@ -120,7 +120,7 @@ interface StakeCardProps {
 export function StakeCard({
     delegationObject,
     currentEpoch,
-    inActiveValidator = false,
+    inactiveValidator = false,
 }: StakeCardProps) {
     const {
         stakedSuiId,
@@ -135,7 +135,7 @@ export function StakeCard({
     // Reward earning epoch is 2 epochs after stake request epoch
     const earningRewardsEpoch = stakeRequestEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
     const isEarnedRewards = currentEpoch >= earningRewardsEpoch;
-    const delegationState = inActiveValidator
+    const delegationState = inactiveValidator
         ? StakeState.IN_ACTIVE
         : isEarnedRewards
         ? StakeState.EARNING

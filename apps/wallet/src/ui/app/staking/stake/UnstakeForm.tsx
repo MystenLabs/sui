@@ -71,7 +71,7 @@ export function UnStakeForm({
                         >
                             Current Epoch Ends
                         </Text>
-                        <div className="flex gap-0.5 items-end">
+                        <div className="flex gap-0.5 ml-auto">
                             {currentEpochEndTime > 0 ? (
                                 <CountDownTimer
                                     timestamp={currentEpochEndTime}
@@ -96,7 +96,7 @@ export function UnStakeForm({
                         <Text variant="p2" weight="medium" color="steel-darker">
                             Total unstaked SUI
                         </Text>
-                        <div className="flex gap-0.5 items-end">
+                        <div className="flex gap-0.5 ml-auto">
                             <Heading
                                 variant="heading4"
                                 weight="semibold"

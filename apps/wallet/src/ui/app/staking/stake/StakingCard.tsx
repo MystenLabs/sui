@@ -84,7 +84,7 @@ function StakingCard() {
 
     const [coinDecimals] = useCoinDecimals(coinType);
     // set minimum stake amount to 1 SUI
-    const minimumStake = 1000000000;
+    const minimumStake = parseAmount('1', coinDecimals);
 
     const validationSchema = useMemo(
         () =>

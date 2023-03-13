@@ -10,7 +10,7 @@ export function createValidationSchema(
     coinSymbol: string,
     decimals: number,
     isUnstake: boolean,
-    minimumStake: number
+    minimumStake: bigint
 ) {
     return object({
         // NOTE: This is an intentional subset of the token validation:
