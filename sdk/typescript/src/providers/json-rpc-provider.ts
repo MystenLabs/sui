@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Provider } from './provider';
 import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   Coin,
@@ -111,7 +110,7 @@ const DEFAULT_OPTIONS: RpcProviderOptions = {
   versionCacheTimeoutInSeconds: 600,
 };
 
-export class JsonRpcProvider extends Provider {
+export class JsonRpcProvider {
   public connection: Connection;
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
@@ -128,8 +127,6 @@ export class JsonRpcProvider extends Provider {
     connection: Connection = devnetConnection,
     public options: RpcProviderOptions = DEFAULT_OPTIONS,
   ) {
-    super();
-
     this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };

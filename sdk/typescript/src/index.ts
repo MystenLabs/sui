@@ -9,7 +9,6 @@ export * from './cryptography/publickey';
 export * from './cryptography/mnemonics';
 export * from './cryptography/signature';
 
-export * from './providers/provider';
 export * from './providers/json-rpc-provider';
 
 export * from './rpc/client';

@@ -5,7 +5,7 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { Transaction } from '../builder';
 import { TransactionDataBuilder } from '../builder/TransactionData';
 import { SerializedSignature } from '../cryptography/signature';
-import { Provider } from '../providers/provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { HttpHeaders } from '../rpc/client';
 import {
   ExecuteTransactionRequestType,
@@ -24,7 +24,7 @@ import { SignedTransaction, SignedMessage } from './types';
 ///////////////////////////////
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
-  readonly provider: Provider;
+  readonly provider: JsonRpcProvider;
 
   ///////////////////
   // Sub-classes MUST implement these
@@ -39,7 +39,7 @@ export abstract class SignerWithProvider implements Signer {
 
   // Returns a new instance of the Signer, connected to provider.
   // This MAY throw if changing providers is not supported.
-  abstract connect(provider: Provider): SignerWithProvider;
+  abstract connect(provider: JsonRpcProvider): SignerWithProvider;
 
   ///////////////////
   // Sub-classes MAY override these
@@ -58,7 +58,7 @@ export abstract class SignerWithProvider implements Signer {
     );
   }
 
-  constructor(provider: Provider) {
+  constructor(provider: JsonRpcProvider) {
     this.provider = provider;
   }
 

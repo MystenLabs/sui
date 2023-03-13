@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Transaction } from '../builder';
-import { Provider } from '../providers/provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import {
   getObjectReference,
   normalizeSuiObjectId,
@@ -35,7 +35,7 @@ export class SuiSystemStateUtil {
    * @param gasBudget omittable only for DevInspect mode
    */
   public static async newRequestAddStakeTxn(
-    provider: Provider,
+    provider: JsonRpcProvider,
     coins: ObjectId[],
     amount: bigint,
     validatorAddress: SuiAddress,
