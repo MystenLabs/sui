@@ -31,15 +31,11 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey_bytes: Vec<u8>,
@@ -121,7 +117,7 @@ impl ValidatorMetadataV1 {
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
             .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
         // Also make sure that the p2p address is a valid anemo address.
-        // TODO: This will trigger a bunch of Move test failures today since we did not give proper
+        // MUSTFIX: This will trigger a bunch of Move test failures today since we did not give proper
         // value for p2p address.
         // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
         let primary_address = Multiaddr::try_from(self.primary_address.clone())
@@ -234,8 +230,6 @@ impl ValidatorMetadataV1 {
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "Validator")]
 pub struct ValidatorV1 {
     metadata: ValidatorMetadataV1,
     #[serde(skip)]
@@ -358,8 +352,6 @@ impl ValidatorV1 {
 
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
     pub activation_epoch: Option<u64>,
@@ -375,8 +367,6 @@ pub struct StakingPoolV1 {
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
@@ -416,8 +406,6 @@ impl SuiSystemStateInnerV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
     pub epoch_counter: u64,
     pub balance: Balance,
@@ -466,7 +454,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         CommitteeWithNetworkMetadata {
             committee: Committee::new(self.epoch, voting_rights)
                 // unwrap is safe because we should have verified the committee on-chain.
-                // TODO: Make sure we actually verify it.
+                // MUSTFIX: Make sure we always have a valid committee
                 .unwrap(),
             network_metadata,
         }

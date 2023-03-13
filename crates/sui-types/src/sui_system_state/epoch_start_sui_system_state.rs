@@ -125,7 +125,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .collect();
         Committee::new(self.epoch, voting_rights)
             // unwrap is safe because we should have verified the committee on-chain.
-            // TODO: Make sure we actually verify it.
+            // MUSTFIX: Make sure we always have a valid committee.
             .unwrap()
     }
 
