@@ -327,6 +327,7 @@ module sui::sui_system_tests {
         network_address: vector<u8>,
         p2p_address: vector<u8>,
         commission_rate: u64,
+        gas_price: u64,
     ) {
         let ctx = test_scenario::ctx(scenario);
         sui_system::update_validator_name(system_state, name, ctx);
@@ -347,6 +348,9 @@ module sui::sui_system_tests {
         sui_system::update_candidate_validator_network_pubkey(system_state, vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62], ctx);
 
         sui_system::set_candidate_validator_commission_rate(system_state, commission_rate, ctx);
+        let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
+        sui_system::set_candidate_validator_gas_price(system_state, &cap, gas_price);
+        test_scenario::return_to_sender(scenario, cap);
     }
 
 
@@ -357,7 +361,8 @@ module sui::sui_system_tests {
         pop: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
-        commission_rate: u64
+        commission_rate: u64,
+        gas_price: u64,
 
     ) {
         verify_current_epoch_metadata(
@@ -373,6 +378,7 @@ module sui::sui_system_tests {
             vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
         );
         assert!(validator::commission_rate(validator) == commission_rate, 0);
+        assert!(validator::gas_price(validator) == gas_price, 0);
 
     }
 
@@ -711,25 +717,28 @@ module sui::sui_system_tests {
         test_scenario::next_tx(scenario, validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         test_scenario::next_tx(scenario, validator_addr);
-        sui_system::request_add_validator_candidate_for_testing(
-            &mut system_state,
-            pubkey,
-            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
-            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-            pop,
-            b"ValidatorName2",
-            b"description2",
-            b"image_url2",
-            b"project_url2",
-            vector[4, 127, 0, 0, 2],
-            vector[4, 127, 0, 0, 2],
-            vector[4, 168, 168, 168, 168],
-            vector[4, 168, 168, 168, 168],
-            1,
-            0,
-            test_scenario::ctx(scenario),
-        );
+        {
+            sui_system::request_add_validator_candidate_for_testing(
+                &mut system_state,
+                pubkey,
+                vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+                vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+                pop,
+                b"ValidatorName2",
+                b"description2",
+                b"image_url2",
+                b"project_url2",
+                vector[4, 127, 0, 0, 2],
+                vector[4, 127, 0, 0, 2],
+                vector[4, 168, 168, 168, 168],
+                vector[4, 168, 168, 168, 168],
+                1,
+                0,
+                test_scenario::ctx(scenario),
+            );
+        };
 
+        test_scenario::next_tx(scenario, validator_addr);
         update_candidate(
             scenario,
             &mut system_state,
@@ -739,7 +748,10 @@ module sui::sui_system_tests {
             vector[4, 42, 42, 42, 42],
             vector[4, 43, 43, 43, 43],
             42,
+            7,
         );
+
+        test_scenario::next_tx(scenario, validator_addr);
 
         let validator = sui_system::candidate_validator_by_address(&system_state, validator_addr);
         verify_candidate(
@@ -749,7 +761,8 @@ module sui::sui_system_tests {
             pop1,
             vector[4, 42, 42, 42, 42],
             vector[4, 43, 43, 43, 43],
-            42
+            42,
+            7,
         );
 
 
