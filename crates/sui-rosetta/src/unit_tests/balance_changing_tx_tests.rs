@@ -134,7 +134,7 @@ async fn test_publish_and_move_call() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish_immutable(compiled_module, dependencies);
+        builder.publish_immutable(compiled_modules_bytes, dependencies);
         builder.finish()
     };
     let response =
