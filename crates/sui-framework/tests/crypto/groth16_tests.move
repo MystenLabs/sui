@@ -5,10 +5,12 @@
 module sui::groth16_tests {
     use sui::groth16;
     use std::vector;
-      #[test]
+    use sui::groth16::{bls12381, bn254};
+
+    #[test]
     fun test_prepare_verifying_key_bls12381() {
         let vk = x"a84d039ad1ae98eeeee4c8ba9af9b6c5d1cfcb98c3fc92ccfcebd77bcccffa1d170d39da29e9b4aa83b98680cb90bb25946b2b70f9e3565510c5361d5d65cb458a0b3177d612dd340b8f8f8493c2772454e3e8f577a3f77865df851d1a159b800c2ec5bae889029fc419678e83dee900465d60e7ef26f614940e719c6f7c0c7db57464fa0481a93c18d52cb2fbf8dcf0a398b153643614fc1071a54e288edb6402f1d9e00d3408c76d95c16885cc992dff5c6ebee3b739cb22359ab2d126026a1626c43ea7b898a7c1d2904c1bd4bbce5d0b1b16fab8535a52d1b08a5217df2e912ee1b0f4140892afa31d479f78dfbc82ab58a209ad00df6c86ab14841e8daa7a380a6853f28bacf38aad9903b6149fff4b119dea16de8aa3e5050b9d563a01009e061a950c233f66511c8fae2a8c58503059821df7f6defbba8f93d26e412cc07b66a9f3cdd740cce5c8488ce94fc8020000000000000081aabea18713222ac45a6ef3208a09f55ce2dde8a11cc4b12788be2ae77ae318176d631d36d80942df576af651b57a31a95f2e9bcaebbb53a588251634715599f7a7e9d51fe872fe312edf0b39d98f0d7f8b5554f96f759c041ea38b4b1e5e19";
-        let arr = groth16::pvk_to_bytes(groth16::prepare_verifying_key(0, &vk));
+        let arr = groth16::pvk_to_bytes(groth16::prepare_verifying_key(bls12381(), &vk));
 
         let expected_vk_bytes = x"81aabea18713222ac45a6ef3208a09f55ce2dde8a11cc4b12788be2ae77ae318176d631d36d80942df576af651b57a31a95f2e9bcaebbb53a588251634715599f7a7e9d51fe872fe312edf0b39d98f0d7f8b5554f96f759c041ea38b4b1e5e19";
         let expected_alpha_bytes = x"097ca8074c7f1d661e25d70fc2e6f14aa874dabe3d8a5d7751a012a737d30b59fc0f5f6d4ce0ea6f6c4562912dfb2a1442df06f9f0b8fc2d834ca007c8620823926b2fc09367d0dfa9b205a216921715e13deedd93580c77cae413cbb83134051cb724633c58759c77e4eda4147a54b03b1f443b68c65247166465105ab5065847ae61ba9d8bdfec536212b0dadedc042dab119d0eeea16349493a4118d481761b1e75f559fbad57c926d599e81d98dde586a2cfcc37b49972e2f9db554e5a0ba56bec2d57a8bfed629ae29c95002e3e943311b7b0d1690d2329e874b179ce5d720bd7c5fb5a2f756b37e3510582cb0c0f8fc8047305fc222c309a5a8234c5ff31a7b311aabdcebf4a43d98b69071a9e5796372146f7199ba05f9ca0a3d14b0c421e7f1bd02ac87b365fd8ce992c0f87994d0ca66f75c72fed0ce94ca174fcb9e5092f0474e07e71e9fd687b3daa441193f264ca2059760faa9c5ca5ef38f6ecefef2ac7d8c47df67b99c36efa64f625fe3f55f40ad1865abbdf2ff4c3fc3a162e28b953f6faec70a6a61c76f4dca1eecc86544b88352994495ae7fc7a77d387880e59b2357d9dd1277ae7f7ee9ba00b440e0e6923dc3971de9050a977db59d767195622f200f2bf0d00e4a986e94a6932627954dd2b7da39b4fcb32c991a0190bdc44562ad83d34e0af7656b51d6cde03530b5d523380653130b87346720ad6dd425d8133ffb02f39a95fc70e9707181ecb168bd8d2d0e9e85e262255fecab15f1ada809ecbefa42a7082fa7326a1d494261a8954fe5b215c5b761fb10b7f18";
@@ -32,7 +34,7 @@ module sui::groth16_tests {
     #[expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
     fun test_prepare_verifying_key_invalid_bls12381() {
         let invalid_vk = x"";
-        groth16::prepare_verifying_key(0, &invalid_vk);
+        groth16::prepare_verifying_key(bls12381(), &invalid_vk);
     }
 
     #[test]
@@ -50,20 +52,20 @@ module sui::groth16_tests {
         let proof_bytes = x"a29981304df8e0f50750b558d4de59dbc8329634b81c986e28e9fff2b0faa52333b14a1f7b275b029e13499d1f5dd8ab955cf5fa3000a097920180381a238ce12df52207597eade4a365a6872c0a19a39c08a9bfb98b69a15615f90cc32660180ca32e565c01a49b505dd277713b1eae834df49643291a3601b11f56957bde02d5446406d0e4745d1bd32c8ccb8d8e80b877712f5f373016d2ecdeebb58caebc7a425b8137ebb1bd0c5b81c1d48151b25f0f24fe9602ba4e403811fb17db6f14";
         let proof = groth16::proof_points_from_bytes(proof_bytes);
 
-        assert!(groth16::verify_groth16_proof(0, &pvk, &inputs, &proof) == true, 0);
+        assert!(groth16::verify_groth16_proof(bls12381(), &pvk, &inputs, &proof) == true, 0);
 
         // Invalid prepared verifying key.
         vector::pop_back(&mut vk_bytes);
         let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
-        assert!(groth16::verify_groth16_proof(0, &invalid_pvk, &inputs, &proof) == false, 0);
+        assert!(groth16::verify_groth16_proof(bls12381(), &invalid_pvk, &inputs, &proof) == false, 0);
 
         // Invalid public inputs bytes.
         let invalid_inputs = groth16::public_proof_inputs_from_bytes(x"cf");
-        assert!(groth16::verify_groth16_proof(0, &pvk, &invalid_inputs, &proof) == false, 0);
+        assert!(groth16::verify_groth16_proof(bls12381(), &pvk, &invalid_inputs, &proof) == false, 0);
 
         // Invalid proof bytes.
         let invalid_proof = groth16::proof_points_from_bytes(x"4a");
-        assert!(groth16::verify_groth16_proof(0, &pvk, &inputs, &invalid_proof) == false, 0);
+        assert!(groth16::verify_groth16_proof(bls12381(), &pvk, &inputs, &invalid_proof) == false, 0);
     }
 
     #[test]
@@ -93,7 +95,7 @@ module sui::groth16_tests {
     #[expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
     fun test_prepare_verifying_key_invalid_bn254() {
         let invalid_vk = x"";
-        groth16::prepare_verifying_key(1, &invalid_vk);
+        groth16::prepare_verifying_key(bn254(), &invalid_vk);
     }
 
     #[test]
@@ -111,20 +113,20 @@ module sui::groth16_tests {
         let proof_bytes = x"dd2ef02e57d6a282df6b7f36c134ab7e55c2e04c5b8cbd7831be18e0e7224623ae8bd6c41637c10cbd02f5e68de6394461f417895ddd264d6f0ddacf68c6cd02feb8881f0efa599139a6faf4223dd8743777c4346cba52322eb466af96f2be9f813af1450f84d6f8029804f60cac1add70ad1a3d4226404f84f4022dc18caa0f";
         let proof = groth16::proof_points_from_bytes(proof_bytes);
 
-        assert!(groth16::verify_groth16_proof(1, &pvk, &inputs, &proof) == true, 0);
+        assert!(groth16::verify_groth16_proof(bn254(), &pvk, &inputs, &proof) == true, 0);
 
         // Invalid prepared verifying key.
         vector::pop_back(&mut vk_bytes);
         let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
-        assert!(groth16::verify_groth16_proof(1, &invalid_pvk, &inputs, &proof) == false, 0);
+        assert!(groth16::verify_groth16_proof(bn254(), &invalid_pvk, &inputs, &proof) == false, 0);
 
         // Invalid public inputs bytes.
         let invalid_inputs = groth16::public_proof_inputs_from_bytes(x"cf");
-        assert!(groth16::verify_groth16_proof(1, &pvk, &invalid_inputs, &proof) == false, 0);
+        assert!(groth16::verify_groth16_proof(bn254(), &pvk, &invalid_inputs, &proof) == false, 0);
 
         // Invalid proof bytes.
         let invalid_proof = groth16::proof_points_from_bytes(x"4a");
-        assert!(groth16::verify_groth16_proof(1, &pvk, &inputs, &invalid_proof) == false, 0);
+        assert!(groth16::verify_groth16_proof(bn254(), &pvk, &inputs, &invalid_proof) == false, 0);
     }
 
     #[test]

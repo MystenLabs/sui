@@ -9,6 +9,8 @@
 -  [Struct `PublicProofInputs`](#0x2_groth16_PublicProofInputs)
 -  [Struct `ProofPoints`](#0x2_groth16_ProofPoints)
 -  [Constants](#@Constants_0)
+-  [Function `bls12381`](#0x2_groth16_bls12381)
+-  [Function `bn254`](#0x2_groth16_bn254)
 -  [Function `pvk_from_bytes`](#0x2_groth16_pvk_from_bytes)
 -  [Function `pvk_to_bytes`](#0x2_groth16_pvk_to_bytes)
 -  [Function `public_proof_inputs_from_bytes`](#0x2_groth16_public_proof_inputs_from_bytes)
@@ -146,6 +148,58 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 </code></pre>
 
 
+
+<a name="0x2_groth16_bls12381"></a>
+
+## Function `bls12381`
+
+Return the value indicating that the BLS12-381 construction should be used in a given function.
+This should be given as the first parameter to <code>prepare_verifying_key</code> or <code>verify_groth16_proof</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): u8 {
+    0
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_groth16_bn254"></a>
+
+## Function `bn254`
+
+Return the value indicating that the BN254 construction should be used in a given function.
+This should be given as the first parameter to <code>prepare_verifying_key</code> or <code>verify_groth16_proof</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): u8 {
+    1
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="0x2_groth16_pvk_from_bytes"></a>
 

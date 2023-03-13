@@ -10,6 +10,14 @@ module sui::groth16 {
     // Error if the given curve is not supported
     const EInvalidCurve: u64 = 1;
 
+    /// Return the value indicating that the BLS12-381 construction should be used in a given function.
+    /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
+    public fun bls12381(): u8 { 0 }
+
+    /// Return the value indicating that the BN254 construction should be used in a given function.
+    /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
+    public fun bn254(): u8 { 1 }
+
     /// A `PreparedVerifyingKey` consisting of four components in serialized form.
     struct PreparedVerifyingKey has store, copy, drop {
         vk_gamma_abc_g1_bytes: vector<u8>,
@@ -58,7 +66,7 @@ module sui::groth16 {
         ProofPoints { bytes }
     }
 
-    /// @param curve: What elliptic curve construction to use where 0 => BLS12-831 and 1 => BN254.
+    /// @param curve: What elliptic curve construction to use. See `bls12381` and `bn254`.
     /// @param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
     ///
     /// Returns four vectors of bytes representing the four components of a prepared verifying key.
@@ -66,7 +74,7 @@ module sui::groth16 {
     /// This can be used as inputs for the `verify_groth16_proof` function.
     public native fun prepare_verifying_key(curve: u8, verifying_key: &vector<u8>): PreparedVerifyingKey;
 
-    /// @param curve: What elliptic curve construction to use where 0 => BLS12-831 and 1 => BN254.
+    /// @param curve: What elliptic curve construction to use. See `bls12381` and `bn254`.
     /// @param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
     /// @param public_proof_inputs: Represent inputs that are public.
     /// @param proof_points: Represent three proof points.
