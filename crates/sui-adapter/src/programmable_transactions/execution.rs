@@ -19,6 +19,7 @@ use move_vm_runtime::{
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
+use serde::de::DeserializeSeed;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{
@@ -1163,7 +1164,10 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
                 deserializer.deserialize_string(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::Option(layout) | SpecialArgumentLayout::Vector(layout) => {
+            SpecialArgumentLayout::Option(layout) => {
+                deserializer.deserialize_option(OptionElementVisitor(layout))
+            }
+            SpecialArgumentLayout::Vector(layout) => {
                 deserializer.deserialize_seq(VectorElementVisitor(layout))
             }
         }
@@ -1185,6 +1189,30 @@ impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
     {
         while seq.next_element_seed(self.0)?.is_some() {}
         Ok(())
+    }
+}
+
+struct OptionElementVisitor<'a>(&'a SpecialArgumentLayout);
+
+impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Option")
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(())
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        self.0.deserialize(deserializer)
     }
 }
 
