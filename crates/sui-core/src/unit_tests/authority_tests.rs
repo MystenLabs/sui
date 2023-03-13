@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use crate::{
-    authority::move_integration_tests::build_and_publish_test_package,
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
@@ -3914,9 +3914,14 @@ async fn test_iter_live_object_set() {
         .await
         .unwrap();
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_wrapping")
-            .await;
+    let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_wrapping",
+    )
+    .await;
 
     // Create a Child object.
     let effects = call_move(
@@ -4044,6 +4049,7 @@ async fn test_iter_live_object_set() {
             (package.0, package.1),
             (gas, SequenceNumber::from_u64(8)),
             (obj_id, SequenceNumber::from_u64(2)),
+            (upgrade_cap.0, upgrade_cap.1),
         ],
     );
 }

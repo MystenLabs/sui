@@ -317,7 +317,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let cap = builder.publish_upgradeable(vec![module_bytes]);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish(vec![module_bytes]);
+                builder.publish_immutable(vec![module_bytes]);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
