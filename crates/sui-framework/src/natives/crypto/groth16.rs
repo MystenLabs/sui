@@ -114,6 +114,6 @@ pub fn verify_groth16_proof_internal(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::bool(result.unwrap_or(false))]
+        smallvec![Value::bool(result.unwrap_or(false))],
     ))
 }
