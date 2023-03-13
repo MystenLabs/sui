@@ -366,19 +366,6 @@ This can be used as inputs for the <code>verify_groth16_proof</code> function.
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_groth16_prepare_verifying_key_internal"></a>
 
 ## Function `prepare_verifying_key_internal`
@@ -396,6 +383,19 @@ Native functions that flattens the inputs into an array and passes to the Rust n
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key_internal">prepare_verifying_key_internal</a>(curve: u8, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

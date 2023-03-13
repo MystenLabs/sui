@@ -112,8 +112,8 @@ pub fn verify_groth16_proof_internal(
         return Ok(NativeResult::err(cost, INVALID_CURVE));
     }
 
-    match result {
-        Ok(res) => Ok(NativeResult::ok(cost, smallvec![Value::bool(res)])),
-        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    }
+    Ok(NativeResult::ok(cost, smallvec![Value::bool(match result {
+        Ok(res) => res,
+        Err(_) => false,
+    })]))
 }
