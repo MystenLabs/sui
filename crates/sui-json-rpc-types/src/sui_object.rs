@@ -23,8 +23,7 @@ use sui_types::base_types::{
 };
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::MoveModulePublish;
-use sui_types::move_package::{disassemble_modules, MovePackage};
+use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
 use sui_types::parse_sui_struct_tag;
 
@@ -835,15 +834,6 @@ impl SuiPastObjectResponse {
 #[serde(rename = "MovePackage", rename_all = "camelCase")]
 pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
-}
-
-impl From<MoveModulePublish> for SuiMovePackage {
-    fn from(m: MoveModulePublish) -> Self {
-        Self {
-            // In case of failed publish transaction, disassemble can fail, we can only return empty module map in that case.
-            disassembled: disassemble_modules(m.modules.iter()).unwrap_or_default(),
-        }
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]

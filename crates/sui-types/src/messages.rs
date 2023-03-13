@@ -35,13 +35,8 @@ use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_binary_format::CompiledModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
-    value::MoveStructLayout,
-};
+use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::Bytes;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
@@ -104,12 +99,6 @@ pub enum ObjectArg {
     },
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct TransferObject {
-    pub recipient: SuiAddress,
-    pub object_ref: ObjectRef,
-}
-
 fn type_tag_validity_check(
     tag: &TypeTag,
     config: &ProtocolConfig,
@@ -149,199 +138,6 @@ fn type_tag_validity_check(
         })?,
     };
     Ok(count)
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct MoveCall {
-    pub package: ObjectID,
-    pub module: Identifier,
-    pub function: Identifier,
-    pub type_arguments: Vec<TypeTag>,
-    pub arguments: Vec<CallArg>,
-}
-
-impl MoveCall {
-    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
-            self.package,
-            self.module.as_str(),
-            self.function.as_str(),
-        ));
-        fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
-        let mut type_arguments_count = 0;
-        for tag in self.type_arguments.iter() {
-            type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
-            fp_ensure!(
-                type_arguments_count < config.max_type_arguments() as usize,
-                UserInputError::SizeLimitExceeded {
-                    limit: "maximum type arguments in a call transaction".to_string(),
-                    value: config.max_type_arguments().to_string()
-                }
-            );
-        }
-        fp_ensure!(
-            self.arguments.len() < config.max_arguments() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum arguments in a move call".to_string(),
-                value: config.max_arguments().to_string()
-            }
-        );
-        for a in self.arguments.iter() {
-            a.validity_check(config)?;
-        }
-        Ok(())
-    }
-}
-
-#[serde_as]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct MoveModulePublish {
-    #[serde_as(as = "Vec<Bytes>")]
-    pub modules: Vec<Vec<u8>>,
-}
-
-impl MoveModulePublish {
-    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        fp_ensure!(
-            self.modules.len() < config.max_modules_in_publish() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum modules in a publish transaction".to_string(),
-                value: config.max_modules_in_publish().to_string()
-            }
-        );
-        Ok(())
-    }
-}
-
-// TODO: we can deprecate TransferSui when its callsites on RPC & SDK are
-// fully replaced by PaySui and PayAllSui.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct TransferSui {
-    pub recipient: SuiAddress,
-    pub amount: Option<u64>,
-}
-
-/// Send all SUI coins to one recipient.
-/// only for SUI coin and does not require a separate gas coin object either.
-/// Specifically, what pay_all_sui does are:
-/// 1. accumulate all SUI from input coins and deposit all SUI to the first input coin
-/// 2. transfer the updated first coin to the recipient and also use this first coin as
-/// gas coin object.
-/// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
-/// 4. all other input coins other than the first are deleted.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct PayAllSui {
-    /// The coins to be used for payment.
-    pub coins: Vec<ObjectRef>,
-    /// The address that will receive payment
-    pub recipient: SuiAddress,
-}
-
-impl PayAllSui {
-    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
-        fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
-        fp_ensure!(gas.len() == 1, UserInputError::UnexpectedGasPaymentObject);
-        fp_ensure!(
-            // unwrap() is safe because coins are not empty.
-            // gas is > 0 (validity_check) and == 1 (above)
-            self.coins.first().unwrap() == &gas[0],
-            UserInputError::UnexpectedGasPaymentObject
-        );
-        fp_ensure!(
-            self.coins.len() < config.max_coins() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum coins in a payment transaction".to_string(),
-                value: config.max_coins().to_string()
-            }
-        );
-        Ok(())
-    }
-}
-
-/// Send SUI coins to a list of addresses, following a list of amounts.
-/// only for SUI coin and does not require a separate gas coin object.
-/// Specifically, what pay_sui does are:
-/// 1. debit each input_coin to create new coin following the order of
-/// amounts and assign it to the corresponding recipient.
-/// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
-/// input coin, then use the first input coin as the gas coin object.
-/// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
-/// 4. all other input coins other than the first one are deleted.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct PaySui {
-    /// The coins to be used for payment.
-    pub coins: Vec<ObjectRef>,
-    /// The addresses that will receive payment
-    pub recipients: Vec<SuiAddress>,
-    /// The amounts each recipient will receive.
-    /// Must be the same length as recipients
-    pub amounts: Vec<u64>,
-}
-
-impl PaySui {
-    pub fn validity_check(&self, config: &ProtocolConfig, gas: &[ObjectRef]) -> UserInputResult {
-        fp_ensure!(!self.coins.is_empty(), UserInputError::EmptyInputCoins);
-        fp_ensure!(gas.len() == 1, UserInputError::UnexpectedGasPaymentObject);
-        fp_ensure!(
-            // unwrap() is safe because coins are not empty.
-            // gas is > 0 (validity_check) and == 1 (above)
-            self.coins.first().unwrap() == &gas[0],
-            UserInputError::UnexpectedGasPaymentObject
-        );
-        fp_ensure!(
-            self.coins.len() < config.max_coins() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum coins in a payment transaction".to_string(),
-                value: config.max_coins().to_string()
-            }
-        );
-        fp_ensure!(
-            self.recipients.len() <= config.max_pay_recipients() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum recipients in a payment transaction".to_string(),
-                value: config.max_pay_recipients().to_string()
-            }
-        );
-        // TODO: was this maybe missing a check for the following, or was
-        // it intentionally omitted?
-        // fp_ensure!(self.recipients.len() == self.amounts.len(), ...)
-        Ok(())
-    }
-}
-
-/// Pay each recipient the corresponding amount using the input coins
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct Pay {
-    /// The coins to be used for payment
-    pub coins: Vec<ObjectRef>,
-    /// The addresses that will receive payment
-    pub recipients: Vec<SuiAddress>,
-    /// The amounts each recipient will receive.
-    /// Must be the same length as recipients
-    pub amounts: Vec<u64>,
-}
-
-impl Pay {
-    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        fp_ensure!(
-            self.coins.len() < config.max_coins() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum coins in a payment transaction".to_string(),
-                value: config.max_coins().to_string()
-            }
-        );
-        fp_ensure!(
-            self.recipients.len() <= config.max_pay_recipients() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum recipients in a payment transaction".to_string(),
-                value: config.max_pay_recipients().to_string()
-            }
-        );
-        // TODO: was this maybe missing a check for the following, or was
-        // it intentionally omitted?
-        // fp_ensure!(self.recipients.len() == self.amounts.len(), ...)
-        Ok(())
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -481,27 +277,6 @@ impl ObjectArg {
     }
 }
 
-impl MoveCall {
-    pub fn input_objects(&self) -> Vec<InputObjectKind> {
-        let MoveCall {
-            arguments,
-            package,
-            type_arguments,
-            ..
-        } = self;
-        // using a BTreeSet so the output of `input_objects` has a stable ordering
-        let mut packages = BTreeSet::from([*package]);
-        for type_argument in type_arguments {
-            add_type_tag_packages(&mut packages, type_argument)
-        }
-        arguments
-            .iter()
-            .flat_map(|arg| arg.input_objects())
-            .chain(packages.into_iter().map(InputObjectKind::MovePackage))
-            .collect()
-    }
-}
-
 // Add package IDs, `ObjectID`, for types defined in modules.
 fn add_type_tag_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &TypeTag) {
     let mut stack = vec![type_argument];
@@ -610,6 +385,34 @@ impl ProgrammableMoveCall {
             .map(InputObjectKind::MovePackage)
             .collect()
     }
+
+    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
+            self.package,
+            self.module.as_str(),
+            self.function.as_str(),
+        ));
+        fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
+        let mut type_arguments_count = 0;
+        for tag in self.type_arguments.iter() {
+            type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
+            fp_ensure!(
+                type_arguments_count < config.max_type_arguments() as usize,
+                UserInputError::SizeLimitExceeded {
+                    limit: "maximum type arguments in a call transaction".to_string(),
+                    value: config.max_type_arguments().to_string()
+                }
+            );
+        }
+        fp_ensure!(
+            self.arguments.len() < config.max_arguments() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum arguments in a move call".to_string(),
+                value: config.max_arguments().to_string()
+            }
+        );
+        Ok(())
+    }
 }
 
 impl Command {
@@ -671,33 +474,7 @@ impl Command {
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
-            Command::MoveCall(call) => {
-                let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
-                    call.package,
-                    call.module.as_str(),
-                    call.function.as_str(),
-                ));
-                fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
-                let mut type_arguments_count = 0;
-                for tag in call.type_arguments.iter() {
-                    type_arguments_count +=
-                        type_tag_validity_check(tag, config, 1, type_arguments_count)?;
-                    fp_ensure!(
-                        type_arguments_count < config.max_type_arguments() as usize,
-                        UserInputError::SizeLimitExceeded {
-                            limit: "maximum type arguments in a call transaction".to_string(),
-                            value: config.max_type_arguments().to_string()
-                        }
-                    );
-                }
-                fp_ensure!(
-                    call.arguments.len() < config.max_arguments() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum arguments in a move call".to_string(),
-                        value: config.max_arguments().to_string()
-                    }
-                );
-            }
+            Command::MoveCall(call) => call.validity_check(config)?,
             Command::TransferObjects(args, _) | Command::MergeCoins(_, args) => {
                 fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
@@ -801,15 +578,19 @@ impl ProgrammableTransaction {
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        let ProgrammableTransaction { inputs, commands } = self;
         fp_ensure!(
-            self.commands.len() < config.max_programmable_tx_commands() as usize,
+            commands.len() < config.max_programmable_tx_commands() as usize,
             UserInputError::SizeLimitExceeded {
                 limit: "maximum commands in a programmable transaction".to_string(),
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
-        for c in &self.commands {
-            c.validity_check(config)?
+        for input in inputs {
+            input.validity_check(config)?
+        }
+        for command in commands {
+            command.validity_check(config)?
         }
         Ok(())
     }
@@ -2244,28 +2025,6 @@ pub struct HandleCertificateResponse {
 pub struct VerifiedHandleCertificateResponse {
     pub signed_effects: VerifiedSignedTransactionEffects,
     pub events: TransactionEvents,
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum CallResult {
-    Bool(bool),
-    U8(u8),
-    U64(u64),
-    U128(u128),
-    Address(AccountAddress),
-    // these are not ideal but there is no other way to deserialize
-    // vectors encoded in BCS (you need a full type before this can be
-    // done)
-    BoolVec(Vec<bool>),
-    U8Vec(Vec<u8>),
-    U64Vec(Vec<u64>),
-    U128Vec(Vec<u128>),
-    AddrVec(Vec<AccountAddress>),
-    BoolVecVec(Vec<bool>),
-    U8VecVec(Vec<Vec<u8>>),
-    U64VecVec(Vec<Vec<u64>>),
-    U128VecVec(Vec<Vec<u128>>),
-    AddrVecVec(Vec<Vec<AccountAddress>>),
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
