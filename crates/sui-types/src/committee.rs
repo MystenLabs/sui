@@ -32,9 +32,12 @@ pub type CommitteeDigest = [u8; 32];
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
+    // TODO: Remove and replace with constant.
     pub total_votes: StakeUnit,
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     index_map: HashMap<AuthorityName, usize>,
+    // TODO: This is no longer needed. This file needs a cleanup since we removed the optional
+    // cached expanded keys.
     loaded: bool,
 }
 
@@ -89,9 +92,14 @@ impl Committee {
     ) {
         let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
-            // TODO: Verify all code path to make sure we always have valid public keys.
-            // e.g. when a new validator is registering themself on-chain.
-            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
+            .map(|(addr, _)| {
+                (
+                    *addr,
+                    (*addr)
+                        .try_into()
+                        .expect("Validator pubkey is always verified on-chain"),
+                )
+            })
             .collect();
 
         let index_map: HashMap<AuthorityName, usize> = voting_rights
