@@ -340,7 +340,7 @@ impl ValidatorService {
         for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
             certificate
                 .data()
-                .intent_message
+                .intent_message()
                 .value
                 .kind()
                 .input_objects()

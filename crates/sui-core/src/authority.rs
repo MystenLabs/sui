@@ -499,7 +499,7 @@ impl AuthorityState {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
-            &transaction.data().intent_message.value,
+            &transaction.data().intent_message().value,
         )
         .await?;
 
@@ -545,10 +545,15 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        fp_ensure!(
+            !transaction.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         let tx_digest = *transaction.digest();
         debug!(
             "handle_transaction with transaction data: {:?}",
-            &transaction.data().intent_message.value
+            &transaction.data().intent_message().value
         );
 
         // Ensure an idempotent answer. This is checked before the system_tx check so that
@@ -923,7 +928,7 @@ impl AuthorityState {
         self.metrics.batch_size.observe(
             certificate
                 .data()
-                .intent_message
+                .intent_message()
                 .value
                 .kind()
                 .num_commands() as f64,
@@ -969,7 +974,7 @@ impl AuthorityState {
             *certificate.digest(),
             epoch_store.protocol_config(),
         );
-        let transaction_data = &certificate.data().intent_message.value;
+        let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -1192,9 +1197,9 @@ impl AuthorityState {
             .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
-            cert.data().intent_message.value.sender(),
+            cert.data().intent_message().value.sender(),
             cert.data()
-                .intent_message
+                .intent_message()
                 .value
                 .input_objects()?
                 .iter()
@@ -1204,7 +1209,7 @@ impl AuthorityState {
                 .into_iter()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
-                .intent_message
+                .intent_message()
                 .value
                 .move_calls()
                 .into_iter()

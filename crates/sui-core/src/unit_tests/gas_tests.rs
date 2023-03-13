@@ -299,7 +299,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // genesis objects are read during transaction since they are direct dependencies.
     let genesis_objects = create_genesis_module_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
-    let publish_bytes = match response.0.data().intent_message.value.kind() {
+    let publish_bytes = match response.0.data().intent_message().value.kind() {
         TransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
             Command::Publish(modules) => modules,
             _ => unreachable!(),

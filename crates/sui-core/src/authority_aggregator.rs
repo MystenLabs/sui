@@ -992,7 +992,7 @@ where
         );
         trace!(
             "Transaction data: {:?}",
-            transaction.data().intent_message.value
+            transaction.data().intent_message().value
         );
 
         let committee = Arc::new(self.committee.clone());

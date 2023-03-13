@@ -1509,7 +1509,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 impl TransactionDataV1 {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct SenderSignedData {
+pub struct SenderSignedData(Vec<SenderSignedTransaction>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct SenderSignedTransaction {
     pub intent_message: IntentMessage<TransactionData>,
     /// A list of signatures signed by all transaction participants.
     /// 1. non participant signature must not be present.
@@ -1523,10 +1526,10 @@ impl SenderSignedData {
         intent: Intent,
         tx_signatures: Vec<GenericSignature>,
     ) -> Self {
-        Self {
+        Self(vec![SenderSignedTransaction {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signatures,
-        }
+        }])
     }
 
     pub fn new_from_sender_signature(
@@ -1534,21 +1537,37 @@ impl SenderSignedData {
         intent: Intent,
         tx_signature: Signature,
     ) -> Self {
-        Self {
+        Self(vec![SenderSignedTransaction {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signatures: vec![tx_signature.into()],
-        }
+        }])
+    }
+
+    pub fn inner(&self) -> &SenderSignedTransaction {
+        // assert is safe - SenderSignedTransaction::verify ensures length is 1.
+        assert_eq!(self.0.len(), 1);
+        self.0
+            .get(0)
+            .expect("SenderSignedData must contain exactly one transaction")
+    }
+
+    pub fn inner_mut(&mut self) -> &mut SenderSignedTransaction {
+        // assert is safe - SenderSignedTransaction::verify ensures length is 1.
+        assert_eq!(self.0.len(), 1);
+        self.0
+            .get_mut(0)
+            .expect("SenderSignedData must contain exactly one transaction")
     }
 
     // This function does not check validity of the signature
     // or perform any de-dup checks.
     pub fn add_signature(&mut self, new_signature: Signature) {
-        self.tx_signatures.push(new_signature.into());
+        self.inner_mut().tx_signatures.push(new_signature.into());
     }
 
     fn get_signer_sig_mapping(&self) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
         let mut mapping = BTreeMap::new();
-        for sig in &self.tx_signatures {
+        for sig in &self.inner().tx_signatures {
             let address = sig.try_into()?;
             mapping.insert(address, sig);
         }
@@ -1556,7 +1575,25 @@ impl SenderSignedData {
     }
 
     pub fn transaction_data(&self) -> &TransactionData {
-        &self.intent_message.value
+        &self.intent_message().value
+    }
+
+    pub fn intent_message(&self) -> &IntentMessage<TransactionData> {
+        &self.inner().intent_message
+    }
+
+    pub fn tx_signatures(&self) -> &[GenericSignature] {
+        &self.inner().tx_signatures
+    }
+
+    #[cfg(test)]
+    pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
+        &mut self.inner_mut().intent_message
+    }
+
+    // used cross-crate, so cannot be #[cfg(test)]
+    pub fn tx_signatures_mut_for_testing(&mut self) -> &mut Vec<GenericSignature> {
+        &mut self.inner_mut().tx_signatures
     }
 }
 
@@ -1575,7 +1612,7 @@ impl VersionedProtocolMessage for SenderSignedData {
         // When adding a new signature type, check if current_protocol_version
         // predates support for the new type. If it does, return
         // SuiError::WrongMessageVersion
-        for sig in &self.tx_signatures {
+        for sig in &self.inner().tx_signatures {
             match sig {
                 GenericSignature::MultiSig(_) | GenericSignature::Signature(_) => (),
             }
@@ -1590,21 +1627,29 @@ impl Message for SenderSignedData {
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(user_hash(&self.intent_message.value))
+        TransactionDigest::new(user_hash(&self.intent_message().value))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
-        if self.intent_message.value.is_system_tx() {
+        fp_ensure!(
+            self.0.len() == 1,
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must contain exactly one transaction".to_string()
+                )
+            }
+        );
+        if self.intent_message().value.is_system_tx() {
             return Ok(());
         }
 
         // Verify signatures. Steps are ordered in asc complexity order to minimize abuse.
-        let signers = self.intent_message.value.signers();
+        let signers = self.intent_message().value.signers();
         // Signature number needs to match
         fp_ensure!(
-            self.tx_signatures.len() == signers.len(),
+            self.inner().tx_signatures.len() == signers.len(),
             SuiError::SignerSignatureNumberMismatch {
-                actual: self.tx_signatures.len(),
+                actual: self.inner().tx_signatures.len(),
                 expected: signers.len()
             }
         );
@@ -1620,7 +1665,7 @@ impl Message for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_secure_generic(&self.intent_message, signer)?;
+            signature.verify_secure_generic(self.intent_message(), signer)?;
         }
         Ok(())
     }
@@ -1628,11 +1673,11 @@ impl Message for SenderSignedData {
 
 impl<S> Envelope<SenderSignedData, S> {
     pub fn sender_address(&self) -> SuiAddress {
-        self.data().intent_message.value.sender()
+        self.data().intent_message().value.sender()
     }
 
     pub fn gas(&self) -> &[ObjectRef] {
-        self.data().intent_message.value.gas()
+        self.data().intent_message().value.gas()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -1641,6 +1686,7 @@ impl<S> Envelope<SenderSignedData, S> {
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         self.data()
+            .inner()
             .intent_message
             .value
             .shared_input_objects()
@@ -1670,7 +1716,7 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 
     pub fn is_system_tx(&self) -> bool {
-        self.data().intent_message.value.is_system_tx()
+        self.data().intent_message().value.is_system_tx()
     }
 }
 
@@ -1717,8 +1763,9 @@ impl Transaction {
     /// and a list of Base64 encoded [enum GenericSignature].
     pub fn to_tx_bytes_and_signatures(&self) -> (Base64, Vec<Base64>) {
         (
-            Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
+            Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message().value).unwrap()),
             self.data()
+                .inner()
                 .tx_signatures
                 .iter()
                 .map(|s| Base64::from_bytes(s.as_ref()))
@@ -2473,7 +2520,7 @@ impl TransactionEffects {
             tx,
             (
                 random_object_ref(),
-                Owner::AddressOwner(tx.data().intent_message.value.sender()),
+                Owner::AddressOwner(tx.data().intent_message().value.sender()),
             ),
         )
     }
@@ -2936,7 +2983,7 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sig().signers_map
         )?;
-        write!(writer, "{}", &self.data().intent_message.value.kind())?;
+        write!(writer, "{}", &self.data().intent_message().value.kind())?;
         write!(f, "{}", writer)
     }
 }

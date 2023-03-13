@@ -600,7 +600,7 @@ impl<'a> SuiTestAdapter<'a> {
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let (input_objects, objects) = transaction
             .data()
-            .intent_message
+            .intent_message()
             .value
             .input_objects()?
             .into_iter()
@@ -624,7 +624,12 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_digest,
             &PROTOCOL_CONSTANTS,
         );
-        let transaction_data = &transaction.into_inner().into_data().intent_message.value;
+        let transaction_data = &transaction
+            .into_inner()
+            .into_data()
+            .intent_message()
+            .value
+            .clone();
         let (kind, signer, gas) = transaction_data.execution_parts();
 
         let (
