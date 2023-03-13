@@ -85,5 +85,5 @@ module sui::groth16 {
     }
 
     /// Native functions that flattens the inputs into arrays of vectors and passed to the Rust native function.
-    public native fun verify_groth16_proof_internal(curve: u8, vk_gamma_abc_g1_bytes: &vector<u8>, alpha_g1_beta_g2_bytes: &vector<u8>, gamma_g2_neg_pc_bytes: &vector<u8>, delta_g2_neg_pc_bytes: &vector<u8>, public_proof_inputs: &vector<u8>, proof_points: &vector<u8>): bool;
+    native fun verify_groth16_proof_internal(curve: u8, vk_gamma_abc_g1_bytes: &vector<u8>, alpha_g1_beta_g2_bytes: &vector<u8>, gamma_g2_neg_pc_bytes: &vector<u8>, delta_g2_neg_pc_bytes: &vector<u8>, public_proof_inputs: &vector<u8>, proof_points: &vector<u8>): bool;
 }

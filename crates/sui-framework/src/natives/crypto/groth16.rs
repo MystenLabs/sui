@@ -15,7 +15,7 @@ use std::collections::VecDeque;
 pub const INVALID_VERIFYING_KEY: u64 = 0;
 pub const INVALID_CURVE: u64 = 1;
 
-pub const BLS12_831: u8 = 0;
+pub const BLS12381: u8 = 0;
 pub const BN254: u8 = 1;
 
 pub fn prepare_verifying_key(
@@ -35,7 +35,7 @@ pub fn prepare_verifying_key(
     let cost = legacy_empty_cost();
 
     let result;
-    if curve == BLS12_831 {
+    if curve == BLS12381 {
         result = fastcrypto_zkp::bls12381::api::prepare_pvk_bytes(&verifying_key);
     } else if curve == BN254 {
         result = fastcrypto_zkp::bn254::api::prepare_pvk_bytes(&verifying_key);
@@ -89,7 +89,7 @@ pub fn verify_groth16_proof_internal(
     let cost = legacy_empty_cost();
 
     let result;
-    if curve == BLS12_831 {
+    if curve == BLS12381 {
         result = fastcrypto_zkp::bls12381::api::verify_groth16_in_bytes(
             &vk_gamma_abc_g1,
             &alpha_g1_beta_g2,
