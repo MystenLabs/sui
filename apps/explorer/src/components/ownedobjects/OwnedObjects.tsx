@@ -58,8 +58,8 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
         setIsFail(false);
         setIsLoaded(false);
         const req = byAddress
-            ? rpc.getObjectsOwnedByAddress(id)
-            : rpc.getDynamicFields(id);
+            ? rpc.getObjectsOwnedByAddress({ owner: id })
+            : rpc.getDynamicFields({ parentId: id });
 
         req.then((objects) => {
             let ids: string[];
@@ -69,9 +69,12 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                 ids = objects.data.map(({ objectId }) => objectId);
             }
             return rpc
-                .getObjectBatch(ids, {
-                    showType: true,
-                    showContent: true,
+                .multiGetObjects({
+                    ids,
+                    options: {
+                        showType: true,
+                        showContent: true,
+                    },
                 })
                 .then((results) => {
                     setResults(

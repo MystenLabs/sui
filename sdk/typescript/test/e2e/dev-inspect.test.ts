@@ -61,9 +61,9 @@ describe('Test dev inspect', () => {
 
 async function validateDevInspectTransaction(
   signer: RawSigner,
-  txn: Transaction,
+  transaction: Transaction,
   status: 'success' | 'failure',
 ) {
-  const result = await signer.devInspectTransaction(txn);
+  const result = await signer.devInspectTransaction({ transaction });
   expect(result.effects.status.status).toEqual(status);
 }

@@ -52,8 +52,11 @@ export class SuiSystemStateUtil {
         tx.pure(validatorAddress),
       ],
     });
-    const coinObjects = await provider.getObjectBatch(coins, {
-      showOwner: true,
+    const coinObjects = await provider.multiGetObjects({
+      ids: coins,
+      options: {
+        showOwner: true,
+      },
     });
     tx.setGasPayment(coinObjects.map((obj) => getObjectReference(obj)!));
     return tx;

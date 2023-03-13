@@ -22,23 +22,22 @@ describe('Event Subscription API', () => {
   );
 
   it('Subscribe to events', async () => {
-    const subscriptionId = await toolbox.provider.subscribeEvent(
-      { SenderAddress: toolbox.address() },
-      mockCallback,
-    );
+    const subscriptionId = await toolbox.provider.subscribeEvent({
+      filter: { SenderAddress: toolbox.address() },
+      onMessage: mockCallback,
+    });
 
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
     tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
-    await toolbox.signer.signAndExecuteTransaction(
-      tx,
-      {},
-      'WaitForLocalExecution',
-    );
+    await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      requestType: 'WaitForLocalExecution',
+    });
 
-    const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent(
-      subscriptionId,
-    );
+    const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent({
+      id: subscriptionId,
+    });
     expect(subFoundAndRemoved).toBeTruthy();
     expect(mockCallback).toHaveBeenCalled();
   });

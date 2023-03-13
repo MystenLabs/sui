@@ -171,10 +171,13 @@ export const getDataOnTxDigests = (
     transactions: GetTxnDigestsResponse
 ) =>
     rpc
-        .getTransactionResponseBatch(dedupe(transactions), {
-            showInput: true,
-            showEffects: true,
-            showEvents: true,
+        .multiGetTransactions({
+            digests: dedupe(transactions),
+            options: {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            },
         })
         .then((txEffs) =>
             txEffs

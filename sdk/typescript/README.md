@@ -128,9 +128,9 @@ Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const objects = await provider.getObjectsOwnedByAddress(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
-);
+const objects = await provider.getObjectsOwnedByAddress({
+  owner: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+});
 ```
 
 Fetch object details for the object with id `0xcff6ccc8707aa517b4f1b95750a2a8c666012df3`
@@ -138,20 +138,20 @@ Fetch object details for the object with id `0xcff6ccc8707aa517b4f1b95750a2a8c66
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const txn = await provider.getObject(
-  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+const txn = await provider.getObject({
+  id: '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
   // fetch the object content field
-  { showContent: true },
-);
+  options: { showContent: true },
+});
 // You can also fetch multiple objects in one batch request
-const txns = await provider.getObjectBatch(
-  [
+const txns = await provider.multiGetObjects({
+  ids: [
     '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
     '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
   ],
   // only fetch the object type
-  { showType: true },
-);
+  options: { showType: true },
+});
 ```
 
 Fetch transaction details from transaction digests:
@@ -159,20 +159,20 @@ Fetch transaction details from transaction digests:
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const txn = await provider.getTransactionResponse(
-  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
+const txn = await provider.getTransaction({
+  digest: '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
   // only fetch the effects field
-  { showEffects: true },
-);
+  options: { showEffects: true },
+});
 // You can also fetch multiple transactions in one batch request
-const txns = await provider.getTransactionResponseBatch(
-  [
+const txns = await provider.multiGetTransactions({
+  digests: [
     '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
     '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
   ],
   // fetch both the input transaction data as well as effects
-  { showInput: true, showEffects: true },
-);
+  options: { showInput: true, showEffects: true },
+});
 ```
 
 Fetch transaction events from a transaction digest:
@@ -249,7 +249,7 @@ tx.transferObjects(
   [tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0')],
   tx.pure('0xd84058cb73bdeabe123b56632713dcd65e1a6c92'),
 );
-const result = await signer.signAndExecuteTransaction(tx);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });
 ```
 
@@ -269,7 +269,7 @@ const signer = new RawSigner(keypair, provider);
 const tx = new Transaction();
 const coin = tx.splitCoin(tx.gas, tx.pure(1000));
 tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
-const result = await signer.signAndExecuteTransaction(tx);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });
 ```
 
@@ -290,7 +290,7 @@ const tx = new Transaction();
 tx.mergeCoin(tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0'), [
   tx.object('0xcc460051569bfb888dedaf5182e76f473ee351af'),
 ]);
-const result = await signer.signAndExecuteTransaction(tx);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });
 ```
 
@@ -313,7 +313,7 @@ tx.moveCall({
   target: `${packageObjectId}::nft::mint`,
   arguments: [tx.pure('Example NFT')],
 });
-const result = await signer.signAndExecuteTransaction(tx);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });
 ```
 
@@ -325,16 +325,18 @@ const provider = new JsonRpcProvider();
 
 // calls RPC method 'sui_subscribeEvent' with params:
 // [ { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
-const subscriptionId = await provider.subscribeEvent(
-  { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
-  (event: SuiEventEnvelope) => {
+const subscriptionId = await provider.subscribeEvent({
+  filter: { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
+  onMessage(event: SuiEventEnvelope) {
     // handle subscription notification message here. This function is called once per subscription message.
   },
-);
+});
 
 // later, to unsubscribe
 // calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
-const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
+const subFoundAndRemoved = await provider.unsubscribeEvent({
+  id: subscriptionId,
+});
 ```
 
 Subscribe to all events created by a package's `nft` module
@@ -351,12 +353,12 @@ const devnetNftFilter = {
     { Module: 'nft' },
   ],
 };
-const devNftSub = await provider.subscribeEvent(
-  devnetNftFilter,
-  (event: SuiEventEnvelope) => {
+const devNftSub = await provider.subscribeEvent({
+  filter: devnetNftFilter,
+  onMessage(event: SuiEventEnvelope) {
     // handle subscription notification message here
   },
-);
+});
 ```
 
 To publish a package:
@@ -381,7 +383,7 @@ const compiledModules = JSON.parse(
 );
 const tx = new Transaction();
 tx.publish(compiledModules);
-const result = await signer.signAndExecuteTransaction(tx);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });
 ```
 

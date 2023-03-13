@@ -62,20 +62,22 @@ export const respondToTransactionRequest = createAsyncThunk<
             );
             try {
                 if (txRequest.tx.type === 'sign-message') {
-                    txResult = await signer.signMessage(
-                        fromB64(txRequest.tx.message)
-                    );
+                    txResult = await signer.signMessage({
+                        message: fromB64(txRequest.tx.message),
+                    });
                 } else if (txRequest.tx.type === 'transaction') {
                     const tx = Transaction.from(txRequest.tx.data);
                     if (txRequest.tx.justSign) {
                         // Just a signing request, do not submit
-                        txSigned = await signer.signTransaction(tx);
+                        txSigned = await signer.signTransaction({
+                            transaction: tx,
+                        });
                     } else {
-                        txResult = await signer.signAndExecuteTransaction(
-                            tx,
-                            txRequest.tx.options?.contentOptions,
-                            txRequest.tx.options?.requestType
-                        );
+                        txResult = await signer.signAndExecuteTransaction({
+                            transaction: tx,
+                            options: txRequest.tx.options?.contentOptions,
+                            requestType: txRequest.tx.options?.requestType,
+                        });
                     }
                 } else {
                     throw new Error(

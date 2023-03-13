@@ -70,10 +70,13 @@ function TransferCoinPage() {
                             }))
                     );
 
-                    return signer.signAndExecuteTransaction(tx, {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                    return signer.signAndExecuteTransaction({
+                        transaction: tx,
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     });
                 }
 
@@ -103,10 +106,13 @@ function TransferCoinPage() {
                     tx.transferObjects([coin], tx.pure(formData.to));
                 }
 
-                return signer.signAndExecuteTransaction(tx, {
-                    showInput: true,
-                    showEffects: true,
-                    showEvents: true,
+                return signer.signAndExecuteTransaction({
+                    transaction: tx,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 });
             } catch (error) {
                 transaction.setTag('failure', true);

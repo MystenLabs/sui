@@ -13,10 +13,13 @@ export function useGetObject(
     const response = useQuery(
         ['object', normalizedObjId],
         async () => {
-            return rpc.getObject(normalizedObjId, {
-                showType: true,
-                showContent: true,
-                showOwner: true,
+            return rpc.getObject({
+                id: normalizedObjId,
+                options: {
+                    showType: true,
+                    showContent: true,
+                    showOwner: true,
+                },
             });
         },
         { enabled: !!objectId }

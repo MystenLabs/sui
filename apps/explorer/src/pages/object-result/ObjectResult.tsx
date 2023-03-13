@@ -45,12 +45,15 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     const rpc = useRpcClient();
 
     useEffect(() => {
-        rpc.getObject(objID, {
-            showType: true,
-            showContent: true,
-            showOwner: true,
-            showPreviousTransaction: true,
-            showStorageRebate: true,
+        rpc.getObject({
+            id: objID,
+            options: {
+                showType: true,
+                showContent: true,
+                showOwner: true,
+                showPreviousTransaction: true,
+                showStorageRebate: true,
+            },
         })
             .then((objState) => {
                 const resp: DataType = translate(objState) as DataType;
@@ -70,8 +73,11 @@ function ObjectResultAPI({ objID }: { objID: string }) {
 
                 if (resp.objType === 'Move Package' && resp.data.tx_digest) {
                     return rpc
-                        .getTransactionResponse(resp.data.tx_digest, {
-                            showInput: true,
+                        .getTransaction({
+                            digest: resp.data.tx_digest,
+                            options: {
+                                showInput: true,
+                            },
                         })
                         .then((txEff) => ({
                             ...resp,

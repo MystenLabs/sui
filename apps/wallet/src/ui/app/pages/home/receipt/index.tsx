@@ -27,10 +27,13 @@ function ReceiptPage() {
     const { data, isLoading, isError } = useQuery(
         ['transactions-by-id', transactionId],
         async () => {
-            return rpc.getTransactionResponse(transactionId!, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            return rpc.getTransaction({
+                digest: transactionId!,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             });
         },
         { enabled: !!transactionId, retry: 8 }

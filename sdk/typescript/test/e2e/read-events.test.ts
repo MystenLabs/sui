@@ -12,30 +12,28 @@ describe('Event Reading API', () => {
   });
 
   it('Get All Events', async () => {
-    const allEvents = await toolbox.provider.getEvents('All', null, null);
+    const allEvents = await toolbox.provider.getEvents({ query: 'All' });
     expect(allEvents.data.length).to.greaterThan(0);
   });
 
   it('Get all event paged', async () => {
-    const page1 = await toolbox.provider.getEvents('All', null, 2);
+    const page1 = await toolbox.provider.getEvents({ query: 'All', limit: 2 });
     expect(page1.nextCursor).to.not.equal(null);
   });
 
   it('Get events by sender paginated', async () => {
-    const query1 = await toolbox.provider.getEvents(
-      { Sender: toolbox.address() },
-      null,
-      2,
-    );
+    const query1 = await toolbox.provider.getEvents({
+      query: { Sender: toolbox.address() },
+      limit: 2,
+    });
     expect(query1.data.length).toEqual(0);
   });
 
   it('Get events by recipient paginated', async () => {
-    const query2 = await toolbox.provider.getEvents(
-      { Recipient: { AddressOwner: toolbox.address() } },
-      null,
-      2,
-    );
+    const query2 = await toolbox.provider.getEvents({
+      query: { Recipient: { AddressOwner: toolbox.address() } },
+      limit: 2,
+    });
     expect(query2.data.length).toEqual(2);
   });
 });

@@ -17,13 +17,16 @@ describe('Test Object Display Standard', () => {
 
   it('Test getting Display fields', async () => {
     const boarId = (
-      await toolbox.provider.getObjectsOwnedByAddress(
-        toolbox.address(),
-        `${packageId}::boars::Boar`,
-      )
+      await toolbox.provider.getObjectsOwnedByAddress({
+        owner: toolbox.address(),
+        typeFilter: `${packageId}::boars::Boar`,
+      })
     )[0].objectId;
     const display = getObjectDisplay(
-      await toolbox.provider.getObject(boarId, { showDisplay: true }),
+      await toolbox.provider.getObject({
+        id: boarId,
+        options: { showDisplay: true },
+      }),
     );
     expect(display).toEqual({
       age: '10',
@@ -42,7 +45,10 @@ describe('Test Object Display Standard', () => {
   it('Test getting Display fields for object that has no display object', async () => {
     const coinId = (await toolbox.getGasObjectsOwnedByAddress())[0].objectId;
     const display = getObjectDisplay(
-      await toolbox.provider.getObject(coinId, { showDisplay: true }),
+      await toolbox.provider.getObject({
+        id: coinId,
+        options: { showDisplay: true },
+      }),
     );
     expect(display).toEqual(undefined);
   });

@@ -28,12 +28,12 @@ export function useGetValidatorsEvents({
     const response = useQuery(
         ['validatorEvents', limit],
         () =>
-            rpc.getEvents(
-                { MoveEvent: VALIDATORS_EVENTS_QUERY },
-                eventCursor,
-                eventLimit,
-                order
-            ),
+            rpc.getEvents({
+                query: { MoveEvent: VALIDATORS_EVENTS_QUERY },
+                cursor: eventCursor?.txDigest,
+                limit: eventLimit,
+                order,
+            }),
         { enabled: !!limit }
     );
 
