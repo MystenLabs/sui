@@ -7,7 +7,6 @@ module sui::sui_system {
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
     use sui::staking_pool::{stake_activation_epoch, StakedSui};
-    use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -19,8 +18,6 @@ module sui::sui_system {
     use sui::vec_set::{Self, VecSet};
     use std::option;
     use std::vector;
-    use sui::epoch_time_lock::EpochTimeLock;
-    use sui::epoch_time_lock;
     use sui::pay;
     use sui::event;
     use sui::table::Table;
@@ -56,6 +53,10 @@ module sui::sui_system {
         epoch: u64,
         /// The current protocol version, starting from 1.
         protocol_version: u64,
+        /// The current version of the system state data structure type.
+        /// This is always the same as SuiSystemState.version. Keeping a copy here so that
+        /// we know what version it is by inspecting SuiSystemStateInner as well.
+        system_state_version: u64,
         /// Contains all information about the validators.
         validators: ValidatorSet,
         /// The storage fund.
@@ -122,8 +123,16 @@ module sui::sui_system {
     const MAX_VALIDATOR_COUNT: u64 = 150;
 
     /// Lower-bound on the amount of stake required to become a validator.
-    const MIN_VALIDATOR_STAKE: u64 = 25_000_000_000_000_000; // 25 million SUI
+    const MIN_VALIDATOR_JOINING_STAKE: u64 = 30_000_000_000_000_000; // 30 million SUI
 
+    /// Validators with stake amount below `VALIDATOR_LOW_STAKE_THRESHOLD` are considered to
+    /// have low stake and will be escorted out of the validator set after being below this
+    /// threshold for more than `VALIDATOR_LOW_STAKE_GRACE_PERIOD` number of epochs.
+    /// And validators with stake below `VALIDATOR_VERY_LOW_STAKE_THRESHOLD` will be removed
+    /// immediately at epoch change, no grace period.
+    const VALIDATOR_LOW_STAKE_THRESHOLD: u64 = 25_000_000_000_000_000; // 25 million SUI
+    const VALIDATOR_VERY_LOW_STAKE_THRESHOLD: u64 = 20_000_000_000_000_000; // 20 million SUI
+    const VALIDATOR_LOW_STAKE_GRACE_PERIOD: u64 = 7; // A validator can have stake below VALIDATOR_LOW_STAKE_THRESHOLD for 7 epochs before being kicked out.
 
     // ==== functions that can only be called by genesis ====
 
@@ -145,6 +154,7 @@ module sui::sui_system {
         let system_state = SuiSystemStateInner {
             epoch: 0,
             protocol_version,
+            system_state_version,
             validators,
             storage_fund,
             parameters: SystemParameters {
@@ -167,8 +177,8 @@ module sui::sui_system {
 
     // ==== entry functions ====
 
-    /// Can be called by anyone who wishes to become a validator candidate and starts accuring
-    /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_STAKE` amount of stake they
+    /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+    /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they
     /// can call `request_add_validator` to officially become an active validator at the next epoch.
     /// Aborts if the caller is already a pending or active validator, or a validator candidate.
     /// Note: `proof_of_possession` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
@@ -207,7 +217,6 @@ module sui::sui_system {
             primary_address,
             worker_address,
             option::none(),
-            option::none(),
             gas_price,
             commission_rate,
             false, // not an initial validator active at genesis
@@ -218,7 +227,7 @@ module sui::sui_system {
     }
 
     /// Called by a validator candidate to remove themselves from the candidacy. After this call
-    /// their staking pool becomes deactive.
+    /// their staking pool becomes deactivate.
     public entry fun request_remove_validator_candidate(
         wrapper: &mut SuiSystemState,
         ctx: &mut TxContext,
@@ -241,7 +250,7 @@ module sui::sui_system {
             ELimitExceeded,
         );
 
-        validator_set::request_add_validator(&mut self.validators, MIN_VALIDATOR_STAKE, ctx);
+        validator_set::request_add_validator(&mut self.validators, MIN_VALIDATOR_JOINING_STAKE, ctx);
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -302,7 +311,6 @@ module sui::sui_system {
             &mut self.validators,
             validator_address,
             coin::into_balance(stake),
-            option::none(),
             ctx,
         );
     }
@@ -317,38 +325,7 @@ module sui::sui_system {
     ) {
         let self = load_system_state_mut(wrapper);
         let balance = extract_coin_balance(stakes, stake_amount, ctx);
-        validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
-    }
-
-    /// Add stake to a validator's staking pool using a locked SUI coin.
-    public entry fun request_add_stake_with_locked_coin(
-        wrapper: &mut SuiSystemState,
-        stake: LockedCoin<SUI>,
-        validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        let (balance, lock) = locked_coin::into_balance(stake);
-        validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
-    }
-
-    /// Add stake to a validator's staking pool using multiple locked SUI coins.
-    public entry fun request_add_stake_mul_locked_coin(
-        wrapper: &mut SuiSystemState,
-        stakes: vector<LockedCoin<SUI>>,
-        stake_amount: option::Option<u64>,
-        validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        let self = load_system_state_mut(wrapper);
-        let (balance, lock) = extract_locked_coin_balance(stakes, stake_amount, ctx);
-        validator_set::request_add_stake(
-            &mut self.validators,
-            validator_address,
-            balance,
-            option::some(lock),
-            ctx
-        );
+        validator_set::request_add_stake(&mut self.validators, validator_address, balance, ctx);
     }
 
     /// Withdraw some portion of a stake from a validator's staking pool.
@@ -656,6 +633,10 @@ module sui::sui_system {
             &mut storage_fund_reward,
             &mut self.validator_report_records,
             reward_slashing_rate,
+            self.parameters.governance_start_epoch,
+            VALIDATOR_LOW_STAKE_THRESHOLD,
+            VALIDATOR_VERY_LOW_STAKE_THRESHOLD,
+            VALIDATOR_LOW_STAKE_GRACE_PERIOD,
             ctx,
         );
 
@@ -697,6 +678,7 @@ module sui::sui_system {
             assert!(old_protocol_version != next_protocol_version, 0);
             let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
             let new_state = upgrade_system_state(cur_state);
+            new_state.system_state_version = new_system_state_version;
             wrapper.version = new_system_state_version;
             dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
         };
@@ -778,11 +760,17 @@ module sui::sui_system {
     }
 
     fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
-        dynamic_field::borrow(&self.id, self.version)
+        let version = self.version;
+        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, version);
+        assert!(inner.system_state_version == version, 0);
+        inner
     }
 
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
-        dynamic_field::borrow_mut(&mut self.id, self.version)
+        let version = self.version;
+        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
+        assert!(inner.system_state_version == version, 0);
+        inner
     }
 
     fun upgrade_system_state(cur_state: SuiSystemStateInner): SuiSystemStateInner {
@@ -811,39 +799,6 @@ module sui::sui_system {
             balance
         } else {
             total_balance
-        }
-    }
-
-    /// Extract required Balance from vector of LockedCoin<SUI>, transfer the remainder back to sender.
-    fun extract_locked_coin_balance(
-        coins: vector<LockedCoin<SUI>>,
-        amount: option::Option<u64>,
-        ctx: &mut TxContext
-    ): (Balance<SUI>, EpochTimeLock) {
-        let (total_balance, first_lock) = locked_coin::into_balance(vector::pop_back(&mut coins));
-        let (i, len) = (0, vector::length(&coins));
-        while (i < len) {
-            let (balance, lock) = locked_coin::into_balance(vector::pop_back(&mut coins));
-            // Make sure all time locks are the same
-            assert!(epoch_time_lock::epoch(&lock) == epoch_time_lock::epoch(&first_lock), 0);
-            epoch_time_lock::destroy_unchecked(lock);
-            balance::join(&mut total_balance, balance);
-            i = i + 1
-        };
-        vector::destroy_empty(coins);
-
-        // return the full amount if amount is not specified
-        if (option::is_some(&amount)){
-            let amount = option::destroy_some(amount);
-            let balance = balance::split(&mut total_balance, amount);
-            if (balance::value(&total_balance) > 0) {
-                locked_coin::new_from_balance(total_balance, first_lock, tx_context::sender(ctx), ctx);
-            } else {
-                balance::destroy_zero(total_balance);
-            };
-            (balance, first_lock)
-        } else{
-            (total_balance, first_lock)
         }
     }
 

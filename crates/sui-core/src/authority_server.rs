@@ -255,7 +255,7 @@ impl ValidatorService {
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         let max_tx_size = epoch_store.protocol_config().max_tx_size();
         fp_ensure!(
-            tx_size <= max_tx_size,
+            tx_size as u64 <= max_tx_size,
             tonic::Status::resource_exhausted(format!(
                 "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size}"
             ))
@@ -314,7 +314,7 @@ impl ValidatorService {
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             let events = if let Some(digest) = signed_effects.events_digest() {
-                state.get_transaction_events(*digest).await?
+                state.get_transaction_events(digest)?
             } else {
                 TransactionEvents::default()
             };
@@ -421,7 +421,7 @@ impl ValidatorService {
         match res {
             Ok(effects) => {
                 let events = if let Some(event_digest) = effects.events_digest() {
-                    state.get_transaction_events(*event_digest).await?
+                    state.get_transaction_events(event_digest)?
                 } else {
                     TransactionEvents::default()
                 };

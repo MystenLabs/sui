@@ -656,7 +656,7 @@ pub fn resolve_move_function_args(
     type_args: &[TypeTag],
     combined_args_json: Vec<SuiJsonValue>,
     allow_arbitrary_function_call: bool,
-) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
+) -> Result<Vec<(SuiJsonCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
     let module = package.deserialize_module(&module_ident)?;
     let function_str = function.as_ident_str();
@@ -700,7 +700,13 @@ pub fn resolve_move_function_args(
     }
 
     // Check that the args are valid and convert to the correct format
-    resolve_call_args(&view, type_args, &combined_args_json, parameters)
+    let call_args = resolve_call_args(&view, type_args, &combined_args_json, parameters)?;
+    let tupled_call_args = call_args
+        .iter()
+        .zip(parameters.iter())
+        .map(|(arg, expected_type)| (arg.clone(), expected_type.clone()))
+        .collect::<Vec<(SuiJsonCallArg, SignatureToken)>>();
+    Ok(tupled_call_args)
 }
 
 fn convert_string_to_u256(s: &str) -> Result<U256, anyhow::Error> {

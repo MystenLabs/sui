@@ -12,7 +12,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{ModuleId, TypeTag},
     value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::{
@@ -22,8 +22,10 @@ use move_vm_runtime::{
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    balance::Balance,
-    base_types::{ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    base_types::{
+        MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
+    },
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
@@ -44,7 +46,7 @@ use sui_verifier::{
 };
 
 use crate::{
-    adapter::{convert_type_argument_error, generate_package_id, validate_primitive_arg_string},
+    adapter::{generate_package_id, validate_primitive_arg_string},
     execution_mode::ExecutionMode,
 };
 
@@ -79,7 +81,7 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     let ExecutionResults {
         object_changes,
         user_events,
-    } = context.finish()?;
+    } = context.finish::<Mode>()?;
     state_view.apply_object_changes(object_changes);
     for (module_id, tag, contents) in user_events {
         state_view.log_event(Event::move_event(
@@ -140,8 +142,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     let obj: ObjectValue =
                         context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                     obj.write_bcs_bytes(&mut res);
-                    let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
-                    (obj.used_in_non_entry_move_call, tag)
+                    (obj.used_in_non_entry_move_call, obj.into_type().into())
                 }
             };
             let elem_ty = context
@@ -195,7 +196,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
             let new_coin_id = context.fresh_id()?;
-            let new_coin = coin.split_coin(amount, UID::new(new_coin_id))?;
+            let new_coin = coin.split(amount, UID::new(new_coin_id))?;
             let coin_type = obj.type_.clone();
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
             vec![Value::Object(ObjectValue::coin(coin_type, new_coin)?)]
@@ -234,13 +235,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     );
                 };
                 context.delete_id(*id.object_id())?;
-                let Some(new_value) = target_coin.balance.value().checked_add(balance.value())
-                else {
-                    return Err(ExecutionError::from_kind(
-                        ExecutionErrorKind::TotalCoinBalanceOverflow,
-                    ));
-                };
-                target_coin.balance = Balance::new(new_value);
+                target_coin.add(balance)?;
             }
             context.restore_arg::<Mode>(
                 &mut argument_updates,
@@ -271,8 +266,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         Command::Publish(modules) => {
             execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
         }
-        Command::Upgrade(upgrade_ticket, dep_ids, modules) => {
-            execute_move_upgrade::<_, _, Mode>(context, upgrade_ticket, dep_ids, modules)?
+        Command::Upgrade(modules, dep_ids, upgrade_ticket) => {
+            execute_move_upgrade::<_, _, Mode>(context, modules, dep_ids, upgrade_ticket)?
         }
     };
 
@@ -430,7 +425,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         vec![]
     } else {
         vec![Value::Object(ObjectValue::new(
-            UpgradeCap::type_(),
+            UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
             /* used_in_non_entry_move_call */ false,
             &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
@@ -442,9 +437,9 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
 fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
-    _upgrade_ticket_arg: Argument,
-    _dep_ids: Vec<ObjectID>,
     _module_bytes: Vec<Vec<u8>>,
+    _dep_ids: Vec<ObjectID>,
+    _upgrade_ticket_arg: Argument,
 ) -> Result<Vec<Value>, ExecutionError> {
     // Check that package upgrades are supported.
     context
@@ -516,9 +511,10 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionM
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;
 
-    if modules.is_empty() {
-        return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
-    }
+    assert_invariant!(
+        !modules.is_empty(),
+        "input checker ensures package is not empty"
+    );
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
@@ -574,7 +570,7 @@ enum FunctionKind {
 /// Used to remember type information about a type when resolving the signature
 enum ValueKind {
     Object {
-        type_: StructTag,
+        type_: MoveObjectType,
         has_public_transfer: bool,
     },
     Raw(Type, AbilitySet),
@@ -608,7 +604,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         context
             .session
             .load_type(ty)
-            .map_err(|e| convert_type_argument_error(idx, e, context.vm, context.state_view))?;
+            .map_err(|e| context.convert_type_argument_error(idx, e))?;
     }
     if from_init {
         // the session is weird and does not load the module on publishing. This is a temporary
@@ -762,7 +758,7 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
                         invariant_violation!("Struct type make a non struct type tag")
                     };
                     ValueKind::Object {
-                        type_: *struct_tag,
+                        type_: MoveObjectType::from(*struct_tag),
                         has_public_transfer: abilities.has_store(),
                     }
                 }
@@ -928,7 +924,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
                 validate_primitive_arg_string(
                     &bytes,
-                    idx as LocalIndex,
+                    idx as u16,
                     string_struct,
                     string_struct_layout,
                 )?;
@@ -977,7 +973,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         Value::Object(obj) => {
             obj_ty = context
                 .session
-                .load_type(&TypeTag::Struct(Box::new(obj.type_.clone())))
+                .load_type(&obj.type_.clone().into())
                 .map_err(|e| context.convert_vm_error(e))?;
             &obj_ty
         }
@@ -1077,6 +1073,16 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
     })
 }
 
+fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let module_id = &s.module;
+    let struct_name = &s.name;
+    (
+        module_id.address(),
+        module_id.name(),
+        struct_name.as_ident_str(),
+    )
+}
+
 /// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
 fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
@@ -1122,14 +1128,4 @@ fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
         }
     }
     Ok(true)
-}
-
-fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
 }

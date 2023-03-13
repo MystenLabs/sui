@@ -16,7 +16,7 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, ObjectType, SuiAddress};
+use sui_types::base_types::{MoveObjectType, ObjectID, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, CoinMetadata, LockedCoin, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
@@ -50,10 +50,10 @@ impl CoinReadApi {
     async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
         let o = self.get_object(coin_id).await?;
         if let Some(move_object) = o.data.try_as_move() {
-            let (balance, locked_until_epoch) = if Coin::is_coin(&move_object.type_) {
+            let (balance, locked_until_epoch) = if move_object.type_().is_coin() {
                 let coin: Coin = bcs::from_bytes(move_object.contents())?;
                 (coin.balance.value(), None)
-            } else if LockedCoin::is_locked_coin(&move_object.type_) {
+            } else if move_object.type_().is_locked_coin() {
                 let locked_coin: LockedCoin = bcs::from_bytes(move_object.contents())?;
                 (
                     locked_coin.balance.value(),
@@ -61,12 +61,17 @@ impl CoinReadApi {
                 )
             } else {
                 return Err(Error::SuiError(SuiError::ObjectDeserializationError {
-                    error: format!("{:?} is not a supported coin type", move_object.type_),
+                    error: format!("{:?} is not a supported coin type", move_object.type_()),
                 }));
             };
 
             Ok(SuiCoin {
-                coin_type: move_object.type_.type_params.first().unwrap().to_string(),
+                coin_type: move_object
+                    .type_()
+                    .type_params()
+                    .first()
+                    .unwrap()
+                    .to_string(),
                 coin_object_id: o.id(),
                 version: o.version(),
                 digest: o.digest(),
@@ -138,7 +143,7 @@ impl CoinReadApi {
             .await?;
 
         let events = if let Some(digests) = effect.events_digest() {
-            self.state.get_transaction_events(*digests).await?
+            self.state.get_transaction_events(digests)?
         } else {
             TransactionEvents::default()
         };
@@ -313,10 +318,10 @@ impl CoinReadApiServer for CoinReadApi {
     }
 }
 
-fn is_coin_type(type_: &StructTag, coin_type: &Option<StructTag>) -> bool {
-    if Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_) {
+fn is_coin_type(type_: &MoveObjectType, coin_type: &Option<StructTag>) -> bool {
+    if type_.is_coin() || type_.is_locked_coin() {
         return if let Some(coin_type) = coin_type {
-            matches!(type_.type_params.first(), Some(TypeTag::Struct(type_)) if type_.to_canonical_string() == coin_type.to_canonical_string())
+            matches!(type_.type_params().first(), Some(TypeTag::Struct(type_)) if type_.to_canonical_string() == coin_type.to_canonical_string())
         } else {
             true
         };

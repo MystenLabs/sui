@@ -9,16 +9,18 @@ use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
 use signature::rand_core::OsRng;
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
 use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::BuildConfig;
+use sui_json_rpc_types::{ObjectChange, SuiObjectRef};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiObjectDataOptions,
-    SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents, SuiTransactionResponse,
+    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI,
+    SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -98,7 +100,7 @@ async fn test_transfer_object() {
     let object_ref = get_random_sui(&client, sender, vec![]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object_ref);
+        builder.transfer_object(recipient, object_ref).unwrap();
         builder.finish()
     };
     test_transaction(
@@ -136,20 +138,18 @@ async fn test_publish_and_move_call() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish(compiled_module);
+        builder.publish_immutable(compiled_module);
         builder.finish()
     };
     let response =
         test_transaction(&client, keystore, vec![], sender, pt, vec![], 10000, false).await;
-    let events = response.events.unwrap();
+    let object_changes = response.object_changes.unwrap();
 
     // Test move call (reuse published module from above test)
-    let effect = response.effects.unwrap();
-    let package = events
-        .data
+    let package = object_changes
         .iter()
-        .find_map(|event| {
-            if let SuiEvent::Publish { package_id, .. } = event {
+        .find_map(|change| {
+            if let ObjectChange::Published { package_id, .. } = change {
                 Some(package_id)
             } else {
                 None
@@ -158,7 +158,7 @@ async fn test_publish_and_move_call() {
         .unwrap();
 
     // TODO: Improve tx response to make it easier to find objects.
-    let treasury = find_module_object(&effect, &events, "::TreasuryCap");
+    let treasury = find_module_object(&object_changes, "::TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let pt = {
@@ -521,7 +521,6 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let metadata = ConstructionMetadata {
         tx_metadata: TransactionMetadata::Delegation {
             coins: vec![coin1, coin2],
-            locked_until_epoch: None,
         },
         sender,
         gas: vec![gas],
@@ -536,31 +535,32 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn find_module_object(
-    effects: &SuiTransactionEffects,
-    events: &SuiTransactionEvents,
-    object_type_name: &str,
-) -> OwnedObjectRef {
-    let mut results: Vec<_> = events
-        .data
+fn find_module_object(changes: &[ObjectChange], object_type_name: &str) -> OwnedObjectRef {
+    let mut results: Vec<_> = changes
         .iter()
-        .filter_map(|event| {
-            if let SuiEvent::NewObject {
+        .filter_map(|change| {
+            if let ObjectChange::Created {
                 object_id,
                 object_type,
+                owner,
+                version,
+                digest,
                 ..
-            } = event
+            } = change
             {
-                if object_type.contains(object_type_name) {
-                    return effects
-                        .created()
-                        .iter()
-                        .find(|obj| &obj.reference.object_id == object_id);
+                if object_type.to_string().contains(object_type_name) {
+                    return Some(OwnedObjectRef {
+                        owner: *owner,
+                        reference: SuiObjectRef {
+                            object_id: *object_id,
+                            version: *version,
+                            digest: *digest,
+                        },
+                    });
                 }
             };
             None
         })
-        .cloned()
         .collect();
     // Check that there is only one object found, and hence no ambiguity.
     assert_eq!(results.len(), 1);
@@ -623,6 +623,7 @@ async fn test_transaction(
             Transaction::from_data(data.clone(), Intent::default(), vec![signature])
                 .verify()
                 .unwrap(),
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

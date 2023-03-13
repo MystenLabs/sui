@@ -26,7 +26,7 @@ pub struct Transaction {
     pub recipients: Vec<Option<String>>,
     pub checkpoint_sequence_number: i64,
     pub transaction_time: Option<NaiveDateTime>,
-    pub transaction_kind: Option<String>,
+    pub transaction_kind: String,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -188,7 +188,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             sender,
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
-            transaction_kind: Some(tx_kind),
+            transaction_kind: tx_kind,
             transaction_time: timestamp,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),
@@ -248,7 +248,9 @@ impl TryInto<SuiTransactionResponse> for Transaction {
             checkpoint: Some(self.checkpoint_sequence_number as u64),
             // TODO: Indexer need to persist event properly.
             events: Default::default(),
+            object_changes: None,
             errors: vec![],
+            balance_changes: None,
         })
     }
 }

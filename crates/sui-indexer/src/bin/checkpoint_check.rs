@@ -58,7 +58,10 @@ async fn main() -> Result<()> {
         );
 
         if let (Some(fn_txn_digest), Some(idx_txn_digest)) = (fn_txn_digest, idx_txn_digest) {
-            let fetch_options = SuiTransactionResponseOptions::full_content();
+            let fetch_options = SuiTransactionResponseOptions::new()
+                .with_events()
+                .with_effects()
+                .with_input();
             let fn_sui_txn_response = fn_rpc_client
                 .read_api()
                 .get_transaction_with_options(fn_txn_digest, fetch_options.clone())

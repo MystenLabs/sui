@@ -16,13 +16,15 @@ use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
+use sui_types::messages::{
+    SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
+};
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -283,4 +285,57 @@ pub fn make_transfer_object_transaction(
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
+}
+
+/// Make a tx that refers to a non-existent object
+pub fn make_dummy_tx(
+    receiver: SuiAddress,
+    sender: SuiAddress,
+    sender_sec: &AccountKeyPair,
+) -> VerifiedTransaction {
+    Transaction::from_data_and_signer(
+        TransactionData::new_transfer_with_dummy_gas_price(
+            receiver,
+            random_object_ref(),
+            sender,
+            random_object_ref(),
+            10000,
+        ),
+        Intent::default(),
+        vec![sender_sec],
+    )
+    .verify()
+    .unwrap()
+}
+
+/// Make a cert using an arbitrarily large committee.
+pub fn make_cert_with_large_committee(
+    committee: &Committee,
+    key_pairs: &[AuthorityKeyPair],
+    transaction: &VerifiedTransaction,
+) -> CertifiedTransaction {
+    // assumes equal weighting.
+    let len = committee.voting_rights.len();
+    assert_eq!(len, key_pairs.len());
+    let count = (len * 2 + 2) / 3;
+
+    let sigs: Vec<_> = key_pairs
+        .iter()
+        .take(count)
+        .map(|key_pair| {
+            SignedTransaction::new(
+                committee.epoch(),
+                transaction.clone().into_message(),
+                key_pair,
+                AuthorityPublicKeyBytes::from(key_pair.public()),
+            )
+            .auth_sig()
+            .clone()
+        })
+        .collect();
+
+    let cert =
+        CertifiedTransaction::new(transaction.clone().into_message(), sigs, committee).unwrap();
+    cert.verify_signature(committee).unwrap();
+    cert
 }

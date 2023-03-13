@@ -13,7 +13,7 @@ it('can construct and serialize an empty tranaction', () => {
 
 it('can be serialized and deserialized to the same values', () => {
   const tx = new Transaction();
-  tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+  tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
   const serialized = tx.serialize();
   const tx2 = Transaction.from(serialized);
   expect(serialized).toEqual(tx2.serialize());
@@ -21,8 +21,8 @@ it('can be serialized and deserialized to the same values', () => {
 
 it('allows transfer with the result of split commands', () => {
   const tx = new Transaction();
-  const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
-  tx.add(Commands.TransferObjects([coin], tx.input('0x2')));
+  const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+  tx.add(Commands.TransferObjects([coin], tx.object('0x2')));
 });
 
 it('supports nested results through either array index or destructuring', () => {
@@ -54,30 +54,30 @@ describe('offline build', () => {
 
   it('builds a split command', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.input(Inputs.Pure('u64', 100))));
+    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure('u64', 100))));
     await tx.build();
   });
 
   it('infers the type of inputs', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+    tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
     await tx.build();
   });
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
     tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
+      Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
     );
     tx.add(
       Commands.MoveCall({
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          tx.input(Inputs.Pure('string', 'foo')),
-          tx.input(Inputs.Pure('string', 'bar')),
-          tx.input(Inputs.Pure('string', 'baz')),
+          tx.pure(Inputs.Pure('string', 'foo')),
+          tx.pure(Inputs.Pure('string', 'bar')),
+          tx.pure(Inputs.Pure('string', 'baz')),
         ],
       }),
     );
@@ -86,18 +86,18 @@ describe('offline build', () => {
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.input(100)));
+    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
     tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.input(Inputs.ObjectRef(ref()))]),
+      Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
     );
     tx.add(
       Commands.MoveCall({
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          tx.input(Inputs.Pure('string', 'foo')),
-          tx.input(Inputs.Pure('string', 'bar')),
-          tx.input(Inputs.Pure('string', 'baz')),
+          tx.pure(Inputs.Pure('string', 'foo')),
+          tx.pure(Inputs.Pure('string', 'bar')),
+          tx.pure(Inputs.Pure('string', 'baz')),
         ],
       }),
     );

@@ -19,17 +19,20 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    Argument, Command, ExecutionStatus, GenesisObject, InputObjectKind, ProgrammableMoveCall,
-    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-    TransactionEffects, TransactionEffectsAPI, TransactionEvents, TransactionKind,
-    VersionedProtocolMessage,
+    Argument, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
+    InputObjectKind, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
+    TransactionData, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
+    TransactionEvents, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
+use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 
+use crate::balance_changes::BalanceChange;
+use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 #[serde_as]
@@ -58,8 +61,32 @@ impl Display for BigInt {
         write!(f, "{}", self.0)
     }
 }
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase", rename = "TransactionResponseQuery", default)]
+pub struct SuiTransactionResponseQuery {
+    /// If None, no filter will be applied
+    pub filter: Option<TransactionFilter>,
+    /// config which fields to include in the response, by default only digest is included
+    pub options: Option<SuiTransactionResponseOptions>,
+}
 
-pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
+impl SuiTransactionResponseQuery {
+    pub fn new(
+        filter: Option<TransactionFilter>,
+        options: Option<SuiTransactionResponseOptions>,
+    ) -> Self {
+        Self { filter, options }
+    }
+
+    pub fn new_with_filter(filter: TransactionFilter) -> Self {
+        Self {
+            filter: Some(filter),
+            options: None,
+        }
+    }
+}
+
+pub type TransactionsPage = Page<SuiTransactionResponse, TransactionDigest>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
 #[serde(
@@ -74,6 +101,10 @@ pub struct SuiTransactionResponseOptions {
     pub show_effects: bool,
     /// Whether to show transaction events. Default to be False
     pub show_events: bool,
+    /// Whether to show object_changes. Default to be False
+    pub show_object_changes: bool,
+    /// Whether to show balance_changes. Default to be False
+    pub show_balance_changes: bool,
 }
 
 impl SuiTransactionResponseOptions {
@@ -86,6 +117,8 @@ impl SuiTransactionResponseOptions {
             show_effects: true,
             show_input: true,
             show_events: true,
+            show_object_changes: true,
+            show_balance_changes: true,
         }
     }
 
@@ -103,6 +136,42 @@ impl SuiTransactionResponseOptions {
         self.show_events = true;
         self
     }
+
+    pub fn with_balance_changes(mut self) -> Self {
+        self.show_balance_changes = true;
+        self
+    }
+
+    pub fn with_object_changes(mut self) -> Self {
+        self.show_object_changes = true;
+        self
+    }
+
+    /// default to return `WaitForEffectsCert` unless some options require
+    /// local execution
+    pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
+        // if people want effects or events, they typically want to wait for local execution
+        if self.require_effects() {
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        } else {
+            ExecuteTransactionRequestType::WaitForEffectsCert
+        }
+    }
+
+    pub fn require_local_execution(&self) -> bool {
+        self.show_balance_changes || self.show_object_changes
+    }
+
+    pub fn require_effects(&self) -> bool {
+        self.show_effects
+            || self.show_events
+            || self.show_balance_changes
+            || self.show_object_changes
+    }
+
+    pub fn only_digest(&self) -> bool {
+        self == &Self::default()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
@@ -116,6 +185,10 @@ pub struct SuiTransactionResponse {
     pub effects: Option<SuiTransactionEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<SuiTransactionEvents>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_changes: Option<Vec<ObjectChange>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance_changes: Option<Vec<BalanceChange>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -876,7 +949,7 @@ pub enum SuiCommand {
     /// Publishes a Move package
     Publish(SuiMovePackage),
     /// Upgrades a Move package
-    Upgrade(SuiArgument, Vec<ObjectID>, SuiMovePackage),
+    Upgrade(SuiMovePackage, Vec<ObjectID>, SuiArgument),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -912,7 +985,7 @@ impl Display for SuiCommand {
                 write!(f, ")")
             }
             Self::Publish(_bytes) => write!(f, "Publish(_)"),
-            Self::Upgrade(ticket, deps, _bytes) => {
+            Self::Upgrade(_bytes, deps, ticket) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
                 write!(f, ", _)")?;
@@ -942,12 +1015,12 @@ impl From<Command> for SuiCommand {
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Upgrade(ticket, dep_ids, modules) => SuiCommand::Upgrade(
-                SuiArgument::from(ticket),
-                dep_ids,
+            Command::Upgrade(modules, dep_ids, ticket) => SuiCommand::Upgrade(
                 SuiMovePackage {
                     disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
                 },
+                dep_ids,
+                SuiArgument::from(ticket),
             ),
         }
     }

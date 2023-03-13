@@ -9,7 +9,6 @@ module sui::validator {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
-    use sui::epoch_time_lock::EpochTimeLock;
     use sui::validator_cap::{Self, ValidatorOperationCap};
     use sui::object::{Self, ID};
     use std::option::{Option, Self};
@@ -58,9 +57,6 @@ module sui::validator {
 
     /// Commission rate set by the validator is higher than the threshold
     const ECommissionRateTooHigh: u64 = 8;
-
-    /// No stake balance is provided but an epoch time lock for the stake is provided.
-    const EEmptyStakeWithNonEmptyTimeLock: u64 = 9;
 
     /// New Capability is not created by the validator itself
     const ENewCapNotCreatedByValidatorItself: u64 = 100;
@@ -197,7 +193,6 @@ module sui::validator {
         primary_address: vector<u8>,
         worker_address: vector<u8>,
         initial_stake_option: Option<Balance<SUI>>,
-        coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
         is_active_at_genesis: bool,
@@ -235,7 +230,6 @@ module sui::validator {
         new_from_metadata(
             metadata,
             initial_stake_option,
-            coin_locked_until_epoch,
             gas_price,
             commission_rate,
             is_active_at_genesis,
@@ -262,7 +256,6 @@ module sui::validator {
     public(friend) fun request_add_stake(
         self: &mut Validator,
         stake: Balance<SUI>,
-        locking_period: Option<EpochTimeLock>,
         staker_address: address,
         ctx: &mut TxContext,
     ) {
@@ -270,7 +263,7 @@ module sui::validator {
         assert!(stake_amount > 0, 0);
         let stake_epoch = tx_context::epoch(ctx) + 1;
         staking_pool::request_add_stake(
-            &mut self.staking_pool, stake, locking_period, self.metadata.sui_address, staker_address, stake_epoch, ctx
+            &mut self.staking_pool, stake, self.metadata.sui_address, staker_address, stake_epoch, ctx
         );
         // Process stake right away if staking pool is preactive.
         if (staking_pool::is_preactive(&self.staking_pool)) {
@@ -634,7 +627,6 @@ module sui::validator {
     fun new_from_metadata(
         metadata: ValidatorMetadata,
         initial_stake_option: Option<Balance<SUI>>,
-        coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
         is_active_at_genesis: bool,
@@ -656,8 +648,7 @@ module sui::validator {
         if (option::is_some(&initial_stake_option)) {
             staking_pool::request_add_stake(
                 &mut staking_pool,
-                option::destroy_some(initial_stake_option),
-                coin_locked_until_epoch,
+                option::extract(&mut initial_stake_option),
                 sui_address,
                 sui_address,
                 tx_context::epoch(ctx),
@@ -665,11 +656,8 @@ module sui::validator {
             );
             // We immediately process this stake as they are at validator setup time and this is the validator staking with itself.
             staking_pool::process_pending_stake(&mut staking_pool);
-        } else {
-            assert!(option::is_none(&coin_locked_until_epoch), EEmptyStakeWithNonEmptyTimeLock);
-            option::destroy_none(coin_locked_until_epoch);
-            option::destroy_none(initial_stake_option);
         };
+        option::destroy_none(initial_stake_option);
 
         let operation_cap_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(sui_address, ctx);
         Validator {
@@ -709,7 +697,6 @@ module sui::validator {
         primary_address: vector<u8>,
         worker_address: vector<u8>,
         initial_stake_option: Option<Balance<SUI>>,
-        coin_locked_until_epoch: Option<EpochTimeLock>,
         gas_price: u64,
         commission_rate: u64,
         is_active_at_genesis: bool,
@@ -732,7 +719,6 @@ module sui::validator {
                 worker_address,
             ),
             initial_stake_option,
-            coin_locked_until_epoch,
             gas_price,
             commission_rate,
             is_active_at_genesis,

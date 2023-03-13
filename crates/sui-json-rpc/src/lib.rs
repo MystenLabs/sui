@@ -22,12 +22,17 @@ use sui_open_rpc::{Module, Project};
 use crate::metrics::MetricsLogger;
 use crate::routing_layer::RoutingLayer;
 
+pub use balance_changes::*;
+pub use object_changes::*;
+
 pub mod api;
+mod balance_changes;
 pub mod coin_api;
 pub mod error;
 pub mod event_api;
 pub mod governance_api;
 mod metrics;
+mod object_changes;
 pub mod read_api;
 mod routing_layer;
 pub mod transaction_builder_api;

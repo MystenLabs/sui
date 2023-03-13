@@ -9,7 +9,7 @@ use std::{
 
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::{CodeOffset, FunctionDefinitionIndex},
+    file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -17,7 +17,7 @@ use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, Run
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
@@ -74,7 +74,7 @@ struct AdditionalWrite {
     /// The new owner of the object
     recipient: Owner,
     /// the type of the object,
-    type_: StructTag,
+    type_: MoveObjectType,
     /// if the object has public transfer or not, i.e. if it has store
     has_public_transfer: bool,
     /// contents of the object
@@ -379,7 +379,7 @@ where
     }
 
     /// Determine the object changes and collect all user events
-    pub fn finish(self) -> Result<ExecutionResults, ExecutionError> {
+    pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
         use sui_types::error::convert_vm_error;
         let Self {
             protocol_config,
@@ -428,41 +428,44 @@ where
             add_input_object_write(input)
         }
         // check for unused values
-        for (i, command_result) in results.iter().enumerate() {
-            for (j, result_value) in command_result.iter().enumerate() {
-                let ResultValue {
-                    last_usage_kind,
-                    value,
-                } = result_value;
-                match value {
-                    None => (),
-                    Some(Value::Object(_)) => {
-                        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
-                            result_idx: i as u16,
-                            secondary_idx: j as u16,
+        // disable this check for dev inspect
+        if !Mode::allow_arbitrary_values() {
+            for (i, command_result) in results.iter().enumerate() {
+                for (j, result_value) in command_result.iter().enumerate() {
+                    let ResultValue {
+                        last_usage_kind,
+                        value,
+                    } = result_value;
+                    match value {
+                        None => (),
+                        Some(Value::Object(_)) => {
+                            return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+                                result_idx: i as u16,
+                                secondary_idx: j as u16,
+                            }
+                            .into())
                         }
-                        .into())
-                    }
-                    Some(Value::Raw(RawValueType::Any, _)) => (),
-                    Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
-                        // - nothing to check for drop
-                        // - if it does not have drop, but has copy,
-                        //   the last usage must be by value in order to "lie" and say that the
-                        //   last usage is actually a take instead of a clone
-                        // - Otherwise, an error
-                        if abilities.has_drop() {
-                        } else if abilities.has_copy()
-                            && !matches!(last_usage_kind, Some(UsageKind::ByValue))
-                        {
-                            let msg = "The value has copy, but not drop. \
+                        Some(Value::Raw(RawValueType::Any, _)) => (),
+                        Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
+                            // - nothing to check for drop
+                            // - if it does not have drop, but has copy,
+                            //   the last usage must be by value in order to "lie" and say that the
+                            //   last usage is actually a take instead of a clone
+                            // - Otherwise, an error
+                            if abilities.has_drop() {
+                            } else if abilities.has_copy()
+                                && !matches!(last_usage_kind, Some(UsageKind::ByValue))
+                            {
+                                let msg = "The value has copy, but not drop. \
                                 Its last usage must be by-value so it can be taken.";
-                            return Err(ExecutionError::new_with_source(
-                                ExecutionErrorKind::UnusedValueWithoutDrop {
-                                    result_idx: i as u16,
-                                    secondary_idx: j as u16,
-                                },
-                                msg,
-                            ));
+                                return Err(ExecutionError::new_with_source(
+                                    ExecutionErrorKind::UnusedValueWithoutDrop {
+                                        result_idx: i as u16,
+                                        secondary_idx: j as u16,
+                                    },
+                                    msg,
+                                ));
+                            }
                         }
                     }
                 }
@@ -557,13 +560,13 @@ where
             !gas_status.is_unmetered(),
             protocol_config,
         );
-        for (id, (write_kind, recipient, ty, tag, value)) in writes {
+        for (id, (write_kind, recipient, ty, move_type, value)) in writes {
             let abilities = tmp_session
                 .get_type_abilities(&ty)
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let has_public_transfer = abilities.has_store();
             let layout = tmp_session
-                .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
+                .get_type_layout(&move_type.clone().into())
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
@@ -573,7 +576,7 @@ where
                     &input_object_metadata,
                     &loaded_child_objects,
                     id,
-                    tag,
+                    move_type,
                     has_public_transfer,
                     bytes,
                     write_kind,
@@ -616,6 +619,28 @@ where
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+    }
+
+    /// Special case errors for type arguments to Move functions
+    pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+        use move_core_types::vm_status::StatusCode;
+        use sui_types::messages::TypeArgumentError;
+        match error.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => self.convert_vm_error(error),
+        }
     }
 
     /// Returns true if the value at the argument's location is borrowed, mutably or immutably
@@ -797,7 +822,7 @@ fn refund_max_gas_budget(
         .value()
         .checked_add(gas_status.max_gax_budget_in_balance()) else {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::TotalCoinBalanceOverflow,
+                ExecutionErrorKind::CoinBalanceOverflow,
                 "Gas coin too large after returning the max gas budget",
             ));
         };
@@ -816,7 +841,7 @@ unsafe fn create_written_object(
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     id: ObjectID,
-    tag: StructTag,
+    type_: MoveObjectType,
     has_public_transfer: bool,
     contents: Vec<u8>,
     write_kind: WriteKind,
@@ -842,7 +867,7 @@ unsafe fn create_written_object(
     );
 
     MoveObject::new_from_execution(
-        tag,
+        type_,
         has_public_transfer,
         old_obj_ver.unwrap_or_else(SequenceNumber::new),
         contents,

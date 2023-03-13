@@ -11,17 +11,18 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionsPage,
+    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+    TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::query::TransactionQuery;
+use sui_types::query::TransactionFilter;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -56,9 +57,9 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok(txn_resp)
     }
 
-    fn get_transactions(
+    fn query_transactions(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -67,19 +68,27 @@ impl<S: IndexerStore> ReadApi<S> {
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
 
-        let digests_from_db = match query {
-            TransactionQuery::All => {
+        let opts = query.options.unwrap_or_default();
+        if !opts.only_digest() {
+            // TODO(chris): implement this as a separate PR
+            return Err(IndexerError::NotImplementedError(
+                "options has not been implemented on indexer for queryTransactions".to_string(),
+            ));
+        }
+
+        let digests_from_db = match query.filter {
+            None => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
                 self.state
                     .get_all_transaction_digest_page(indexer_seq_number, limit, is_descending)
             }
-            TransactionQuery::MoveFunction {
+            Some(TransactionFilter::MoveFunction {
                 package,
                 module,
                 function,
-            } => {
+            }) => {
                 let move_call_seq_number = self
                     .state
                     .get_move_call_sequence_by_digest(cursor_str, is_descending)?;
@@ -96,8 +105,8 @@ impl<S: IndexerStore> ReadApi<S> {
             // SuiTransactionResponse, instead we should store the BCS
             // serialized transaction and retrive from there.
             // This is now blocked by the endpoint on FN side.
-            TransactionQuery::InputObject(_input_obj_id) => Ok(vec![]),
-            TransactionQuery::MutatedObject(mutated_obj_id) => {
+            Some(TransactionFilter::InputObject(_input_obj_id)) => Ok(vec![]),
+            Some(TransactionFilter::MutatedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
@@ -108,7 +117,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     is_descending,
                 )
             }
-            TransactionQuery::FromAddress(sender_address) => {
+            Some(TransactionFilter::FromAddress(sender_address)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
@@ -119,7 +128,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     is_descending,
                 )
             }
-            TransactionQuery::ToAddress(recipient_address) => {
+            Some(TransactionFilter::ToAddress(recipient_address)) => {
                 let recipient_seq_number = self
                     .state
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
@@ -151,7 +160,10 @@ impl<S: IndexerStore> ReadApi<S> {
         let next_cursor = txn_digests.last().cloned().map_or(cursor, Some);
 
         Ok(Page {
-            data: txn_digests,
+            data: txn_digests
+                .into_iter()
+                .map(SuiTransactionResponse::new)
+                .collect(),
             next_cursor,
             has_next_page,
         })
@@ -250,31 +262,33 @@ where
         Ok(self.get_total_transaction_number()?)
     }
 
-    async fn get_transactions(
+    async fn query_transactions(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
         if self
             .method_to_be_forwarded
-            .contains(&"get_transactions".to_string())
+            .contains(&"query_transactions".to_string())
         {
             return self
                 .fullnode
-                .get_transactions(query, cursor, limit, descending_order)
+                .query_transactions(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.get_transactions(query, cursor, limit, descending_order)?)
+        Ok(self.query_transactions(query, cursor, limit, descending_order)?)
     }
 
-    async fn get_transactions_in_range(
+    async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> RpcResult<Vec<TransactionDigest>> {
-        self.fullnode.get_transactions_in_range(start, end).await
+        self.fullnode
+            .get_transactions_in_range_deprecated(start, end)
+            .await
     }
 
     async fn get_transaction_with_options(
@@ -372,6 +386,16 @@ where
     ) -> RpcResult<SuiPastObjectResponse> {
         self.fullnode
             .try_get_past_object(object_id, version, options)
+            .await
+    }
+
+    async fn try_multi_get_past_objects(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiPastObjectResponse>> {
+        self.fullnode
+            .try_multi_get_past_objects(past_objects, options)
             .await
     }
 

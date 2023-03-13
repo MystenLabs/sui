@@ -65,8 +65,8 @@ class Transactions {
             throw new Error('Transaction signature is empty');
         }
         if (tx) {
-            if (!txResult || !('transaction' in txResult)) {
-                throw new Error(`Transaction result is empty`);
+            if (!txResult || !('digest' in txResult)) {
+                throw new Error(`Transaction result is empty ${txResult}`);
             }
             return txResult;
         }

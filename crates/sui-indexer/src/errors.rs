@@ -59,6 +59,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     SuiError(#[from] SuiError),
+
+    #[error("Invalid argument with error: `{0}`")]
+    InvalidArgumentError(String),
 }
 
 impl IndexerError {
@@ -81,6 +84,7 @@ impl IndexerError {
             IndexerError::UncategorizedError(_) => "UncategorizedError".into(),
             IndexerError::ObjectIdParseError(_) => "ObjectIdParseError".into(),
             IndexerError::SuiError(_) => "SuiError".into(),
+            IndexerError::InvalidArgumentError(_) => "InvalidArgumentError".into(),
         }
     }
 }

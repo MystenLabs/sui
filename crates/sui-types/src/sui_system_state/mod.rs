@@ -64,6 +64,7 @@ pub trait SuiSystemStateTrait {
     fn epoch(&self) -> u64;
     fn reference_gas_price(&self) -> u64;
     fn protocol_version(&self) -> u64;
+    fn system_state_version(&self) -> u64;
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn safe_mode(&self) -> bool;
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
@@ -115,6 +116,10 @@ impl SuiSystemState {
             epoch,
             ..Default::default()
         })
+    }
+
+    pub fn version(&self) -> u64 {
+        self.system_state_version()
     }
 }
 

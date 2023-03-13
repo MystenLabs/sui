@@ -12,6 +12,7 @@ pub mod checkpoints;
 pub mod consensus_adapter;
 pub mod consensus_handler;
 pub mod consensus_validator;
+pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
@@ -34,5 +35,7 @@ pub mod transaction_orchestrator;
 mod pay_sui_tests;
 pub mod signature_verifier;
 pub mod test_authority_clients;
+
+pub mod batch_bls_verifier;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

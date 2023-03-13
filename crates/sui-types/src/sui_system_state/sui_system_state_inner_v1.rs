@@ -8,9 +8,7 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata,
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
-use crate::sui_system_state::epoch_start_sui_system_state::{
-    EpochStartSystemState, EpochStartValidatorInfo,
-};
+use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
@@ -18,8 +16,9 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
-use super::SuiSystemStateTrait;
+use super::{SuiSystemStateTrait, INIT_SYSTEM_STATE_VERSION};
 
 const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -399,6 +398,7 @@ pub struct ValidatorSetV1 {
     pub staking_pool_mappings: Table,
     pub inactive_pools: Table,
     pub validator_candidates: Table,
+    pub at_risk_validators: VecMap<SuiAddress, u64>,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
@@ -407,6 +407,7 @@ pub struct ValidatorSetV1 {
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
     pub protocol_version: u64,
+    pub system_state_version: u64,
     pub validators: ValidatorSetV1,
     pub storage_fund: Balance,
     pub parameters: SystemParametersV1,
@@ -438,6 +439,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
 
     fn protocol_version(&self) -> u64 {
         self.protocol_version
+    }
+
+    fn system_state_version(&self) -> u64 {
+        self.system_state_version
     }
 
     fn epoch_start_timestamp_ms(&self) -> u64 {
@@ -472,19 +477,18 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
     }
 
     fn into_epoch_start_state(self) -> EpochStartSystemState {
-        EpochStartSystemState {
-            epoch: self.epoch,
-            protocol_version: self.protocol_version,
-            reference_gas_price: self.reference_gas_price,
-            safe_mode: self.safe_mode,
-            epoch_start_timestamp_ms: self.epoch_start_timestamp_ms,
-            active_validators: self
-                .validators
+        EpochStartSystemState::new_v1(
+            self.epoch,
+            self.protocol_version,
+            self.reference_gas_price,
+            self.safe_mode,
+            self.epoch_start_timestamp_ms,
+            self.validators
                 .active_validators
                 .iter()
                 .map(|validator| {
                     let metadata = validator.verified_metadata();
-                    EpochStartValidatorInfo {
+                    EpochStartValidatorInfoV1 {
                         sui_address: metadata.sui_address,
                         protocol_pubkey: metadata.protocol_pubkey.clone(),
                         narwhal_network_pubkey: metadata.network_pubkey.clone(),
@@ -497,7 +501,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     }
                 })
                 .collect(),
-        }
+        )
     }
 
     fn into_sui_system_state_summary(self) -> SuiSystemStateSummary {
@@ -507,6 +511,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         let Self {
             epoch,
             protocol_version,
+            system_state_version,
             validators:
                 ValidatorSetV1 {
                     total_stake,
@@ -535,6 +540,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                             id: validator_candidates_id,
                             size: validator_candidates_size,
                         },
+                    at_risk_validators:
+                        VecMap {
+                            contents: at_risk_validators,
+                        },
                 },
             storage_fund,
             parameters: SystemParametersV1 {
@@ -557,6 +566,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         SuiSystemStateSummary {
             epoch,
             protocol_version,
+            system_state_version,
             storage_fund: storage_fund.value(),
             reference_gas_price,
             safe_mode,
@@ -579,6 +589,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             inactive_pools_size,
             validator_candidates_id,
             validator_candidates_size,
+            at_risk_validators: at_risk_validators
+                .into_iter()
+                .map(|e| (e.key, e.value))
+                .collect(),
             validator_report_records: validator_report_records
                 .into_iter()
                 .map(|e| (e.key, e.value.contents))
@@ -598,10 +612,12 @@ impl Default for SuiSystemStateInnerV1 {
             staking_pool_mappings: Table::default(),
             inactive_pools: Table::default(),
             validator_candidates: Table::default(),
+            at_risk_validators: VecMap { contents: vec![] },
         };
         Self {
             epoch: 0,
             protocol_version: ProtocolVersion::MIN.as_u64(),
+            system_state_version: INIT_SYSTEM_STATE_VERSION,
             validators: validator_set,
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {

@@ -32,7 +32,7 @@ export type SharedObjectRef = {
   objectId: string;
 
   /** The version the object was shared at */
-  initialSharedVersion: number;
+  initialSharedVersion: number | bigint;
 
   /** Whether reference is mutable */
   mutable: boolean;
@@ -171,11 +171,10 @@ const BCS_SPEC: TypeSchema = {
     TransactionKind: {
       // can not be called from sui.js; dummy placement
       // to set the enum counter right for ProgrammableTransact
+      ProgrammableTransaction: 'ProgrammableTransaction',
       ChangeEpoch: null,
       Genesis: null,
       ConsensusCommitPrologue: null,
-
-      ProgrammableTransaction: 'ProgrammableTransaction',
     },
     TransactionExpiration: {
       None: null,

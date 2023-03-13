@@ -2,17 +2,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::coin::Coin;
+use crate::coin::CoinMetadata;
+use crate::coin::LockedCoin;
+use crate::coin::COIN_MODULE_NAME;
+use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
     SuiPublicKey, SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::dynamic_field::DynamicFieldInfo;
+use crate::dynamic_field::DynamicFieldType;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
+use crate::gas_coin::GAS;
+use crate::governance::StakedSui;
+use crate::governance::STAKED_SUI_STRUCT_NAME;
+use crate::governance::STAKING_POOL_MODULE_NAME;
 use crate::messages::Transaction;
 use crate::messages::TransactionEffects;
 use crate::messages::TransactionEffectsAPI;
@@ -24,6 +35,7 @@ use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::SUI_FRAMEWORK_ADDRESS;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -31,7 +43,9 @@ use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -94,20 +108,195 @@ pub fn random_object_ref() -> ObjectRef {
     )
 }
 
+/// Wrapper around StructTag with a space-efficient representation for common types like coins
+/// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win
+#[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Deserialize, Serialize, Hash)]
+pub enum MoveObjectType {
+    /// A type that is not 0x2::coin::Coin<T>
+    Other(StructTag),
+    /// A SUI coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
+    GasCoin,
+    /// A record of a staked SUI coin (i.e., 0x2::staking_pool::StakedSui)
+    StakedSui,
+    /// A non-SUI coin type (i.e., 0x2::coin::Coin<T> where T != 0x2::sui::SUI)
+    Coin(TypeTag),
+    // NOTE: if adding a new type here, and there are existing on-chain objects of that
+    // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
+    // to make sure the new type and Other(_) are interpreted consistently.
+}
+
+impl MoveObjectType {
+    pub fn address(&self) -> AccountAddress {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => {
+                SUI_FRAMEWORK_ADDRESS
+            }
+            MoveObjectType::Other(s) => s.address,
+        }
+    }
+
+    pub fn module(&self) -> &IdentStr {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => COIN_MODULE_NAME,
+            MoveObjectType::StakedSui => STAKING_POOL_MODULE_NAME,
+            MoveObjectType::Other(s) => &s.module,
+        }
+    }
+
+    pub fn name(&self) -> &IdentStr {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => COIN_STRUCT_NAME,
+            MoveObjectType::StakedSui => STAKED_SUI_STRUCT_NAME,
+            MoveObjectType::Other(s) => &s.name,
+        }
+    }
+
+    pub fn type_params(&self) -> Vec<TypeTag> {
+        match self {
+            MoveObjectType::GasCoin => vec![GAS::type_tag()],
+            MoveObjectType::StakedSui => vec![],
+            MoveObjectType::Coin(inner) => vec![inner.clone()],
+            MoveObjectType::Other(s) => s.type_params.clone(),
+        }
+    }
+
+    pub fn into_type_params(self) -> Vec<TypeTag> {
+        match self {
+            MoveObjectType::GasCoin => vec![GAS::type_tag()],
+            MoveObjectType::StakedSui => vec![],
+            MoveObjectType::Coin(inner) => vec![inner],
+            MoveObjectType::Other(s) => s.type_params,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        ModuleId::new(self.address(), self.module().to_owned())
+    }
+
+    pub fn size_for_gas_metering(&self) -> usize {
+        // unwraps safe because a `StructTag` cannot fail to serialize
+        match self {
+            MoveObjectType::GasCoin => 1,
+            MoveObjectType::StakedSui => 1,
+            MoveObjectType::Coin(inner) => bcs::serialized_size(inner).unwrap() + 1,
+            MoveObjectType::Other(s) => bcs::serialized_size(s).unwrap() + 1,
+        }
+    }
+
+    /// Return true if `self` is 0x2::coin::Coin<T> for some T (note: T can be SUI)
+    pub fn is_coin(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => true,
+            MoveObjectType::StakedSui | MoveObjectType::Other(_) => false,
+        }
+    }
+
+    /// Return true if `self` is 0x2::coin::Coin<0x2::sui::SUI>
+    pub fn is_gas_coin(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin => true,
+            MoveObjectType::StakedSui | MoveObjectType::Coin(_) | MoveObjectType::Other(_) => false,
+        }
+    }
+
+    pub fn is_staked_sui(&self) -> bool {
+        match self {
+            MoveObjectType::StakedSui => true,
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) | MoveObjectType::Other(_) => false,
+        }
+    }
+
+    pub fn is_locked_coin(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
+            MoveObjectType::Other(s) => LockedCoin::is_locked_coin(s),
+        }
+    }
+
+    pub fn is_coin_metadata(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
+            MoveObjectType::Other(s) => CoinMetadata::is_coin_metadata(s),
+        }
+    }
+
+    pub fn is_dynamic_field(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
+            MoveObjectType::Other(s) => DynamicFieldInfo::is_dynamic_field(s),
+        }
+    }
+
+    pub fn try_extract_field_name(&self, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => {
+                Err(SuiError::ObjectDeserializationError {
+                    error: "Error extracting dynamic object name from Coin object".to_string(),
+                })
+            }
+            MoveObjectType::Other(s) => DynamicFieldInfo::try_extract_field_name(s, type_),
+        }
+    }
+
+    pub fn is(&self, s: &StructTag) -> bool {
+        match self {
+            MoveObjectType::GasCoin => GasCoin::is_gas_coin(s),
+            MoveObjectType::StakedSui => StakedSui::is_staked_sui(s),
+            MoveObjectType::Coin(inner) => {
+                Coin::is_coin(s) && s.type_params.len() == 1 && inner == &s.type_params[0]
+            }
+            MoveObjectType::Other(o) => s == o,
+        }
+    }
+}
+
+impl From<StructTag> for MoveObjectType {
+    fn from(mut s: StructTag) -> Self {
+        if GasCoin::is_gas_coin(&s) {
+            MoveObjectType::GasCoin
+        } else if Coin::is_coin(&s) {
+            // unwrap safe because a coin has exactly one type parameter
+            MoveObjectType::Coin(s.type_params.pop().unwrap())
+        } else if StakedSui::is_staked_sui(&s) {
+            MoveObjectType::StakedSui
+        } else {
+            MoveObjectType::Other(s)
+        }
+    }
+}
+
+impl From<MoveObjectType> for StructTag {
+    fn from(o: MoveObjectType) -> Self {
+        match o {
+            MoveObjectType::GasCoin => GasCoin::type_(),
+            MoveObjectType::StakedSui => StakedSui::type_(),
+            MoveObjectType::Coin(inner) => Coin::type_(inner),
+            MoveObjectType::Other(s) => s,
+        }
+    }
+}
+
+impl From<MoveObjectType> for TypeTag {
+    fn from(o: MoveObjectType) -> TypeTag {
+        let s: StructTag = o.into();
+        TypeTag::Struct(Box::new(s))
+    }
+}
+
 /// Type of a Sui object
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum ObjectType {
     /// Move package containing one or more bytecode modules
     Package,
-    /// A Move struct of the given
-    Struct(StructTag),
+    /// A Move struct of the given type
+    Struct(MoveObjectType),
 }
 
 impl From<&Object> for ObjectType {
     fn from(o: &Object) -> Self {
         o.data
             .type_()
-            .map(|tag| ObjectType::Struct(tag.clone()))
+            .map(|t| ObjectType::Struct(t.clone()))
             .unwrap_or(ObjectType::Package)
     }
 }
@@ -120,7 +309,7 @@ impl FromStr for ObjectType {
             Ok(ObjectType::Package)
         } else {
             let tag = parse_sui_struct_tag(s)?;
-            Ok(ObjectType::Struct(tag))
+            Ok(ObjectType::Struct(MoveObjectType::from(tag)))
         }
     }
 }
@@ -152,7 +341,7 @@ const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
         match self {
-            ObjectType::Struct(s) => s == &GasCoin::type_(),
+            ObjectType::Struct(s) => s.is_gas_coin(),
             ObjectType::Package => false,
         }
     }
@@ -287,7 +476,7 @@ impl From<&PublicKey> for SuiAddress {
 
 /// A MultiSig address is the first 20 bytes of the hash of
 /// `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n`
-/// of all participating public keys and its weight.  
+/// of all participating public keys and its weight.
 impl From<MultiSigPublicKey> for SuiAddress {
     fn from(multisig_pk: MultiSigPublicKey) -> Self {
         let mut hasher = Sha3_256::default();
@@ -491,7 +680,10 @@ impl TxContext {
             || self.digest != other.digest
             || other.ids_created < self.ids_created
         {
-            return Err(ExecutionErrorKind::InvalidTransactionUpdate.into());
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InvariantViolation,
+                "Immutable fields for TxContext changed",
+            ));
         }
         self.ids_created = other.ids_created;
         Ok(())
@@ -837,6 +1029,13 @@ impl From<SuiAddress> for AccountAddress {
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::Display for MoveObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        let s: StructTag = self.clone().into();
+        write!(f, "{}", s)
     }
 }
 

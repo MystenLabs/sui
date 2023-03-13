@@ -10,7 +10,6 @@ const styles = cva(
     [
         'transition flex flex-nowrap items-center justify-center outline-none gap-1 w-full',
         'no-underline bg-transparent p-0 border-none',
-        'text-bodySmall',
         'active:opacity-70',
         'disabled:opacity-40',
         'cursor-pointer group',
@@ -29,6 +28,11 @@ const styles = cva(
             weight: {
                 semibold: 'font-semibold',
                 medium: 'font-medium',
+            },
+            size: {
+                bodySmall: 'text-bodySmall',
+                body: 'text-body',
+                base: 'text-base leading-none',
             },
         },
     }
@@ -61,11 +65,19 @@ interface LinkProps
 
 export const Link = forwardRef(
     (
-        { before, after, text, color, weight, ...otherProps }: LinkProps,
+        {
+            before,
+            after,
+            text,
+            color,
+            weight,
+            size = 'bodySmall',
+            ...otherProps
+        }: LinkProps,
         ref: Ref<HTMLAnchorElement | HTMLButtonElement>
     ) => (
         <ButtonOrLink
-            className={styles({ color, weight })}
+            className={styles({ color, weight, size })}
             {...otherProps}
             ref={ref}
         >
@@ -73,7 +85,7 @@ export const Link = forwardRef(
                 <div className={iconStyles({ color })}>{before}</div>
             ) : null}
             {text ? (
-                <div className={'truncate leading-tight'}>{text}</div>
+                <div className={'truncate leading-none'}>{text}</div>
             ) : null}
             {after ? (
                 <div className={iconStyles({ color })}>{after}</div>

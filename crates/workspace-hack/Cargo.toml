@@ -35,6 +35,7 @@ anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.4" }
+ark-bn254 = { version = "0.4" }
 ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
 ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
 ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
@@ -57,7 +58,6 @@ assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
-atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
@@ -136,15 +136,12 @@ const-oid = { version = "0.9", default-features = false }
 const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
-crc = { version = "3", default-features = false }
-crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 criterion-plot = { version = "0.5", default-features = false }
 crossbeam-channel = { version = "0.5" }
 crossbeam-deque = { version = "0.8" }
 crossbeam-epoch = { version = "0.9", default-features = false, features = ["std"] }
-crossbeam-queue = { version = "0.3" }
 crossbeam-utils = { version = "0.8" }
 crossterm = { version = "0.25" }
 crunchy = { version = "0.2", default-features = false, features = ["std"] }
@@ -180,7 +177,6 @@ dirs-sys = { version = "0.3", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
-dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11" }
 duration-str = { version = "0.4" }
 dyn-clone = { version = "1", default-features = false }
@@ -198,8 +194,8 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9fbe55e9d477eac6a6d13e872e1dee19b0c83f53", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9fbe55e9d477eac6a6d13e872e1dee19b0c83f53", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -210,7 +206,6 @@ fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", defau
 flate2 = { version = "1" }
 flexstr = { version = "0.9" }
 float-cmp = { version = "0.9" }
-flume = { version = "0.10", default-features = false, features = ["async"] }
 fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
@@ -219,8 +214,7 @@ funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
 futures-core = { version = "0.3", features = ["unstable"] }
-futures-executor = { version = "0.3" }
-futures-intrusive = { version = "0.4" }
+futures-executor = { version = "0.3", default-features = false, features = ["std"] }
 futures-io = { version = "0.3", features = ["unstable"] }
 futures-lite = { version = "1" }
 futures-sink = { version = "0.3" }
@@ -249,7 +243,6 @@ hakari = { version = "0.13", default-features = false, features = ["cli-support"
 half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
-hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7" }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4" }
@@ -305,7 +298,6 @@ lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
-libsqlite3-sys = { version = "0.25", default-features = false, features = ["bundled", "pkg-config", "unlock_notify", "vcpkg"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -525,15 +517,9 @@ smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
-spin-274715c4dabd11b0 = { package = "spin", version = "0.9" }
 spki = { version = "0.6", default-features = false, features = ["std"] }
-sqlformat = { version = "0.2", default-features = false }
-sqlx = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", features = ["runtime-tokio-rustls", "sqlite"] }
-sqlx-core = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["any", "migrate", "runtime-tokio-rustls", "sqlite"] }
-sqlx-rt = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["runtime-tokio-rustls"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
-stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
@@ -573,7 +559,7 @@ tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
-tokio-stream = { version = "0.1", features = ["fs", "net", "sync"] }
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml = { version = "0.5", features = ["preserve_order"] }
 toml_datetime = { version = "0.5", default-features = false }
@@ -613,7 +599,6 @@ unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
-unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
@@ -664,6 +649,7 @@ anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.4" }
+ark-bn254 = { version = "0.4" }
 ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
 ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
 ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
@@ -696,7 +682,6 @@ async-recursion = { version = "1", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 async-stream-impl = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
-atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
@@ -787,15 +772,12 @@ constant_time_eq = { version = "0.2", default-features = false }
 convert_case-3b31131e45eafb45 = { package = "convert_case", version = "0.6", default-features = false }
 convert_case-9fbad63c4bcf4a8f = { package = "convert_case", version = "0.4", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
-crc = { version = "3", default-features = false }
-crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 criterion-plot = { version = "0.5", default-features = false }
 crossbeam-channel = { version = "0.5" }
 crossbeam-deque = { version = "0.8" }
 crossbeam-epoch = { version = "0.9", default-features = false, features = ["std"] }
-crossbeam-queue = { version = "0.3" }
 crossbeam-utils = { version = "0.8" }
 crossterm = { version = "0.25" }
 crunchy = { version = "0.2", default-features = false, features = ["std"] }
@@ -843,7 +825,6 @@ dirs-sys-next = { version = "0.1", default-features = false }
 displaydoc = { version = "0.2" }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
-dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11" }
 duration-str = { version = "0.4" }
 dyn-clone = { version = "1", default-features = false }
@@ -862,9 +843,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5454b7f65632b35cb9503fb14ac0aca3823b5706", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9fbe55e9d477eac6a6d13e872e1dee19b0c83f53", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9fbe55e9d477eac6a6d13e872e1dee19b0c83f53", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9fbe55e9d477eac6a6d13e872e1dee19b0c83f53", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -875,7 +856,6 @@ fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", defau
 flate2 = { version = "1" }
 flexstr = { version = "0.9" }
 float-cmp = { version = "0.9" }
-flume = { version = "0.10", default-features = false, features = ["async"] }
 fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
@@ -884,8 +864,7 @@ funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
 futures-core = { version = "0.3", features = ["unstable"] }
-futures-executor = { version = "0.3" }
-futures-intrusive = { version = "0.4" }
+futures-executor = { version = "0.3", default-features = false, features = ["std"] }
 futures-io = { version = "0.3", features = ["unstable"] }
 futures-lite = { version = "1" }
 futures-macro = { version = "0.3", default-features = false }
@@ -916,10 +895,9 @@ hakari = { version = "0.13", default-features = false, features = ["cli-support"
 half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
-hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7" }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
-heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode"] }
+heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4" }
 hex = { version = "0.4" }
 hex-literal = { version = "0.3", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
@@ -983,7 +961,6 @@ libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
-libsqlite3-sys = { version = "0.25", default-features = false, features = ["bundled", "pkg-config", "unlock_notify", "vcpkg"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -1245,16 +1222,9 @@ smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
-spin-274715c4dabd11b0 = { package = "spin", version = "0.9" }
 spki = { version = "0.6", default-features = false, features = ["std"] }
-sqlformat = { version = "0.2", default-features = false }
-sqlx = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", features = ["runtime-tokio-rustls", "sqlite"] }
-sqlx-core = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["any", "migrate", "runtime-tokio-rustls", "sqlite"] }
-sqlx-macros = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["migrate", "runtime-tokio-rustls", "sqlite"] }
-sqlx-rt = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["runtime-tokio-rustls"] }
 stable_deref_trait = { version = "1" }
 static_assertions = { version = "1", default-features = false }
-stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
@@ -1303,7 +1273,7 @@ tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23" }
-tokio-stream = { version = "0.1", features = ["fs", "net", "sync"] }
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml = { version = "0.5", features = ["preserve_order"] }
 toml_datetime = { version = "0.5", default-features = false }
@@ -1348,7 +1318,6 @@ unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
 unicode-xid-6f8ce4dd05d13bba = { package = "unicode-xid", version = "0.2" }
 unicode-xid-c65f7effa3be6d31 = { package = "unicode-xid", version = "0.1" }
-unicode_categories = { version = "0.1", default-features = false }
 universal-hash = { version = "0.5", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
@@ -1357,7 +1326,6 @@ url = { version = "2" }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 variant_count = { version = "1", default-features = false }
-vcpkg = { version = "0.2", default-features = false }
 vec_map = { version = "0.8", default-features = false }
 version_check = { version = "0.9", default-features = false }
 versions = { version = "4", default-features = false }
@@ -1492,7 +1460,7 @@ rustix = { version = "0.36", features = ["fs", "termios"] }
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
-spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+spin = { version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
@@ -1529,7 +1497,7 @@ rustix = { version = "0.36", features = ["fs", "termios"] }
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
-spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+spin = { version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
@@ -1549,7 +1517,7 @@ output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
-spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+spin = { version = "0.5", default-features = false }
 str-buf = { version = "1", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
@@ -1574,8 +1542,9 @@ output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
-spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+spin = { version = "0.5", default-features = false }
 str-buf = { version = "1", default-features = false }
+vcpkg = { version = "0.2", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }

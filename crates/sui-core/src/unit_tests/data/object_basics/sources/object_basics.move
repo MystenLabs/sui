@@ -60,13 +60,17 @@ module examples::object_basics {
     }
 
     public entry fun wrap(o: Object, ctx: &mut TxContext) {
-        transfer::transfer(Wrapper { id: object::new(ctx), o }, tx_context::sender(ctx))
+        transfer::transfer(wrap_object(o, ctx), tx_context::sender(ctx))
     }
 
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         object::delete(id);
         transfer::transfer(o, tx_context::sender(ctx))
+    }
+
+    public fun wrap_object(o: Object, ctx: &mut TxContext): Wrapper {
+        Wrapper { id: object::new(ctx), o }
     }
 
     public entry fun add_ofield(o: &mut Object, v: Object) {
