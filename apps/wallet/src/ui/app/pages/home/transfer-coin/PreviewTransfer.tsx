@@ -8,8 +8,8 @@ import { IconTooltip } from '_app/shared/tooltip';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { parseAmount } from '_helpers';
-import { useAppSelector } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 export type PreviewTransferProps = {
     coinType: string;
@@ -26,7 +26,7 @@ export function PreviewTransfer({
     amount,
     approximation,
 }: PreviewTransferProps) {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = parseAmount(amount, decimals);
 

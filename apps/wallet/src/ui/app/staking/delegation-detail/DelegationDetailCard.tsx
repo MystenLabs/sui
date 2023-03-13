@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
