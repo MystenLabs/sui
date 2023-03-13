@@ -280,7 +280,7 @@ impl CompiledPackage {
     /// Return the set of Object IDs corresponding to this package's transitive dependencies'
     /// original package IDs.
     pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
-        let ids: BTreeSet<_> = self
+        let mut ids: BTreeSet<_> = self
             .package
             .deps_compiled_units
             .iter()
@@ -290,6 +290,9 @@ impl CompiledPackage {
             })
             .collect();
 
+        // `0x0` is not a real dependency ID -- it means that the package has unpublished
+        // dependencies.
+        ids.remove(&ObjectID::ZERO);
         ids.into_iter().collect()
     }
 
