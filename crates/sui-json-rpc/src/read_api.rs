@@ -331,6 +331,7 @@ impl ReadApiServer for ReadApi {
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
+        // the input is needed for object_changes to retrieve the sender address.
         if opts.show_input || opts.show_object_changes {
             temp_response.transaction =
                 Some(self.state.get_executed_transaction(digest).await.tap_err(
@@ -1038,7 +1039,5 @@ fn convert_to_response(
     if opts.show_object_changes {
         response.object_changes = cache.object_changes;
     }
-
-    println!("{response:?}");
     response
 }

@@ -59,7 +59,7 @@ pub async fn get_object_change_from_effect<P: ObjectProvider<Error = E>, E>(
 
     for ((id, version, _), kind) in effects.all_deleted() {
         let o = object_provider
-            .find_object_less_then_version(id, version)
+            .find_object_lt_or_eq_version(id, version)
             .await?;
         if let Some(o) = o {
             if let Some(type_) = o.type_() {
