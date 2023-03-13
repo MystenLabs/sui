@@ -248,7 +248,9 @@ impl TryInto<SuiTransactionResponse> for Transaction {
             checkpoint: Some(self.checkpoint_sequence_number as u64),
             // TODO: Indexer need to persist event properly.
             events: Default::default(),
+            object_changes: None,
             errors: vec![],
+            balance_changes: None,
         })
     }
 }

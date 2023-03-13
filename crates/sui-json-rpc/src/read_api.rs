@@ -1,31 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fastcrypto::encoding::Base64;
 use futures::future::join_all;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-use tap::TapFallible;
-use tracing::debug;
-
-use fastcrypto::encoding::Base64;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
+use sui_types::messages::TransactionDataAPI;
+use tap::TapFallible;
+use tracing::debug;
+
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
+    BalanceChange, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectChange,
+    ObjectValueKind, Page, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -48,10 +51,12 @@ use sui_types::query::EventQuery;
 
 use crate::api::cap_page_limit;
 use crate::api::ReadApiServer;
-use crate::error::Error;
-use crate::SuiRpcModule;
-
 use crate::api::QUERY_MAX_RESULT_LIMIT;
+use crate::error::Error;
+use crate::{
+    get_balance_change_from_effect, get_object_change_from_effect, ObjectProviderCache,
+    SuiRpcModule,
+};
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
@@ -71,6 +76,8 @@ struct IntermediateTransactionResponse {
     effects: Option<TransactionEffects>,
     events: Option<SuiTransactionEvents>,
     checkpoint_seq: Option<CheckpointSequenceNumber>,
+    balance_changes: Option<Vec<BalanceChange>>,
+    object_changes: Option<Vec<ObjectChange>>,
     timestamp: Option<CheckpointTimestamp>,
     errors: Vec<String>,
 }
@@ -324,7 +331,8 @@ impl ReadApiServer for ReadApi {
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
-        if opts.show_input {
+        // the input is needed for object_changes to retrieve the sender address.
+        if opts.show_input || opts.show_object_changes {
             temp_response.transaction =
                 Some(self.state.get_executed_transaction(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
@@ -373,6 +381,28 @@ impl ReadApiServer for ReadApi {
                 // events field will be Some if and only if `show_events` is true and
                 // there is no error in converting fetching events
                 temp_response.events = Some(SuiTransactionEvents::default());
+            }
+        }
+
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        if opts.show_balance_changes {
+            if let Some(effects) = &temp_response.effects {
+                let balance_changes = get_balance_change_from_effect(&object_cache, effects)
+                    .await
+                    .map_err(Error::SuiError)?;
+                temp_response.balance_changes = Some(balance_changes);
+            }
+        }
+
+        if opts.show_object_changes {
+            if let (Some(effects), Some(input)) =
+                (&temp_response.effects, &temp_response.transaction)
+            {
+                let sender = input.data().intent_message.value.sender();
+                let object_changes = get_object_change_from_effect(&object_cache, sender, effects)
+                    .await
+                    .map_err(Error::SuiError)?;
+                temp_response.object_changes = Some(object_changes);
             }
         }
 
@@ -1002,5 +1032,12 @@ fn convert_to_response(
         response.events = cache.events;
     }
 
+    if opts.show_balance_changes {
+        response.balance_changes = cache.balance_changes;
+    }
+
+    if opts.show_object_changes {
+        response.object_changes = cache.object_changes;
+    }
     response
 }

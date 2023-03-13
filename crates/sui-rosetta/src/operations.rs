@@ -1,24 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use std::collections::HashMap;
 use std::vec;
-use sui_json_rpc_types::SuiArgument;
+
+use anyhow::anyhow;
+use serde::Deserialize;
+use serde::Serialize;
+
 use sui_json_rpc_types::SuiCommand;
 use sui_json_rpc_types::SuiProgrammableMoveCall;
 use sui_json_rpc_types::SuiProgrammableTransaction;
+use sui_json_rpc_types::{BalanceChange, SuiArgument};
 use sui_sdk::json::SuiJsonValue;
-
-use serde::Deserialize;
-use serde::Serialize;
 use sui_sdk::rpc_types::{
-    SuiEvent, SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionKind, SuiTransactionResponse,
+    SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
+    SuiTransactionResponse,
 };
-
 use sui_types::base_types::{SequenceNumber, SuiAddress};
-use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::governance::ADD_STAKE_MUL_COIN_FUN_NAME;
 use sui_types::messages::TransactionData;
@@ -344,54 +343,33 @@ impl Operations {
             && tx.function == ADD_STAKE_MUL_COIN_FUN_NAME.as_str()
     }
 
-    fn get_balance_operation_from_events(
-        events: &[SuiEvent],
+    fn process_balance_change(
+        gas_owner: SuiAddress,
+        gas_used: i128,
+        balance_changes: &[BalanceChange],
         status: Option<OperationStatus>,
         balances: HashMap<SuiAddress, i128>,
     ) -> impl Iterator<Item = Operation> {
-        let (balances, gas) = events
+        let mut balances = balance_changes
             .iter()
-            .flat_map(Self::get_balance_change_from_event)
-            .fold(
-                (balances, HashMap::<SuiAddress, i128>::new()),
-                |(mut balances, mut gas), (type_, address, amount)| {
-                    if type_ == BalanceChangeType::Gas {
-                        *gas.entry(address).or_default() += amount;
-                    } else {
-                        *balances.entry(address).or_default() += amount;
+            .fold(balances, |mut balances, balance_change| {
+                // Rosetta only care about address owner
+                if let Owner::AddressOwner(owner) = balance_change.owner {
+                    if balance_change.coin_type == GAS::type_tag() {
+                        *balances.entry(owner).or_default() += balance_change.amount;
                     }
-                    (balances, gas)
-                },
-            );
+                }
+                balances
+            });
+        // separate gas from balances
+        *balances.entry(gas_owner).or_default() -= gas_used;
 
         let balance_change = balances
             .into_iter()
             .filter(|(_, amount)| *amount != 0)
             .map(move |(addr, amount)| Operation::balance_change(status, addr, amount));
-        let gas = gas
-            .into_iter()
-            .map(|(addr, amount)| Operation::gas(addr, amount));
-
+        let gas = vec![Operation::gas(gas_owner, gas_used)];
         balance_change.chain(gas)
-    }
-
-    fn get_balance_change_from_event(
-        event: &SuiEvent,
-    ) -> Option<(BalanceChangeType, SuiAddress, i128)> {
-        if let SuiEvent::CoinBalanceChange {
-            owner: Owner::AddressOwner(owner),
-            coin_type,
-            amount,
-            change_type,
-            ..
-        } = event
-        {
-            // We only interested in SUI coins and account addresses
-            if coin_type == &GAS::type_().to_string() {
-                return Some((*change_type, *owner, *amount));
-            }
-        }
-        None
     }
 }
 
@@ -410,15 +388,16 @@ impl TryFrom<SuiTransactionData> for Operations {
 impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let status = Some(
-            response
-                .effects
-                .ok_or_else(|| {
-                    Error::InternalError(anyhow!("Response effects should not be empty"))
-                })?
-                .into_status()
-                .into(),
-        );
+        let effect = response
+            .effects
+            .ok_or_else(|| Error::InternalError(anyhow!("Response effects should not be empty")))?;
+        let gas_owner = effect.gas_object().owner.get_owner_address()?;
+        let gas_summary = effect.gas_used();
+        let gas_used = gas_summary.storage_rebate as i128
+            - gas_summary.storage_cost as i128
+            - gas_summary.computation_cost as i128;
+
+        let status = Some(effect.into_status().into());
         let ops: Operations = response
             .transaction
             .ok_or_else(|| {
@@ -445,13 +424,12 @@ impl TryFrom<SuiTransactionResponse> for Operations {
             });
 
         // Extract coin change operations from events
-        let coin_change_operations = Self::get_balance_operation_from_events(
-            &response
-                .events
-                .ok_or_else(|| {
-                    Error::InternalError(anyhow!("Response events should not be empty"))
-                })?
-                .data,
+        let coin_change_operations = Self::process_balance_change(
+            gas_owner,
+            gas_used,
+            &response.balance_changes.ok_or_else(|| {
+                Error::InternalError(anyhow!("Response balance changes should not be empty."))
+            })?,
             status,
             accounted_balances,
         );

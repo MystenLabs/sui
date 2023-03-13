@@ -6,9 +6,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponseOptions};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{
-    ExecuteTransactionRequestType, Transaction, TransactionData, TransactionDataAPI,
-};
+use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
 use crate::errors::Error;
@@ -128,8 +126,11 @@ pub async fn submit(
         .quorum_driver()
         .execute_transaction(
             signed_tx,
-            SuiTransactionResponseOptions::full_content(),
-            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+            SuiTransactionResponseOptions::new()
+                .with_input()
+                .with_effects()
+                .with_balance_changes(),
+            None,
         )
         .await?;
 
