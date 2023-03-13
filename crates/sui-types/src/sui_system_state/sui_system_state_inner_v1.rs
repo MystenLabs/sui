@@ -457,10 +457,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             );
         }
         CommitteeWithNetworkMetadata {
-            committee: Committee::new(self.epoch, voting_rights)
-                // unwrap is safe because we should have verified the committee on-chain.
-                // MUSTFIX: Make sure we always have a valid committee
-                .unwrap(),
+            committee: Committee::new(self.epoch, voting_rights),
             network_metadata,
         }
     }

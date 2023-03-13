@@ -737,7 +737,7 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(0, authorities.iter().cloned().collect()).unwrap();
+        let committee = Committee::new(0, authorities.iter().cloned().collect());
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;

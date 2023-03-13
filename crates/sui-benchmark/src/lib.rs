@@ -184,7 +184,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info));
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -212,7 +212,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info));
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -528,7 +528,7 @@ impl FullNodeProxy {
         let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, committee_map)?;
+        let committee = Committee::new(epoch, committee_map);
 
         Ok(Self {
             sui_client,

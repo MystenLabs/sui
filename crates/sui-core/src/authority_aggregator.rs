@@ -1041,7 +1041,7 @@ where
                                 }
                                 if err.is_object_or_package_not_found() {
                                     // Special case for object not found because we can
-                                    // retry if we have < 2f+1 object not found errors. 
+                                    // retry if we have < 2f+1 object not found errors.
                                     // However once we reach >= 2f+1 object not found errors
                                     // we cannot retry.
                                     state.object_or_package_not_found_stake += weight;
@@ -1592,7 +1592,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info))?;
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info));
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();

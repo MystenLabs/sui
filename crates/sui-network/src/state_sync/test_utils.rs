@@ -38,8 +38,7 @@ impl CommitteeFixture {
                 .iter()
                 .map(|(name, (_, stake))| (*name, *stake))
                 .collect(),
-        )
-        .unwrap();
+        );
 
         Self {
             epoch,

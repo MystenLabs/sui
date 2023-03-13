@@ -84,8 +84,7 @@ impl<S: SignatureVerifier + Default> ReconfigObserver<NetworkAuthorityClient, S>
                                 // Safe to unwrap, checked above
                                 Committee::new(
                                     committee.epoch,
-                                    BTreeMap::from_iter(committee.validators.into_iter())).unwrap_or_else(
-                                    |e| panic!("Can't create a valid Committee given info returned from Full Node: {:?}", e)
+                                    BTreeMap::from_iter(committee.validators.into_iter()),
                                 )
                             }
                             other => {

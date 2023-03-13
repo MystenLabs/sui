@@ -31,6 +31,7 @@ module sui::voting_power {
     const ETotalPowerMismatch: u64 = 1;
     const ERelativePowerMismatch: u64 = 2;
     const EVotingPowerOverThreshold: u64 = 3;
+    const EInvalidVotingPower: u64 = 4;
 
     /// Set the voting power of all validators.
     /// Each validator's voting power is initialized using their stake. We then attempt to cap their voting power
@@ -142,6 +143,7 @@ module sui::voting_power {
         let total = 0;
         while (i < len) {
             let voting_power = validator::voting_power(vector::borrow(v, i));
+            assert!(voting_power > 0, EInvalidVotingPower);
             total = total + voting_power;
             i = i + 1;
         };

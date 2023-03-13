@@ -99,7 +99,7 @@ impl SuiSystemStateSummary {
             );
         }
         CommitteeWithNetworkMetadata {
-            committee: Committee::new(self.epoch, voting_rights).unwrap(),
+            committee: Committee::new(self.epoch, voting_rights),
             network_metadata,
         }
     }
