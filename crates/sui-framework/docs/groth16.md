@@ -343,7 +343,7 @@ Returns a boolean indicating whether the proof is valid.
 Native functions that flattens the inputs into arrays of vectors and passed to the Rust native function.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(curve: u8, vk_gamma_abc_g1_bytes: &<a href="">vector</a>&lt;u8&gt;, alpha_g1_beta_g2_bytes: &<a href="">vector</a>&lt;u8&gt;, gamma_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, delta_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, public_proof_inputs: &<a href="">vector</a>&lt;u8&gt;, proof_points: &<a href="">vector</a>&lt;u8&gt;): bool
+<pre><code><b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(curve: u8, vk_gamma_abc_g1_bytes: &<a href="">vector</a>&lt;u8&gt;, alpha_g1_beta_g2_bytes: &<a href="">vector</a>&lt;u8&gt;, gamma_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, delta_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, public_proof_inputs: &<a href="">vector</a>&lt;u8&gt;, proof_points: &<a href="">vector</a>&lt;u8&gt;): bool
 </code></pre>
 
 
@@ -352,7 +352,7 @@ Native functions that flattens the inputs into arrays of vectors and passed to t
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(curve: u8, vk_gamma_abc_g1_bytes: &<a href="">vector</a>&lt;u8&gt;, alpha_g1_beta_g2_bytes: &<a href="">vector</a>&lt;u8&gt;, gamma_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, delta_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, public_proof_inputs: &<a href="">vector</a>&lt;u8&gt;, proof_points: &<a href="">vector</a>&lt;u8&gt;): bool;
+<pre><code><b>native</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(curve: u8, vk_gamma_abc_g1_bytes: &<a href="">vector</a>&lt;u8&gt;, alpha_g1_beta_g2_bytes: &<a href="">vector</a>&lt;u8&gt;, gamma_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, delta_g2_neg_pc_bytes: &<a href="">vector</a>&lt;u8&gt;, public_proof_inputs: &<a href="">vector</a>&lt;u8&gt;, proof_points: &<a href="">vector</a>&lt;u8&gt;): bool;
 </code></pre>
 
 
