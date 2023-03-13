@@ -48,6 +48,7 @@ impl NativesCostTable {
                 copy_bytes_to_address_cost_per_byte: protocol_config
                     .copy_bytes_to_address_cost_per_byte()
                     .into(),
+                address_from_bytes_cost_base: protocol_config.address_from_bytes_cost_base().into(),
             },
             address_to_u256_cost_params: AddressToU256CostParams {
                 address_to_vec_cost_per_byte: protocol_config.address_to_vec_cost_per_byte().into(),
@@ -57,6 +58,7 @@ impl NativesCostTable {
                 copy_convert_to_u256_cost_per_byte: protocol_config
                     .copy_convert_to_u256_cost_per_byte()
                     .into(),
+                address_to_u256_cost_base: protocol_config.address_to_u256_cost_base().into(),
             },
             address_from_u256_cost_params: AddressFromU256CostParams {
                 u256_to_bytes_to_vec_cost_per_byte: protocol_config
@@ -68,6 +70,7 @@ impl NativesCostTable {
                 copy_convert_to_address_cost_per_byte: protocol_config
                     .u256_bytes_vec_reverse_cost_per_byte()
                     .into(),
+                address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
             },
             event_emit_cost_params: EventEmitCostParams {
                 event_value_size_derivation_cost_per_byte: protocol_config
@@ -77,6 +80,7 @@ impl NativesCostTable {
                     .event_tag_size_derivation_cost_per_byte()
                     .into(),
                 event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
+                event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
             },
         }
     }

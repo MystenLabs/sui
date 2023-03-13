@@ -347,19 +347,23 @@ pub struct ProtocolConfig {
     /// === Native Function Costs ===
 
     /// Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
+    address_from_bytes_cost_base: Option<u64>,
     copy_bytes_to_address_cost_per_byte: Option<u64>,
 
     /// Cost params for the Move native function `address::to_u256(address): u256`
+    address_to_u256_cost_base: Option<u64>,
     address_to_vec_cost_per_byte: Option<u64>,
     address_vec_reverse_cost_per_byte: Option<u64>,
     copy_convert_to_u256_cost_per_byte: Option<u64>,
 
     /// Cost params for the Move native function `address::from_u256(u256): address`
+    address_from_u256_cost_base: Option<u64>,
     u256_to_bytes_to_vec_cost_per_byte: Option<u64>,
     u256_bytes_vec_reverse_cost_per_byte: Option<u64>,
     copy_convert_to_address_cost_per_byte: Option<u64>,
 
     /// Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+    event_emit_cost_base: Option<u64>,
     event_value_size_derivation_cost_per_byte: Option<u64>,
     event_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_cost_per_byte: Option<u64>,
@@ -582,6 +586,9 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn address_from_bytes_cost_base(&self) -> u64 {
+        self.address_from_bytes_cost_base.expect(CONSTANT_ERR_MSG)
+    }
     pub fn copy_bytes_to_address_cost_per_byte(&self) -> u64 {
         self.copy_bytes_to_address_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
@@ -593,9 +600,15 @@ impl ProtocolConfig {
         self.address_vec_reverse_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
     }
+    pub fn address_to_u256_cost_base(&self) -> u64 {
+        self.address_to_u256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
     pub fn copy_convert_to_u256_cost_per_byte(&self) -> u64 {
         self.copy_convert_to_u256_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn address_from_u256_cost_base(&self) -> u64 {
+        self.address_from_u256_cost_base.expect(CONSTANT_ERR_MSG)
     }
     pub fn u256_to_bytes_to_vec_cost_per_byte(&self) -> u64 {
         self.u256_to_bytes_to_vec_cost_per_byte
@@ -610,6 +623,9 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn event_emit_cost_base(&self) -> u64 {
+        self.event_emit_cost_base.expect(CONSTANT_ERR_MSG)
+    }
     pub fn event_value_size_derivation_cost_per_byte(&self) -> u64 {
         self.event_value_size_derivation_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
@@ -782,26 +798,37 @@ impl ProtocolConfig {
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),
 
                 /// === Native Function Costs ===
+                // Base cost for `from_bytes`
+                address_from_bytes_cost_base: Some(52),
                 // Copying bytes is a simple low-cost operation
-                copy_bytes_to_address_cost_per_byte: Some(10),
+                copy_bytes_to_address_cost_per_byte: Some(0),
+
+                // Base cost for `to_u256`
+                address_to_u256_cost_base: Some(52),
                 // Copying bytes is a simple low-cost operation
-                address_to_vec_cost_per_byte: Some(10),
+                address_to_vec_cost_per_byte: Some(0),
                 // Reversing bytes is a simple low-cost operation
-                address_vec_reverse_cost_per_byte: Some(10),
+                address_vec_reverse_cost_per_byte: Some(0),
                 // Copying bytes and converting to Value::u256 are simple low-cost operation
-                copy_convert_to_u256_cost_per_byte: Some(10),
+                copy_convert_to_u256_cost_per_byte: Some(0),
+
+                // Base cost for `from_u256`
+                address_from_u256_cost_base: Some(52),
                 // Copying bytes snd converting sre simple low-cost operations
-                u256_to_bytes_to_vec_cost_per_byte: Some(10),
+                u256_to_bytes_to_vec_cost_per_byte: Some(0),
                 // Reversing bytes is a simple low-cost operation
-                u256_bytes_vec_reverse_cost_per_byte: Some(10),
+                u256_bytes_vec_reverse_cost_per_byte: Some(0),
                 // Copying bytes and converting sre simple low-cost operations
-                copy_convert_to_address_cost_per_byte: Some(10),
+                copy_convert_to_address_cost_per_byte: Some(0),
+
+                // Base cost for `emit`
+                event_emit_cost_base: Some(52),
                 // Deriving event value size can be expensive due to recursion overhead
-                event_value_size_derivation_cost_per_byte: Some(1_000),
+                event_value_size_derivation_cost_per_byte: Some(0),
                 // Converting type to typetag be expensive due to recursion overhead
-                event_tag_size_derivation_cost_per_byte: Some(1_000),
+                event_tag_size_derivation_cost_per_byte: Some(0),
                 // Emitting an event is cheap since its a vector push
-                event_emit_cost_per_byte: Some(1_000),
+                event_emit_cost_per_byte: Some(0),
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
