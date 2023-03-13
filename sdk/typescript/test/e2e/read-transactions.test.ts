@@ -24,6 +24,17 @@ describe('Transaction Reading API', () => {
     expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
+  it('Query Transactions with opts', async () => {
+    const options = { showEvents: true, showEffects: true };
+    const resp = await toolbox.provider.queryTransactions({ options }, null, 1);
+    const digest = resp.data[0].digest;
+    const response2 = await toolbox.provider.getTransactionResponse(
+      digest,
+      options,
+    );
+    expect(resp.data[0]).toEqual(response2);
+  });
+
   it('Get Transactions', async () => {
     const resp = await toolbox.provider.queryTransactionsForAddressDeprecated(
       toolbox.address(),

@@ -137,6 +137,16 @@ impl SuiTransactionResponseOptions {
         self
     }
 
+    pub fn with_balance_changes(mut self) -> Self {
+        self.show_balance_changes = true;
+        self
+    }
+
+    pub fn with_object_changes(mut self) -> Self {
+        self.show_object_changes = true;
+        self
+    }
+
     /// default to return `WaitForEffectsCert` unless some options require
     /// local execution
     pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
@@ -159,14 +169,8 @@ impl SuiTransactionResponseOptions {
             || self.show_object_changes
     }
 
-    pub fn with_balance_changes(mut self) -> Self {
-        self.show_balance_changes = true;
-        self
-    }
-
-    pub fn with_object_changes(mut self) -> Self {
-        self.show_object_changes = true;
-        self
+    pub fn only_digest(&self) -> bool {
+        self == &Self::default()
     }
 }
 
