@@ -1940,6 +1940,7 @@ async fn test_nested_string() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -2298,6 +2299,7 @@ async fn test_entry_point_string_option_error() {
         &sender_key,
         &gas,
         "entry_point_string",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
