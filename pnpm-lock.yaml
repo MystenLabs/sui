@@ -517,7 +517,6 @@ importers:
       '@suchipi/femver': ^1.0.0
       '@types/tmp': ^0.2.3
       cross-env: ^7.0.3
-      cross-fetch: ^3.1.5
       eslint: ^8.35.0
       eslint-config-prettier: ^8.6.0
       eslint-config-react-app: ^7.0.1
@@ -548,7 +547,6 @@ importers:
       '@scure/bip32': 1.1.5
       '@scure/bip39': 1.1.1
       '@suchipi/femver': 1.0.0
-      cross-fetch: 3.1.5
       jayson: 4.0.0
       js-sha3: 0.8.0
       rpc-websockets: 7.5.1
@@ -679,8 +677,8 @@ importers:
     dependencies:
       '@mysten/wallet-kit': link:../wallet-kit
       next: 13.2.3_biqbaboplfbrettd7655fr4n2y
-      nextra: 2.2.18_nvzgbose6yf6w7ijjprgspqefi
-      nextra-theme-docs: 2.2.18_eabglq5mx25htemwufj5jyllhe
+      nextra: 2.2.19_nvzgbose6yf6w7ijjprgspqefi
+      nextra-theme-docs: 2.2.19_v24abnaciir5bgiyiwoymk6zhm
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
     devDependencies:
@@ -9971,14 +9969,6 @@ packages:
       cross-spawn: 7.0.3
     dev: true
 
-  /cross-fetch/3.1.5:
-    resolution: {integrity: sha512-lvb1SBsI0Z7GDwmuid+mU3kWVBwTVUbe7S0H52yaaAdQOXq2YktTCZdlAcNKFzE6QtRz0snpw9bNiPeOIkkQvw==}
-    dependencies:
-      node-fetch: 2.6.7
-    transitivePeerDependencies:
-      - encoding
-    dev: false
-
   /cross-spawn/5.1.0:
     resolution: {integrity: sha512-pTgQJ5KC0d2hcY8eyL1IzlBPYjTkyH72XRZPnLyKus2mBfNjQs3klqbJU2VILqZryAZUt9JOb3h/mWMy23/f5A==}
     dependencies:
@@ -16311,11 +16301,11 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.2.18_eabglq5mx25htemwufj5jyllhe:
-    resolution: {integrity: sha512-gW9P2fOuV0w414vmHyJY9k1XSoPsFLOXIDWyW177v8xPJcNF3DrYCOIaVgZt7UwxlBNmZlBDg+glPPogXw1qHQ==}
+  /nextra-theme-docs/2.2.19_v24abnaciir5bgiyiwoymk6zhm:
+    resolution: {integrity: sha512-+5PcNgHwxwSAmQZlbV2cbjbvxj7CPYnN44OtWNxHQ8L3dzlw6fUyIJtyCUcGbDHpFC3sHmwYgB3OCWH8m4P35Q==}
     peerDependencies:
       next: '>=9.5.3'
-      nextra: 2.2.18
+      nextra: 2.2.19
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -16330,15 +16320,15 @@ packages:
       next: 13.2.3_biqbaboplfbrettd7655fr4n2y
       next-seo: 5.15.0_nvzgbose6yf6w7ijjprgspqefi
       next-themes: 0.2.1_nvzgbose6yf6w7ijjprgspqefi
-      nextra: 2.2.18_nvzgbose6yf6w7ijjprgspqefi
+      nextra: 2.2.19_nvzgbose6yf6w7ijjprgspqefi
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       scroll-into-view-if-needed: 3.0.6
       zod: 3.20.2
     dev: false
 
-  /nextra/2.2.18_nvzgbose6yf6w7ijjprgspqefi:
-    resolution: {integrity: sha512-45fXVzSOOhjMs+bTcq/jsW4BT8bOeTZjceHEubDTFEdelqTv5rUtwVsHqt0iwzmj/braNdZWTITygY25rE65tA==}
+  /nextra/2.2.19_nvzgbose6yf6w7ijjprgspqefi:
+    resolution: {integrity: sha512-QmgbJvT1lfmFCM8n5gfGTA5p8efw20N/oZP9ojBhWhmatq/PwAp7VoSeTan6TT9Yspv6PmnrgpqKhYGzPSkFVw==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
@@ -16408,6 +16398,7 @@ packages:
         optional: true
     dependencies:
       whatwg-url: 5.0.0
+    dev: true
 
   /node-fetch/3.3.0:
     resolution: {integrity: sha512-BKwRP/O0UvoMKp7GNdwPlObhYGB5DQqwhEDQlNKuoqwVYSxkSZCSbHjnFFmUEtwSKRPU4kNK8PbDYYitwaE3QA==}
@@ -20454,6 +20445,7 @@ packages:
 
   /tr46/0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
+    dev: true
 
   /tr46/1.0.1:
     resolution: {integrity: sha512-dTpowEjclQ7Kgx5SdBkqRzVhERQXov8/l9Ft9dVM9fmg0W0KQSVaXX9T4i6twCPNtYiZM53lpSSUAwJbFPOHxA==}
@@ -21955,6 +21947,7 @@ packages:
 
   /webidl-conversions/3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
+    dev: true
 
   /webidl-conversions/4.0.2:
     resolution: {integrity: sha512-YQ+BmxuTgd6UXZW3+ICGfyqRyHXVlD5GtQr5+qjiNW7bF0cqrzX500HVXPBOvgXb5YnzDd+h0zqyv61KUD7+Sg==}
@@ -22097,6 +22090,7 @@ packages:
     dependencies:
       tr46: 0.0.3
       webidl-conversions: 3.0.1
+    dev: true
 
   /whatwg-url/7.1.0:
     resolution: {integrity: sha512-WUu7Rg1DroM7oQvGWfOiAK21n74Gg+T4elXEQYkOhtyLeWiJFoOGLXPKI/9gzIie9CtwVLm8wtw6YJdKyxSjeg==}
