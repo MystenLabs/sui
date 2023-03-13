@@ -7,7 +7,8 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     internal_hash, user_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, InternalHash, Signature, Signer, SuiSignatureInner,
+    ToFromBytes,
 };
 use crate::digests::{CertificateDigest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
@@ -25,10 +26,7 @@ use crate::{
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
-use fastcrypto::{
-    encoding::Base64,
-    hash::{HashFunction, Sha3_256},
-};
+use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
@@ -2038,7 +2036,7 @@ pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorum
 
 impl CertifiedTransaction {
     pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = Sha3_256::default();
+        let mut digest = InternalHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
