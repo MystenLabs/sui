@@ -4,17 +4,12 @@
 use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
-use shared_crypto::intent::{Intent, IntentScope};
 use std::sync::Arc;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::transaction_manager::TransactionManager;
 use narwhal_worker::TransactionValidator;
-use sui_types::message_envelope::Message;
-use sui_types::{
-    crypto::{AuthoritySignInfoTrait, VerificationObligation},
-    messages::{ConsensusTransaction, ConsensusTransactionKind},
-};
+use sui_types::messages::{ConsensusTransaction, ConsensusTransactionKind};
 use tap::TapFallible;
 
 use tracing::{info, warn};
@@ -66,38 +61,12 @@ impl TransactionValidator for SuiTxValidator {
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
 
-        // let mut owned_tx_certs = Vec::new();
-        let mut obligation = VerificationObligation::default();
-        let mut verified_cert_digests = Vec::new();
+        let mut cert_batch = Vec::new();
+        let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
-                    let cert_digest = certificate.certificate_digest();
-                    if self
-                        .epoch_store
-                        .verified_cert_cache()
-                        .is_cert_verified(&cert_digest)
-                    {
-                        continue;
-                    }
-
-                    self.metrics.certificate_signatures_verified.inc();
-                    certificate.data().verify(None)?;
-                    let idx = obligation.add_message(
-                        certificate.data(),
-                        certificate.epoch(),
-                        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
-                    );
-                    certificate.auth_sig().add_to_verification_obligation(
-                        self.epoch_store.committee(),
-                        &mut obligation,
-                        idx,
-                    )?;
-
-                    // The digest must not be added to the cache until:
-                    // - the user signature is verified (checked above)
-                    // - batch verification completes successfully.
-                    verified_cert_digests.push(cert_digest);
+                    cert_batch.push(*certificate);
 
                     // if !certificate.contains_shared_object() {
                     //     // new_unchecked safety: we do not use the certs in this list until all
@@ -106,34 +75,27 @@ impl TransactionValidator for SuiTxValidator {
                     // }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    self.metrics.checkpoint_signatures_verified.inc();
-                    let summary = signature.summary;
-                    let idx = obligation.add_message(
-                        summary.data(),
-                        summary.epoch,
-                        Intent::default().with_scope(IntentScope::CheckpointSummary),
-                    );
-                    summary.auth_sig().add_to_verification_obligation(
-                        self.epoch_store.committee(),
-                        &mut obligation,
-                        idx,
-                    )?;
+                    ckpt_batch.push(signature.summary)
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_) => {}
             }
         }
-        // verify the user transaction signatures as a batch
-        obligation
-            .verify_all()
+
+        // verify the certificate signatures as a batch
+        let cert_count = cert_batch.len();
+        let ckpt_count = ckpt_batch.len();
+        self.epoch_store
+            .batch_verifier
+            .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
             .tap_err(|e| warn!("batch verification error: {}", e))
             .wrap_err("Malformed batch (failed to verify)")?;
-
-        // All the certs that we just batch verified can now be cached as verified.
-        self.epoch_store
-            .verified_cert_cache()
-            .cache_certs_verified(verified_cert_digests);
-
+        self.metrics
+            .certificate_signatures_verified
+            .inc_by(cert_count as u64);
+        self.metrics
+            .checkpoint_signatures_verified
+            .inc_by(ckpt_count as u64);
         Ok(())
 
         // todo - we should un-comment line below once we have a way to revert those transactions at the end of epoch

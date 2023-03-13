@@ -22,6 +22,10 @@ pub trait Message {
     type DigestType: Clone + Debug;
     const SCOPE: IntentScope;
 
+    fn scope(&self) -> IntentScope {
+        Self::SCOPE
+    }
+
     fn digest(&self) -> Self::DigestType;
 
     /// Verify the internal data consistency of this message.

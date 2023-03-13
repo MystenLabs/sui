@@ -95,14 +95,12 @@ use sui_types::{
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-pub use crate::authority::authority_per_epoch_store::{
-    VerifiedCertificateCache, VerifiedCertificateCacheMetrics,
-};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -1683,7 +1681,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+        let batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1693,7 +1691,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            batch_verifier_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(
