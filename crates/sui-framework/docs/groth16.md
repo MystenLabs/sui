@@ -184,7 +184,7 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 ## Function `bls12381`
 
-Return the value indicating that the BLS12-381 construction should be used in a given function.
+Return the <code><a href="groth16.md#0x2_groth16_Curve">Curve</a></code> value indicating that the BLS12-381 construction should be used in a given function.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>
@@ -207,7 +207,7 @@ Return the value indicating that the BLS12-381 construction should be used in a 
 
 ## Function `bn254`
 
-Return the value indicating that the BN254 construction should be used in a given function.
+Return the <code><a href="groth16.md#0x2_groth16_Curve">Curve</a></code> value indicating that the BN254 construction should be used in a given function.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>
@@ -348,7 +348,7 @@ This step computes one pairing e(P, Q), and binds the verification to one partic
 This can be used as inputs for the <code>verify_groth16_proof</code> function.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: &<a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>
 </code></pre>
 
 
@@ -357,7 +357,7 @@ This can be used as inputs for the <code>verify_groth16_proof</code> function.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: <a href="groth16.md#0x2_groth16_Curve">Curve</a>, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: &<a href="groth16.md#0x2_groth16_Curve">Curve</a>, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a> {
     <a href="groth16.md#0x2_groth16_prepare_verifying_key_internal">prepare_verifying_key_internal</a>(curve.id, verifying_key)
 }
 </code></pre>
@@ -414,7 +414,7 @@ Native functions that flattens the inputs into an array and passes to the Rust n
 Returns a boolean indicating whether the proof is valid.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">groth16::PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">groth16::ProofPoints</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: &<a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">groth16::PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">groth16::ProofPoints</a>): bool
 </code></pre>
 
 
@@ -423,7 +423,7 @@ Returns a boolean indicating whether the proof is valid.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: <a href="groth16.md#0x2_groth16_Curve">Curve</a>, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: &<a href="groth16.md#0x2_groth16_Curve">Curve</a>, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a>): bool {
     <a href="groth16.md#0x2_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(
         curve.id,
         &prepared_verifying_key.vk_gamma_abc_g1_bytes,

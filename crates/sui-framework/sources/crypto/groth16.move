@@ -16,10 +16,10 @@ module sui::groth16 {
         id: u8,
     }
 
-    /// Return the value indicating that the BLS12-381 construction should be used in a given function.
+    /// Return the `Curve` value indicating that the BLS12-381 construction should be used in a given function.
     public fun bls12381(): Curve { Curve { id: 0 } }
 
-    /// Return the value indicating that the BN254 construction should be used in a given function.
+    /// Return the `Curve` value indicating that the BN254 construction should be used in a given function.
     public fun bn254(): Curve { Curve { id: 1 } }
 
     /// A `PreparedVerifyingKey` consisting of four components in serialized form.
@@ -76,7 +76,7 @@ module sui::groth16 {
     /// Returns four vectors of bytes representing the four components of a prepared verifying key.
     /// This step computes one pairing e(P, Q), and binds the verification to one particular proof statement.
     /// This can be used as inputs for the `verify_groth16_proof` function.
-    public fun prepare_verifying_key(curve: Curve, verifying_key: &vector<u8>): PreparedVerifyingKey {
+    public fun prepare_verifying_key(curve: &Curve, verifying_key: &vector<u8>): PreparedVerifyingKey {
         prepare_verifying_key_internal(curve.id, verifying_key)
     }
 
@@ -89,7 +89,7 @@ module sui::groth16 {
     /// @param proof_points: Represent three proof points.
     ///
     /// Returns a boolean indicating whether the proof is valid.
-    public fun verify_groth16_proof(curve: Curve, prepared_verifying_key: &PreparedVerifyingKey, public_proof_inputs: &PublicProofInputs, proof_points: &ProofPoints): bool {
+    public fun verify_groth16_proof(curve: &Curve, prepared_verifying_key: &PreparedVerifyingKey, public_proof_inputs: &PublicProofInputs, proof_points: &ProofPoints): bool {
         verify_groth16_proof_internal(
             curve.id,
             &prepared_verifying_key.vk_gamma_abc_g1_bytes,
