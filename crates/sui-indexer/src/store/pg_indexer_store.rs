@@ -269,6 +269,27 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
+    fn multi_get_transactions_by_digests(
+        &self,
+        txn_digests: &[String],
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                transactions_dsl::transactions
+                    .filter(transactions_dsl::transaction_digest.eq_any(txn_digests))
+                    .load::<Transaction>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transactions with digests {:?} and err: {:?}",
+                    txn_digests, e
+                ))
+            })
+    }
+
     fn get_transaction_sequence_by_digest(
         &self,
         txn_digest: Option<String>,

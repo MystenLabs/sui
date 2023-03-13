@@ -31,7 +31,7 @@ impl<S: IndexerStore> EventReadApi<S> {
         }
     }
 
-    pub fn get_events(
+    pub fn get_events_internal(
         &self,
         query: EventQuery,
         cursor: Option<EventID>,
@@ -65,7 +65,7 @@ where
                 .get_events(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.get_events(query, cursor, limit, descending_order)?)
+        Ok(self.get_events_internal(query, cursor, limit, descending_order)?)
     }
 
     fn subscribe_event(
