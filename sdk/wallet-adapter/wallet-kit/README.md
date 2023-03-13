@@ -44,27 +44,25 @@ function ConnectToWallet() {
 To get access to the currently connected wallet, use the `useWalletKit()` hook to interact with the wallet, such as proposing transactions:
 
 ```tsx
+import { Transaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 
 export function SendTransaction() {
   const { signAndExecuteTransaction } = useWalletKit();
 
   const handleClick = async () => {
-    await signAndExecuteTransaction({
-      kind: "moveCall",
-      data: {
-        packageObjectId: "0x2",
-        module: "devnet_nft",
-        function: "mint",
-        typeArguments: [],
-        arguments: [
-          "name",
-          "capy",
-          "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop",
-        ],
-        gasBudget: 10000,
-      },
+    const tx = new Transaction();
+    tx.moveCall({
+      target: "0x2::devnet_nft::mint",
+      arguments: [
+        tx.pure("some name"),
+        tx.pure("some description"),
+        tx.pure(
+          "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop"
+        ),
+      ],
     });
+    await signAndExecuteTransaction({ transaction: tx });
   };
 
   return (
