@@ -39,10 +39,8 @@ export function CountDownTimer({
     const timeAgo = useTimeAgo(timestamp, false, true);
 
     return (
-        <section>
-            <div className={timeStyle(styles)}>
-                {label} {timeAgo}
-            </div>
-        </section>
+        <div className={timeStyle(styles)}>
+            {label} {timeAgo}
+        </div>
     );
 }

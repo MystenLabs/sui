@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 
 import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
+import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
@@ -132,7 +133,7 @@ export function StakeCard({
     // TODO: Once two step withdraw is available, add cool down and withdraw now logic
     // For cool down epoch, show Available to withdraw add rewards to principal
     // Reward earning epoch is 2 epochs after stake request epoch
-    const earningRewardsEpoch = stakeRequestEpoch + 2;
+    const earningRewardsEpoch = stakeRequestEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
     const isEarnedRewards = currentEpoch >= earningRewardsEpoch;
     const delegationState = inActiveValidator
         ? StakeState.IN_ACTIVE

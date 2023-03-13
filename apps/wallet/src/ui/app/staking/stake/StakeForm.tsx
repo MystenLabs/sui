@@ -16,6 +16,7 @@ import {
     DEFAULT_GAS_BUDGET_FOR_PAY,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
 } from '_redux/slices/sui-objects/Coin';
+import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
 import type { FormValues } from './StakingCard';
@@ -60,7 +61,9 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
     }, [setFieldValue, gasBudgetInMist, isLoading]);
 
     // Reward will be available after 2 epochs
-    const startEarningRewardsEpoch = epoch ? Number(epoch) + 2 : 0;
+    const startEarningRewardsEpoch = epoch
+        ? Number(epoch) + NUM_OF_EPOCH_BEFORE_EARNING
+        : 0;
     const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
         startEarningRewardsEpoch
     );
