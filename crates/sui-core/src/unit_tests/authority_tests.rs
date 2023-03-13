@@ -2894,7 +2894,6 @@ async fn test_authority_persist() {
             epoch_store,
             committee_store,
             None,
-            None,
             checkpoint_store,
             &registry,
             AuthorityStorePruningConfig::default(),

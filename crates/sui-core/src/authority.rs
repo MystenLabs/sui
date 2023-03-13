@@ -54,7 +54,6 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
-    event_store::EventStoreType,
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
@@ -440,7 +439,7 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    pub event_handler: Option<Arc<EventHandler>>,
+    pub event_handler: Arc<EventHandler>,
     pub(crate) checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
@@ -1395,7 +1394,7 @@ impl AuthorityState {
         events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        if self.indexes.is_none() && self.event_handler.is_none() {
+        if self.indexes.is_none() {
             return Ok(());
         }
 
@@ -1418,8 +1417,8 @@ impl AuthorityState {
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
 
             // Emit events
-            if let (Some(event_handler), Ok(seq)) = (&self.event_handler, res) {
-                event_handler
+            if let Ok(seq) = res {
+                self.event_handler
                     .process_events(
                         effects,
                         events,
@@ -1580,7 +1579,6 @@ impl AuthorityState {
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
-        event_store: Option<Arc<EventStoreType>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         pruning_config: AuthorityStorePruningConfig,
@@ -1590,11 +1588,6 @@ impl AuthorityState {
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
-        let event_handler = event_store.map(|es| {
-            let handler = EventHandler::new(es);
-            handler.regular_cleanup_task();
-            Arc::new(handler)
-        });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(TransactionManager::new(
@@ -1620,7 +1613,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             database: store.clone(),
             indexes,
-            event_handler,
+            event_handler: Arc::new(EventHandler::default()),
             checkpoint_store,
             committee_store,
             transaction_manager,
@@ -1716,7 +1709,6 @@ impl AuthorityState {
             epoch_store,
             epochs,
             index_store,
-            None,
             checkpoint_store,
             &registry,
             AuthorityStorePruningConfig::default(),
