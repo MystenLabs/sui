@@ -1322,6 +1322,37 @@
       }
     },
     {
+      "name": "sui_getStakes",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return one or more [DelegatedStake]",
+      "params": [
+        {
+          "name": "staked_sui_id",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getTotalSupply",
       "tags": [
         {

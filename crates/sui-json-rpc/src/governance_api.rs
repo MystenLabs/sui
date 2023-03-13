@@ -42,7 +42,7 @@ impl GovernanceReadApi {
         let stakes = futures::future::try_join_all(
             staked_sui_id
                 .iter()
-                .map(|id| self.state.get_move_object::<StakedSui>(&id)),
+                .map(|id| self.state.get_move_object::<StakedSui>(id)),
         )
         .await?;
         if stakes.is_empty() {

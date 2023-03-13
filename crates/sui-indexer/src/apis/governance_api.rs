@@ -10,7 +10,7 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::SuiCommittee;
 use sui_open_rpc::Module;
-use sui_types::base_types::{EpochId, SuiAddress};
+use sui_types::base_types::{EpochId, SuiAddress, ObjectID};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 pub(crate) struct GovernanceReadApi {
@@ -27,6 +27,9 @@ impl GovernanceReadApi {
 
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApi {
+    async fn get_stakes(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>> {
+        self.fullnode.get_stakes(staked_sui_id).await
+    }
     async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
         self.fullnode.get_delegated_stakes(owner).await
     }
