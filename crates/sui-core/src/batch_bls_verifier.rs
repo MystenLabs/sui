@@ -154,6 +154,9 @@ impl BatchCertificateVerifier {
         &self,
         cert: CertifiedTransaction,
     ) -> SuiResult<VerifiedCertificate> {
+        // Cancellation safety: we use parking_lot locks, which cannot be held across awaits.
+        // Therefore once the queue has been taken by a thread, it is guaranteed to process the
+        // queue and send all results before the future can be cancelled by the caller.
         let (tx, rx) = oneshot::channel();
         pin_mut!(rx);
 

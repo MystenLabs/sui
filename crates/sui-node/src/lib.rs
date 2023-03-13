@@ -61,7 +61,7 @@ use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::{
-    authority::{AuthorityState, AuthorityStore, VerifiedCertificateCacheMetrics},
+    authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::coin_api::CoinReadApi;
