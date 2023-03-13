@@ -55,21 +55,28 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
+const sortOrderByAccountType = [
+    AccountType.DERIVED,
+    AccountType.IMPORTED,
+    AccountType.LEDGER,
+];
+
 const accountsAdapter = createEntityAdapter<SerializedAccount>({
     selectId: ({ address }) => address,
     sortComparer: (a, b) => {
         if (a.type !== b.type) {
-            // first derived accounts
-            return a.type === AccountType.DERIVED ? -1 : 1;
-        } else if (a.type === AccountType.DERIVED) {
-            // sort derived accounts by derivation path
+            const sortRankForA = sortOrderByAccountType.indexOf(a.type);
+            const sortRankForB = sortOrderByAccountType.indexOf(b.type);
+            return sortRankForA - sortRankForB;
+        } else if (a.derivationPath) {
+            // Sort accounts by their derivation path if one exists
             return (a.derivationPath || '').localeCompare(
                 b.derivationPath || '',
                 undefined,
                 { numeric: true }
             );
         } else {
-            // sort imported account by address
+            // Otherwise, let's sort accounts by their address
             return a.address.localeCompare(b.address, undefined, {
                 numeric: true,
             });
