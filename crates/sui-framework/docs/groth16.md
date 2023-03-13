@@ -5,6 +5,7 @@
 
 
 
+-  [Struct `Curve`](#0x2_groth16_Curve)
 -  [Struct `PreparedVerifyingKey`](#0x2_groth16_PreparedVerifyingKey)
 -  [Struct `PublicProofInputs`](#0x2_groth16_PublicProofInputs)
 -  [Struct `ProofPoints`](#0x2_groth16_ProofPoints)
@@ -16,6 +17,7 @@
 -  [Function `public_proof_inputs_from_bytes`](#0x2_groth16_public_proof_inputs_from_bytes)
 -  [Function `proof_points_from_bytes`](#0x2_groth16_proof_points_from_bytes)
 -  [Function `prepare_verifying_key`](#0x2_groth16_prepare_verifying_key)
+-  [Function `prepare_verifying_key_internal`](#0x2_groth16_prepare_verifying_key_internal)
 -  [Function `verify_groth16_proof`](#0x2_groth16_verify_groth16_proof)
 -  [Function `verify_groth16_proof_internal`](#0x2_groth16_verify_groth16_proof_internal)
 
@@ -23,6 +25,35 @@
 <pre><code></code></pre>
 
 
+
+<a name="0x2_groth16_Curve"></a>
+
+## Struct `Curve`
+
+Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
+This should be given as the first parameter to <code>prepare_verifying_key</code> or <code>verify_groth16_proof</code>.
+
+
+<pre><code><b>struct</b> <a href="groth16.md#0x2_groth16_Curve">Curve</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: u8</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
 
 <a name="0x2_groth16_PreparedVerifyingKey"></a>
 
@@ -154,10 +185,9 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 ## Function `bls12381`
 
 Return the value indicating that the BLS12-381 construction should be used in a given function.
-This should be given as the first parameter to <code>prepare_verifying_key</code> or <code>verify_groth16_proof</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>
 </code></pre>
 
 
@@ -166,7 +196,7 @@ This should be given as the first parameter to <code>prepare_verifying_key</code
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): u8 { 0 }
+<pre><code><b>public</b> <b>fun</b> <a href="bls12381.md#0x2_bls12381">bls12381</a>(): <a href="groth16.md#0x2_groth16_Curve">Curve</a> { <a href="groth16.md#0x2_groth16_Curve">Curve</a> { id: 0 } }
 </code></pre>
 
 
@@ -178,10 +208,9 @@ This should be given as the first parameter to <code>prepare_verifying_key</code
 ## Function `bn254`
 
 Return the value indicating that the BN254 construction should be used in a given function.
-This should be given as the first parameter to <code>prepare_verifying_key</code> or <code>verify_groth16_proof</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>
 </code></pre>
 
 
@@ -190,7 +219,7 @@ This should be given as the first parameter to <code>prepare_verifying_key</code
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): u8 { 1 }
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_bn254">bn254</a>(): <a href="groth16.md#0x2_groth16_Curve">Curve</a> { <a href="groth16.md#0x2_groth16_Curve">Curve</a> { id: 1 } }
 </code></pre>
 
 
@@ -311,7 +340,7 @@ Creates a Groth16 <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints
 
 ## Function `prepare_verifying_key`
 
-@param curve: What elliptic curve construction to use. See <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code>.
+@param curve: What elliptic curve construction to use. See the <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code> functions.
 @param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
 
 Returns four vectors of bytes representing the four components of a prepared verifying key.
@@ -319,7 +348,7 @@ This step computes one pairing e(P, Q), and binds the verification to one partic
 This can be used as inputs for the <code>verify_groth16_proof</code> function.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: u8, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>
 </code></pre>
 
 
@@ -328,7 +357,9 @@ This can be used as inputs for the <code>verify_groth16_proof</code> function.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: u8, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>;
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key">prepare_verifying_key</a>(curve: <a href="groth16.md#0x2_groth16_Curve">Curve</a>, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a> {
+    <a href="groth16.md#0x2_groth16_prepare_verifying_key_internal">prepare_verifying_key_internal</a>(curve.id, verifying_key)
+}
 </code></pre>
 
 
@@ -348,19 +379,14 @@ This can be used as inputs for the <code>verify_groth16_proof</code> function.
 
 </details>
 
-<a name="0x2_groth16_verify_groth16_proof"></a>
+<a name="0x2_groth16_prepare_verifying_key_internal"></a>
 
-## Function `verify_groth16_proof`
+## Function `prepare_verifying_key_internal`
 
-@param curve: What elliptic curve construction to use. See <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code>.
-@param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
-@param public_proof_inputs: Represent inputs that are public.
-@param proof_points: Represent three proof points.
-
-Returns a boolean indicating whether the proof is valid.
+Native functions that flattens the inputs into an array and passes to the Rust native function.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: u8, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">groth16::PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">groth16::ProofPoints</a>): bool
+<pre><code><b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key_internal">prepare_verifying_key_internal</a>(curve: u8, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>
 </code></pre>
 
 
@@ -369,9 +395,37 @@ Returns a boolean indicating whether the proof is valid.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: u8, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a>): bool {
+<pre><code><b>native</b> <b>fun</b> <a href="groth16.md#0x2_groth16_prepare_verifying_key_internal">prepare_verifying_key_internal</a>(curve: u8, verifying_key: &<a href="">vector</a>&lt;u8&gt;): <a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_groth16_verify_groth16_proof"></a>
+
+## Function `verify_groth16_proof`
+
+@param curve: What elliptic curve construction to use. See the <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code> functions.
+@param prepared_verifying_key: Consists of four vectors of bytes representing the four components of a prepared verifying key.
+@param public_proof_inputs: Represent inputs that are public.
+@param proof_points: Represent three proof points.
+
+Returns a boolean indicating whether the proof is valid.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: <a href="groth16.md#0x2_groth16_Curve">groth16::Curve</a>, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">groth16::PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">groth16::PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">groth16::ProofPoints</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="groth16.md#0x2_groth16_verify_groth16_proof">verify_groth16_proof</a>(curve: <a href="groth16.md#0x2_groth16_Curve">Curve</a>, prepared_verifying_key: &<a href="groth16.md#0x2_groth16_PreparedVerifyingKey">PreparedVerifyingKey</a>, public_proof_inputs: &<a href="groth16.md#0x2_groth16_PublicProofInputs">PublicProofInputs</a>, proof_points: &<a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a>): bool {
     <a href="groth16.md#0x2_groth16_verify_groth16_proof_internal">verify_groth16_proof_internal</a>(
-        curve,
+        curve.id,
         &prepared_verifying_key.vk_gamma_abc_g1_bytes,
         &prepared_verifying_key.alpha_g1_beta_g2_bytes,
         &prepared_verifying_key.gamma_g2_neg_pc_bytes,

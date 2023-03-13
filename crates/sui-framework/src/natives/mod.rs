@@ -175,8 +175,8 @@ pub fn all_natives(
         ),
         (
             "groth16",
-            "prepare_verifying_key",
-            make_native!(groth16::prepare_verifying_key),
+            "prepare_verifying_key_internal",
+            make_native!(groth16::prepare_verifying_key_internal),
         ),
         (
             "hmac",
