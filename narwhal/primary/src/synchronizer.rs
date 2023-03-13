@@ -67,7 +67,9 @@ struct Inner {
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Send missing certificates to the `CertificateFetcher`.
     tx_certificate_fetcher: Sender<Certificate>,
-    /// Send certificates to be accepted into a separate loop, to avoid client cancellations.
+    /// Send certificates to be accepted into a separate task that runs
+    /// `process_certificate_with_lock()` in a loop.
+    /// See comment above `process_certificate_with_lock()` for why this is necessary.
     tx_certificate_acceptor: mpsc::Sender<(Certificate, oneshot::Sender<DagResult<()>>, bool)>,
     /// Output all certificates to the consensus layer. Must send certificates in causal order.
     tx_new_certificates: Sender<Certificate>,
@@ -363,7 +365,8 @@ impl Synchronizer {
             }
         });
 
-        // Start a task to accept certificates.
+        // Start a task to accept certificates. See comment above `process_certificate_with_lock()`
+        // for why this task is needed.
         let weak_inner = Arc::downgrade(&inner);
         spawn_monitored_task!(async move {
             loop {
@@ -375,7 +378,7 @@ impl Synchronizer {
                     debug!("Synchronizer is shutting down.");
                     return;
                 };
-                // Ignore error if receiver is dropped.
+                // Ignore error if receiver has been dropped.
                 let _ = result_sender.send(
                     Self::process_certificate_with_lock(&inner, certificate, early_suspend).await,
                 );
@@ -635,6 +638,14 @@ impl Synchronizer {
             .expect("Synchronizer should shut down before certificate acceptor task.")
     }
 
+    /// This function checks if a certificate has all parents and can be accepted into storage.
+    /// If yes, writing the certificate to storage and sending it to consensus need to happen
+    /// atomically. Otherwise, there will be divergence between certificate storage and consensus
+    /// DAG. A certificate that is sent to consensus must have all of its parents already in
+    /// the consensu DAG.
+    ///
+    /// Because of the atomicity requirement, this function cannot be made cancellation safe.
+    /// So it is run in a loop inside a separate task, connected to `Synchronizer` via a channel.
     async fn process_certificate_with_lock(
         inner: &Inner,
         certificate: Certificate,
