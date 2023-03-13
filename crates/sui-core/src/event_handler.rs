@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::time::Duration;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use std::sync::Arc;
-
 use tokio_stream::Stream;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace};
 
 use sui_json_rpc_types::SuiMoveStruct;
-use sui_storage::event_store::{EventStore, EventStoreType};
 use sui_types::base_types::TransactionDigest;
 use sui_types::filter::EventFilter;
 use sui_types::messages::TransactionEvents;
@@ -30,32 +26,18 @@ pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
     event_streamer: Streamer<EventEnvelope, EventFilter>,
-    pub(crate) event_store: Arc<EventStoreType>,
 }
 
-impl EventHandler {
-    pub fn new(event_store: Arc<EventStoreType>) -> Self {
+impl Default for EventHandler {
+    fn default() -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
             event_streamer: streamer,
-            event_store,
         }
     }
+}
 
-    /// Run a regular cleanup task on the store
-    pub fn regular_cleanup_task(&self) {
-        let store_copy = self.event_store.clone();
-        tokio::spawn(async move {
-            match store_copy.as_ref() {
-                EventStoreType::SqlEventStore(db) => {
-                    // Start periodic task to clean up WAL every 30 minutes
-                    db.wal_cleanup_thread(Some(Duration::from_secs(30 * 60)))
-                        .await;
-                }
-            }
-        });
-    }
-
+impl EventHandler {
     #[instrument(level = "debug", skip_all, fields(seq=?seq_num, tx_digest=?effects.transaction_digest()), err)]
     pub async fn process_events(
         &self,
@@ -81,18 +63,6 @@ impl EventHandler {
             })
             .collect();
         let envelopes = res?;
-
-        // Ingest all envelopes together at once (for efficiency) into Event Store
-        let row_inserted: u64 = self.event_store.add_events(&envelopes).await?;
-
-        if row_inserted != envelopes.len() as u64 {
-            warn!(
-                num_events = envelopes.len(),
-                row_inserted = row_inserted,
-                tx_digest =? effects.transaction_digest(),
-                "Inserted event record is less than expected."
-            );
-        }
 
         trace!(
             num_events = envelopes.len(),

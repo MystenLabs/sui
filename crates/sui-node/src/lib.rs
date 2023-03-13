@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::GrpcMetrics;
+use std::collections::HashMap;
+use std::fmt;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
@@ -10,67 +15,31 @@ use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use arc_swap::ArcSwap;
-use checkpoint_executor::CheckpointExecutor;
 use futures::TryFutureExt;
-use mysten_metrics::{spawn_monitored_task, RegistryService};
-use mysten_network::server::ServerBuilder;
-use narwhal_network::metrics::MetricsMakeCallbackHandler;
-use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
-use std::collections::HashMap;
-use std::fmt;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::AuthorityAggregator;
-use sui_core::authority_server::ValidatorService;
-use sui_core::checkpoints::checkpoint_executor;
-use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::state_accumulator::StateAccumulator;
-use sui_core::storage::RocksDbStore;
-use sui_core::transaction_orchestrator::TransactiondOrchestrator;
-use sui_core::{
-    authority::{AuthorityState, AuthorityStore, VerifiedCertificateCacheMetrics},
-    authority_client::NetworkAuthorityClient,
-};
-use sui_json_rpc::event_api::EventReadApi;
-use sui_json_rpc::read_api::ReadApi;
-use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
-use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use sui_network::api::ValidatorServer;
-use sui_network::discovery;
-use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::sui_system_state::SuiSystemStateTrait;
 use tap::tap::TapFallible;
-use tracing::{debug, warn};
-
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
-
-use sui_storage::{
-    event_store::{EventStoreType, SqlEventStore},
-    IndexStore,
-};
-use sui_types::committee::Committee;
-use sui_types::crypto::KeypairTraits;
-use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
+use tracing::{debug, warn};
 use tracing::{error_span, info, Instrument};
-use typed_store::DBMetrics;
-pub mod admin;
-mod handle;
-pub mod metrics;
+
+use checkpoint_executor::CheckpointExecutor;
 pub use handle::SuiNodeHandle;
+use mysten_metrics::{spawn_monitored_task, RegistryService};
+use mysten_network::server::ServerBuilder;
+use narwhal_network::metrics::MetricsMakeCallbackHandler;
+use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use narwhal_types::TransactionsClient;
 use sui_config::node::DBCheckpointConfig;
+use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
+use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_server::ValidatorService;
+use sui_core::checkpoints::checkpoint_executor;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -81,16 +50,48 @@ use sui_core::consensus_adapter::{
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
+use sui_core::state_accumulator::StateAccumulator;
+use sui_core::storage::RocksDbStore;
+use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_core::{
+    authority::{AuthorityState, AuthorityStore, VerifiedCertificateCacheMetrics},
+    authority_client::NetworkAuthorityClient,
+};
 use sui_json_rpc::coin_api::CoinReadApi;
+use sui_json_rpc::event_api::EventReadApi;
+use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_json_rpc::read_api::ReadApi;
+use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
+use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_network::api::ValidatorServer;
+use sui_network::discovery;
+use sui_network::discovery::TrustedPeerChangeEvent;
+use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
+use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::committee::Committee;
+use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{AuthorityCapabilities, ConsensusTransaction};
+use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use typed_store::DBMetrics;
+
+use crate::metrics::GrpcMetrics;
+
+pub mod admin;
+mod handle;
+pub mod metrics;
 
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
@@ -104,8 +105,6 @@ pub struct ValidatorComponents {
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
-use sui_json_rpc::governance_api::GovernanceReadApi;
-use sui_network::discovery::TrustedPeerChangeEvent;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -227,22 +226,6 @@ impl SuiNode {
             Some(Arc::new(IndexStore::new(config.db_path().join("indexes"))))
         };
 
-        let event_store = if config.enable_event_processing {
-            let path = config.db_path().join("events.db");
-            let db = SqlEventStore::new_from_file(&path).await?;
-            db.initialize().await?;
-
-            if index_store.is_none() {
-                return Err(anyhow!(
-                    "event storage requires that IndexStore be enabled as well"
-                ));
-            }
-
-            Some(Arc::new(EventStoreType::SqlEventStore(db)))
-        } else {
-            None
-        };
-
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
@@ -291,7 +274,6 @@ impl SuiNode {
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
-            event_store,
             checkpoint_store.clone(),
             &prometheus_registry,
             config.authority_store_pruning_config,
@@ -1058,9 +1040,10 @@ pub async fn build_server(
         ))?;
     }
 
-    if let Some(event_handler) = state.event_handler.clone() {
-        server.register_module(EventReadApi::new(state.clone(), event_handler))?;
-    }
+    server.register_module(EventReadApi::new(
+        state.clone(),
+        state.event_handler.clone(),
+    ))?;
 
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
 

@@ -9827,7 +9827,6 @@ dependencies = [
  "rocksdb",
  "serde 1.0.152",
  "serde_json",
- "sqlx",
  "strum",
  "strum_macros",
  "sui-json-rpc-types",
