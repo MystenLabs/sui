@@ -1996,6 +1996,78 @@ async fn test_nested_string() {
     .await
     .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // pass an empty option utf8 string
+    let utf8_str: Option<String> = None;
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "option_utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // an empty vector option utf8 string
+    let utf8_str: Vec<Option<String>> = vec![];
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "vec_option_utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // an vector of None
+    let utf8_str: Vec<Option<String>> = vec![None, None];
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "vec_option_utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+
+    // vector option utf8 string
+    let utf8_str: Option<Vec<Option<String>>> = Some(vec![None, None]);
+    let utf_str_bcs = bcs::to_bytes(&utf8_str).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "entry_point_string",
+        "option_vec_option_utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 }
 
 #[tokio::test]
