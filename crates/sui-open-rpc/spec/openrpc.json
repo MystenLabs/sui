@@ -2767,7 +2767,6 @@
         "type": "object",
         "required": [
           "amount",
-          "changeType",
           "coinType",
           "owner"
         ],
@@ -2777,14 +2776,16 @@
             "type": "integer",
             "format": "int128"
           },
-          "changeType": {
-            "$ref": "#/components/schemas/BalanceChangeType"
-          },
           "coinType": {
             "type": "string"
           },
           "owner": {
-            "$ref": "#/components/schemas/Owner"
+            "description": "Owner of the balance change",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Owner"
+              }
+            ]
           }
         }
       },
