@@ -1,11 +1,25 @@
-# `Move.lock` file for Move packages
+# `Move.lock` File for Move Packages
 
-## What is it and what do I do with it?
+When you build a Move package, the process creates a `Move.lock` file at the root of your package. The file acts as a communication layer between the Move compiler and other tools, like chain-specific command line interfaces and third-party package managers. The `Move.lock` file contains information about your package, including its dependencies, that aids operations like verification of source code against on-chain packages and package manager compatability.    
 
-The `Move.lock` file is automatically created when you build a `Move` package. It contains data about your package (like dependencies). This aids operations like verifying your source code against on-chain packages and ensures compatibility with package managers.
+Although the `Move.lock` file is text-based, it's not intended for you to edit the file directly. Processes on the toolchain, like the Move compiler, access and edit the file to read and append relevant information. You also must not move the file from the root, as it needs to be at the same level as your `Move.toml` manifest. 
 
-Do: check in the generated `Move.lock` file if you use source control. It will be created in your package root (where `Move.toml` is).
+If you are using source control for your package, make sure the `Move.lock` file is checked in to your repository. This ensures every build of your package are exact replicas.   
 
-Don't: Manually edit the `Move.lock` file by hand, or move it to another directory.
+## Why `Move.lock`
 
-A full technical description of the [original design is available](https://docs.google.com/document/d/1OV3te-SnpZv2Yxv7uxGQH6NFhE-CdqiCjB66JmYAGKs/edit#heading=h.byj11m1l42gu), which describes the schema, including headers like `[dependencies]` found in the `Move.lock` file.
+Although the `Move.lock` file serves many purposes, it's principle functions are on-chain source verification and integration of third-party package managers.   
+
+### On-chain source verification
+
+`Move.lock` records the toolchain version and flags passed during package compilation so the compiler can replicate the process. This provides confirmation that the package found at a given address on chain originated from a specific source package. Having this data in the lock file means you don't have to manually provide this information, which would be time consuming and prone to error.
+
+### Integrating third-party package managers
+
+Third-party package managers use the `Move.lock` file to integrate with the Sui network.
+
+## Format
+
+The `Move.lock` file is a text-based file similar to the `Move.tonl` package manifest file. 
+
+
