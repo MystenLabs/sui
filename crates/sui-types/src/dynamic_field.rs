@@ -4,13 +4,15 @@
 use crate::base_types::{ObjectDigest, SuiAddress};
 use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
+use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
-use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
+use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base58;
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::value::{MoveStruct, MoveTypeLayout, MoveValue};
+use move_core_types::value::{MoveStruct, MoveValue};
 use schemars::JsonSchema;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -206,28 +208,48 @@ pub fn is_dynamic_object(move_struct: &MoveStruct) -> bool {
 pub fn derive_dynamic_field_id<T>(
     parent: T,
     key_type_tag: &TypeTag,
-    key_type_layout: &MoveTypeLayout,
-    key: &move_vm_types::values::Value,
-) -> Option<ObjectID>
+    key_bytes: &[u8],
+) -> Result<ObjectID, bcs::Error>
 where
     T: Into<SuiAddress>,
 {
-    let Ok(k_tag_bytes) = bcs::to_bytes(key_type_tag) else {
-        return None;
-    };
-    let Some(k_bytes) = key.simple_serialize(key_type_layout) else {
-        return None;
-    };
+    let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
 
     // hash(parent || key || key_type_tag)
     let mut hasher = Sha3_256::default();
     hasher.update(parent.into());
-    hasher.update(k_bytes.len().to_le_bytes());
-    hasher.update(k_bytes);
+    hasher.update(key_bytes.len().to_le_bytes());
+    hasher.update(key_bytes);
     hasher.update(k_tag_bytes);
     let hash = hasher.finalize();
 
     // truncate into an ObjectID and return
     // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
-    Some(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
+    Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
+}
+
+/// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field
+/// from the `object_store`. The key type `K` must implement `MoveTypeTagTrait` which has an associated
+/// function that returns the Move type tag. This is needed to properly derive the field object ID.
+pub fn get_dynamic_field_from_store<S, K, V>(
+    object_store: &S,
+    parent_id: ObjectID,
+    key: &K,
+) -> Result<V, SuiError>
+where
+    S: ObjectStore,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
+        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
+    let object = object_store.get_object(&id)?.ok_or_else(|| {
+        SuiError::DynamicFieldReadError("Dynamic field not found on parent".to_owned())
+    })?;
+    let move_object = object.data.try_as_move().ok_or_else(|| {
+        SuiError::DynamicFieldReadError("Dynamic field is not a Move object".to_owned())
+    })?;
+    Ok(bcs::from_bytes::<Field<K, V>>(move_object.contents())
+        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?
+        .value)
 }

@@ -116,7 +116,7 @@ impl TestCaseImpl for CallContractTest {
             package_id == &SUI_FRAMEWORK_OBJECT_ID
             && sender == &signer
             && type_ == &String::from("0x2::devnet_nft::MintNFTEvent")
-            && bcs::from_bytes::<MintNFTEvent>(bcs).unwrap() == MintNFTEvent {object_id: ID {bytes: nft_id}, creator: signer, name: EXAMPLE_NFT_NAME.into()}
+            && bcs::from_bytes::<MintNFTEvent>(bcs).unwrap() == MintNFTEvent {object_id: ID::new(nft_id), creator: signer, name: EXAMPLE_NFT_NAME.into()}
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
