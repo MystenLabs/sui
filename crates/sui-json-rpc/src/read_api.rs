@@ -421,6 +421,18 @@ impl ReadApiServer for ReadApi {
             })
             .into());
         }
+
+        let opts = opts.unwrap_or_default();
+        if opts.show_balance_changes || opts.show_object_changes {
+            // Not supported because it's likely the response will easily exceed response limit
+            return Err(anyhow!(UserInputError::Unsupported(
+                "show_balance_changes and show_object_changes is not available on \
+                multiGetTransactions"
+                    .to_string()
+            ))
+            .into());
+        }
+
         // use LinkedHashMap to dedup and can iterate in insertion order.
         let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
             LinkedHashMap::from_iter(
@@ -431,8 +443,6 @@ impl ReadApiServer for ReadApi {
         if temp_response.len() < num_digests {
             return Err(anyhow!("The list of digests in the input contain duplicates").into());
         }
-
-        let opts = opts.unwrap_or_default();
 
         if opts.show_input {
             let transactions = self
@@ -686,20 +696,39 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
+        let opts = query.options.unwrap_or_default();
+        if opts.show_balance_changes || opts.show_object_changes {
+            // Not supported because it's likely the response will easily exceed response limit
+            return Err(anyhow!(UserInputError::Unsupported(
+                "show_balance_changes and show_object_changes is not available on \
+                queryTransactions"
+                    .to_string()
+            ))
+            .into());
+        }
 
         // Retrieve 1 extra item for next cursor
-        let mut data =
+        let mut digests =
             self.state
                 .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
-        let next_cursor = data.last().cloned().map_or(cursor, Some);
+        let has_next_page = digests.len() > limit;
+        digests.truncate(limit);
+        let next_cursor = digests.last().cloned().map_or(cursor, Some);
 
-        // TODO(chris): fetch transaction response based on `query.options`
+        let data: Vec<SuiTransactionResponse> = if opts.only_digest() {
+            digests
+                .into_iter()
+                .map(SuiTransactionResponse::new)
+                .collect()
+        } else {
+            self.multi_get_transactions_with_options(digests, Some(opts))
+                .await?
+        };
+
         Ok(Page {
-            data: data.into_iter().map(SuiTransactionResponse::new).collect(),
+            data,
             next_cursor,
             has_next_page,
         })

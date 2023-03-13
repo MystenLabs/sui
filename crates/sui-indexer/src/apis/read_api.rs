@@ -68,6 +68,14 @@ impl<S: IndexerStore> ReadApi<S> {
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
 
+        let opts = query.options.unwrap_or_default();
+        if !opts.only_digest() {
+            // TODO(chris): implement this as a separate PR
+            return Err(IndexerError::NotImplementedError(
+                "options has not been implemented on indexer for queryTransactions".to_string(),
+            ));
+        }
+
         let digests_from_db = match query.filter {
             None => {
                 let indexer_seq_number = self
