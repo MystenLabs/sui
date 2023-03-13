@@ -370,8 +370,7 @@ impl ReadApiServer for ReadApi {
             if let Some(digest) = temp_response.effects.as_ref().unwrap().events_digest() {
                 let events = self
                     .state
-                    .get_transaction_events(*digest)
-                    .await
+                    .get_transaction_events(digest)
                     .map_err(Error::from)?;
                 match to_sui_transaction_events(self, events) {
                     Ok(e) => temp_response.events = Some(e),

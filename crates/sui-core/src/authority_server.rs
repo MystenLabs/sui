@@ -314,7 +314,7 @@ impl ValidatorService {
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             let events = if let Some(digest) = signed_effects.events_digest() {
-                state.get_transaction_events(*digest).await?
+                state.get_transaction_events(digest)?
             } else {
                 TransactionEvents::default()
             };
@@ -421,7 +421,7 @@ impl ValidatorService {
         match res {
             Ok(effects) => {
                 let events = if let Some(event_digest) = effects.events_digest() {
-                    state.get_transaction_events(*event_digest).await?
+                    state.get_transaction_events(event_digest)?
                 } else {
                     TransactionEvents::default()
                 };

@@ -400,11 +400,11 @@ impl EventStore for SqlEventStore {
                     .push_bind(event.tx_digest.into_inner().to_vec())
                     .push_bind(event_type as u16)
                     .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
-                    .push_bind(event.event.module_name())
+                    .push_bind(event.event.module_name().map(|n| n.as_str()))
                     .push_bind(event.event.object_id().map(|id| id.to_vec()))
                     .push_bind(event.event.object_type())
                     .push_bind(Self::event_to_json(event))
-                    .push_bind(move_event_name)
+                    .push_bind(move_event_name.map(|s| s.to_string()))
                     .push_bind(event.event.move_event_contents())
                     .push_bind(sender)
                     .push_bind(
@@ -724,6 +724,7 @@ impl Display for Comparator {
 #[cfg(test)]
 mod tests {
     use flexstr::shared_str;
+    use move_core_types::identifier::IdentStr;
     use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 
     use sui_types::event::EventEnvelope;
@@ -738,7 +739,10 @@ mod tests {
         assert_eq!(queried.package_id, orig.event.package_id());
         assert_eq!(
             queried.module_name,
-            orig.event.module_name().map(SharedStr::from)
+            orig.event
+                .module_name()
+                .map(IdentStr::as_str)
+                .map(SharedStr::from)
         );
         assert_eq!(queried.object_id, orig.event.object_id());
         assert_eq!(queried.sender, orig.event.sender());
@@ -755,7 +759,10 @@ mod tests {
         assert_eq!(queried.object_digest().unwrap(), orig.event.digest());
         assert_eq!(queried.amount().unwrap(), orig.event.amount());
         let move_event_name = orig.event.move_event_name();
-        assert_eq!(queried.move_event_name.as_ref(), move_event_name.as_ref());
+        assert_eq!(
+            queried.move_event_name.as_ref(),
+            move_event_name.map(|s| s.to_string()).as_ref()
+        );
     }
 
     #[tokio::test]

@@ -1,24 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::authority_notify_read::NotifyRead;
-use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_types::{
-    get_store_object_pair, ObjectContentDigest, StoreObjectPair,
-};
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
+use std::iter;
+use std::ops::Not;
+use std::path::Path;
+use std::sync::Arc;
+
 use either::Either;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
-use std::iter;
-use std::path::Path;
-use std::sync::Arc;
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tracing::{debug, info, trace};
+
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
@@ -30,10 +28,17 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tracing::{debug, info, trace};
 use typed_store::rocks::{DBBatch, TypedStoreError};
 use typed_store::traits::Map;
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_types::{
+    get_store_object_pair, ObjectContentDigest, StoreObjectPair,
+};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+
+use super::authority_notify_read::NotifyRead;
+use super::{authority_store_tables::AuthorityPerpetualTables, *};
 
 const NUM_SHARDS: usize = 4096;
 const SHARD_SIZE: usize = 128;
@@ -167,11 +172,14 @@ impl AuthorityStore {
             // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
             // This is important for fullnodes to be able to generate indexing data right now.
 
-            store
-                .perpetual_tables
-                .events
-                .insert(&genesis.events().digest(), genesis.events())
-                .unwrap();
+            let event_digests = genesis.events().digest();
+            let events = genesis
+                .events()
+                .data
+                .iter()
+                .enumerate()
+                .map(|(i, e)| ((event_digests, i), e));
+            store.perpetual_tables.events.multi_insert(events).unwrap();
         }
 
         Ok(store)
@@ -199,20 +207,26 @@ impl AuthorityStore {
     pub(crate) fn get_events(
         &self,
         event_digest: &TransactionEventsDigest,
-    ) -> SuiResult<TransactionEvents> {
-        self.perpetual_tables
+    ) -> Result<Option<TransactionEvents>, TypedStoreError> {
+        let data = self
+            .perpetual_tables
             .events
-            .get(event_digest)?
-            .ok_or(SuiError::TransactionEventsNotFound {
-                digest: *event_digest,
-            })
+            .iter()
+            .skip_to(&(*event_digest, 0))?
+            .take_while(|((digest, _), _)| digest == event_digest)
+            .map(|(_, e)| e)
+            .collect::<Vec<_>>();
+        Ok(data.is_empty().not().then_some(TransactionEvents { data }))
     }
 
     pub fn multi_get_events(
         &self,
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        Ok(self.perpetual_tables.events.multi_get(event_digests)?)
+        Ok(event_digests
+            .iter()
+            .map(|digest| self.get_events(digest))
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn multi_get_effects<'a>(
@@ -847,8 +861,14 @@ impl AuthorityStore {
             )?;
         }
 
-        write_batch =
-            write_batch.insert_batch(&self.perpetual_tables.events, [(events.digest(), events)])?;
+        let event_digest = events.digest();
+        let events = events
+            .data
+            .into_iter()
+            .enumerate()
+            .map(|(i, e)| ((event_digest, i), e));
+
+        write_batch = write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
         let new_locks_to_init: Vec<_> = written
             .iter()

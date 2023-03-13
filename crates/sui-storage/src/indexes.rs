@@ -4,31 +4,38 @@
 //! IndexStore supports creation of various ancillary indexes of state in SuiDataStore.
 //! The main user of this data is the explorer.
 
-use anyhow::anyhow;
-use move_core_types::identifier::Identifier;
-use serde::{de::DeserializeOwned, Serialize};
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use anyhow::anyhow;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{ModuleId, StructTag};
+use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
+
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{ObjectInfo, ObjectRef};
+use sui_types::digests::TransactionEventsDigest;
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::event::EventType;
+use sui_types::fp_ensure;
+use sui_types::messages::TransactionEvents;
+use sui_types::object::Owner;
+use sui_types::query::TransactionFilter;
 use typed_store::rocks::DBOptions;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
 
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
-use sui_types::base_types::{ObjectInfo, ObjectRef};
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::fp_ensure;
-use sui_types::object::Owner;
-use sui_types::query::TransactionFilter;
-
 use crate::default_db_options;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
+type EventId = (TxSequenceNumber, usize);
+type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
 
 pub const MAX_TX_RANGE_SIZE: u64 = 4096;
 
@@ -92,6 +99,25 @@ pub struct IndexStoreTables {
     /// by a specific object, and their object reference.
     #[default_options_override_fn = "dynamic_field_index_table_default_config"]
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
+
+    #[default_options_override_fn = "index_table_default_config"]
+    event_order: DBMap<EventId, EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_move_module: DBMap<(ModuleId, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_move_event: DBMap<(StructTag, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_time: DBMap<(u64, EventId), EventIndex>,
+
+    // Can be removed after removing system events
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_recipient: DBMap<(Owner, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_object: DBMap<(ObjectID, EventId), EventIndex>,
+    #[default_options_override_fn = "index_table_default_config"]
+    event_by_event_type: DBMap<(EventType, EventId), EventIndex>,
 }
 
 pub struct IndexStore {
@@ -130,6 +156,9 @@ fn owner_index_table_default_config() -> DBOptions {
 fn dynamic_field_index_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
+fn index_table_default_config() -> DBOptions {
+    default_db_options(None, Some(1_000_000)).0
+}
 
 impl IndexStore {
     pub fn new(path: PathBuf) -> Self {
@@ -156,6 +185,7 @@ impl IndexStore {
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
         move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
+        events: &TransactionEvents,
         object_index_changes: ObjectIndexChanges,
         digest: &TransactionDigest,
         timestamp_ms: u64,
@@ -232,6 +262,87 @@ impl IndexStore {
         let batch = batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
+        )?;
+
+        // events
+        let event_digest = events.digest();
+        let batch = batch.insert_batch(
+            &self.tables.event_order,
+            events
+                .data
+                .iter()
+                .enumerate()
+                .map(|(i, e)| ((sequence, i), (event_digest, *digest, timestamp_ms))),
+        )?;
+        let batch = batch.insert_batch(
+            &self.tables.event_by_move_module,
+            events
+                .data
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| match (e.package_id(), e.module_name()) {
+                    (Some(id), Some(module)) => Some((i, ModuleId::new(id.into(), module.into()))),
+                    _ => None,
+                })
+                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+        )?;
+        let batch = batch.insert_batch(
+            &self.tables.event_by_sender,
+            events
+                .data
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| e.sender().map(|s| (i, s)))
+                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+        )?;
+        let batch = batch.insert_batch(
+            &self.tables.event_by_move_event,
+            events
+                .data
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| e.move_event_name().map(|s| (i, s.clone())))
+                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+        )?;
+
+        let batch = batch.insert_batch(
+            &self.tables.event_by_recipient,
+            events
+                .data
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| e.recipient().map(|s| (i, *s)))
+                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+        )?;
+
+        let batch = batch.insert_batch(
+            &self.tables.event_by_object,
+            events
+                .data
+                .iter()
+                .enumerate()
+                .filter_map(|(i, e)| e.object_id().map(|s| (i, s)))
+                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+        )?;
+
+        let batch = batch.insert_batch(
+            &self.tables.event_by_event_type,
+            events.data.iter().enumerate().map(|(i, e)| {
+                (
+                    (e.event_type(), (sequence, i)),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
+        )?;
+
+        let batch = batch.insert_batch(
+            &self.tables.event_by_time,
+            events.data.iter().enumerate().map(|(i, _)| {
+                (
+                    (timestamp_ms, (sequence, i)),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
         )?;
 
         batch.write()?;
@@ -545,6 +656,249 @@ impl IndexStore {
         digest: &TransactionDigest,
     ) -> SuiResult<Option<TxSequenceNumber>> {
         Ok(self.tables.transactions_seq.get(digest)?)
+    }
+
+    pub fn all_events(
+        &self,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Ok(if descending {
+            self.tables
+                .event_order
+                .iter()
+                .skip_prior_to(&(tx_seq, event_seq))?
+                .reverse()
+                .take(limit)
+                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        } else {
+            self.tables
+                .event_order
+                .iter()
+                .skip_to(&(tx_seq, event_seq))?
+                .take(limit)
+                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        })
+    }
+
+    pub fn events_by_transaction(
+        &self,
+        digest: &TransactionDigest,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        let seq = self
+            .get_transaction_seq(digest)?
+            .ok_or(SuiError::TransactionNotFound { digest: *digest })?;
+        Ok(if descending {
+            self.tables
+                .event_order
+                .iter()
+                .skip_prior_to(&(min(tx_seq, seq), event_seq))?
+                .reverse()
+                .take_while(|((tx, _), _)| tx == &seq)
+                .take(limit)
+                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        } else {
+            self.tables
+                .event_order
+                .iter()
+                .skip_to(&(max(tx_seq, seq), event_seq))?
+                .take_while(|((tx, _), _)| tx == &seq)
+                .take(limit)
+                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        })
+    }
+
+    fn get_event_from_index<KeyT: Clone + PartialEq + Serialize + DeserializeOwned>(
+        index: &DBMap<(KeyT, EventId), (TransactionEventsDigest, TransactionDigest, u64)>,
+        key: &KeyT,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Ok(if descending {
+            index
+                .iter()
+                .skip_prior_to(&(key.clone(), (tx_seq, event_seq)))?
+                .reverse()
+                .take_while(|((m, _), _)| m == key)
+                .take(limit)
+                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        } else {
+            index
+                .iter()
+                .skip_to(&(key.clone(), (tx_seq, event_seq)))?
+                .take_while(|((m, _), _)| m == key)
+                .take(limit)
+                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        })
+    }
+
+    pub fn events_by_module_id(
+        &self,
+        module: &ModuleId,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_move_module,
+            module,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_move_event_struct_name(
+        &self,
+        struct_name: &StructTag,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_move_event,
+            struct_name,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_sender(
+        &self,
+        sender: &SuiAddress,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_sender,
+            sender,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_recipient(
+        &self,
+        recipient: &Owner,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_recipient,
+            recipient,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_object(
+        &self,
+        object: &ObjectID,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_object,
+            object,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn events_by_type(
+        &self,
+        event_type: &EventType,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Self::get_event_from_index(
+            &self.tables.event_by_event_type,
+            event_type,
+            tx_seq,
+            event_seq,
+            limit,
+            descending,
+        )
+    }
+
+    pub fn event_iterator(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        tx_seq: TxSequenceNumber,
+        event_seq: usize,
+        limit: usize,
+        descending: bool,
+    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+        Ok(if descending {
+            self.tables
+                .event_by_time
+                .iter()
+                .skip_prior_to(&(end_time, (tx_seq, event_seq)))?
+                .reverse()
+                .take_while(|((m, _), _)| m >= &start_time)
+                .take(limit)
+                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        } else {
+            self.tables
+                .event_by_time
+                .iter()
+                .skip_to(&(start_time, (tx_seq, event_seq)))?
+                .take_while(|((m, _), _)| m <= &end_time)
+                .take(limit)
+                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                    (digest, tx_digest, event_seq, time)
+                })
+                .collect()
+        })
     }
 
     pub fn get_dynamic_fields_iterator(
