@@ -10,9 +10,9 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes, CheckpointPage,
+    Balance, CheckpointPage, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
 };
 use sui_json_rpc_types::{SuiObjectInfo, SuiTransactionResponseQuery};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -557,14 +557,13 @@ async fn test_get_checkpoint() -> Result<(), anyhow::Error> {
     assert_eq!(2, ch.data.len());
     assert_eq!(2, ch.next_cursor.unwrap());
 
-    let ch1: CheckpointPage = http_client.get_checkpoints(2.into(), 3.into(), false).await?;
+    let ch1: CheckpointPage = http_client
+        .get_checkpoints(2.into(), 3.into(), false)
+        .await?;
     assert_eq!(2, ch1.data[0].sequence_number);
 
     let ch2: CheckpointPage = http_client.get_checkpoints(None, 3.into(), true).await?;
-    assert_eq!(
-        last_checkpoint,
-        ch2.data[0].sequence_number
-    );
+    assert_eq!(last_checkpoint, ch2.data[0].sequence_number);
 
     Ok(())
 }
