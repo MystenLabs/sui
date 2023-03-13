@@ -155,6 +155,7 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
 
       - name: Setup environment
         run: .github/scripts/rosetta/setup.sh
