@@ -531,6 +531,8 @@ impl IndexerStore for PgIndexerStore {
             .run(|conn| {
                 let mut boxed_query = transactions_dsl::transactions
                     .filter(transactions_dsl::mutated.contains(vec![Some(object_id.clone())]))
+                    .or_filter(transactions_dsl::created.contains(vec![Some(object_id.clone())]))
+                    .or_filter(transactions_dsl::unwrapped.contains(vec![Some(object_id.clone())]))
                     .into_boxed();
                 if let Some(start_sequence) = start_sequence {
                     if is_descending {
