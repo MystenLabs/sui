@@ -451,6 +451,7 @@ impl Orchestrator {
     ) -> TestbedResult<()> {
         display::header("Preparing testbed");
         display::config("Commit", format!("'{}'", &self.settings.repository.commit));
+        display::newline();
 
         // Cleanup the testbed (in case the previous run was not completed).
         self.cleanup(true).await?;
@@ -468,6 +469,7 @@ impl Orchestrator {
             display::header(format!("Starting benchmark {i}"));
             display::config("Load type", &parameters.shared_objects_ratio);
             display::config("Parameters", &parameters);
+            display::newline();
 
             // Cleanup the testbed (in case the previous run was not completed).
             self.cleanup(true).await?;

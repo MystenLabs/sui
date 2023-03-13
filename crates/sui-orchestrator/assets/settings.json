@@ -7,7 +7,7 @@
     "specs": "g5.8xlarge",
     "repository": {
         "url": "http://github.com/mystenlabs/sui",
-        "commit": "dbe73d5"
+        "commit": "19a4673"
     },
     "results_directory": "./results",
     "logs_directory": "./logs"

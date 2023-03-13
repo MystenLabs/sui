@@ -172,7 +172,7 @@ pub enum Load {
     /// Search for the maximum load that the system can sustainably handle.
     Search {
         /// The initial load (in tx/s) to test and use a baseline.
-        #[clap(long, value_name = "INT", default_value = "200")]
+        #[clap(long, value_name = "INT", default_value = "250")]
         starting_load: usize,
         /// The maximum number of iterations before converging on a breaking point.
         #[clap(long, value_name = "INT", default_value = "5")]

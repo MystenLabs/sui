@@ -38,7 +38,7 @@ pub fn config<N: Display, V: Display>(name: N, value: V) {
     crossterm::execute!(
         stdout(),
         PrintStyledContent(format!("{name}: ").bold()),
-        Print(format!("{value}\n\n"))
+        Print(format!("{value}\n"))
     )
     .unwrap();
 }
