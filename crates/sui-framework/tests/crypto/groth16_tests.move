@@ -67,6 +67,67 @@ module sui::groth16_tests {
     }
 
     #[test]
+    fun test_prepare_verifying_key_bn254() {
+        let vk = x"53d75f472c207c7fcf6a34bc1e50cf0d7d2f983dd2230ffcaf280362d162c3871cae3e4f91b77eadaac316fe625e3764fb39af2bb5aa25007e9bc6b116f6f02f597ad7c28c4a33da5356e656dcef4660d7375973fe0d7b6dc642d51f16b6c8806030ca5b462a3502d560df7ff62b7f1215195233f688320de19e4b3a2a2cb6120ae49bcc0abbd3cbbf06b29b489edbf86e3b679f4e247464992145f468e3c08db41e5e09002a7170cb4cc56ae96b152d17b6b0d1b9333b41f2325c3c8a9d2e2df98f8e2315884fae52b3c6bb329df0359daac4eff4d2e7ce729078b10d79d42f02000000000000001dcc52e058148a622c51acfdee6e181252ec0e9717653f0be1faaf2a68222e0dd2ccf4e1e8b088efccfdb955a1ff4a0fd28ae2ccbe1a112449ddae8738fb40b0";
+        let arr = groth16::pvk_to_bytes(groth16::prepare_verifying_key(1, &vk));
+
+        let expected_vk_bytes = x"1dcc52e058148a622c51acfdee6e181252ec0e9717653f0be1faaf2a68222e0dd2ccf4e1e8b088efccfdb955a1ff4a0fd28ae2ccbe1a112449ddae8738fb40b0";
+        let expected_alpha_bytes = x"61665b255f20b17bbd56b04a9e4d6bf596cb8d578ce5b2a9ccd498e26d394a3071485596cabce152f68889799f7f6b4e94d415c28e14a3aa609e389e344ae72778358ca908efe2349315bce79341c69623a14397b7fa47ae3fa31c6e41c2ee1b6ab50ef5434c1476d9894bc6afee68e0907b98aa8dfa3464cc9a122b247334064ff7615318b47b881cef4869f3dbfde38801475ae15244be1df58f55f71a5a01e28c8fa91fac886b97235fddb726dfc6a916483464ea130b6f82dc602e684b14f5ee655e510a0c1dd6f87b608718cd19d63a914f745a80c8016aa2c49883482aa28acd647cf9ce56446c0330fe6568bc03812b3bda44d804530abc67305f4914a509ecdc30f0b88b1a4a8b11e84856b333da3d86bb669a53dbfcde59511be60d8d5f7c79faa4910bf396ab04e7239d491e0a3bee177e6c9aac0ecbcd09ca850afcd46f25410849cefcfbdac828e7b057d4a732a373aad913d4b767897ba15d0bfcbcbb25bc5f2dae1ea59196ede9666a5c260f054b1a64977666af6a03076409";
+        let expected_gamma_bytes = x"6030ca5b462a3502d560df7ff62b7f1215195233f688320de19e4b3a2a2cb6120ae49bcc0abbd3cbbf06b29b489edbf86e3b679f4e247464992145f468e3c00d";
+        let expected_delta_bytes = x"b41e5e09002a7170cb4cc56ae96b152d17b6b0d1b9333b41f2325c3c8a9d2e2df98f8e2315884fae52b3c6bb329df0359daac4eff4d2e7ce729078b10d79d4af";
+
+        let delta_bytes = vector::pop_back(&mut arr);
+        assert!(delta_bytes == expected_delta_bytes, 0);
+
+        let gamma_bytes = vector::pop_back(&mut arr);
+        assert!(gamma_bytes == expected_gamma_bytes, 0);
+
+        let alpha_bytes = vector::pop_back(&mut arr);
+        assert!(alpha_bytes == expected_alpha_bytes, 0);
+
+        let vk_bytes = vector::pop_back(&mut arr);
+        assert!(vk_bytes == expected_vk_bytes, 0);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
+    fun test_prepare_verifying_key_invalid_bn254() {
+        let invalid_vk = x"";
+        groth16::prepare_verifying_key(1, &invalid_vk);
+    }
+
+    #[test]
+    fun test_verify_groth_16_proof_bn254() {
+        // Success case.
+        let vk_bytes = x"e8324a3242be5193eb38cca8761691ce061e89ce86f1fce8fd7ef40808f12da3c67d9ed5667c841f956e11adbbe240ddf37a1e3a4a890600dc88f608b897898e";
+        let alpha_bytes = x"51e6d72cd3b0914dd232653f84e7971d3e5bbcde6b47ff8d6c05277e579f1c1eb2fe30aa252c63950de6ea00dd21a1027f6d130357e47c31fafeca0d31e19406231df42bc11ce376f8cf75135d9074f081c242c31f198d151ec69ec37d67cc2b12542cb306a7823c8b194f13672176c6ee8266b2a0c9f57a5dbdb2278046b511d44e715a3ebe02ec2e1cf493c1b1ada84676e234134a6da5a552f61d4e905e15c0dc58a3414d74304775de5ba8571128f3548d269b51fdc08d5b646fd9157e0a2bc0c4bec5a9a6048d17d1d6cd941b4d459f1de0c7c1d417f33995d2a8dd670b91f0baaccaaf2802100901711885026a5ec97fbbb801000d0d01185651947c1900e336921d07eb16d0e25a2192829540ad5eeb1c498ba9c6316e16807a55dc2b9a7f3dea2e4a2f485ed1295a96d6ca86851842b3a22f83507f93ac66a1dc341d5d22f592527d8ea5c12db16bbabe24b76b3e1baf825c8dcf147be369fd8c5300fd77d0aa8dce730e4e7442c93c4890023f3a266c9fbc90ebbf72825e798c4c00";
+        let gamma_bytes = x"240a80664919b9f7490209cff12bfd81c32c272607dc004661c792082cbe282ef826f56a3822ebd72345f86c7ee9872e23f10d1f2dbf43f8aca5dc2ceb5388a5";
+        let delta_bytes = x"f755df8c90edab48ac5adafef6a5a461902217f392e3aa4c34c0462b700c18164f79018778755980d491647de11ecc51fda2cc17171c4b44485ec37ccd23a69b";
+        let pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
+
+        let inputs_bytes = x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a";
+        let inputs = groth16::public_proof_inputs_from_bytes(inputs_bytes);
+
+        let proof_bytes = x"dd2ef02e57d6a282df6b7f36c134ab7e55c2e04c5b8cbd7831be18e0e7224623ae8bd6c41637c10cbd02f5e68de6394461f417895ddd264d6f0ddacf68c6cd02feb8881f0efa599139a6faf4223dd8743777c4346cba52322eb466af96f2be9f813af1450f84d6f8029804f60cac1add70ad1a3d4226404f84f4022dc18caa0f";
+        let proof = groth16::proof_points_from_bytes(proof_bytes);
+
+        assert!(groth16::verify_groth16_proof(1, &pvk, &inputs, &proof) == true, 0);
+
+        // Invalid prepared verifying key.
+        vector::pop_back(&mut vk_bytes);
+        let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
+        assert!(groth16::verify_groth16_proof(1, &invalid_pvk, &inputs, &proof) == false, 0);
+
+        // Invalid public inputs bytes.
+        let invalid_inputs = groth16::public_proof_inputs_from_bytes(x"cf");
+        assert!(groth16::verify_groth16_proof(1, &pvk, &invalid_inputs, &proof) == false, 0);
+
+        // Invalid proof bytes.
+        let invalid_proof = groth16::proof_points_from_bytes(x"4a");
+        assert!(groth16::verify_groth16_proof(1, &pvk, &inputs, &invalid_proof) == false, 0);
+    }
+
+    #[test]
     #[expected_failure(abort_code = groth16::EInvalidCurve)]
     fun test_invalid_curve() {
         let vk = x"";
