@@ -156,7 +156,7 @@ async fn init_genesis(
         OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
-        &[std_move_pkg, sui_move_pkg],
+        [&std_move_pkg, &sui_move_pkg],
     )
     .unwrap();
     let pkg_id = pkg.id();

@@ -125,7 +125,6 @@ fn create_genesis_module_objects() -> Genesis {
     let sui_modules = sui_framework::get_sui_framework();
     let std_modules = sui_framework::get_move_stdlib();
     let objects = vec![create_clock()];
-    // SAFETY: genesis packages should never exceed max size
     let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let std_pkg =
         Object::new_package_from_data(Data::Package(std_move_pkg), TransactionDigest::genesis());

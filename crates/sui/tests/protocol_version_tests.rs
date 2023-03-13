@@ -421,7 +421,7 @@ mod sim_only_tests {
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
-            &[std_move_pkg],
+            [&std_move_pkg],
         )
         .unwrap()
     }

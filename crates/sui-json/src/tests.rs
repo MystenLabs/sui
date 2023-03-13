@@ -408,12 +408,11 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    // SAFETY: genesis packages should never exceed max size
     let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let example_package = Object::new_package_for_testing(
         compiled_modules,
         TransactionDigest::genesis(),
-        &[std_move_pkg, sui_move_pkg],
+        [&std_move_pkg, &sui_move_pkg],
     )
     .unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
@@ -534,12 +533,11 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    // SAFETY: genesis packages should never exceed max size
     let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let example_package = Object::new_package_for_testing(
         compiled_modules,
         TransactionDigest::genesis(),
-        &[std_move_pkg, sui_move_pkg],
+        [&std_move_pkg, &sui_move_pkg],
     )
     .unwrap();
     let framework_pkg = example_package.data.try_as_package().unwrap();
@@ -639,12 +637,11 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    // SAFETY: genesis packages should never exceed max size
     let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let example_package = Object::new_package_for_testing(
         compiled_modules,
         TransactionDigest::genesis(),
-        &[std_move_pkg, sui_move_pkg],
+        [&std_move_pkg, &sui_move_pkg],
     )
     .unwrap();
     let example_package = example_package.data.try_as_package().unwrap();

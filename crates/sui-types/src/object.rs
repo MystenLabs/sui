@@ -561,12 +561,12 @@ impl Object {
     }
 
     // Note: this will panic if `modules` is empty
-    pub fn new_package(
+    pub fn new_package<'p>(
         modules: Vec<CompiledModule>,
         version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
-        dependencies: &[MovePackage],
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
@@ -579,10 +579,10 @@ impl Object {
         ))
     }
 
-    pub fn new_package_for_testing(
+    pub fn new_package_for_testing<'p>(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
-        dependencies: &[MovePackage],
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,

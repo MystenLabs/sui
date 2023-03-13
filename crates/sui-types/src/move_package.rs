@@ -252,11 +252,33 @@ impl MovePackage {
         )
     }
 
-    /// Return the size of the package in bytes. Only count the bytes of the modules themselves--the
-    /// fact that we store them in a map is an implementation detail
+    /// Return the size of the package in bytes
     pub fn size(&self) -> usize {
-        // TODO: Add sizes of linkage and type origin tables
-        self.module_map.values().map(|b| b.len()).sum()
+        let module_map_size = self
+            .module_map
+            .iter()
+            .map(|(name, module)| name.len() + module.len())
+            .sum::<usize>();
+        let type_origin_table_size = self
+            .type_origin_table
+            .iter()
+            .map(
+                |(
+                    ModuleStruct {
+                        module_name,
+                        struct_name,
+                    },
+                    _,
+                )| module_name.len() + struct_name.len() + ObjectID::LENGTH,
+            )
+            .sum::<usize>();
+        let linkage_table_size = self
+            .linkage_table
+            .iter()
+            .map(|_| ObjectID::LENGTH + (ObjectID::LENGTH + 8/* SequenceNumber */))
+            .sum::<usize>();
+
+        ObjectID::LENGTH + 8 /* SequenceNumber */ + module_map_size + type_origin_table_size + linkage_table_size
     }
 
     pub fn id(&self) -> ObjectID {
@@ -273,12 +295,7 @@ impl MovePackage {
 
     /// Approximate size of the package in bytes. This is used for gas metering.
     pub fn object_size_for_gas_metering(&self) -> usize {
-        // + 8 for version
-        self.serialized_module_map()
-            .iter()
-            .map(|(name, module)| name.len() + module.len())
-            .sum::<usize>()
-            + 8
+        self.size()
     }
 
     pub fn serialized_module_map(&self) -> &BTreeMap<String, Vec<u8>> {
@@ -460,21 +477,18 @@ fn build_linkage_table<'p>(
     }
     // (1) Every dependency is represented in the transitive dependencies
     if !immediate_dependencies.is_empty() {
-        // TODO ExecutionError
-        panic!("Dependency not found in linkage table");
+        return Err(ExecutionErrorKind::PublishUpgradeMissingImmediateDependency.into());
     }
 
     // (2) Every dependency's linkage table is superseded by this linkage table
     for dep_linkage_table in dep_linkage_tables {
         for (original_id, dep_info) in dep_linkage_table {
             let Some(our_info) = linkage_table.get(original_id) else {
-                // TODO ExecutionError
-                panic!("Transitive dependency not found in linkage table");
+                return Err(ExecutionErrorKind::PublishUpgradeMissingIndirectDependency.into());
             };
 
             if our_info.upgraded_version < dep_info.upgraded_version {
-                // TODO ExecutionError
-                panic!("Downgrade in linkage table");
+                return Err(ExecutionErrorKind::PublishUpgradeDependencyDowngrade.into());
             }
         }
     }
@@ -505,8 +519,7 @@ fn build_upgraded_type_origin_table(
     modules: &[CompiledModule],
 ) -> BTreeMap<ModuleStruct, ObjectID> {
     let mut new_table = BTreeMap::new();
-    // to double-check that the compatibility check for upgraded package was successful
-    let mut all_new_types = BTreeSet::new();
+    let mut existing_table = predecessor.type_origin_table.clone();
     for m in modules {
         for struct_def in m.struct_defs() {
             let struct_handle = m.struct_handle_at(struct_def.struct_handle);
@@ -516,21 +529,19 @@ fn build_upgraded_type_origin_table(
                 module_name,
                 struct_name,
             };
-            all_new_types.insert(mod_struct.clone());
-            // only insert types that are not in the original table as only these should be
-            // marked as originating from the current package
-            if predecessor.type_origin_table.contains_key(&mod_struct) {
-                continue;
-            }
-            let id: ObjectID = (*m.self_id().address()).into();
+            // if id exists in the predecessor's table, use it, otherwise use the id of the upgraded
+            // module
+            let id = existing_table
+                .remove(&mod_struct)
+                .unwrap_or_else(|| (*m.self_id().address()).into());
             new_table.insert(mod_struct, id);
         }
     }
-    if !BTreeSet::from_iter(predecessor.type_origin_table.keys().cloned()).is_subset(&all_new_types)
-    {
-        // panic as it should be caught by compatibility check
-        panic!("Earlier package version contains a type missing from the upgraded one");
+    if !existing_table.is_empty() {
+        {
+            // panic as it should be caught by compatibility check
+            panic!("Earlier package version contains a type missing from the upgraded one");
+        }
     }
-    new_table.extend(predecessor.type_origin_table.clone().into_iter());
     new_table
 }

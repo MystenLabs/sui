@@ -2305,13 +2305,34 @@ pub enum ExecutionFailureStatus {
     CoinBalanceOverflow,
 
     //
-    // Publish errors
+    // Publish/Upgrade errors
     //
     #[error(
         "Publish Error, Non-zero Address. \
         The modules in the package must have their address set to zero."
     )]
     PublishErrorNonZeroAddress,
+    #[error(
+        "Publish/Upgrade Error, Missing immediate dependency. \
+         Immediate dependencies of a package published/upgraded must be present \
+         on a list provided on command line when publishing/upgrading a package."
+    )]
+    PublishUpgradeMissingImmediateDependency,
+
+    #[error(
+        "Publish/Upgrade Error, Missing indirect dependency. \
+         Indirect (transitive) dependencies of a package published/upgraded must be present \
+         on a list provided on command line when publishing/upgrading a package."
+    )]
+    PublishUpgradeMissingIndirectDependency,
+
+    #[error(
+        "Publish/Upgrade Error, Dependency downgrade. \
+         A version of dependency specified on command line when publishing/upgrading a package \
+         must be equal or greater than versions of all indirect dependencies of this package."
+    )]
+    PublishUpgradeDependencyDowngrade,
+
     #[error(
         "Sui Move Bytecode Verification Error. \
         Please run the Sui Move Verifier for more information."

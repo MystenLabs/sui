@@ -350,10 +350,10 @@ where
     }
 
     /// Create a new package
-    pub fn new_package(
+    pub fn new_package<'p>(
         &mut self,
         modules: Vec<move_binary_format::CompiledModule>,
-        dependencies: &[MovePackage],
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<ObjectID, ExecutionError> {
         // wrap the modules in an object, write it to the store
         let package_object = Object::new_package(
