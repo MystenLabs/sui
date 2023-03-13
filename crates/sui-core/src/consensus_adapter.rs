@@ -46,7 +46,7 @@ use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -427,7 +427,7 @@ impl ConsensusAdapter {
 
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
-            {
+            let submit_inner = async {
                 let ack_start = Instant::now();
                 let mut retries: u32 = 0;
                 while let Err(e) = self
@@ -435,11 +435,12 @@ impl ConsensusAdapter {
                     .submit_to_consensus(&transaction, epoch_store)
                     .await
                 {
-                    // This can happen during Narwhal reconfig, so wait for a few retries.
+                    // This can happen during Narwhal reconfig or when the validator is struggling
+                    // to get its certificate included into Narwhal output, so retry a few times.
                     if retries > 3 {
-                        error!(
-                            "Error submitting transaction to own narwhal worker: {:?}",
-                            e
+                        warn!(
+                            "Failed to submit transaction {:?} to own narwhal worker: {:?}. Retry {}",
+                            transaction_key, e, retries,
                         );
                     }
                     self.opt_metrics.as_ref().map(|metrics| {
@@ -466,11 +467,15 @@ impl ConsensusAdapter {
                         .with_label_values(&[&bucket])
                         .observe(ack_start.elapsed().as_secs_f64());
                 });
+            };
+            match select(processed_waiter, submit_inner.boxed()).await {
+                Either::Left((processed, _submitted)) => processed,
+                Either::Right(((), processed_waiter)) => {
+                    debug!("Submitted {transaction_key:?} to consensus");
+                    processed_waiter.await
+                }
             }
-            debug!("Submitted {transaction_key:?} to consensus");
-            processed_waiter
-                .await
-                .expect("Storage error when waiting for consensus message processed");
+            .expect("Storage error when waiting for consensus message processed");
         }
         debug!("{transaction_key:?} processed by consensus");
         epoch_store
