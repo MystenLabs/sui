@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { getAllStakeSui } from '../getAllStakeSui';
 import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
@@ -20,11 +21,10 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const {
         data: delegatedStake,
         isLoading,

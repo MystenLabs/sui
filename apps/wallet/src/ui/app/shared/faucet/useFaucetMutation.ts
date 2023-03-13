@@ -4,11 +4,11 @@
 import { useRpcClient } from '@mysten/core';
 import { useIsMutating, useMutation } from '@tanstack/react-query';
 
-import useAppSelector from '../../hooks/useAppSelector';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 
 export function useFaucetMutation() {
     const api = useRpcClient();
-    const address = useAppSelector(({ account: { address } }) => address);
+    const address = useActiveAddress();
     const mutationKey = ['faucet-request-tokens', address];
     const mutation = useMutation({
         mutationKey,

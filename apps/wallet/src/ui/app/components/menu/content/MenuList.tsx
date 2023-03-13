@@ -24,6 +24,7 @@ import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { ToS_LINK } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { logout } from '_src/ui/app/redux/slices/account';
@@ -36,7 +37,7 @@ function MenuList() {
     const accountUrl = useNextMenuUrl(true, '/accounts');
     const networkUrl = useNextMenuUrl(true, '/network');
     const autoLockUrl = useNextMenuUrl(true, '/auto-lock');
-    const address = useAppSelector(({ account }) => account.address);
+    const address = useActiveAddress();
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
     const autoLockInterval = useAutoLockInterval();

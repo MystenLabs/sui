@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import { DAppPermissionsList } from '../../components/DAppPermissionsList';
 import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { Text } from '../../shared/text';
 import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
@@ -38,7 +39,7 @@ function SiteConnectPage() {
     );
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
-    const activeAccount = useAppSelector(({ account }) => account.address);
+    const activeAccount = useActiveAddress();
     const isMultiAccountEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
     const [accountsToConnect, setAccountsToConnect] = useState<SuiAddress[]>(
         () => (activeAccount ? [activeAccount] : [])

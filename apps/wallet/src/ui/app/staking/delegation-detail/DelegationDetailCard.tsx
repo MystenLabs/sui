@@ -4,6 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
@@ -20,7 +21,6 @@ import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -38,7 +38,7 @@ export function DelegationDetailCard({
         isError: errorValidators,
     } = useSystemState();
 
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const {
         data: allDelegation,

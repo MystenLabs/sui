@@ -8,12 +8,13 @@ import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
 import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
-import { useAppSelector, useQueryTransactionsByAddress } from '_hooks';
+import { useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function TransactionsPage() {
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useActiveAddress();
     const {
         data: txns,
         isLoading,
