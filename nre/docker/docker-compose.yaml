@@ -4,7 +4,7 @@ version: "3"
 services:
   validator:
     container_name: validator
-    image: mysten/sui-node:testnet
+    image: mysten/sui-node:${SUI_SHA} # UPDATE HERE
     environment:
       - RUST_BACKTRACE=1
       - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info

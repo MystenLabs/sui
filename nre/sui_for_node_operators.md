@@ -28,11 +28,11 @@ There are pre-built container images available in [Docker Hub](https://hub.docke
 And pre built `linux/amd64` binaries available in S3 that can be fetched using one of the following methods:
 
 ```shell
-wget https://releases.sui.io/$SUI_REPO_SHA/sui-node
+wget https://releases.sui.io/$SUI_SHA/sui-node
 ```
 
 ```shell
-curl https://releases.sui.io/$SUI_REPO_SHA/sui-node -o sui-node
+curl https://releases.sui.io/$SUI_SHA/sui-node -o sui-node
 ```
 
 To build directly from source:
@@ -196,7 +196,7 @@ These checkpoints are synchronized between validators and fullnodes via a dedica
 
 Inter-validator state sync is always permitted however there are controls available to limit what fullnodes are allowed to sync from a specific validator. 
 
-The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but will restrict all fullnode from syncing. The Sui Node [configuration](#configuration) can be modified to allow a known fullnode to sync from a validator:
+The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but will restrict all fullnodes from syncing. The Sui Node [configuration](#configuration) can be modified to allow a known fullnode to sync from a validator:
 
 ```shell
 p2p-config:
@@ -214,12 +214,12 @@ p2p-config:
 The following chain operations are executed using the `sui` CLI. This binary is built and provided as a release similar to `sui-node`, examples:
 
 ```shell
-wget https://releases.sui.io/$SUI_REPO_SHA/sui
+wget https://releases.sui.io/$SUI_SHA/sui
 chmod +x sui
 ```
 
 ```shell
-curl https://releases.sui.io/$SUI_REPO_SHA/sui -o sui
+curl https://releases.sui.io/$SUI_SHA/sui -o sui
 chmod +x sui
 ```
 
@@ -240,7 +240,7 @@ To update metadata, a validator makes a MoveCall transaction that interacts with
 1. to update name to `new_validator_name`, use the Sui Client CLI to call `sui_system::update_validator_name`:
 
 ```
-sui client call --package 0x2 --module sui_system --function update_validator_name --args 0x5 \"new_validaotr_name\" --gas-budget 10000
+sui client call --package 0x2 --module sui_system --function update_validator_name --args 0x5 \"new_validator_name\" --gas-budget 10000
 ```
 
 2. to update p2p address starting from next epoch to `/ip4/192.168.1.1`, use the Sui Client CLI to call `sui_system::update_validator_next_epoch_p2p_address`:
