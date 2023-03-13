@@ -271,9 +271,9 @@ By default the new `Cap` object is transferred to the validator address, which t
 
 To get the current valid `Cap` object's ID of a validator, use the Sui Client CLI `sui client objects` command after setting the holder as the active address. Or go to the [explorer](https://explorer.sui.io/object/0x0000000000000000000000000000000000000005) and look for `operation_cap_id` of that validator in the `validators` module.
 
-### Updating the Reference Gas Price
+### Updating the Gas Price Survey Quote
 
-To update the Reference Gas Price (RGP), the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender could be the validator itself, or a trusted delegatee. To do so, call `sui_system::request_set_gas_price`:
+To update the Gas Price Survey Quote of a validator, which is used to calculate the Reference Gas Price at the end of the epoch, the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender could be the validator itself, or a trusted delegatee. To do so, call `sui_system::request_set_gas_price`:
 
 ```
 sui client call --package 0x2 --module sui_system --function request_set_gas_price --args 0x5 {cap_object_id} {new_gas_price} --gas-budget 10000
@@ -287,6 +287,27 @@ To report a validator or undo an existing reporting, the sender needs to hold a 
 sui client call --package 0x2 --module sui_system --function report_validator/undo_report_validator --args 0x5 {cap_object_id} {reportee_address} --gas-budget 10000
 ```
 
-### Joining or Leaving the Validator Set
+Once a validator is reported by `2f + 1` other validators by voting power, their staking rewards will be slashed.
 
-- TODO: get content from Emma
+### Joining the Validator Set
+
+In order for a Sui address to join the validator set, they need to first sign up as a validator candidate by calling `sui_system::request_add_validator_candidate` with their metadata and initial configs:
+
+```
+sui client call --package 0x2 --module sui_system --function request_add_validator_candidate --args 0x5 {protocol_pubkey_bytes {network_pubkey_bytes} {worker_pubkey_bytes} {proof_of_possession} {name} {description} {image_url} {project_url} {net_address}
+{p2p_address} {primary_address} {worker_address} {gas_price} {commission_rate}
+```
+
+After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. Refer to our dedicated staking FAQ on how staking works. Once a candidate's staking pool has accumulated at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially add themselves to next epoch's active validator set:
+```
+sui client call --package 0x2 --module sui_system --function request_add_validator --args 0x5 --gas-budget 10000
+```
+
+### Leaving the Validator Set
+
+To leave the validator set starting next epoch, the sender needs to be an active validator in the current epoch and should call `sui_system::request_remove_validator`:
+```
+sui client call --package 0x2 --module sui_system --function request_remove_validator --args 0x5 --gas-budget 10000
+```
+
+After the validator is removed at the next epoch change, the staking pool will become inactive and stakes can only be withdrawn from an inactive pool.
