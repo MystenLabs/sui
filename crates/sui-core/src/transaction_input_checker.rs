@@ -138,7 +138,7 @@ pub async fn check_certificate_input(
         protocol_version
     );
 
-    let tx_data = &cert.data().intent_message.value;
+    let tx_data = &cert.data().intent_message().value;
     let input_object_kinds = tx_data.input_objects()?;
     let input_object_data = if tx_data.is_change_epoch_tx() {
         // When changing the epoch, we update a the system object, which is shared, without going

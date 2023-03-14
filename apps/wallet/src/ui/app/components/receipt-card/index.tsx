@@ -115,7 +115,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             <ReceiptCardBg status={executionStatus}>
                 <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0">
                     {error && (
-                        <div className="py-3.5 first:pt-0">
+                        <div className="py-3.5 first:pt-0 break-words">
                             <Text
                                 variant="body"
                                 weight="medium"

@@ -835,8 +835,8 @@ impl TryFrom<SenderSignedData> for SuiTransaction {
 
     fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
         Ok(Self {
-            data: data.intent_message.value.try_into()?,
-            tx_signatures: data.tx_signatures,
+            data: data.intent_message().value.clone().try_into()?,
+            tx_signatures: data.tx_signatures().to_vec(),
         })
     }
 }

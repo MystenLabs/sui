@@ -31,18 +31,20 @@
 -  [Function `is_active_validator_by_sui_address`](#0x2_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#0x2_validator_set_is_duplicate_with_active_validator)
 -  [Function `is_duplicate_with_pending_validator`](#0x2_validator_set_is_duplicate_with_pending_validator)
--  [Function `get_preactive_or_active_validator_mut`](#0x2_validator_set_get_preactive_or_active_validator_mut)
+-  [Function `get_candidate_or_active_validator_mut`](#0x2_validator_set_get_candidate_or_active_validator_mut)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
 -  [Function `find_validator_from_table_vec`](#0x2_validator_set_find_validator_from_table_vec)
 -  [Function `get_validator_indices`](#0x2_validator_set_get_validator_indices)
 -  [Function `get_validator_mut`](#0x2_validator_set_get_validator_mut)
--  [Function `get_active_or_pending_validator_mut`](#0x2_validator_set_get_active_or_pending_validator_mut)
+-  [Function `get_active_or_pending_or_candidate_validator_mut`](#0x2_validator_set_get_active_or_pending_or_candidate_validator_mut)
 -  [Function `get_validator_mut_with_verified_cap`](#0x2_validator_set_get_validator_mut_with_verified_cap)
 -  [Function `get_validator_mut_with_ctx`](#0x2_validator_set_get_validator_mut_with_ctx)
+-  [Function `get_validator_mut_with_ctx_including_candidates`](#0x2_validator_set_get_validator_mut_with_ctx_including_candidates)
 -  [Function `get_validator_ref`](#0x2_validator_set_get_validator_ref)
--  [Function `get_active_or_pending_validator_ref`](#0x2_validator_set_get_active_or_pending_validator_ref)
+-  [Function `get_active_or_pending_or_candidate_validator_ref`](#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref)
 -  [Function `get_active_validator_ref`](#0x2_validator_set_get_active_validator_ref)
 -  [Function `get_pending_validator_ref`](#0x2_validator_set_get_pending_validator_ref)
+-  [Function `get_candidate_validator_ref`](#0x2_validator_set_get_candidate_validator_ref)
 -  [Function `verify_cap`](#0x2_validator_set_verify_cap)
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
 -  [Function `process_validator_departure`](#0x2_validator_set_process_validator_departure)
@@ -336,7 +338,43 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 1;
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 101;
+</code></pre>
+
+
+
+<a name="0x2_validator_set_ENotValidatorCandidate"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>: u64 = 8;
+</code></pre>
+
+
+
+<a name="0x2_validator_set_ACTIVE_OR_PENDING_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
+</code></pre>
+
+
+
+<a name="0x2_validator_set_ACTIVE_VALIDATOR_ONLY"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="0x2_validator_set_ANY_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ANY_VALIDATOR">ANY_VALIDATOR</a>: u8 = 3;
 </code></pre>
 
 
@@ -413,20 +451,20 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<a name="0x2_validator_set_ENotValidatorCandidate"></a>
+<a name="0x2_validator_set_ENotActiveOrPendingValidator"></a>
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>: u64 = 8;
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: u64 = 9;
 </code></pre>
 
 
 
-<a name="0x2_validator_set_EValidatorNotPreactive"></a>
+<a name="0x2_validator_set_EValidatorNotCandidate"></a>
 
 
 
-<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EValidatorNotPreactive">EValidatorNotPreactive</a>: u64 = 7;
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: u64 = 7;
 </code></pre>
 
 
@@ -497,7 +535,7 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
             && !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
         <a href="validator_set.md#0x2_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
-    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotPreactive">EValidatorNotPreactive</a>);
+    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     <b>let</b> validator_address = sui_address(&<a href="validator.md#0x2_validator">validator</a>);
     <b>assert</b>!(
         !<a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address),
@@ -537,7 +575,7 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
         <a href="validator_set.md#0x2_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>
     );
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
-    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotPreactive">EValidatorNotPreactive</a>);
+    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
 
     <b>let</b> staking_pool_id = staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>);
 
@@ -585,7 +623,7 @@ processed at the end of epoch.
             && !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
         <a href="validator_set.md#0x2_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
-    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotPreactive">EValidatorNotPreactive</a>);
+    <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     <b>assert</b>!(<a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(&<a href="validator.md#0x2_validator">validator</a>) &gt;= min_joining_stake_amount, <a href="validator_set.md#0x2_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
 
     <a href="table_vec.md#0x2_table_vec_push_back">table_vec::push_back</a>(&<b>mut</b> self.pending_active_validators, <a href="validator.md#0x2_validator">validator</a>);
@@ -659,7 +697,7 @@ of the epoch.
     stake: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_preactive_or_active_validator_mut">get_preactive_or_active_validator_mut</a>(self, validator_address);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address);
     <a href="validator.md#0x2_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x2_validator">validator</a>, stake, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
 }
 </code></pre>
@@ -698,7 +736,7 @@ the stake and any rewards corresponding to it will be immediately processed.
     // This is an active <a href="validator.md#0x2_validator">validator</a>.
     <b>if</b> (<a href="table.md#0x2_table_contains">table::contains</a>(&self.staking_pool_mappings, staking_pool_id)) {
         <b>let</b> validator_address = *<a href="table.md#0x2_table_borrow">table::borrow</a>(&self.staking_pool_mappings, pool_id(&staked_sui));
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_preactive_or_active_validator_mut">get_preactive_or_active_validator_mut</a>(self, validator_address);
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address);
         <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
     } <b>else</b> { // This is an inactive pool.
         <b>assert</b>!(<a href="table.md#0x2_table_contains">table::contains</a>(&self.inactive_validators, staking_pool_id), <a href="validator_set.md#0x2_validator_set_ENoPoolFound">ENoPoolFound</a>);
@@ -1260,14 +1298,14 @@ Checks whether <code>new_validator</code> is duplicate with any currently pendin
 
 </details>
 
-<a name="0x2_validator_set_get_preactive_or_active_validator_mut"></a>
+<a name="0x2_validator_set_get_candidate_or_active_validator_mut"></a>
 
-## Function `get_preactive_or_active_validator_mut`
+## Function `get_candidate_or_active_validator_mut`
 
-Get mutable reference to either a preactive or an active validator by address.
+Get mutable reference to either a candidate or an active validator by address.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_preactive_or_active_validator_mut">get_preactive_or_active_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1276,7 +1314,7 @@ Get mutable reference to either a preactive or an active validator by address.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_preactive_or_active_validator_mut">get_preactive_or_active_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): &<b>mut</b> Validator {
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): &<b>mut</b> Validator {
     <b>if</b> (<a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address)) {
         <b>return</b> <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address)
     };
@@ -1426,15 +1464,17 @@ Aborts if any address isn't in the given validator set.
 
 </details>
 
-<a name="0x2_validator_set_get_active_or_pending_validator_mut"></a>
+<a name="0x2_validator_set_get_active_or_pending_or_candidate_validator_mut"></a>
 
-## Function `get_active_or_pending_validator_mut`
+## Function `get_active_or_pending_or_candidate_validator_mut`
 
+Get mutable reference to an active or (if active does not exist) pending or (if pending and
+active do not exist) or candidate validator by address.
 Note: this function should be called carefully, only after verifying the transaction
 sender has the ability to modify the <code>Validator</code>.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">get_active_or_pending_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, include_candidate: bool): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1443,9 +1483,10 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">get_active_or_pending_validator_mut</a>(
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
+    include_candidate: bool,
 ): &<b>mut</b> Validator {
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
     <b>if</b> (<a href="_is_some">option::is_some</a>(&validator_index_opt)) {
@@ -1453,8 +1494,13 @@ sender has the ability to modify the <code>Validator</code>.
         <b>return</b> <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, validator_index)
     };
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
-    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
-    <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow_mut">table_vec::borrow_mut</a>(&<b>mut</b> self.pending_active_validators, validator_index)
+    // consider both pending validators and the candidate ones
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&validator_index_opt)) {
+        <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+        <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow_mut">table_vec::borrow_mut</a>(&<b>mut</b> self.pending_active_validators, validator_index)
+    };
+    <b>assert</b>!(include_candidate, <a href="validator_set.md#0x2_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>);
+    <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address)
 }
 </code></pre>
 
@@ -1468,7 +1514,7 @@ sender has the ability to modify the <code>Validator</code>.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, verified_cap: &<a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, verified_cap: &<a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>, include_candidate: bool): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1480,8 +1526,9 @@ sender has the ability to modify the <code>Validator</code>.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut_with_verified_cap">get_validator_mut_with_verified_cap</a>(
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     verified_cap: &ValidatorOperationCap,
+    include_candidate: bool,
 ): &<b>mut</b> Validator {
-    <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">get_active_or_pending_validator_mut</a>(self, *<a href="validator_cap.md#0x2_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(verified_cap))
+    <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(self, *<a href="validator_cap.md#0x2_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(verified_cap), include_candidate)
 }
 </code></pre>
 
@@ -1509,7 +1556,35 @@ sender has the ability to modify the <code>Validator</code>.
     ctx: &TxContext,
 ): &<b>mut</b> Validator {
     <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_mut">get_active_or_pending_validator_mut</a>(self, validator_address)
+    <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(self, validator_address, <b>false</b>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_get_validator_mut_with_ctx_including_candidates"></a>
+
+## Function `get_validator_mut_with_ctx_including_candidates`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut_with_ctx_including_candidates">get_validator_mut_with_ctx_including_candidates</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    ctx: &TxContext,
+): &<b>mut</b> Validator {
+    <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_mut">get_active_or_pending_or_candidate_validator_mut</a>(self, validator_address, <b>true</b>)
 }
 </code></pre>
 
@@ -1547,13 +1622,13 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
-<a name="0x2_validator_set_get_active_or_pending_validator_ref"></a>
+<a name="0x2_validator_set_get_active_or_pending_or_candidate_validator_ref"></a>
 
-## Function `get_active_or_pending_validator_ref`
+## Function `get_active_or_pending_or_candidate_validator_ref`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_ref">get_active_or_pending_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, which_validator: u8): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1562,18 +1637,22 @@ sender has the ability to modify the <code>Validator</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_ref">get_active_or_pending_validator_ref</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(
     self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
+    which_validator: u8,
 ): &Validator {
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&validator_index_opt)) {
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&validator_index_opt) || which_validator == <a href="validator_set.md#0x2_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>) {
         <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
         <b>return</b> <a href="_borrow">vector::borrow</a>(&self.active_validators, validator_index)
     };
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x2_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
-    <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
-    <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_active_validators, validator_index)
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&validator_index_opt) || which_validator == <a href="validator_set.md#0x2_validator_set_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>) {
+        <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
+        <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_active_validators, validator_index)
+    };
+    <a href="table.md#0x2_table_borrow">table::borrow</a>(&self.validator_candidates, validator_address)
 }
 </code></pre>
 
@@ -1641,6 +1720,33 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
+<a name="0x2_validator_set_get_candidate_validator_ref"></a>
+
+## Function `get_candidate_validator_ref`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_validator_ref">get_candidate_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_validator_ref">get_candidate_validator_ref</a>(
+    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    validator_address: <b>address</b>,
+): &Validator {
+    <a href="table.md#0x2_table_borrow">table::borrow</a>(&self.validator_candidates, validator_address)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_set_verify_cap"></a>
 
 ## Function `verify_cap`
@@ -1650,7 +1756,7 @@ If <code>active_validator_only</code> is true, only verify the Cap for an active
 Otherwise, verify the Cap for au either active or pending validator.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_verify_cap">verify_cap</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, cap: &<a href="validator_cap.md#0x2_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>, active_validator_only: bool): <a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_verify_cap">verify_cap</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, cap: &<a href="validator_cap.md#0x2_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>, which_validator: u8): <a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>
 </code></pre>
 
 
@@ -1662,14 +1768,14 @@ Otherwise, verify the Cap for au either active or pending validator.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_verify_cap">verify_cap</a>(
     self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     cap: &UnverifiedValidatorOperationCap,
-    active_validator_only: bool,
+    which_validator: u8,
 ): ValidatorOperationCap {
     <b>let</b> cap_address = *<a href="validator_cap.md#0x2_validator_cap_unverified_operation_cap_address">validator_cap::unverified_operation_cap_address</a>(cap);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> =
-        <b>if</b> (active_validator_only)
+        <b>if</b> (which_validator == <a href="validator_set.md#0x2_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>)
             <a href="validator_set.md#0x2_validator_set_get_active_validator_ref">get_active_validator_ref</a>(self, cap_address)
         <b>else</b>
-            <a href="validator_set.md#0x2_validator_set_get_active_or_pending_validator_ref">get_active_or_pending_validator_ref</a>(self, cap_address);
+            <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(self, cap_address, which_validator);
     <b>assert</b>!(<a href="validator.md#0x2_validator_operation_cap_id">validator::operation_cap_id</a>(<a href="validator.md#0x2_validator">validator</a>) == &<a href="object.md#0x2_object_id">object::id</a>(cap), <a href="validator_set.md#0x2_validator_set_EInvalidCap">EInvalidCap</a>);
     <a href="validator_cap.md#0x2_validator_cap_new_from_unverified">validator_cap::new_from_unverified</a>(cap)
 }

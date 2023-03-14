@@ -95,14 +95,12 @@ use sui_types::{
 use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-pub use crate::authority::authority_per_epoch_store::{
-    VerifiedCertificateCache, VerifiedCertificateCacheMetrics,
-};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -499,7 +497,7 @@ impl AuthorityState {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
-            &transaction.data().intent_message.value,
+            &transaction.data().intent_message().value,
         )
         .await?;
 
@@ -545,10 +543,15 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        fp_ensure!(
+            !transaction.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         let tx_digest = *transaction.digest();
         debug!(
             "handle_transaction with transaction data: {:?}",
-            &transaction.data().intent_message.value
+            &transaction.data().intent_message().value
         );
 
         // Ensure an idempotent answer. This is checked before the system_tx check so that
@@ -923,7 +926,7 @@ impl AuthorityState {
         self.metrics.batch_size.observe(
             certificate
                 .data()
-                .intent_message
+                .intent_message()
                 .value
                 .kind()
                 .num_commands() as f64,
@@ -969,7 +972,7 @@ impl AuthorityState {
             *certificate.digest(),
             epoch_store.protocol_config(),
         );
-        let transaction_data = &certificate.data().intent_message.value;
+        let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -1192,9 +1195,9 @@ impl AuthorityState {
             .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
-            cert.data().intent_message.value.sender(),
+            cert.data().intent_message().value.sender(),
             cert.data()
-                .intent_message
+                .intent_message()
                 .value
                 .input_objects()?
                 .iter()
@@ -1204,7 +1207,7 @@ impl AuthorityState {
                 .into_iter()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
-                .intent_message
+                .intent_message()
                 .value
                 .move_calls()
                 .into_iter()
@@ -1678,7 +1681,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+        let batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1688,7 +1691,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            batch_verifier_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(

@@ -644,7 +644,7 @@ impl From<&ObjectRef> for ObjectKey {
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
 pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
     Ok(tx
-        .intent_message
+        .intent_message()
         .value
         .input_objects()?
         .into_iter()

@@ -68,9 +68,9 @@ async fn test_tx_gas_balance_less_than_budget() {
     let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
     assert_eq!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::GasBalanceTooLow {
             gas_balance: gas_balance as u128,
-            gas_budget: (gas_price * budget) as u128,
+            needed_gas_amount: (gas_price * budget) as u128,
         }
     );
 }
@@ -125,6 +125,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // computation gas is for both read and writes, so on a simple transfer is twice the objects
     // (transfer object and gas coin)
     gas_status.charge_computation_gas_for_storage_mutation((obj_size + gas_size) as u64 * 2)?;
+    gas_status.bucketize_computation()?;
     let summary = gas_status.summary();
     assert_eq!(gas_cost, &summary);
     Ok(())
@@ -164,9 +165,9 @@ async fn test_native_transfer_gas_price_is_used() {
     let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
     assert_eq!(
         UserInputError::try_from(result.response.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::GasBalanceTooLow {
             gas_balance: (gas_balance as u128),
-            gas_budget: (gas_budget as u128),
+            needed_gas_amount: ((gas_budget as u128) * (gas_price as u128)),
         }
     );
 }
@@ -299,7 +300,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // genesis objects are read during transaction since they are direct dependencies.
     let genesis_objects = create_genesis_module_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
-    let publish_bytes = match response.0.data().intent_message.value.kind() {
+    let publish_bytes = match response.0.data().intent_message().value.kind() {
         TransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
             Command::Publish(modules) => modules,
             _ => unreachable!(),

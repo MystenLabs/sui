@@ -803,7 +803,7 @@ async fn sync_batches_drops_old() {
         let _ = tx_consensus_round_updates.send(30);
     });
     match synchronizer
-        .sync_batches(&test_header, network.clone(), 10)
+        .sync_header_batches(&test_header, network.clone(), 10)
         .await
     {
         Err(DagError::TooOld(_, _, _)) => (),

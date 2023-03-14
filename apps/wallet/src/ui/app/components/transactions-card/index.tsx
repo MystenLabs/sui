@@ -91,7 +91,7 @@ export function TransactionCard({
 
     const isSender = address === getTransactionSender(txn);
 
-    const error = useMemo(() => getExecutionStatusError(txn), [txn]);
+    const error = getExecutionStatusError(txn);
 
     // Transition label - depending on the transaction type and amount
     // Epoch change without amount is delegation object
@@ -140,8 +140,8 @@ export function TransactionCard({
 
                                 <div className="flex break-all">
                                     <Text
-                                        variant="subtitle"
-                                        weight="medium"
+                                        variant="p3"
+                                        weight="normal"
                                         color="issue-dark"
                                     >
                                         {error}

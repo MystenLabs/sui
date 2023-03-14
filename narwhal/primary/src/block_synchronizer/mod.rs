@@ -649,6 +649,7 @@ impl BlockSynchronizer {
             let message = WorkerSynchronizeMessage {
                 digests: batch_ids,
                 target: primary_peer_name.clone(),
+                is_certified: true,
             };
             let _ = self.network.unreliable_send(worker_name, &message);
 
