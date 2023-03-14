@@ -9,13 +9,14 @@ use crate::ValidatorProxy;
 use async_trait::async_trait;
 use prometheus::Registry;
 
-use crate::workloads::workload::WorkloadInfo;
+use crate::workloads::WorkloadInfo;
 
 #[async_trait]
 pub trait Driver<T> {
     async fn run(
         &self,
-        proxy_workloads: Vec<(Arc<dyn ValidatorProxy + Send + Sync>, Vec<WorkloadInfo>)>,
+        proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        workloads: Vec<WorkloadInfo>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,

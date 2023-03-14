@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::future::try_join_all;
@@ -16,6 +17,7 @@ use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_reg
 use prometheus::{register_histogram_vec_with_registry, register_int_counter_with_registry};
 use prometheus::{register_int_counter_vec_with_registry, CounterVec};
 use prometheus::{GaugeVec, IntCounter};
+use rand::seq::SliceRandom;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
@@ -24,7 +26,7 @@ use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::WorkloadInfo;
+use crate::workloads::WorkloadInfo;
 use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
@@ -208,20 +210,15 @@ impl BenchDriver {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<BenchWorker> {
         let mut workers = vec![];
-        let mut qps = workload_info.target_qps;
+        let mut qps = workload_info.workload_params.target_qps;
         if qps == 0 {
             return vec![];
         }
         let mut payloads = workload_info
             .workload
-            .make_test_payloads(
-                workload_info.max_in_flight_ops,
-                workload_info.payload_config.clone(),
-                proxy.clone(),
-                system_state_observer.clone(),
-            )
+            .make_test_payloads(proxy.clone(), system_state_observer.clone())
             .await;
-        let mut total_workers = workload_info.num_workers;
+        let mut total_workers = workload_info.workload_params.num_workers;
         while total_workers > 0 {
             let target_qps = qps / total_workers;
             if target_qps > 0 {
@@ -256,7 +253,8 @@ async fn ctrl_c() -> std::io::Result<()> {
 impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
-        proxy_workloads: Vec<(Arc<dyn ValidatorProxy + Send + Sync>, Vec<WorkloadInfo>)>,
+        proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        workloads: Vec<WorkloadInfo>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
@@ -268,13 +266,14 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
-        for (proxy, workloads) in proxy_workloads.iter() {
-            for workload in workloads.iter() {
-                bench_workers.extend(
-                    self.make_workers(workload, proxy.clone(), system_state_observer.clone())
-                        .await,
-                );
-            }
+        for workload in workloads.iter() {
+            let proxy = proxies
+                .choose(&mut rand::thread_rng())
+                .context("Failed to get proxy for bench driver")?;
+            bench_workers.extend(
+                self.make_workers(workload, proxy.clone(), system_state_observer.clone())
+                    .await,
+            );
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
@@ -361,7 +360,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             if let Some(mut b) = retry_queue.pop_front() {
                                 num_error += 1;
                                 num_submitted += 1;
-                                metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
+                                metrics_cloned.num_submitted.with_label_values(&[&b.1.to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
@@ -379,11 +378,11 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 }
 
                                                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
-                                                metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
-                                                metrics_cloned.latency_squared_s.with_label_values(&[&b.1.get_workload_type().to_string()]).inc_by(square_latency_ms);
+                                                metrics_cloned.latency_s.with_label_values(&[&b.1.to_string()]).observe(latency.as_secs_f64());
+                                                metrics_cloned.latency_squared_s.with_label_values(&[&b.1.to_string()]).inc_by(square_latency_ms);
 
-                                                metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
-                                                metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
+                                                metrics_cloned.num_success.with_label_values(&[&b.1.to_string()]).inc();
+                                                metrics_cloned.num_in_flight.with_label_values(&[&b.1.to_string()]).dec();
                                                 // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                                 // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                                 if let Some(sig_info) = effects.quorum_sig() {
@@ -397,7 +396,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             }
                                             Err(err) => {
                                                 error!("{}", err);
-                                                metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
+                                                metrics_cloned.num_error.with_label_values(&[&b.1.to_string()]).inc();
                                                 NextOp::Retry(b)
                                             }
                                         }
@@ -413,8 +412,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let mut payload = free_pool.pop().unwrap();
                                 num_in_flight += 1;
                                 num_submitted += 1;
-                                metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
-                                metrics_cloned.num_submitted.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
+                                metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
+                                metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                                 let tx = payload.make_transaction();
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
@@ -433,11 +432,11 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             }
 
                                             let square_latency_ms = latency.as_secs_f64().powf(2.0);
-                                            metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
-                                            metrics_cloned.latency_squared_s.with_label_values(&[&payload.get_workload_type().to_string()]).inc_by(square_latency_ms);
+                                            metrics_cloned.latency_s.with_label_values(&[&payload.to_string()]).observe(latency.as_secs_f64());
+                                            metrics_cloned.latency_squared_s.with_label_values(&[&payload.to_string()]).inc_by(square_latency_ms);
 
-                                            metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
-                                            metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
+                                            metrics_cloned.num_success.with_label_values(&[&payload.to_string()]).inc();
+                                            metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).dec();
                                             // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                             // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
@@ -449,7 +448,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                         }
                                         Err(err) => {
                                             error!("Retry due to error: {}", err);
-                                            metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
+                                            metrics_cloned.num_error.with_label_values(&[&payload.to_string()]).inc();
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
                                     }

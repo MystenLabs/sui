@@ -17,11 +17,12 @@ use sui_types::{
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::{Gas, GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
+use crate::workloads::workload::WorkloadBuilder;
+use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_pay_sui_transaction;
 
-use super::workload::{Workload, WorkloadType, MAX_GAS_FOR_TESTING};
+use super::workload::{Workload, MAX_GAS_FOR_TESTING};
 
 /// Value of each address's "primary coin" in mist. The first transaction gives
 /// each address a coin worth PRIMARY_COIN_VALUE, and all subsequent transfers
@@ -46,6 +47,12 @@ pub struct BatchPaymentTestPayload {
     /// after the first tx, any address can send
     first_sender: SuiAddress,
     system_state_observer: Arc<SystemStateObserver>,
+}
+
+impl std::fmt::Display for BatchPaymentTestPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "batch_payment")
+    }
 }
 
 impl Payload for BatchPaymentTestPayload {
@@ -97,18 +104,52 @@ impl Payload for BatchPaymentTestPayload {
             Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
+}
 
-    fn get_workload_type(&self) -> WorkloadType {
-        WorkloadType::BatchPayment
+#[derive(Debug)]
+pub struct BatchPaymentWorkloadBuilder {
+    num_payloads: u64,
+}
+
+impl BatchPaymentWorkloadBuilder {
+    pub fn from(
+        workload_weight: f32,
+        target_qps: u64,
+        num_workers: u64,
+        in_flight_ratio: u64,
+    ) -> Option<WorkloadBuilderInfo> {
+        let target_qps = (workload_weight * target_qps as f32) as u64;
+        let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
+        let max_ops = target_qps * in_flight_ratio;
+        if max_ops == 0 || num_workers == 0 {
+            None
+        } else {
+            let workload_params = WorkloadParams {
+                target_qps,
+                num_workers,
+                max_ops,
+            };
+            let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
+                BatchPaymentWorkloadBuilder {
+                    num_payloads: max_ops,
+                },
+            ));
+            let builder_info = WorkloadBuilderInfo {
+                workload_params,
+                workload_builder,
+            };
+            Some(builder_info)
+        }
     }
 }
 
-#[derive(Debug, Default)]
-pub struct BatchPaymentWorkload {}
-
-impl BatchPaymentWorkload {
-    pub fn generate_gas_config_for_payloads(count: u64) -> Vec<GasCoinConfig> {
-        (0..count)
+#[async_trait]
+impl WorkloadBuilder<dyn Payload> for BatchPaymentWorkloadBuilder {
+    async fn generate_coin_config_for_init(&self) -> Vec<GasCoinConfig> {
+        vec![]
+    }
+    async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
+        (0..self.num_payloads)
             .map(|_| {
                 let (address, keypair) = get_key_pair();
                 GasCoinConfig {
@@ -119,13 +160,24 @@ impl BatchPaymentWorkload {
             })
             .collect()
     }
+    async fn build(
+        &self,
+        _init_gas: Vec<Gas>,
+        payload_gas: Vec<Gas>,
+    ) -> Box<dyn Workload<dyn Payload>> {
+        Box::<dyn Workload<dyn Payload>>::from(Box::new(BatchPaymentWorkload { payload_gas }))
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct BatchPaymentWorkload {
+    payload_gas: Vec<Gas>,
 }
 
 #[async_trait]
 impl Workload<dyn Payload> for BatchPaymentWorkload {
     async fn init(
         &mut self,
-        _init_config: WorkloadInitGas,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         _system_state_observer: Arc<SystemStateObserver>,
     ) {
@@ -133,20 +185,19 @@ impl Workload<dyn Payload> for BatchPaymentWorkload {
 
     async fn make_test_payloads(
         &self,
-        num_payloads: u64,
-        payload_config: WorkloadPayloadGas,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let mut gas_by_address: HashMap<SuiAddress, Vec<Gas>> = HashMap::new();
-        for gas in payload_config.batch_payment_payload_gas.into_iter() {
+        for gas in self.payload_gas.iter() {
             gas_by_address
-                .entry(gas.1.get_owner_address().unwrap())
+                .entry(gas.1)
                 .or_insert_with(|| Vec::with_capacity(1))
-                .push(gas);
+                .push(gas.clone());
         }
-        assert!(
-            gas_by_address.len() as u64 == num_payloads,
+        assert_eq!(
+            gas_by_address.len(),
+            self.payload_gas.len(),
             "Each sender needs some gas"
         );
 
@@ -176,9 +227,5 @@ impl Workload<dyn Payload> for BatchPaymentWorkload {
             .into_iter()
             .map(|b| Box::<dyn Payload>::from(b))
             .collect()
-    }
-
-    fn get_workload_type(&self) -> WorkloadType {
-        WorkloadType::BatchPayment
     }
 }
