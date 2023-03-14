@@ -5,7 +5,6 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { SuiEvent, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
-  DEFAULT_RECIPIENT,
   setup,
   TestToolbox,
 } from './utils/setup';
@@ -27,7 +26,16 @@ describe('Event Subscription API', () => {
 
     const tx = new Transaction();
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
+    tx.moveCall({
+      target: '0x2::devnet_nft::mint',
+      arguments: [
+        tx.pure('Example NFT'),
+        tx.pure('An NFT created by the wallet Command Line Tool'),
+        tx.pure(
+          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+        ),
+      ],
+    });
     await toolbox.signer.signAndExecuteTransaction({
       transaction: tx,
       requestType: 'WaitForLocalExecution',
