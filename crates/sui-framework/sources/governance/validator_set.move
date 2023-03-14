@@ -64,13 +64,14 @@ module sui::validator_set {
 
     /// Event containing staking and rewards related information of
     /// each validator, emitted during epoch advancement.
-    struct ValidatorEpochInfo has copy, drop {
+    struct ValidatorEpochInfoEvent has copy, drop {
         epoch: u64,
         validator_address: address,
         reference_gas_survey_quote: u64,
         stake: u64,
         commission_rate: u64,
-        stake_rewards: u64,
+        pool_staking_reward: u64,
+        storage_fund_staking_reward: u64,
         pool_token_exchange_rate: PoolTokenExchangeRate,
         tallying_rule_reporters: vector<address>,
         tallying_rule_global_score: u64,
@@ -362,7 +363,7 @@ module sui::validator_set {
 
         // Emit events after we have processed all the rewards distribution and pending stakes.
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
-            validator_report_records, &slashed_validators);
+            &adjusted_storage_fund_reward_amounts, validator_report_records, &slashed_validators);
 
         process_pending_validators(self, new_epoch);
 
@@ -1089,7 +1090,8 @@ module sui::validator_set {
     fun emit_validator_epoch_events(
         new_epoch: u64,
         vs: &vector<Validator>,
-        reward_amounts: &vector<u64>,
+        pool_staking_reward_amounts: &vector<u64>,
+        storage_fund_staking_reward_amounts: &vector<u64>,
         report_records: &VecMap<address, VecSet<address>>,
         slashed_validators: &vector<address>,
     ) {
@@ -1108,13 +1110,14 @@ module sui::validator_set {
                 if (vector::contains(slashed_validators, &validator_address)) 0
                 else 1;
             event::emit(
-                ValidatorEpochInfo {
+                ValidatorEpochInfoEvent {
                     epoch: new_epoch,
                     validator_address,
                     reference_gas_survey_quote: validator::gas_price(v),
                     stake: validator::total_stake_amount(v),
                     commission_rate: validator::commission_rate(v),
-                    stake_rewards: *vector::borrow(reward_amounts, i),
+                    pool_staking_reward: *vector::borrow(pool_staking_reward_amounts, i),
+                    storage_fund_staking_reward: *vector::borrow(storage_fund_staking_reward_amounts, i),
                     pool_token_exchange_rate: validator::pool_token_exchange_rate_at_epoch(v, new_epoch),
                     tallying_rule_reporters,
                     tallying_rule_global_score,
