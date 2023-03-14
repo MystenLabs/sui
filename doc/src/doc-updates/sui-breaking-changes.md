@@ -20,12 +20,112 @@ Added 03/13/23
 
 ---
 
-**[Major breaking change]** The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request  explicitly specifies other data, such as `type`, `owner`, or `bcs`. To learn more, see [PR 8817](https://github.com/MystenLabs/sui/pull/8817)
+**[Major breaking change]** - The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request  explicitly specifies other data, such as `type`, `owner`, or `bcs`. To learn more, see [PR 8817](https://github.com/MystenLabs/sui/pull/8817)
 
-`SuiSystemState`
+**Resolution - TypeScript**
+
+The following example demonstrates how to include the new parameter in TypeScript. 
+
+```tsx
+
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+
+// Previous API (Prior to release .28)
+const txn = await provider.getObject(
+  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+);
+const txns = await provider.getObjectBatch([
+  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
+]);
+
+// Updated API in release .28
+const txn = await provider.getObject({
+  id: '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  // fetch the object content field
+  options: { showContent: true },
+});
+const txns = await provider.multiGetObjects({
+  ids: [
+    '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+    '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  ],
+  // only fetch the object type
+  options: { showType: true },
+});
+```
+
+**Resolution - JSON RPC**
+
+```bash
+# Previous API (Prior to release .28)
+curl --location --request POST 'https://fullnode.devnet.sui.io:443' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getObject",
+    "params": {
+        "object_id": "0x08240661f5504c9bb4a487d9a28e7e9d6822abf692801f2a750d67a44d0b2340",
+    }
+}'
+
+# Updated API in release .28
+curl --location --request POST 'https://fullnode.devnet.sui.io:443' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getObject",
+    "params": {
+        "object_id": "0x08240661f5504c9bb4a487d9a28e7e9d6822abf692801f2a750d67a44d0b2340",
+        "options": {
+            "showContent": true,
+						"showOwner": true,
+        }
+    }
+}'
+
+# If you use sui_getRawObject, enable the showBcs option to fetch it
+curl --location --request POST 'https://fullnode.devnet.sui.io:443' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sui_getObject",
+    "params": {
+        "object_id": "0x08240661f5504c9bb4a487d9a28e7e9d6822abf692801f2a750d67a44d0b2340",
+        "options": {
+            "showBcs": true
+        }
+    }
+}'
+```
+
 ---
 
 **[Major breaking change]** - The ID leak verifier that governs usage of `UID`s in Sui Move code has been rewritten and flipped. New objects must now get “fresh” `UID`s created in the function where the object is made, but when the object’s struct is destroyed, the UID can be stored as if the object was wrapped (but without it's contents). In contrast, the previous rules stated that the `UID` could come from anywhere, but must have been destroyed when the object was unpacked. We have made this change to make using dynamic fields a bit more ergonomic, so you do not always need a `Bag` or `Table` if you want to retain access to dynamic fields after unpacking an object into its constituent fields. See [PR 8026](https://github.com/MystenLabs/sui/pull/8026) for details and a migration example.
+
+
+**Resolution:**
+`UID`s must now be statically deemed “fresh” when you construct an object. This means that the `UID` must come from `object::new` (or `test_scenario::new_object` during tests). To migrate an existing project, any function that previously took a `UID` as an argument to construct an object now requires the `TxContext` to generate new IDs. 
+
+For example, prior to release .28, to construct an object:
+
+```rust
+fun new(id: UID): Counter { 
+    Counter { id, count: 0 } 
+}
+```
+
+With release .28, to construct an object:
+
+```rust
+fun new(ctx: &mut TxContext): Counter { 
+    Counter { id: object::new(ctx), count: 0 } 
+}
+```
 
 ---
 
@@ -45,7 +145,17 @@ Added 03/13/23
 
 ---
 
-**[Breaking change]** - `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message. You must also include the u8 that represents  the hash function. See [PR 7773](https://github.com/MystenLabs/sui/pull/7773) for more details.
+**[Breaking change]** - `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message. You must also include the hash_function name represented by u8. See [PR 7773](https://github.com/MystenLabs/sui/pull/7773) for more details.
+
+**Resolution**
+`ecdsa_k1::ecrecover(sig, hashed_msg, hash_function)` is now updated to `ecdsa_k1::secp256k1_ecrecover(sig, msg, hash_function)`
+
+`ecdsa_k1::secp256k1_verify(sig, pk, hashed_msg)` is now updated to `ecdsa_k1::secp256k1_verify(sig, pk, msg, hash_function)`
+
+See source code for details: 
+
+ * [ecdsa_k1.md](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_k1.md)
+ *  [ecdsa_r1.md](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_r1.md) 
 
 ---
 
