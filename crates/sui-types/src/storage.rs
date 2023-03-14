@@ -23,6 +23,7 @@ use crate::{
     event::Event,
     object::Object,
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
@@ -75,35 +76,57 @@ pub trait Storage {
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
 }
 
+pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
+
 pub trait BackingPackageStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
-    /// Returns an object for each package id in `package_ids`. Returns `None` if any package id is
-    /// unable to be found.
-    fn get_package_objects<'a>(
-        &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
-    ) -> SuiResult<Option<Vec<Object>>> {
-        package_ids
-            .into_iter()
-            .map(|id| self.get_package_object(id))
-            .collect()
-    }
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<MovePackage>> {
         self.get_package_object(package_id)
             .map(|opt_obj| opt_obj.and_then(|obj| obj.data.try_into_package()))
     }
+    /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
+    /// `package_id` were found. If any package in `package_ids` was not found it returns Err(<list
+    /// of any package ids that are unable to be found>).
+    fn get_package_objects<'a>(
+        &self,
+        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> SuiResult<PackageFetchResults<Object>> {
+        let package_objects: Vec<Result<Object, ObjectID>> = package_ids
+            .into_iter()
+            .map(|id| match self.get_package_object(id) {
+                Ok(None) => Ok(Err(*id)),
+                Ok(Some(o)) => Ok(Ok(o)),
+                Err(x) => Err(x),
+            })
+            .collect::<SuiResult<_>>()?;
+
+        let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
+            package_objects.into_iter().partition_result();
+        if !failed_to_fetch.is_empty() {
+            Ok(Err(failed_to_fetch))
+        } else {
+            Ok(Ok(fetched))
+        }
+    }
     fn get_packages<'a>(
         &self,
         package_ids: impl IntoIterator<Item = &'a ObjectID>,
-    ) -> SuiResult<Option<Vec<MovePackage>>> {
-        self.get_package_objects(package_ids).map(|packages| {
-            packages.and_then(|objects| {
-                objects
-                    .into_iter()
-                    .map(|opt_obj| opt_obj.data.try_into_package())
-                    .collect()
-            })
-        })
+    ) -> SuiResult<PackageFetchResults<MovePackage>> {
+        let objects = self.get_package_objects(package_ids)?;
+        Ok(objects.and_then(|objects| {
+            let (packages, failed): (Vec<_>, Vec<_>) = objects
+                .into_iter()
+                .map(|obj| {
+                    let obj_id = obj.id();
+                    obj.data.try_into_package().ok_or(obj_id)
+                })
+                .partition_result();
+            if !failed.is_empty() {
+                Err(failed)
+            } else {
+                Ok(packages)
+            }
+        }))
     }
 }
 

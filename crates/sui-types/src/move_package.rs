@@ -486,14 +486,14 @@ fn build_linkage_table<'p>(
     }
     // (1) Every dependency is represented in the transitive dependencies
     if !immediate_dependencies.is_empty() {
-        return Err(ExecutionErrorKind::PublishUpgradeMissingImmediateDependency.into());
+        return Err(ExecutionErrorKind::PublishUpgradeMissingDependency.into());
     }
 
     // (2) Every dependency's linkage table is superseded by this linkage table
     for dep_linkage_table in dep_linkage_tables {
         for (original_id, dep_info) in dep_linkage_table {
             let Some(our_info) = linkage_table.get(original_id) else {
-                return Err(ExecutionErrorKind::PublishUpgradeMissingIndirectDependency.into());
+                return Err(ExecutionErrorKind::PublishUpgradeMissingDependency.into());
             };
 
             if our_info.upgraded_version < dep_info.upgraded_version {
