@@ -316,7 +316,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         SuiCostTable::new_for_testing(),
     );
     gas_status.charge_min_tx_gas()?;
-    gas_status.charge_vm_gas()?;
     gas_status.charge_storage_read(
         genesis_objects
             .iter()
