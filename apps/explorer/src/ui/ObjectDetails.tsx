@@ -1,24 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { ArrowUpRight16, EyeClose16, NftTypeImage24 } from '@mysten/icons';
+import { ArrowUpRight16, X12 } from '@mysten/icons';
 import { cva } from 'class-variance-authority';
-import clsx from 'clsx';
 import { useState } from 'react';
 
 import { Heading } from './Heading';
+import { IconButton } from './IconButton';
+import { Image } from './Image';
 import { ObjectLink } from './InternalLink';
-import { LightBox } from './LightBox';
+import { Modal } from './Modal';
 import { Text } from './Text';
 
-interface ImageProps {
-    onClick?: () => void;
-    className: string;
-    src: string;
-    blur?: boolean;
-    alt?: string;
-}
-
-const imageStyles = cva(['object-cover z-0'], {
+const imageStyles = cva(['rounded-md cursor-pointer object-cover z-0'], {
     variants: {
         size: {
             small: 'h-14 w-14',
@@ -58,9 +51,9 @@ export function ObjectDetails({
     const openPreview = () => setOpen(true);
     return (
         <div className="flex items-center gap-3.75">
-            <LightBox open={open} onClose={close}>
+            <Modal open={open} onClose={close}>
                 <div className="flex flex-col gap-5">
-                    <Image alt={name} src={image} className="rounded-none" />
+                    <Image alt={name} src={image} rounded="none" />
                     <Heading variant="heading2/semibold" color="sui-light">
                         {name}
                     </Heading>
@@ -68,14 +61,23 @@ export function ObjectDetails({
                         {type}
                     </Text>
                 </div>
-            </LightBox>
-            <div className="relative flex-shrink-0">
+                <div className="absolute -right-12 top-0">
+                    <IconButton
+                        onClick={close}
+                        className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-gray-90 p-0 text-sui-light outline-none hover:scale-105 active:scale-100"
+                        aria-label="Close"
+                        icon={X12}
+                    />
+                </div>
+            </Modal>
+
+            <div className={imageStyles({ size: variant })}>
                 <Image
+                    rounded="md"
                     onClick={openPreview}
                     alt={name}
                     src={image}
                     blur={nsfw}
-                    className={imageStyles({ size: variant })}
                 />
             </div>
             <div className={textStyles({ size: variant })}>
@@ -103,42 +105,5 @@ export function ObjectDetails({
                 ) : null}
             </div>
         </div>
-    );
-}
-
-function FallbackImage({ className }: { className: string }) {
-    return (
-        <div
-            className={clsx(
-                className,
-                'flex items-center justify-center rounded-md bg-gray-45 text-gray-65'
-            )}
-        >
-            <NftTypeImage24 />
-        </div>
-    );
-}
-
-function Image({ className, alt, src, blur = false, onClick }: ImageProps) {
-    const [error, setError] = useState(false);
-    return (
-        <>
-            {blur ? (
-                <div className="pointer-events-none absolute z-20 flex h-full w-full flex-col items-center justify-center space-y-2.5 rounded-md bg-gray-100/30 text-center backdrop-blur-sm">
-                    <EyeClose16 className="h-1/3 w-1/3 text-white" />
-                </div>
-            ) : null}
-            {error ? (
-                <FallbackImage className={className} />
-            ) : (
-                <img
-                    onError={() => setError(true)}
-                    alt={alt}
-                    src={src ?? ''}
-                    className={clsx('cursor-pointer rounded-md', className)}
-                    onClick={onClick}
-                />
-            )}
-        </>
     );
 }

@@ -25,7 +25,7 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
     return (
         <div className="mb-10 grid grid-cols-2 gap-4">
             {results.map((entryObj) => (
-                <OwnedNFT key={`object-${entryObj.id}`} {...entryObj} />
+                <OwnedNFT key={entryObj.id} {...entryObj} />
             ))}
         </div>
     );
