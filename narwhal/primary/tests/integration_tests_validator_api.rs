@@ -18,7 +18,7 @@ use std::{
 };
 use storage::NodeStorage;
 use storage::{CertificateStore, PayloadToken};
-use store::Store;
+use store::{rocks::DBMap, Map, Store};
 use test_utils::{
     fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
     temp_dir, AuthorityFixture, CommitteeFixture,
@@ -92,10 +92,7 @@ async fn test_get_collections() {
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store
-                .batch_store
-                .async_write(batch.digest(), batch.clone())
-                .await;
+            store.batch_store.insert(&batch.digest(), &batch).unwrap();
         } else {
             missing_certificate = digest;
         }
@@ -312,10 +309,7 @@ async fn test_remove_collections() {
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store
-                .batch_store
-                .async_write(batch.digest(), batch.clone())
-                .await;
+            store.batch_store.insert(&batch.digest(), &batch).unwrap();
         }
     }
 
@@ -1188,7 +1182,7 @@ async fn fixture_certificate(
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    batch_store: Store<BatchDigest, Batch>,
+    batch_store: DBMap<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
     let batch = fixture_batch_with_transactions(10);
     let worker_id = 0;
@@ -1221,7 +1215,7 @@ async fn fixture_certificate(
         .expect("couldn't store batches");
 
     // Add a batch to the workers store
-    batch_store.async_write(batch_digest, batch.clone()).await;
+    batch_store.insert(&batch_digest, &batch).unwrap();
 
     (certificate, batch)
 }
