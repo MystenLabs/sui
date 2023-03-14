@@ -36,7 +36,6 @@ export async function mint(address: string) {
             ),
         ],
     });
-    tx.setGasBudget(30000);
 
     const result = await signer.signAndExecuteTransaction({
         transaction: tx,

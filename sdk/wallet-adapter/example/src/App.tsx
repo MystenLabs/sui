@@ -7,7 +7,6 @@ import { Transaction } from "@mysten/sui.js";
 import { useEffect } from "react";
 
 const transaction = new Transaction();
-transaction.setGasBudget(2000);
 transaction.moveCall({
   target: `0x2::devnet_nft::mint`,
   arguments: [

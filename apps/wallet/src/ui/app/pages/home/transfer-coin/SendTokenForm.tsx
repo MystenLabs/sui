@@ -4,8 +4,8 @@
 import { useCoinDecimals, useFormatCoin, CoinFormat } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG, Coin as CoinAPI, type CoinStruct } from '@mysten/sui.js';
-import { Field, Form, useFormikContext, Formik } from 'formik';
-import { useMemo, useEffect } from 'react';
+import { Field, Form, Formik } from 'formik';
+import { useMemo } from 'react';
 
 import { createValidationSchemaStepOne } from './validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
@@ -15,22 +15,16 @@ import BottomMenuLayout, {
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
 import { AddressInput } from '_components/address-input';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useGetCoins } from '_hooks';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 
 const initialValues = {
     to: '',
     amount: '',
     isPayAllSui: false,
-    // for gas validation purposes
-    // to revalidate when amount changes
-    gasInputBudgetEst: null as number | null,
 };
 
 export type FormValues = typeof initialValues;
@@ -40,7 +34,6 @@ export type SubmitProps = {
     amount: string;
     isPayAllSui: boolean;
     coinIds: string[];
-    gasBudget: number;
     coins: CoinStruct[];
 };
 
@@ -52,54 +45,47 @@ export type SendTokenFormProps = {
     initialGasEstimation: number;
 };
 
-function GasBudgetEstimation({
-    coinDecimals,
-    suiCoins,
-}: {
-    coinDecimals: number;
-    suiCoins: CoinStruct[];
-}) {
-    const { values, setFieldValue } = useFormikContext<FormValues>();
-    const gasBudgetEstimationUnits = useMemo(
-        () =>
-            Coin.computeGasBudgetForPay(
-                suiCoins,
-                parseAmount(values.amount, coinDecimals)
-            ),
-        [coinDecimals, suiCoins, values.amount]
-    );
-    const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
-        gasBudgetEstimationUnits
-    );
+// TODO: Rebuild gas budget estimation:
+// function GasBudgetEstimation({
+//     coinDecimals,
+//     suiCoins,
+// }: {
+//     coinDecimals: number;
+//     suiCoins: CoinStruct[];
+// }) {
+//     const { values, setFieldValue } = useFormikContext<FormValues>();
+//     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
+//         gasBudgetEstimationUnits
+//     );
 
-    const [formattedGas, gasSymbol] = useFormatCoin(
-        gasBudgetEstimation,
-        GAS_TYPE_ARG
-    );
+//     const [formattedGas, gasSymbol] = useFormatCoin(
+//         gasBudgetEstimation,
+//         GAS_TYPE_ARG
+//     );
 
-    // gasBudgetEstimation should change when the amount above changes
-    useEffect(() => {
-        setFieldValue('gasInputBudgetEst', gasBudgetEstimation, true);
-    }, [gasBudgetEstimation, setFieldValue, values.amount]);
+//     // gasBudgetEstimation should change when the amount above changes
+//     useEffect(() => {
+//         setFieldValue('gasInputBudgetEst', gasBudgetEstimation, true);
+//     }, [gasBudgetEstimation, setFieldValue, values.amount]);
 
-    return (
-        <Loading loading={isLoading}>
-            <div className="px-2 mt-3 mb-5 flex w-full gap-2 justify-between">
-                <div className="flex gap-1">
-                    <Text variant="body" color="gray-80" weight="medium">
-                        Estimated Gas Fees
-                    </Text>
-                    <div className="text-gray-60 h-4 items-end flex">
-                        <IconTooltip tip="Estimated Gas Fees" placement="top" />
-                    </div>
-                </div>
-                <Text variant="body" color="gray-90" weight="medium">
-                    {formattedGas} {gasSymbol}
-                </Text>
-            </div>
-        </Loading>
-    );
-}
+//     return (
+//         <Loading loading={isLoading}>
+//             <div className="px-2 mt-3 mb-5 flex w-full gap-2 justify-between">
+//                 <div className="flex gap-1">
+//                     <Text variant="body" color="gray-80" weight="medium">
+//                         Estimated Gas Fees
+//                     </Text>
+//                     <div className="text-gray-60 h-4 items-end flex">
+//                         <IconTooltip tip="Estimated Gas Fees" placement="top" />
+//                     </div>
+//                 </div>
+//                 <Text variant="body" color="gray-90" weight="medium">
+//                     {formattedGas} {gasSymbol}
+//                 </Text>
+//             </div>
+//         </Loading>
+//     );
+// }
 
 // Set the initial gasEstimation from initial amount
 // base on the input amount field update the gasEstimation value
@@ -202,19 +188,13 @@ export function SendTokenForm({
                         !!initAmountBig &&
                         initAmountBig === coinBalance &&
                         coinType === SUI_TYPE_ARG,
-                    gasInputBudgetEst: initialGasEstimation,
                 }}
                 validationSchema={validationSchemaStepOne}
                 enableReinitialize
                 validateOnMount
                 validateOnChange
-                onSubmit={({
-                    to,
-                    amount,
-                    isPayAllSui,
-                    gasInputBudgetEst,
-                }: FormValues) => {
-                    if (!gasInputBudgetEst || !coins || !suiCoins) return;
+                onSubmit={({ to, amount, isPayAllSui }: FormValues) => {
+                    if (!coins || !suiCoins) return;
                     const coinsIDs = [...coins]
                         .sort((a, b) => b.balance - a.balance)
                         .map(({ coinObjectId }) => coinObjectId);
@@ -225,7 +205,6 @@ export function SendTokenForm({
                         isPayAllSui,
                         coins,
                         coinIds: coinsIDs,
-                        gasBudget: gasInputBudgetEst,
                     };
                     onSubmit(data);
                 }}
@@ -287,17 +266,17 @@ export function SendTokenForm({
                                                     coinDecimals
                                                 ) === coinBalance ||
                                                 queryResult.isLoading ||
-                                                !coinBalance ||
-                                                !values.gasInputBudgetEst
+                                                !coinBalance
                                             }
                                         />
                                     </div>
-                                    {suiCoins ? (
+                                    {/* TODO: Re-enable gas budget estimation: */}
+                                    {/* {suiCoins ? (
                                         <GasBudgetEstimation
                                             coinDecimals={coinDecimals}
                                             suiCoins={suiCoins}
                                         />
-                                    ) : null}
+                                    ) : null} */}
 
                                     <div className="w-full flex gap-2.5 flex-col mt-7.5">
                                         <div className="px-2 tracking-wider">

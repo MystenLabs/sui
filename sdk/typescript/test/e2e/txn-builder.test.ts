@@ -131,7 +131,6 @@ describe('Transaction Builders', () => {
 });
 
 async function validateTransaction(signer: RawSigner, tx: Transaction) {
-  tx.setGasBudget(DEFAULT_GAS_BUDGET);
   const localDigest = await signer.getTransactionDigest(tx);
   const result = await signer.signAndExecuteTransaction({
     transaction: tx,

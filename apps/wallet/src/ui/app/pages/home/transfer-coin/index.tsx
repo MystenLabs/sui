@@ -56,7 +56,6 @@ function TransferCoinPage() {
                 });
 
                 const tx = new Transaction();
-                tx.setGasBudget(formData.gasBudget);
 
                 if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
                     tx.transferObjects([tx.gas], tx.pure(formData.to));
@@ -158,8 +157,9 @@ function TransferCoinPage() {
                                 coinType={coinType}
                                 amount={formData.amount}
                                 to={formData.to}
-                                gasCostEstimation={formData.gasBudget}
                                 approximation={formData.isPayAllSui}
+                                gasCostEstimation={0}
+                                // gasCostEstimation={formData.gasBudget}
                             />
                         </Content>
                         <Menu
@@ -200,7 +200,8 @@ function TransferCoinPage() {
                             coinType={coinType}
                             initialAmount={formData?.amount || ''}
                             initialTo={formData?.to || ''}
-                            initialGasEstimation={formData?.gasBudget || 0}
+                            initialGasEstimation={0}
+                            // initialGasEstimation={formData?.gasBudget || 0}
                         />
                     </>
                 )}
