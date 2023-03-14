@@ -530,9 +530,15 @@ fn extract_tx_data(
         .multi_get_transactions(&all_tx_digests)
         .expect("Failed to get checkpoint txes from store")
         .into_iter()
-        .map(|tx| {
+        .enumerate()
+        .map(|(i, tx)| {
             VerifiedExecutableTransaction::new_from_checkpoint(
-                tx.expect("state-sync should have ensured that the transaction exists"),
+                tx.unwrap_or_else(||
+                    panic!(
+                        "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
+                        all_tx_digests[i]
+                    )
+                ),
                 epoch_store.epoch(),
                 *checkpoint_sequence,
             )

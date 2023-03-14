@@ -1169,10 +1169,16 @@ impl AuthorityStore {
     /// executed locally on the validator but didn't make to the last checkpoint.
     /// The effects of the execution is reverted here.
     /// The following things are reverted:
-    /// 1. Certificate and effects are deleted.
-    /// 2. Latest parent_sync entries for each mutated object are deleted.
-    /// 3. All new object states are deleted.
-    /// 4. owner_index table change is reverted.
+    /// 1. Latest parent_sync entries for each mutated object are deleted.
+    /// 2. All new object states are deleted.
+    /// 3. owner_index table change is reverted.
+    ///
+    /// NOTE: transaction and effects are intentionally not deleted. It's
+    /// possible that if this node is behind, the network will execute the
+    /// transaction in a later epoch. In that case, we need to keep it saved
+    /// so that when we receive the checkpoint that includes it from state
+    /// sync, we are able to execute the checkpoint.
+    /// TODO: implement GC for transactions that are no longer needed.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
@@ -1183,13 +1189,10 @@ impl AuthorityStore {
         assert!(effects.shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
-        write_batch = write_batch
-            .delete_batch(&self.perpetual_tables.transactions, iter::once(tx_digest))?
-            .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
-            .delete_batch(
-                &self.perpetual_tables.executed_effects,
-                iter::once(tx_digest),
-            )?;
+        write_batch = write_batch.delete_batch(
+            &self.perpetual_tables.executed_effects,
+            iter::once(tx_digest),
+        )?;
         if let Some(events_digest) = effects.events_digest() {
             write_batch = write_batch.delete_range(
                 &self.perpetual_tables.events,

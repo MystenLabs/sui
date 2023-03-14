@@ -3356,7 +3356,9 @@ async fn test_store_revert_transfer_sui() {
         db.get_latest_parent_entry(gas_object_id).unwrap().unwrap(),
         (gas_object_ref, TransactionDigest::genesis()),
     );
-    assert!(db.get_transaction(&tx_digest).unwrap().is_none());
+    // Transaction should not be deleted on revert in case it's needed
+    // to execute a future state sync checkpoint.
+    assert!(db.get_transaction(&tx_digest).unwrap().is_some());
     assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
