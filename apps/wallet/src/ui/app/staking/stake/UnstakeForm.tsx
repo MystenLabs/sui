@@ -78,6 +78,7 @@ export function UnStakeForm({
                                     variant="body"
                                     color="steel-dark"
                                     weight="medium"
+                                    endLabel="--"
                                 />
                             ) : (
                                 <Text
