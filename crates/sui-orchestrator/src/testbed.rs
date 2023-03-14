@@ -103,6 +103,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         display::config("Client", &self.client);
         let repo = &self.settings.repository;
         display::config("Repo", format!("{} ({})", repo.url, repo.commit));
+        display::newline();
         table.printstd();
         display::newline();
     }

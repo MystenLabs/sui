@@ -320,7 +320,7 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
-            ["source $HOME/.cargo/env", &run].join(" && ")
+            ["set BENCH_MODE=true", "source $HOME/.cargo/env", &run].join(" && ")
         };
 
         let repo = self.settings.repository_name();
@@ -467,7 +467,10 @@ impl Orchestrator {
         let mut latest_comittee_size = 0;
         while let Some(parameters) = generator.next() {
             display::header(format!("Starting benchmark {i}"));
-            display::config("Load type", &parameters.shared_objects_ratio);
+            display::config(
+                "Load type",
+                format!("{}% shared objects", &parameters.shared_objects_ratio),
+            );
             display::config("Parameters", &parameters);
             display::newline();
 
