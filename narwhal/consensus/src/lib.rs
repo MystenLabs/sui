@@ -15,7 +15,7 @@ pub mod consensus_utils;
 pub mod dag;
 pub mod metrics;
 pub mod tusk;
-mod utils;
+pub mod utils;
 
 pub use crate::consensus::Consensus;
 use store::StoreError;

@@ -20,7 +20,7 @@ where
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
     assert_eq!(leader.round() % 2, 0);
-    for r in (state.last_committed_round + 2..=leader.round() - 2)
+    for r in (state.last_round.committed_round + 2..=leader.round() - 2)
         .rev()
         .step_by(2)
     {
@@ -55,15 +55,11 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
 }
 
 /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
-/// https://en.wikipedia.org/wiki/Tree_traversal#Pre-order
-pub fn order_dag(
-    gc_depth: Round,
-    leader: &Certificate,
-    state: &ConsensusState,
-) -> Vec<Certificate> {
+/// <https://en.wikipedia.org/wiki/Tree_traversal#Pre-order>
+pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
     assert!(leader.round() > 0);
-    let gc_round = leader.round().saturating_sub(gc_depth);
+    let gc_round = leader.round().saturating_sub(state.gc_depth);
 
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
@@ -103,4 +99,9 @@ pub fn order_dag(
     // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
     ordered.sort_by_key(|x| x.round());
     ordered
+}
+
+/// Calculates the GC round given a commit round and the gc_depth
+pub fn gc_round(commit_round: Round, gc_depth: Round) -> Round {
+    commit_round.saturating_sub(gc_depth)
 }
