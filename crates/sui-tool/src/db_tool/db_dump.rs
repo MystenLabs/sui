@@ -12,13 +12,12 @@ use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::StoreData;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
-use sui_storage::default_db_options;
 use sui_storage::write_ahead_log::DBWriteAheadLogTables;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
 use sui_types::temporary_store::InnerTemporaryStore;
-use typed_store::rocks::MetricConf;
+use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
@@ -36,23 +35,20 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
-        &default_db_options(None, None).0.options,
-        path,
-    )
-    .map_err(|e| e.into())
-    .map(|q| {
-        q.iter()
-            .filter_map(|s| {
-                // The `default` table is not used
-                if s != "default" {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    })
+    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options().options, path)
+        .map_err(|e| e.into())
+        .map(|q| {
+            q.iter()
+                .filter_map(|s| {
+                    // The `default` table is not used
+                    if s != "default" {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
 }
 
 pub fn table_summary(

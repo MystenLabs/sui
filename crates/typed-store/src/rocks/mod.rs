@@ -1794,6 +1794,23 @@ pub struct DBOptions {
 /// Creates a default RocksDB option, to be used when RocksDB option is not specified..
 pub fn default_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
+
+    // One common issue when running tests on Mac is that the default ulimit is too low,
+    // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
+    if let Some(limit) = fdlimit::raise_fd_limit() {
+        // on windows raise_fd_limit return None
+        opt.set_max_open_files((limit / 8) as i32);
+    }
+
+    let row_cache = rocksdb::Cache::new_lru_cache(300_000).expect("Cache is ok");
+    opt.set_row_cache(&row_cache);
+
+    // The table cache is locked for updates and this determines the number
+    // of shards, ie 2^10. Increase in case of lock contentions.
+    opt.set_table_cache_num_shard_bits(10);
+
+    opt.set_compression_type(rocksdb::DBCompressionType::None);
+
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
     //
@@ -1819,6 +1836,16 @@ pub fn default_db_options() -> DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),
     }
+}
+
+/// Creates a default RocksDB option, optimized for point lookup.
+pub fn point_lookup_db_options() -> DBOptions {
+    let mut db_options = default_db_options();
+    db_options
+        .options
+        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
+    db_options.options.set_memtable_whole_key_filtering(true);
+    db_options
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
