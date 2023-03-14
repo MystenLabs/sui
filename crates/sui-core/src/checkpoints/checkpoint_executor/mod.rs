@@ -294,11 +294,6 @@ impl CheckpointExecutor {
             epoch_store.epoch(),
         );
 
-        // Record checkpoint participation for tallying rule.
-        epoch_store
-            .record_certified_checkpoint_signatures(checkpoint.inner())
-            .unwrap();
-
         let metrics = self.metrics.clone();
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
         let authority_store = self.authority_store.clone();

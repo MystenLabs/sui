@@ -41,8 +41,7 @@ use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::{
-    make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
-    to_sender_signed_transaction_with_multi_signers,
+    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
@@ -4930,137 +4929,6 @@ async fn test_consensus_message_processed() {
             .epoch_store_for_testing()
             .get_next_object_version(&shared_object_id),
     );
-}
-
-#[tokio::test]
-async fn test_tallying_rule_score_updates() {
-    let seed = [1u8; 32];
-    let mut rng = StdRng::from_seed(seed);
-    let (authorities, committee) = make_committee_key(&mut rng);
-    let auth_0_name = authorities[0].public().into();
-    let auth_1_name = authorities[1].public().into();
-    let auth_2_name = authorities[2].public().into();
-    let auth_3_name = authorities[3].public().into();
-    let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
-    let registry = Registry::new();
-    let metrics = EpochMetrics::new(&registry);
-
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        .rng(rng)
-        .build();
-    let genesis = network_config.genesis;
-    let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
-            .await
-            .unwrap(),
-    );
-
-    let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-    let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
-    let epoch_store = AuthorityPerEpochStore::new(
-        auth_0_name,
-        Arc::new(committee.clone()),
-        &path,
-        None,
-        metrics.clone(),
-        EpochStartConfiguration::new_for_testing(),
-        store,
-        cache_metrics,
-        async_batch_verifier_metrics,
-    );
-
-    let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {
-        epoch_store
-            .get_num_certified_checkpoint_sigs_by(auth_name)
-            .unwrap()
-    };
-
-    // Only include auth_[0..3] in this certified checkpoint.
-    let ckpt_1 = mock_certified_checkpoint(authorities[0..3].iter(), committee.clone(), 1);
-
-    assert!(epoch_store
-        .record_certified_checkpoint_signatures(&ckpt_1)
-        .is_ok());
-
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_0_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_1_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_2_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(get_stored_seq_num_and_counter(&auth_3_name), None);
-
-    // Only include auth_1, auth_2 and auth_3 in this certified checkpoint.
-    let ckpt_2 = mock_certified_checkpoint(authorities[1..].iter(), committee.clone(), 2);
-
-    assert!(epoch_store
-        .record_certified_checkpoint_signatures(&ckpt_2)
-        .is_ok());
-
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_0_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_1_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_2_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_3_name),
-        Some((Some(2), 1))
-    );
-
-    // Check idempotency.
-    // Call the record function again with the same checkpoint and the stored
-    // values shouldn't change.
-    assert!(epoch_store
-        .record_certified_checkpoint_signatures(&ckpt_2)
-        .is_ok());
-
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_0_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_1_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_2_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_3_name),
-        Some((Some(2), 1))
-    );
-
-    // Check that the metrics are correctly set.
-    let get_auth_score_metric = |auth_name: &AuthorityName| {
-        metrics
-            .tallying_rule_scores
-            .get_metric_with_label_values(&[
-                &format!("{:?}", auth_name.concise()),
-                &committee.epoch().to_string(),
-            ])
-            .unwrap()
-            .get()
-    };
-    assert_eq!(get_auth_score_metric(&auth_0_name), 1);
-    assert_eq!(get_auth_score_metric(&auth_1_name), 2);
-    assert_eq!(get_auth_score_metric(&auth_2_name), 2);
-    assert_eq!(get_auth_score_metric(&auth_3_name), 1);
 }
 
 #[test]
