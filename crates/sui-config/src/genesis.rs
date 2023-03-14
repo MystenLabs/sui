@@ -987,7 +987,7 @@ fn process_package(
     dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
 ) -> Result<()> {
-    let dependency_objects = store.get_objects(&dependencies[..]);
+    let dependency_objects = store.get_objects(&dependencies);
     // When publishing genesis packages, since the std framework packages all have
     // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
     // them as dependencies even though they are not. Hence input_objects contain objects
