@@ -43,7 +43,7 @@ use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
+    Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
     SuiObjectDataFilter, SuiTransactionEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
@@ -2422,6 +2422,72 @@ impl AuthorityState {
                 sequence_number
             )),
         }
+    }
+
+    pub fn get_checkpoints(
+        &self,
+        // exclusive cursor if `Some`, otherwise start from the beginning
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: Option<usize>,
+        reverse: bool,
+    ) -> Result<Vec<Checkpoint>, anyhow::Error> {
+        let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
+
+        let mut cursor = cursor.unwrap_or(0);
+        if cursor != 0 && !reverse {
+            cursor += 1;
+        }
+        let limit = limit.unwrap_or(1) as u64;
+
+        let end_index = std::cmp::min(cursor + limit, max_checkpoint);
+        let mut values = (cursor..=end_index).collect::<Vec<_>>();
+
+        if reverse && cursor == 0 {
+            cursor = max_checkpoint
+        }
+
+        if reverse {
+            let mut start_index = 0;
+            if let Some(_result) = cursor.checked_sub(limit) {
+                start_index = std::cmp::max(cursor - limit, 0);
+            }
+            values = (start_index..=(cursor - 1)).collect::<Vec<_>>();
+        }
+
+        let mut checkpoint_numbers = values;
+
+        if reverse {
+            checkpoint_numbers.reverse();
+        }
+
+        let verified_checkpoints = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_by_sequence_number(checkpoint_numbers.as_slice())?;
+
+        // let checks: Vec<VerifiedCheckpoint> = verified_checkpoints.into_iter().flatten().collect();
+        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
+            .into_iter()
+            .flatten()
+            .map(|check| check.into_summary_and_sequence().1)
+            .collect();
+
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
+            .iter()
+            .map(|chsummary| chsummary.content_digest)
+            .collect();
+
+        let checkpoint_contents = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
+        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
+
+        let mut checkpoints: Vec<Checkpoint> = vec![];
+
+        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
+            checkpoints.push(Checkpoint::from((summary, content)));
+        }
+
+        Ok(checkpoints)
     }
 
     pub async fn get_timestamp_ms(

@@ -22,12 +22,12 @@ use tracing::debug;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectChange,
-    ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
-    SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
-    SuiTransactionResponseQuery, TransactionsPage,
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
+    ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
+    SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -59,6 +59,7 @@ use crate::{
 };
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
+const QUERY_MAX_RESULT_LIMIT_CHECKPOINTS: usize = 20;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
@@ -815,6 +816,38 @@ impl ReadApiServer for ReadApi {
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
         Ok(self.get_checkpoint_internal(id)?)
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        let mut limit = limit.unwrap_or_default();
+        if limit > QUERY_MAX_RESULT_LIMIT_CHECKPOINTS || limit == 0 {
+            limit = QUERY_MAX_RESULT_LIMIT_CHECKPOINTS;
+        }
+
+        let mut data = self
+            .state
+            .get_checkpoints(cursor, Some(limit + 1), descending_order)?;
+
+        let has_next_page = data.len() > limit;
+
+        data.truncate(limit);
+
+        let mut next_cursor = Some(data.last().unwrap().sequence_number);
+
+        if !has_next_page {
+            next_cursor = None;
+        }
+
+        Ok(CheckpointPage {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 }
 
