@@ -35,12 +35,13 @@ use sui_types::{
 };
 
 use tap::prelude::*;
+use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_simulator::anemo::PeerId;
 use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
@@ -51,6 +52,14 @@ use tracing::{debug, info, warn};
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
+
+// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
+// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
+pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
+
+// Assuming 100 nodes cluster
+const MAX_PENDING_LOCAL_SUBMISSIONS: usize =
+    (MAX_PENDING_CONSENSUS_TRANSACTIONS as usize) / 100 * 2;
 
 const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
@@ -66,19 +75,19 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_authority_position: Histogram,
+    pub sequencing_in_flight_semaphore_wait: IntGauge,
+    pub sequencing_in_flight_submissions: IntGauge,
 }
 
-pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
-
 impl ConsensusAdapterMetrics {
-    pub fn new(registry: &Registry) -> OptArcConsensusAdapterMetrics {
+    pub fn new(registry: &Registry) -> Self {
         let authority_position_buckets = &[
             linear_buckets(0.0, 1.0, 19).unwrap().as_slice(),
             linear_buckets(20.0, 5.0, 10).unwrap().as_slice(),
         ]
         .concat();
 
-        Some(Arc::new(ConsensusAdapterMetrics {
+        Self {
             sequencing_certificate_attempt: register_int_counter_with_registry!(
                 "sequencing_certificate_attempt",
                 "Counts the number of certificates the validator attempts to sequence.",
@@ -125,11 +134,23 @@ impl ConsensusAdapterMetrics {
                 authority_position_buckets.to_vec(),
                 registry,
             ).unwrap(),
-        }))
+            sequencing_in_flight_semaphore_wait: register_int_gauge_with_registry!(
+                "sequencing_in_flight_semaphore_wait",
+                "How many requests are blocked on submit_permit.",
+                registry,
+            )
+                .unwrap(),
+            sequencing_in_flight_submissions: register_int_gauge_with_registry!(
+                "sequencing_in_flight_submissions",
+                "Number of transactions submitted to local narwhal instance and not yet sequenced",
+                registry,
+            )
+                .unwrap(),
+        }
     }
 
-    pub fn new_test() -> OptArcConsensusAdapterMetrics {
-        None
+    pub fn new_test() -> Self {
+        Self::new(&Registry::default())
     }
 }
 
@@ -166,7 +187,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
 }
 
 /// Submit Sui certificates to the consensus.
-#[allow(unused)]
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Box<dyn SubmitToConsensus>,
@@ -177,7 +197,9 @@ pub struct ConsensusAdapter {
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to register metrics
-    opt_metrics: OptArcConsensusAdapterMetrics,
+    metrics: ConsensusAdapterMetrics,
+    /// Semaphore limiting parallel submissions to narwhal
+    submit_semaphore: Semaphore,
 }
 
 pub trait CheckConnection: Send + Sync {
@@ -204,7 +226,7 @@ impl ConsensusAdapter {
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
-        opt_metrics: OptArcConsensusAdapterMetrics,
+        metrics: ConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
         Arc::new(Self {
@@ -212,7 +234,8 @@ impl ConsensusAdapter {
             authority,
             num_inflight_transactions,
             connection_monitor_status,
-            opt_metrics,
+            metrics,
+            submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
         })
     }
 
@@ -249,10 +272,6 @@ impl ConsensusAdapter {
         for transaction in recovered {
             self.submit_unchecked(transaction, epoch_store);
         }
-    }
-
-    pub fn num_inflight_transactions(&self) -> u64 {
-        self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
     fn await_submit_delay(
@@ -342,6 +361,19 @@ impl ConsensusAdapter {
         Ok(self.submit_unchecked(transaction, epoch_store))
     }
 
+    /// Performs weakly consistent checks on internal buffers to quickly
+    /// discard transactions if we are overloaded
+    pub fn check_limits(&self) -> bool {
+        // First check total transactions (waiting and in submission)
+        if self.num_inflight_transactions.load(Ordering::Relaxed)
+            > MAX_PENDING_CONSENSUS_TRANSACTIONS
+        {
+            return false;
+        }
+        // Then check if submit_semaphore has permits
+        self.submit_semaphore.available_permits() > 0
+    }
+
     fn submit_unchecked(
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
@@ -424,6 +456,14 @@ impl ConsensusAdapter {
             // populate the position only when this authority submits the transaction
             // to consensus
             guard.position = Some(position);
+            let _permit: SemaphorePermit = self
+                .submit_semaphore
+                .acquire()
+                .count_in_flight(&self.metrics.sequencing_in_flight_semaphore_wait)
+                .await
+                .expect("Consensus adapter does not close semaphore");
+            let _in_flight_submission_guard =
+                GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
@@ -443,9 +483,7 @@ impl ConsensusAdapter {
                             transaction_key, e, retries,
                         );
                     }
-                    self.opt_metrics.as_ref().map(|metrics| {
-                        metrics.sequencing_certificate_failures.inc();
-                    });
+                    self.metrics.sequencing_certificate_failures.inc();
                     retries += 1;
                     time::sleep(Duration::from_secs(10)).await;
                 }
@@ -461,12 +499,10 @@ impl ConsensusAdapter {
                     _ => "over_100".to_string(),
                 };
 
-                self.opt_metrics.as_ref().map(|metrics| {
-                    metrics
-                        .sequencing_acknowledge_latency
-                        .with_label_values(&[&bucket])
-                        .observe(ack_start.elapsed().as_secs_f64());
-                });
+                self.metrics
+                    .sequencing_acknowledge_latency
+                    .with_label_values(&[&bucket])
+                    .observe(ack_start.elapsed().as_secs_f64());
             };
             match select(processed_waiter, submit_inner.boxed()).await {
                 Either::Left((processed, _submit_inner)) => processed,
@@ -510,9 +546,7 @@ impl ConsensusAdapter {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
         }
-        self.opt_metrics.as_ref().map(|metrics| {
-            metrics.sequencing_certificate_success.inc();
-        });
+        self.metrics.sequencing_certificate_success.inc();
     }
 }
 
@@ -652,10 +686,11 @@ impl<'a> InflightDropGuard<'a> {
         let inflight = adapter
             .num_inflight_transactions
             .fetch_add(1, Ordering::SeqCst);
-        if let Some(metrics) = adapter.opt_metrics.as_ref() {
-            metrics.sequencing_certificate_attempt.inc();
-            metrics.sequencing_certificate_inflight.set(inflight as i64);
-        }
+        adapter.metrics.sequencing_certificate_attempt.inc();
+        adapter
+            .metrics
+            .sequencing_certificate_inflight
+            .set(inflight as i64);
         Self {
             adapter,
             start: Instant::now(),
@@ -671,23 +706,26 @@ impl<'a> Drop for InflightDropGuard<'a> {
             .num_inflight_transactions
             .fetch_sub(1, Ordering::SeqCst);
         // Store the latest latency
-        if let Some(metrics) = self.adapter.opt_metrics.as_ref() {
-            metrics.sequencing_certificate_inflight.set(inflight as i64);
+        self.adapter
+            .metrics
+            .sequencing_certificate_inflight
+            .set(inflight as i64);
 
-            let position = if let Some(position) = self.position {
-                metrics
-                    .sequencing_certificate_authority_position
-                    .observe(position as f64);
-                position.to_string()
-            } else {
-                "not_submitted".to_string()
-            };
+        let position = if let Some(position) = self.position {
+            self.adapter
+                .metrics
+                .sequencing_certificate_authority_position
+                .observe(position as f64);
+            position.to_string()
+        } else {
+            "not_submitted".to_string()
+        };
 
-            metrics
-                .sequencing_certificate_latency
-                .with_label_values(&[&position])
-                .observe(self.start.elapsed().as_secs_f64());
-        }
+        self.adapter
+            .metrics
+            .sequencing_certificate_latency
+            .with_label_values(&[&position])
+            .observe(self.start.elapsed().as_secs_f64());
     }
 }
 
