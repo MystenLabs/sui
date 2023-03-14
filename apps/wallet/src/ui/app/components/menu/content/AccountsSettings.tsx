@@ -33,10 +33,6 @@ export function AccountsSettings() {
     const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] =
         useState(false);
 
-    const { on: isLedgerIntegrationEnabled } = useFeature(
-        FEATURES.WALLET_LEDGER_INTEGRATION
-    );
-
     const navigate = useNavigate();
     const importLedgerAccountsUrl = useNextMenuUrl(
         true,
@@ -70,29 +66,25 @@ export function AccountsSettings() {
                         />
                     </>
                 ) : null}
-                {isLedgerIntegrationEnabled ? (
-                    <>
-                        <Button
-                            variant="outline"
-                            size="tall"
-                            text="Connect Ledger Wallet"
-                            before={<LockedLockIcon />}
-                            onClick={() => setConnectLedgerModalOpen(true)}
-                        />
-                        <ConnectLedgerModal
-                            isOpen={isConnectLedgerModalOpen}
-                            onClose={() => setConnectLedgerModalOpen(false)}
-                            onError={(error) => {
-                                setConnectLedgerModalOpen(false);
-                                toast.error(getLedgerErrorMessage(error));
-                            }}
-                            onConfirm={() => {
-                                setConnectLedgerModalOpen(false);
-                                navigate(importLedgerAccountsUrl);
-                            }}
-                        />
-                    </>
-                ) : null}
+                <Button
+                    variant="outline"
+                    size="tall"
+                    text="Connect Ledger Wallet"
+                    before={<LockedLockIcon />}
+                    onClick={() => setConnectLedgerModalOpen(true)}
+                />
+                <ConnectLedgerModal
+                    isOpen={isConnectLedgerModalOpen}
+                    onClose={() => setConnectLedgerModalOpen(false)}
+                    onError={(error) => {
+                        setConnectLedgerModalOpen(false);
+                        toast.error(getLedgerErrorMessage(error));
+                    }}
+                    onConfirm={() => {
+                        setConnectLedgerModalOpen(false);
+                        navigate(importLedgerAccountsUrl);
+                    }}
+                />
             </div>
         </MenuLayout>
     );

@@ -53,9 +53,6 @@ function MenuContent() {
     const isMultiAccountsEnabled = useFeature(
         FEATURES.WALLET_MULTI_ACCOUNTS
     ).on;
-    const { on: isLedgerIntegrationEnabled } = useFeature(
-        FEATURES.WALLET_LEDGER_INTEGRATION
-    );
 
     if (!isOpen) {
         return null;
@@ -94,12 +91,10 @@ function MenuContent() {
                                 <Navigate to={menuHomeUrl} replace={true} />
                             }
                         />
-                        {isLedgerIntegrationEnabled && (
-                            <Route
-                                path="/import-ledger-accounts"
-                                element={<ImportLedgerAccounts />}
-                            />
-                        )}
+                        <Route
+                            path="/import-ledger-accounts"
+                            element={<ImportLedgerAccounts />}
+                        />
                     </Routes>
                 </MainLocationContext.Provider>
             </ErrorBoundary>
