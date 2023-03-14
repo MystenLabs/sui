@@ -374,6 +374,15 @@ impl TransactionManager {
         let _ = self.tx_ready_certificates.send(certificate);
     }
 
+    /// Gets the missing input object keys for the given transaction.
+    pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
+        let inner = self.inner.read();
+        inner
+            .pending_certificates
+            .get(digest)
+            .map(|cert| cert.missing.clone().into_iter().collect())
+    }
+
     // Returns the number of transactions waiting on each object ID.
     pub(crate) fn objects_queue_len(&self, keys: Vec<ObjectID>) -> Vec<(ObjectID, usize)> {
         let inner = self.inner.read();
