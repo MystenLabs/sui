@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { ExportedKeypair, Keypair, PRIVATE_KEY_SIZE } from './keypair';
+import { ExportedKeypair, KeypairType, PRIVATE_KEY_SIZE, SoftwareKeypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
 import { derivePath } from '../utils/ed25519-hd-key';
@@ -24,7 +24,8 @@ export interface Ed25519KeypairData {
 /**
  * An Ed25519 Keypair used for signing transactions.
  */
-export class Ed25519Keypair implements Keypair {
+export class Ed25519Keypair implements SoftwareKeypair {
+  readonly type = KeypairType.SOFTWARE
   private keypair: Ed25519KeypairData;
 
   /**

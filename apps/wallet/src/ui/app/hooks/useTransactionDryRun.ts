@@ -18,10 +18,7 @@ export function useTransactionDryRun(
     const response = useQuery({
         queryKey: ['dryRunTransaction', transaction, sender],
         queryFn: async () => {
-            if (signer instanceof SignerWithProvider) {
-                return signer.dryRunTransaction(transaction);
-            }
-            return (await signer())?.dryRunTransaction(transaction);
+            return signer.dryRunTransaction(transaction);
         },
         enabled: !!signer,
     });

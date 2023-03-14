@@ -55,13 +55,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 showEffects: true,
                 showEvents: true,
             };
-            if (signer instanceof SignerWithProvider) {
-                return signer.signAndExecuteTransaction(tx, transactionOptions);
-            }
-            return (await signer())?.signAndExecuteTransaction(
-                tx,
-                transactionOptions
-            );
+            return signer.signAndExecuteTransaction(tx, transactionOptions);
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);

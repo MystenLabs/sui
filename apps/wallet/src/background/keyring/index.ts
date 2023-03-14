@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
+import TransportWebHID from '@ledgerhq/hw-transport-webhid';
+import TransportWebUSB from '@ledgerhq/hw-transport-webusb';
+import SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
+import { Ed25519Keypair, fromB64, LedgerKeypair } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
@@ -22,6 +25,7 @@ import {
 } from '_src/shared/constants';
 
 import type { UiConnection } from '../connections/UiConnection';
+import type Transport from '@ledgerhq/hw-transport';
 import type { SuiAddress, ExportedKeypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { ErrorPayload } from '_payloads';
@@ -127,6 +131,10 @@ export class Keyring {
         return account;
     }
 
+    async connectToLedger(): Promise<Transport | null> {
+        return await TransportWebHID.openConnected();
+    }
+
     public async importLedgerAccounts(
         ledgerAccounts: SerializedLedgerAccount[]
     ) {
@@ -136,10 +144,25 @@ export class Keyring {
 
         await this.storeLedgerAccounts(ledgerAccounts);
 
+        // eslint-disable-next-line no-debugger
+        debugger;
+
+        const t = await this.connectToLedger();
+        if (!t) {
+            throw new Error('not possible');
+        }
+
+        const suiLedgerClient = new SuiLedgerClient(t);
+        console.log('OMG CONNECTED', suiLedgerClient);
+
         for (const ledgerAccount of ledgerAccounts) {
             const account = new LedgerAccount({
                 derivationPath: ledgerAccount.derivationPath,
                 address: ledgerAccount.address,
+                keypair: new LedgerKeypair(
+                    suiLedgerClient,
+                    ledgerAccount.derivationPath
+                ),
             });
             this.#accountsMap.set(ledgerAccount.address, account);
         }
@@ -180,7 +203,7 @@ export class Keyring {
             if (!account || !isImportedOrDerivedAccount(account)) {
                 return null;
             }
-            return account.accountKeypair.exportKeypair();
+            return account.exportKeypair();
         } else {
             throw new Error('Wrong password');
         }
@@ -287,25 +310,17 @@ export class Keyring {
                     );
                 }
 
-                if (isImportedOrDerivedAccount(account)) {
-                    const signature = await account.accountKeypair.sign(
-                        fromB64(data)
-                    );
-                    uiConnection.send(
-                        createMessage<KeyringPayload<'signData'>>(
-                            {
-                                type: 'keyring',
-                                method: 'signData',
-                                return: signature,
-                            },
-                            id
-                        )
-                    );
-                } else {
-                    throw new Error(
-                        `Unable to sign message for account with type ${account.type}`
-                    );
-                }
+                const signature = await account.sign(fromB64(data));
+                uiConnection.send(
+                    createMessage<KeyringPayload<'signData'>>(
+                        {
+                            type: 'keyring',
+                            method: 'signData',
+                            return: signature,
+                        },
+                        id
+                    )
+                );
             } else if (isKeyringPayload(payload, 'switchAccount')) {
                 if (this.#locked) {
                     throw new Error('Keyring is locked. Unlock it first.');
@@ -453,6 +468,12 @@ export class Keyring {
                 new LedgerAccount({
                     derivationPath: savedLedgerAccount.derivationPath,
                     address: savedLedgerAccount.address,
+                    keypair: new LedgerKeypair(
+                        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                        // @ts-ignore
+                        null,
+                        savedLedgerAccount.derivationPath
+                    ),
                 })
             );
         }

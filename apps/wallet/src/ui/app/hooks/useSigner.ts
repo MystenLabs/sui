@@ -24,9 +24,9 @@ export function useSigner(address?: SuiAddress) {
         throw new Error("Can't find account for the signer address");
     }
 
-    if (signerAccount.type === AccountType.LEDGER) {
-        return () => getLedgerSignerInstance(signerAccount.derivationPath);
-    }
+    // if (signerAccount.type === AccountType.LEDGER) {
+    //     return () => getLedgerSignerInstance(signerAccount.derivationPath);
+    // }
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     return api.getSignerInstance(signerAccount, background, null);

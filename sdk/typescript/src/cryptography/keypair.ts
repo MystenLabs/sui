@@ -15,10 +15,17 @@ export type ExportedKeypair = {
   privateKey: string;
 };
 
+export enum KeypairType {
+  SOFTWARE = "SOFTWARE",
+  HARDWARE = "HARDWARE",
+}
+
 /**
  * A keypair used for signing transactions.
  */
-export interface Keypair {
+export interface SoftwareKeypair {
+  readonly type: KeypairType.SOFTWARE;
+
   /**
    * The public key for this keypair
    */
@@ -37,7 +44,29 @@ export interface Keypair {
   export(): ExportedKeypair;
 }
 
-export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
+
+export interface HardwareKeypair {
+  readonly type: KeypairType.HARDWARE;
+
+  /**
+   * The public key for this keypair
+   */
+  getPublicKey(): Promise<PublicKey>;
+
+  /**
+   * Return the signature for the data
+   */
+  signData(data: Uint8Array): Promise<Uint8Array>;
+
+  /**
+   * Get the key scheme of the keypair: Secp256k1 or ED25519
+   */
+  getKeyScheme(): SignatureScheme;
+}
+
+export type Keypair = SoftwareKeypair | HardwareKeypair
+
+export function fromExportedKeypair(keypair: ExportedKeypair): SoftwareKeypair {
   const secretKey = fromB64(keypair.privateKey);
   switch (keypair.schema) {
     case 'ED25519':

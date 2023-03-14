@@ -35,5 +35,5 @@
     "resolveJsonModule": true,
     "composite": true
   },
-  "references": [{ "path": "../bcs" }]
+  "references": [{ "path": "../bcs", }, { "path": "../ledgerjs-hw-app-sui" }]
 }

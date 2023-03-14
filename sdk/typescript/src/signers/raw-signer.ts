@@ -19,12 +19,13 @@ export class RawSigner extends SignerWithProvider {
   }
 
   async getAddress(): Promise<SuiAddress> {
-    return this.keypair.getPublicKey().toSuiAddress();
+    const publicKey = await this.keypair.getPublicKey();
+    return publicKey.toSuiAddress();
   }
 
   async signData(data: Uint8Array): Promise<SerializedSignature> {
-    const pubkey = this.keypair.getPublicKey();
-    const signature = this.keypair.signData(data, false);
+    const pubkey = await this.keypair.getPublicKey();
+    const signature = await this.keypair.signData(data, false);
     const signatureScheme = this.keypair.getKeyScheme();
 
     return toSerializedSignature({

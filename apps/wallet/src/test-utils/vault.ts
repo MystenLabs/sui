@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
+import { fromExportedKeypair, SoftwareKeypair } from '@mysten/sui.js';
 
 import {
     EPHEMERAL_PASSWORD_KEY,
@@ -53,7 +53,7 @@ export const testDataVault1 = Object.freeze({
     mnemonic: testMnemonic as string,
     entropy: testEntropy,
     entropySerialized: testEntropySerialized as string,
-    keypairs: [testEd25519, testSecp256k1] as Keypair[],
+    keypairs: [testEd25519, testSecp256k1] as SoftwareKeypair[],
     password: '12345' as string,
     encrypted: {
         v0: '{"data":"58d/PfOjiRO4Hl0o9w5rFvCm8t5NmaDbt/DjgSkYw1gntJSgEzj0bJVbcd4nWTvZuQMG2EnRzsvaOkd3OGuJ7noGedS45xcoW717XWBWEcWFFT77E9nnut/9Q5GrSQ==","iv":"29RBia36PI4eAOs+BLEF3Q==","salt":"cSLTzKEUE5hMRshgl/qD8Tr9wWIcCdCdmejakMIjZNk="}',

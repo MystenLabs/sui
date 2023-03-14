@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress, type SuiAddress } from '@mysten/sui.js';
+import {
+    type SuiAddress,
+    type HardwareKeypair,
+    toSerializedSignature,
+    type SerializedSignature,
+} from '@mysten/sui.js';
 
 import { type Account, AccountType } from './Account';
 
@@ -12,6 +17,7 @@ export type SerializedLedgerAccount = {
 };
 
 export class LedgerAccount implements Account {
+    #keypair: HardwareKeypair;
     readonly type: AccountType;
     readonly address: SuiAddress;
     readonly derivationPath: string;
@@ -19,13 +25,27 @@ export class LedgerAccount implements Account {
     constructor({
         address,
         derivationPath,
+        keypair,
     }: {
         address: SuiAddress;
         derivationPath: string;
+        keypair: HardwareKeypair;
     }) {
         this.type = AccountType.LEDGER;
-        this.address = normalizeSuiAddress(address);
+        this.#keypair = keypair;
+        this.address = address;
         this.derivationPath = derivationPath;
+    }
+
+    async sign(data: Uint8Array): Promise<SerializedSignature> {
+        const pubkey = await this.#keypair.getPublicKey();
+        const signature = await this.#keypair.signData(data);
+        const signatureScheme = this.#keypair.getKeyScheme();
+        return toSerializedSignature({
+            signature,
+            signatureScheme,
+            pubKey: pubkey,
+        });
     }
 
     toJSON(): SerializedLedgerAccount {

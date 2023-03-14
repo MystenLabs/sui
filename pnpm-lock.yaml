@@ -509,6 +509,7 @@ importers:
   sdk/typescript:
     specifiers:
       '@mysten/bcs': workspace:*
+      '@mysten/ledgerjs-hw-app-sui': workspace:*
       '@noble/hashes': ^1.2.0
       '@noble/secp256k1': ^1.7.1
       '@scure/bip32': ^1.1.5
@@ -542,6 +543,7 @@ importers:
       wait-on: ^7.0.1
     dependencies:
       '@mysten/bcs': link:../bcs
+      '@mysten/ledgerjs-hw-app-sui': link:../ledgerjs-hw-app-sui
       '@noble/hashes': 1.2.0
       '@noble/secp256k1': 1.7.1
       '@scure/bip32': 1.1.5

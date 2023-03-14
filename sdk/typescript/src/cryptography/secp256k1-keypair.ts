@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as secp from '@noble/secp256k1';
-import type { ExportedKeypair, Keypair } from './keypair';
+import { ExportedKeypair, Keypair, KeypairType, SoftwareKeypair } from './keypair';
 import { PublicKey } from './publickey';
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
@@ -32,7 +32,8 @@ export interface Secp256k1KeypairData {
 /**
  * An Secp256k1 Keypair used for signing transactions.
  */
-export class Secp256k1Keypair implements Keypair {
+export class Secp256k1Keypair implements SoftwareKeypair {
+  readonly type = KeypairType.SOFTWARE
   private keypair: Secp256k1KeypairData;
 
   /**

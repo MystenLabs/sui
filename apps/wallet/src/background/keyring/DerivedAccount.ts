@@ -3,12 +3,13 @@
 
 import {
     normalizeSuiAddress,
-    type Keypair,
+    type SerializedSignature,
+    type SoftwareKeypair,
+    toSerializedSignature,
     type SuiAddress,
 } from '@mysten/sui.js';
 
 import { type Account, AccountType } from './Account';
-import { AccountKeypair } from './AccountKeypair';
 
 export type SerializedDerivedAccount = {
     type: AccountType.DERIVED;
@@ -17,7 +18,7 @@ export type SerializedDerivedAccount = {
 };
 
 export class DerivedAccount implements Account {
-    readonly accountKeypair: AccountKeypair;
+    #keypair: SoftwareKeypair;
     readonly type: AccountType;
     readonly address: SuiAddress;
     readonly derivationPath: string;
@@ -27,14 +28,30 @@ export class DerivedAccount implements Account {
         keypair,
     }: {
         derivationPath: string;
-        keypair: Keypair;
+        keypair: SoftwareKeypair;
     }) {
-        this.type = AccountType.IMPORTED;
-        this.derivationPath = derivationPath;
-        this.accountKeypair = new AccountKeypair(keypair);
+        this.type = AccountType.DERIVED;
+        this.#keypair = keypair;
         this.address = normalizeSuiAddress(
-            this.accountKeypair.publicKey.toSuiAddress()
+            this.#keypair.getPublicKey().toSuiAddress()
         );
+        this.derivationPath = derivationPath;
+    }
+
+    sign(data: Uint8Array): SerializedSignature {
+        const pubkey = this.#keypair.getPublicKey();
+        // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
+        const signature = this.#keypair.signData(data, false);
+        const signatureScheme = this.#keypair.getKeyScheme();
+        return toSerializedSignature({
+            signature,
+            signatureScheme,
+            pubKey: pubkey,
+        });
+    }
+
+    exportKeypair() {
+        return this.#keypair.export();
     }
 
     toJSON(): SerializedDerivedAccount {
@@ -43,5 +60,9 @@ export class DerivedAccount implements Account {
             address: this.address,
             derivationPath: this.derivationPath,
         };
+    }
+
+    get publicKey() {
+        return this.#keypair.getPublicKey();
     }
 }

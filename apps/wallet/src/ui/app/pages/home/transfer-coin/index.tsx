@@ -76,13 +76,7 @@ function TransferCoinPage() {
                         showEffects: true,
                         showEvents: true,
                     };
-                    if (signer instanceof SignerWithProvider) {
-                        return signer.signAndExecuteTransaction(
-                            tx,
-                            transactionOptions
-                        );
-                    }
-                    return (await signer())?.signAndExecuteTransaction(
+                    return signer.signAndExecuteTransaction(
                         tx,
                         transactionOptions
                     );
@@ -119,16 +113,7 @@ function TransferCoinPage() {
                     showEffects: true,
                     showEvents: true,
                 };
-                if (signer instanceof SignerWithProvider) {
-                    return signer.signAndExecuteTransaction(
-                        tx,
-                        transactionOptions
-                    );
-                }
-                return (await signer())?.signAndExecuteTransaction(
-                    tx,
-                    transactionOptions
-                );
+                return signer.signAndExecuteTransaction(tx, transactionOptions);
             } catch (error) {
                 transaction.setTag('failure', true);
                 throw error;

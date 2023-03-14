@@ -129,20 +129,10 @@ export default class ApiProvider {
             this.setNewJsonRpcProvider();
         }
 
-        switch (account.type) {
-            case AccountType.DERIVED:
-            case AccountType.IMPORTED:
-                return this.getSoftwareSignerInstance(
-                    account.address,
-                    backgroundClient
-                );
-            case AccountType.LEDGER:
-                throw new Error(
-                    "Signing with Ledger via ApiProvider isn't supported"
-                );
-            default:
-                throw new Error('Encountered unknown account type');
-        }
+        return this.getSoftwareSignerInstance(
+            account.address,
+            backgroundClient
+        );
     }
 
     public getSoftwareSignerInstance(

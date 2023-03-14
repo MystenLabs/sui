@@ -95,6 +95,7 @@
   },
   "dependencies": {
     "@mysten/bcs": "workspace:*",
+    "@mysten/ledgerjs-hw-app-sui": "workspace:*",
     "@noble/hashes": "^1.2.0",
     "@noble/secp256k1": "^1.7.1",
     "@scure/bip32": "^1.1.5",

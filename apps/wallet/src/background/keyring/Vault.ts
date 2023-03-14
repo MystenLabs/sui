@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromExportedKeypair } from '@mysten/sui.js';
+import { fromExportedKeypair, type SoftwareKeypair } from '@mysten/sui.js';
 
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import {
@@ -29,7 +29,7 @@ export type V2DecryptedDataType = {
  */
 export class Vault {
     public readonly entropy: Uint8Array;
-    public readonly importedKeypairs: Keypair[];
+    public readonly importedKeypairs: SoftwareKeypair[];
 
     public static async from(
         password: string,
@@ -37,7 +37,7 @@ export class Vault {
         onMigrateCallback?: (vault: Vault) => Promise<void>
     ) {
         let entropy: Uint8Array | null = null;
-        let keypairs: Keypair[] = [];
+        let keypairs: SoftwareKeypair[] = [];
         if (typeof data === 'string') {
             entropy = mnemonicToEntropy(
                 Buffer.from(await decrypt<string>(password, data)).toString(
@@ -68,7 +68,7 @@ export class Vault {
         return vault;
     }
 
-    constructor(entropy: Uint8Array, importedKeypairs: Keypair[] = []) {
+    constructor(entropy: Uint8Array, importedKeypairs: SoftwareKeypair[] = []) {
         this.entropy = entropy;
         this.importedKeypairs = importedKeypairs;
     }

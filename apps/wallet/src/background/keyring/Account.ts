@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js';
+import { type SerializedSignature, type SuiAddress } from '@mysten/sui.js';
 
 import {
     type DerivedAccount,
@@ -30,6 +30,9 @@ export type SerializedAccount =
 export interface Account {
     readonly type: AccountType;
     readonly address: SuiAddress;
+    sign: (
+        data: Uint8Array
+    ) => SerializedSignature | Promise<SerializedSignature>;
     toJSON(): SerializedAccount;
 }
 
