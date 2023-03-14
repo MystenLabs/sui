@@ -533,12 +533,11 @@ fn extract_tx_data(
         .enumerate()
         .map(|(i, tx)| {
             VerifiedExecutableTransaction::new_from_checkpoint(
-                tx.expect(
-                    format!(
+                tx.unwrap_or_else(||
+                    panic!(
                         "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
                         all_tx_digests[i]
                     )
-                    .as_str(),
                 ),
                 epoch_store.epoch(),
                 *checkpoint_sequence,

@@ -1184,11 +1184,10 @@ impl AuthorityStore {
         assert!(effects.shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
-        write_batch = write_batch
-            .delete_batch(
-                &self.perpetual_tables.executed_effects,
-                iter::once(tx_digest),
-            )?;
+        write_batch = write_batch.delete_batch(
+            &self.perpetual_tables.executed_effects,
+            iter::once(tx_digest),
+        )?;
         if let Some(events_digest) = effects.events_digest() {
             write_batch = write_batch.delete_range(
                 &self.perpetual_tables.events,
