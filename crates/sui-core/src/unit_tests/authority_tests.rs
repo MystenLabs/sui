@@ -33,17 +33,6 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
     SuiTransactionEffectsAPI, SuiTypeTag,
 };
-use sui_types::error::UserInputError;
-use sui_types::gas_coin::GasCoin;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::utils::{
-    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
-};
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
-
-use crate::epoch::epoch_metrics::EpochMetrics;
-use move_core_types::parser::parse_type_tag;
-use std::{convert::TryInto, env};
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
@@ -55,8 +44,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::utils::{
-    make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
-    to_sender_signed_transaction_with_multi_signers,
+    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{
     base_types::dbg_addr,
