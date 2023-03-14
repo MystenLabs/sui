@@ -5,9 +5,9 @@ import { cx } from 'class-variance-authority';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { ValidatorLogo } from './ValidatorLogo';
-import { Badge } from '_app/shared/badge';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
+import { Badge } from '_src/ui/app/shared/Badge';
 
 type ValidatorListItemProp = {
     selected?: boolean;

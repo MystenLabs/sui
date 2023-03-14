@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 const badgeStyle = cva(
     [
-        'text-captionSmallExtra flex uppercase font-medium px-1 py-0.5 rounded-md w-fit-content h-3.5 max-w-8 w-max justify-center items-center',
+        'text-captionSmallExtra flex uppercase font-medium px-1 py-0.5 rounded-md w-fit-content h-3.5 w-max justify-center items-center',
     ],
     {
         variants: {
