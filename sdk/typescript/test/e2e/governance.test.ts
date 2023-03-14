@@ -8,7 +8,7 @@ import {
   SuiSystemStateUtil,
   SUI_TYPE_ARG,
 } from '../../src';
-import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 const DEFAULT_STAKED_AMOUNT = 1;
 
@@ -62,8 +62,6 @@ async function addStake(signer: RawSigner) {
     BigInt(DEFAULT_STAKED_AMOUNT),
     validators[0].suiAddress,
   );
-
-  tx.setGasBudget(DEFAULT_GAS_BUDGET);
 
   return await signer.signAndExecuteTransaction({
     transaction: tx,

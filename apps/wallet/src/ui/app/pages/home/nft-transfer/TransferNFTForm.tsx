@@ -46,7 +46,6 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
                 throw new Error('Missing data');
             }
             const tx = new Transaction();
-            tx.setGasBudget(DEFAULT_NFT_TRANSFER_GAS_FEE);
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
             return signer.signAndExecuteTransaction({
                 transaction: tx,
@@ -79,6 +78,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
     });
 
     const maxGasCoinBalance = coinBalance?.totalBalance || BigInt(0);
+    // TODO: Show actual gas budget.
     const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(
         DEFAULT_NFT_TRANSFER_GAS_FEE
     );

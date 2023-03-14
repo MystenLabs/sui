@@ -11,7 +11,7 @@ import {
   Transaction,
 } from '../../src';
 
-import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 const SPLIT_AMOUNTS = [BigInt(1), BigInt(2), BigInt(3)];
 
@@ -25,7 +25,6 @@ describe('Coin related API', () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     coinToSplit = coins[0].objectId;
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const recieverInput = tx.pure(toolbox.address());
     SPLIT_AMOUNTS.forEach((amount) => {
       const coin = tx.splitCoin(tx.gas, tx.pure(amount));

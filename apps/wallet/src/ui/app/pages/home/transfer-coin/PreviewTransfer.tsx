@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCoinDecimals, useFormatCoin } from '@mysten/core';
+import { useCoinDecimals } from '@mysten/core';
 
-import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
+// import { Text } from '_app/shared/text';
+// import { IconTooltip } from '_app/shared/tooltip';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { parseAmount } from '_helpers';
-import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 export type PreviewTransferProps = {
@@ -30,7 +29,7 @@ export function PreviewTransfer({
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = parseAmount(amount, decimals);
 
-    const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
+    // const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
 
     return (
         <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">
@@ -42,7 +41,8 @@ export function PreviewTransfer({
             />
             <TxnAddress address={accountAddress || ''} label="From" />
             <TxnAddress address={to} label="To" />
-            <div className="pt-3.5 mb-5 flex w-full gap-2 justify-between">
+            {/* TODO: Re-enable gas */}
+            {/* <div className="pt-3.5 mb-5 flex w-full gap-2 justify-between">
                 <div className="flex gap-1">
                     <Text variant="body" color="gray-80" weight="medium">
                         Estimated Gas Fees
@@ -54,7 +54,7 @@ export function PreviewTransfer({
                 <Text variant="body" color="gray-90" weight="medium">
                     {formattedGas} {GAS_SYMBOL}
                 </Text>
-            </div>
+            </div> */}
         </div>
     );
 }

@@ -72,7 +72,6 @@ export function ModuleFunction({
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
             const tx = new Transaction();
-            tx.setGasBudget(2000);
             tx.moveCall({
                 target: `${packageId}::${moduleName}::${functionName}`,
                 typeArguments: types ?? [],
