@@ -18,7 +18,7 @@ use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::{
     rngs::{OsRng, StdRng},
-    thread_rng, Rng, SeedableRng,
+    thread_rng, Rng, RngCore, SeedableRng,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -157,6 +157,21 @@ pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, (WorkerId
     payload
 }
 
+pub fn fixture_payload_with_rand<R: Rng + ?Sized>(
+    number_of_batches: u8,
+    rand: &mut R,
+) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+    let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
+
+    for _ in 0..number_of_batches {
+        let batch_digest = batch_with_rand(rand).digest();
+
+        payload.insert(batch_digest, (0, 0));
+    }
+
+    payload
+}
+
 // will create a batch with randomly formed transactions
 // dictated by the parameter number_of_transactions
 pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
@@ -171,6 +186,13 @@ pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
 pub fn transaction() -> Transaction {
     // generate random value transactions, but the length will be always 100 bytes
     (0..100).map(|_v| rand::random::<u8>()).collect()
+}
+
+pub fn transaction_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Transaction {
+    // generate random value transactions, but the length will be always 100 bytes
+    (0..100)
+        .map(|_v| rand.gen_range(u8::MIN..=u8::MAX))
+        .collect()
 }
 
 #[derive(Clone)]
@@ -352,6 +374,13 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 // Fixture
 pub fn batch() -> Batch {
     Batch::new(vec![transaction(), transaction()])
+}
+
+pub fn batch_with_rand<R: Rng + ?Sized>(rand: &mut R) -> Batch {
+    Batch::new(vec![
+        transaction_with_rand(rand),
+        transaction_with_rand(rand),
+    ])
 }
 
 /// generate multiple fixture batches. The number of generated batches
@@ -540,7 +569,8 @@ pub fn this_cert_parents_with_slow_nodes(
             let b = Bernoulli::new(*inclusion_probability).unwrap();
             let should_include = b.sample(rand);
 
-            if should_include {
+            // always include the genesis parents
+            if should_include || parent.round() == 0 {
                 parents.insert(parent.digest());
             }
         } else {
@@ -608,6 +638,26 @@ pub fn mock_certificate(
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
     mock_certificate_with_epoch(committee, origin, round, 0, parents)
+}
+
+pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
+    committee: &Committee,
+    origin: PublicKey,
+    round: Round,
+    parents: BTreeSet<CertificateDigest>,
+    rand: &mut R,
+) -> (CertificateDigest, Certificate) {
+    let header_builder = HeaderBuilder::default();
+    let header = header_builder
+        .author(origin)
+        .round(round)
+        .epoch(0)
+        .parents(parents)
+        .payload(fixture_payload_with_rand(1, rand))
+        .build(&KeyPair::generate(&mut rand::thread_rng()))
+        .unwrap();
+    let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
+    (certificate.digest(), certificate)
 }
 
 // Creates a badly signed certificate from its given round, epoch, origin, and parents,
