@@ -379,6 +379,7 @@ pub struct SuiTransactionEffectsV1 {
     pub gas_object: OwnedObjectRef,
     /// The digest of the events emitted during execution,
     /// can be None if the transaction does not emit any event.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

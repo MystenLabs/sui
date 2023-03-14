@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { SuiEventEnvelope, Transaction } from '../../src';
+import { SuiEvent, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   DEFAULT_RECIPIENT,
@@ -17,13 +17,11 @@ describe('Event Subscription API', () => {
     toolbox = await setup();
   });
 
-  const mockCallback = vi.fn((_: SuiEventEnvelope) =>
-    expect(true).toBeTruthy(),
-  );
+  const mockCallback = vi.fn((_: SuiEvent) => expect(true).toBeTruthy());
 
   it('Subscribe to events', async () => {
     const subscriptionId = await toolbox.provider.subscribeEvent({
-      filter: { SenderAddress: toolbox.address() },
+      filter: { Sender: toolbox.address() },
       onMessage: mockCallback,
     });
 
