@@ -57,7 +57,7 @@ impl TestCaseImpl for CallContractTest {
         ];
 
         let data = ctx
-            .build_transaction_remotely("sui_moveCall", params)
+            .build_transaction_remotely("unsafe_moveCall", params)
             .await?;
         let response = ctx.sign_and_execute(data, "call contract").await;
 
