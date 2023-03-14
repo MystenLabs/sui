@@ -17,7 +17,7 @@ tracing = "0.1"
 anemo.workspace = true
 anemo-tower.workspace = true
 narwhal-network = { path = "../../narwhal/network" }
-fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto.workspace = true
 telemetry-subscribers.workspace = true
 tower = "0.4.13"
 lru = "0.10"

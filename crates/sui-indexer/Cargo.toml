@@ -28,7 +28,7 @@ tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 
-fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto.workspace = true
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 sui-config = { path = "../sui-config" }

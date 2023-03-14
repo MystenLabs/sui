@@ -54,7 +54,7 @@ sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-config = { path = "../sui-protocol-config" }
 shared-crypto = { path = "../shared-crypto" }
 
-fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto.workspace = true
 
 typed-store.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
