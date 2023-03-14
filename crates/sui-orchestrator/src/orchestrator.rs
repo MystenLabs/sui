@@ -156,7 +156,7 @@ impl Orchestrator {
 
     /// Update all instances to use the version of the codebase specified in the setting file.
     pub async fn update(&self) -> TestbedResult<()> {
-        display::action(format!("Updating all instances"));
+        display::action("Updating all instances");
 
         // Update all active instances. This requires compiling the codebase in release (which
         // may take a long time) so we run the command in the background to avoid keeping alive

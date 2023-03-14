@@ -50,7 +50,7 @@ impl LogsAnalyzer {
     /// Print a summary of the errors.
     pub fn print_summary(&self) {
         if self.node_panic {
-            display::error("Client(s) panicked!");
+            display::error("Node(s) panicked!");
         } else if self.client_panic {
             display::error("Client(s) panicked!");
         } else if self.node_errors != 0 || self.client_errors != 0 {
