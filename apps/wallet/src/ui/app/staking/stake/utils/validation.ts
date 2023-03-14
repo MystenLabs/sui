@@ -76,34 +76,5 @@ export function createValidationSchema(
                       }
                   )
                   .label('Amount'),
-        gasBudget: mixed()
-            .transform((_, original) => {
-                try {
-                    return BigInt(original);
-                } catch (e) {
-                    return null;
-                }
-            })
-            // we calculate/load the gas budget on component mount and set the for field to the result
-            // here we return an empty message to avoid showing an error but set the form invalid
-            .test('required', '', (value) => {
-                return !!value;
-            })
-            .test('gasBudget', (gasBudget, ctx) => {
-                //NOTE: no need to include the amount because budget is included in the max check of the amount
-                // this check is mainly for the unstake form
-                if (coinBalance > gasBudget || !gasBudget) {
-                    return true;
-                }
-                return ctx.createError({
-                    message: `Insufficient SUI balance (${formatBalance(
-                        coinBalance,
-                        decimals
-                    )}) to cover for the gas fee (${formatBalance(
-                        gasBudget,
-                        decimals
-                    )})`,
-                });
-            }),
     });
 }

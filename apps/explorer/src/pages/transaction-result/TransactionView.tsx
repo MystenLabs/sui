@@ -524,7 +524,7 @@ function TransactionView({
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={gasBudget * gasPrice} />
+                                    <GasAmount amount={gasBudget} />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (
