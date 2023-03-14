@@ -33,7 +33,6 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
-    epoch_duration_ms: Option<u64>,
     initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
     db_checkpoint_config: DBCheckpointConfig,
@@ -51,7 +50,6 @@ impl SwarmBuilder {
             fullnode_count: 0,
             fullnode_rpc_addr: None,
             with_event_store: false,
-            epoch_duration_ms: None,
             initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
@@ -70,7 +68,6 @@ impl<R> SwarmBuilder<R> {
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
-            epoch_duration_ms: None,
             initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config: DBCheckpointConfig::default(),
@@ -121,7 +118,11 @@ impl<R> SwarmBuilder<R> {
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
-        self.epoch_duration_ms = Some(epoch_duration_ms);
+        let mut initial_accounts_config = self
+            .initial_accounts_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        initial_accounts_config.parameters.epoch_duration_ms = epoch_duration_ms;
+        self.initial_accounts_config = Some(initial_accounts_config);
         self
     }
 
@@ -167,10 +168,6 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if let Some(initial_accounts_config) = self.initial_accounts_config {
             config_builder = config_builder.initial_accounts_config(initial_accounts_config);
-        }
-
-        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
-            config_builder = config_builder.with_epoch_duration(epoch_duration_ms);
         }
 
         let network_config = config_builder

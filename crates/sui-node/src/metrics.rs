@@ -14,7 +14,7 @@ use prometheus::{
 };
 
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_network::tonic::Code;
 
 use mysten_metrics::RegistryService;
@@ -124,9 +124,22 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         url: &reqwest::Url,
         registry: &RegistryService,
     ) -> Result<(), anyhow::Error> {
+        // now represents a collection timestamp for all of the metrics we send to the proxy
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        let mut metric_families = registry.gather_all();
+        for mf in metric_families.iter_mut() {
+            for m in mf.mut_metric() {
+                m.set_timestamp_ms(now);
+            }
+        }
+
         let mut buf: Vec<u8> = vec![];
         let encoder = prometheus::ProtobufEncoder::new();
-        encoder.encode(&registry.gather_all(), &mut buf)?;
+        encoder.encode(&metric_families, &mut buf)?;
 
         let response = client
             .client()

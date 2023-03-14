@@ -279,14 +279,15 @@ storage_fund:
   value: 0
 parameters:
   governance_start_epoch: 0
+  epoch_duration_ms: 10000
 reference_gas_price: 1
 validator_report_records:
   contents: []
 stake_subsidy:
   epoch_counter: 0
   balance:
-    value: 975000000000000000
-  current_epoch_amount: 1000000
+    value: 100000000000000000
+  current_epoch_amount: 1000000000000000
 safe_mode: false
 epoch_start_timestamp_ms: 10
 

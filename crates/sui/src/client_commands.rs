@@ -1252,8 +1252,10 @@ impl WalletContext {
             .quorum_driver()
             .execute_transaction(
                 tx,
-                // TODO(chris): we probably don't need full content here
-                SuiTransactionResponseOptions::full_content(),
+                SuiTransactionResponseOptions::new()
+                    .with_effects()
+                    .with_events()
+                    .with_input(),
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)

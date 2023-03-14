@@ -156,6 +156,7 @@ export const SuiSystemStateSummary = object({
   safeMode: boolean(),
   epochStartTimestampMs: number(),
   governanceStartEpoch: number(),
+  epochDurationMs: number(),
   stakeSubsidyEpochCounter: number(),
   stakeSubsidyBalance: number(),
   stakeSubsidyCurrentEpochAmount: number(),

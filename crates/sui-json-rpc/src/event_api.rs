@@ -1,39 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Display;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::{StreamExt, TryStream};
-
+use futures::Stream;
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
-use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
 use tracing::{debug, warn};
 
+use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
-use sui_core::event_handler::EventHandler;
-use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter};
+use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_open_rpc::Module;
-use sui_types::event::{EventEnvelope, EventID};
-use sui_types::query::EventQuery;
+use sui_types::digests::TransactionDigest;
+use sui_types::event::EventID;
+use sui_types::messages::TransactionEffectsAPI;
 
 use crate::api::cap_page_limit;
 use crate::api::EventReadApiServer;
+use crate::error::Error;
 use crate::SuiRpcModule;
 
-fn spawn_subscription<S, T, E>(mut sink: SubscriptionSink, rx: S)
+pub fn spawn_subscription<S, T>(mut sink: SubscriptionSink, rx: S)
 where
-    S: TryStream<Ok = T, Error = E> + Unpin + Send + 'static,
+    S: Stream<Item = T> + Unpin + Send + 'static,
     T: Serialize,
-    E: Display,
 {
     spawn_monitored_task!(async move {
-        match sink.pipe_from_try_stream(rx).await {
+        match sink.pipe_from_stream(rx).await {
             SubscriptionClosed::Success => {
                 sink.close(SubscriptionClosed::Success);
             }
@@ -48,23 +46,46 @@ where
 
 pub struct EventReadApi {
     state: Arc<AuthorityState>,
-    event_handler: Arc<EventHandler>,
 }
 
 impl EventReadApi {
-    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
-        Self {
-            state,
-            event_handler,
-        }
+    pub fn new(state: Arc<AuthorityState>) -> Self {
+        Self { state }
     }
 }
 
 #[async_trait]
 impl EventReadApiServer for EventReadApi {
-    async fn get_events(
+    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+        let store = self.state.load_epoch_store_one_call_per_task();
+        let effect = self.state.get_executed_effects(transaction_digest).await?;
+        let events = if let Some(event_digest) = effect.events_digest() {
+            self.state
+                .get_transaction_events(event_digest)
+                .map_err(Error::SuiError)?
+                .data
+                .into_iter()
+                .enumerate()
+                .map(|(seq, e)| {
+                    SuiEvent::try_from(
+                        e,
+                        *effect.transaction_digest(),
+                        seq as u64,
+                        None,
+                        store.module_cache(),
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(Error::SuiError)?
+        } else {
+            vec![]
+        };
+        Ok(events)
+    }
+
+    async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<EventID>,
         limit: Option<usize>,
@@ -86,8 +107,7 @@ impl EventReadApiServer for EventReadApi {
             .await?;
         let has_next_page = data.len() > limit;
         data.truncate(limit);
-        let next_cursor = data.last().cloned().map_or(cursor, |(id, _)| Some(id));
-        let data = data.into_iter().map(|(_, event)| event).collect();
+        let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
         Ok(EventPage {
             data,
             next_cursor,
@@ -95,43 +115,8 @@ impl EventReadApiServer for EventReadApi {
         })
     }
 
-    fn subscribe_event(
-        &self,
-        mut sink: SubscriptionSink,
-        filter: SuiEventFilter,
-    ) -> SubscriptionResult {
-        let filter = match filter.try_into() {
-            Ok(filter) => filter,
-            Err(e) => {
-                let e = jsonrpsee::core::Error::from(e);
-                warn!(error = ?e, "Rejecting subscription request.");
-                return Ok(sink.reject(e)?);
-            }
-        };
-
-        let state = self.state.clone();
-        let stream = self.event_handler.subscribe(filter);
-        let stream = stream.map(move |e: EventEnvelope| {
-            let event = SuiEvent::try_from(
-                e.event,
-                // threading the epoch_store through this API does not
-                // seem possible, so we just read it from the state and fetch
-                // the module cache out of it.
-                // Notice that no matter what module cache we get things
-                // should work
-                state
-                    .load_epoch_store_one_call_per_task()
-                    .module_cache()
-                    .as_ref(),
-            );
-            event.map(|event| SuiEventEnvelope {
-                timestamp: e.timestamp,
-                tx_digest: e.tx_digest,
-                id: EventID::from((e.tx_digest, e.event_num as i64)),
-                event,
-            })
-        });
-        spawn_subscription(sink, stream);
+    fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
+        spawn_subscription(sink, self.state.event_handler.subscribe(filter));
         Ok(())
     }
 }

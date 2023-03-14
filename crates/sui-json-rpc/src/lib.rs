@@ -16,14 +16,13 @@ use tap::TapFallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
-use crate::error::Error;
-use sui_open_rpc::{Module, Project};
-
-use crate::metrics::MetricsLogger;
-use crate::routing_layer::RoutingLayer;
-
 pub use balance_changes::*;
 pub use object_changes::*;
+use sui_open_rpc::{Module, Project};
+
+use crate::error::Error;
+use crate::metrics::MetricsLogger;
+use crate::routing_layer::RoutingLayer;
 
 pub mod api;
 mod balance_changes;

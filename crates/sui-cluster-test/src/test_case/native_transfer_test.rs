@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    helper::{CoinBalanceChangeEventChecker, ObjectChecker},
-    TestCaseImpl, TestContext,
-};
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
+use tracing::info;
+
 use sui_json_rpc_types::SuiTransactionResponse;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
     object::Owner,
-    SUI_FRAMEWORK_OBJECT_ID,
 };
-use tracing::info;
+
+use crate::{
+    helper::{BalanceChangeChecker, ObjectChecker},
+    TestCaseImpl, TestContext,
+};
 
 pub struct NativeTransferTest;
 
@@ -49,15 +50,7 @@ impl TestCaseImpl for NativeTransferTest {
             .await?;
         let mut response = ctx.sign_and_execute(data, "coin transfer").await;
 
-        Self::examine_response(
-            ctx,
-            &mut response,
-            signer,
-            recipient_addr,
-            obj_to_transfer,
-            "transfer_object",
-        )
-        .await;
+        Self::examine_response(ctx, &mut response, signer, recipient_addr, obj_to_transfer).await;
 
         // Test transfer sui
         let obj_to_transfer = *sui_objs.swap_remove(0).id();
@@ -67,15 +60,7 @@ impl TestCaseImpl for NativeTransferTest {
             .await?;
         let mut response = ctx.sign_and_execute(data, "coin transfer").await;
 
-        Self::examine_response(
-            ctx,
-            &mut response,
-            signer,
-            recipient_addr,
-            obj_to_transfer,
-            "transfer_sui",
-        )
-        .await;
+        Self::examine_response(ctx, &mut response, signer, recipient_addr, obj_to_transfer).await;
         Ok(())
     }
 }
@@ -87,39 +72,28 @@ impl NativeTransferTest {
         signer: SuiAddress,
         recipient: SuiAddress,
         obj_to_transfer_id: ObjectID,
-        method: &str,
     ) {
-        let events = &mut response.events.as_mut().unwrap().data;
+        let balance_changes = &mut response.balance_changes.as_mut().unwrap();
+        // for transfer we only expect 2 balance changes, one for sender and one for recipient.
         assert_eq!(
-            events.len(),
-            3,
-            "Expect three event emitted, but got {}",
-            events.len()
+            balance_changes.len(),
+            2,
+            "Expect 2 balance changes emitted, but got {}",
+            balance_changes.len()
         );
-        CoinBalanceChangeEventChecker::new()
-            .package_id(SUI_FRAMEWORK_OBJECT_ID)
-            .transaction_module("gas".into())
-            .sender(signer)
-            .owner(Owner::AddressOwner(signer))
-            .coin_type("0x2::sui::SUI")
-            .check(&events.remove(0));
-        CoinBalanceChangeEventChecker::new()
-            .package_id(SUI_FRAMEWORK_OBJECT_ID)
-            .transaction_module(method.into())
-            .sender(signer)
-            .owner(Owner::AddressOwner(signer))
-            .coin_object_id(obj_to_transfer_id)
-            .coin_type("0x2::sui::SUI")
-            .check(&events.remove(0));
-        CoinBalanceChangeEventChecker::new()
-            .package_id(SUI_FRAMEWORK_OBJECT_ID)
-            .transaction_module(method.into())
-            .sender(signer)
+        // Order of balance change is not fixed so need to check who's balance come first.
+        // this make sure recipient always come first
+        if balance_changes[0].owner.get_owner_address().unwrap() == signer {
+            balance_changes.reverse()
+        }
+        BalanceChangeChecker::new()
             .owner(Owner::AddressOwner(recipient))
-            .coin_object_id(obj_to_transfer_id)
             .coin_type("0x2::sui::SUI")
-            .check(&events.remove(0));
-
+            .check(&balance_changes.remove(0));
+        BalanceChangeChecker::new()
+            .owner(Owner::AddressOwner(signer))
+            .coin_type("0x2::sui::SUI")
+            .check(&balance_changes.remove(0));
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync(vec![response.digest], 5).await;
 

@@ -238,7 +238,7 @@ async fn test_dry_run_transaction() {
 
     let response = fullnode
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await
@@ -262,7 +262,7 @@ async fn test_dry_run_transaction() {
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
 
-    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = &transaction.data().intent_message().value;
     let txn_data = TransactionData::new_with_gas_coins(
         txn_data.kind().clone(),
         txn_data.sender(),
@@ -900,7 +900,7 @@ async fn test_dry_run_on_validator() {
     let transaction_digest = *transaction.digest();
     let response = validator
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await;
@@ -950,11 +950,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
-    bad_signature_transfer_transaction
+    *bad_signature_transfer_transaction
         .data_mut_for_testing()
-        .tx_signatures =
+        .tx_signatures_mut_for_testing() =
         vec![
-            Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into(),
+            Signature::new_secure(transfer_transaction.data().intent_message(), &unknown_key)
+                .into(),
         ];
 
     assert!(client
@@ -1104,7 +1105,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 async fn test_upgrade_module_is_feature_gated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 10000);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 100000);
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
 
@@ -1112,7 +1113,8 @@ async fn test_upgrade_module_is_feature_gated() {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Data doesn't matter here. We hit the feature flag before checking it.
         let arg = builder.pure(1).unwrap();
-        builder.upgrade(arg, vec![], vec![vec![]]);
+        let stdlib_pkg_id = ObjectID::from_hex_literal("0x1").unwrap();
+        builder.upgrade(stdlib_pkg_id, arg, vec![], vec![vec![]]);
         builder.finish()
     };
 
@@ -1240,8 +1242,8 @@ async fn test_handle_transfer_transaction_ok() {
     };
 
     assert_eq!(
-        envelope.data().intent_message.value,
-        transfer_transaction.data().intent_message.value
+        envelope.data().intent_message().value,
+        transfer_transaction.data().intent_message().value
     );
 }
 
@@ -2542,7 +2544,6 @@ async fn test_move_call_mutable_object_not_mutated() {
 }
 
 // skipped because it violates SUI conservation checks
-#[ignore]
 #[tokio::test]
 async fn test_move_call_insufficient_gas() {
     // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
@@ -2869,7 +2870,8 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+        let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(committee),
@@ -2879,7 +2881,7 @@ async fn test_authority_persist() {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            async_batch_verifier_metrics,
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -2894,12 +2896,10 @@ async fn test_authority_persist() {
             epoch_store,
             committee_store,
             None,
-            None,
             checkpoint_store,
             &registry,
             AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
-            10000,
             &DBCheckpointConfig::default(),
         )
         .await
@@ -3920,6 +3920,7 @@ async fn test_iter_live_object_set() {
         &sender_key,
         &gas,
         "object_wrapping",
+        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -4955,7 +4956,7 @@ async fn test_tallying_rule_score_updates() {
     );
 
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-    let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+    let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
     let epoch_store = AuthorityPerEpochStore::new(
         auth_0_name,
         Arc::new(committee.clone()),
@@ -4965,7 +4966,7 @@ async fn test_tallying_rule_score_updates() {
         EpochStartConfiguration::new_for_testing(),
         store,
         cache_metrics,
-        verified_cert_cache_metrics,
+        async_batch_verifier_metrics,
     );
 
     let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {
@@ -5214,7 +5215,6 @@ fn test_choose_next_system_packages() {
 }
 
 // skipped because it violates SUI conservation checks
-#[ignore]
 #[tokio::test]
 async fn test_gas_smashing() {
     // run a create move object transaction with a given set o gas coins and a budget
@@ -5306,7 +5306,7 @@ async fn test_gas_smashing() {
         gas_used
     }
 
-    // 1. get the cost of the transaction so we can play with multiple gas coins
+    // get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
     let gas_used = run_and_check(100_000, 1, 100_000, true).await;
 
@@ -5316,7 +5316,7 @@ async fn test_gas_smashing() {
     run_and_check(reference_gas_used, 10, reference_gas_used - 100, true).await;
 
     // make less then required to succeed
-    let reference_gas_used = gas_used - 10;
+    let reference_gas_used = gas_used - 1;
     run_and_check(reference_gas_used, 2, reference_gas_used - 10, false).await;
     run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
     // use a small amount less than what 3 coins above reported (with success)

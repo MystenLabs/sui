@@ -33,11 +33,10 @@ describe('Coin related API', () => {
     });
 
     // split coins into desired amount
-    await toolbox.signer.signAndExecuteTransaction(
-      tx,
-      {},
-      'WaitForLocalExecution',
-    );
+    await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      requestType: 'WaitForLocalExecution',
+    });
     coinsAfterSplit = await toolbox.getGasObjectsOwnedByAddress();
   });
 

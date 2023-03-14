@@ -16,7 +16,6 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
-use sui_types::messages::TransactionDataAPI;
 use tap::TapFallible;
 use tracing::debug;
 
@@ -24,7 +23,7 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVer
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectChange,
-    ObjectValueKind, Page, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
+    ObjectValueKind, Page, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
@@ -35,11 +34,13 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::collection_types::VecMap;
-use sui_types::crypto::sha3_hash;
+use sui_types::crypto::user_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::{DisplayCreatedEvent, DisplayObject};
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::error::UserInputError;
+use sui_types::event::Event;
+use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::{
     TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
     VerifiedTransaction,
@@ -47,7 +48,6 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
-use sui_types::query::EventQuery;
 
 use crate::api::cap_page_limit;
 use crate::api::ReadApiServer;
@@ -367,13 +367,12 @@ impl ReadApiServer for ReadApi {
 
         if opts.show_events && temp_response.effects.is_some() {
             // safe to unwrap because we have checked is_some
-            if let Some(digest) = temp_response.effects.as_ref().unwrap().events_digest() {
+            if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest() {
                 let events = self
                     .state
-                    .get_transaction_events(*digest)
-                    .await
+                    .get_transaction_events(event_digest)
                     .map_err(Error::from)?;
-                match to_sui_transaction_events(self, events) {
+                match to_sui_transaction_events(self, digest, events) {
                     Ok(e) => temp_response.events = Some(e),
                     Err(e) => temp_response.errors.push(e.to_string()),
                 };
@@ -398,7 +397,7 @@ impl ReadApiServer for ReadApi {
             if let (Some(effects), Some(input)) =
                 (&temp_response.effects, &temp_response.transaction)
             {
-                let sender = input.data().intent_message.value.sender();
+                let sender = input.data().intent_message().value.sender();
                 let object_changes = get_object_change_from_effect(&object_cache, sender, effects)
                     .await
                     .map_err(Error::SuiError)?;
@@ -422,6 +421,18 @@ impl ReadApiServer for ReadApi {
             })
             .into());
         }
+
+        let opts = opts.unwrap_or_default();
+        if opts.show_balance_changes || opts.show_object_changes {
+            // Not supported because it's likely the response will easily exceed response limit
+            return Err(anyhow!(UserInputError::Unsupported(
+                "show_balance_changes and show_object_changes is not available on \
+                multiGetTransactions"
+                    .to_string()
+            ))
+            .into());
+        }
+
         // use LinkedHashMap to dedup and can iterate in insertion order.
         let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
             LinkedHashMap::from_iter(
@@ -432,8 +443,6 @@ impl ReadApiServer for ReadApi {
         if temp_response.len() < num_digests {
             return Err(anyhow!("The list of digests in the input contain duplicates").into());
         }
-
-        let opts = opts.unwrap_or_default();
 
         if opts.show_input {
             let transactions = self
@@ -547,7 +556,7 @@ impl ReadApiServer for ReadApi {
                     let events: Option<RpcResult<SuiTransactionEvents>> = event_digest_to_events
                         .remove(event_digest.as_ref().unwrap())
                         .expect("This can only happen if there are two or more transaction digests sharing the same event digests, which should never happen")
-                        .map(|e| to_sui_transaction_events(self, e));
+                        .map(|e| to_sui_transaction_events(self, cache_entry.digest, e));
                     match events {
                         Some(Ok(e)) => cache_entry.events = Some(e),
                         Some(Err(e)) => cache_entry.errors.push(e.to_string()),
@@ -687,20 +696,39 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
+        let opts = query.options.unwrap_or_default();
+        if opts.show_balance_changes || opts.show_object_changes {
+            // Not supported because it's likely the response will easily exceed response limit
+            return Err(anyhow!(UserInputError::Unsupported(
+                "show_balance_changes and show_object_changes is not available on \
+                queryTransactions"
+                    .to_string()
+            ))
+            .into());
+        }
 
         // Retrieve 1 extra item for next cursor
-        let mut data =
+        let mut digests =
             self.state
                 .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
-        let next_cursor = data.last().cloned().map_or(cursor, Some);
+        let has_next_page = digests.len() > limit;
+        digests.truncate(limit);
+        let next_cursor = digests.last().cloned().map_or(cursor, Some);
 
-        // TODO(chris): fetch transaction response based on `query.options`
+        let data: Vec<SuiTransactionResponse> = if opts.only_digest() {
+            digests
+                .into_iter()
+                .map(SuiTransactionResponse::new)
+                .collect()
+        } else {
+            self.multi_get_transactions_with_options(digests, Some(opts))
+                .await?
+        };
+
         Ok(Page {
-            data: data.into_iter().map(SuiTransactionResponse::new).collect(),
+            data,
             next_cursor,
             has_next_page,
         })
@@ -732,10 +760,13 @@ impl SuiRpcModule for ReadApi {
 
 fn to_sui_transaction_events(
     fullnode_api: &ReadApi,
+    tx_digest: TransactionDigest,
     events: TransactionEvents,
 ) -> RpcResult<SuiTransactionEvents> {
     Ok(SuiTransactionEvents::try_from(
         events,
+        tx_digest,
+        None,
         // threading the epoch_store through this API does not
         // seem possible, so we just read it from the state and fetch
         // the module cache out of it.
@@ -746,7 +777,8 @@ fn to_sui_transaction_events(
             .load_epoch_store_one_call_per_task()
             .module_cache()
             .as_ref(),
-    )?)
+    )
+    .map_err(Error::SuiError)?)
 }
 
 async fn get_display_fields(
@@ -794,28 +826,30 @@ async fn get_display_object_by_type(
 async fn get_display_object_id(
     fullnode_api: &ReadApi,
     object_type: &StructTag,
-) -> RpcResult<Option<ObjectID>> {
-    let display_created_event = fullnode_api
+) -> Result<Option<ObjectID>, Error> {
+    let package_id = ObjectID::from(object_type.address);
+    let package_tx = fullnode_api
         .state
-        .query_events(
-            EventQuery::MoveEvent(DisplayCreatedEvent::type_(object_type).to_string()),
-            /* cursor */ None,
-            /* limit */ 1,
-            /* descending */ false,
-        )
-        .await?;
-    if display_created_event.is_empty() {
+        .get_object_read(&package_id)
+        .await?
+        .into_object()?
+        .previous_transaction;
+    let effects = fullnode_api.state.get_executed_effects(package_tx).await?;
+    let Some(event_digest) = effects.events_digest() else {
         return Ok(None);
-    }
-    if let SuiEvent::MoveEvent { bcs, .. } = display_created_event[0].clone().1.event {
-        let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(&bcs)
-            .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
-            .id
-            .bytes;
-        Ok(Some(display_object_id))
-    } else {
-        Err(anyhow!("Failed to extract display object id from event"))?
-    }
+    };
+    let events = fullnode_api.state.get_transaction_events(event_digest)?;
+    let Some(display_created_event) = events.data.iter().find(|e|{
+        e.type_ == DisplayCreatedEvent::type_(object_type)
+    }) else{
+        return Ok(None);
+    };
+    let Event { contents, .. } = display_created_event;
+    let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(contents)
+        .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
+        .id
+        .bytes;
+    Ok(Some(display_object_id))
 }
 
 fn get_object_type_and_struct(
@@ -888,7 +922,7 @@ pub fn get_transaction_data_and_digest(
         },
         tx_data,
     );
-    let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
+    let txn_digest = TransactionDigest::new(user_hash(&intent_msg.value));
     Ok((intent_msg.value, txn_digest))
 }
 

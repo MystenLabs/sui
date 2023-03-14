@@ -10,14 +10,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::accumulator::Accumulator;
 use crate::base_types::{ExecutionData, ExecutionDigests, VerifiedExecutionData};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
-use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
+use crate::crypto::{internal_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages::TransactionEffectsAPI;
 use crate::signature::GenericSignature;
 use crate::storage::ReadStore;
-use crate::{base_types::AuthorityName, committee::Committee, crypto::sha3_hash, error::SuiError};
+use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -137,7 +137,7 @@ impl Message for CheckpointSummary {
     const SCOPE: IntentScope = IntentScope::CheckpointSummary;
 
     fn digest(&self) -> Self::DigestType {
-        CheckpointDigest::new(sha3_hash(self))
+        CheckpointDigest::new(internal_hash(self))
     }
 
     fn verify(&self, sig_epoch: Option<EpochId>) -> SuiResult {
@@ -367,7 +367,7 @@ impl CheckpointContents {
     pub fn digest(&self) -> &CheckpointContentsDigest {
         self.as_v1()
             .digest
-            .get_or_init(|| CheckpointContentsDigest::new(sha3_hash(self)))
+            .get_or_init(|| CheckpointContentsDigest::new(internal_hash(self)))
     }
 }
 

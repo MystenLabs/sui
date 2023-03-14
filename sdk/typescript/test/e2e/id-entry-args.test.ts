@@ -26,8 +26,11 @@ describe('Test ID as args to entry functions', () => {
         ),
       ],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
-      showEffects: true,
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
   });

@@ -7,7 +7,7 @@ import tmp from 'tmp';
 
 import {
   Ed25519Keypair,
-  getEvents,
+  getPublishedObjectChanges,
   getExecutionStatusType,
   JsonRpcProvider,
   fromB64,
@@ -51,9 +51,9 @@ export class TestToolbox {
   }
 
   async getGasObjectsOwnedByAddress() {
-    const objects = await this.provider.getObjectsOwnedByAddress(
-      this.address(),
-    );
+    const objects = await this.provider.getObjectsOwnedByAddress({
+      owner: this.address(),
+    });
 
     return objects.filter((obj) => Coin.isSUI(obj));
   }
@@ -120,16 +120,21 @@ export async function publishPackage(
   // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
   tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
 
-  const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx, {
-    showEffects: true,
-    showEvents: true,
+  const publishTxn = await toolbox.signer.signAndExecuteTransaction({
+    transaction: tx,
+    options: {
+      showEffects: true,
+      showObjectChanges: true,
+    },
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
+  const packageId = getPublishedObjectChanges(publishTxn)[0].packageId.replace(
+    /^(0x)(0+)/,
+    '0x',
+  );
+  expect(packageId).toBeTruthy();
 
-  // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );

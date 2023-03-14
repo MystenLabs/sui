@@ -27,9 +27,9 @@ export function useScorecardHistory(scorecardId?: string | null) {
       const txIds = await provider.queryTransactionsForObjectDeprecated(
         scorecardId
       );
-      const txs = await provider.getTransactionResponseBatch(
-        Array.from(new Set(txIds))
-      );
+      const txs = await provider.multiGetTransactions({
+        digests: Array.from(new Set(txIds)),
+      });
 
       return txs
         .reduce((acc: any[], tx) => acc.concat(tx.events || []), [])

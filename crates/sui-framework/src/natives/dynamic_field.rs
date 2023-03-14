@@ -75,7 +75,13 @@ pub fn hash_type_and_key(
             ))
         }
     };
-    let Some(id) = derive_dynamic_field_id(parent, &k_tag, &k_layout, &k) else {
+    let Some(k_bytes) = k.simple_serialize(&k_layout) else {
+        return Ok(NativeResult::err(
+            legacy_emit_cost(),
+            E_BCS_SERIALIZATION_FAILURE,
+        ))
+    };
+    let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
         return Ok(NativeResult::err(
             legacy_emit_cost(),
             E_BCS_SERIALIZATION_FAILURE,

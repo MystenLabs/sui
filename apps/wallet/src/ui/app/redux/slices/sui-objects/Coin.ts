@@ -111,10 +111,13 @@ export class Coin {
                     tx.pure(validator),
                 ],
             });
-            return await signer.signAndExecuteTransaction(tx, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            return await signer.signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             });
         } finally {
             span.finish();
@@ -124,7 +127,6 @@ export class Coin {
 
     public static async unStakeCoin(
         signer: SignerWithProvider,
-        stake: ObjectId,
         stakedSuiId: ObjectId
     ): Promise<SuiTransactionResponse> {
         const transaction = Sentry.startTransaction({ name: 'unstake' });
@@ -135,14 +137,16 @@ export class Coin {
                 target: '0x2::sui_system::request_withdraw_stake',
                 arguments: [
                     tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
-                    tx.object(stake),
                     tx.object(stakedSuiId),
                 ],
             });
-            return await signer.signAndExecuteTransaction(tx, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            return await signer.signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             });
         } finally {
             transaction.finish();

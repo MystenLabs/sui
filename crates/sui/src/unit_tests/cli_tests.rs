@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use expect_test::expect;
 use move_package::BuildConfig;
 use serde_json::json;
+use sui_types::object::Owner;
 use tokio::time::sleep;
 
 use sui::client_commands::SwitchResponse;
@@ -22,7 +23,8 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiTransactionEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -368,7 +370,20 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
 
     let package = if let SuiClientCommandResult::Publish(response) = resp {
-        response.effects.unwrap().created()[0].reference.object_id
+        response
+            .effects
+            .unwrap()
+            .created()
+            .iter()
+            .find(
+                |OwnedObjectRef {
+                     owner,
+                     reference: _,
+                 }| matches!(owner, Owner::Immutable),
+            )
+            .unwrap()
+            .reference
+            .object_id
     } else {
         unreachable!("Invalid response");
     };
@@ -391,8 +406,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Certain prep work
     // Get a gas object
-    let gas = object_refs.first().unwrap().object_id;
-    let obj = object_refs.get(1).unwrap().object_id;
+    let coins: Vec<_> = object_refs
+        .iter()
+        .filter(|object_ref| object_ref.type_ == "0x2::coin::Coin<0x2::sui::SUI>")
+        .collect();
+    let gas = coins.first().unwrap().object_id;
+    let obj = coins.get(1).unwrap().object_id;
 
     // Create the args
     let args = vec![

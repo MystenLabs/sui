@@ -48,10 +48,13 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             const tx = new Transaction();
             tx.setGasBudget(DEFAULT_NFT_TRANSFER_GAS_FEE);
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
-            return signer.signAndExecuteTransaction(tx, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            return signer.signAndExecuteTransaction({
+                transaction: tx,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             });
         },
         onSuccess: (response) => {

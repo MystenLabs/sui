@@ -9,7 +9,7 @@ import {
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { getEventsSummary, getAmount } from '_helpers';
+import { getAmount } from '_helpers';
 
 type Props = {
     txn: SuiTransactionResponse;
@@ -19,10 +19,10 @@ type Props = {
 export function useGetTxnRecipientAddress({ txn, address }: Props) {
     const events = txn.events!;
 
-    const eventsSummary = useMemo(() => {
-        const { coins } = getEventsSummary(events, address);
-        return coins;
-    }, [events, address]);
+    // const eventsSummary = useMemo(() => {
+    //     const { coins } = getEventsSummary(events, address);
+    //     return coins;
+    // }, [events, address]);
 
     const transaction = getTransactionKind(txn)!;
     const amountByRecipient = getAmount(transaction, txn.effects!, events);
@@ -33,18 +33,18 @@ export function useGetTxnRecipientAddress({ txn, address }: Props) {
             amountByRecipient?.find(
                 ({ recipientAddress }) => recipientAddress !== address
             )?.recipientAddress;
-        const receiverAddr =
-            eventsSummary &&
-            eventsSummary.find(
-                ({ receiverAddress }) => receiverAddress !== address
-            )?.receiverAddress;
+        // MUSTFIX(chris)
+        // const receiverAddr =
+        //     eventsSummary &&
+        //     eventsSummary.find(
+        //         ({ receiverAddress }) => receiverAddress !== address
+        //     )?.receiverAddress;
 
         return (
-            receiverAddr ??
-            transferObjectRecipientAddress ??
-            getTransactionSender(txn)
+            null ?? transferObjectRecipientAddress ?? getTransactionSender(txn)
         );
-    }, [address, amountByRecipient, eventsSummary, txn]);
+    }, [address, amountByRecipient, txn]);
+    // }, [address, amountByRecipient, eventsSummary, txn]);
 
     return recipientAddress;
 }

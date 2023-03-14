@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useTimeAgo } from '@mysten/core';
 import { useMemo } from 'react';
-
-import { useTimeAgo } from '~/utils/timeUtils';
 
 export function useEpochProgress(
     start?: number,

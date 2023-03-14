@@ -4,7 +4,6 @@
 pub mod indexes;
 pub use indexes::{IndexStore, IndexStoreTables};
 
-pub mod event_store;
 pub mod mutex_table;
 pub mod object_store;
 pub mod write_ahead_log;

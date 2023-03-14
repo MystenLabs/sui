@@ -334,6 +334,13 @@ impl Primary {
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
+            // Increase send and receive buffer sizes on the primary, since the primary also
+            // needs to fetch payloads.
+            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
+            quic_config.stream_receive_window = Some(100 << 20);
+            quic_config.receive_window = Some(200 << 20);
+            quic_config.send_window = Some(200 << 20);
+            quic_config.crypto_buffer_size = Some(1 << 20);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
@@ -816,7 +823,7 @@ impl PrimaryReceiverHandler {
 
         // Synchronize all batches referenced in the header.
         self.synchronizer
-            .sync_batches(header, network, /* max_age */ 0)
+            .sync_header_batches(header, network, /* max_age */ 0)
             .await?;
 
         // Check that the time of the header is smaller than the current time. If not but the difference is

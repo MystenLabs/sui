@@ -204,8 +204,8 @@ where
                 votes.push(sig);
                 if let Some(inner_transaction) = tx_data {
                     assert_eq!(
-                        inner_transaction.intent_message.value,
-                        data.intent_message.value
+                        inner_transaction.intent_message().value,
+                        data.intent_message().value
                     );
                 }
                 tx_data = Some(data);

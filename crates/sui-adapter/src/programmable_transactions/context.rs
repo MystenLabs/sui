@@ -23,7 +23,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
-    storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
+    storage::{ObjectChange, Storage, WriteKind},
 };
 
 use crate::{
@@ -397,7 +397,6 @@ where
             ..
         } = self;
         let tx_digest = tx_context.digest();
-        let sender = tx_context.sender();
         let mut additional_writes = BTreeMap::new();
         let mut input_object_metadata = BTreeMap::new();
         // Any object value that has not been taken (still has `Some` for it's value) needs to
@@ -506,12 +505,10 @@ where
             "Events should be taken after every Move call"
         );
         // todo remove this when system events are removed
-        let dummy_event_ctx = SingleTxContext::unused_input(sender);
         let mut object_changes = BTreeMap::new();
         for package in new_packages {
             let id = package.id();
-            let change =
-                ObjectChange::Write(SingleTxContext::publish(sender), package, WriteKind::Create);
+            let change = ObjectChange::Write(package, WriteKind::Create);
             object_changes.insert(id, change);
         }
         for (id, additional_write) in additional_writes {
@@ -548,7 +545,7 @@ where
                 )?
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
-            let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
+            let change = ObjectChange::Write(object, write_kind);
             object_changes.insert(id, change);
         }
 
@@ -583,7 +580,7 @@ where
                 )?
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
-            let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
+            let change = ObjectChange::Write(object, write_kind);
             object_changes.insert(id, change);
         }
         for (id, delete_kind) in deletions {
@@ -597,10 +594,7 @@ where
                     Err(_) => invariant_violation!(missing_unwrapped_msg(&id)),
                 },
             };
-            object_changes.insert(
-                id,
-                ObjectChange::Delete(dummy_event_ctx.clone(), version, delete_kind),
-            );
+            object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
         }
         let (change_set, move_events) = tmp_session
             .finish()

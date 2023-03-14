@@ -15,7 +15,7 @@ pub async fn get_object_change_from_effect<P: ObjectProvider<Error = E>, E>(
 ) -> Result<Vec<ObjectChange>, E> {
     let mut object_changes = vec![];
 
-    for ((id, version, digest), owner, kind) in effects.all_mutated() {
+    for ((id, version, digest), owner, kind) in effects.all_changed_objects() {
         let o = object_provider.get_object(id, version).await?;
         if let Some(type_) = o.type_() {
             let type_ = match type_ {

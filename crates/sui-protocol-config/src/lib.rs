@@ -144,8 +144,14 @@ pub struct ProtocolConfig {
     /// Maximum serialized size of a transaction (in bytes).
     max_tx_size: Option<u64>,
 
-    /// Maximum number of individual transactions in a Batch transaction.
-    max_tx_in_batch: Option<u32>,
+    /// Maximum number of input objects.
+    max_input_objects: Option<u64>,
+
+    /// Maximum size of serialized transaction effects.
+    max_serialized_tx_effects_size_bytes: Option<u64>,
+
+    /// Maximum size of serialized transaction effects for system transactions.
+    max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
 
     /// Maximum number of gas payment objets for a transaction.
     max_gas_payment_objects: Option<u32>,
@@ -165,16 +171,6 @@ pub struct ProtocolConfig {
 
     /// Maximum size of a Pure CallArg.
     max_pure_argument_size: Option<u32>,
-
-    /// Maximum size of an ObjVec CallArg.
-    max_object_vec_argument_size: Option<u32>,
-
-    /// Maximum number of coins in Pay* transactions, or a ProgrammableTransaction's
-    /// MergeCoins command.
-    max_coins: Option<u32>,
-
-    /// Maximum number of recipients in Pay* transactions.
-    max_pay_recipients: Option<u32>,
 
     /// Maximum number of Commands in a ProgrammableTransaction.
     max_programmable_tx_commands: Option<u32>,
@@ -402,8 +398,16 @@ impl ProtocolConfig {
     pub fn max_tx_size(&self) -> u64 {
         self.max_tx_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_tx_in_batch(&self) -> u32 {
-        self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    pub fn max_input_objects(&self) -> u64 {
+        self.max_input_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes_system_tx(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes_system_tx
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_gas_payment_objects(&self) -> u32 {
         self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
@@ -422,15 +426,6 @@ impl ProtocolConfig {
     }
     pub fn max_pure_argument_size(&self) -> u32 {
         self.max_pure_argument_size.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_object_vec_argument_size(&self) -> u32 {
-        self.max_object_vec_argument_size.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_coins(&self) -> u32 {
-        self.max_coins.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_pay_recipients(&self) -> u32 {
-        self.max_pay_recipients.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_programmable_tx_commands(&self) -> u32 {
         self.max_programmable_tx_commands.expect(CONSTANT_ERR_MSG)
@@ -727,21 +722,21 @@ impl ProtocolConfig {
                 feature_flags: Default::default(),
 
                 max_tx_size: Some(64 * 1024),
-                max_tx_in_batch: Some(10),
-                max_gas_payment_objects: Some(32),
+                // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
+                max_input_objects: Some(2048),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
+                max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
+                max_gas_payment_objects: Some(256),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
                 max_pure_argument_size: Some(16 * 1024),
-                max_object_vec_argument_size: Some(128),
-                max_coins: Some(1024),
-                max_pay_recipients: Some(1024),
                 max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
-                max_tx_gas: Some(1_000_000_000),
+                max_tx_gas: Some(10_000_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),

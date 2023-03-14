@@ -21,6 +21,7 @@ pub trait EpochStartSystemStateTrait {
     fn reference_gas_price(&self) -> u64;
     fn safe_mode(&self) -> bool;
     fn epoch_start_timestamp_ms(&self) -> u64;
+    fn epoch_duration_ms(&self) -> u64;
     fn get_sui_committee(&self) -> Committee;
     fn get_narwhal_committee(&self) -> NarwhalCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
@@ -48,6 +49,7 @@ impl EpochStartSystemState {
         reference_gas_price: u64,
         safe_mode: bool,
         epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
         active_validators: Vec<EpochStartValidatorInfoV1>,
     ) -> Self {
         Self::V1(EpochStartSystemStateV1 {
@@ -56,6 +58,7 @@ impl EpochStartSystemState {
             reference_gas_price,
             safe_mode,
             epoch_start_timestamp_ms,
+            epoch_duration_ms,
             active_validators,
         })
     }
@@ -76,6 +79,7 @@ pub struct EpochStartSystemStateV1 {
     reference_gas_price: u64,
     safe_mode: bool,
     epoch_start_timestamp_ms: u64,
+    epoch_duration_ms: u64,
     active_validators: Vec<EpochStartValidatorInfoV1>,
 }
 
@@ -91,6 +95,7 @@ impl EpochStartSystemStateV1 {
             reference_gas_price: 1,
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
+            epoch_duration_ms: 1000,
             active_validators: vec![],
         }
     }
@@ -117,6 +122,10 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         self.epoch_start_timestamp_ms
     }
 
+    fn epoch_duration_ms(&self) -> u64 {
+        self.epoch_duration_ms
+    }
+
     fn get_sui_committee(&self) -> Committee {
         let voting_rights = self
             .active_validators
@@ -125,7 +134,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .collect();
         Committee::new(self.epoch, voting_rights)
             // unwrap is safe because we should have verified the committee on-chain.
-            // TODO: Make sure we actually verify it.
+            // MUSTFIX: Make sure we always have a valid committee.
             .unwrap()
     }
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::balance::Balance;
-use crate::base_types::{ObjectID, SuiAddress};
+use crate::base_types::{EpochId, ObjectID, SuiAddress};
 use crate::collection_types::{Table, TableVec, VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion};
 use crate::crypto::verify_proof_of_possession;
@@ -31,15 +31,12 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "SystemParameters")]
 pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
+    pub epoch_duration_ms: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorMetadata")]
 pub struct ValidatorMetadataV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey_bytes: Vec<u8>,
@@ -121,7 +118,7 @@ impl ValidatorMetadataV1 {
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
             .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
         // Also make sure that the p2p address is a valid anemo address.
-        // TODO: This will trigger a bunch of Move test failures today since we did not give proper
+        // MUSTFIX: This will trigger a bunch of Move test failures today since we did not give proper
         // value for p2p address.
         // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
         let primary_address = Multiaddr::try_from(self.primary_address.clone())
@@ -234,8 +231,6 @@ impl ValidatorMetadataV1 {
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "Validator")]
 pub struct ValidatorV1 {
     metadata: ValidatorMetadataV1,
     #[serde(skip)]
@@ -358,8 +353,6 @@ impl ValidatorV1 {
 
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakingPool")]
 pub struct StakingPoolV1 {
     pub id: ObjectID,
     pub activation_epoch: Option<u64>,
@@ -373,23 +366,8 @@ pub struct StakingPoolV1 {
     pub pending_pool_token_withdraw: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct PoolTokenExchangeRate {
-    sui_amount: u64,
-    pool_token_amount: u64,
-}
-
-impl PoolTokenExchangeRate {
-    /// Rate of the staking pool, pool token amount : Sui amount
-    pub fn rate(&self) -> f64 {
-        self.pool_token_amount as f64 / self.sui_amount as f64
-    }
-}
-
 /// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "ValidatorSet")]
 pub struct ValidatorSetV1 {
     pub total_stake: u64,
     pub active_validators: Vec<ValidatorV1>,
@@ -419,9 +397,16 @@ pub struct SuiSystemStateInnerV1 {
     // TODO: Use getters instead of all pub.
 }
 
+impl SuiSystemStateInnerV1 {
+    pub fn new_for_testing(epoch: EpochId) -> Self {
+        Self {
+            epoch,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-// TODO: Get rid of json schema once we deprecate getSuiSystemState RPC API.
-#[serde(rename = "StakeSubsidy")]
 pub struct StakeSubsidyV1 {
     pub epoch_counter: u64,
     pub balance: Balance,
@@ -449,6 +434,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         self.epoch_start_timestamp_ms
     }
 
+    fn epoch_duration_ms(&self) -> u64 {
+        self.parameters.epoch_duration_ms
+    }
+
     fn safe_mode(&self) -> bool {
         self.safe_mode
     }
@@ -470,7 +459,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         CommitteeWithNetworkMetadata {
             committee: Committee::new(self.epoch, voting_rights)
                 // unwrap is safe because we should have verified the committee on-chain.
-                // TODO: Make sure we actually verify it.
+                // MUSTFIX: Make sure we always have a valid committee
                 .unwrap(),
             network_metadata,
         }
@@ -483,6 +472,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             self.reference_gas_price,
             self.safe_mode,
             self.epoch_start_timestamp_ms,
+            self.parameters.epoch_duration_ms,
             self.validators
                 .active_validators
                 .iter()
@@ -546,9 +536,11 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         },
                 },
             storage_fund,
-            parameters: SystemParametersV1 {
-                governance_start_epoch,
-            },
+            parameters:
+                SystemParametersV1 {
+                    governance_start_epoch,
+                    epoch_duration_ms,
+                },
             reference_gas_price,
             validator_report_records:
                 VecMap {
@@ -572,6 +564,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             safe_mode,
             epoch_start_timestamp_ms,
             governance_start_epoch,
+            epoch_duration_ms,
             stake_subsidy_epoch_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
             stake_subsidy_current_epoch_amount,
@@ -622,6 +615,7 @@ impl Default for SuiSystemStateInnerV1 {
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {
                 governance_start_epoch: 0,
+                epoch_duration_ms: 10000,
             },
             reference_gas_price: 1,
             validator_report_records: VecMap { contents: vec![] },

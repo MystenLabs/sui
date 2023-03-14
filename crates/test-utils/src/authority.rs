@@ -26,7 +26,12 @@ pub fn test_authority_configs() -> NetworkConfig {
 pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
-    let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
+    let mut configs = NetworkConfig::generate_with_rng_and_epoch_duration(
+        &config_dir,
+        committee_size,
+        24 * 60 * 60 * 1000, /* 24 hrs*/
+        rng,
+    );
     for config in configs.validator_configs.iter_mut() {
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
         // NOTE: the following parameters are important to ensure tests run fast. Using the default
