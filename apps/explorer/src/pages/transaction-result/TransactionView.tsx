@@ -22,10 +22,10 @@ import {
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import {
-    eventToDisplay,
-    getAddressesLinks,
-} from '../../components/events/eventDisplay';
+// import {
+//     eventToDisplay,
+//     getAddressesLinks,
+// } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 // TODO: (Jibz) Create a new pagination component
 import Pagination from '../../components/pagination/Pagination';
@@ -271,27 +271,28 @@ function TransactionView({
     );
 
     // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
-    const txEventData = transaction.events?.map(eventToDisplay);
+    // const txEventData = transaction.events?.map(eventToDisplay);
 
-    let eventTitles: [string, string][] = [];
-    const txEventDisplay = txEventData?.map((ed, index) => {
-        if (!ed) return <div />;
+    // MUSTFIX(chris): re-enable event display
+    // let eventTitles: [string, string][] = [];
+    // const txEventDisplay = txEventData?.map((ed, index) => {
+    //     if (!ed) return <div />;
 
-        let key = ed.top.title + index;
-        eventTitles.push([ed.top.title, key]);
-        return (
-            <div className={styles.txgridcomponent} key={key}>
-                <ItemView data={ed.top as TxItemView} />
-                {ed.fields && <ItemView data={ed.fields as TxItemView} />}
-            </div>
-        );
-    });
+    //     let key = ed.top.title + index;
+    //     eventTitles.push([ed.top.title, key]);
+    //     return (
+    //         <div className={styles.txgridcomponent} key={key}>
+    //             <ItemView data={ed.top as TxItemView} />
+    //             {ed.fields && <ItemView data={ed.fields as TxItemView} />}
+    //         </div>
+    //     );
+    // });
 
-    let eventTitlesDisplay = eventTitles.map(([title, key]) => (
-        <div key={key} className={styles.eventtitle}>
-            {title}
-        </div>
-    ));
+    // let eventTitlesDisplay = eventTitles.map(([title, key]) => (
+    //     <div key={key} className={styles.eventtitle}>
+    //         {title}
+    //     </div>
+    // ));
 
     const createdMutateData = generateMutatedCreated(transaction);
 
@@ -346,7 +347,9 @@ function TransactionView({
     //           }
     //         : false;
 
-    const hasEvents = txEventData && txEventData.length > 0;
+    // MUSTFIX(chris): re-enable event display
+    // const hasEvents = txEventData && txEventData.length > 0;
+    const hasEvents = false;
 
     const txError = getExecutionStatusError(transaction);
 
@@ -591,7 +594,7 @@ function TransactionView({
                             </DescriptionList>
                         </div>
                     </TabPanel>
-                    {hasEvents && (
+                    {/* {hasEvents && (
                         <TabPanel>
                             <div className={styles.txevents}>
                                 <div className={styles.txeventsleft}>
@@ -602,7 +605,7 @@ function TransactionView({
                                 </div>
                             </div>
                         </TabPanel>
-                    )}
+                    )} */}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
                             {accountSignature && (

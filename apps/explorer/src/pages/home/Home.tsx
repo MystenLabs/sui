@@ -3,7 +3,7 @@
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
+// import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
@@ -54,7 +54,7 @@ function Home() {
                         </TabPanels>
                     </TabGroup>
                 </div>
-                <div>
+                {/* <div>
                     <TabGroup>
                         <TabList>
                             <Tab>Recent Packages</Tab>
@@ -67,7 +67,7 @@ function Home() {
                             </TabPanel>
                         </TabPanels>
                     </TabGroup>
-                </div>
+                </div> */}
             </div>
         </div>
     );

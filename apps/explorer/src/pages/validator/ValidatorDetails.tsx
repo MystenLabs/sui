@@ -33,8 +33,7 @@ function ValidatorDetails() {
     const validatorRewards = useMemo(() => {
         if (!validatorEvents || !id) return 0;
         return (
-            getValidatorMoveEvent(validatorEvents.data, id)?.fields
-                .stake_rewards || 0
+            getValidatorMoveEvent(validatorEvents.data, id)?.stake_rewards || 0
         );
     }, [id, validatorEvents]);
 
