@@ -52,6 +52,10 @@
 						"fileName": "learn/objects"
 					},
 					{
+						"label": "Object and Package Versioning",
+						"fileName": "learn/object-package-versions"
+					},
+					{
 						"label": "Transactions",
 						"fileName": "learn/transactions"
 					},
