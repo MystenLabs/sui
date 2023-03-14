@@ -14,7 +14,7 @@ All Sui transactions have the following common metadata:
 * Epoch: The Sui epoch this transaction is intended for.
 * Type: A call, publish, or native transaction and its type-specific-data (see below).
 * Authenticator: A cryptographic signature on the [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/latest/bcs/)-encoded bytes of the data above, and a public key that both verifies against the signature and is cryptographically committed to by the sender address.
-* Expiration: An epoch ID or timestamp that sets a time after which validators will no longer consider the transaction valid. Setting an expiration value enables users to define transactions that either execute and commit by a set time, or never execute after the deadline passes. By default, there is no deadline for when a transaction must execute. 
+* Expiration: An epoch reference that sets a deadline after which validators will no longer consider the transaction valid. The optional expiration epoch reference enables users to define transactions that either execute and commit by a set time (current epoch less than or equal to expiration epoch), or never execute after the deadline passes. By default, there is no deadline for when a transaction must execute. 
 
 ## Move call transaction
 
