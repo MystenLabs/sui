@@ -77,7 +77,7 @@ pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
 /// Default hash function for user-facing purposes, namely the ones that is also done by the wallet.
-pub type UserHash = Sha3_256;
+pub type UserHash = Blake2b256;
 
 /// Default hash function for non-user-facing purposes, namely the ones not done by the wallet.
 pub type InternalHash = Blake2b256;
