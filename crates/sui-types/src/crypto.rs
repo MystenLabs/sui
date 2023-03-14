@@ -42,7 +42,7 @@ use crate::sui_serde::{Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::error::FastCryptoError;
-use fastcrypto::hash::{Blake2b256, HashFunction, Sha3_256};
+use fastcrypto::hash::{Blake2b256, HashFunction};
 pub use fastcrypto::traits::Signer;
 use std::fmt::Debug;
 
@@ -76,11 +76,7 @@ pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
-/// Default hash function for user-facing purposes, namely the ones that is also done by the wallet.
-pub type UserHash = Sha3_256;
-
-/// Default hash function for non-user-facing purposes, namely the ones not done by the wallet.
-pub type InternalHash = Blake2b256;
+pub type DefaultHash = Blake2b256;
 
 pub const DEFAULT_EPOCH_ID: EpochId = 0;
 
@@ -1546,12 +1542,8 @@ fn hash<S: Signable<H>, H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     hash.into()
 }
 
-pub fn user_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
-    hash::<S, UserHash, 32>(signable)
-}
-
-pub fn internal_hash<S: Signable<Blake2b256>>(signable: &S) -> [u8; 32] {
-    hash::<S, InternalHash, 32>(signable)
+pub fn default_hash<S: Signable<DefaultHash>>(signable: &S) -> [u8; 32] {
+    hash::<S, DefaultHash, 32>(signable)
 }
 
 #[derive(Default)]

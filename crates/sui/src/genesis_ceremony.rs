@@ -229,8 +229,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
             println!("Successfully built {SUI_GENESIS_FILENAME}");
             println!(
-                "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                Hex::encode(genesis.sha3())
+                "{SUI_GENESIS_FILENAME} blake2b-256: {}",
+                Hex::encode(genesis.hash())
             );
         }
     }

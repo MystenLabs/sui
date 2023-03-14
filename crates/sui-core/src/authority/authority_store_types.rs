@@ -7,7 +7,7 @@ use serde_with::Bytes;
 use std::convert::TryFrom;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::{ObjectDigest, SequenceNumber, TransactionDigest};
-use sui_types::crypto::{internal_hash, Signable};
+use sui_types::crypto::{default_hash, Signable};
 use sui_types::error::SuiError;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, Owner};
@@ -178,7 +178,7 @@ impl StoreMoveObject {
     pub fn digest(&self) -> ObjectContentDigest {
         // expected to be called on constructed object with default ref count 1
         assert_eq!(self.ref_count, 1);
-        ObjectContentDigest::new(internal_hash(self))
+        ObjectContentDigest::new(default_hash(self))
     }
 }
 

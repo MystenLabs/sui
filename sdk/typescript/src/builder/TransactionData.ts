@@ -16,7 +16,7 @@ import {
   string,
   union,
 } from 'superstruct';
-import { sha256Hash } from '../cryptography/hash';
+import { hashTypedData } from '../cryptography/hash';
 import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
@@ -123,7 +123,7 @@ export class TransactionDataBuilder {
    * @returns transaction digest.
    */
   static getDigestFromBytes(bytes: Uint8Array) {
-    const hash = sha256Hash('TransactionData', bytes);
+    const hash = hashTypedData('TransactionData', bytes);
     return toB58(hash);
   }
 
