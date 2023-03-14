@@ -163,6 +163,16 @@ impl GasCostSummary {
     }
 }
 
+impl std::fmt::Display for GasCostSummary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "computation_cost: {}, storage_cost: {},  storage_rebate: {}",
+            self.computation_cost, self.storage_cost, self.storage_rebate
+        )
+    }
+}
+
 // Fixed cost type
 #[derive(Clone)]
 pub struct FixedCost(InternalGas);
