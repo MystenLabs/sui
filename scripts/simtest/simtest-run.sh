@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -22,7 +22,8 @@ MSIM_TEST_NUM=30 \
 scripts/simtest/cargo-simtest simtest \
   --package sui \
   --package sui-core \
-  --profile simtestnightly
+  --profile simtestnightly \
+  -E "$TEST_FILTER"
 
 # create logs directory
 SIMTEST_LOGS_DIR=~/simtest_logs
