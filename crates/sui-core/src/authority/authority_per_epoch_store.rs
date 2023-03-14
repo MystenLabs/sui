@@ -14,7 +14,6 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::default_db_options;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
@@ -29,7 +28,9 @@ use sui_types::messages::{
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
-use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
+use typed_store::rocks::{
+    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
+};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
@@ -1883,7 +1884,7 @@ impl AuthorityPerEpochStore {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
 
 impl ExecutionComponents {
