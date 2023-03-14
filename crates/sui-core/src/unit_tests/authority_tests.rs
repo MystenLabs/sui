@@ -1693,20 +1693,22 @@ async fn test_package_size_limit() {
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, u64::MAX);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let mut package = Vec::new();
-    let mut package_size = 0;
-    // create a package larger than the max size
+    let mut modules_size = 0;
+    // create a package larger than the max size; serialized modules is the largest contributor and
+    // while other metadata is also contributing to the size it's easiest to construct object that's
+    // too large by adding more module bytes
     let max_move_package_size = ProtocolConfig::get_for_min_version().max_move_package_size();
-    while package_size <= max_move_package_size {
+    while modules_size <= max_move_package_size {
         let mut module = file_format::empty_module();
         // generate unique name
         module.identifiers[0] =
-            Identifier::new(format!("TestModule{:0>21000?}", package_size)).unwrap();
+            Identifier::new(format!("TestModule{:0>21000?}", modules_size)).unwrap();
         let module_bytes = {
             let mut bytes = Vec::new();
             module.serialize(&mut bytes).unwrap();
             bytes
         };
-        package_size += module_bytes.len() as u64;
+        modules_size += module_bytes.len() as u64;
         package.push(module_bytes);
     }
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
@@ -1722,16 +1724,13 @@ async fn test_package_size_limit() {
         .await
         .unwrap()
         .1;
-    assert_eq!(
-        *signed_effects.status(),
-        ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::MovePackageTooBig {
-                object_size: package_size,
-                max_object_size: max_move_package_size
-            },
-            command: Some(0),
-        }
-    )
+    let ExecutionStatus::Failure { error, command: _ } = signed_effects.status() else {
+        panic!("expected transaction to fail")
+    };
+    assert!(matches!(
+        error,
+        ExecutionFailureStatus::MovePackageTooBig { .. }
+    ));
 }
 
 #[tokio::test]
