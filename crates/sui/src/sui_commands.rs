@@ -26,6 +26,7 @@ use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{SuiClientConfig, SuiEnv};
 use crate::console::start_console;
+use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use sui_move::{self, execute_move_command};
@@ -110,6 +111,12 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
+    },
+
+    /// Tool for Fire Drill
+    FireDrill {
+        #[clap(subcommand)]
+        fire_drill: FireDrill,
     },
 }
 
@@ -246,6 +253,7 @@ impl SuiCommand {
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
         }
     }
 }
