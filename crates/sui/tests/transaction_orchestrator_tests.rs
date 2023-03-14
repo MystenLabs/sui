@@ -145,6 +145,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
     test_cluster.start_validator(validator_addresses[0]).await;
+    tokio::task::yield_now().await;
     execute_with_orchestrator(
         &orchestrator,
         txn,
