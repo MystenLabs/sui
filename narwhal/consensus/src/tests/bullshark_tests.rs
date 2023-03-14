@@ -1046,7 +1046,7 @@ async fn slow_node() {
                     .filter(|c| c.origin() == slow_node)
                     .count();
 
-                assert_eq!(slow_node_total, 6);
+                assert_eq!(slow_node_total, 4);
 
                 committed = true;
             }
@@ -1194,7 +1194,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                     assert_eq!(sub_dags[1].leader.round(), 6);
 
                     assert_eq!(sub_dags[0].certificates.len(), 4);
-                    assert_eq!(sub_dags[1].certificates.len(), 11);
+                    assert_eq!(sub_dags[1].certificates.len(), 9);
 
                     // And GC has collected everything up to round 5.
                     assert_eq!(state.dag.len(), 5);
