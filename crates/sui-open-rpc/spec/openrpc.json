@@ -404,16 +404,15 @@
               },
               "objectChanges": [
                 {
-                  "transferred": {
-                    "sender": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
-                    "recipient": {
-                      "AddressOwner": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1"
-                    },
-                    "object_type": "0x2::example::Object",
-                    "object_id": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
-                    "version": 2,
-                    "digest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
-                  }
+                  "type": "transferred",
+                  "sender": "0x4fb8880a0baf5c17edc30759ad9705670324baae1801851a37e8b4c0a42de675",
+                  "recipient": {
+                    "AddressOwner": "0x557dc42aaefeeb8c154d7ddc456b8aeaa3132c7403531dc98e83f6e198d2d7d1"
+                  },
+                  "objectType": "0x2::example::Object",
+                  "objectId": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
+                  "version": 2,
+                  "digest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
                 }
               ]
             }
@@ -1460,16 +1459,15 @@
               },
               "objectChanges": [
                 {
-                  "transferred": {
-                    "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
-                    "recipient": {
-                      "AddressOwner": "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653"
-                    },
-                    "object_type": "0x2::example::Object",
-                    "object_id": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb",
-                    "version": 2,
-                    "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
-                  }
+                  "type": "transferred",
+                  "sender": "0xbdda5e66040ca41c0b935b7d5083add6ab4e34a41e5c0d6d87ad3df5cc0fa664",
+                  "recipient": {
+                    "AddressOwner": "0xd77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3ea244dd060d2b653"
+                  },
+                  "objectType": "0x2::example::Object",
+                  "objectId": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb",
+                  "version": 2,
+                  "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
                 }
               ]
             }
@@ -4011,226 +4009,214 @@
             "description": "Module published",
             "type": "object",
             "required": [
-              "published"
+              "digest",
+              "modules",
+              "packageId",
+              "type",
+              "version"
             ],
             "properties": {
-              "published": {
-                "type": "object",
-                "required": [
-                  "digest",
-                  "modules",
-                  "package_id",
-                  "version"
-                ],
-                "properties": {
-                  "digest": {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  },
-                  "modules": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "package_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "version": {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  }
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "modules": {
+                "type": "array",
+                "items": {
+                  "type": "string"
                 }
+              },
+              "packageId": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "published"
+                ]
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Transfer objects to new address / wrap in another object",
             "type": "object",
             "required": [
-              "transferred"
+              "digest",
+              "objectId",
+              "objectType",
+              "recipient",
+              "sender",
+              "type",
+              "version"
             ],
             "properties": {
-              "transferred": {
-                "type": "object",
-                "required": [
-                  "digest",
-                  "object_id",
-                  "object_type",
-                  "recipient",
-                  "sender",
-                  "version"
-                ],
-                "properties": {
-                  "digest": {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  },
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "object_type": {
-                    "type": "string"
-                  },
-                  "recipient": {
-                    "$ref": "#/components/schemas/Owner"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "version": {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "objectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "objectType": {
+                "type": "string"
+              },
+              "recipient": {
+                "$ref": "#/components/schemas/Owner"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transferred"
+                ]
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Object mutated.",
             "type": "object",
             "required": [
-              "mutated"
+              "digest",
+              "objectId",
+              "objectType",
+              "owner",
+              "sender",
+              "type",
+              "version"
             ],
             "properties": {
-              "mutated": {
-                "type": "object",
-                "required": [
-                  "digest",
-                  "object_id",
-                  "object_type",
-                  "owner",
-                  "sender",
-                  "version"
-                ],
-                "properties": {
-                  "digest": {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  },
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "object_type": {
-                    "type": "string"
-                  },
-                  "owner": {
-                    "$ref": "#/components/schemas/Owner"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "version": {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "objectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "objectType": {
+                "type": "string"
+              },
+              "owner": {
+                "$ref": "#/components/schemas/Owner"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mutated"
+                ]
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Delete object",
             "type": "object",
             "required": [
-              "deleted"
+              "objectId",
+              "objectType",
+              "sender",
+              "type",
+              "version"
             ],
             "properties": {
-              "deleted": {
-                "type": "object",
-                "required": [
-                  "object_id",
-                  "object_type",
-                  "sender",
-                  "version"
-                ],
-                "properties": {
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "object_type": {
-                    "type": "string"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "version": {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
+              "objectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "objectType": {
+                "type": "string"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "deleted"
+                ]
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "Wrapped object",
             "type": "object",
             "required": [
-              "wrapped"
+              "objectId",
+              "objectType",
+              "sender",
+              "type",
+              "version"
             ],
             "properties": {
-              "wrapped": {
-                "type": "object",
-                "required": [
-                  "object_id",
-                  "object_type",
-                  "sender",
-                  "version"
-                ],
-                "properties": {
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "object_type": {
-                    "type": "string"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "version": {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
+              "objectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "objectType": {
+                "type": "string"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "wrapped"
+                ]
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "description": "New object creation",
             "type": "object",
             "required": [
-              "created"
+              "digest",
+              "objectId",
+              "objectType",
+              "owner",
+              "sender",
+              "type",
+              "version"
             ],
             "properties": {
-              "created": {
-                "type": "object",
-                "required": [
-                  "digest",
-                  "object_id",
-                  "object_type",
-                  "owner",
-                  "sender",
-                  "version"
-                ],
-                "properties": {
-                  "digest": {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  },
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "object_type": {
-                    "type": "string"
-                  },
-                  "owner": {
-                    "$ref": "#/components/schemas/Owner"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "version": {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
+              "digest": {
+                "$ref": "#/components/schemas/ObjectDigest"
+              },
+              "objectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "objectType": {
+                "type": "string"
+              },
+              "owner": {
+                "$ref": "#/components/schemas/Owner"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "created"
+                ]
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },

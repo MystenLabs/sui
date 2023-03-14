@@ -13,7 +13,7 @@ use sui_types::object::Owner;
 /// ObjectChange are derived from the object mutations in the TransactionEffect to provide richer object information.
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase", tag="type")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum ObjectChange {
     /// Module published
     #[serde(rename_all = "camelCase")]
