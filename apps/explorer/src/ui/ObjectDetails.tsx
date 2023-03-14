@@ -3,10 +3,12 @@
 import { ArrowUpRight16, X12 } from '@mysten/icons';
 import { cva } from 'class-variance-authority';
 import { useState } from 'react';
+import useImage from '~/hooks/useImage';
+import { useImageMod } from '~/hooks/useImageMod';
 
 import { Heading } from './Heading';
 import { IconButton } from './IconButton';
-import { Image } from './Image';
+import { Image } from './image/Image';
 import { ObjectLink } from './InternalLink';
 import { Modal } from './Modal';
 import { Text } from './Text';
@@ -34,7 +36,7 @@ export interface ObjectDetailsProps {
     image: string;
     name?: string;
     type: string;
-    nsfw?: boolean;
+    nsfw: boolean | null;
     variant: 'small' | 'large';
 }
 
@@ -43,12 +45,13 @@ export function ObjectDetails({
     image,
     name,
     type,
-    nsfw = false,
+    nsfw,
     variant = 'small',
 }: ObjectDetailsProps) {
     const [open, setOpen] = useState(false);
     const close = () => setOpen(false);
     const openPreview = () => setOpen(true);
+
     return (
         <div className="flex items-center gap-3.75">
             <Modal open={open} onClose={close}>
@@ -77,7 +80,6 @@ export function ObjectDetails({
                     onClick={openPreview}
                     alt={name}
                     src={image}
-                    blur={nsfw}
                 />
             </div>
             <div className={textStyles({ size: variant })}>

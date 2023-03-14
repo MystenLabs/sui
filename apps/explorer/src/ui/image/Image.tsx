@@ -3,11 +3,10 @@
 
 import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
-import { useEffect, useState } from 'react';
 
-type Status = 'loading' | 'failed' | 'loaded';
+import useImage from '~/hooks/useImage';
 
-const imageStyles = cva([], {
+const imageStyles = cva(null, {
     variants: {
         rounded: {
             full: 'rounded-full',
@@ -43,6 +42,7 @@ export interface ImageProps
     extends ImageStyleProps,
         React.ImgHTMLAttributes<HTMLImageElement> {
     onClick?: () => void;
+    moderate?: boolean;
     src: string;
     blur?: boolean;
 }
@@ -51,22 +51,14 @@ export function Image({
     alt,
     src,
     srcSet,
-    blur = false,
+    moderate = false,
     onClick,
     rounded,
     fit,
     size,
     ...imgProps
 }: ImageProps) {
-    const [status, setStatus] = useState<Status>('loading');
-
-    useEffect(() => {
-        const img = new global.Image();
-        img.src = src;
-        img.onload = () => setStatus('loaded');
-        img.onerror = () => setStatus('failed');
-    });
-
+    const { status, nsfw } = useImage(src, moderate);
     return (
         <div
             className={cx(
@@ -74,25 +66,23 @@ export function Image({
                 'relative flex items-center justify-center bg-gray-45 text-gray-65'
             )}
         >
-            {blur ? (
+            {nsfw && status === 'loaded' ? (
                 <div className="pointer-events-none absolute z-20 flex h-full w-full items-center justify-center rounded-md bg-gray-100/30 text-center backdrop-blur-md">
                     <EyeClose16 className="text-white" />
                 </div>
             ) : null}
-            {status === 'failed' || status === 'loading' ? (
+            {['failed', 'loading'].includes(status) ? (
                 <NftTypeImage24 />
             ) : (
                 <img
                     alt={alt}
                     src={src}
                     srcSet={srcSet}
-                    className={cx(
-                        imageStyles({
-                            rounded,
-                            fit,
-                            size,
-                        })
-                    )}
+                    className={imageStyles({
+                        rounded,
+                        fit,
+                        size,
+                    })}
                     onClick={onClick}
                     {...imgProps}
                 />

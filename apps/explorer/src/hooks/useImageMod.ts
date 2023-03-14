@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useQuery } from '@tanstack/react-query';
 
-export function useImageMod({ url }: { url?: string }) {
+export function useImageMod({
+    url,
+    enabled = true,
+}: {
+    url?: string;
+    enabled?: boolean;
+}) {
     return useQuery(
         ['image-mod', url],
         async () => {
-            if (import.meta.env.DEV) return true;
+            // if (import.meta.env.DEV) return true;
             try {
                 const allowed = await (
                     await fetch(`https://imgmod.sui.io/img`, {
@@ -21,10 +27,10 @@ export function useImageMod({ url }: { url?: string }) {
             }
         },
         {
-            enabled: !!url,
-            placeholderData: false,
-            staleTime: Infinity,
-            cacheTime: Infinity,
+            enabled: !!url && enabled,
+            placeholderData: undefined,
+            staleTime: 0,
+            cacheTime: 0,
         }
     );
 }

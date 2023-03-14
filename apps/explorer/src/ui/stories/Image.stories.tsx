@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Image, type ImageProps } from '../Image';
+import { Image, type ImageProps } from '../image/Image';
 
 import type { Meta, StoryObj } from '@storybook/react';
 
