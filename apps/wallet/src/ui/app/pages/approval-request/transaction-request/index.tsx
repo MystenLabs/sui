@@ -12,6 +12,7 @@ import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
+import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 
 import st from './TransactionRequest.module.scss';
 
@@ -124,6 +125,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
             onSubmit={handleOnSubmit}
             address={addressForTransaction}
         >
+            <PageMainLayoutTitle title="Approve Transaction" />
             <section className={st.txInfo}>
                 <TransactionSummaryCard
                     transaction={tx}

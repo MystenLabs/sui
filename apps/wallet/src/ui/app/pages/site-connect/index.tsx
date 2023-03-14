@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import { DAppPermissionsList } from '../../components/DAppPermissionsList';
 import { SummaryCard } from '../../components/SummaryCard';
 import { WalletListSelect } from '../../components/WalletListSelect';
+import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
 import { Text } from '../../shared/text';
 import Loading from '_components/loading';
 import { UserApproveContainer } from '_components/user-approve-container';
@@ -103,6 +104,7 @@ function SiteConnectPage() {
                         isConnect
                         addressHidden
                     >
+                        <PageMainLayoutTitle title="Insecure Website" />
                         <div className={st.warningWrapper}>
                             <h1 className={st.warningTitle}>
                                 Your Connection is Not Secure
@@ -129,6 +131,7 @@ function SiteConnectPage() {
                         addressHidden
                         approveDisabled={!accountsToConnect.length}
                     >
+                        <PageMainLayoutTitle title="Approve Connection" />
                         <SummaryCard
                             header="Permissions requested"
                             body={
