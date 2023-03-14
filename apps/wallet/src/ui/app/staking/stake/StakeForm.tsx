@@ -61,9 +61,9 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
     }, [setFieldValue, gasBudgetInMist, isLoading]);
 
     // Reward will be available after 2 epochs
-    const startEarningRewardsEpoch = epoch
-        ? Number(epoch) + NUM_OF_EPOCH_BEFORE_EARNING
-        : 0;
+    const startEarningRewardsEpoch =
+        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_EARNING;
+
     const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
         startEarningRewardsEpoch
     );
