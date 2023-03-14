@@ -617,7 +617,7 @@ impl<S> TemporaryStore<S> {
         self.drop_writes();
         gas_status.reset_storage_cost_and_rebate();
 
-        self.smash_gas( gas)
+        self.smash_gas(gas)
             .expect("Gas smashing cannot fail because it already succeeded when we did it before on the same `gas`");
     }
 
