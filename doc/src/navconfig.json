@@ -227,10 +227,6 @@
 			}
 		],
 			"reference": [{
-				"label": "Sui Migration Guide",
-				"link": "doc-updates/sui-migration-guide"
-			},
-			{
 				"label": "TypeScript/JavaScript SDK",
 				"link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
 				"external": true
