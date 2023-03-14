@@ -47,11 +47,9 @@ pub struct SimpleFaucet {
 }
 
 enum GasCoinResponse {
-    GasCoinWithInsufficientBalance(ObjectID),
-    InvalidGasCoin(ObjectID),
     NoGasCoinAvailable,
     UnknownGasCoin(ObjectID),
-    ValidGasCoin(ObjectID),
+    ValidGasCoins(Vec<ObjectID>),
 }
 
 // TODO: replace this with dryrun at the SDK level
@@ -82,7 +80,7 @@ impl SimpleFaucet {
         let metrics = FaucetMetrics::new(prometheus_registry);
 
         let wal = WriteAheadLog::open(wal_path);
-        let mut pending = vec![];
+        let mut pending: Vec<(Uuid, SuiAddress, Vec<ObjectID>, TransactionData)> = vec![];
 
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
@@ -95,7 +93,14 @@ impl SimpleFaucet {
             {
                 let uuid = Uuid::from_bytes(uuid);
                 info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
-                pending.push((uuid, recipient, coin_id, tx));
+
+                let current_length = pending.len();
+                // group all coins that had the same uuid in a vector
+                if current_length != 0 && pending[current_length - 1].0 == uuid {
+                    pending[current_length - 1].2.push(coin_id);
+                } else {
+                    pending.push((uuid, recipient, vec![coin_id], tx));
+                }
             } else {
                 producer
                     .send(coin_id)
@@ -121,6 +126,7 @@ impl SimpleFaucet {
         // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
         // values -- if the executions failed, the pending coins will simply remain in the WAL, and
         // not recycled.
+
         futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
             faucet.sign_and_execute_txn(uuid, recipient, coin_id, tx)
         }))
@@ -157,26 +163,37 @@ impl SimpleFaucet {
     /// Pulls a coin from the queue and makes sure it is fit for use (belongs to the faucet, has
     /// sufficient balance).
     async fn prepare_gas_coin(&self, total_amount: u64, uuid: Uuid) -> GasCoinResponse {
-        let Some(coin_id) = self.pop_gas_coin(uuid).await else {
-            warn!("Failed getting gas coin, try later!");
-            return GasCoinResponse::NoGasCoinAvailable;
-        };
+        let target_value = total_amount;
+        let mut current_value: u64 = 0;
+        let mut result: Vec<ObjectID> = Vec::new();
+        let mut error: Option<GasCoinResponse> = None;
+        while current_value < target_value {
+            let Some(coin_id) = self.pop_gas_coin(uuid).await else {
+                warn!("Failed getting gas coin, try later!");
+                return GasCoinResponse::NoGasCoinAvailable;
+            };
 
-        match self.get_gas_coin_and_check_faucet_owner(coin_id).await {
-            Ok(Some(gas_coin)) if gas_coin.value() >= total_amount => {
-                info!(?uuid, ?coin_id, "balance: {}", gas_coin.value());
-                GasCoinResponse::ValidGasCoin(coin_id)
-            }
+            match self.get_gas_coin_and_check_faucet_owner(coin_id).await {
+                Ok(Some(gas_coin)) => {
+                    current_value += gas_coin.value();
+                    result.push(coin_id);
+                }
+                // here perhaps we could log the invalid coin, but otherwise just skip it and get a valid one
+                Ok(None) => {
+                    self.metrics.total_discarded_coins.inc();
+                }
 
-            Ok(Some(_)) => GasCoinResponse::GasCoinWithInsufficientBalance(coin_id),
-
-            Ok(None) => GasCoinResponse::InvalidGasCoin(coin_id),
-
-            Err(e) => {
-                error!(?uuid, ?coin_id, "Fullnode read error: {e:?}");
-                GasCoinResponse::UnknownGasCoin(coin_id)
+                Err(e) => {
+                    error!(?uuid, ?coin_id, "Fullnode read error: {e:?}");
+                    error = Some(GasCoinResponse::UnknownGasCoin(coin_id));
+                }
             }
         }
+        if let Some(val) = error {
+            return val;
+        }
+
+        GasCoinResponse::ValidGasCoins(result)
     }
 
     /// Check if the gas coin is still valid. A valid gas coin
@@ -230,7 +247,7 @@ impl SimpleFaucet {
         &self,
         uuid: Uuid,
         recipient: SuiAddress,
-        coin_id: ObjectID,
+        coin_ids: Vec<ObjectID>,
         tx_data: TransactionData,
     ) -> Result<SuiTransactionBlockResponse, FaucetError> {
         let signature = self
@@ -243,24 +260,25 @@ impl SimpleFaucet {
             .verify()
             .unwrap();
         let tx_digest = *tx.digest();
+        let mut coins = coin_ids.clone();
         info!(
             ?tx_digest,
             ?recipient,
-            ?coin_id,
+            ?coins,
             ?uuid,
             "PaySui transaction in faucet."
         );
 
         match timeout(
             Duration::from_secs(300),
-            self.execute_pay_sui_txn_with_retries(&tx, coin_id, recipient, uuid),
+            self.execute_pay_sui_txn_with_retries(&tx, coin_ids.clone(), recipient, uuid),
         )
         .await
         {
             Err(elapsed) => {
                 warn!(
                     ?recipient,
-                    ?coin_id,
+                    ?coins,
                     ?uuid,
                     "Failed to execute PaySui transactions in faucet after {elapsed}. Coin will \
                      not be reused."
@@ -276,15 +294,21 @@ impl SimpleFaucet {
                 // intervene and attempt to fix things. If we re-use coins that had errors, we may
                 // lock them permanently.
 
-                // It's important to remove the coin from the WAL before recycling it, to avoid a
-                // race with the next request served with this coin.  If this operation fails, log
+                // It's important to remove the coins from the WAL before recycling it, to avoid a
+                // race with the next request served with this coins.  If this operation fails, log
                 // it and continue so we don't lose access to the coin -- the worst that can happen
                 // is that the WAL contains a stale entry.
-                if self.wal.lock().await.commit(coin_id).is_err() {
-                    error!(?coin_id, "Failed to remove coin from WAL");
-                }
 
-                self.recycle_gas_coin(coin_id, uuid).await;
+                while !coins.is_empty() {
+                    let coin_id = coins.pop().unwrap();
+                    if self.wal.lock().await.commit(coin_id).is_err() {
+                        error!(?coin_id, "Failed to remove coin from WAL");
+                    }
+                    // recycel first coin that survived the pay_sui merge
+                    if coins.is_empty() {
+                        self.recycle_gas_coin(coin_id, uuid).await;
+                    }
+                }
 
                 Ok(result)
             }
@@ -303,9 +327,15 @@ impl SimpleFaucet {
 
         let gas_coin_response = self.prepare_gas_coin(total_amount + gas_cost, uuid).await;
         match gas_coin_response {
-            GasCoinResponse::ValidGasCoin(coin_id) => {
+            GasCoinResponse::ValidGasCoins(coin_ids) => {
                 let tx_data = self
-                    .build_pay_sui_txn(coin_id, self.active_address, recipient, amounts, gas_cost)
+                    .build_pay_sui_txn(
+                        coin_ids.clone(),
+                        self.active_address,
+                        recipient,
+                        amounts,
+                        gas_cost,
+                    )
                     .await
                     .map_err(FaucetError::internal)?;
 
@@ -314,11 +344,16 @@ impl SimpleFaucet {
                     // faucet fails or we give up before we get a definite response, we have a
                     // chance to retry later.
                     let mut wal = self.wal.lock().await;
-                    wal.reserve(uuid, coin_id, recipient, tx_data.clone())
-                        .map_err(FaucetError::internal)?;
+                    // lock all the coins in the id
+                    let mut coin_ids_clone = coin_ids.clone();
+                    while !coin_ids_clone.is_empty() {
+                        let coin_id = coin_ids_clone.pop().unwrap();
+                        wal.reserve(uuid, coin_id, recipient, tx_data.clone())
+                            .map_err(FaucetError::internal)?;
+                    }
                 }
                 let response = self
-                    .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
+                    .sign_and_execute_txn(uuid, recipient, coin_ids.clone(), tx_data)
                     .await?;
 
                 self.check_and_map_transfer_gas_result(response, number_of_coins, recipient)
@@ -330,21 +365,6 @@ impl SimpleFaucet {
                 Err(FaucetError::FullnodeReadingError(format!(
                     "unknown gas coin {coin_id:?}"
                 )))
-            }
-
-            GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
-                warn!(?uuid, ?coin_id, "Insufficient balance, removing from pool");
-                self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::GasCoinWithInsufficientBalance(
-                    coin_id.to_hex_uncompressed(),
-                ))
-            }
-
-            GasCoinResponse::InvalidGasCoin(coin_id) => {
-                // The coin does not exist, or does not belong to the current active address.
-                warn!(?uuid, ?coin_id, "Invalid, removing from pool");
-                self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::InvalidGasCoin(coin_id.to_hex_uncompressed()))
             }
 
             GasCoinResponse::NoGasCoinAvailable => Err(FaucetError::NoGasCoinAvailable),
@@ -367,14 +387,16 @@ impl SimpleFaucet {
     async fn execute_pay_sui_txn_with_retries(
         &self,
         tx: &VerifiedTransaction,
-        coin_id: ObjectID,
+        coin_ids: Vec<ObjectID>,
         recipient: SuiAddress,
         uuid: Uuid,
     ) -> SuiTransactionBlockResponse {
         let mut retry_delay = Duration::from_millis(500);
 
         loop {
-            let res = self.execute_pay_sui_txn(tx, coin_id, recipient, uuid).await;
+            let res = self
+                .execute_pay_sui_txn(tx, coin_ids.clone(), recipient, uuid)
+                .await;
 
             if let Ok(res) = res {
                 return res;
@@ -382,7 +404,7 @@ impl SimpleFaucet {
 
             info!(
                 ?recipient,
-                ?coin_id,
+                ?coin_ids,
                 ?uuid,
                 ?retry_delay,
                 "PaySui transaction in faucet failed, previous error: {:?}",
@@ -397,7 +419,7 @@ impl SimpleFaucet {
     async fn execute_pay_sui_txn(
         &self,
         tx: &VerifiedTransaction,
-        coin_id: ObjectID,
+        coin_ids: Vec<ObjectID>,
         recipient: SuiAddress,
         uuid: Uuid,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
@@ -420,7 +442,7 @@ impl SimpleFaucet {
                 error!(
                     ?tx_digest,
                     ?recipient,
-                    ?coin_id,
+                    ?coin_ids,
                     ?uuid,
                     "Transfer Transaction failed: {:?}",
                     e
@@ -448,7 +470,7 @@ impl SimpleFaucet {
 
     async fn build_pay_sui_txn(
         &self,
-        coin_id: ObjectID,
+        coin_ids: Vec<ObjectID>,
         signer: SuiAddress,
         recipient: SuiAddress,
         amounts: &[u64],
@@ -459,12 +481,18 @@ impl SimpleFaucet {
         let client = self.wallet.get_client().await?;
         client
             .transaction_builder()
-            .pay_sui(signer, vec![coin_id], recipients, amounts.to_vec(), budget)
+            .pay_sui(
+                signer,
+                coin_ids.clone(),
+                recipients,
+                amounts.to_vec(),
+                budget,
+            )
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
                     "Failed to build PaySui transaction for coin {:?}, with err {:?}",
-                    coin_id,
+                    coin_ids,
                     e
                 )
             })
