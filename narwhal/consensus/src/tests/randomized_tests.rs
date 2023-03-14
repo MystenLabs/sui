@@ -16,18 +16,18 @@ use rand::prelude::SliceRandom;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
-use test_utils::mock_certificate;
+use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
 use types::Round;
 use types::{Certificate, CertificateDigest};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct FailureModes {
     // The probability of having failures per round. The failures should
     // be <=f , otherwise no DAG could be created. The provided number gives the probability of having
@@ -72,11 +72,11 @@ async fn bullshark_randomised_tests() {
     // A range of the committee size to be used
     const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=8;
     // A range of rounds for which we will create DAGs
-    const DAG_ROUNDS: RangeInclusive<Round> = 8..=15;
+    const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 10_000;
+    const EXECUTION_PLANS: u64 = 1_000;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 1_000;
+    const DAGS_PER_SETUP: u64 = 200;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
         // No failures
@@ -88,13 +88,13 @@ async fn bullshark_randomised_tests() {
         // Some failures
         FailureModes {
             nodes_failure_probability: 0.05,     // 5%
-            slow_nodes_percentage: 0.05,         // 5%
+            slow_nodes_percentage: 0.20,         // 20%
             slow_nodes_failure_probability: 0.3, // 30%
         },
         // Severe failures
         FailureModes {
             nodes_failure_probability: 0.0,      // 0%
-            slow_nodes_percentage: 0.2,          // 20%
+            slow_nodes_percentage: 0.33,         // 33%
             slow_nodes_failure_probability: 0.7, // 70%
         },
     ];
@@ -125,11 +125,44 @@ async fn bullshark_randomised_tests() {
                             gc_depth,
                             dag_rounds,
                             run_id,
+                            *mode,
                         );
                     }
                 }
             }
         }
+    }
+}
+
+/// Ensures that the methods to generate the DAGs and the execution plans are random but can be
+/// reproduced by providing the same seed number - so practically they behave deterministically.
+/// If that test breaks then we have no reassurance that we can reproduce the tests in case of
+/// failure.
+#[test]
+fn test_determinism() {
+    let committee_size = 4;
+    let number_of_rounds = 2;
+    let failure_modes = FailureModes {
+        nodes_failure_probability: 0.0,
+        slow_nodes_percentage: 0.33,
+        slow_nodes_failure_probability: 0.5,
+    };
+
+    for seed in 0..=10 {
+        // Compare the creation of DAG & committee
+        let (dag_1, committee_1) =
+            generate_randomised_dag(committee_size, number_of_rounds, seed, failure_modes);
+        let (dag_2, committee_2) =
+            generate_randomised_dag(committee_size, number_of_rounds, seed, failure_modes);
+
+        assert_eq!(committee_1, committee_2);
+        assert_eq!(dag_1, dag_2);
+
+        // Compare the creation of execution plan based on the provided DAG
+        let execution_plan_1 = create_execution_plan(dag_1.clone(), seed);
+        let execution_plan_2 = create_execution_plan(dag_1, seed);
+
+        assert_eq!(execution_plan_1.certificates, execution_plan_2.certificates);
     }
 }
 
@@ -244,12 +277,25 @@ pub fn make_certificates_with_parameters(
 
             // Step 3 -- figure out the parents taking into account the slow nodes - assuming they
             // are provide such.
-            let parent_digests = test_utils::this_cert_parents_with_slow_nodes(
-                name,
-                current_parents.clone(),
-                slow_node_keys.as_slice(),
-                &mut rand,
-            );
+            let mut parent_digests: BTreeSet<CertificateDigest> =
+                test_utils::this_cert_parents_with_slow_nodes(
+                    name,
+                    current_parents.clone(),
+                    slow_node_keys.as_slice(),
+                    &mut rand,
+                );
+
+            // We want to ensure that we always refer to "our" certificate of the previous round -
+            // assuming that exist, so we can re-add it later.
+            let my_parent_digest = if let Some(my_previous_round) =
+                current_parents.iter().find(|c| c.header.author == *name)
+            {
+                parent_digests.remove(&my_previous_round.digest());
+                Some(my_previous_round.digest())
+            } else {
+                None
+            };
+
             let mut parent_digests: Vec<CertificateDigest> = parent_digests.into_iter().collect();
 
             // Step 3 -- references to previous round
@@ -262,14 +308,33 @@ pub fn make_certificates_with_parameters(
             parent_digests.shuffle(&mut rand);
 
             // now keep only the num_of_parents_to_pick
-            let parents_digests = parent_digests
+            let mut parents_digests: Vec<CertificateDigest> = parent_digests
                 .into_iter()
                 .take(num_of_parents_to_pick as usize)
                 .collect();
 
+            // Now swap one if necessary with our own
+            if let Some(my_parent_digest) = my_parent_digest {
+                // remove one only if we have at least a quorum
+                if parents_digests.len() >= committee.quorum_threshold() as usize {
+                    parents_digests.pop();
+                }
+                parents_digests.insert(0, my_parent_digest);
+            }
+
+            assert!(parents_digests.len() >= committee.quorum_threshold() as usize);
+
+            let parents_digests: BTreeSet<CertificateDigest> =
+                parents_digests.into_iter().collect();
+
             // Now create the certificate with the provided parents
-            let (_, certificate) =
-                mock_certificate(committee, name.clone(), round, parents_digests);
+            let (_, certificate) = mock_certificate_with_rand(
+                committee,
+                name.clone(),
+                round,
+                parents_digests.clone(),
+                &mut rand,
+            );
 
             // group certificates by round for easy access
             certificates_per_round
@@ -321,7 +386,17 @@ fn generate_and_run_execution_plans(
     gc_depth: Round,
     dag_rounds: Round,
     run_id: u64,
+    modes: FailureModes,
 ) {
+    println!(
+        "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
+        run_id,
+        dag_rounds,
+        committee.authorities.len(),
+        gc_depth,
+        modes
+    );
+
     let mut executed_plans = HashSet::new();
     let mut committed_certificates = Vec::new();
 
@@ -333,7 +408,7 @@ fn generate_and_run_execution_plans(
         // clear store before using for next test
         store.clear().unwrap();
 
-        let seed = (i + 1) * run_id;
+        let seed = (i + 1) + run_id;
 
         let plan = create_execution_plan(original_certificates.clone(), seed);
 
@@ -351,7 +426,7 @@ fn generate_and_run_execution_plans(
         let mut bullshark = Bullshark::new(
             committee.clone(),
             store.clone(),
-            metrics,
+            metrics.clone(),
             NUM_SUB_DAGS_PER_SCHEDULE,
         );
 
@@ -359,8 +434,6 @@ fn generate_and_run_execution_plans(
 
         let mut plan_committed_certificates = Vec::new();
         for c in plan.certificates {
-            //print!("R {} - D {}", c.round(), c.digest());
-
             // A sanity check that we indeed attempt to send to Bullshark a certificate
             // whose parents have already been inserted.
             if c.round() > 1 {
@@ -373,7 +446,6 @@ fn generate_and_run_execution_plans(
             // Now commit one by one the certificates and gather the results
             let (_outcome, committed_sub_dags) =
                 bullshark.process_certificate(&mut state, c).unwrap();
-            //println!(" -> Outcome: {:?}", outcome);
             for sub_dag in committed_sub_dags {
                 plan_committed_certificates.extend(sub_dag.certificates);
             }
@@ -386,21 +458,15 @@ fn generate_and_run_execution_plans(
             assert_eq!(
                 committed_certificates,
                 plan_committed_certificates,
-                "Fork detected in plans for seed={}, rounds={}, committee={}, gc_depth={}",
+                "Fork detected in plans for run_id={}, seed={}, rounds={}, committee={}, gc_depth={}, modes={:?}",
+                run_id,
                 seed,
                 dag_rounds,
                 committee.authorities.len(),
-                gc_depth
+                gc_depth,
+                modes
             );
         }
-
-        println!(
-            "Successfully committed plan with seed {} for rounds={}, committee={}, gc_depth={}",
-            seed,
-            dag_rounds,
-            committee.authorities.len(),
-            gc_depth
-        );
     }
 }
 
