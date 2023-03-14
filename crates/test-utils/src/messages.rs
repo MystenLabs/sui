@@ -249,19 +249,23 @@ pub fn make_transactions_with_pre_genesis_objects(
 }
 
 /// Make a few different test transaction containing the same shared object.
-pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
+pub fn test_shared_object_transactions(
+    shared_object: Option<Object>,
+    gas_objects: Option<Vec<Object>>,
+) -> Vec<VerifiedTransaction> {
     // The key pair of the sender of the transaction.
     let (sender, keypair) = deterministic_random_account_key();
 
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
-    let shared_object = Object::shared_for_testing();
+    let shared_object = shared_object.unwrap_or_else(Object::shared_for_testing);
+    let gas_objects = gas_objects.unwrap_or_else(generate_test_gas_objects);
     let shared_object_id = shared_object.id();
     let initial_shared_version = shared_object.version();
     let module = "object_basics";
     let function = "create";
 
-    for gas_object in generate_test_gas_objects() {
+    for gas_object in gas_objects {
         let data = TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             SUI_FRAMEWORK_OBJECT_ID,

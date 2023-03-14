@@ -5,16 +5,21 @@ use futures::future::join_all;
 use move_core_types::ident_str;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
+use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
+use sui_config::builder::ConfigBuilder;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_types::crypto::ToFromBytes;
-use sui_types::crypto::{generate_proof_of_possession, get_account_key_pair};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{
+    generate_proof_of_possession, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
+    KeypairTraits, ToFromBytes,
+};
 use sui_types::gas::GasCostSummary;
 use sui_types::id::ID;
 use sui_types::message_envelope::Message;
@@ -28,9 +33,11 @@ use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-use test_utils::authority::{start_node, test_and_configure_authority_configs};
+use test_utils::authority::start_node;
 use test_utils::{
-    authority::{spawn_test_authorities, test_authority_configs},
+    authority::{
+        spawn_test_authorities, test_authority_configs, test_authority_configs_with_objects,
+    },
     network::TestClusterBuilder,
 };
 use tokio::time::{sleep, timeout};
@@ -38,7 +45,7 @@ use tracing::{info, warn};
 
 #[sim_test]
 async fn advance_epoch_tx_test() {
-    let authorities = spawn_test_authorities([], &test_authority_configs()).await;
+    let authorities = spawn_test_authorities(&test_authority_configs()).await;
     let states: Vec<_> = authorities
         .iter()
         .map(|authority| authority.with(|node| node.state()))
@@ -79,7 +86,7 @@ async fn advance_epoch_tx_test() {
 async fn basic_reconfig_end_to_end_test() {
     // TODO remove this sleep when this test passes consistently
     sleep(Duration::from_secs(1)).await;
-    let authorities = spawn_test_authorities([], &test_authority_configs()).await;
+    let authorities = spawn_test_authorities(&test_authority_configs()).await;
     trigger_reconfiguration(&authorities).await;
 }
 
@@ -88,11 +95,10 @@ async fn reconfig_with_revert_end_to_end_test() {
     let (sender, keypair) = get_account_key_pair();
     let gas1 = Object::with_owner_for_testing(sender); // committed
     let gas2 = Object::with_owner_for_testing(sender); // (most likely) reverted
-    let authorities = spawn_test_authorities(
-        [gas1.clone(), gas2.clone()].into_iter(),
-        &test_authority_configs(),
-    )
-    .await;
+    let (configs, objects) = test_authority_configs_with_objects([gas1, gas2]);
+    let gas1 = &objects[0];
+    let gas2 = &objects[1];
+    let authorities = spawn_test_authorities(&configs).await;
     let registry = Registry::new();
 
     // gas1 transaction is committed
@@ -277,8 +283,9 @@ async fn test_validator_resign_effects() {
     // in the new epoch.
     let (sender, keypair) = get_account_key_pair();
     let gas = Object::with_owner_for_testing(sender);
-    let configs = test_authority_configs();
-    let authorities = spawn_test_authorities([gas.clone()].into_iter(), &configs).await;
+    let (configs, mut objects) = test_authority_configs_with_objects([gas]);
+    let gas = objects.pop().unwrap();
+    let authorities = spawn_test_authorities(&configs).await;
     let tx = make_transfer_sui_transaction(
         gas.compute_object_reference(),
         sender,
@@ -318,17 +325,26 @@ async fn test_validator_resign_effects() {
 
 #[sim_test]
 async fn test_inactive_validator_pool_read() {
-    let init_configs = test_and_configure_authority_configs(5);
-    let leaving_validator = &init_configs.validator_configs()[0];
-    let address = leaving_validator.sui_address();
+    let leaving_validator_account_key = gen_keys(5).pop().unwrap();
+    let address: SuiAddress = leaving_validator_account_key.public().into();
 
     let gas_objects = generate_test_gas_objects_with_owner(1, address);
     let stake = Object::new_gas_with_balance_and_owner_for_testing(25_000_000_000_000_000, address);
-    let mut genesis_objects = vec![stake.clone()];
+    let mut genesis_objects = vec![stake];
     genesis_objects.extend(gas_objects.clone());
 
-    let authorities =
-        spawn_test_authorities(genesis_objects.clone().into_iter(), &init_configs).await;
+    let init_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(genesis_objects.clone())
+        .build();
+
+    let gas_objects: Vec<_> = gas_objects
+        .into_iter()
+        .map(|o| init_configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    let authorities = spawn_test_authorities(&init_configs).await;
 
     let staking_pool_id = authorities[0].with(|node| {
         node.state()
@@ -357,7 +373,7 @@ async fn test_inactive_validator_pool_read() {
         10000,
     )
     .unwrap();
-    let transaction = to_sender_signed_transaction(tx_data, leaving_validator.account_key_pair());
+    let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
@@ -387,14 +403,52 @@ async fn test_inactive_validator_pool_read() {
     })
 }
 
+// generate N keys - use a fixed RNG so we can regenerate the same set again later (keypairs
+// are not Clone)
+fn gen_keys(count: usize) -> Vec<AccountKeyPair> {
+    let mut rng = StdRng::from_seed([0; 32]);
+    (0..count)
+        .into_iter()
+        .map(|_| get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng).1)
+        .collect()
+}
+
 #[sim_test]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
 
+    let new_validator_key = gen_keys(5).pop().unwrap();
+    let new_validator_address: SuiAddress = new_validator_key.public().into();
+
     // TODO: In order to better "test" this flow we probably want to set the validators to ignore
     // all p2p peer connections so that we can verify that new nodes joining can really "talk" with the
     // other validators in the set.
-    let init_configs = test_and_configure_authority_configs(4);
+    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
+    let stake = Object::new_gas_with_balance_and_owner_for_testing(
+        30_000_000_000_000_000,
+        new_validator_address,
+    );
+    let mut objects = vec![stake.clone()];
+    objects.extend(gas_objects.clone());
+
+    let init_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(4))
+        .with_objects(objects.clone())
+        .build();
+
+    let new_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(objects.clone())
+        .build();
+
+    let gas_objects: Vec<_> = gas_objects
+        .into_iter()
+        .map(|o| init_configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    let stake = init_configs.genesis.object(stake.id()).unwrap();
 
     // Generate a new validator config.
     // Our committee generation uses a fixed seed, so we need to generate a new committee
@@ -408,7 +462,6 @@ async fn test_reconfig_with_committee_change_basic() {
         .iter()
         .map(|v| v.protocol_key())
         .collect();
-    let new_configs = test_and_configure_authority_configs(5);
     let new_validator = new_configs
         .validator_set()
         .into_iter()
@@ -424,17 +477,7 @@ async fn test_reconfig_with_committee_change_basic() {
         new_validator.protocol_key.concise()
     );
 
-    let new_validator_address = new_node_config.sui_address();
-    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
-    let stake = Object::new_gas_with_balance_and_owner_for_testing(
-        30_000_000_000_000_000,
-        new_validator_address,
-    );
-    let mut genesis_objects = gas_objects.clone();
-    genesis_objects.push(stake.clone());
-
-    let mut authorities =
-        spawn_test_authorities(genesis_objects.clone().into_iter(), &init_configs).await;
+    let mut authorities = spawn_test_authorities(&init_configs).await;
 
     let proof_of_possession =
         generate_proof_of_possession(new_node_config.protocol_key_pair(), new_validator_address);
@@ -475,8 +518,7 @@ async fn test_reconfig_with_committee_change_basic() {
         10000,
     )
     .unwrap();
-    let transaction =
-        to_sender_signed_transaction(candidate_tx_data, new_node_config.account_key_pair());
+    let transaction = to_sender_signed_transaction(candidate_tx_data, &new_validator_key);
     let effects = execute_transaction(&authorities, transaction)
         .await
         .unwrap();
@@ -554,16 +596,6 @@ async fn test_reconfig_with_committee_change_basic() {
         RegistryService::new(Registry::new()),
     )
     .await;
-    // We have to manually insert the genesis objects since the test utility doesn't.
-    handle
-        .with_async(|node| async {
-            node.state().insert_genesis_objects(&genesis_objects).await;
-            // When the node started, it's not part of the committee, and hence a fullnode.
-            assert!(node
-                .state()
-                .is_fullnode(&node.state().epoch_store_for_testing()));
-        })
-        .await;
     // Give the new validator enough time to catch up and sync.
     tokio::time::sleep(Duration::from_secs(30)).await;
     handle.with(|node| {
