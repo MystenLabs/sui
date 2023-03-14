@@ -19,7 +19,7 @@ The `[package]` section contains the following information:
 
 ### `published-at` property
 
-Package dependencies are required to specify a `published-at` field in `Move.toml` that specifies the published address of the dependency. For example, the Sui framework is published at address `0x2`, so its `Move.toml` file includes the `published-at` entry:
+Package dependencies in `Move.toml` must include a `published-at` field that specifies the published address of the dependency. For example, the Sui framework is published at address `0x2`, so its `Move.toml` file includes the `published-at` entry:
 
 ```toml
 published-at = "0x2"
