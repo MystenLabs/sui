@@ -21,6 +21,6 @@ export interface CountDownTimerProps extends VariantProps<typeof badgeStyle> {
     label: string;
 }
 
-export function Badge({ label, ...styles }: CountDownTimerProps) {
+export function BadgeUI({ label, ...styles }: CountDownTimerProps) {
     return <div className={badgeStyle(styles)}>{label}</div>;
 }
