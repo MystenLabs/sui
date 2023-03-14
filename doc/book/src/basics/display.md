@@ -12,7 +12,7 @@ There's no limitation to what fields can be set, all object properties can be ac
 
 ## Example
 
-For the Hero module below, the Display would vary based on the "name", "id" and "img_url" properties of the type "Hero". The template defined in the init function can be represented as:
+For the following Hero module, the Display would vary based on the "name", "id" and "img_url" properties of the type "Hero". The template defined in the init function can be represented as:
 
 ```json
 {
