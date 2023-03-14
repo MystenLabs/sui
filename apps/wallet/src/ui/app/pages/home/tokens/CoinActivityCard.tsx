@@ -7,12 +7,12 @@ import { useMemo } from 'react';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
-// import { getEventsSummary } from '_helpers';
-import { useAppSelector, useQueryTransactionsByAddress } from '_hooks';
+import { useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 export function CoinActivitiesCard({ coinType }: { coinType: string }) {
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useActiveAddress();
     const {
         data: txns,
         isLoading,

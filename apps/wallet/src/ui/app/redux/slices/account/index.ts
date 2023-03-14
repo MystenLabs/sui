@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -13,7 +14,6 @@ import {
     type SerializedAccount,
 } from '_src/background/keyring/Account';
 
-import type { SuiAddress } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
@@ -102,9 +102,6 @@ const accountSlice = createSlice({
     name: 'account',
     initialState,
     reducers: {
-        setAddress: (state, action: PayloadAction<string | null>) => {
-            state.address = action.payload;
-        },
         setKeyringStatus: (
             state,
             {
@@ -115,7 +112,7 @@ const accountSlice = createSlice({
         ) => {
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
-            state.address = payload.activeAddress || null; // is already normalized
+            state.address = payload.activeAddress; // is already normalized
             accountsAdapter.setAll(state, payload.accounts);
         },
     },
@@ -133,7 +130,7 @@ const accountSlice = createSlice({
             }),
 });
 
-export const { setAddress, setKeyringStatus } = accountSlice.actions;
+export const { setKeyringStatus } = accountSlice.actions;
 
 export const accountsAdapterSelectors = accountsAdapter.getSelectors(
     (state: RootState) => state.account
@@ -142,5 +139,16 @@ export const accountsAdapterSelectors = accountsAdapter.getSelectors(
 const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
 
-export const activeAccountSelector = ({ account }: RootState) =>
+export const activeAccountSelector = (state: RootState) => {
+    const {
+        account: { address },
+    } = state;
+
+    if (address) {
+        return accountsAdapterSelectors.selectById(state, address);
+    }
+    return null;
+};
+
+export const activeAddressSelector = ({ account }: RootState) =>
     account.address;
