@@ -686,34 +686,6 @@
       }
     },
     {
-      "name": "sui_getDelegatedStakes",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return all [DelegatedStake].",
-      "params": [
-        {
-          "name": "owner",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<DelegatedStake>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/DelegatedStake"
-          }
-        }
-      }
-    },
-    {
       "name": "sui_getDynamicFieldObject",
       "tags": [
         {
@@ -1261,6 +1233,34 @@
     },
     {
       "name": "sui_getStakes",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return all [DelegatedStake].",
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getStakesByIds",
       "tags": [
         {
           "name": "Governance Read API"

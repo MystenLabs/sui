@@ -525,11 +525,11 @@ impl GovernanceApi {
     }
 
     /// Return all [DelegatedStake].
-    pub async fn get_delegated_stakes(
+    pub async fn get_stakes(
         &self,
         owner: SuiAddress,
     ) -> SuiRpcResult<Vec<DelegatedStake>> {
-        Ok(self.api.http.get_delegated_stakes(owner).await?)
+        Ok(self.api.http.get_stakes(owner).await?)
     }
 
     /// Return the committee information for the asked `epoch`.

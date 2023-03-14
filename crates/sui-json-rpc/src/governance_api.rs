@@ -40,7 +40,7 @@ impl GovernanceReadApi {
             .await?)
     }
 
-    async fn get_stakes(&self, staked_sui_id: Vec<ObjectID>) -> Result<Vec<DelegatedStake>, Error> {
+    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> Result<Vec<DelegatedStake>, Error> {
         let stakes = futures::future::try_join_all(
             staked_sui_id
                 .iter()
@@ -51,19 +51,19 @@ impl GovernanceReadApi {
             return Ok(vec![]);
         }
 
-        self.get_delegated_stakes_internal(stakes).await
+        self.get_delegated_stakes(stakes).await
     }
 
-    async fn get_delegated_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
+    async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
         let stakes = self.get_staked_sui(owner).await?;
         if stakes.is_empty() {
             return Ok(vec![]);
         }
 
-        self.get_delegated_stakes_internal(stakes).await
+        self.get_delegated_stakes(stakes).await
     }
 
-    async fn get_delegated_stakes_internal(
+    async fn get_delegated_stakes(
         &self,
         stakes: Vec<StakedSui>,
     ) -> Result<Vec<DelegatedStake>, Error> {
@@ -167,12 +167,12 @@ impl GovernanceReadApi {
 
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApi {
-    async fn get_stakes(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>> {
-        Ok(self.get_stakes(staked_sui_id).await?)
+    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>> {
+        Ok(self.get_stakes_by_ids(staked_sui_id).await?)
     }
 
-    async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        Ok(self.get_delegated_stakes(owner).await?)
+    async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
+        Ok(self.get_stakes(owner).await?)
     }
 
     async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<SuiCommittee> {

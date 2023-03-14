@@ -734,7 +734,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     assert_eq!(5, objects.len());
 
     // Check StakedSui object before test
-    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert!(staked_sui.is_empty());
 
     let validator = http_client
@@ -770,7 +770,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         .await?;
 
     // Check DelegatedStake object
-    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
     assert_eq!(1000000, staked_sui[0].stakes[0].principal);
     assert!(matches!(
@@ -778,7 +778,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         StakeStatus::Pending
     ));
     let staked_sui_copy = http_client
-        .get_stakes(vec![staked_sui[0].stakes[0].staked_sui_id])
+        .get_stakes_by_ids(vec![staked_sui[0].stakes[0].staked_sui_id])
         .await?;
     assert_eq!(
         staked_sui[0].stakes[0].staked_sui_id,
@@ -800,7 +800,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
     let genesis_coin_amount = coins.data[0].balance;
 
     // Check StakedSui object before test
-    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert!(staked_sui.is_empty());
 
     let validator = http_client
@@ -839,7 +839,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .await?;
 
     // Check DelegatedStake object
-    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
     assert_eq!(1000000, staked_sui[0].stakes[0].principal);
     assert!(matches!(

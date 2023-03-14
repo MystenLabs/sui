@@ -65,7 +65,7 @@ async fn get_sub_account_balances(
         SubAccountType::DelegatedSui => {
             let delegations = client
                 .governance_api()
-                .get_delegated_stakes(address)
+                .get_stakes(address)
                 .await?;
             delegations
                 .into_iter()
@@ -81,7 +81,7 @@ async fn get_sub_account_balances(
         SubAccountType::PendingDelegation => {
             let delegations = client
                 .governance_api()
-                .get_delegated_stakes(address)
+                .get_stakes(address)
                 .await?;
             delegations
                 .into_iter()

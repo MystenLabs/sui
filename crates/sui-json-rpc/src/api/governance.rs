@@ -16,12 +16,12 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 #[rpc(server, client, namespace = "sui")]
 pub trait GovernanceReadApi {
     /// Return one or more [DelegatedStake]
-    #[method(name = "getStakes")]
-    async fn get_stakes(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>>;
+    #[method(name = "getStakesByIds")]
+    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>>;
 
     /// Return all [DelegatedStake].
-    #[method(name = "getDelegatedStakes")]
-    async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
+    #[method(name = "getStakes")]
+    async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
 
     /// Return the committee information for the asked `epoch`.
     #[method(name = "getCommitteeInfo")]
