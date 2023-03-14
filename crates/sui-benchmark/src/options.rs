@@ -82,12 +82,6 @@ pub struct Opts {
     /// Whether or no to download TXes during follow
     #[clap(long, global = true)]
     pub download_txes: bool,
-    /// Run in disjoint_mode when we don't want different workloads
-    /// to interfere with each other. This mode is useful when
-    /// we don't want backoff to penalize all workloads even if only
-    /// one (or some) is slow.
-    #[clap(long, parse(try_from_str), default_value = "true", global = true)]
-    pub disjoint_mode: bool,
     /// Number of transactions or duration to
     /// run the benchmark for. Default set to
     /// "unbounded" i.e. benchmark runs forever

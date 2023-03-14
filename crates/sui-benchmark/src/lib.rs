@@ -53,6 +53,7 @@ use sui_types::{
 use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
+pub mod bank;
 pub mod benchmark_setup;
 pub mod drivers;
 pub mod embedded_reconfig_observer;
