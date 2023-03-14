@@ -10,9 +10,7 @@ export function useGetTimeBeforeEpochNumber(epoch: number) {
     // Current epoch
     const currentEpoch = data.data?.epoch || 0;
     const currentEpochStartTime = data.data?.epochStartTimestampMs || 0;
-    // TODO: Get the period between epochs from system state
-    // setting to 0 until we get the period from system state
-    const epochPeriod = 0;
+    const epochPeriod = data.data?.epochDurationMs || 0;
     const timeBeforeSpecifiedEpoch =
         epoch > currentEpoch && epoch > 0 && epochPeriod > 0
             ? currentEpochStartTime + (epoch - currentEpoch) * epochPeriod

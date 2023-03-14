@@ -40,7 +40,7 @@ export function CountDownTimer({
 
     return (
         <div className={timeStyle(styles)}>
-            {label} {timeAgo}
+            {timeAgo === '< 1 sec' ? 'now' : `${label || ''} ${timeAgo}`}
         </div>
     );
 }

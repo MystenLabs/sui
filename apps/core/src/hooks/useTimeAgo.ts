@@ -77,8 +77,8 @@ export function useTimeAgo(
 ) {
     const [now, setNow] = useState(() => Date.now());
 
-    // end interval when the difference between now and timeFrom is less than or equal to 0
-    const endInterval = !(shouldEnd && now - (timeFrom || now) >= 0);
+    // end interval when the difference between now and timeFrom is less than or equal to 0    
+    const endInterval = (shouldEnd && (timeFrom || now) - now >= 1000);
     const intervalEnabled =
         !!timeFrom &&
         Math.abs(now - (timeFrom || now)) < ONE_HOUR &&
