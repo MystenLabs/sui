@@ -112,8 +112,7 @@ const accountSlice = createSlice({
         ) => {
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
-            // The addresses are already normalized at this point
-            state.address = payload.activeAddress;
+            state.address = payload.activeAddress; // is already normalized
             accountsAdapter.setAll(state, payload.accounts);
         },
     },
