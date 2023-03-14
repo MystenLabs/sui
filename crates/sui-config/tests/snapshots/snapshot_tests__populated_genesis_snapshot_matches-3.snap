@@ -286,8 +286,8 @@ validator_report_records:
 stake_subsidy:
   epoch_counter: 0
   balance:
-    value: 975000000000000000
-  current_epoch_amount: 1000000
+    value: 100000000000000000
+  current_epoch_amount: 1000000000000000
 safe_mode: false
 epoch_start_timestamp_ms: 10
 
