@@ -190,7 +190,7 @@ async fn check_gas(
         let cost_table = SuiCostTable::new(protocol_config);
         let storage_gas_price = protocol_config.storage_gas_price();
 
-        // TODO: We should revisit how we compute gas price and compare to gas budget.
+        // MUSTFIX: We should revisit how we compute gas price and compare to gas budget.
         let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
 
         let mut more_gas_objects = vec![];
