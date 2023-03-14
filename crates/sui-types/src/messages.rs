@@ -332,7 +332,13 @@ pub enum Command {
     /// the type tag must be specified.
     MakeMoveVec(Option<TypeTag>, Vec<Argument>),
     /// Upgrades a Move package
-    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, Argument),
+    /// Takes (in order):
+    /// 1. A vector of serialized modules for the package.
+    /// 2. A vector of object ids for the transitive dependencies of the new package.
+    /// 3. The object ID of the package being upgraded.
+    /// 4. An argument holding the `UpgradeTicket` that must have been produced from an earlier command in the same
+    ///    programmable transaction.
+    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
 }
 
 /// An argument to a programmable transaction command
@@ -451,9 +457,12 @@ impl Command {
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
-            Command::Upgrade(modules, _, _) | Command::Publish(modules) => {
-                Self::publish_command_input_objects(modules)
-            }
+            Command::Upgrade(_, deps, package_id, _) => deps
+                .iter()
+                .map(|id| InputObjectKind::MovePackage(*id))
+                .chain(Some(InputObjectKind::MovePackage(*package_id)))
+                .collect(),
+            Command::Publish(modules) => Self::publish_command_input_objects(modules),
             Command::MoveCall(c) => c.input_objects(),
             Command::MakeMoveVec(Some(t), _) => {
                 let mut packages = BTreeSet::new();
@@ -521,7 +530,7 @@ impl Command {
                 );
             }
             Command::SplitCoin(_, _) => (),
-            Command::Upgrade(modules, _, _) => {
+            Command::Upgrade(modules, _, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -687,9 +696,10 @@ impl Display for Command {
                 write!(f, ")")
             }
             Command::Publish(_bytes) => write!(f, "Publish(_)"),
-            Command::Upgrade(_bytes, deps, ticket) => {
+            Command::Upgrade(_bytes, deps, current_package_id, ticket) => {
                 write!(f, "Upgrade(_,")?;
                 write_sep(f, deps, ",")?;
+                write!(f, ", {current_package_id}")?;
                 write!(f, ", {ticket}")?;
                 write!(f, ")")
             }

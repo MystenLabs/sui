@@ -1105,7 +1105,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 async fn test_upgrade_module_is_feature_gated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 10000);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 100000);
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
 
@@ -1113,7 +1113,8 @@ async fn test_upgrade_module_is_feature_gated() {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Data doesn't matter here. We hit the feature flag before checking it.
         let arg = builder.pure(1).unwrap();
-        builder.upgrade(arg, vec![], vec![vec![]]);
+        let stdlib_pkg_id = ObjectID::from_hex_literal("0x1").unwrap();
+        builder.upgrade(stdlib_pkg_id, arg, vec![], vec![vec![]]);
         builder.finish()
     };
 
