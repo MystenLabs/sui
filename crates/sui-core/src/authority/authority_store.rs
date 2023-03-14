@@ -1169,10 +1169,11 @@ impl AuthorityStore {
     /// executed locally on the validator but didn't make to the last checkpoint.
     /// The effects of the execution is reverted here.
     /// The following things are reverted:
-    /// 1. Certificate and effects are deleted.
-    /// 2. Latest parent_sync entries for each mutated object are deleted.
-    /// 3. All new object states are deleted.
-    /// 4. owner_index table change is reverted.
+    /// 1. Latest parent_sync entries for each mutated object are deleted.
+    /// 2. All new object states are deleted.
+    /// 3. owner_index table change is reverted.
+    /// NOTE: certificate and effects are not deleted, in case this transaction
+    /// re-appears in a checkpoint for a later epoch.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
@@ -1184,8 +1185,6 @@ impl AuthorityStore {
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         write_batch = write_batch
-            .delete_batch(&self.perpetual_tables.transactions, iter::once(tx_digest))?
-            .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
             .delete_batch(
                 &self.perpetual_tables.executed_effects,
                 iter::once(tx_digest),
