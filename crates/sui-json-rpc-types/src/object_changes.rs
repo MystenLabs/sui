@@ -13,9 +13,10 @@ use sui_types::object::Owner;
 /// ObjectChange are derived from the object mutations in the TransactionEffect to provide richer object information.
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum ObjectChange {
     /// Module published
+    #[serde(rename_all = "camelCase")]
     Published {
         package_id: ObjectID,
         version: SequenceNumber,
@@ -23,6 +24,7 @@ pub enum ObjectChange {
         modules: Vec<String>,
     },
     /// Transfer objects to new address / wrap in another object
+    #[serde(rename_all = "camelCase")]
     Transferred {
         sender: SuiAddress,
         recipient: Owner,
@@ -34,6 +36,7 @@ pub enum ObjectChange {
         digest: ObjectDigest,
     },
     /// Object mutated.
+    #[serde(rename_all = "camelCase")]
     Mutated {
         sender: SuiAddress,
         owner: Owner,
@@ -45,6 +48,7 @@ pub enum ObjectChange {
         digest: ObjectDigest,
     },
     /// Delete object
+    #[serde(rename_all = "camelCase")]
     Deleted {
         sender: SuiAddress,
         #[schemars(with = "String")]
@@ -54,6 +58,7 @@ pub enum ObjectChange {
         version: SequenceNumber,
     },
     /// Wrapped object
+    #[serde(rename_all = "camelCase")]
     Wrapped {
         sender: SuiAddress,
         #[schemars(with = "String")]
@@ -63,6 +68,7 @@ pub enum ObjectChange {
         version: SequenceNumber,
     },
     /// New object creation
+    #[serde(rename_all = "camelCase")]
     Created {
         sender: SuiAddress,
         owner: Owner,
