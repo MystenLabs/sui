@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatDate } from '@mysten/core';
+
 import { Text } from '~/ui/Text';
-import { formatDate } from '~/utils/timeUtils';
 
 export interface DateCardProps {
     date: Date | number;

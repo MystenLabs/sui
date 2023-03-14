@@ -238,7 +238,7 @@ async fn test_dry_run_transaction() {
 
     let response = fullnode
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await
@@ -262,7 +262,7 @@ async fn test_dry_run_transaction() {
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
 
-    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = &transaction.data().intent_message().value;
     let txn_data = TransactionData::new_with_gas_coins(
         txn_data.kind().clone(),
         txn_data.sender(),
@@ -900,7 +900,7 @@ async fn test_dry_run_on_validator() {
     let transaction_digest = *transaction.digest();
     let response = validator
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await;
@@ -950,11 +950,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
-    bad_signature_transfer_transaction
+    *bad_signature_transfer_transaction
         .data_mut_for_testing()
-        .tx_signatures =
+        .tx_signatures_mut_for_testing() =
         vec![
-            Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into(),
+            Signature::new_secure(transfer_transaction.data().intent_message(), &unknown_key)
+                .into(),
         ];
 
     assert!(client
@@ -1240,8 +1241,8 @@ async fn test_handle_transfer_transaction_ok() {
     };
 
     assert_eq!(
-        envelope.data().intent_message.value,
-        transfer_transaction.data().intent_message.value
+        envelope.data().intent_message().value,
+        transfer_transaction.data().intent_message().value
     );
 }
 
@@ -2868,7 +2869,8 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+        let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(committee),
@@ -2878,7 +2880,7 @@ async fn test_authority_persist() {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            async_batch_verifier_metrics,
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -4953,7 +4955,7 @@ async fn test_tallying_rule_score_updates() {
     );
 
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-    let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+    let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
     let epoch_store = AuthorityPerEpochStore::new(
         auth_0_name,
         Arc::new(committee.clone()),
@@ -4963,7 +4965,7 @@ async fn test_tallying_rule_score_updates() {
         EpochStartConfiguration::new_for_testing(),
         store,
         cache_metrics,
-        verified_cert_cache_metrics,
+        async_batch_verifier_metrics,
     );
 
     let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {

@@ -397,7 +397,7 @@ impl ReadApiServer for ReadApi {
             if let (Some(effects), Some(input)) =
                 (&temp_response.effects, &temp_response.transaction)
             {
-                let sender = input.data().intent_message.value.sender();
+                let sender = input.data().intent_message().value.sender();
                 let object_changes = get_object_change_from_effect(&object_cache, sender, effects)
                     .await
                     .map_err(Error::SuiError)?;

@@ -933,6 +933,10 @@ impl PayloadAvailabilityResponse {
 pub struct WorkerSynchronizeMessage {
     pub digests: Vec<BatchDigest>,
     pub target: PublicKey,
+    // Used to indicate to the worker that it does not need to fully validate
+    // the batch it receives because it is part of a certificate. Only digest
+    // verification is required.
+    pub is_certified: bool,
 }
 
 /// Used by the primary to request that the worker delete the specified batches.

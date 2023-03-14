@@ -31,8 +31,10 @@ module sui::sui_system {
     #[test_only]
     friend sui::governance_test_utils;
 
-    const ACTIVE_VALIDATOR_ONLY: bool = true;
-    const ACTIVE_OR_PENDING_VALIDATOR: bool = false;
+    // same as in validator_set
+    const ACTIVE_VALIDATOR_ONLY: u8 = 1;
+    const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
+    const ANY_VALIDATOR: u8 = 3;
 
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:
@@ -285,12 +287,27 @@ module sui::sui_system {
 
         // Verify the represented address is an active or pending validator, and the capability is still valid.
         let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_OR_PENDING_VALIDATOR);
-        let validator = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap);
+        let validator = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap, false /* include_candidate */);
 
         validator::request_set_gas_price(validator, verified_cap, new_gas_price);
     }
 
-    /// A validator can call this entry function to set a new commission rate, updated at the end of the epoch.
+    /// This entry function is used to set new gas price for candidate validators
+    public entry fun set_candidate_validator_gas_price(
+        wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
+        new_gas_price: u64,
+    ) {
+        let self = load_system_state_mut(wrapper);
+
+        // Verify the represented address is an active or pending validator, and the capability is still valid.
+        let verified_cap = validator_set::verify_cap(&self.validators, cap, ANY_VALIDATOR);
+        let candidate = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap, true /* include_candidate */);
+        validator::set_candidate_gas_price(candidate, verified_cap, new_gas_price)
+    }
+
+    /// A validator can call this entry function to set a new commission rate, updated at the end of
+    /// the epoch.
     public entry fun request_set_commission_rate(
         wrapper: &mut SuiSystemState,
         new_commission_rate: u64,
@@ -302,6 +319,17 @@ module sui::sui_system {
             new_commission_rate,
             ctx
         )
+    }
+
+    /// This entry function is used to set new commission rate for candidate validators
+    public entry fun set_candidate_validator_commission_rate(
+        wrapper: &mut SuiSystemState,
+        new_commission_rate: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::set_candidate_commission_rate(candidate, new_commission_rate)
     }
 
     /// Add stake to a validator's staking pool.
@@ -424,7 +452,7 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
         validator::new_unverified_validator_operation_cap_and_transfer(validator, ctx);
     }
 
@@ -435,7 +463,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
         validator::update_name(validator, string::from_ascii(ascii::string(name)));
     }
 
@@ -446,7 +474,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
         validator::update_description(validator, string::from_ascii(ascii::string(description)));
     }
 
@@ -457,7 +485,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
         validator::update_image_url(validator, url::new_unsafe_from_bytes(image_url));
     }
 
@@ -468,7 +496,7 @@ module sui::sui_system {
         ctx: &TxContext,
     ) {
         let self = load_system_state_mut(self);
-        let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let validator = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
         validator::update_project_url(validator, url::new_unsafe_from_bytes(project_url));
     }
 
@@ -484,6 +512,17 @@ module sui::sui_system {
         validator::update_next_epoch_network_address(validator, network_address);
     }
 
+    /// Update candidate validator's network address.
+    public entry fun update_candidate_validator_network_address(
+        self: &mut SuiSystemState,
+        network_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_network_address(candidate, network_address);
+    }
+
     /// Update a validator's p2p address.
     /// The change will only take effects starting from the next epoch.
     public entry fun update_validator_next_epoch_p2p_address(
@@ -494,6 +533,17 @@ module sui::sui_system {
         let self = load_system_state_mut(self);
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_p2p_address(validator, p2p_address);
+    }
+
+    /// Update candidate validator's p2p address.
+    public entry fun update_candidate_validator_p2p_address(
+        self: &mut SuiSystemState,
+        p2p_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_p2p_address(candidate, p2p_address);
     }
 
     /// Update a validator's narwhal primary address.
@@ -508,6 +558,17 @@ module sui::sui_system {
         validator::update_next_epoch_primary_address(validator, primary_address);
     }
 
+    /// Update candidate validator's narwhal primary address.
+    public entry fun update_candidate_validator_primary_address(
+        self: &mut SuiSystemState,
+        primary_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_primary_address(candidate, primary_address);
+    }
+
     /// Update a validator's narwhal worker address.
     /// The change will only take effects starting from the next epoch.
     public entry fun update_validator_next_epoch_worker_address(
@@ -518,6 +579,17 @@ module sui::sui_system {
         let self = load_system_state_mut(self);
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_worker_address(validator, worker_address);
+    }
+
+    /// Update candidate validator's narwhal worker address.
+    public entry fun update_candidate_validator_worker_address(
+        self: &mut SuiSystemState,
+        worker_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_worker_address(candidate, worker_address);
     }
 
     /// Update a validator's public key of protocol key and proof of possession.
@@ -533,6 +605,18 @@ module sui::sui_system {
         validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
     }
 
+    /// Update candidate validator's public key of protocol key and proof of possession.
+    public entry fun update_candidate_validator_protocol_pubkey(
+        self: &mut SuiSystemState,
+        protocol_pubkey: vector<u8>,
+        proof_of_possession: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_protocol_pubkey(candidate, protocol_pubkey, proof_of_possession);
+    }
+
     /// Update a validator's public key of worker key.
     /// The change will only take effects starting from the next epoch.
     public entry fun update_validator_next_epoch_worker_pubkey(
@@ -545,6 +629,17 @@ module sui::sui_system {
         validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
     }
 
+    /// Update candidate validator's public key of worker key.
+    public entry fun update_candidate_validator_worker_pubkey(
+        self: &mut SuiSystemState,
+        worker_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_worker_pubkey(candidate, worker_pubkey);
+    }
+
     /// Update a validator's public key of network key.
     /// The change will only take effects starting from the next epoch.
     public entry fun update_validator_next_epoch_network_pubkey(
@@ -555,6 +650,17 @@ module sui::sui_system {
         let self = load_system_state_mut(self);
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_pubkey(validator, network_pubkey);
+    }
+
+    /// Update candidate validator's public key of network key.
+    public entry fun update_candidate_validator_network_pubkey(
+        self: &mut SuiSystemState,
+        network_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        validator::update_candidate_network_pubkey(candidate, network_pubkey);
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
@@ -823,6 +929,11 @@ module sui::sui_system {
         validator_set::get_pending_validator_ref(validators(self), validator_address)
     }
 
+    /// Return the currently candidate validator by address
+    public fun candidate_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_candidate_validator_ref(validators(self), validator_address)
+    }
+
     #[test_only]
     public fun set_epoch_for_testing(wrapper: &mut SuiSystemState, epoch_num: u64) {
         let self = load_system_state_mut(wrapper);
@@ -843,4 +954,52 @@ module sui::sui_system {
 
         validator_set::request_add_validator(&mut self.validators, min_joining_stake_for_testing, ctx);
     }
+
+    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
+    // candidate validator - bypassing the proof of possession check and other metadata validation
+    // in the process.
+    #[test_only]
+    public entry fun request_add_validator_candidate_for_testing(
+        wrapper: &mut SuiSystemState,
+        pubkey_bytes: vector<u8>,
+        network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
+        proof_of_possession: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        project_url: vector<u8>,
+        net_address: vector<u8>,
+        p2p_address: vector<u8>,
+        primary_address: vector<u8>,
+        worker_address: vector<u8>,
+        gas_price: u64,
+        commission_rate: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        let validator = validator::new_for_testing(
+            tx_context::sender(ctx),
+            pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            option::none(),
+            gas_price,
+            commission_rate,
+            false, // not an initial validator active at genesis
+            ctx
+        );
+
+        validator_set::request_add_validator_candidate(&mut self.validators, validator);
+    }
+
 }

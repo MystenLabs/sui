@@ -195,7 +195,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
 
     assert!(matches!(
         UserInputError::try_from(response.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget { .. }
+        UserInputError::GasBalanceTooLow { .. }
     ));
 
     Ok(())

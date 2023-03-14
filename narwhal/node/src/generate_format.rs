@@ -122,6 +122,7 @@ fn get_registry() -> Result<Registry> {
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
+        is_certified: true,
     };
 
     tracer.trace_value(&mut samples, &our_batch)?;
