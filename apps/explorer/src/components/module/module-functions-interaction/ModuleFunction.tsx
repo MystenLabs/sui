@@ -24,7 +24,7 @@ import type { TypeOf } from 'zod';
 
 import { useZodForm } from '~/hooks/useZodForm';
 import { Button } from '~/ui/Button';
-import { DisclosureBox } from '~/ui/DisclosureBox';
+import { Disclosure } from '~/ui/Disclosure';
 import { Input } from '~/ui/Input';
 
 const argsSchema = z.object({
@@ -107,7 +107,11 @@ export function ModuleFunction({
         isValidating || !isValid || isSubmitting || !isConnected;
 
     return (
-        <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
+        <Disclosure
+            variant="module"
+            defaultOpen={defaultOpen}
+            title={functionName}
+        >
             <form
                 onSubmit={handleSubmit((formData) =>
                     execute.mutateAsync(formData).catch(() => {
@@ -176,6 +180,6 @@ export function ModuleFunction({
                     />
                 ) : null}
             </form>
-        </DisclosureBox>
+        </Disclosure>
     );
 }

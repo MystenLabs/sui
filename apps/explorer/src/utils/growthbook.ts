@@ -39,4 +39,5 @@ export enum GROWTHBOOK_FEATURES {
     USE_TEST_NET_ENDPOINT = 'testnet-selection',
     VALIDATOR_PAGE_STAKING = 'validator-page-staking',
     EPOCHS_CHECKPOINTS = 'explorer-epochs-checkpoints',
+    MOCK_UI = 'explorer-mock-ui',
 }
