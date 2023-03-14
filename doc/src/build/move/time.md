@@ -6,7 +6,7 @@ You have options when needing to access network-based time for your transactions
 
 ## The `sui::clock::Clock` module
 
-To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address at `0x6`, no new instances can be created.
+To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address `0x6`, no new instances can be created.
 
 Extract a unix timestamp in milliseconds from an instance of `Clock` using
 
