@@ -15,7 +15,7 @@ use std::collections::VecDeque;
 pub const INVALID_VERIFYING_KEY: u64 = 0;
 pub const INVALID_CURVE: u64 = 1;
 
-// These must match the values in sui::groth16::Curve.
+// These must match the corresponding values in sui::groth16::Curve.
 pub const BLS12381: u8 = 0;
 pub const BN254: u8 = 1;
 
