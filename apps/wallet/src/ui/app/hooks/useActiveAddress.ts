@@ -5,5 +5,5 @@ import { activeAddressSelector } from '../redux/slices/account';
 import useAppSelector from './useAppSelector';
 
 export function useActiveAddress() {
-    return useAppSelector(activeAddressSelector) ?? null;
+    return useAppSelector(activeAddressSelector);
 }
