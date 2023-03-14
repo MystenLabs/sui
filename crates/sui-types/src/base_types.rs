@@ -967,6 +967,12 @@ impl ObjectID {
         }
         Ok(ret)
     }
+
+    /// Returns the full hex string with 0x prefix without removing trailing 0s. Prefer this
+    /// over [fn to_hex_literal] if the string needs to be fully preserved.
+    pub fn to_hex_uncompressed(&self) -> String {
+        format!("0x{:x}", self)
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, thiserror::Error)]
