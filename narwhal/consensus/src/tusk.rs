@@ -54,7 +54,7 @@ impl ConsensusProtocol for Tusk {
         // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r - 2;
-        if leader_round <= state.last_committed_round {
+        if leader_round <= state.last_round.committed_round {
             return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
@@ -95,9 +95,9 @@ impl ConsensusProtocol for Tusk {
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-            for x in utils::order_dag(self.gc_depth, leader, state) {
+            for x in utils::order_dag(leader, state) {
                 // Update and clean up internal state.
-                state.update(&x, self.gc_depth);
+                state.update(&x);
 
                 // Add the certificate to the sequence.
                 sequence.push(x);
@@ -203,7 +203,7 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee);
+        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();
@@ -248,7 +248,7 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics, &committee);
+        let mut state = ConsensusState::new(metrics, &committee, gc_depth);
         let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {

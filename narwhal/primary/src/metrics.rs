@@ -283,8 +283,6 @@ pub struct PrimaryMetrics {
     pub certificates_currently_suspended: IntGauge,
     /// count number of duplicate certificates that the node processed (others + own)
     pub duplicate_certificates_processed: IntCounter,
-    /// Latency to perform a garbage collection in core module
-    pub gc_core_latency: Histogram,
     /// The current Narwhal round in proposer
     pub current_round: IntGauge,
     /// The highest Narwhal round of certificates that have been accepted.
@@ -384,12 +382,6 @@ impl PrimaryMetrics {
             duplicate_certificates_processed: register_int_counter_with_registry!(
                 "duplicate_certificates_processed",
                 "Number of certificates that node processed (others + own)",
-                registry
-            )
-            .unwrap(),
-            gc_core_latency: register_histogram_with_registry!(
-                "gc_core_latency",
-                "Latency of a the garbage collection process for core module",
                 registry
             )
             .unwrap(),
