@@ -87,7 +87,10 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(600000)
+        .build()
+        .await?;
 
     let node = &test_cluster.fullnode_handle.sui_node;
 
