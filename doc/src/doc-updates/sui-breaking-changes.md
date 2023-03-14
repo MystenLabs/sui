@@ -8,6 +8,10 @@ To learn how to update your project to work with the changes introduced in relea
 
 New entries added 03/14/23.
 
+Added 03/14/23
+
+**[Major breaking change]** - Sui now calculates `SuiAddress` using the first 32 bytes of the Blake2b hash of `flag || pubkey` instead of the SHA3_256 hash. See [PR 9262](https://github.com/MystenLabs/sui/pull/9262) for more information.
+
 ---
 
 Added 03/13/23
