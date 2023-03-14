@@ -599,7 +599,6 @@ To produce a valid PoP, run [fn test_proof_of_possession].
         <a href="_none">option::none</a>(),
         gas_price,
         commission_rate,
-        <b>false</b>, // not an initial <a href="validator.md#0x2_validator">validator</a> active at <a href="genesis.md#0x2_genesis">genesis</a>
         ctx
     );
 

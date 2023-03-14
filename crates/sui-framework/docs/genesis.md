@@ -134,7 +134,8 @@ all the information we need in the system.
         <b>let</b> worker_address = *<a href="_borrow">vector::borrow</a>(&validator_worker_addresses, i);
         <b>let</b> gas_price = *<a href="_borrow">vector::borrow</a>(&validator_gas_prices, i);
         <b>let</b> commission_rate = *<a href="_borrow">vector::borrow</a>(&validator_commission_rates, i);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x2_validator_new">validator::new</a>(
+
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator.md#0x2_validator_new">validator::new</a>(
             sui_address,
             pubkey,
             network_pubkey,
@@ -153,9 +154,13 @@ all the information we need in the system.
             <a href="_some">option::some</a>(<a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, initial_validator_stake_mist)),
             gas_price,
             commission_rate,
-            <b>true</b>, // <a href="validator.md#0x2_validator">validator</a> is active right away
             ctx
-        ));
+        );
+
+        <a href="validator.md#0x2_validator_activate">validator::activate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, 0);
+
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x2_validator">validator</a>);
+
         i = i + 1;
     };
 
