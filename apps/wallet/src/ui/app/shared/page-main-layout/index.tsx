@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { type ReactNode } from 'react';
+import { createContext, type ReactNode, useState } from 'react';
 
 import { useAppSelector } from '../../hooks';
 import { AppType } from '../../redux/slices/app/AppType';
@@ -14,6 +14,8 @@ import { MenuButton, MenuContent } from '_components/menu';
 import Navigation from '_components/navigation';
 
 import st from './PageMainLayout.module.scss';
+
+export const PageMainLayoutContext = createContext<HTMLDivElement | null>(null);
 
 export type PageMainLayoutProps = {
     children: ReactNode | ReactNode[];
@@ -33,7 +35,8 @@ export default function PageMainLayout({
     const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
     const appType = useAppSelector((state) => state.app.appType);
     const isFullScreen = appType === AppType.fullscreen;
-
+    const [titlePortalContainer, setTitlePortalContainer] =
+        useState<HTMLDivElement | null>(null);
     return (
         <div
             className={cl(st.container, {
@@ -42,7 +45,13 @@ export default function PageMainLayout({
         >
             <Header
                 networkName={networkName}
-                middleContent={dappStatusEnabled ? <DappStatus /> : undefined}
+                middleContent={
+                    dappStatusEnabled ? (
+                        <DappStatus />
+                    ) : (
+                        <div ref={setTitlePortalContainer} />
+                    )
+                }
                 rightContent={topNavMenuEnabled ? <MenuButton /> : undefined}
             />
             <div
@@ -57,7 +66,11 @@ export default function PageMainLayout({
                         className
                     )}
                 >
-                    <ErrorBoundary>{children}</ErrorBoundary>
+                    <PageMainLayoutContext.Provider
+                        value={titlePortalContainer}
+                    >
+                        <ErrorBoundary>{children}</ErrorBoundary>
+                    </PageMainLayoutContext.Provider>
                 </main>
                 {bottomNavEnabled ? <Navigation /> : null}
                 {topNavMenuEnabled ? <MenuContent /> : null}
