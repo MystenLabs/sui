@@ -217,7 +217,7 @@ impl IndexerStore for InMemoryIndexerStore {
         Ok(0)
     }
 
-    fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<usize, IndexerError> {
+    fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         todo!()
     }
 
