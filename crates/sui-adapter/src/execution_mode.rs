@@ -102,7 +102,7 @@ impl ExecutionMode for Genesis {
     }
 
     fn allow_arbitrary_values() -> bool {
-        false
+        true
     }
 
     fn packages_are_predefined() -> bool {
