@@ -142,6 +142,8 @@ pub struct ProtocolConfig {
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
+    // NOTE: This value should be kept in sync with the corresponding value in
+    // sdk/typescript/src/builder/TransactionData.ts
     max_tx_size: Option<u64>,
 
     /// Maximum number of input objects.
@@ -721,7 +723,7 @@ impl ProtocolConfig {
                 // All flags are disabled in V1
                 feature_flags: Default::default(),
 
-                max_tx_size: Some(64 * 1024),
+                max_tx_size: Some(128 * 1024),
                 // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
                 max_input_objects: Some(2048),
                 max_serialized_tx_effects_size_bytes: Some(512 * 1024),

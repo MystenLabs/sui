@@ -5,7 +5,7 @@ expression: "ProtocolConfig::get_for_version(cur)"
 version: 1
 feature_flags:
   package_upgrades: false
-max_tx_size: 65536
+max_tx_size: 131072
 max_input_objects: 2048
 max_serialized_tx_effects_size_bytes: 524288
 max_serialized_tx_effects_size_bytes_system_tx: 8388608
@@ -71,3 +71,4 @@ copy_convert_to_address_cost_per_byte: 10
 event_value_size_derivation_cost_per_byte: 1000
 event_tag_size_derivation_cost_per_byte: 1000
 event_emit_cost_per_byte: 1000
+

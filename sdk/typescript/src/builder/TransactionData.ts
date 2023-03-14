@@ -70,7 +70,9 @@ function prepareSuiAddress(address: string) {
   return normalizeSuiAddress(address).replace('0x', '');
 }
 
-const TRANSACTION_DATA_MAX_SIZE = 64 * 1024;
+// NOTE: This value should be kept in sync with the corresponding value in
+// crates/sui-protocol-config/src/lib.rs
+const TRANSACTION_DATA_MAX_SIZE = 128 * 1024;
 
 export class TransactionDataBuilder {
   static fromBytes(bytes: Uint8Array) {
