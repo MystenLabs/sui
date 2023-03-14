@@ -10,7 +10,7 @@ New entries added 03/13/23.
 
 Added 03/13/23
 
-**[Major breaking change]** - This release replaces the `sui_getValidators` and `sui_getSuiSystemState` functions with a new `sui_getLatestSuiSystemState` function. The new function returns a flattened type that contains all information from the latest SuiSystemState  object on-chain with type `SuiSystemStateSummary`. It also contains a vector of type `SuiValidatorSummary` that summarizes information from each validator, including: metadata, staking pool, and other data. The release also adds a `p2p_address` to each validator’s metadata. The value for the field is the address the validator used for p2p activities, such as state sync.
+**[Major breaking change]** - This release replaces the `sui_getValidators` and `sui_getSuiSystemState` functions with a new `sui_getLatestSuiSystemState` function. The new function returns a flattened type that contains all information from the latest `SuiSystemState`  object on-chain with type `SuiSystemStateSummary`. It also contains a vector of type `SuiValidatorSummary` that summarizes information from each validator, including: metadata, staking pool, and other data. The release also adds a `p2p_address` to each validator’s metadata. The value for the field is the address the validator used for p2p activities, such as state sync.
 
 ---
 
