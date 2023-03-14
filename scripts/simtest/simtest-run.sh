@@ -7,7 +7,7 @@ NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=64 # We can increase this later if needed
 
 # filter out some tests that give spurious failures.
-TEST_FILTER="(not test(~cli_tests)"
+TEST_FILTER="(not test(~cli_tests))"
 
 DATE=$(date +%s)
 SEED="$DATE"
