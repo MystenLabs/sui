@@ -70,7 +70,7 @@ export function AccountsSettings() {
                         />
                     </>
                 ) : null}
-                {isLedgerIntegrationEnabled ? (
+                {
                     <>
                         <Button
                             variant="outline"
@@ -92,7 +92,7 @@ export function AccountsSettings() {
                             }}
                         />
                     </>
-                ) : null}
+                }
             </div>
         </MenuLayout>
     );

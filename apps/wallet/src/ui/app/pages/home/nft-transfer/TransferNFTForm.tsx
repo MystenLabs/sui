@@ -4,6 +4,7 @@
 import { ArrowRight16 } from '@mysten/icons';
 import {
     getTransactionDigest,
+    SignerWithProvider,
     SUI_TYPE_ARG,
     Transaction,
 } from '@mysten/sui.js';
@@ -41,18 +42,26 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const transferNFT = useMutation({
-        mutationFn: (to: string) => {
+        mutationFn: async (to: string) => {
             if (!to || !signer || isInsufficientGas) {
                 throw new Error('Missing data');
             }
             const tx = new Transaction();
             tx.setGasBudget(DEFAULT_NFT_TRANSFER_GAS_FEE);
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
-            return signer.signAndExecuteTransaction(tx, {
+
+            const transactionOptions = {
                 showInput: true,
                 showEffects: true,
                 showEvents: true,
-            });
+            };
+            if (signer instanceof SignerWithProvider) {
+                return signer.signAndExecuteTransaction(tx, transactionOptions);
+            }
+            return (await signer())?.signAndExecuteTransaction(
+                tx,
+                transactionOptions
+            );
         },
         onSuccess: (response) => {
             queryClient.invalidateQueries(['object', objectId]);

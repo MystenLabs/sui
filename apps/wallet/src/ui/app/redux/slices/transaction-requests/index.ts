@@ -57,8 +57,13 @@ export const respondToTransactionRequest = createAsyncThunk<
         let txResultError: string | undefined;
         if (approved) {
             const signer = api.getSignerInstance(
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
                 addressForTransaction,
-                background
+                background,
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
+                null
             );
             try {
                 if (txRequest.tx.type === 'sign-message') {

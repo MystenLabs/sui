@@ -19,6 +19,9 @@ import {
 } from './LedgerExceptions';
 
 import type Transport from '@ledgerhq/hw-transport';
+import { LedgerSigner } from '../../LedgerSigner';
+import { api } from '../../redux/store/thunk-extras';
+import { useAppSelector } from '../../hooks';
 
 type SuiLedgerClientProviderProps = {
     children: React.ReactNode;
@@ -26,43 +29,104 @@ type SuiLedgerClientProviderProps = {
 
 type SuiLedgerClientContextValue = [
     SuiLedgerClient | undefined,
-    () => Promise<SuiLedgerClient>
+    () => Promise<SuiLedgerClient>,
+    (derivationPath: string) => Promise<LedgerSigner>
 ];
 
 const SuiLedgerClientContext = createContext<
     SuiLedgerClientContextValue | undefined
 >(undefined);
 
+type LedgerSignerByDerivationPath = Map<string, LedgerSigner>;
+
 export function SuiLedgerClientProvider({
     children,
 }: SuiLedgerClientProviderProps) {
     const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
+    const network = useAppSelector(
+        ({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`
+    );
+    const [ledgerSignerMap, setLedgerSignerMap] =
+        useState<LedgerSignerByDerivationPath>(new Map());
 
     useEffect(() => {
         const onDisconnect = () => {
             setSuiLedgerClient(undefined);
+            console.log('disconnected');
+            setLedgerSignerMap(new Map());
         };
 
         suiLedgerClient?.transport.on('disconnect', onDisconnect);
         return () => suiLedgerClient?.transport.off('disconnect', onDisconnect);
     }, [suiLedgerClient?.transport]);
 
+    const getLedgerSignerInstance = useCallback(
+        async (derivationPath: string) => {
+            console.log('GETTING INSTACE', derivationPath);
+            const existingLedgerSigner = ledgerSignerMap.get(derivationPath);
+            if (existingLedgerSigner) {
+                console.log('INSTANCE FOUND');
+                return existingLedgerSigner;
+            }
+
+            let ledgerSigner: LedgerSigner;
+
+            if (!suiLedgerClient) {
+                try {
+                    const transport = await getLedgerTransport(false);
+                    const newClient = new SuiLedgerClient(transport);
+                    setSuiLedgerClient(newClient);
+
+                    ledgerSigner = new LedgerSigner(
+                        newClient,
+                        derivationPath,
+                        api.instance.fullNode
+                    );
+                } catch (e) {
+                    throw new Error('F');
+                }
+            } else {
+                ledgerSigner = new LedgerSigner(
+                    suiLedgerClient,
+                    derivationPath,
+                    api.instance.fullNode
+                );
+            }
+
+            setLedgerSignerMap((prevState) => {
+                const updatedMap = new Map(prevState);
+                updatedMap.set(derivationPath, ledgerSigner!);
+                return updatedMap;
+            });
+
+            console.log('returning signer');
+            return ledgerSigner;
+        },
+        [ledgerSignerMap, suiLedgerClient]
+    );
+
     const connectToLedger = useCallback(async () => {
+        console.log('ATTEMPTING TO CONNECT', suiLedgerClient);
         if (suiLedgerClient?.transport) {
             // If we've already connected to a Ledger device, we need
             // to close the connection before we try to re-connect
+            console.log(
+                'CLOSING ALREADY OPEN TRANSPORT',
+                suiLedgerClient.transport
+            );
             await suiLedgerClient.transport.close();
         }
 
-        const ledgerTransport = await getLedgerTransport();
+        const ledgerTransport = await getLedgerTransport(true);
         const ledgerClient = new SuiLedgerClient(ledgerTransport);
+        console.log('SETTING STATE', ledgerClient);
         setSuiLedgerClient(ledgerClient);
         return ledgerClient;
     }, [suiLedgerClient]);
 
     const contextValue: SuiLedgerClientContextValue = useMemo(
-        () => [suiLedgerClient, connectToLedger],
-        [connectToLedger, suiLedgerClient]
+        () => [suiLedgerClient, connectToLedger, getLedgerSignerInstance],
+        [connectToLedger, suiLedgerClient, getLedgerSignerInstance]
     );
 
     return (
@@ -82,12 +146,17 @@ export function useSuiLedgerClient() {
     return suiLedgerClientContext;
 }
 
-async function getLedgerTransport() {
+async function getLedgerTransport(requestPermissionsFirst: boolean) {
     let ledgerTransport: Transport | null | undefined;
 
     try {
-        ledgerTransport = await initiateLedgerConnection();
+        if (requestPermissionsFirst) {
+            ledgerTransport = await requestConnectToLedger();
+        } else {
+            ledgerTransport = await connectToLedger();
+        }
     } catch (error) {
+        console.log('ERROR', error);
         throw new LedgerConnectionFailedError(
             "Unable to connect to the user's Ledger device"
         );
@@ -102,11 +171,20 @@ async function getLedgerTransport() {
     return ledgerTransport;
 }
 
-async function initiateLedgerConnection(): Promise<Transport | null> {
+async function requestConnectToLedger(): Promise<Transport | null> {
     if (await TransportWebHID.isSupported()) {
         return await TransportWebHID.request();
     } else if (await TransportWebUSB.isSupported()) {
         return await TransportWebUSB.request();
+    }
+    return null;
+}
+
+async function connectToLedger(): Promise<Transport | null> {
+    if (await TransportWebHID.isSupported()) {
+        return await TransportWebHID.openConnected();
+    } else if (await TransportWebUSB.isSupported()) {
+        return await TransportWebUSB.openConnected();
     }
     return null;
 }

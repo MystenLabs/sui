@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    SignerWithProvider,
+    type SuiAddress,
+    type Transaction,
+} from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 import { useSigner } from '_hooks';
-
-import type { SuiAddress, Transaction } from '@mysten/sui.js';
 
 export function useTransactionDryRun(
     sender: SuiAddress,
@@ -15,7 +18,10 @@ export function useTransactionDryRun(
     const response = useQuery({
         queryKey: ['dryRunTransaction', transaction, sender],
         queryFn: async () => {
-            return signer!.dryRunTransaction(transaction);
+            if (signer instanceof SignerWithProvider) {
+                return signer.dryRunTransaction(transaction);
+            }
+            return (await signer())?.dryRunTransaction(transaction);
         },
         enabled: !!signer,
     });

@@ -57,29 +57,31 @@ function AppWrapper() {
         ({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`
     );
 
-    // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes
-    // so that the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look
-    // into making the API provider instance a reactive value and moving it out of the redux-thunk middleware
     return (
-        <Fragment key={network}>
-            <GrowthBookProvider growthbook={growthbook}>
-                <HashRouter>
-                    <IntlProvider locale={navigator.language}>
-                        <QueryClientProvider client={queryClient}>
-                            <RpcClientContext.Provider
-                                value={api.instance.fullNode}
-                            >
-                                <SuiLedgerClientProvider>
+        <GrowthBookProvider growthbook={growthbook}>
+            <HashRouter>
+                <IntlProvider locale={navigator.language}>
+                    <SuiLedgerClientProvider>
+                        {/*
+                         * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
+                         * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
+                         * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
+                         */}
+                        <Fragment key={network}>
+                            <QueryClientProvider client={queryClient}>
+                                <RpcClientContext.Provider
+                                    value={api.instance.fullNode}
+                                >
                                     <ErrorBoundary>
                                         <App />
                                     </ErrorBoundary>
-                                </SuiLedgerClientProvider>
-                            </RpcClientContext.Provider>
-                        </QueryClientProvider>
-                    </IntlProvider>
-                </HashRouter>
-            </GrowthBookProvider>
-        </Fragment>
+                                </RpcClientContext.Provider>
+                            </QueryClientProvider>
+                        </Fragment>
+                    </SuiLedgerClientProvider>
+                </IntlProvider>
+            </HashRouter>
+        </GrowthBookProvider>
     );
 }
 

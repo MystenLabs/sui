@@ -6,18 +6,16 @@ import {
     SUI_SYSTEM_STATE_OBJECT_ID,
     getObjectType,
     Transaction,
+    type ObjectId,
+    type SuiObjectData,
+    type SuiAddress,
+    type SuiMoveObject,
+    type SuiTransactionResponse,
+    SignerWithProvider,
+    type CoinStruct,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-
-import type {
-    ObjectId,
-    SuiObjectData,
-    SuiAddress,
-    SuiMoveObject,
-    SuiTransactionResponse,
-    SignerWithProvider,
-    CoinStruct,
-} from '@mysten/sui.js';
+import { type LedgerSigner } from '_src/ui/app/LedgerSigner';
 
 const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
@@ -88,7 +86,7 @@ export class Coin {
      * @param validator The sui address of the chosen validator
      */
     public static async stakeCoin(
-        signer: SignerWithProvider,
+        signer: SignerWithProvider | (() => Promise<LedgerSigner>),
         amount: bigint,
         validator: SuiAddress
     ): Promise<SuiTransactionResponse> {
@@ -111,11 +109,21 @@ export class Coin {
                     tx.pure(validator),
                 ],
             });
-            return await signer.signAndExecuteTransaction(tx, {
+
+            const transactionOptions = {
                 showInput: true,
                 showEffects: true,
                 showEvents: true,
-            });
+            };
+            if (signer instanceof SignerWithProvider) {
+                return await signer.signAndExecuteTransaction(
+                    tx,
+                    transactionOptions
+                );
+            }
+            return await (
+                await signer()
+            )?.signAndExecuteTransaction(tx, transactionOptions);
         } finally {
             span.finish();
             transaction.finish();
@@ -123,7 +131,7 @@ export class Coin {
     }
 
     public static async unStakeCoin(
-        signer: SignerWithProvider,
+        signer: SignerWithProvider | (() => Promise<LedgerSigner>),
         stake: ObjectId,
         stakedSuiId: ObjectId
     ): Promise<SuiTransactionResponse> {
@@ -139,11 +147,21 @@ export class Coin {
                     tx.object(stakedSuiId),
                 ],
             });
-            return await signer.signAndExecuteTransaction(tx, {
+
+            const transactionOptions = {
                 showInput: true,
                 showEffects: true,
                 showEvents: true,
-            });
+            };
+            if (signer instanceof SignerWithProvider) {
+                return await signer.signAndExecuteTransaction(
+                    tx,
+                    transactionOptions
+                );
+            }
+            return await (
+                await signer()
+            )?.signAndExecuteTransaction(tx, transactionOptions);
         } finally {
             transaction.finish();
         }

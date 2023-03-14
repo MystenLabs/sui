@@ -5,6 +5,7 @@ import { useCoinDecimals } from '@mysten/core';
 import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
+    SignerWithProvider,
     SUI_TYPE_ARG,
     Transaction,
 } from '@mysten/sui.js';
@@ -70,11 +71,21 @@ function TransferCoinPage() {
                             }))
                     );
 
-                    return signer.signAndExecuteTransaction(tx, {
+                    const transactionOptions = {
                         showInput: true,
                         showEffects: true,
                         showEvents: true,
-                    });
+                    };
+                    if (signer instanceof SignerWithProvider) {
+                        return signer.signAndExecuteTransaction(
+                            tx,
+                            transactionOptions
+                        );
+                    }
+                    return (await signer())?.signAndExecuteTransaction(
+                        tx,
+                        transactionOptions
+                    );
                 }
 
                 const bigIntAmount = parseAmount(formData.amount, coinDecimals);
@@ -103,11 +114,21 @@ function TransferCoinPage() {
                     tx.transferObjects([coin], tx.pure(formData.to));
                 }
 
-                return signer.signAndExecuteTransaction(tx, {
+                const transactionOptions = {
                     showInput: true,
                     showEffects: true,
                     showEvents: true,
-                });
+                };
+                if (signer instanceof SignerWithProvider) {
+                    return signer.signAndExecuteTransaction(
+                        tx,
+                        transactionOptions
+                    );
+                }
+                return (await signer())?.signAndExecuteTransaction(
+                    tx,
+                    transactionOptions
+                );
             } catch (error) {
                 transaction.setTag('failure', true);
                 throw error;

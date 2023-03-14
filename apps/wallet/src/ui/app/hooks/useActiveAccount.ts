@@ -5,5 +5,9 @@ import { activeAccountSelector } from '../redux/slices/account';
 import useAppSelector from './useAppSelector';
 
 export function useActiveAccount() {
+<<<<<<< HEAD
     return useAppSelector(activeAccountSelector);
+=======
+    return useAppSelector(activeAccountSelector) ?? null;
+>>>>>>> 081aa4f85 (work)
 }
