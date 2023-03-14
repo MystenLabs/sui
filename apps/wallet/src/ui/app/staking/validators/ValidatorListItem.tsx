@@ -53,10 +53,10 @@ export function ValidatorListItem({
                                 />
                             </div>
                             <div className="-ml-4 flex gap-1">
-                                {!newValidator && (
+                                {newValidator && (
                                     <BadgeUI label="New" variant="success" />
                                 )}
-                                {!atRisk && (
+                                {atRisk && (
                                     <BadgeUI
                                         label="At Risk"
                                         variant="warning"
