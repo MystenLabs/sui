@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use tracing::{debug, info};
 
+use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
@@ -13,6 +14,7 @@ use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
     SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -21,7 +23,6 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
-use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
@@ -113,6 +114,7 @@ pub async fn publish_package_with_wallet(
         .quorum_driver()
         .execute_transaction(
             transaction,
+            SuiTransactionResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -120,6 +122,7 @@ pub async fn publish_package_with_wallet(
 
     assert!(resp.confirmed_local_execution.unwrap());
     resp.effects
+        .unwrap()
         .created()
         .iter()
         .find(|obj_ref| obj_ref.owner == Owner::Immutable)
@@ -171,6 +174,7 @@ pub async fn submit_move_transaction(
         .quorum_driver()
         .execute_transaction(
             tx,
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -201,6 +205,7 @@ pub async fn publish_basics_package_and_make_counter(
 
     let counter_ref = response
         .effects
+        .unwrap()
         .created()
         .iter()
         .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
@@ -289,7 +294,7 @@ pub async fn transfer_sui(
     .await?;
 
     let digest = if let SuiClientCommandResult::TransferSui(response) = res {
-        *response.effects.transaction_digest()
+        response.digest
     } else {
         panic!("transfer command did not return WalletCommandResult::TransferSui");
     };
@@ -334,11 +339,17 @@ pub async fn transfer_coin(
     .await?;
 
     let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, response) = res {
+        let gas_used = response.effects.as_ref().unwrap().gas_used();
         (
-            *response.effects.transaction_digest(),
-            response.transaction.data.gas_data().payment.clone(),
-            response.effects.gas_used().computation_cost + response.effects.gas_used().storage_cost
-                - response.effects.gas_used().storage_rebate,
+            response.digest,
+            response
+                .transaction
+                .unwrap()
+                .data
+                .gas_data()
+                .payment
+                .clone(),
+            gas_used.computation_cost + gas_used.storage_cost - gas_used.storage_rebate,
         )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
@@ -384,7 +395,8 @@ pub async fn delete_devnet_nft(
         gas,
         vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
         MAX_GAS,
-    );
+    )
+    .unwrap();
 
     let signature = context
         .config
@@ -400,6 +412,7 @@ pub async fn delete_devnet_nft(
         .quorum_driver()
         .execute_transaction(
             tx,
+            SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

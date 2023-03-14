@@ -8,7 +8,10 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_types::{DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
+};
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -30,31 +33,12 @@ impl WriteApiServer for WriteApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
-        signature: Base64,
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse> {
-        self.submit_transaction(tx_bytes, vec![signature], request_type)
-            .await
-    }
-
-    async fn execute_transaction_serialized_sig(
-        &self,
-        tx_bytes: Base64,
-        signature: Base64,
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse> {
-        self.execute_transaction(tx_bytes, signature, request_type)
-            .await
-    }
-
-    async fn submit_transaction(
-        &self,
-        tx_bytes: Base64,
         signatures: Vec<Base64>,
-        request_type: ExecuteTransactionRequestType,
+        options: Option<SuiTransactionResponseOptions>,
+        request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionResponse> {
         self.fullnode
-            .submit_transaction(tx_bytes, signatures, request_type)
+            .execute_transaction(tx_bytes, signatures, options, request_type)
             .await
     }
 

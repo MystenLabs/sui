@@ -9,6 +9,7 @@ use crate::{
 };
 use bincode::Options;
 use config::{Committee, Parameters, WorkerId};
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{
@@ -80,7 +81,8 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -203,7 +205,8 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -309,7 +312,8 @@ async fn test_request_vote_send_missing_parents() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -363,7 +367,7 @@ async fn test_request_vote_send_missing_parents() {
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     // Write some certificates from round 2 into the store, and leave out the rest to test
@@ -452,7 +456,8 @@ async fn test_request_vote_accept_missing_parents() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -507,7 +512,7 @@ async fn test_request_vote_accept_missing_parents() {
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     // Populate all round 1 certificates and some round 2 certificates into the storage.
@@ -587,7 +592,8 @@ async fn test_request_vote_missing_batches() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -626,7 +632,7 @@ async fn test_request_vote_missing_batches() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -643,7 +649,7 @@ async fn test_request_vote_missing_batches() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let test_digests: HashSet<_> = test_header
         .payload
@@ -711,7 +717,8 @@ async fn test_request_vote_already_voted() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -750,7 +757,7 @@ async fn test_request_vote_already_voted() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -786,7 +793,7 @@ async fn test_request_vote_already_voted() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -829,7 +836,7 @@ async fn test_request_vote_already_voted() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -868,7 +875,8 @@ async fn test_fetch_certificates_handler() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1035,7 +1043,8 @@ async fn test_process_payload_availability_success() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1076,7 +1085,7 @@ async fn test_process_payload_availability_success() {
         let header = author
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1185,7 +1194,8 @@ async fn test_process_payload_availability_when_failures() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1224,7 +1234,7 @@ async fn test_process_payload_availability_when_failures() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1283,7 +1293,8 @@ async fn test_request_vote_created_at_in_future() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1322,7 +1333,7 @@ async fn test_request_vote_created_at_in_future() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1363,7 +1374,7 @@ async fn test_request_vote_created_at_in_future() {
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
@@ -1393,7 +1404,7 @@ async fn test_request_vote_created_at_in_future() {
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {

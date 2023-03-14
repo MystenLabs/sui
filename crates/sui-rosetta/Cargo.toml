@@ -44,6 +44,7 @@ sui-storage = { path = "../sui-storage" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 chrono = "0.4.23"
+shared-crypto = { path = "../shared-crypto" }
 
 move-core-types.workspace = true
 

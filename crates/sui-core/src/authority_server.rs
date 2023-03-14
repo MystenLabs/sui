@@ -255,7 +255,7 @@ impl ValidatorService {
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         let max_tx_size = epoch_store.protocol_config().max_tx_size();
         fp_ensure!(
-            tx_size <= max_tx_size,
+            tx_size as u64 <= max_tx_size,
             tonic::Status::resource_exhausted(format!(
                 "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size}"
             ))
@@ -314,7 +314,7 @@ impl ValidatorService {
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             let events = if let Some(digest) = signed_effects.events_digest() {
-                state.get_transaction_events(*digest).await?
+                state.get_transaction_events(digest)?
             } else {
                 TransactionEvents::default()
             };
@@ -340,7 +340,7 @@ impl ValidatorService {
         for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
             certificate
                 .data()
-                .intent_message
+                .intent_message()
                 .value
                 .kind()
                 .input_objects()
@@ -361,16 +361,16 @@ impl ValidatorService {
         }
         // code block within reconfiguration lock
         let certificate = {
+            let certificate = {
+                let _timer = metrics.cert_verification_latency.start_timer();
+                epoch_store.batch_verifier.verify_cert(certificate).await?
+            };
+
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
                 metrics.num_rejected_cert_in_epoch_boundary.inc();
                 return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
             }
-
-            let certificate = {
-                let _timer = metrics.cert_verification_latency.start_timer();
-                certificate.verify(epoch_store.committee())?
-            };
 
             // 3) All certificates are sent to consensus (at least by some authorities)
             // For shared objects this will wait until either timeout or we have heard back from consensus.
@@ -408,7 +408,7 @@ impl ValidatorService {
         match res {
             Ok(effects) => {
                 let events = if let Some(event_digest) = effects.events_digest() {
-                    state.get_transaction_events(*event_digest).await?
+                    state.get_transaction_events(event_digest)?
                 } else {
                     TransactionEvents::default()
                 };
@@ -495,10 +495,10 @@ impl Validator for ValidatorService {
         &self,
         _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemStateInnerBenchmark>, tonic::Status> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let response = epoch_store
-            .system_state_object()
-            .clone()
+        let response = self
+            .state
+            .database
+            .get_sui_system_state_object()?
             .into_benchmark_version();
 
         return Ok(tonic::Response::new(response));

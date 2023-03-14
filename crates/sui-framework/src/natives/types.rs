@@ -14,26 +14,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub fn is_one_time_witness(
-    context: &mut NativeContext,
-    mut ty_args: Vec<Type>,
-    args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
-
-    // unwrap safe because the interface of native function guarantees it.
-    let ty = ty_args.pop().unwrap();
-    let type_tag = context.type_to_type_tag(&ty)?;
-    let type_layout = context.type_to_type_layout(&ty)?;
-
-    // TODO: what should the cost of this be?
-    let cost = legacy_length_cost();
-    let struct_layout = match type_layout {
-        Some(MoveTypeLayout::Struct(l)) => l,
-        _ => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
-
+pub(crate) fn is_otw_struct(struct_layout: &MoveStructLayout, type_tag: &TypeTag) -> bool {
     let has_one_bool_field = match struct_layout {
         MoveStructLayout::Runtime(vec) => matches!(vec.as_slice(), [MoveTypeLayout::Bool]),
         MoveStructLayout::WithFields(vec) => matches!(
@@ -57,10 +38,31 @@ pub fn is_one_time_witness(
     // properties of a one-time witness type are checked in the one_time_witness_verifier pass in
     // the Sui bytecode verifier (a type with this name and with a single bool field that does not
     // have all the remaining properties of a one-time witness type will cause a verifier error).
-    Ok(NativeResult::ok(
-        cost,
-        smallvec![Value::bool(
-            matches!(type_tag, TypeTag::Struct(struct_tag) if has_one_bool_field && struct_tag.name.to_string() == struct_tag.module.to_string().to_ascii_uppercase())
-        )],
-    ))
+    matches!(
+        type_tag,
+        TypeTag::Struct(struct_tag) if has_one_bool_field && struct_tag.name.to_string() == struct_tag.module.to_string().to_ascii_uppercase())
+}
+
+pub fn is_one_time_witness(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    // unwrap safe because the interface of native function guarantees it.
+    let ty = ty_args.pop().unwrap();
+    let type_tag = context.type_to_type_tag(&ty)?;
+    let type_layout = context.type_to_type_layout(&ty)?;
+
+    // TODO: what should the cost of this be?
+    let cost = legacy_length_cost();
+    let Some(MoveTypeLayout::Struct(struct_layout)) = type_layout else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]))
+    };
+
+    let is_otw = is_otw_struct(&struct_layout, &type_tag);
+
+    Ok(NativeResult::ok(cost, smallvec![Value::bool(is_otw)]))
 }

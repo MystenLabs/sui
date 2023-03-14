@@ -74,7 +74,7 @@ async fn test_successful_blocks_delete() {
             .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0, 0)
             .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -247,7 +247,7 @@ async fn test_failed_blocks_delete() {
             .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0, 0)
             .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);

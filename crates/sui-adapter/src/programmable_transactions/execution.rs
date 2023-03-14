@@ -12,27 +12,29 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
-    value::{MoveStructLayout, MoveTypeLayout},
+    language_storage::{ModuleId, TypeTag},
 };
 use move_vm_runtime::{
     move_vm::MoveVM,
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
+use serde::de::DeserializeSeed;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    balance::Balance,
-    base_types::{ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    base_types::{
+        MoveObjectType, ObjectID, SuiAddress, TxContext, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
+    },
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     event::Event,
     gas::SuiGasStatus,
     id::UID,
     messages::{
-        Argument, Command, CommandArgumentError, EntryArgumentErrorKind, ProgrammableMoveCall,
-        ProgrammableTransaction,
+        Argument, Command, CommandArgumentError, ProgrammableMoveCall, ProgrammableTransaction,
     },
+    move_package::UpgradeCap,
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
@@ -43,21 +45,19 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::adapter::{
-    convert_type_argument_error, generate_package_id, validate_primitive_arg_string,
-};
+use crate::{adapter::generate_package_id, execution_mode::ExecutionMode};
 
 use super::{context::*, types::*};
 
-pub fn execute<E: fmt::Debug, S: StorageView<E>>(
+pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     vm: &MoveVM,
     state_view: &mut S,
     tx_context: &mut TxContext,
     gas_status: &mut SuiGasStatus,
-    gas_coin: ObjectID,
+    gas_coin: Option<ObjectID>,
     pt: ProgrammableTransaction,
-) -> Result<(), ExecutionError> {
+) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
     let mut context = ExecutionContext::new(
         protocol_config,
@@ -69,17 +69,19 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>>(
         inputs,
     )?;
     // execute commands
+    let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
-        execute_command(&mut context, command).map_err(|e| e.with_command_index(idx))?;
+        execute_command::<_, _, Mode>(&mut context, &mut mode_results, command)
+            .map_err(|e| e.with_command_index(idx))?
     }
     // apply changes
     let ExecutionResults {
         object_changes,
         user_events,
-    } = context.finish()?;
+    } = context.finish::<Mode>()?;
     state_view.apply_object_changes(object_changes);
     for (module_id, tag, contents) in user_events {
-        state_view.log_event(Event::move_event(
+        state_view.log_event(Event::new(
             module_id.address(),
             module_id.name(),
             tx_context.sender(),
@@ -87,14 +89,16 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>>(
             contents,
         ))
     }
-    Ok(())
+    Ok(mode_results)
 }
 
 /// Execute a single command
-fn execute_command<E: fmt::Debug, S: StorageView<E>>(
+fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    mode_results: &mut Mode::ExecutionResults,
     command: Command,
 ) -> Result<(), ExecutionError> {
+    let mut argument_updates = Mode::empty_arguments();
     let results = match command {
         Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
             let Some(tag) = tag_opt else {
@@ -102,22 +106,25 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
-            let ty = context
+            let elem_ty = context
                 .session
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
+            let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
                 .session
                 .get_type_abilities(&ty)
                 .map_err(|e| context.convert_vm_error(e))?;
-            let type_ = RawValueType::Loaded {
-                ty,
-                abilities,
-                used_in_non_entry_move_call: false,
-            };
             // BCS layout for any empty vector should be the same
             let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
-            vec![Value::Raw(type_, bytes)]
+            vec![Value::Raw(
+                RawValueType::Loaded {
+                    ty,
+                    abilities,
+                    used_in_non_entry_move_call: false,
+                },
+                bytes,
+            )]
         }
         Command::MakeMoveVec(tag_opt, args) => {
             let mut res = vec![];
@@ -132,8 +139,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                     let obj: ObjectValue =
                         context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                     obj.write_bcs_bytes(&mut res);
-                    let tag = TypeTag::Struct(Box::new(obj.type_.clone()));
-                    (obj.used_in_non_entry_move_call, tag)
+                    (obj.used_in_non_entry_move_call, obj.into_type().into())
                 }
             };
             let elem_ty = context
@@ -142,7 +148,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                 .map_err(|e| context.convert_vm_error(e))?;
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                check_param_type(context, idx, &value, &elem_ty)?;
+                check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                 value.write_bcs_bytes(&mut res);
@@ -187,9 +193,9 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
             };
             let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
             let new_coin_id = context.fresh_id()?;
-            let new_coin = coin.split_coin(amount, UID::new(new_coin_id))?;
+            let new_coin = coin.split(amount, UID::new(new_coin_id))?;
             let coin_type = obj.type_.clone();
-            context.restore_arg(coin_arg, Value::Object(obj))?;
+            context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
             vec![Value::Object(ObjectValue::coin(coin_type, new_coin)?)]
         }
         Command::MergeCoins(target_arg, coin_args) => {
@@ -226,15 +232,13 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                     );
                 };
                 context.delete_id(*id.object_id())?;
-                let Some(new_value) = target_coin.balance.value().checked_add(balance.value())
-                else {
-                    return Err(ExecutionError::from_kind(
-                        ExecutionErrorKind::TotalCoinBalanceOverflow,
-                    ));
-                };
-                target_coin.balance = Balance::new(new_value);
+                target_coin.add(balance)?;
             }
-            context.restore_arg(target_arg, Value::Object(target))?;
+            context.restore_arg::<Mode>(
+                &mut argument_updates,
+                target_arg,
+                Value::Object(target),
+            )?;
             vec![]
         }
         Command::MoveCall(move_call) => {
@@ -246,8 +250,9 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
                 arguments,
             } = *move_call;
             let module_id = ModuleId::new(package.into(), module);
-            execute_move_call(
+            execute_move_call::<_, _, Mode>(
                 context,
+                &mut argument_updates,
                 &module_id,
                 &function,
                 type_arguments,
@@ -256,17 +261,28 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>>(
             )?
         }
         Command::Publish(modules) => {
-            execute_move_publish(context, modules)?;
-            vec![]
+            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
+        }
+        Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
+            execute_move_upgrade::<_, _, Mode>(
+                context,
+                modules,
+                dep_ids,
+                current_package_id,
+                upgrade_ticket,
+            )?
         }
     };
+
+    Mode::finish_command(context, mode_results, argument_updates, &results)?;
     context.push_command_results(results)?;
     Ok(())
 }
 
 /// Execute a single Move call
-fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
+fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    argument_updates: &mut Mode::ArgumentUpdates,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: Vec<TypeTag>,
@@ -280,10 +296,16 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         return_value_kinds,
         index,
         last_instr,
-    } = check_visibility_and_signature(context, module_id, function, &type_arguments, is_init)?;
+    } = check_visibility_and_signature::<_, _, Mode>(
+        context,
+        module_id,
+        function,
+        &type_arguments,
+        is_init,
+    )?;
     // build the arguments, storing meta data about by-mut-ref args
     let (tx_context_kind, by_mut_ref, serialized_arguments) =
-        build_move_args(context, module_id, function, kind, &signature, &arguments)?;
+        build_move_args::<_, _, Mode>(context, module_id, function, kind, &signature, &arguments)?;
     // invoke the VM
     let SerializedReturnValues {
         mutable_reference_outputs,
@@ -309,7 +331,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>>(
         let arg_idx = i1 as usize;
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
         let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
-        context.restore_arg(arguments[arg_idx], value)?;
+        context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
     }
 
     context.take_user_events(module_id, index, last_instr)?;
@@ -355,16 +377,21 @@ fn make_value(
     })
 }
 
-/// Publish Move modules and call the init functions
-fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
+/// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
+/// published package on success.
+fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
-) -> Result<(), ExecutionError> {
+) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
         "empty package is checked in transaction input checker"
     );
-    let modules = publish_and_verify_modules(context, module_bytes)?;
+    context
+        .gas_status
+        .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
+    let modules = publish_and_verify_modules::<_, _, Mode>(context, module_bytes)?;
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
@@ -379,10 +406,11 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
         })
         .collect::<Vec<_>>();
 
-    context.new_package(modules)?;
+    let package_id = context.new_package(modules)?;
     for module_id in &modules_to_init {
-        let return_values = execute_move_call(
+        let return_values = execute_move_call::<_, _, Mode>(
             context,
+            argument_updates,
             module_id,
             INIT_FN_NAME,
             vec![],
@@ -394,7 +422,36 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>>(
             "init should not have return values"
         )
     }
-    Ok(())
+
+    let values = if Mode::packages_are_predefined() {
+        // no upgrade cap for genesis modules
+        vec![]
+    } else {
+        vec![Value::Object(ObjectValue::new(
+            UpgradeCap::type_().into(),
+            /* has_public_transfer */ true,
+            /* used_in_non_entry_move_call */ false,
+            &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
+        )?)]
+    };
+    Ok(values)
+}
+
+/// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
+fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<E, S>,
+    _module_bytes: Vec<Vec<u8>>,
+    _dep_ids: Vec<ObjectID>,
+    _current_package_id: ObjectID,
+    _upgrade_ticket_arg: Argument,
+) -> Result<Vec<Value>, ExecutionError> {
+    // Check that package upgrades are supported.
+    context
+        .protocol_config
+        .check_package_upgrades_supported()
+        .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
+
+    invariant_violation!("Package upgrades are turned off. We should NEVER get here.")
 }
 
 /***************************************************************************************************
@@ -445,7 +502,7 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
 /// - Deserializes the modules
 /// - Publishes them into the VM, which invokes the Move verifier
 /// - Run the Sui Verifier
-fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
+fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     module_bytes: Vec<Vec<u8>>,
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
@@ -458,14 +515,20 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;
 
-    if modules.is_empty() {
-        return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
-    }
+    assert_invariant!(
+        !modules.is_empty(),
+        "input checker ensures package is not empty"
+    );
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
     // cannot interact
-    let package_id = generate_package_id(&mut modules, context.tx_context)?;
+    let package_id = if Mode::packages_are_predefined() {
+        // do not calculate package id for genesis modules
+        (*modules[0].self_id().address()).into()
+    } else {
+        generate_package_id(&mut modules, context.tx_context)?
+    };
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -511,7 +574,7 @@ enum FunctionKind {
 /// Used to remember type information about a type when resolving the signature
 enum ValueKind {
     Object {
-        type_: StructTag,
+        type_: MoveObjectType,
         has_public_transfer: bool,
     },
     Raw(Type, AbilitySet),
@@ -534,7 +597,7 @@ struct LoadedFunctionInfo {
 /// - an entry function
 /// - a public function that does not return references
 /// - module init (only internal usage)
-fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
+fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &IdentStr,
@@ -545,7 +608,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
         context
             .session
             .load_type(ty)
-            .map_err(|e| convert_type_argument_error(idx, e, context.vm, context.state_view))?;
+            .map_err(|e| context.convert_type_argument_error(idx, e))?;
     }
     if from_init {
         // the session is weird and does not load the module on publishing. This is a temporary
@@ -580,7 +643,6 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
         .as_ref()
         .map(|code| code.code.len() - 1)
         .unwrap_or(0) as CodeOffset;
-    // TODO dev inspect
     let function_kind = match (fdef.visibility, fdef.is_entry) {
         (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
         (Visibility::Public, true) => FunctionKind::PublicEntry,
@@ -591,6 +653,11 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
                 "module init specified non-init function"
             );
             FunctionKind::Init
+        }
+        (Visibility::Private | Visibility::Friend, false)
+            if Mode::allow_arbitrary_function_calls() =>
+        {
+            FunctionKind::NonEntry
         }
         (Visibility::Private | Visibility::Friend, false) => {
             return Err(ExecutionError::new_with_source(
@@ -613,7 +680,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>>(
             vec![]
         }
         FunctionKind::NonEntry => {
-            check_non_entry_signature(context, module_id, function, &signature)?
+            check_non_entry_signature::<_, _, Mode>(context, module_id, function, &signature)?
         }
     };
     check_private_generics(context, module_id, function, &signature.type_arguments)?;
@@ -654,7 +721,7 @@ fn subst_signature(
 
 /// Checks that the non-entry function does not return references. And marks the return values
 /// as object or non-object return values
-fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
+fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     _module_id: &ModuleId,
     _function: &IdentStr,
@@ -665,10 +732,19 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
         .iter()
         .enumerate()
         .map(|(idx, return_type)| {
-            if let Type::Reference(_) | Type::MutableReference(_) = return_type {
-                return Err(ExecutionError::from_kind(
-                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                ));
+            let return_type = match return_type {
+                // for dev-inspect, just dereference the value
+                Type::Reference(inner) | Type::MutableReference(inner)
+                    if Mode::allow_arbitrary_values() =>
+                {
+                    inner
+                }
+                Type::Reference(_) | Type::MutableReference(_) => {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                    ))
+                }
+                t => t,
             };
             let abilities = context
                 .session
@@ -686,7 +762,7 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>>(
                         invariant_violation!("Struct type make a non struct type tag")
                     };
                     ValueKind::Object {
-                        type_: *struct_tag,
+                        type_: MoveObjectType::from(*struct_tag),
                         has_public_transfer: abilities.has_store(),
                     }
                 }
@@ -750,7 +826,7 @@ type ArgInfo = (
 
 /// Serializes the arguments into BCS values for Move. Performs the necessary type checking for
 /// each value
-fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
+fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &IdentStr,
@@ -771,9 +847,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
     let has_tx_context = tx_ctx_kind != TxContextKind::None;
     let num_args = args.len() + (has_one_time_witness as usize) + (has_tx_context as usize);
     if num_args != parameters.len() {
-        let idx = std::cmp::min(parameters.len(), num_args) as LocalIndex;
         return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::ArityMismatch),
+            ExecutionErrorKind::ArityMismatch,
             format!(
                 "Expected {:?} argument{} calling function '{}', but found {:?}",
                 parameters.len(),
@@ -841,7 +916,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
                 idx,
             ));
         }
-        check_param_type(context, idx, &value, non_ref_param_ty)?;
+        check_param_type::<_, _, Mode>(context, idx, &value, non_ref_param_ty)?;
         let bytes = {
             let mut v = vec![];
             value.write_bcs_bytes(&mut v);
@@ -850,13 +925,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
         // Any means this was just some bytes passed in as an argument (as opposed to being
         // generated from a Move function). Meaning we will need to run validation
         if matches!(value, Value::Raw(RawValueType::Any, _)) {
-            if let Some((string_struct, string_struct_layout)) = is_string_arg(context, param_ty)? {
-                validate_primitive_arg_string(
-                    &bytes,
-                    idx as LocalIndex,
-                    string_struct,
-                    string_struct_layout,
-                )?;
+            if let Some(layout) = additional_validation_layout(context, param_ty)? {
+                special_argument_validate(&bytes, idx as u16, layout)?;
             }
         }
         serialized_args.push(bytes);
@@ -865,7 +935,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>>(
 }
 
 /// checks that the value is compatible with the specified type
-fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
+fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     idx: usize,
     value: &Value,
@@ -873,7 +943,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
 ) -> Result<(), ExecutionError> {
     let obj_ty;
     let ty = match value {
-        // TODO dev inspect
+        Value::Raw(_, _) if Mode::allow_arbitrary_values() => return Ok(()),
         Value::Raw(RawValueType::Any, _) => {
             if !is_entry_primitive_type(context, param_ty)? {
                 let msg = format!(
@@ -893,13 +963,16 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
             }
         }
         Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
-            assert_invariant!(!abilities.has_key(), "Raw value should never be an object");
+            assert_invariant!(
+                Mode::allow_arbitrary_values() || !abilities.has_key(),
+                "Raw value should never be an object"
+            );
             ty
         }
         Value::Object(obj) => {
             obj_ty = context
                 .session
-                .load_type(&TypeTag::Struct(Box::new(obj.type_.clone())))
+                .load_type(&obj.type_.clone().into())
                 .map_err(|e| context.convert_vm_error(e))?;
             &obj_ty
         }
@@ -914,37 +987,15 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>>(
     }
 }
 
-/// If the type is a string, returns the name of the string type and the layout
-/// Otherwise, returns None
-fn is_string_arg<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
-    param_ty: &Type,
-) -> Result<Option<StringInfo>, ExecutionError> {
-    let Type::Struct(idx) = param_ty else { return Ok(None) };
-    let Some(s) = context.session.get_struct_type(*idx) else {
-        invariant_violation!("Loaded struct not found")
-    };
-    let resolved_struct = get_struct_ident(&s);
-    let string_name = if resolved_struct == RESOLVED_ASCII_STR {
-        RESOLVED_ASCII_STR
-    } else if resolved_struct == RESOLVED_UTF8_STR {
-        RESOLVED_UTF8_STR
-    } else {
-        return Ok(None);
-    };
-    let layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(
-        Box::new(MoveTypeLayout::U8),
-    )]));
-    Ok(Some((string_name, layout)))
-}
-type StringInfo = (
+fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let module_id = &s.module;
+    let struct_name = &s.name;
     (
-        &'static AccountAddress,
-        &'static IdentStr,
-        &'static IdentStr,
-    ),
-    MoveTypeLayout,
-);
+        module_id.address(),
+        module_id.name(),
+        struct_name.as_ident_str(),
+    )
+}
 
 // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
 // a MutableReference, and Immutable otherwise.
@@ -1024,12 +1075,179 @@ fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
     Ok(true)
 }
 
-fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
+/***************************************************************************************************
+ * Special serialization formats
+ **************************************************************************************************/
+
+/// Special enum for values that need additional validation, in other words
+/// There is validation to do on top of the BCS layout. Currently only needed for
+/// strings
+pub enum SpecialArgumentLayout {
+    /// An option
+    Option(Box<SpecialArgumentLayout>),
+    /// A vector
+    Vector(Box<SpecialArgumentLayout>),
+    /// An ASCII encoded string
+    Ascii,
+    /// A UTF8 encoded string
+    UTF8,
+}
+
+/// If the type is a string, returns the name of the string type and the layout
+/// Otherwise, returns None
+fn additional_validation_layout<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    param_ty: &Type,
+) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
+    match param_ty {
+        Type::Bool
+        | Type::U8
+        | Type::U16
+        | Type::U32
+        | Type::U64
+        | Type::U128
+        | Type::U256
+        | Type::Address
+        | Type::Signer
+        | Type::Reference(_)
+        | Type::MutableReference(_)
+        | Type::TyParam(_) => Ok(None),
+        Type::StructInstantiation(idx, targs) => {
+            let Some(s) = context.session.get_struct_type(*idx) else {
+                invariant_violation!("Loaded struct not found")
+            };
+            let resolved_struct = get_struct_ident(&s);
+            // is option of a string
+            if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
+                let info_opt = additional_validation_layout(context, &targs[0])?;
+                Ok(info_opt.map(|layout| SpecialArgumentLayout::Option(Box::new(layout))))
+            } else {
+                Ok(None)
+            }
+        }
+        Type::Vector(inner) => {
+            let info_opt = additional_validation_layout(context, inner)?;
+            Ok(info_opt.map(|layout| SpecialArgumentLayout::Vector(Box::new(layout))))
+        }
+        Type::Struct(idx) => {
+            let Some(s) = context.session.get_struct_type(*idx) else {
+                invariant_violation!("Loaded struct not found")
+            };
+            let resolved_struct = get_struct_ident(&s);
+            let layout = if resolved_struct == RESOLVED_ASCII_STR {
+                Some(SpecialArgumentLayout::Ascii)
+            } else if resolved_struct == RESOLVED_UTF8_STR {
+                Some(SpecialArgumentLayout::UTF8)
+            } else {
+                None
+            };
+            Ok(layout)
+        }
+    }
+}
+
+/// Checks the bytes against the `SpecialArgumentLayout` using `bcs`. It does not actually generate
+/// the deserialized value, only walks the bytes
+pub fn special_argument_validate(
+    bytes: &[u8],
+    idx: u16,
+    layout: SpecialArgumentLayout,
+) -> Result<(), ExecutionError> {
+    bcs::from_bytes_seed(&layout, bytes).map_err(|_| {
+        ExecutionError::new_with_source(
+            ExecutionErrorKind::command_argument_error(CommandArgumentError::TypeMismatch, idx),
+            format!("Function expects {layout} but provided argument's value does not match",),
+        )
+    })
+}
+
+impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
+    type Value = ();
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        use serde::de::Error;
+        match self {
+            SpecialArgumentLayout::Ascii => {
+                let s: &str = serde::Deserialize::deserialize(deserializer)?;
+                if !s.is_ascii() {
+                    Err(D::Error::custom("not an ascii string"))
+                } else {
+                    Ok(())
+                }
+            }
+            SpecialArgumentLayout::UTF8 => {
+                deserializer.deserialize_string(serde::de::IgnoredAny)?;
+                Ok(())
+            }
+            SpecialArgumentLayout::Option(layout) => {
+                deserializer.deserialize_option(OptionElementVisitor(layout))
+            }
+            SpecialArgumentLayout::Vector(layout) => {
+                deserializer.deserialize_seq(VectorElementVisitor(layout))
+            }
+        }
+    }
+}
+
+struct VectorElementVisitor<'a>(&'a SpecialArgumentLayout);
+
+impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Vector")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'d>,
+    {
+        while seq.next_element_seed(self.0)?.is_some() {}
+        Ok(())
+    }
+}
+
+struct OptionElementVisitor<'a>(&'a SpecialArgumentLayout);
+
+impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Option")
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(())
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        self.0.deserialize(deserializer)
+    }
+}
+
+impl fmt::Display for SpecialArgumentLayout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SpecialArgumentLayout::Vector(inner) => {
+                write!(f, "vector<{inner}>")
+            }
+            SpecialArgumentLayout::Option(inner) => {
+                write!(f, "std::option::Option<{inner}>")
+            }
+            SpecialArgumentLayout::Ascii => {
+                write!(f, "std::{}::{}", RESOLVED_ASCII_STR.1, RESOLVED_ASCII_STR.2)
+            }
+            SpecialArgumentLayout::UTF8 => {
+                write!(f, "std::{}::{}", RESOLVED_UTF8_STR.1, RESOLVED_UTF8_STR.2)
+            }
+        }
+    }
 }

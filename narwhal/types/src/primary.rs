@@ -8,7 +8,10 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
-use crypto::{AggregateSignature, PublicKey, Signature};
+use crypto::{
+    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
+    NarwhalAuthoritySignature, PublicKey, Signature,
+};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
@@ -29,10 +32,6 @@ use std::{
     fmt,
 };
 use tracing::warn;
-
-#[cfg(test)]
-#[path = "./tests/primary_type_tests.rs"]
-mod primary_type_tests;
 
 /// The round number.
 pub type Round = u64;
@@ -154,6 +153,8 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
 #[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
+    // Primary that created the header. Must be the same primary that broadcasted the header.
+    // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
@@ -163,14 +164,10 @@ pub struct Header {
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
-    pub signature: Signature,
 }
 
 impl HeaderBuilder {
-    pub fn build<F>(self, signer: &F) -> Result<Header, fastcrypto::error::FastCryptoError>
-    where
-        F: Signer<Signature>,
-    {
+    pub fn build(self) -> Result<Header, fastcrypto::error::FastCryptoError> {
         let h = Header {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
@@ -179,14 +176,10 @@ impl HeaderBuilder {
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
-            signature: Signature::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
 
-        Ok(Header {
-            signature: signer.sign(Digest::from(Hash::digest(&h)).as_ref()),
-            ..h
-        })
+        Ok(h)
     }
 
     // helper method to set directly values to the payload
@@ -214,7 +207,6 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let header = Self {
             author,
@@ -224,22 +216,17 @@ impl Header {
             payload,
             parents,
             digest: OnceCell::default(),
-            signature: Signature::default(),
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
-        let signature = signature_service.request_signature(digest.into()).await;
-        Self {
-            signature,
-            ..header
-        }
+        header
     }
 
     pub fn digest(&self) -> HeaderDigest {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
-    pub fn verify(&self, committee: &Committee, worker_cache: WorkerCache) -> DagResult<()> {
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -269,11 +256,7 @@ impl Header {
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
-        // Check the signature.
-        let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        self.author
-            .verify(digest.as_ref(), &self.signature)
-            .map_err(|_| DagError::InvalidSignature)
+        Ok(())
     }
 }
 
@@ -287,7 +270,6 @@ impl Default for Header {
             payload: IndexMap::default(),
             parents: BTreeSet::default(),
             digest: OnceCell::default(),
-            signature: Signature::default(),
         }
     }
 }
@@ -335,18 +317,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
 
     fn digest(&self) -> HeaderDigest {
         let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(&self.author);
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(self.created_at.to_le_bytes());
-        for (x, (y, z)) in self.payload.iter() {
-            hasher.update(Digest::from(*x));
-            hasher.update(y.to_le_bytes());
-            hasher.update(z.to_le_bytes());
-        }
-        for x in self.parents.iter() {
-            hasher.update(Digest::from(*x))
-        }
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
         HeaderDigest(hasher.finalize().into())
     }
 }
@@ -399,7 +370,7 @@ impl Vote {
     pub async fn new(
         header: &Header,
         author: &PublicKey,
-        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     ) -> Self {
         let vote = Self {
             header_digest: header.digest(),
@@ -429,7 +400,7 @@ impl Vote {
         };
 
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = vote.digest().into();
-        let signature = signer.sign(vote_digest.as_ref());
+        let signature = Signature::new_secure(&to_intent_message(vote_digest), signer);
 
         Self { signature, ..vote }
     }
@@ -452,8 +423,8 @@ impl Vote {
 
         // Check the signature.
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
-        self.author
-            .verify(vote_digest.as_ref(), &self.signature)
+        self.signature
+            .verify_secure(&to_intent_message(vote_digest), &self.author)
             .map_err(|_| DagError::InvalidSignature)
     }
 }
@@ -465,6 +436,18 @@ pub struct VoteDigest([u8; crypto::DIGEST_LENGTH]);
 impl From<VoteDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: VoteDigest) -> Self {
         Digest::new(hd.0)
+    }
+}
+
+impl From<VoteDigest> for Digest<{ crypto::INTENT_MESSAGE_LENGTH }> {
+    fn from(digest: VoteDigest) -> Self {
+        let intent_message = to_intent_message(HeaderDigest(digest.0));
+        Digest {
+            digest: bcs::to_bytes(&intent_message)
+                .expect("Serialization message should not fail")
+                .try_into()
+                .expect("INTENT_MESSAGE_LENGTH is correct"),
+        }
     }
 }
 
@@ -657,9 +640,9 @@ impl Certificate {
         (weight, pks)
     }
 
-    /// Verifies the validaity of the certificate.
+    /// Verifies the validity of the certificate.
     /// TODO: Output a different type, similar to Sui VerifiedCertificate.
-    pub fn verify(&self, committee: &Committee, worker_cache: WorkerCache) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -674,8 +657,8 @@ impl Certificate {
             return Ok(());
         }
 
-        // Check the embedded header.
-        self.header.verify(committee, worker_cache)?;
+        // Save signature verifications when the header is invalid.
+        self.header.validate(committee, worker_cache)?;
 
         let (weight, pks) = self.signed_by(committee);
 
@@ -687,7 +670,7 @@ impl Certificate {
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
-            .verify(&pks[..], certificate_digest.as_ref())
+            .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
 
         Ok(())
@@ -950,6 +933,10 @@ impl PayloadAvailabilityResponse {
 pub struct WorkerSynchronizeMessage {
     pub digests: Vec<BatchDigest>,
     pub target: PublicKey,
+    // Used to indicate to the worker that it does not need to fully validate
+    // the batch it receives because it is part of a certificate. Only digest
+    // verification is required.
+    pub is_certified: bool,
 }
 
 /// Used by the primary to request that the worker delete the specified batches.

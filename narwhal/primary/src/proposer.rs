@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
-use crypto::{PublicKey, Signature};
-use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
+use crypto::PublicKey;
+use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
@@ -45,8 +45,6 @@ pub struct Proposer {
     name: PublicKey,
     /// The committee information.
     committee: Committee,
-    /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// The threshold number of batches that can trigger
     /// a header creation. When there are available at least
     /// `header_num_of_batches_threshold` batches we are ok
@@ -104,7 +102,6 @@ impl Proposer {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
@@ -126,7 +123,6 @@ impl Proposer {
                 Self {
                     name,
                     committee,
-                    signature_service,
                     header_num_of_batches_threshold,
                     max_header_num_of_batches,
                     max_header_delay,
@@ -228,7 +224,6 @@ impl Proposer {
                 .map(|(digest, worker_id, created_at)| (*digest, (*worker_id, *created_at)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
-            &self.signature_service,
         )
         .await;
 

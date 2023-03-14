@@ -29,7 +29,7 @@ use sui_protocol_config::ProtocolConfig;
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
-    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac, tbls},
+    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     event::EventEmitCostParams,
 };
 
@@ -192,16 +192,6 @@ pub fn all_natives(
             make_native!(object::record_new_uid),
         ),
         (
-            "randomness",
-            "native_tbls_verify_signature",
-            make_native!(tbls::tbls_verify_signature),
-        ),
-        (
-            "randomness",
-            "native_tbls_sign",
-            make_native!(tbls::tbls_sign),
-        ),
-        (
             "test_scenario",
             "take_from_address_by_id",
             make_native!(test_scenario::take_from_address_by_id),
@@ -287,6 +277,11 @@ pub fn all_natives(
             make_native!(validator::validate_metadata_bcs),
         ),
         ("test_utils", "destroy", make_native!(test_utils::destroy)),
+        (
+            "test_utils",
+            "create_one_time_witness",
+            make_native!(test_utils::create_one_time_witness),
+        ),
     ];
     sui_natives
         .iter()

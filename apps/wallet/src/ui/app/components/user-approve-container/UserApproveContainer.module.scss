@@ -15,6 +15,10 @@
     display: flex;
     flex-flow: column;
     gap: 15px;
+
+    &.scrollable {
+        overflow-y: auto;
+    }
 }
 
 .children {
@@ -22,6 +26,11 @@
     display: flex;
     flex-flow: column;
     gap: 15px;
+
+    &.scrollable {
+        overflow-y: hidden;
+        min-height: 150px;
+    }
 }
 
 .origin-container {

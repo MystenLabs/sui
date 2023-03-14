@@ -174,6 +174,7 @@ module fungible_tokens::treasury_lock_tests {
     use sui::transfer;
     use sui::coin;
     use sui::object::{Self};
+    use sui::test_utils;
     use fungible_tokens::treasury_lock::{Self, TreasuryLock, LockAdminCap, MintCap, create_and_transfer_mint_cap, new_lock, mint_balance};
 
     const ADMIN: address = @0xABBA;
@@ -189,7 +190,8 @@ module fungible_tokens::treasury_lock_tests {
         // create a currency and lock it
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let (treasury, metadata) = coin::create_currency(TREASURY_LOCK_TESTS {}, 0, b"", b"", b"", option::none(), test_scenario::ctx(scenario));
+            let treasury_lock_tests = test_utils::create_one_time_witness<TREASURY_LOCK_TESTS>();
+            let (treasury, metadata) = coin::create_currency(treasury_lock_tests, 0, b"", b"", b"", option::none(), test_scenario::ctx(scenario));
             transfer::freeze_object(metadata);
             let admin_cap = new_lock(treasury, test_scenario::ctx(scenario));
             transfer::transfer(

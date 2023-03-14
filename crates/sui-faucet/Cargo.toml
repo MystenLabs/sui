@@ -39,6 +39,7 @@ mysten-metrics = { path = "../../crates/mysten-metrics" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
+shared-crypto = { path = "../shared-crypto" }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

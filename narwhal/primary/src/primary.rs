@@ -27,6 +27,7 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Committee, Parameters, WorkerCache, WorkerId, WorkerInfo};
+use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{
@@ -110,7 +111,7 @@ impl Primary {
         vote_digest_store: Store<PublicKey, VoteInfo>,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-        rx_consensus_round_updates: watch::Receiver<Round>,
+        rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
@@ -334,6 +335,13 @@ impl Primary {
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
+            // Increase send and receive buffer sizes on the primary, since the primary also
+            // needs to fetch payloads.
+            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
+            quic_config.stream_receive_window = Some(100 << 20);
+            quic_config.receive_window = Some(200 << 20);
+            quic_config.send_window = Some(200 << 20);
+            quic_config.crypto_buffer_size = Some(1 << 20);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
@@ -459,9 +467,7 @@ impl Primary {
             header_store.clone(),
             certificate_store.clone(),
             synchronizer.clone(),
-            signature_service.clone(),
-            rx_consensus_round_updates.clone(),
-            parameters.gc_depth,
+            signature_service,
             tx_shutdown.subscribe(),
             rx_headers,
             node_metrics.clone(),
@@ -476,7 +482,6 @@ impl Primary {
             network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
-            parameters.gc_depth,
             tx_shutdown.subscribe(),
             rx_certificate_fetcher,
             synchronizer.clone(),
@@ -488,7 +493,6 @@ impl Primary {
         let proposer_handle = Proposer::spawn(
             name.clone(),
             committee.clone(),
-            signature_service,
             proposer_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
@@ -644,7 +648,7 @@ struct PrimaryReceiverHandler {
     worker_cache: WorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+    signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -692,7 +696,7 @@ impl PrimaryReceiverHandler {
 
         let header = &request.body().header;
         let committee = self.committee.clone();
-        header.verify(&committee, self.worker_cache.clone())?;
+        header.validate(&committee, &self.worker_cache)?;
 
         // Vote request must come from the Header's author.
         let peer_id = request
@@ -774,6 +778,9 @@ impl PrimaryReceiverHandler {
         }
 
         // Ensure we have the parents. If any are missing, the requester should provide them on retry.
+        // This check is necessary for correctness, because it is possible that the list of missing
+        // parents in the request is incomplete, or wait_notifications get notified on shut down
+        // without actually having the parents available.
         let (parents, missing) = self.synchronizer.get_parents(header)?;
         if !missing.is_empty() {
             return Ok(RequestVoteResponse {
@@ -814,7 +821,7 @@ impl PrimaryReceiverHandler {
 
         // Synchronize all batches referenced in the header.
         self.synchronizer
-            .sync_batches(header, network, /* max_age */ 0)
+            .sync_header_batches(header, network, /* max_age */ 0)
             .await?;
 
         // Check that the time of the header is smaller than the current time. If not but the difference is
@@ -1012,10 +1019,12 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         );
 
         let mut fetch_queue = BinaryHeap::new();
+        const MAX_SKIP_ROUNDS: usize = 1000;
         for (origin, rounds) in &skip_rounds {
-            if rounds.len() > 50 {
+            if rounds.len() > MAX_SKIP_ROUNDS {
                 warn!(
-                    "{} rounds are available locally for origin {}. elapsed = {}ms",
+                    "Peer has sent {} rounds to skip on origin {}, indicating peer's problem with \
+                    committing or keeping track of GC rounds. elapsed = {}ms",
                     rounds.len(),
                     origin,
                     time_start.elapsed().as_millis(),

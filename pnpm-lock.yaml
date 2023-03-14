@@ -62,8 +62,8 @@ importers:
       '@floating-ui/react': ^0.18.0
       '@fontsource/inter': ^4.5.14
       '@fontsource/red-hat-mono': ^4.5.11
-      '@growthbook/growthbook': ^0.21.2
-      '@growthbook/growthbook-react': ^0.11.2
+      '@growthbook/growthbook': ^0.23.0
+      '@growthbook/growthbook-react': ^0.12.0
       '@headlessui/react': ^1.7.7
       '@hookform/resolvers': ^2.9.10
       '@mysten/core': workspace:*
@@ -104,6 +104,7 @@ importers:
       eslint-config-react-app: ^7.0.1
       eslint-plugin-header: ^3.1.1
       framer-motion: ^8.1.9
+      happy-dom: ^8.1.2
       onchange: ^7.1.0
       plausible-tracker: ^0.3.8
       playwright: ^1.29.1
@@ -134,8 +135,8 @@ importers:
       '@floating-ui/react': 0.18.0_ib3m5ricvtkl2cll7qpr2f6lvq
       '@fontsource/inter': 4.5.14
       '@fontsource/red-hat-mono': 4.5.11
-      '@growthbook/growthbook': 0.21.2
-      '@growthbook/growthbook-react': 0.11.2_react@18.2.0
+      '@growthbook/growthbook': 0.23.0
+      '@growthbook/growthbook-react': 0.12.0_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
       '@hookform/resolvers': 2.9.10_react-hook-form@7.42.1
       '@mysten/core': link:../core
@@ -191,6 +192,7 @@ importers:
       eslint-config-prettier: 8.6.0_eslint@8.31.0
       eslint-config-react-app: 7.0.1_iukboom6ndih5an6iafl45j2fe
       eslint-plugin-header: 3.1.1_eslint@8.31.0
+      happy-dom: 8.1.2
       onchange: 7.1.0
       playwright: 1.29.1
       postcss: 8.4.21
@@ -203,7 +205,7 @@ importers:
       typescript: 4.9.4
       vite: 4.0.4_@types+node@18.11.18
       vite-plugin-svgr: 2.4.0_vite@4.0.4
-      vitest: 0.26.3_@vitest+ui@0.26.3
+      vitest: 0.26.3_nnc6v4qssw4u2mary2z2vuz4tu
 
   apps/icons:
     specifiers:
@@ -231,9 +233,14 @@ importers:
       '@growthbook/growthbook': ^0.20.1
       '@growthbook/growthbook-react': ^0.10.1
       '@headlessui/react': ^1.7.7
+      '@ledgerhq/errors': ^6.12.3
+      '@ledgerhq/hw-transport': ^6.27.11
+      '@ledgerhq/hw-transport-webhid': ^6.27.11
+      '@ledgerhq/hw-transport-webusb': ^6.27.11
       '@metamask/browser-passworder': ^4.0.2
       '@mysten/core': workspace:*
       '@mysten/icons': workspace:*
+      '@mysten/ledgerjs-hw-app-sui': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-standard': workspace:*
       '@noble/hashes': ^1.1.5
@@ -341,9 +348,14 @@ importers:
       '@growthbook/growthbook': 0.20.1
       '@growthbook/growthbook-react': 0.10.1_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
+      '@ledgerhq/errors': 6.12.3
+      '@ledgerhq/hw-transport': 6.28.1
+      '@ledgerhq/hw-transport-webhid': 6.27.12
+      '@ledgerhq/hw-transport-webusb': 6.27.12
       '@metamask/browser-passworder': 4.0.2
       '@mysten/core': link:../core
       '@mysten/icons': link:../icons
+      '@mysten/ledgerjs-hw-app-sui': link:../../sdk/ledgerjs-hw-app-sui
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-standard': link:../../sdk/wallet-adapter/wallet-standard
       '@noble/hashes': 1.1.5
@@ -505,8 +517,8 @@ importers:
       '@scure/bip39': ^1.1.1
       '@size-limit/preset-small-lib': ^8.2.4
       '@suchipi/femver': ^1.0.0
+      '@types/tmp': ^0.2.3
       cross-env: ^7.0.3
-      cross-fetch: ^3.1.5
       eslint: ^8.35.0
       eslint-config-prettier: ^8.6.0
       eslint-config-react-app: ^7.0.1
@@ -537,7 +549,6 @@ importers:
       '@scure/bip32': 1.1.5
       '@scure/bip39': 1.1.1
       '@suchipi/femver': 1.0.0
-      cross-fetch: 3.1.5
       jayson: 4.0.0
       js-sha3: 0.8.0
       rpc-websockets: 7.5.1
@@ -545,6 +556,7 @@ importers:
       tweetnacl: 1.0.3
     devDependencies:
       '@size-limit/preset-small-lib': 8.2.4_size-limit@8.2.4
+      '@types/tmp': 0.2.3
       cross-env: 7.0.3
       eslint: 8.35.0
       eslint-config-prettier: 8.6.0_eslint@8.35.0
@@ -625,6 +637,7 @@ importers:
 
   sdk/wallet-adapter/example:
     specifiers:
+      '@mysten/sui.js': workspace:*
       '@mysten/wallet-kit': workspace:*
       '@testing-library/jest-dom': ^5.16.4
       '@testing-library/react': ^13.4.0
@@ -638,6 +651,7 @@ importers:
       typescript: ^4.9.4
       vite: ^4.0.4
     dependencies:
+      '@mysten/sui.js': link:../../typescript
       '@mysten/wallet-kit': link:../wallet-kit
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 13.4.0_biqbaboplfbrettd7655fr4n2y
@@ -656,6 +670,7 @@ importers:
     specifiers:
       '@mysten/wallet-kit': workspace:*
       '@types/node': 18.11.10
+      '@types/react': ^18.0.26
       next: ^13.0.6
       nextra: latest
       nextra-theme-docs: latest
@@ -665,12 +680,13 @@ importers:
     dependencies:
       '@mysten/wallet-kit': link:../wallet-kit
       next: 13.2.3_biqbaboplfbrettd7655fr4n2y
-      nextra: 2.2.17_nvzgbose6yf6w7ijjprgspqefi
-      nextra-theme-docs: 2.2.17_sk5zsfkxizvi3trle4mkuwucem
+      nextra: 2.2.19_nvzgbose6yf6w7ijjprgspqefi
+      nextra-theme-docs: 2.2.19_v24abnaciir5bgiyiwoymk6zhm
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
     devDependencies:
       '@types/node': 18.11.10
+      '@types/react': 18.0.26
       typescript: 4.9.5
 
   sdk/wallet-adapter/wallet-kit:
@@ -4329,13 +4345,13 @@ packages:
       react: 18.2.0
     dev: false
 
-  /@growthbook/growthbook-react/0.11.2_react@18.2.0:
-    resolution: {integrity: sha512-C2O4F3Sf28vFDM8Bv3xj9wYAeCVm5r2ykGzWjtezrhd2MVc38gFVOz3tIMg79xJiffM50NF7G+qIm4Y664rV8Q==}
+  /@growthbook/growthbook-react/0.12.0_react@18.2.0:
+    resolution: {integrity: sha512-Oo2cbGpM8thaAmwEccKFy/uRU3bqU4r4xcpKaLEHPeGARCkccFi1tdq2GPYEoO6cyeo7/Wc9eHqhtazg340orA==}
     engines: {node: '>=10'}
     peerDependencies:
       react: ^16.8.0-0 || ^17.0.0-0 || ^18.0.0-0
     dependencies:
-      '@growthbook/growthbook': 0.21.2
+      '@growthbook/growthbook': 0.23.0
       react: 18.2.0
     dev: false
 
@@ -4344,8 +4360,8 @@ packages:
     engines: {node: '>=10'}
     dev: false
 
-  /@growthbook/growthbook/0.21.2:
-    resolution: {integrity: sha512-kAu6LH02krkS+IxfQbe5mGYfPCGrmw+Cm9N3BChc151anhhVvMd8KS1m+vev6yEPnY606BouxE6a3SuDmmCF4g==}
+  /@growthbook/growthbook/0.23.0:
+    resolution: {integrity: sha512-sEVJGazy40N2iGUZQN0qzO6qSFJEbKVVfA4dLo5znP0YCr1xWbGlrmmXshQDMEznj2fZiiFL5/UCnghktwB35g==}
     engines: {node: '>=10'}
     dev: false
 
@@ -4675,6 +4691,24 @@ packages:
       '@ledgerhq/hw-transport': 6.28.1
       '@ledgerhq/logs': 6.10.1
     dev: true
+
+  /@ledgerhq/hw-transport-webhid/6.27.12:
+    resolution: {integrity: sha512-Yhy5dOKeJIU24Dh9xQjrStc++NviPjRSGHsbc1PeyEjgPEGc8q8wtvm7WFBDzmymBwMhIA5eoNj3fGLk/voXQQ==}
+    dependencies:
+      '@ledgerhq/devices': 8.0.0
+      '@ledgerhq/errors': 6.12.3
+      '@ledgerhq/hw-transport': 6.28.1
+      '@ledgerhq/logs': 6.10.1
+    dev: false
+
+  /@ledgerhq/hw-transport-webusb/6.27.12:
+    resolution: {integrity: sha512-U96UWLZIurD9ifHlm77PAgBbvDCe99DAJk64O2SdR41WRF3WaRq/pjrzCq2UvvammdCd1p7nS4zbhlse0wZplg==}
+    dependencies:
+      '@ledgerhq/devices': 8.0.0
+      '@ledgerhq/errors': 6.12.3
+      '@ledgerhq/hw-transport': 6.28.1
+      '@ledgerhq/logs': 6.10.1
+    dev: false
 
   /@ledgerhq/hw-transport/6.28.1:
     resolution: {integrity: sha512-RaZe+abn0zBIz82cE9tp7Y7aZkHWWbEaE2yJpfxT8AhFz3fx+BU0kLYzuRN9fmA7vKueNJ1MTVUCY+Ex9/CHSQ==}
@@ -7299,6 +7333,10 @@ packages:
 
   /@types/throttle-debounce/5.0.0:
     resolution: {integrity: sha512-Pb7k35iCGFcGPECoNE4DYp3Oyf2xcTd3FbFQxXUI9hEYKUl6YX+KLf7HrBmgVcD05nl50LIH6i+80js4iYmWbw==}
+    dev: true
+
+  /@types/tmp/0.2.3:
+    resolution: {integrity: sha512-dDZH/tXzwjutnuk4UacGgFRwV+JSLaXL1ikvidfJprkb7L9Nx1njcRHHmi3Dsvt7pgqqTEeucQuOrWHPFgzVHA==}
     dev: true
 
   /@types/topojson-client/3.1.1:
@@ -9934,14 +9972,6 @@ packages:
     dependencies:
       cross-spawn: 7.0.3
     dev: true
-
-  /cross-fetch/3.1.5:
-    resolution: {integrity: sha512-lvb1SBsI0Z7GDwmuid+mU3kWVBwTVUbe7S0H52yaaAdQOXq2YktTCZdlAcNKFzE6QtRz0snpw9bNiPeOIkkQvw==}
-    dependencies:
-      node-fetch: 2.6.7
-    transitivePeerDependencies:
-      - encoding
-    dev: false
 
   /cross-spawn/5.1.0:
     resolution: {integrity: sha512-pTgQJ5KC0d2hcY8eyL1IzlBPYjTkyH72XRZPnLyKus2mBfNjQs3klqbJU2VILqZryAZUt9JOb3h/mWMy23/f5A==}
@@ -16275,11 +16305,11 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /nextra-theme-docs/2.2.17_sk5zsfkxizvi3trle4mkuwucem:
-    resolution: {integrity: sha512-GTTie4YtTjiBdh3PqSYX5xtOQaCcLWoHWrubR2ikmBMq0GYxM2AX26J6O3gZ/xzzJje+vWmZGOilop/bG2RCog==}
+  /nextra-theme-docs/2.2.19_v24abnaciir5bgiyiwoymk6zhm:
+    resolution: {integrity: sha512-+5PcNgHwxwSAmQZlbV2cbjbvxj7CPYnN44OtWNxHQ8L3dzlw6fUyIJtyCUcGbDHpFC3sHmwYgB3OCWH8m4P35Q==}
     peerDependencies:
       next: '>=9.5.3'
-      nextra: 2.2.17
+      nextra: 2.2.19
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -16294,15 +16324,15 @@ packages:
       next: 13.2.3_biqbaboplfbrettd7655fr4n2y
       next-seo: 5.15.0_nvzgbose6yf6w7ijjprgspqefi
       next-themes: 0.2.1_nvzgbose6yf6w7ijjprgspqefi
-      nextra: 2.2.17_nvzgbose6yf6w7ijjprgspqefi
+      nextra: 2.2.19_nvzgbose6yf6w7ijjprgspqefi
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       scroll-into-view-if-needed: 3.0.6
       zod: 3.20.2
     dev: false
 
-  /nextra/2.2.17_nvzgbose6yf6w7ijjprgspqefi:
-    resolution: {integrity: sha512-IRfvDfUut6YgbivBVP8cG2DkxEBvODWQFiv7rqHD1tR9lBjiDKugyCi64zl1CiOlW5awc8xmbPDrzYak9l+A/w==}
+  /nextra/2.2.19_nvzgbose6yf6w7ijjprgspqefi:
+    resolution: {integrity: sha512-QmgbJvT1lfmFCM8n5gfGTA5p8efw20N/oZP9ojBhWhmatq/PwAp7VoSeTan6TT9Yspv6PmnrgpqKhYGzPSkFVw==}
     peerDependencies:
       next: '>=9.5.3'
       react: '>=16.13.1'
@@ -16372,6 +16402,7 @@ packages:
         optional: true
     dependencies:
       whatwg-url: 5.0.0
+    dev: true
 
   /node-fetch/3.3.0:
     resolution: {integrity: sha512-BKwRP/O0UvoMKp7GNdwPlObhYGB5DQqwhEDQlNKuoqwVYSxkSZCSbHjnFFmUEtwSKRPU4kNK8PbDYYitwaE3QA==}
@@ -20418,6 +20449,7 @@ packages:
 
   /tr46/0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
+    dev: true
 
   /tr46/1.0.1:
     resolution: {integrity: sha512-dTpowEjclQ7Kgx5SdBkqRzVhERQXov8/l9Ft9dVM9fmg0W0KQSVaXX9T4i6twCPNtYiZM53lpSSUAwJbFPOHxA==}
@@ -21697,7 +21729,7 @@ packages:
       - terser
     dev: true
 
-  /vitest/0.26.3_@vitest+ui@0.26.3:
+  /vitest/0.26.3_nnc6v4qssw4u2mary2z2vuz4tu:
     resolution: {integrity: sha512-FmHxU9aUCxTi23keF3vxb/Qp0lYXaaJ+jRLGOUmMS3qVTOJvgGE+f1VArupA6pEhaG2Ans4X+zV9dqM5WISMbg==}
     engines: {node: '>=v14.16.0'}
     hasBin: true
@@ -21727,6 +21759,7 @@ packages:
       acorn-walk: 8.2.0
       chai: 4.3.7
       debug: 4.3.4
+      happy-dom: 8.1.2
       local-pkg: 0.4.2
       source-map: 0.6.1
       strip-literal: 1.0.0
@@ -21919,6 +21952,7 @@ packages:
 
   /webidl-conversions/3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
+    dev: true
 
   /webidl-conversions/4.0.2:
     resolution: {integrity: sha512-YQ+BmxuTgd6UXZW3+ICGfyqRyHXVlD5GtQr5+qjiNW7bF0cqrzX500HVXPBOvgXb5YnzDd+h0zqyv61KUD7+Sg==}
@@ -22061,6 +22095,7 @@ packages:
     dependencies:
       tr46: 0.0.3
       webidl-conversions: 3.0.1
+    dev: true
 
   /whatwg-url/7.1.0:
     resolution: {integrity: sha512-WUu7Rg1DroM7oQvGWfOiAK21n74Gg+T4elXEQYkOhtyLeWiJFoOGLXPKI/9gzIie9CtwVLm8wtw6YJdKyxSjeg==}

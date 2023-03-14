@@ -32,13 +32,13 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
-        let uid2 = ts::new_object(&mut scenario);
-        let id2 = object::uid_to_inner(&uid2);
+        let counter1 = new(&mut scenario);
+        let id1 = object::id(&counter1);
+        let counter2 = new(&mut scenario);
+        let id2 = object::id(&counter2);
         // add fields
-        add(&mut bag, b"hello", new(uid1));
-        add(&mut bag, 1, new(uid2));
+        add(&mut bag, b"hello", counter1);
+        add(&mut bag, 1, counter2);
         // check they exist
         assert!(contains(&bag, b"hello"), 0);
         assert!(contains(&bag, 1), 0);
@@ -72,10 +72,8 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        add(&mut bag, b"hello", new(uid1));
-        add(&mut bag, b"hello", new(uid2));
+        add(&mut bag, b"hello", new(&mut scenario));
+        add(&mut bag, b"hello", new(&mut scenario));
         abort 42
     }
 
@@ -115,8 +113,8 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        add(&mut bag, 0, new(uid1));
+        let counter = new(&mut scenario);
+        add(&mut bag, 0, counter);
         object_bag::destroy_empty(bag);
         ts::end(scenario);
     }
@@ -126,9 +124,9 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
+        let counter = new(&mut scenario);
         assert!(!contains(&mut bag, 0), 0);
-        add(&mut bag, 0, new(uid1));
+        add(&mut bag, 0, counter);
         assert!(contains(&mut bag, 0), 0);
         assert!(!contains(&mut bag, 1), 0);
         ts::end(scenario);
@@ -141,10 +139,10 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
+        let counter = new(&mut scenario);
         assert!(!contains_with_type<u64, Counter>(&mut bag, 0), 0);
         assert!(!contains_with_type<u64, Fake>(&mut bag, 0), 0);
-        add(&mut bag, 0, new(uid1));
+        add(&mut bag, 0, counter);
         assert!(contains_with_type<u64, Counter>(&bag, 0), 0);
         assert!(!contains_with_type<u8, Counter>(&bag, 0), 0);
         assert!(!contains_with_type<u8, Fake>(&bag, 0), 0);
@@ -158,14 +156,14 @@ module sui::object_bag_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
+        let counter1 = new(&mut scenario);
+        let counter2 = new(&mut scenario);
         assert!(object_bag::is_empty(&bag), 0);
         assert!(object_bag::length(&bag) == 0, 0);
-        add(&mut bag, 0, new(uid1));
+        add(&mut bag, 0, counter1);
         assert!(!object_bag::is_empty(&bag), 0);
         assert!(object_bag::length(&bag) == 1, 0);
-        add(&mut bag, 1, new(uid2));
+        add(&mut bag, 1, counter2);
         assert!(!object_bag::is_empty(&bag), 0);
         assert!(object_bag::length(&bag) == 2, 0);
         ts::end(scenario);
@@ -181,7 +179,7 @@ module sui::object_bag_tests {
         let scenario = ts::begin(sender);
         let bag1 = object_bag::new(ts::ctx(&mut scenario));
         let bag2 = object_bag::new(ts::ctx(&mut scenario));
-        add(&mut bag1, 0, new(ts::new_object(&mut scenario)));
+        add(&mut bag1, 0, new(&mut scenario));
         assert!(contains(&bag1, 0), 0);
         assert!(!contains(&bag2, 0), 0);
         bump(borrow_mut(&mut bag1, 0));
@@ -197,8 +195,8 @@ module sui::object_bag_tests {
         object_bag::destroy_empty(bag2);
     }
 
-    fun new(id: UID): Counter {
-        Counter { id, count: 0 }
+    fun new(scenario: &mut ts::Scenario): Counter {
+        Counter { id: ts::new_object(scenario), count: 0 }
     }
 
     fun count(counter: &Counter): u64 {

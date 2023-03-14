@@ -81,7 +81,7 @@ fn get_registry() -> Result<Registry> {
                 .collect(),
         )
         .parents(certificates.iter().map(|x| x.digest()).collect())
-        .build(&kp)
+        .build()
         .unwrap();
 
     let worker_pk = network_keys[0].public().clone();
@@ -122,6 +122,7 @@ fn get_registry() -> Result<Registry> {
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
+        is_certified: true,
     };
 
     tracer.trace_value(&mut samples, &our_batch)?;

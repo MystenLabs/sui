@@ -5,20 +5,18 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionResponse, TransactionsPage,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiGetPastObjectRequest,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+    TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
-use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-};
-use sui_types::query::TransactionQuery;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -48,8 +46,9 @@ pub trait ReadApi {
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
 
     /// Return list of transaction digests within the queried range.
-    #[method(name = "getTransactionsInRange")]
-    async fn get_transactions_in_range(
+    /// This method will be removed before April 2023, please use `queryTransactions` instead
+    #[method(name = "getTransactionsInRangeDeprecated", deprecated)]
+    async fn get_transactions_in_range_deprecated(
         &self,
         /// the matching transactions' sequence number will be greater than or equals to the starting sequence number
         start: TxSequenceNumber,
@@ -59,10 +58,12 @@ pub trait ReadApi {
 
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
-    async fn get_transaction(
+    async fn get_transaction_with_options(
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
+        /// options for specifying the content to be returned
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse>;
 
     /// Return the object information for a specified object
@@ -74,6 +75,16 @@ pub trait ReadApi {
         /// options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse>;
+
+    /// Return the object data for a list of objects
+    #[method(name = "multiGetObjects")]
+    async fn multi_get_object_with_options(
+        &self,
+        /// the IDs of the queried objects
+        object_ids: Vec<ObjectID>,
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiObjectResponse>>;
 
     /// Return the dynamic field object information for a specified object
     #[method(name = "getDynamicFieldObject")]
@@ -129,23 +140,29 @@ pub trait ReadApi {
     ) -> RpcResult<SuiMoveNormalizedFunction>;
 
     /// Return list of transactions for a specified query criteria.
-    #[method(name = "getTransactions")]
-    async fn get_transactions(
+    #[method(name = "queryTransactions")]
+    async fn query_transactions(
         &self,
         /// the transaction query criteria.
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         /// Optional paging cursor
         cursor: Option<TransactionDigest>,
-        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
+        /// Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
+    /// Returns an ordered list of transaction responses
+    /// The method will throw an error if the input contains any duplicate or
+    /// the input size exceeds QUERY_MAX_RESULT_LIMIT
     #[method(name = "multiGetTransactions")]
-    async fn multi_get_transactions(
+    async fn multi_get_transactions_with_options(
         &self,
+        /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
+        /// config options to control which fields to fetch
+        options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionResponse>>;
 
     /// Note there is no software-level guarantee/SLA that objects with past versions
@@ -163,6 +180,19 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse>;
 
+    /// Note there is no software-level guarantee/SLA that objects with past versions
+    /// can be retrieved by this API, even if the object and version exists/existed.
+    /// The result may vary across nodes depending on their pruning policies.
+    /// Return the object information for a specified version
+    #[method(name = "tryMultiGetPastObjects")]
+    async fn try_multi_get_past_objects(
+        &self,
+        /// a vector of object and versions to be queried
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<Vec<SuiPastObjectResponse>>;
+
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
@@ -174,32 +204,4 @@ pub trait ReadApi {
         /// Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.
         id: CheckpointId,
     ) -> RpcResult<Checkpoint>;
-
-    /// Return a checkpoint summary based on a checkpoint sequence number
-    #[method(name = "getCheckpointSummary")]
-    async fn get_checkpoint_summary(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointSummary>;
-
-    /// Return a checkpoint summary based on checkpoint digest
-    #[method(name = "getCheckpointSummaryByDigest")]
-    async fn get_checkpoint_summary_by_digest(
-        &self,
-        digest: CheckpointDigest,
-    ) -> RpcResult<CheckpointSummary>;
-
-    /// Return contents of a checkpoint, namely a list of execution digests
-    #[method(name = "getCheckpointContents")]
-    async fn get_checkpoint_contents(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> RpcResult<CheckpointContents>;
-
-    /// Return contents of a checkpoint based on checkpoint content digest
-    #[method(name = "getCheckpointContentsByDigest")]
-    async fn get_checkpoint_contents_by_digest(
-        &self,
-        digest: CheckpointContentsDigest,
-    ) -> RpcResult<CheckpointContents>;
 }

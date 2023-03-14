@@ -5,7 +5,7 @@
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
-    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation},
+    messages::{CommandIndex, ExecutionFailureStatus, MoveLocation, MoveLocationOpt},
     object::Owner,
 };
 use fastcrypto::error::FastCryptoError;
@@ -22,7 +22,6 @@ pub use move_vm_runtime::move_vm::MoveVM;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
-use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -128,11 +127,14 @@ pub enum UserInputError {
     #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than gas budget: {:?}.",
+        "Balance of gas object {:?} is lower than the needed amount: {:?}.",
         gas_balance,
-        gas_budget
+        needed_gas_amount
     )]
-    GasBalanceTooLowToCoverGasBudget { gas_balance: u128, gas_budget: u128 },
+    GasBalanceTooLow {
+        gas_balance: u128,
+        needed_gas_amount: u128,
+    },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
     #[error(
@@ -192,6 +194,9 @@ pub enum SuiError {
     UserInputError { error: UserInputError },
     #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
+
+    #[error("There are already {queue_len} transactions pending, above threshold of {threshold}")]
+    TooManyTransactionsPendingExecution { queue_len: usize, threshold: usize },
 
     #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
     TooManyTransactionsPendingOnObject {
@@ -421,23 +426,23 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
-    #[error("Failed to get the system state object content")]
-    SuiSystemStateNotFound,
+    #[error("Failed to read dynamic field from table in the object store: {0}")]
+    DynamicFieldReadError(String),
 
-    #[error("Found the sui system state object but it has an unexpected version")]
-    SuiSystemStateUnexpectedVersion,
+    #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
+    SuiSystemStateReadError(String),
 
-    #[error("Message version is not supported at the current protocol version")]
-    WrongMessageVersion {
-        message_version: u64,
-        // the range in which the given message version is supported
-        supported: SupportedProtocolVersions,
-        // the current protocol version which is outside of that range
-        current_protocol_version: ProtocolVersion,
-    },
+    #[error("Unexpected version error: {0}")]
+    UnexpectedVersion(String),
+
+    #[error("Message version is not supported at the current protocol version: {error}")]
+    WrongMessageVersion { error: String },
 
     #[error("unknown error: {0}")]
     Unknown(String),
+
+    #[error("Failed to perform file operation: {0}")]
+    FileIOError(String),
 }
 
 #[repr(u64)]
@@ -450,10 +455,18 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
     DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
     TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
+    OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED = 5,
+    OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 pub type UserInputResult<T = ()> = Result<T, UserInputError>;
+
+impl From<sui_protocol_config::Error> for SuiError {
+    fn from(error: sui_protocol_config::Error) -> Self {
+        SuiError::WrongMessageVersion { error: error.0 }
+    }
+}
 
 // TODO these are both horribly wrong, categorization needs to be considered
 impl From<PartialVMError> for SuiError {
@@ -578,7 +591,24 @@ impl SuiError {
             SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
                 (false, true)
             }
+
+            // Overload errors
+            SuiError::TooManyTransactionsPendingExecution { .. } => (false, true),
+            SuiError::TooManyTransactionsPendingOnObject { .. } => (false, true),
             _ => (false, false),
+        }
+    }
+
+    pub fn is_object_or_package_not_found(&self) -> bool {
+        match self {
+            SuiError::UserInputError { error } => {
+                matches!(
+                    error,
+                    UserInputError::ObjectNotFound { .. }
+                        | UserInputError::DependentPackageNotFound { .. }
+                )
+            }
+            _ => false,
         }
     }
 }
@@ -612,6 +642,10 @@ impl ExecutionError {
 
     pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
         Self::new(kind, Some(source.into()))
+    }
+
+    pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
+        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
     }
 
     pub fn with_command_index(mut self, command: CommandIndex) -> Self {
@@ -729,7 +763,7 @@ pub fn convert_vm_error<
                     }
                     _ => None,
                 };
-                ExecutionFailureStatus::MovePrimitiveRuntimeError(location)
+                ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(location))
             }
             StatusType::Validation
             | StatusType::Verification

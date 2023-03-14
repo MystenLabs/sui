@@ -10,12 +10,12 @@
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
-    align-content: flex-start;
-    position: fixed;
-    z-index: 100;
-    top: 0;
-    margin-left: -20px;
     backdrop-filter: blur(20px);
+}
+
+.full-screen-container {
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 .header {

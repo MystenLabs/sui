@@ -28,27 +28,31 @@ use schemars::JsonSchema;
 use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
 
-use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
+use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
-use crate::intent::{Intent, IntentMessage};
 use crate::sui_serde::{Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::error::FastCryptoError;
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::{Blake2b256, HashFunction, Sha3_256};
 pub use fastcrypto::traits::Signer;
 use std::fmt::Debug;
 
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
 mod crypto_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/intent_tests.rs"]
+mod intent_tests;
 
 // Authority Objects
 pub type AuthorityKeyPair = BLS12381KeyPair;
@@ -68,25 +72,60 @@ pub type NetworkKeyPair = Ed25519KeyPair;
 pub type NetworkPublicKey = Ed25519PublicKey;
 pub type NetworkPrivateKey = Ed25519PrivateKey;
 
-pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"kosk";
 pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
-pub const TBLS_RANDOMNESS_OBJECT_DOMAIN: &[u8; 10] = b"randomness";
 
-// Creates a proof that the keypair is possesed, as well as binds this proof to a specific SuiAddress.
-pub fn generate_proof_of_possession<K: KeypairTraits>(
-    keypair: &K,
+/// Default hash function for user-facing purposes, namely the ones that is also done by the wallet.
+pub type UserHash = Sha3_256;
+
+/// Default hash function for non-user-facing purposes, namely the ones not done by the wallet.
+pub type InternalHash = Blake2b256;
+
+pub const DEFAULT_EPOCH_ID: EpochId = 0;
+
+/// Creates a proof of that the authority account address is owned by the
+/// holder of authority protocol key, and also ensures that the authority
+/// protocol public key exists. A proof of possession is an authority
+/// signature committed over the intent message `intent || message` (See
+/// more at [struct IntentMessage] and [struct Intent]) where the message is
+/// constructed as `authority_pubkey_bytes || authority_account_address`.
+pub fn generate_proof_of_possession(
+    keypair: &AuthorityKeyPair,
     address: SuiAddress,
-) -> <K as KeypairTraits>::Sig {
-    let mut domain_with_pk: Vec<u8> = Vec::new();
-    domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
-    domain_with_pk.extend_from_slice(keypair.public().as_bytes());
-    domain_with_pk.extend_from_slice(address.as_ref());
-    // TODO (joyqvq): Use Signature::new_secure
-    keypair.sign(&domain_with_pk[..])
+) -> AuthoritySignature {
+    let mut msg: Vec<u8> = Vec::new();
+    msg.extend_from_slice(keypair.public().as_bytes());
+    msg.extend_from_slice(address.as_ref());
+    AuthoritySignature::new_secure(
+        &IntentMessage::new(
+            Intent::default().with_scope(IntentScope::ProofOfPossession),
+            msg,
+        ),
+        &DEFAULT_EPOCH_ID,
+        keypair,
+    )
 }
 
+/// Verify proof of possession against the expected intent message,
+/// consisting of the protocol pubkey and the authority account address.
+pub fn verify_proof_of_possession(
+    pop: &narwhal_crypto::Signature,
+    protocol_pubkey: &narwhal_crypto::PublicKey,
+    sui_address: SuiAddress,
+) -> Result<(), SuiError> {
+    protocol_pubkey.validate()?;
+    let mut msg = protocol_pubkey.as_bytes().to_vec();
+    msg.extend_from_slice(sui_address.as_ref());
+    pop.verify_secure(
+        &IntentMessage::new(
+            Intent::default().with_scope(IntentScope::ProofOfPossession),
+            msg,
+        ),
+        DEFAULT_EPOCH_ID,
+        protocol_pubkey.into(),
+    )
+}
 ///////////////////////////////////////////////
 /// Account Keys
 ///
@@ -453,12 +492,10 @@ impl SuiAuthoritySignature for AuthoritySignature {
     where
         T: Serialize,
     {
-        let mut message = Vec::new();
-        let intent_msg_bytes =
+        let mut intent_msg_bytes =
             bcs::to_bytes(&value).expect("Message serialization should not fail");
-        message.extend(intent_msg_bytes);
-        epoch.write(&mut message);
-        secret.sign(&message)
+        epoch.write(&mut intent_msg_bytes);
+        secret.sign(&intent_msg_bytes)
     }
 
     fn verify_secure<T>(
@@ -470,10 +507,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
     where
         T: Serialize,
     {
-        let mut message = Vec::new();
-        let intent_msg_bytes =
-            bcs::to_bytes(&value).expect("Message serialization should not fail");
-        message.extend(intent_msg_bytes);
+        let mut message = bcs::to_bytes(&value).expect("Message serialization should not fail");
         epoch.write(&mut message);
 
         let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
@@ -517,10 +551,15 @@ where
 }
 
 pub const TEST_COMMITTEE_SIZE: usize = 4;
-/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+
 pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
+    random_committee_key_pairs_of_size(TEST_COMMITTEE_SIZE)
+}
+
+/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
-    (0..TEST_COMMITTEE_SIZE)
+    (0..size)
         .map(|_| {
             // TODO: We are generating the keys 4 times to match exactly as how we generate
             // keys in ConfigBuilder::build (sui-config/src/builder.rs). This is because
@@ -632,16 +671,6 @@ impl<'de> Deserialize<'de> for Signature {
 }
 
 impl Signature {
-    #[warn(deprecated)]
-    pub fn new<T>(value: &T, secret: &dyn Signer<Signature>) -> Signature
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut message = Vec::new();
-        value.write(&mut message);
-        Signer::sign(secret, &message)
-    }
-
     pub fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn Signer<Signature>) -> Self
     where
         T: Serialize,
@@ -1299,14 +1328,13 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
             .ok_or(SuiError::InvalidAuthenticator)?;
 
         for authority_index in self.signers_map.iter() {
-            let authority =
-                committee
-                    .authority_by_index(authority_index)
-                    .ok_or(SuiError::UnknownSigner {
-                        signer: None,
-                        index: Some(authority_index),
-                        committee: Box::new(committee.clone()),
-                    })?;
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or_else(|| SuiError::UnknownSigner {
+                    signer: None,
+                    index: Some(authority_index),
+                    committee: Box::new(committee.clone()),
+                })?;
 
             // Update weight.
             let voting_rights = committee.weight(authority);
@@ -1363,7 +1391,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             map.insert(
                 committee
                     .authority_index(pk)
-                    .ok_or(SuiError::UnknownSigner {
+                    .ok_or_else(|| SuiError::UnknownSigner {
                         signer: Some(pk.concise().to_string()),
                         index: None,
                         committee: Box::new(committee.clone()),
@@ -1457,7 +1485,6 @@ mod bcs_signable {
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
     impl BcsSignable for crate::committee::Committee {}
-    impl BcsSignable for crate::committee::CommitteeWithNetAddresses {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointSummary {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
 
@@ -1510,11 +1537,21 @@ where
     }
 }
 
-pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
-    let mut digest = Sha3_256::default();
+fn hash<S: Signable<H>, H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
+    signable: &S,
+) -> [u8; DIGEST_SIZE] {
+    let mut digest = H::default();
     signable.write(&mut digest);
     let hash = digest.finalize();
     hash.into()
+}
+
+pub fn user_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
+    hash::<S, UserHash, 32>(signable)
+}
+
+pub fn internal_hash<S: Signable<Blake2b256>>(signable: &S) -> [u8; 32] {
+    hash::<S, InternalHash, 32>(signable)
 }
 
 #[derive(Default)]
@@ -1535,15 +1572,13 @@ impl VerificationObligation {
     where
         T: Serialize,
     {
-        let mut message = Vec::new();
         let intent_msg = IntentMessage::new(intent, message_value);
-        let intent_msg_bytes =
+        let mut intent_msg_bytes =
             bcs::to_bytes(&intent_msg).expect("Message serialization should not fail");
-        message.extend(intent_msg_bytes);
-        epoch.write(&mut message);
+        epoch.write(&mut intent_msg_bytes);
         self.signatures.push(AggregateAuthoritySignature::default());
         self.public_keys.push(Vec::new());
-        self.messages.push(message);
+        self.messages.push(intent_msg_bytes);
         self.messages.len() - 1
     }
 
@@ -1602,7 +1637,7 @@ pub mod bcs_signable_test {
     where
         T: super::bcs_signable::BcsSignable,
     {
-        use crate::intent::{Intent, IntentScope};
+        use shared_crypto::intent::{Intent, IntentScope};
 
         let mut obligation = VerificationObligation::default();
         // Add the obligation of the authority signature verifications.
@@ -1654,14 +1689,6 @@ impl SignatureScheme {
             )),
         }
     }
-}
-
-pub fn construct_tbls_randomness_object_message(epoch: EpochId, obj_id: &ObjectID) -> Vec<u8> {
-    let mut msg = TBLS_RANDOMNESS_OBJECT_DOMAIN.to_vec();
-    // Unwrap is safe here since to_bytes will never fail on u64.
-    msg.extend_from_slice(bcs::to_bytes(&epoch).unwrap().as_slice());
-    msg.extend_from_slice(obj_id.as_ref());
-    msg
 }
 
 /// Unlike [enum Signature], [enum CompressedSignature] does not contain public key.

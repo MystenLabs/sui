@@ -32,14 +32,22 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_framework::get_sui_framework();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
+                // For reasons I can't understand, LruCache causes divergent behavior the second
+                // time one is constructed and inserted into, so construct one before the first
+                // test run for determinism.
+                let mut cache = ::sui_simulator::lru::LruCache::new(1.try_into().unwrap());
+                cache.put(1, 1);
+
                 {
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
                     use std::path::PathBuf;
-                    use sui_simulator::sui_framework_build::compiled_package::BuildConfig;
+                    use sui_simulator::sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
                     use sui_simulator::sui_framework::build_move_package;
                     use sui_simulator::tempfile::TempDir;
+		    use sui_simulator::move_package::package_hooks::register_package_hooks;
 
+		    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                     path.push("../../sui_programmability/examples/basics");
                     let mut build_config = BuildConfig::default();

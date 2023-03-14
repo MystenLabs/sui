@@ -18,13 +18,13 @@ module sui::object_table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = object_table::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        let id1 = object::uid_to_inner(&uid1);
-        let uid2 = ts::new_object(&mut scenario);
-        let id2 = object::uid_to_inner(&uid2);
+        let counter1 = new(&mut scenario);
+        let id1 = object::id(&counter1);
+        let counter2 = new(&mut scenario);
+        let id2 = object::id(&counter2);
         // add fields
-        add(&mut table, b"hello", new(uid1));
-        add(&mut table, b"goodbye", new(uid2));
+        add(&mut table, b"hello", counter1);
+        add(&mut table, b"goodbye", counter2);
         // check they exist
         assert!(contains(&table, b"hello"), 0);
         assert!(contains(&table, b"goodbye"), 0);
@@ -56,10 +56,8 @@ module sui::object_table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = object_table::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
-        add(&mut table, b"hello", new(uid1));
-        add(&mut table, b"hello", new(uid2));
+        add(&mut table, b"hello", new(&mut scenario));
+        add(&mut table, b"hello", new(&mut scenario));
         abort 42
     }
 
@@ -99,8 +97,7 @@ module sui::object_table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = object_table::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        add(&mut table, 0, new(uid1));
+        add(&mut table, 0, new(&mut scenario));
         object_table::destroy_empty(table);
         ts::end(scenario);
     }
@@ -110,9 +107,8 @@ module sui::object_table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = object_table::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
         assert!(!contains(&mut table, 0), 0);
-        add(&mut table, 0, new(uid1));
+        add(&mut table, 0, new(&mut scenario));
         assert!(contains(&mut table, 0), 0);
         assert!(!contains(&mut table, 1), 0);
         ts::end(scenario);
@@ -125,14 +121,12 @@ module sui::object_table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = object_table::new(ts::ctx(&mut scenario));
-        let uid1 = ts::new_object(&mut scenario);
-        let uid2 = ts::new_object(&mut scenario);
         assert!(object_table::is_empty(&table), 0);
         assert!(object_table::length(&table) == 0, 0);
-        add(&mut table, 0, new(uid1));
+        add(&mut table, 0, new(&mut scenario));
         assert!(!object_table::is_empty(&table), 0);
         assert!(object_table::length(&table) == 1, 0);
-        add(&mut table, 1, new(uid2));
+        add(&mut table, 1, new(&mut scenario));
         assert!(!object_table::is_empty(&table), 0);
         assert!(object_table::length(&table) == 2, 0);
         ts::end(scenario);
@@ -148,7 +142,7 @@ module sui::object_table_tests {
         let scenario = ts::begin(sender);
         let table1 = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
         let table2 = object_table::new<u64, Counter>(ts::ctx(&mut scenario));
-        add(&mut table1, 0, new(ts::new_object(&mut scenario)));
+        add(&mut table1, 0, new(&mut scenario));
         assert!(contains(&table1, 0), 0);
         assert!(!contains(&table2, 0), 0);
         bump(borrow_mut(&mut table1, 0));
@@ -164,8 +158,8 @@ module sui::object_table_tests {
         object_table::destroy_empty(table2);
     }
 
-    fun new(id: UID): Counter {
-        Counter { id, count: 0 }
+    fun new(scenario: &mut ts::Scenario): Counter {
+        Counter { id: ts::new_object(scenario), count: 0 }
     }
 
     fun count(counter: &Counter): u64 {

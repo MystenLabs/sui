@@ -27,7 +27,6 @@
 
 module nfts::shared_auction {
     use sui::coin::{Self, Coin};
-    use sui::object;
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
 
@@ -43,7 +42,7 @@ module nfts::shared_auction {
     /// Creates an auction. This is executed by the owner of the asset
     /// to be auctioned.
     public entry fun create_auction<T: key + store >(to_sell: T, ctx: &mut TxContext) {
-        let auction = auction_lib::create_auction(object::new(ctx), to_sell, ctx);
+        let auction = auction_lib::create_auction(to_sell, ctx);
         auction_lib::share_object(auction);
     }
 

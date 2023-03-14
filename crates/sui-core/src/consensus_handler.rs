@@ -75,11 +75,11 @@ fn update_hash(
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
     let hash = hasher.finish();
-    // Log hash every 100th transaction of the subdag
-    if index.transaction_index % 100 == 0 {
+    // Log hash every 1000th transaction of the subdag
+    if index.transaction_index % 1000 == 0 {
         debug!(
-            "Integrity hash for consensus output at subdag {} is {:016x}",
-            index.sub_dag_index, hash
+            "Integrity hash for consensus output at subdag {} transaction {} is {:016x}",
+            index.sub_dag_index, index.transaction_index, hash
         );
     }
     let last_seen = ExecutionIndicesWithHash { index, hash };
@@ -100,15 +100,14 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let mut sequenced_transactions = Vec::new();
 
         let mut bytes = 0usize;
-        let round = consensus_output.sub_dag.round();
+        let round = consensus_output.sub_dag.leader_round();
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
+        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
+        let timestamp = consensus_output.sub_dag.leader.header.created_at;
 
-        let prologue_transaction = self.consensus_commit_prologue_transaction(
-            consensus_output.sub_dag.round(),
-            consensus_output.sub_dag.leader.metadata.created_at,
-        );
+        let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
             vec![],
             SequencedConsensusTransactionKind::System(prologue_transaction),
@@ -196,7 +195,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         }
 
         self.epoch_store
-            .handle_commit_boundary(&consensus_output.sub_dag, &self.checkpoint_service)
+            .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 

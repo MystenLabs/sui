@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -17,17 +12,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-
+use serde_with::DisplayFromStr;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, TransactionDigest,
 };
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::MoveModulePublish;
-use sui_types::move_package::{disassemble_modules, MovePackage};
+use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
-use sui_types::parse_sui_struct_tag;
 
 use crate::{SuiMoveStruct, SuiMoveValue};
 
@@ -39,6 +36,7 @@ pub enum SuiObjectResponse {
     Deleted(SuiObjectRef),
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectData")]
 pub struct SuiObjectData {
@@ -48,8 +46,10 @@ pub struct SuiObjectData {
     /// Base64 string representing the object digest
     pub digest: ObjectDigest,
     /// The type of the object. Default to be None unless SuiObjectDataOptions.showType is set to true
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<DisplayFromStr>")]
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub type_: Option<String>,
+    pub type_: Option<ObjectType>,
     // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
     /// The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,14 +84,18 @@ impl SuiObjectData {
     pub fn object_type(&self) -> anyhow::Result<ObjectType> {
         self.type_
             .as_ref()
-            .ok_or_else(|| anyhow!("type is missing for object {:?}", self.object_id))?
-            .parse()
+            .ok_or_else(|| anyhow!("type is missing for object {:?}", self.object_id))
+            .cloned()
     }
 }
 
 impl Display for SuiObjectData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let type_ = self.type_.clone().unwrap_or_default();
+        let type_ = if let Some(type_) = &self.type_ {
+            type_.to_string()
+        } else {
+            "Unknown Type".into()
+        };
         let mut writer = String::new();
         writeln!(
             writer,
@@ -143,7 +147,7 @@ impl TryFrom<&SuiObjectData> for GasCoin {
             .ok_or_else(|| anyhow!("Expect object content to not be empty"))?
         {
             SuiParsedData::MoveObject(o) => {
-                if GasCoin::type_().to_string() == o.type_ {
+                if GasCoin::type_() == o.type_ {
                     return GasCoin::try_from(&o.fields);
                 }
             }
@@ -177,7 +181,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase", rename = "ObjectContentOptions", default)]
+#[serde(rename_all = "camelCase", rename = "ObjectDataOptions", default)]
 pub struct SuiObjectDataOptions {
     /// Whether to show the type of the object. Default to be False
     pub show_type: bool,
@@ -299,7 +303,7 @@ impl
 
         let (object_id, version, digest) = object_ref;
         let type_ = if show_type {
-            Some(Into::<ObjectType>::into(&o).to_string())
+            Some(Into::<ObjectType>::into(&o))
         } else {
             None
         };
@@ -424,18 +428,15 @@ impl TryInto<Object> for SuiObjectData {
     fn try_into(self) -> Result<Object, Self::Error> {
         let protocol_config = ProtocolConfig::get_for_min_version();
         let data = match self.bcs {
-            Some(SuiRawData::MoveObject(o)) => {
-                let struct_tag = parse_sui_struct_tag(o.type_())?;
-                Data::Move(unsafe {
-                    MoveObject::new_from_execution(
-                        struct_tag,
-                        o.has_public_transfer,
-                        o.version,
-                        o.bcs_bytes,
-                        &protocol_config,
-                    )?
-                })
-            }
+            Some(SuiRawData::MoveObject(o)) => Data::Move(unsafe {
+                MoveObject::new_from_execution(
+                    o.type_().clone().into(),
+                    o.has_public_transfer,
+                    o.version,
+                    o.bcs_bytes,
+                    &protocol_config,
+                )?
+            }),
             Some(SuiRawData::Package(p)) => Data::Package(MovePackage::new(
                 p.id,
                 self.version,
@@ -506,7 +507,7 @@ pub trait SuiData: Sized {
     fn try_from_package(package: MovePackage) -> Result<Self, anyhow::Error>;
     fn try_as_move(&self) -> Option<&Self::ObjectType>;
     fn try_as_package(&self) -> Option<&Self::PackageType>;
-    fn type_(&self) -> Option<&str>;
+    fn type_(&self) -> Option<&StructTag>;
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
@@ -543,9 +544,9 @@ impl SuiData for SuiRawData {
         }
     }
 
-    fn type_(&self) -> Option<&str> {
+    fn type_(&self) -> Option<&StructTag> {
         match self {
-            Self::MoveObject(o) => Some(o.type_.as_ref()),
+            Self::MoveObject(o) => Some(&o.type_),
             Self::Package(_) => None,
         }
     }
@@ -592,7 +593,7 @@ impl SuiData for SuiParsedData {
         }
     }
 
-    fn type_(&self) -> Option<&str> {
+    fn type_(&self) -> Option<&StructTag> {
         match self {
             Self::MoveObject(o) => Some(&o.type_),
             Self::Package(_) => None,
@@ -630,14 +631,17 @@ pub trait SuiMoveObject: Sized {
         Self::try_from_layout(o, layout)
     }
 
-    fn type_(&self) -> &str;
+    fn type_(&self) -> &StructTag;
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "MoveObject", rename_all = "camelCase")]
 pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
-    pub type_: String,
+    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "String")]
+    pub type_: StructTag,
     pub has_public_transfer: bool,
     pub fields: SuiMoveStruct,
 }
@@ -658,7 +662,7 @@ impl SuiMoveObject for SuiParsedMoveObject {
                 }
             } else {
                 SuiParsedMoveObject {
-                    type_: object.type_.to_string(),
+                    type_: object.type_().clone().into(),
                     has_public_transfer: object.has_public_transfer(),
                     fields: move_struct,
                 }
@@ -666,7 +670,7 @@ impl SuiMoveObject for SuiParsedMoveObject {
         )
     }
 
-    fn type_(&self) -> &str {
+    fn type_(&self) -> &StructTag {
         &self.type_
     }
 }
@@ -674,10 +678,10 @@ impl SuiMoveObject for SuiParsedMoveObject {
 pub fn type_and_fields_from_move_struct(
     type_: &StructTag,
     move_struct: MoveStruct,
-) -> (String, SuiMoveStruct) {
+) -> (StructTag, SuiMoveStruct) {
     match move_struct.into() {
         SuiMoveStruct::WithTypes { type_, fields } => (type_, SuiMoveStruct::WithFields(fields)),
-        fields => (type_.to_string(), fields),
+        fields => (type_.clone(), fields),
     }
 }
 
@@ -685,8 +689,10 @@ pub fn type_and_fields_from_move_struct(
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "RawMoveObject", rename_all = "camelCase")]
 pub struct SuiRawMoveObject {
+    #[schemars(with = "String")]
     #[serde(rename = "type")]
-    pub type_: String,
+    #[serde_as(as = "DisplayFromStr")]
+    pub type_: StructTag,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
     #[serde_as(as = "Base64")]
@@ -697,7 +703,7 @@ pub struct SuiRawMoveObject {
 impl From<MoveObject> for SuiRawMoveObject {
     fn from(o: MoveObject) -> Self {
         Self {
-            type_: o.type_.to_string(),
+            type_: o.type_().clone().into(),
             has_public_transfer: o.has_public_transfer(),
             version: o.version(),
             bcs_bytes: o.into_contents(),
@@ -711,14 +717,14 @@ impl SuiMoveObject for SuiRawMoveObject {
         _layout: MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            type_: object.type_.to_string(),
+            type_: object.type_().clone().into(),
             has_public_transfer: object.has_public_transfer(),
             version: object.version(),
             bcs_bytes: object.into_contents(),
         })
     }
 
-    fn type_(&self) -> &str {
+    fn type_(&self) -> &StructTag {
         &self.type_
     }
 }
@@ -734,6 +740,7 @@ impl SuiRawMoveObject {
 #[serde(rename = "RawMovePackage", rename_all = "camelCase")]
 pub struct SuiRawMovePackage {
     pub id: ObjectID,
+    pub version: SequenceNumber,
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
     pub module_map: BTreeMap<String, Vec<u8>>,
@@ -743,6 +750,7 @@ impl From<MovePackage> for SuiRawMovePackage {
     fn from(p: MovePackage) -> Self {
         Self {
             id: p.id(),
+            version: p.version(),
             module_map: p.serialized_module_map().clone(),
         }
     }
@@ -829,15 +837,6 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
-impl From<MoveModulePublish> for SuiMovePackage {
-    fn from(m: MoveModulePublish) -> Self {
-        Self {
-            // In case of failed publish transaction, disassemble can fail, we can only return empty module map in that case.
-            disassembled: disassemble_modules(m.modules.iter()).unwrap_or_default(),
-        }
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
 #[serde(rename = "ObjectInfo", rename_all = "camelCase")]
 pub struct SuiObjectInfo {
@@ -867,4 +866,13 @@ impl From<ObjectInfo> for SuiObjectInfo {
             previous_transaction: info.previous_transaction,
         }
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "GetPastObjectRequest", rename_all = "camelCase")]
+pub struct SuiGetPastObjectRequest {
+    /// the ID of the queried object
+    pub object_id: ObjectID,
+    /// the version of the queried object.
+    pub version: SequenceNumber,
 }

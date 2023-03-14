@@ -6,11 +6,9 @@ use anemo::{rpc::Status, Request, Response, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use sui_types::{
-    base_types::ExecutionDigests,
     digests::{CheckpointContentsDigest, CheckpointDigest},
-    messages::{Transaction, TransactionEffects},
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
         VerifiedCheckpoint,
     },
     storage::ReadStore,
@@ -57,7 +55,7 @@ where
             return Ok(Response::new(()));
         }
 
-        let highest_verified_checkpoint = self
+        let highest_verified_checkpoint = *self
             .store
             .get_highest_verified_checkpoint()
             .map_err(|e| Status::internal(e.to_string()))?
@@ -65,7 +63,7 @@ where
 
         // If this checkpoint is higher than our highest verified checkpoint notify the
         // event loop to potentially sync it
-        if checkpoint.sequence_number() > highest_verified_checkpoint {
+        if *checkpoint.sequence_number() > highest_verified_checkpoint {
             if let Some(sender) = self.sender.upgrade() {
                 sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
             }
@@ -98,40 +96,11 @@ where
     async fn get_checkpoint_contents(
         &self,
         request: Request<CheckpointContentsDigest>,
-    ) -> Result<Response<Option<CheckpointContents>>, Status> {
+    ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
         let contents = self
             .store
-            .get_checkpoint_contents(request.inner())
+            .get_full_checkpoint_contents(request.inner())
             .map_err(|e| Status::internal(e.to_string()))?;
-
         Ok(Response::new(contents))
-    }
-
-    async fn get_transaction_and_effects(
-        &self,
-        request: Request<ExecutionDigests>,
-    ) -> Result<Response<Option<(Transaction, TransactionEffects)>>, Status> {
-        let ExecutionDigests {
-            transaction: tx_digest,
-            effects: effects_digest,
-        } = request.into_inner();
-
-        let Some(transaction) = self
-            .store
-            .get_transaction(&tx_digest)
-            .map_err(|e| Status::internal(e.to_string()))? else
-        {
-            return Ok(Response::new(None));
-        };
-
-        let Some(effects) = self
-            .store
-            .get_transaction_effects(&effects_digest)
-            .map_err(|e| Status::internal(e.to_string()))? else
-        {
-            return Ok(Response::new(None));
-        };
-
-        Ok(Response::new(Some((transaction.into_inner(), effects))))
     }
 }

@@ -25,10 +25,10 @@ export function SummaryCard({
     return (
         <div className="bg-white flex flex-col flex-nowrap border border-solid border-gray-45 rounded-2xl">
             {header ? (
-                <div className="flex flex-row flex-nowrap items-center justify-center uppercase bg-gray-40 px-3.75 py-3 rounded-t-2xl">
+                <div className="flex flex-row flex-nowrap items-center justify-center uppercase bg-gray-40 px-3.75 py-2.5 rounded-t-2xl">
                     <Text
                         variant="captionSmall"
-                        weight="semibold"
+                        weight="bold"
                         color="steel-darker"
                         truncate
                     >

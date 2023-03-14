@@ -6,8 +6,7 @@ import cl from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
 
 import { Button } from '../../shared/ButtonUI';
-import AccountAddress from '_components/account-address';
-import ExternalLink from '_components/external-link';
+import { DAppInfoCard } from '../DAppInfoCard';
 
 import type { ReactNode } from 'react';
 
@@ -25,6 +24,7 @@ type UserApproveContainerProps = {
     isWarning?: boolean;
     addressHidden?: boolean;
     address?: SuiAddress;
+    scrollable?: boolean;
 };
 
 export function UserApproveContainer({
@@ -39,6 +39,7 @@ export function UserApproveContainer({
     isWarning,
     addressHidden = false,
     address,
+    scrollable,
 }: UserApproveContainerProps) {
     const [submitting, setSubmitting] = useState(false);
     const handleOnResponse = useCallback(
@@ -54,41 +55,20 @@ export function UserApproveContainer({
 
     return (
         <div className={st.container}>
-            <div className={st.scrollBody}>
-                <div className={st.originContainer}>
-                    <div className={st.originMeta}>
-                        {originFavIcon ? (
-                            <img
-                                className={st.favIcon}
-                                src={originFavIcon}
-                                alt="Site favicon"
-                            />
-                        ) : null}
-                        <div className={st.host}>
-                            {parsedOrigin.host.split('.')[0]}
-                            <ExternalLink
-                                href={origin}
-                                className={st.origin}
-                                showIcon={false}
-                            >
-                                {parsedOrigin.host}
-                            </ExternalLink>
-                        </div>
-                    </div>
-                    {!addressHidden ? (
-                        <div className={st.cardFooter}>
-                            <div className={st.label}>Your address</div>
-                            <AccountAddress
-                                showLink={false}
-                                mode="normal"
-                                copyable
-                                className={st.address}
-                                address={address}
-                            />
-                        </div>
-                    ) : null}
+            <div className={cl(st.scrollBody, { [st.scrollable]: scrollable })}>
+                <DAppInfoCard
+                    name={parsedOrigin.host}
+                    url={origin}
+                    iconUrl={originFavIcon}
+                    connectedAddress={
+                        !addressHidden && address ? address : undefined
+                    }
+                />
+                <div
+                    className={cl(st.children, { [st.scrollable]: scrollable })}
+                >
+                    {children}
                 </div>
-                <div className={st.children}>{children}</div>
             </div>
             <div className={st.actionsContainer}>
                 <div className={cl(st.actions, isWarning && st.flipActions)}>

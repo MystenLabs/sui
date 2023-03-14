@@ -13,6 +13,7 @@ use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
+use crate::consensus::ConsensusRound;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
@@ -56,7 +57,8 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -65,13 +67,13 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -149,7 +151,8 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let storage = NodeStorage::reopen(temp_dir());
 
@@ -159,13 +162,13 @@ async fn test_consensus_recovery_with_bullshark() {
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -222,18 +225,19 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
         NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
         committee.clone(),
+        gc_depth,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -259,6 +263,8 @@ async fn test_consensus_recovery_with_bullshark() {
 
     'main: while let Some(sub_dag) = rx_output.recv().await {
         score_with_crash = sub_dag.reputation_score.clone();
+        assert_eq!(score_with_crash.total_authorities(), 4);
+
         for output in sub_dag.certificates {
             assert!(output.round() >= 2);
 

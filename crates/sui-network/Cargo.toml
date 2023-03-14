@@ -16,6 +16,7 @@ tonic = "0.8"
 
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 mysten-network.workspace = true
 
@@ -37,3 +38,5 @@ tonic-build = { version = "0.8.2", features = [ "transport" ] }
 [dev-dependencies]
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
+ed25519-consensus = { version = "2.0.1" }
+fastcrypto = { workspace = true }

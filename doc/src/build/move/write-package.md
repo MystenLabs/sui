@@ -4,7 +4,7 @@ title: Write a Sui Move Package
 
 ##
 
-In order to build a Move package and run code defined in this package, first [install Sui binaries](../install.md#install-or-update-sui-binaries).
+In order to build a Move package and run code defined in this package, first [install Sui binaries](../install.md#install-sui-binaries).
 
 ### Creating the package
 

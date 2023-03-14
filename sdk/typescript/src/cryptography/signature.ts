@@ -22,6 +22,10 @@ export type SignaturePubkeyPair = {
   pubKey: PublicKey;
 };
 
+/**
+ * (`flag || signature || pubkey` bytes, as base-64 encoded string).
+ * Signature is committed to the intent message of the transaction data, as base-64 encoded string.
+ */
 export type SerializedSignature = string;
 
 export const SIGNATURE_SCHEME_TO_FLAG = {

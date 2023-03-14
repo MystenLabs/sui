@@ -15,6 +15,7 @@ use move_core_types::{
     gas_algebra::{GasQuantity, InternalGas, InternalGasPerByte, NumBytes, UnitDiv},
     vm_status::StatusCode,
 };
+use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -27,6 +28,53 @@ use sui_cost_tables::{
 };
 use sui_protocol_config::*;
 
+// A bucket defines a range of units that will be priced the same.
+// A cost for the bucket is defined to make the step function non linear.
+#[allow(dead_code)]
+struct ComputationBucket {
+    min: u64,
+    max: u64,
+    cost: u64,
+}
+
+impl ComputationBucket {
+    fn new(min: u64, max: u64, cost: u64) -> Self {
+        ComputationBucket { min, max, cost }
+    }
+
+    fn simple(min: u64, max: u64) -> Self {
+        ComputationBucket {
+            min,
+            max,
+            cost: max,
+        }
+    }
+}
+
+fn get_bucket_cost(table: &[ComputationBucket], computation_cost: u64) -> u64 {
+    for bucket in table {
+        if bucket.max >= computation_cost {
+            return bucket.cost;
+        }
+    }
+    MAX_BUCKET_COST
+}
+
+// for a RPG of 1000 this amounts to about 1 SUI
+const MAX_BUCKET_COST: u64 = 1_000_000;
+
+// define the bucket table for computation charging
+static COMPUTATION_BUCKETS: Lazy<Vec<ComputationBucket>> = Lazy::new(|| {
+    vec![
+        ComputationBucket::simple(0, 1_000),
+        ComputationBucket::simple(1_001, 5_000),
+        ComputationBucket::simple(5_001, 10_000),
+        ComputationBucket::simple(10_001, 20_000),
+        ComputationBucket::simple(20_001, 50_000),
+        ComputationBucket::new(50_001, u64::MAX, MAX_BUCKET_COST),
+    ]
+});
+
 pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}
 pub enum SuiGasUnit {}
@@ -37,11 +85,11 @@ pub type GasPrice = GasQuantity<GasPriceUnit>;
 pub type SuiGas = GasQuantity<SuiGasUnit>;
 
 macro_rules! ok_or_gas_balance_error {
-    ($balance:expr, $budget:expr) => {
-        if $balance < $budget {
-            Err(UserInputError::GasBalanceTooLowToCoverGasBudget {
+    ($balance:expr, $required:expr) => {
+        if $balance < $required {
+            Err(UserInputError::GasBalanceTooLow {
                 gas_balance: $balance,
-                gas_budget: $budget,
+                needed_gas_amount: $required,
             })
         } else {
             Ok(())
@@ -50,6 +98,7 @@ macro_rules! ok_or_gas_balance_error {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct GasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,
@@ -245,10 +294,6 @@ fn to_external(internal_units: InternalGas) -> GasUnits {
     InternalGas::to_unit_round_down(internal_units)
 }
 
-fn to_internal(external_units: GasUnits) -> InternalGas {
-    GasUnits::to_unit(external_units)
-}
-
 #[derive(Debug)]
 pub struct SuiGasStatus<'a> {
     gas_status: GasStatus<'a>,
@@ -266,6 +311,10 @@ pub struct SuiGasStatus<'a> {
     storage_rebate: SuiGas,
 
     cost_table: SuiCostTable,
+}
+
+fn to_internal(external_units: GasUnits) -> InternalGas {
+    GasUnits::to_unit(external_units)
 }
 
 impl<'a> SuiGasStatus<'a> {
@@ -302,6 +351,18 @@ impl<'a> SuiGasStatus<'a> {
         !self.charge
     }
 
+    pub fn computation_gas_remaining(&self) -> u64 {
+        self.gas_status.remaining_gas().into()
+    }
+
+    pub fn storage_rebate(&self) -> u64 {
+        self.storage_rebate.into()
+    }
+
+    pub fn storage_gas_units(&self) -> u64 {
+        self.storage_gas_units.into()
+    }
+
     pub fn max_gax_budget_in_balance(&self) -> u64 {
         let max_gas_unit_price =
             std::cmp::max(self.computation_gas_unit_price, self.storage_gas_unit_price);
@@ -312,10 +373,22 @@ impl<'a> SuiGasStatus<'a> {
         &mut self.gas_status
     }
 
+    pub fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
+        let computation_cost: u64 = self.gas_used().into();
+        let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, computation_cost);
+        let charge = bucket_cost - computation_cost;
+        self.deduct_computation_cost(&charge.into())
+    }
+
     pub fn charge_vm_gas(&mut self) -> Result<(), ExecutionError> {
         // Disable flat fee for now
         // self.deduct_computation_cost(&VM_FLAT_FEE.to_unit())
         Ok(())
+    }
+
+    pub fn reset_storage_cost_and_rebate(&mut self) {
+        self.storage_gas_units = GasQuantity::zero();
+        self.storage_rebate = GasQuantity::zero();
     }
 
     /// Try to charge the minimal amount of gas from the gas object.
@@ -339,9 +412,16 @@ impl<'a> SuiGasStatus<'a> {
         self.deduct_computation_cost(&cost)
     }
 
+    pub fn charge_computation_gas_for_storage_mutation(
+        &mut self,
+        size: u64,
+    ) -> Result<(), ExecutionError> {
+        let cost = NumBytes::new(size).mul(*self.cost_table.object_mutation_per_byte_cost);
+        self.deduct_computation_cost(&cost)
+    }
+
     pub fn charge_storage_mutation(
         &mut self,
-        old_size: usize,
         new_size: usize,
         storage_rebate: SuiGas,
     ) -> Result<u64, ExecutionError> {
@@ -349,19 +429,12 @@ impl<'a> SuiGasStatus<'a> {
             return Ok(0);
         }
 
-        // Computation cost of a mutation is charged based on the sum of the old and new size.
-        // This is because to update an object in the store, we have to erase the old one and
-        // write a new one.
-        let cost = NumBytes::new((old_size + new_size) as u64)
-            .mul(*self.cost_table.object_mutation_per_byte_cost);
-        self.deduct_computation_cost(&cost)?;
-
-        self.storage_rebate += storage_rebate;
-
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*self.cost_table.storage_per_byte_cost);
-
-        self.deduct_storage_cost(&storage_cost).map(|q| q.into())
+        self.deduct_storage_cost(&storage_cost).map(|gu| {
+            self.storage_rebate += storage_rebate;
+            gu.into()
+        })
     }
 
     /// This function is only called during testing, where we need to mock
@@ -378,7 +451,7 @@ impl<'a> SuiGasStatus<'a> {
     /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
     /// We use initial budget, combined with remaining gas and storage cost to derive
     /// computation cost.
-    pub fn summary(&self, succeeded: bool) -> GasCostSummary {
+    pub fn summary(&self) -> GasCostSummary {
         let remaining_gas = self.gas_status.remaining_gas();
         let storage_cost = self.storage_gas_units;
         // TODO: handle underflow how?
@@ -388,21 +461,12 @@ impl<'a> SuiGasStatus<'a> {
             .expect("Subtraction overflowed")
             .checked_sub(storage_cost)
             .expect("Subtraction overflowed");
+
         let computation_cost_in_sui = computation_cost.mul(self.computation_gas_unit_price).into();
-        if succeeded {
-            GasCostSummary {
-                computation_cost: computation_cost_in_sui,
-                storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
-                storage_rebate: self.storage_rebate.into(),
-            }
-        } else {
-            // If execution failed, no storage creation/deletion will materialize in the store.
-            // Hence they should be 0.
-            GasCostSummary {
-                computation_cost: computation_cost_in_sui,
-                storage_cost: 0,
-                storage_rebate: 0,
-            }
+        GasCostSummary {
+            computation_cost: computation_cost_in_sui,
+            storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
+            storage_rebate: self.storage_rebate.into(),
         }
     }
 
@@ -454,6 +518,13 @@ impl<'a> SuiGasStatus<'a> {
             Ok(ext_cost.mul(self.storage_gas_unit_price))
         }
     }
+
+    fn gas_used(&self) -> GasUnits {
+        let remaining_gas = self.gas_status.remaining_gas();
+        self.init_budget
+            .checked_sub(remaining_gas)
+            .expect("Subtraction overflowed")
+    }
 }
 
 /// Check whether the given gas_object and gas_budget is legit:
@@ -468,9 +539,7 @@ pub fn check_gas_balance(
     gas_object: &Object,
     gas_budget: u64,
     gas_price: u64,
-    extra_amount: u64,
     more_gas_objs: Vec<Object>,
-    extra_objs: Vec<Object>,
     cost_table: &SuiCostTable,
 ) -> UserInputResult {
     if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
@@ -497,19 +566,11 @@ pub fn check_gas_balance(
     }
 
     let mut gas_balance = get_gas_balance(gas_object)? as u128;
-    let gas_budget_amount = (gas_budget as u128) * (gas_price as u128);
+    let required_gas_amount = (gas_budget as u128) * (gas_price as u128);
     for extra_obj in more_gas_objs {
         gas_balance += get_gas_balance(&extra_obj)? as u128;
     }
-    ok_or_gas_balance_error!(gas_balance, gas_budget_amount)?;
-
-    let mut total_balance = gas_balance;
-    for extra_obj in extra_objs {
-        total_balance += get_gas_balance(&extra_obj)? as u128;
-    }
-
-    let total_amount = (gas_budget as u128) + (extra_amount as u128);
-    ok_or_gas_balance_error!(total_balance, total_amount)
+    ok_or_gas_balance_error!(gas_balance, required_gas_amount)
 }
 
 /// Create a new gas status with the given `gas_budget`, and charge the transaction flat fee.

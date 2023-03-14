@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::legacy_empty_cost;
-use fastcrypto_zkp::api::{prepare_pvk_bytes, verify_groth16_in_bytes};
+use fastcrypto_zkp::bls12381::api::{prepare_pvk_bytes, verify_groth16_in_bytes};
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{

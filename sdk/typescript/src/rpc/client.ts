@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import RpcClient from 'jayson/lib/client/browser/index.js';
-import fetch from 'cross-fetch';
 import {
   any,
   Infer,
@@ -16,6 +15,7 @@ import {
 } from 'superstruct';
 import { pkgVersion } from '../pkg-version';
 import { TARGETED_RPC_VERSION } from '../providers/json-rpc-provider';
+import { RequestParamsLike } from 'jayson';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -95,7 +95,7 @@ export class JsonRpcClient {
 
   async requestWithType<T>(
     method: string,
-    args: Array<any>,
+    args: RequestParamsLike,
     struct: Struct<T>,
     skipDataValidation: boolean = false,
   ): Promise<T> {
@@ -121,7 +121,7 @@ export class JsonRpcClient {
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
 
-  async request(method: string, args: Array<any>): Promise<any> {
+  async request(method: string, args: RequestParamsLike): Promise<any> {
     return new Promise((resolve, reject) => {
       this.rpcClient.request(method, args, (err: any, response: any) => {
         if (err) {

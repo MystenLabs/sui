@@ -3,6 +3,7 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::{Batch, Certificate, CertificateDigest, Round};
+use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
@@ -60,7 +61,7 @@ impl CommittedSubDag {
             .map_or_else(|| false, |x| x == output)
     }
 
-    pub fn round(&self) -> Round {
+    pub fn leader_round(&self) -> Round {
         self.leader.round()
     }
 }
@@ -78,6 +79,19 @@ pub struct ReputationScores {
 }
 
 impl ReputationScores {
+    /// Creating a new ReputationScores instance pre-populating the authorities entries with
+    /// zero score value.
+    pub fn new(committee: &Committee) -> Self {
+        let scores_per_authority = committee
+            .authorities()
+            .map(|a| (a.0.clone(), 0_u64))
+            .collect();
+
+        Self {
+            scores_per_authority,
+            ..Default::default()
+        }
+    }
     /// Adds the provided `score` to the existing score for the provided `authority`
     pub fn add_score(&mut self, authority: PublicKey, score: u64) {
         self.scores_per_authority
@@ -89,6 +103,10 @@ impl ReputationScores {
     pub fn total_authorities(&self) -> u64 {
         self.scores_per_authority.len() as u64
     }
+
+    pub fn all_zero(&self) -> bool {
+        !self.scores_per_authority.values().any(|e| *e > 0)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -97,6 +115,8 @@ pub struct CommittedSubDagShell {
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
+    // The round of the leader
+    pub leader_round: Round,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
@@ -108,6 +128,7 @@ impl CommittedSubDagShell {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
+            leader_round: sub_dag.leader.round(),
             sub_dag_index: sub_dag.sub_dag_index,
             reputation_score: sub_dag.reputation_score.clone(),
         }

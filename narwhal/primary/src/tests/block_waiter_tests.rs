@@ -32,7 +32,7 @@ async fn test_successfully_retrieve_block() {
     let header = author
         .header_builder(&committee)
         .payload(fixture_payload(2))
-        .build(author.keypair())
+        .build()
         .unwrap();
     let certificate = fixture.certificate(&header);
     let digest = certificate.digest();
@@ -186,7 +186,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // sort the batches to make sure that the response is the expected one.
         batches.sort_by(|a, b| a.digest.cmp(&b.digest));
 
-        let header = builder.build(author.keypair()).unwrap();
+        let header = builder.build().unwrap();
 
         let certificate = fixture.certificate(&header);
         certificates.push(certificate.clone());

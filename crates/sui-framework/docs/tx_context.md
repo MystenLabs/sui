@@ -9,7 +9,7 @@
 -  [Constants](#@Constants_0)
 -  [Function `sender`](#0x2_tx_context_sender)
 -  [Function `epoch`](#0x2_tx_context_epoch)
--  [Function `epoch_timestamp`](#0x2_tx_context_epoch_timestamp)
+-  [Function `epoch_timestamp_ms`](#0x2_tx_context_epoch_timestamp_ms)
 -  [Function `new_object`](#0x2_tx_context_new_object)
 -  [Function `ids_created`](#0x2_tx_context_ids_created)
 -  [Function `derive_id`](#0x2_tx_context_derive_id)
@@ -150,14 +150,14 @@ Return the current epoch
 
 </details>
 
-<a name="0x2_tx_context_epoch_timestamp"></a>
+<a name="0x2_tx_context_epoch_timestamp_ms"></a>
 
-## Function `epoch_timestamp`
+## Function `epoch_timestamp_ms`
 
 Return the epoch start time as a unix timestamp in milliseconds.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp">epoch_timestamp</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -166,7 +166,7 @@ Return the epoch start time as a unix timestamp in milliseconds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp">epoch_timestamp</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): u64 {
    self.epoch_timestamp_ms
 }
 </code></pre>

@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{random_committee_key_pairs, sha3_hash, AuthorityKeyPair, AuthorityPublicKey};
+use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
+use multiaddr::Multiaddr;
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -31,12 +32,12 @@ pub type CommitteeDigest = [u8; 32];
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
+    // TODO: Remove and replace with constant.
     pub total_votes: StakeUnit,
-    #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
-    #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
-    #[serde(skip)]
+    // TODO: This is no longer needed. This file needs a cleanup since we removed the optional
+    // cached expanded keys.
     loaded: bool,
 }
 
@@ -91,9 +92,14 @@ impl Committee {
     ) {
         let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
-            // TODO: Verify all code path to make sure we always have valid public keys.
-            // e.g. when a new validator is registering themself on-chain.
-            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
+            .map(|(addr, _)| {
+                (
+                    *addr,
+                    (*addr)
+                        .try_into()
+                        .expect("Validator pubkey is always verified on-chain"),
+                )
+            })
             .collect();
 
         let index_map: HashMap<AuthorityName, usize> = voting_rights
@@ -131,12 +137,15 @@ impl Committee {
     }
 
     pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
+        debug_assert_eq!(self.expanded_keys.len(), self.voting_rights.len());
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            None => Err(SuiError::InvalidCommittee(format!(
+                "Authority #{} not found, committee size {}",
+                authority,
+                self.expanded_keys.len()
+            ))),
         }
     }
 
@@ -292,10 +301,11 @@ impl Committee {
     }
 
     // ===== Testing-only methods =====
-
-    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
-    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
-        let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
+    //
+    pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs_of_size(size)
+            .into_iter()
+            .collect();
         let committee = Self::new(
             0,
             key_pairs
@@ -307,6 +317,11 @@ impl Committee {
         )
         .unwrap();
         (committee, key_pairs)
+    }
+
+    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
+    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
+        Self::new_simple_test_committee_of_size(4)
     }
 }
 
@@ -347,23 +362,28 @@ pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CommitteeWithNetAddresses {
-    pub committee: Committee,
-    pub net_addresses: BTreeMap<AuthorityName, Vec<u8>>,
+pub struct NetworkMetadata {
+    pub network_address: Multiaddr,
 }
 
-impl CommitteeWithNetAddresses {
-    pub fn digest(&self) -> CommitteeDigest {
-        sha3_hash(self)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitteeWithNetworkMetadata {
+    pub committee: Committee,
+    pub network_metadata: BTreeMap<AuthorityName, NetworkMetadata>,
+}
+
+impl CommitteeWithNetworkMetadata {
+    pub fn epoch(&self) -> EpochId {
+        self.committee.epoch()
     }
 }
 
-impl Display for CommitteeWithNetAddresses {
+impl Display for CommitteeWithNetworkMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CommitteeWithNetAddresses (committee={}, net_addresses={:?})",
-            self.committee, self.net_addresses
+            "CommitteeWithNetworkMetadata (committee={}, network_metadata={:?})",
+            self.committee, self.network_metadata
         )
     }
 }

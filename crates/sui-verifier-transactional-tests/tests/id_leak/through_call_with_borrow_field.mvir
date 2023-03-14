@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-// no allowed, leaking through call
+// no allowed, the call tries to make a new UID
 module 0x0.m {
     import 0x2.object;
     import 0x2.transfer;

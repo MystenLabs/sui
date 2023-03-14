@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getPureSerializationType,
     getExecutionStatusType,
     getExecutionStatusError,
+    Transaction,
 } from '@mysten/sui.js';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
@@ -52,7 +54,7 @@ export function ModuleFunction({
     const { isValidating, isValid, isSubmitting } = formState;
 
     const typeArguments = useFunctionTypeArguments(
-        functionDetails.type_parameters
+        functionDetails.typeParameters
     );
     const formTypeInputs = useWatch({ control, name: 'types' });
     const resolvedTypeArguments = useMemo(
@@ -66,18 +68,31 @@ export function ModuleFunction({
         functionDetails.parameters,
         resolvedTypeArguments
     );
+
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
+            const tx = new Transaction();
+            tx.setGasBudget(2000);
+            tx.moveCall({
+                target: `${packageId}::${moduleName}::${functionName}`,
+                typeArguments: types ?? [],
+                arguments:
+                    params?.map((param, i) =>
+                        getPureSerializationType(
+                            functionDetails.parameters[i],
+                            param
+                        )
+                            ? tx.pure(param)
+                            : tx.object(param)
+                    ) ?? [],
+            });
             const result = await signAndExecuteTransaction({
-                transaction: {
-                    kind: 'moveCall',
-                    data: {
-                        packageObjectId: packageId,
-                        module: moduleName,
-                        function: functionName,
-                        arguments: params || [],
-                        typeArguments: types || [],
-                        gasBudget: 2000,
+                transaction: tx,
+                options: {
+                    contentOptions: {
+                        showEffects: true,
+                        showEvents: true,
+                        showInput: true,
                     },
                 },
             });

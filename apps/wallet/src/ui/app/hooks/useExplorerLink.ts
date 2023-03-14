@@ -15,7 +15,7 @@ import {
     getValidatorUrl,
 } from '../components/explorer-link//Explorer';
 import { ExplorerLinkType } from '../components/explorer-link/ExplorerLinkType';
-import { activeAccountSelector } from '../redux/slices/account';
+import { useActiveAddress } from './useActiveAddress';
 import useAppSelector from './useAppSelector';
 
 export type ExplorerLinkConfig =
@@ -36,7 +36,7 @@ function useAddress(linkConfig: ExplorerLinkConfig) {
     const { type } = linkConfig;
     const isAddress = type === ExplorerLinkType.address;
     const isProvidedAddress = isAddress && !linkConfig.useActiveAddress;
-    const activeAddress = useAppSelector(activeAccountSelector);
+    const activeAddress = useActiveAddress();
     return isProvidedAddress ? linkConfig.address : activeAddress;
 }
 

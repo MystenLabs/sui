@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  getExecutionStatusType,
-  LocalTxnDataSerializer,
-  ObjectId,
-  RawSigner,
-} from '../../src';
+import { getExecutionStatusType, ObjectId, Transaction } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -15,50 +10,53 @@ import {
   TestToolbox,
 } from './utils/setup';
 
-describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
-  'Test Move call with strings',
-  ({ useLocalTxnBuilder }) => {
-    let toolbox: TestToolbox;
-    let signer: RawSigner;
-    let packageId: ObjectId;
+describe('Test Move call with strings', () => {
+  let toolbox: TestToolbox;
+  let packageId: ObjectId;
 
-    async function callWithString(str: string | string[], funcName: string) {
-      const txn = await signer.executeMoveCall({
-        packageObjectId: packageId,
-        module: 'entry_point_string',
-        function: funcName,
-        typeArguments: [],
-        arguments: [str],
-        gasBudget: DEFAULT_GAS_BUDGET,
-      });
-      expect(getExecutionStatusType(txn)).toEqual('success');
-    }
-
-    beforeAll(async () => {
-      toolbox = await setup();
-      signer = new RawSigner(
-        toolbox.keypair,
-        toolbox.provider,
-        useLocalTxnBuilder
-          ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined,
-      );
-      const packagePath =
-        __dirname +
-        '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
-      packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
+  async function callWithString(
+    str: string | string[],
+    len: number,
+    funcName: string,
+  ) {
+    const tx = new Transaction();
+    tx.setGasBudget(DEFAULT_GAS_BUDGET);
+    tx.moveCall({
+      target: `${packageId}::entry_point_string::${funcName}`,
+      arguments: [tx.pure(str), tx.pure(len)],
     });
-
-    it('Test ascii', async () => {
-      await callWithString('SomeString', 'ascii_arg');
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
+    expect(getExecutionStatusType(result)).toEqual('success');
+  }
 
-    it('Test utf8', async () => {
-      await callWithString('çå∞≠¢õß∂ƒ∫', 'utf8_arg');
-    });
+  beforeAll(async () => {
+    toolbox = await setup();
+    const packagePath =
+      __dirname +
+      '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
+    ({ packageId } = await publishPackage(packagePath));
+  });
 
-    it('Test string vec', async () => {
-      await callWithString(['çå∞≠¢', 'õß∂ƒ∫'], 'utf8_vec_arg');
-    });
-  },
-);
+  it('Test ascii', async () => {
+    const s = 'SomeString';
+    await callWithString(s, s.length, 'ascii_arg');
+  });
+
+  it('Test utf8', async () => {
+    const s = 'çå∞≠¢õß∂ƒ∫';
+    const byte_len = 24;
+    await callWithString(s, byte_len, 'utf8_arg');
+  });
+
+  it('Test string vec', async () => {
+    const s1 = 'çå∞≠¢';
+    const s2 = 'õß∂ƒ∫';
+    const byte_len = 24;
+    await callWithString([s1, s2], byte_len, 'utf8_vec_arg');
+  });
+});

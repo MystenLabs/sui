@@ -6,20 +6,15 @@ import {
   SerializedSignature,
   toSerializedSignature,
 } from '../cryptography/signature';
-import { Provider } from '../providers/provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { SuiAddress } from '../types';
 import { SignerWithProvider } from './signer-with-provider';
-import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
 export class RawSigner extends SignerWithProvider {
   private readonly keypair: Keypair;
 
-  constructor(
-    keypair: Keypair,
-    provider?: Provider,
-    serializer?: TxnDataSerializer,
-  ) {
-    super(provider, serializer);
+  constructor(keypair: Keypair, provider: JsonRpcProvider) {
+    super(provider);
     this.keypair = keypair;
   }
 
@@ -39,7 +34,7 @@ export class RawSigner extends SignerWithProvider {
     });
   }
 
-  connect(provider: Provider): SignerWithProvider {
+  connect(provider: JsonRpcProvider): SignerWithProvider {
     return new RawSigner(this.keypair, provider);
   }
 }

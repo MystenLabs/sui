@@ -39,7 +39,7 @@ describe('RawSigner', () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const { signature } = await signer.signMessage(signData);
+    const { signature } = await signer.signMessage({ message: signData });
     const isValid = await verifyMessage(signData, signature);
     expect(isValid).toBe(true);
   });
@@ -48,7 +48,7 @@ describe('RawSigner', () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const { signature } = await signer.signMessage(signData);
+    const { signature } = await signer.signMessage({ message: signData });
     const isValid = await verifyMessage(
       new TextEncoder().encode('hello worlds'),
       signature,
@@ -73,7 +73,7 @@ describe('RawSigner', () => {
     const keypair = new Secp256k1Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const { signature } = await signer.signMessage(signData);
+    const { signature } = await signer.signMessage({ message: signData });
 
     const isValid = await verifyMessage(signData, signature);
     expect(isValid).toBe(true);

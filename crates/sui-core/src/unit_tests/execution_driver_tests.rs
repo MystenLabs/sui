@@ -512,8 +512,6 @@ async fn test_per_object_overload() {
     sleep(Duration::from_secs(1)).await;
 
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
-    let mut shared_txns = Vec::new();
-    let mut shared_certs = Vec::new();
     // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
     // txn is needed.
     let num_txns = MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH + 1;
@@ -539,8 +537,6 @@ async fn test_per_object_overload() {
             send_consensus(authority, &shared_cert).await;
         }
         send_consensus(&authorities[3], &shared_cert).await;
-        shared_txns.push(shared_txn);
-        shared_certs.push(shared_cert);
     }
 
     // Trying to sign a new transaction would now fail.

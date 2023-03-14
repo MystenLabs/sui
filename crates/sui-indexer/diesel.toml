@@ -5,7 +5,7 @@
 file = "src/schema.rs"
 patch_file = "src/schema.patch"
 # exclude partitions
-filter = { only_tables = ['.*[^_partition_\d]$']}
+filter = { except_tables = ['.*(_partition_)\d+']}
 
 [migrations_directory]
 dir = "migrations"

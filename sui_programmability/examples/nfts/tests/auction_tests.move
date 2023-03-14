@@ -27,7 +27,7 @@ module nfts::auction_tests {
     // Initializes the "state of the world" that mimics what should
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
-    fun init(ctx: &mut TxContext, bidders: vector<address>) {
+    fun init_bidders(ctx: &mut TxContext, bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
             let coin = coin::mint_for_testing<SUI>(100, ctx);
@@ -48,7 +48,7 @@ module nfts::auction_tests {
             let bidders = vector::empty();
             vector::push_back(&mut bidders, bidder1);
             vector::push_back(&mut bidders, bidder2);
-            init(test_scenario::ctx(scenario), bidders);
+            init_bidders(test_scenario::ctx(scenario), bidders);
         };
 
         // a transaction by the item owner to put it for auction
@@ -58,16 +58,8 @@ module nfts::auction_tests {
             id: object::new(ctx),
             value: 42,
         };
-        // generate unique auction ID (it would be more natural to
-        // generate one in crate_auction and return it, but we cannot
-        // do this at the moment)
-        let id = object::new(ctx);
-        // we need to dereference (copy) right here rather wherever
-        // auction_id is used - otherwise id would still be considered
-        // borrowed and could not be passed argument to a function
-        // consuming it
-        let auction_id = object::uid_to_inner(&id);
-        auction::create_auction(to_sell, id, auctioneer, ctx);
+        // create the auction
+        let auction_id = auction::create_auction(to_sell, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid
         test_scenario::next_tx(scenario, bidder1);

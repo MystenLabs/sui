@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ValidatorMetaData } from "@mysten/sui.js";
+import { SuiValidatorSummary } from "@mysten/sui.js";
 import clsx from "clsx";
 import { FormEvent, useState } from "react";
 import { useScorecard } from "../../network/queries/scorecard";
@@ -17,7 +17,7 @@ import { Target } from "./Target";
 
 interface Props {
   index: number;
-  validator: ValidatorMetaData;
+  validator: SuiValidatorSummary;
   stake: ObjectData<StakedSui>;
   delegation?: ObjectData<Delegation>;
 }
@@ -32,9 +32,7 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
     setAmount(evt.currentTarget.value);
   };
 
-  const delegatedStake = BigInt(validator.next_epoch_delegation);
-  const selfStake = BigInt(validator.next_epoch_stake);
-  const totalStake = selfStake + delegatedStake;
+  const totalStake = BigInt(validator.next_epoch_stake);
 
   return (
     <GridItem

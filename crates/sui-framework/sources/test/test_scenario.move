@@ -105,12 +105,12 @@ module sui::test_scenario {
         // digest (and consequently, different object ID's) than the previous tx
         scenario.txn_number = scenario.txn_number + 1;
         let epoch = tx_context::epoch(&scenario.ctx);
-        let epoch_timestamp = tx_context::epoch_timestamp(&scenario.ctx);
+        let epoch_timestamp_ms = tx_context::epoch_timestamp_ms(&scenario.ctx);
         scenario.ctx = tx_context::new_from_hint(
             sender,
             scenario.txn_number,
             epoch,
-            epoch_timestamp,
+            epoch_timestamp_ms,
             0,
         );
         // end the transaction

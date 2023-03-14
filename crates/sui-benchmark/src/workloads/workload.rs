@@ -19,6 +19,7 @@ pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub enum WorkloadType {
+    BatchPayment,
     SharedCounter,
     TransferObject,
     Combination,
@@ -28,6 +29,7 @@ pub enum WorkloadType {
 impl fmt::Display for WorkloadType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            WorkloadType::BatchPayment => write!(f, "batch_payment"),
             WorkloadType::SharedCounter => write!(f, "shared_counter"),
             WorkloadType::TransferObject => write!(f, "transfer_object"),
             WorkloadType::Combination => write!(f, "combination"),
@@ -37,7 +39,7 @@ impl fmt::Display for WorkloadType {
 }
 
 #[async_trait]
-pub trait Workload<T: Payload + ?Sized>: Send + Sync {
+pub trait Workload<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {
     async fn init(
         &mut self,
         init_config: WorkloadInitGas,
@@ -52,14 +54,6 @@ pub trait Workload<T: Payload + ?Sized>: Send + Sync {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<T>>;
     fn get_workload_type(&self) -> WorkloadType;
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
-}
-
-impl std::fmt::Debug for dyn Workload<dyn Payload> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.debug(f)
-    }
 }
 
 type WeightAndPayload = (u32, Box<dyn Workload<dyn Payload>>);
@@ -130,10 +124,6 @@ impl Workload<dyn Payload> for CombinationWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Combination
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self as &CombinationWorkload)
     }
 }
 

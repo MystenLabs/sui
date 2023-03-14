@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type SignedTransaction,
+    type SuiAddress,
+    type SuiTransactionResponse,
+} from '@mysten/sui.js';
 import Browser from 'webextension-polyfill';
 
 import NetworkEnv from '../NetworkEnv';
@@ -12,6 +17,7 @@ import { isGetAccount } from '_payloads/account/GetAccount';
 import {
     isAcquirePermissionsRequest,
     isHasPermissionRequest,
+    type PermissionType,
 } from '_payloads/permissions';
 import {
     isExecuteTransactionRequest,
@@ -21,12 +27,11 @@ import {
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
+import {
+    isSignMessageRequest,
+    type SignMessageRequest,
+} from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 
-import type {
-    SignedTransaction,
-    SuiAddress,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -57,21 +62,10 @@ export class ContentScriptConnection extends Connection {
         const { payload } = msg;
         try {
             if (isGetAccount(payload)) {
-                const existingPermission = await Permissions.getPermission(
-                    this.origin
-                );
-                if (
-                    !(await Permissions.hasPermissions(
-                        this.origin,
-                        ['viewAccount'],
-                        existingPermission
-                    )) ||
-                    !existingPermission
-                ) {
-                    this.sendNotAllowedError(msg.id);
-                } else {
-                    this.sendAccounts(existingPermission.accounts, msg.id);
-                }
+                const { accounts } = await this.ensurePermissions([
+                    'viewAccount',
+                ]);
+                this.sendAccounts(accounts, msg.id);
             } else if (isHasPermissionRequest(payload)) {
                 this.send(
                     createMessage<HasPermissionsResponse>(
@@ -99,57 +93,45 @@ export class ContentScriptConnection extends Connection {
                     // make sure we don't execute transactions that doesn't have a specified account
                     throw new Error('Missing account');
                 }
-                const allowed = await Permissions.hasPermissions(
-                    this.origin,
+                await this.ensurePermissions(
                     ['viewAccount', 'suggestTransactions'],
-                    null,
                     payload.transaction.account
                 );
-                if (allowed) {
-                    const result = await Transactions.executeOrSignTransaction(
-                        { tx: payload.transaction },
-                        this
-                    );
-                    this.send(
-                        createMessage<ExecuteTransactionResponse>(
-                            {
-                                type: 'execute-transaction-response',
-                                result: result as SuiTransactionResponse,
-                            },
-                            msg.id
-                        )
-                    );
-                } else {
-                    this.sendNotAllowedError(msg.id);
-                }
+                const result = await Transactions.executeOrSignTransaction(
+                    { tx: payload.transaction },
+                    this
+                );
+                this.send(
+                    createMessage<ExecuteTransactionResponse>(
+                        {
+                            type: 'execute-transaction-response',
+                            result: result as SuiTransactionResponse,
+                        },
+                        msg.id
+                    )
+                );
             } else if (isSignTransactionRequest(payload)) {
                 if (!payload.transaction.account) {
                     // make sure we don't execute transactions that doesn't have a specified account
                     throw new Error('Missing account');
                 }
-                const allowed = await Permissions.hasPermissions(
-                    this.origin,
+                await this.ensurePermissions(
                     ['viewAccount', 'suggestTransactions'],
-                    null,
                     payload.transaction.account
                 );
-                if (allowed) {
-                    const result = await Transactions.executeOrSignTransaction(
-                        { sign: payload.transaction },
-                        this
-                    );
-                    this.send(
-                        createMessage<SignTransactionResponse>(
-                            {
-                                type: 'sign-transaction-response',
-                                result: result as SignedTransaction,
-                            },
-                            msg.id
-                        )
-                    );
-                } else {
-                    this.sendNotAllowedError(msg.id);
-                }
+                const result = await Transactions.executeOrSignTransaction(
+                    { sign: payload.transaction },
+                    this
+                );
+                this.send(
+                    createMessage<SignTransactionResponse>(
+                        {
+                            type: 'sign-transaction-response',
+                            result: result as SignedTransaction,
+                        },
+                        msg.id
+                    )
+                );
             } else if (isStakeRequest(payload)) {
                 const window = new Window(
                     Browser.runtime.getURL('ui.html') +
@@ -168,6 +150,21 @@ export class ContentScriptConnection extends Connection {
                             type: 'set-network',
                             network: await NetworkEnv.getActiveNetwork(),
                         },
+                        msg.id
+                    )
+                );
+            } else if (isSignMessageRequest(payload) && payload.args) {
+                await this.ensurePermissions(
+                    ['viewAccount', 'suggestTransactions'],
+                    payload.args.accountAddress
+                );
+                const result = await Transactions.signMessage(
+                    payload.args,
+                    this
+                );
+                this.send(
+                    createMessage<SignMessageRequest>(
+                        { type: 'sign-message-request', return: result },
                         msg.id
                     )
                 );
@@ -238,18 +235,6 @@ export class ContentScriptConnection extends Connection {
         this.send(createMessage(error, responseForID));
     }
 
-    private sendNotAllowedError(requestID?: string) {
-        this.sendError(
-            {
-                error: true,
-                message:
-                    "Operation not allowed, dapp doesn't have the required permissions",
-                code: -2,
-            },
-            requestID
-        );
-    }
-
     private sendAccounts(accounts: SuiAddress[], responseForID?: string) {
         this.send(
             createMessage<GetAccountResponse>(
@@ -260,5 +245,24 @@ export class ContentScriptConnection extends Connection {
                 responseForID
             )
         );
+    }
+
+    private async ensurePermissions(
+        permissions: PermissionType[],
+        account?: SuiAddress
+    ) {
+        const existingPermission = await Permissions.getPermission(this.origin);
+        const allowed = await Permissions.hasPermissions(
+            this.origin,
+            permissions,
+            existingPermission,
+            account
+        );
+        if (!allowed || !existingPermission) {
+            throw new Error(
+                "Operation not allowed, dapp doesn't have the required permissions"
+            );
+        }
+        return existingPermission;
     }
 }

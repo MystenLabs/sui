@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
-import { useRpcClient } from '@mysten/core';
+import { useRpcClient, convertNumberToDate } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useParams } from 'react-router-dom';
 
@@ -15,39 +15,27 @@ import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
-import { convertNumberToDate } from '~/utils/timeUtils';
 
 function CheckpointDetail() {
     const { digest } = useParams<{ digest: string }>();
     const rpc = useRpcClient();
 
-    const checkpointQuery = useQuery(['checkpoints', digest], () =>
-        rpc.getCheckpoint(digest!)
+    const { data, isError, isLoading } = useQuery(['checkpoints', digest], () =>
+        rpc.getCheckpoint({ id: digest! })
     );
 
-    // todo: add user_signatures to combined `getCheckpoint` endpoint
-    const contentsQuery = useQuery(
-        ['checkpoints', digest, 'contents'],
-        () => rpc.getCheckpointContents(checkpoint.sequenceNumber),
-        { enabled: !!checkpointQuery.data }
-    );
-
-    if (checkpointQuery.isError)
+    if (isError)
         return (
             <Banner variant="error" fullWidth>
                 There was an issue retrieving data for checkpoint: {digest}
             </Banner>
         );
 
-    if (checkpointQuery.isLoading) return <LoadingSpinner />;
-
-    const {
-        data: { epochRollingGasCostSummary, ...checkpoint },
-    } = checkpointQuery;
+    if (isLoading) return <LoadingSpinner />;
 
     return (
         <div className="flex flex-col space-y-12">
-            <PageHeader title={checkpoint.digest} type="Checkpoint" />
+            <PageHeader title={data.digest} type="Checkpoint" />
             <div className="space-y-8">
                 <TabGroup as="div" size="lg">
                     <TabList>
@@ -62,7 +50,7 @@ function CheckpointDetail() {
                                         variant="p1/medium"
                                         color="steel-darker"
                                     >
-                                        {checkpoint.sequenceNumber}
+                                        {data.sequenceNumber}
                                     </Text>
                                 </DescriptionItem>
                                 <DescriptionItem title="Epoch">
@@ -70,7 +58,7 @@ function CheckpointDetail() {
                                         variant="p1/medium"
                                         color="steel-darker"
                                     >
-                                        {checkpoint.epoch}
+                                        {data.epoch}
                                     </Text>
                                 </DescriptionItem>
                                 <DescriptionItem title="Checkpoint Timestamp">
@@ -78,9 +66,9 @@ function CheckpointDetail() {
                                         variant="p1/medium"
                                         color="steel-darker"
                                     >
-                                        {checkpoint.timestampMs
+                                        {data.timestampMs
                                             ? convertNumberToDate(
-                                                  checkpoint.timestampMs
+                                                  data.timestampMs
                                               )
                                             : '--'}
                                     </Text>
@@ -88,7 +76,8 @@ function CheckpointDetail() {
                             </DescriptionList>
                         </TabPanel>
                         <TabPanel>
-                            <DescriptionList>
+                            {/* TODO: Get validator signatures */}
+                            {/* <DescriptionList>
                                 {contentsQuery.data?.user_signatures.map(
                                     ([signature]) => (
                                         <DescriptionItem
@@ -104,7 +93,7 @@ function CheckpointDetail() {
                                         </DescriptionItem>
                                     )
                                 )}
-                            </DescriptionList>
+                            </DescriptionList> */}
                         </TabPanel>
                     </TabPanels>
                 </TabGroup>
@@ -117,18 +106,25 @@ function CheckpointDetail() {
                             <DescriptionItem title="Computation Fee">
                                 <Text variant="p1/medium" color="steel-darker">
                                     {
-                                        epochRollingGasCostSummary.computation_cost
+                                        data.epochRollingGasCostSummary
+                                            .computationCost
                                     }
                                 </Text>
                             </DescriptionItem>
                             <DescriptionItem title="Storage Fee">
                                 <Text variant="p1/medium" color="steel-darker">
-                                    {epochRollingGasCostSummary.storage_cost}
+                                    {
+                                        data.epochRollingGasCostSummary
+                                            .storageCost
+                                    }
                                 </Text>
                             </DescriptionItem>
                             <DescriptionItem title="Storage Rebate">
                                 <Text variant="p1/medium" color="steel-darker">
-                                    {epochRollingGasCostSummary.storage_rebate}
+                                    {
+                                        data.epochRollingGasCostSummary
+                                            .storageRebate
+                                    }
                                 </Text>
                             </DescriptionItem>
                         </DescriptionList>
@@ -142,8 +138,8 @@ function CheckpointDetail() {
                     <TabPanels>
                         <div className="mt-4">
                             <CheckpointTransactions
-                                digest={checkpoint.digest}
-                                transactions={checkpoint.transactions || []}
+                                digest={data.digest}
+                                transactions={data.transactions || []}
                             />
                         </div>
                     </TabPanels>

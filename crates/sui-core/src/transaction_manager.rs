@@ -132,7 +132,7 @@ impl TransactionManager {
                     .inc();
                 continue;
             }
-            let input_object_kinds = cert.data().intent_message.value.input_objects()?;
+            let input_object_kinds = cert.data().intent_message().value.input_objects()?;
             let input_object_keys = self.authority_store.get_input_object_keys(
                 &digest,
                 &input_object_kinds,
@@ -214,6 +214,9 @@ impl TransactionManager {
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["ready"])
                     .inc();
+                // Record as an executing certificate.
+                assert!(inner.executing_certificates.insert(digest));
+                // Send to execution driver for execution.
                 self.certificate_ready(pending_cert.certificate);
                 continue;
             }
@@ -382,6 +385,12 @@ impl TransactionManager {
                 )
             })
             .collect()
+    }
+
+    // Returns the number of certificates pending execution or being executed by the execution driver right now.
+    pub(crate) fn execution_queue_len(&self) -> usize {
+        let inner = self.inner.read();
+        inner.pending_certificates.len() + inner.executing_certificates.len()
     }
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped

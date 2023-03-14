@@ -196,7 +196,8 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
             mutable: true,
         })],
         MAX_GAS,
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
@@ -271,7 +272,8 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             MAX_GAS,
-        );
+        )
+        .unwrap();
         transactions.push(to_sender_signed_transaction(data, &keypair));
     }
     transactions
@@ -361,7 +363,8 @@ pub fn make_counter_create_transaction(
         vec![],
         MAX_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -388,11 +391,12 @@ pub fn make_counter_increment_transaction(
         })],
         MAX_GAS,
         gas_price.unwrap_or(1),
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, keypair)
 }
 
-pub fn make_delegation_transaction(
+pub fn make_staking_transaction(
     gas_object: ObjectRef,
     coin: ObjectRef,
     validator: SuiAddress,
@@ -404,7 +408,7 @@ pub fn make_delegation_transaction(
         sender,
         SUI_FRAMEWORK_OBJECT_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
-        "request_add_delegation".parse().unwrap(),
+        "request_add_stake".parse().unwrap(),
         vec![],
         gas_object,
         vec![
@@ -418,7 +422,8 @@ pub fn make_delegation_transaction(
         ],
         MAX_DELEGATION_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -454,7 +459,8 @@ pub fn move_transaction_with_type_tags(
         gas_object.compute_object_reference(),
         arguments,
         MAX_GAS,
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, &keypair)
 }
 

@@ -46,10 +46,6 @@ Header:
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-    - signature:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -93,4 +89,4 @@ WorkerSynchronizeMessage:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 96
-
+    - is_certified: BOOL

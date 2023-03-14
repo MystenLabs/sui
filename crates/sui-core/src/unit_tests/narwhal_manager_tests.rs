@@ -14,6 +14,7 @@ use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
@@ -99,11 +100,12 @@ async fn test_narwhal_manager() {
 
         let system_state = state
             .get_sui_system_state_object_for_testing()
-            .expect("Reading Sui system state object cannot fail");
+            .expect("Reading Sui system state object cannot fail")
+            .into_epoch_start_state();
 
         let transactions_addr = &config.consensus_config.as_ref().unwrap().address;
-        let narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-        let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+        let narwhal_committee = system_state.get_narwhal_committee();
+        let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
         let execution_state = Arc::new(NoOpExecutionState {
             epoch: narwhal_committee.epoch,
@@ -174,11 +176,10 @@ async fn test_narwhal_manager() {
 
         let system_state = state
             .get_sui_system_state_object_for_testing()
-            .expect("Reading Sui system state object cannot fail");
-
-        let mut narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-        let mut worker_cache =
-            system_state.get_current_epoch_narwhal_worker_cache(&transactions_addr);
+            .expect("Reading Sui system state object cannot fail")
+            .into_epoch_start_state();
+        let mut narwhal_committee = system_state.get_narwhal_committee();
+        let mut worker_cache = system_state.get_narwhal_worker_cache(&transactions_addr);
 
         // advance epoch
         narwhal_committee.epoch = 1;

@@ -29,8 +29,14 @@ describe("BCS: Serde", () => {
     expect(serde(bcs, "bool", false)).toEqual(false);
 
     expect(
-      serde(bcs, "address", "0x000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af")
-    ).toEqual("000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af");
+      serde(
+        bcs,
+        "address",
+        "0x000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af"
+      )
+    ).toEqual(
+      "000000000000000000000000e3edac2c684ddbba5ad1a2b90fb361100b2094af"
+    );
   });
 
   it("should serde structs", () => {
@@ -47,7 +53,9 @@ describe("BCS: Serde", () => {
       .toBytes();
     let struct = bcs.de("Beep", bytes);
 
-    expect(struct.id).toEqual("00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2");
+    expect(struct.id).toEqual(
+      "00000000000000000000000045aacd9ed90a5a8e211502ac3fa898a3819f23b2"
+    );
     expect(struct.value.toString(10)).toEqual("10000000");
   });
 
@@ -59,7 +67,8 @@ describe("BCS: Serde", () => {
       no_value: null,
     });
 
-    let addr = "bb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d";
+    let addr =
+      "bb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d";
 
     expect(addr).toEqual(
       bcs.de("Enum", bcs.ser("Enum", { with_value: addr }).toBytes()).with_value
@@ -143,7 +152,8 @@ describe("BCS: Serde", () => {
 
     {
       let value = {
-        owner: "0000000000000000000000000000000000000000000000000000000000000001",
+        owner:
+          "0000000000000000000000000000000000000000000000000000000000000001",
         is_active: true,
         item: { balance: { value: "10000" } },
       };
@@ -157,6 +167,28 @@ describe("BCS: Serde", () => {
         value.item.balance.value
       );
     }
+  });
+
+  it("should serde SuiObjectRef", () => {
+    const bcs = new BCS(getSuiMoveConfig());
+    bcs.registerStructType("SuiObjectRef", {
+      objectId: "address",
+      version: "u64",
+      digest: "ObjectDigest",
+    });
+
+    // console.log('base58', toB64('1Bhh3pU9gLXZhoVxkr5wyg9sX6'));
+
+    bcs.registerAlias("ObjectDigest", BCS.STRING);
+
+    const value = {
+      objectId:
+        "5443700000000000000000000000000000000000000000000000000000000000",
+      version: 9180n,
+      digest: "hahahahahaha",
+    };
+
+    expect(serde(bcs, "SuiObjectRef", value)).toEqual(value);
   });
 });
 
