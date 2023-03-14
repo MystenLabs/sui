@@ -102,11 +102,7 @@ fn update_hash(
 impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_output(
-        &self,
-        // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: ConsensusOutput,
-    ) {
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
         let mut sequenced_transactions = Vec::new();
 

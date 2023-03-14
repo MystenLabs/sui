@@ -65,6 +65,7 @@ pub struct AuthorityPerpetualTables {
     ///
     /// When an object is deleted we include an entry into this table for its next version and
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
+    /// TODO: Replace this table with a tombstone eventually.
     pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
@@ -85,10 +86,12 @@ pub struct AuthorityPerpetualTables {
 
     // Currently this is needed in the validator for returning events during process certificates.
     // We could potentially remove this if we decided not to provide events in the execution path.
-    // TODO: Figure out what to do with this table in the long run. Also we need a pruning policy for this table.
+    // TODO: Figure out what to do with this table in the long run.
+    // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     /// When transaction is executed via checkpoint executor, we store association here
+    /// TODO: Eventually be able to prune this table.
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
@@ -244,10 +247,7 @@ impl ObjectStore for AuthorityPerpetualTables {
         // Note that the two reads in this function are (obviously) not atomic, and the
         // object may be deleted after we have read it. Hence we check get_latest_parent_entry
         // last, so that the write to self.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // Such race is ok because, even if the reads were atomic, calls to this function would still
         // race with object deletions (the object could be deleted between when the function is
         // called and when the first read takes place, which would be indistinguishable to the
         // caller with the case in which the object is deleted in between the two reads).

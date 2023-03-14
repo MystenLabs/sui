@@ -1188,7 +1188,6 @@ impl AuthorityPerEpochStore {
         next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
         // Atomically store all elements.
-        // TODO: clear the shared object locks per transaction after ensuring consistency.
         let mut write_batch = self.tables.assigned_shared_object_versions.batch();
 
         let tx_digest = *certificate.digest();

@@ -1585,8 +1585,7 @@ impl AuthorityState {
             sui_simulator::task::shutdown_current_node();
         }
     }
-    // TODO: This function takes both committee and genesis as parameter.
-    // Technically genesis already contains committee information. Could consider merging them.
+
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     pub async fn new(
         name: AuthorityName,
@@ -1778,7 +1777,7 @@ impl AuthorityState {
                 if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
                     // This tx will be only partially executed, however the store will be in a safe
                     // state. We will simply never reach eventual consistency for this TX.
-                    // TODO: Should we revert the tx entirely? I'm not sure the effort is
+                    // MUSTFIX: Should we revert the tx entirely? I'm not sure the effort is
                     // warranted, since the only way this can happen is if we are repeatedly
                     // failing to write to the db, in which case a revert probably won't succeed
                     // either.
@@ -2710,10 +2709,11 @@ impl AuthorityState {
             .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
             .await?;
 
-        // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
-        // For now write transactions after because if we write before, there is a chance the lock can fail
+        // Write transactions after because if we write before, there is a chance the lock can fail
         // and this can cause invalid transactions to be inserted in the table.
-        // https://github.com/MystenLabs/sui/issues/1990
+        // It is also safe being non-atomic with above, because if we crash before writing the
+        // transaction, we will just come back, re-acquire the same lock and write the transaction
+        // again.
         epoch_store.insert_signed_transaction(transaction)?;
 
         Ok(())
@@ -2821,12 +2821,6 @@ impl AuthorityState {
             tx_option = epoch_store.get_signed_transaction(tx_digest)?;
         }
         Ok(tx_option)
-    }
-
-    pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
-        self.database
-            .parent(object_ref)
-            .expect("TODO: propagate the error")
     }
 
     pub async fn get_objects(
