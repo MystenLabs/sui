@@ -448,14 +448,10 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(async move {
-            let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
-            Self::handle_certificate(state, consensus_adapter, request, metrics)
-                .instrument(span)
-                .await
-        })
-        .await
-        .unwrap()
+        let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
+        Self::handle_certificate(state, consensus_adapter, request, metrics)
+            .instrument(span)
+            .await
     }
 
     async fn object_info(
