@@ -190,52 +190,63 @@ ExecutionFailureStatus:
     9:
       PublishErrorNonZeroAddress: UNIT
     10:
-      SuiMoveVerificationError: UNIT
+      PublishUpgradeMissingImmediateDependency: UNIT
     11:
+      PublishUpgradeMissingIndirectDependency: UNIT
+    12:
+      PublishUpgradeDependencyDowngrade: UNIT
+    13:
+      PublishUnresolvedPackageDependency:
+        STRUCT:
+          - object:
+              TYPENAME: ObjectID
+    14:
+      SuiMoveVerificationError: UNIT
+    15:
       MovePrimitiveRuntimeError:
         NEWTYPE:
           TYPENAME: MoveLocationOpt
-    12:
+    16:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    13:
-      VMVerificationOrDeserializationError: UNIT
-    14:
-      VMInvariantViolation: UNIT
-    15:
-      FunctionNotFound: UNIT
-    16:
-      ArityMismatch: UNIT
     17:
-      TypeArityMismatch: UNIT
+      VMVerificationOrDeserializationError: UNIT
     18:
-      NonEntryFunctionInvoked: UNIT
+      VMInvariantViolation: UNIT
     19:
+      FunctionNotFound: UNIT
+    20:
+      ArityMismatch: UNIT
+    21:
+      TypeArityMismatch: UNIT
+    22:
+      NonEntryFunctionInvoked: UNIT
+    23:
       CommandArgumentError:
         STRUCT:
           - arg_idx: U16
           - kind:
               TYPENAME: CommandArgumentError
-    20:
+    24:
       TypeArgumentError:
         STRUCT:
           - argument_idx: U16
           - kind:
               TYPENAME: TypeArgumentError
-    21:
+    25:
       UnusedValueWithoutDrop:
         STRUCT:
           - result_idx: U16
           - secondary_idx: U16
-    22:
+    26:
       InvalidPublicFunctionReturnType:
         STRUCT:
           - idx: U16
-    23:
+    27:
       InvalidTransferObject: UNIT
-    24:
+    28:
       EffectsTooLarge:
         STRUCT:
           - current_size: U64
@@ -273,6 +284,10 @@ ModuleId:
         TYPENAME: AccountAddress
     - name:
         TYPENAME: Identifier
+ModuleStruct:
+  STRUCT:
+    - module_name: STR
+    - struct_name: STR
 MoveFieldLayout:
   STRUCT:
     - name:
@@ -323,6 +338,18 @@ MovePackage:
         MAP:
           KEY: STR
           VALUE: BYTES
+    - type_origin_table:
+        MAP:
+          KEY:
+            TYPENAME: ModuleStruct
+          VALUE:
+            TYPENAME: ObjectID
+    - linkage_table:
+        MAP:
+          KEY:
+            TYPENAME: ObjectID
+          VALUE:
+            TYPENAME: UpgradeInfo
 MoveStructLayout:
   ENUM:
     0:
@@ -536,4 +563,10 @@ TypedStoreError:
       MetricsReporting: UNIT
     5:
       RetryableTransactionError: UNIT
+UpgradeInfo:
+  STRUCT:
+    - upgraded_id:
+        TYPENAME: ObjectID
+    - upgraded_version:
+        TYPENAME: SequenceNumber
 
