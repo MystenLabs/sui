@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::HashMap;
-use sui_types::intent::{Intent, IntentMessage, IntentScope};
-use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId, StakeUnit},
@@ -13,10 +12,9 @@ use sui_types::{
     },
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
-        EndOfEpochData, VerifiedCheckpoint,
+        EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
     },
 };
-
 pub struct CommitteeFixture {
     epoch: EpochId,
     validators: HashMap<AuthorityName, (AuthorityKeyPair, StakeUnit)>,
@@ -60,7 +58,7 @@ impl CommitteeFixture {
             epoch: 0,
             sequence_number: 0,
             network_total_transactions: 0,
-            content_digest: empty_contents()
+            content_digest: *empty_contents()
                 .into_inner()
                 .into_checkpoint_contents()
                 .digest(),
@@ -119,7 +117,7 @@ impl CommitteeFixture {
                 epoch: self.epoch,
                 sequence_number: prev.sequence_number + 1,
                 network_total_transactions: 0,
-                content_digest: empty_contents()
+                content_digest: *empty_contents()
                     .into_inner()
                     .into_checkpoint_contents()
                     .digest(),
@@ -164,7 +162,7 @@ impl CommitteeFixture {
             epoch: self.epoch,
             sequence_number: previous_checkpoint.sequence_number + 1,
             network_total_transactions: 0,
-            content_digest: empty_contents()
+            content_digest: *empty_contents()
                 .into_inner()
                 .into_checkpoint_contents()
                 .digest(),

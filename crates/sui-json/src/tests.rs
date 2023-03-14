@@ -476,23 +476,23 @@ fn test_basic_args_linter_top_level() {
     assert!(!json_args.is_empty());
 
     assert_eq!(
-        json_args[1],
+        json_args[1].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
     );
     assert_eq!(
-        json_args[2],
+        json_args[2].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw.parse::<u64>().unwrap())).unwrap()),
     );
     assert_eq!(
-        json_args[3],
+        json_args[3].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
     );
     assert_eq!(
-        json_args[4],
+        json_args[4].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
     );
     assert_eq!(
-        json_args[5],
+        json_args[5].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
     );
 
@@ -560,14 +560,14 @@ fn test_basic_args_linter_top_level() {
     .unwrap();
 
     assert_eq!(
-        args[0],
+        args[0].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&(value_raw.parse::<u64>().unwrap())).unwrap())
     );
 
     // Need to verify this specially
     // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
     assert_eq!(
-        args[1],
+        args[1].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap()),
     );
 
@@ -604,7 +604,7 @@ fn test_basic_args_linter_top_level() {
     .unwrap();
 
     assert_eq!(
-        args[0],
+        args[0].0,
         SuiJsonCallArg::Object(
             ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
         )
@@ -613,7 +613,7 @@ fn test_basic_args_linter_top_level() {
     // Need to verify this specially
     // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
     assert_eq!(
-        args[1],
+        args[1].0,
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
     );
 
@@ -652,9 +652,9 @@ fn test_basic_args_linter_top_level() {
     )
     .unwrap();
 
-    assert!(matches!(args[0], SuiJsonCallArg::ObjVec { .. }));
+    assert!(matches!(args[0].0, SuiJsonCallArg::ObjVec { .. }));
 
-    if let SuiJsonCallArg::ObjVec(vec) = &args[0] {
+    if let SuiJsonCallArg::ObjVec(vec) = &args[0].0 {
         assert_eq!(vec.len(), 2);
         assert_eq!(
             vec[0],
@@ -740,7 +740,7 @@ fn test_from_str() {
     assert!(test.0.is_boolean());
 
     // test id without quotes
-    let object_id = ObjectID::random().to_hex_literal();
+    let object_id = ObjectID::random().to_hex_uncompressed();
     let test = SuiJsonValue::from_str(&object_id).unwrap();
     assert!(test.0.is_string());
     assert_eq!(object_id, test.0.as_str().unwrap());
@@ -758,5 +758,15 @@ fn test_from_str() {
     // test string with quotes
     let test = SuiJsonValue::from_str("\"Some string\"").unwrap();
     assert!(test.0.is_string());
-    assert_eq!("Some string", test.0.as_str().unwrap())
+    assert_eq!("Some string", test.0.as_str().unwrap());
+
+    let test = SuiJsonValue::from_object_id(
+        ObjectID::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
+            .unwrap(),
+    );
+    assert!(test.0.is_string());
+    assert_eq!(
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+        test.0.as_str().unwrap()
+    );
 }

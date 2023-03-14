@@ -7,7 +7,7 @@ export interface TypeReference {
     address: string;
     module: string;
     name: string;
-    type_arguments: SuiMoveNormalizedType[];
+    typeArguments: SuiMoveNormalizedType[];
 }
 
 export const TX_CONTEXT_TYPE = '0x2::tx_context::TxContext';

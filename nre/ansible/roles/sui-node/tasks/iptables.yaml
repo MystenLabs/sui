@@ -1,0 +1,87 @@
+---
+- name: Set the policy for the INPUT chain to ACCEPT (IPv4)
+  iptables:
+    chain: INPUT
+    ip_version: ipv4
+    policy: ACCEPT
+
+- name: Flush filter chains (IPv4)
+  ansible.builtin.iptables:
+    chain: "{{ item }}"
+    ip_version: ipv4
+    flush: yes
+  with_items: ["INPUT", "FORWARD", "OUTPUT"]
+
+- name: Flush filter chains (IPv6)
+  ansible.builtin.iptables:
+    chain: "{{ item }}"
+    ip_version: ipv6
+    flush: yes
+  with_items: ["INPUT", "FORWARD", "OUTPUT"]
+
+- name: Allow all loopback connectivity
+  ansible.builtin.iptables:
+    chain: INPUT
+    in_interface: lo
+    jump: ACCEPT
+
+- name: Allow TCP port 22 / SSH connectivity
+  ansible.builtin.iptables:
+    chain: INPUT
+    destination_port: 22
+    jump: ACCEPT
+    protocol: tcp
+
+- name: Allow established and related connectivity
+  iptables:
+    chain: INPUT
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+
+- name: Allow TCP destination port 8080 / sui-node protocol connectivity
+  iptables:
+    chain: INPUT
+    destination_port: 8080
+    jump: ACCEPT
+    protocol: tcp
+    comment: sui-node protocol
+
+- name: Allow UDP destination port 8081 / sui-node narwhal-primary-address connectivity
+  iptables:
+    chain: INPUT
+    destination_port: 8081
+    jump: ACCEPT
+    protocol: udp
+    comment: sui-node narwhal-primary-address
+
+- name: Allow UDP destination port 8082 / sui-node narwhal-worker-address connectivity
+  iptables:
+    chain: INPUT
+    destination_port: 8082
+    jump: ACCEPT
+    protocol: udp
+    comment: sui-node narwhal-worker-address
+
+- name: Allow UDP destination port 8084 / sui-node peer-to-peer connectivity
+  iptables:
+    chain: INPUT
+    destination_port: 8084
+    jump: ACCEPT
+    protocol: udp
+    comment: sui-node peer-to-peer
+
+- name: Set the policy for the INPUT chain to DROP (IPv4)
+  iptables:
+    chain: INPUT
+    ip_version: ipv4
+    policy: DROP
+
+- name: Set the policy for the INPUT chain to DROP (IPv6)
+  iptables:
+    chain: INPUT
+    ip_version: ipv6
+    policy: DROP
+
+- name: Save iptables configuration (/etc/iptables/)
+  ansible.builtin.command: netfilter-persistent save
+  become: yes

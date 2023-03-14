@@ -481,7 +481,7 @@ fn test_digest_caching() {
 
     signed_tx
         .data_mut_for_testing()
-        .intent_message
+        .intent_message_mut_for_testing()
         .value
         .gas_data_mut()
         .budget += 1;
@@ -668,7 +668,9 @@ fn test_sponsored_transaction_message() {
     let sponsor = (&sponsor_kp.public()).into();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder
+            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -782,7 +784,9 @@ fn test_sponsored_transaction_validity_check() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref());
+        builder
+            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -812,7 +816,7 @@ fn test_sponsored_transaction_validity_check() {
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish(vec![vec![]]);
+        builder.publish_immutable(vec![vec![]]);
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -921,7 +925,7 @@ fn verify_sender_signature_correctly_with_flag() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
-    let s = match &transaction.data().tx_signatures[0] {
+    let s = match &transaction.data().tx_signatures()[0] {
         GenericSignature::Signature(s) => s,
         _ => panic!("invalid"),
     };
@@ -949,7 +953,7 @@ fn verify_sender_signature_correctly_with_flag() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    let s = match &transaction_1.data().tx_signatures[0] {
+    let s = match &transaction_1.data().tx_signatures()[0] {
         GenericSignature::Signature(s) => s,
         _ => panic!("unexpected signature scheme"),
     };
@@ -1016,7 +1020,7 @@ fn test_change_epoch_transaction() {
     assert!(tx.is_system_tx());
     assert_eq!(
         tx.data()
-            .intent_message
+            .intent_message()
             .value
             .input_objects()
             .unwrap()
@@ -1040,7 +1044,7 @@ fn test_consensus_commit_prologue_transaction() {
     assert!(tx.is_system_tx());
     assert_eq!(
         tx.data()
-            .intent_message
+            .intent_message()
             .value
             .input_objects()
             .unwrap()
@@ -1080,10 +1084,12 @@ fn test_move_input_objects() {
         builder
             .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
             .unwrap(),
-        builder.make_obj_vec(vec![
-            ObjectArg::ImmOrOwnedObject(o2),
-            ObjectArg::ImmOrOwnedObject(o3),
-        ]),
+        builder
+            .make_obj_vec(vec![
+                ObjectArg::ImmOrOwnedObject(o2),
+                ObjectArg::ImmOrOwnedObject(o3),
+            ])
+            .unwrap(),
         builder
             .input(CallArg::Object(ObjectArg::SharedObject {
                 id: shared.0,
@@ -1166,10 +1172,12 @@ fn test_unique_input_objects() {
         builder
             .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)))
             .unwrap(),
-        builder.make_obj_vec(vec![
-            ObjectArg::ImmOrOwnedObject(o2),
-            ObjectArg::ImmOrOwnedObject(o3),
-        ]),
+        builder
+            .make_obj_vec(vec![
+                ObjectArg::ImmOrOwnedObject(o2),
+                ObjectArg::ImmOrOwnedObject(o3),
+            ])
+            .unwrap(),
     ];
     let args_2 = vec![builder
         .input(CallArg::Object(ObjectArg::SharedObject {
@@ -1275,12 +1283,19 @@ fn test_certificate_digest() {
     let digest = cert.certificate_digest();
 
     // mutating a tx sig changes the digest.
-    cert.data_mut_for_testing().tx_signatures[0] = t2.tx_signatures[0].clone();
+    *cert
+        .data_mut_for_testing()
+        .tx_signatures_mut_for_testing()
+        .get_mut(0)
+        .unwrap() = t2.tx_signatures()[0].clone();
     assert_ne!(digest, cert.certificate_digest());
 
     // mutating intent changes the digest
     cert = orig.clone();
-    cert.data_mut_for_testing().intent_message.intent.scope = IntentScope::TransactionEffects;
+    cert.data_mut_for_testing()
+        .intent_message_mut_for_testing()
+        .intent
+        .scope = IntentScope::TransactionEffects;
     assert_ne!(digest, cert.certificate_digest());
 
     // mutating signature epoch changes digest
@@ -1292,4 +1307,40 @@ fn test_certificate_digest() {
     cert = orig;
     *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
     assert_ne!(digest, cert.certificate_digest());
+}
+
+// Use this to ensure that our approximation for components used in effects size are not smaller than expected
+// If this test fails, the value of the constant must be increased
+#[test]
+fn check_approx_effects_components_size() {
+    use std::mem::size_of;
+
+    assert!(
+        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMARY,
+        "Update APPROX_SIZE_OF_GAS_COST_SUMARY constant"
+    );
+    assert!(
+        size_of::<EpochId>() < APPROX_SIZE_OF_EPOCH_ID,
+        "Update APPROX_SIZE_OF_EPOCH_ID constant"
+    );
+    assert!(
+        size_of::<Option<TransactionEventsDigest>>() < APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
+        "Update APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST constant"
+    );
+    assert!(
+        size_of::<ObjectRef>() < APPROX_SIZE_OF_OBJECT_REF,
+        "Update APPROX_SIZE_OF_OBJECT_REF constant"
+    );
+    assert!(
+        size_of::<TransactionDigest>() < APPROX_SIZE_OF_TX_DIGEST,
+        "Update APPROX_SIZE_OF_TX_DIGEST constant"
+    );
+    assert!(
+        size_of::<Owner>() < APPROX_SIZE_OF_OWNER,
+        "Update APPROX_SIZE_OF_OWNER constant"
+    );
+    assert!(
+        size_of::<ExecutionStatus>() < APPROX_SIZE_OF_EXECUTION_STATUS,
+        "Update APPROX_SIZE_OF_EXECUTION_STATUS constant"
+    );
 }

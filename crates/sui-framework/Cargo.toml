@@ -20,7 +20,6 @@ bincode = "1.3.3"
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
-fastcrypto-tbls.workspace = true
 
 digest = "0.10.3"
 serde = { version = "1.0.144", features = ["derive"] }

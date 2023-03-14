@@ -132,7 +132,7 @@ impl TransactionManager {
                     .inc();
                 continue;
             }
-            let input_object_kinds = cert.data().intent_message.value.input_objects()?;
+            let input_object_kinds = cert.data().intent_message().value.input_objects()?;
             let input_object_keys = self.authority_store.get_input_object_keys(
                 &digest,
                 &input_object_kinds,

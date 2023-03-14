@@ -19,6 +19,7 @@ use crate::authority::authority_store_types::{
     MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper,
     StoreObjectWrapper,
 };
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
@@ -84,7 +85,7 @@ pub struct AuthorityPerpetualTables {
     // Currently this is needed in the validator for returning events during process certificates.
     // We could potentially remove this if we decided not to provide events in the execution path.
     // TODO: Figure out what to do with this table in the long run. Also we need a pruning policy for this table.
-    pub(crate) events: DBMap<TransactionEventsDigest, TransactionEvents>,
+    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
@@ -172,6 +173,7 @@ impl AuthorityPerpetualTables {
             .epoch_start_configuration
             .get(&())?
             .expect("Must have current epoch.")
+            .epoch_start_state()
             .epoch())
     }
 

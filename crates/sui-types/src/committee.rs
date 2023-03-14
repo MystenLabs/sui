@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{random_committee_key_pairs, AuthorityKeyPair, AuthorityPublicKey};
+use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
@@ -32,9 +32,12 @@ pub type CommitteeDigest = [u8; 32];
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
+    // TODO: Remove and replace with constant.
     pub total_votes: StakeUnit,
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     index_map: HashMap<AuthorityName, usize>,
+    // TODO: This is no longer needed. This file needs a cleanup since we removed the optional
+    // cached expanded keys.
     loaded: bool,
 }
 
@@ -89,9 +92,14 @@ impl Committee {
     ) {
         let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
-            // TODO: Verify all code path to make sure we always have valid public keys.
-            // e.g. when a new validator is registering themself on-chain.
-            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
+            .map(|(addr, _)| {
+                (
+                    *addr,
+                    (*addr)
+                        .try_into()
+                        .expect("Validator pubkey is always verified on-chain"),
+                )
+            })
             .collect();
 
         let index_map: HashMap<AuthorityName, usize> = voting_rights
@@ -293,10 +301,11 @@ impl Committee {
     }
 
     // ===== Testing-only methods =====
-
-    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
-    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
-        let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
+    //
+    pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs_of_size(size)
+            .into_iter()
+            .collect();
         let committee = Self::new(
             0,
             key_pairs
@@ -308,6 +317,11 @@ impl Committee {
         )
         .unwrap();
         (committee, key_pairs)
+    }
+
+    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
+    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
+        Self::new_simple_test_committee_of_size(4)
     }
 }
 

@@ -34,7 +34,6 @@ export const StakeObject = object({
   stakeRequestEpoch: EpochId,
   stakeActiveEpoch: EpochId,
   principal: number(),
-  tokenLock: nullable(EpochId),
   status: union([literal('Active'), literal('Pending')]),
   estimatedReward: optional(number()),
 });
@@ -43,17 +42,6 @@ export const DelegatedStake = object({
   validatorAddress: SuiAddress,
   stakingPool: ObjectId,
   stakes: array(StakeObject),
-});
-
-export const ParametersFields = object({
-  max_validator_count: string(),
-  min_validator_stake: string(),
-  storage_gas_price: optional(string()),
-});
-
-export const Parameters = object({
-  type: string(),
-  fields: ParametersFields,
 });
 
 export const StakeSubsidyFields = object({
@@ -94,12 +82,12 @@ export const DelegationStakingPoolFields = object({
     size: number(),
   }),
   id: string(),
-  pendingDelegation: number(),
+  pendingStake: number(),
   pendingPoolTokenWithdraw: number(),
   pendingTotalSuiWithdraw: number(),
   poolTokenBalance: number(),
   rewardsPool: object({ value: number() }),
-  startingEpoch: number(),
+  activationEpoch: object({ vec: array() }),
   deactivationEpoch: object({ vec: array() }),
   suiBalance: number(),
 });
@@ -150,7 +138,7 @@ export const SuiValidatorSummary = object({
   stakingPoolSuiBalance: number(),
   rewardsPool: number(),
   poolTokenBalance: number(),
-  pendingDelegation: number(),
+  pendingStake: number(),
   pendingPoolTokenWithdraw: number(),
   pendingTotalSuiWithdraw: number(),
   exchangeRatesId: string(),
@@ -162,13 +150,13 @@ export type SuiValidatorSummary = Infer<typeof SuiValidatorSummary>;
 export const SuiSystemStateSummary = object({
   epoch: number(),
   protocolVersion: number(),
+  systemStateVersion: number(),
   storageFund: number(),
   referenceGasPrice: number(),
   safeMode: boolean(),
   epochStartTimestampMs: number(),
-  minValidatorStake: number(),
-  maxValidatorCount: number(),
   governanceStartEpoch: number(),
+  epochDurationMs: number(),
   stakeSubsidyEpochCounter: number(),
   stakeSubsidyBalance: number(),
   stakeSubsidyCurrentEpochAmount: number(),
@@ -183,6 +171,7 @@ export const SuiSystemStateSummary = object({
   inactivePoolsSize: number(),
   validatorCandidatesId: string(),
   validatorCandidatesSize: number(),
+  atRiskValidators: array(tuple([SuiAddress, number()])),
   validatorReportRecords: array(tuple([SuiAddress, array(SuiAddress)])),
 });
 

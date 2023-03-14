@@ -8,7 +8,9 @@ use move_core_types::language_storage::StructTag;
 use crate::balance::Balance;
 use crate::base_types::{ObjectID, SuiAddress};
 use crate::committee::EpochId;
+use crate::error::SuiError;
 use crate::id::{ID, UID};
+use crate::object::{Data, Object};
 use crate::SUI_FRAMEWORK_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
@@ -18,23 +20,18 @@ pub const MINIMUM_VALIDATOR_STAKE_SUI: u64 = 25_000_000;
 
 pub const STAKING_POOL_MODULE_NAME: &IdentStr = ident_str!("staking_pool");
 pub const STAKED_SUI_STRUCT_NAME: &IdentStr = ident_str!("StakedSui");
-pub const DELEGATION_STRUCT_NAME: &IdentStr = ident_str!("Delegation");
 
-pub const ADD_DELEGATION_MUL_COIN_FUN_NAME: &IdentStr =
-    ident_str!("request_add_delegation_mul_coin");
-pub const ADD_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_add_delegation_mul_coin");
-pub const ADD_DELEGATION_LOCKED_COIN_FUN_NAME: &IdentStr =
-    ident_str!("request_add_delegation_mul_locked_coin");
-pub const WITHDRAW_DELEGATION_FUN_NAME: &IdentStr = ident_str!("request_withdraw_delegation");
+pub const ADD_STAKE_MUL_COIN_FUN_NAME: &IdentStr = ident_str!("request_add_stake_mul_coin");
+pub const ADD_STAKE_FUN_NAME: &IdentStr = ident_str!("request_add_stake_mul_coin");
+pub const WITHDRAW_STAKE_FUN_NAME: &IdentStr = ident_str!("request_withdraw_stake");
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakedSui {
     id: UID,
     pool_id: ID,
     validator_address: SuiAddress,
-    delegation_request_epoch: u64,
+    stake_activation_epoch: u64,
     principal: Balance,
-    sui_token_lock: Option<EpochId>,
 }
 
 impl StakedSui {
@@ -47,6 +44,13 @@ impl StakedSui {
         }
     }
 
+    pub fn is_staked_sui(s: &StructTag) -> bool {
+        s.address == SUI_FRAMEWORK_ADDRESS
+            && s.module.as_ident_str() == STAKING_POOL_MODULE_NAME
+            && s.name.as_ident_str() == STAKED_SUI_STRUCT_NAME
+            && s.type_params.is_empty()
+    }
+
     pub fn id(&self) -> ObjectID {
         self.id.id.bytes
     }
@@ -56,7 +60,7 @@ impl StakedSui {
     }
 
     pub fn request_epoch(&self) -> EpochId {
-        self.delegation_request_epoch
+        self.stake_activation_epoch
     }
 
     pub fn principal(&self) -> u64 {
@@ -66,8 +70,24 @@ impl StakedSui {
     pub fn validator_address(&self) -> SuiAddress {
         self.validator_address
     }
+}
 
-    pub fn sui_token_lock(&self) -> Option<EpochId> {
-        self.sui_token_lock
+impl TryFrom<&Object> for StakedSui {
+    type Error = SuiError;
+    fn try_from(object: &Object) -> Result<Self, Self::Error> {
+        match &object.data {
+            Data::Move(o) => {
+                if o.type_().is_staked_sui() {
+                    return bcs::from_bytes(o.contents()).map_err(|err| SuiError::TypeError {
+                        error: format!("Unable to deserialize StakedSui object: {:?}", err),
+                    });
+                }
+            }
+            Data::Package(_) => {}
+        }
+
+        Err(SuiError::TypeError {
+            error: format!("Object type is not a StakedSui: {:?}", object),
+        })
     }
 }

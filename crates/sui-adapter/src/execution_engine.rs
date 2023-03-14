@@ -5,22 +5,22 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use crate::programmable_transactions;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::epoch_data::EpochData;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     ConsensusCommitPrologue, GenesisTransaction, ObjectArg, TransactionKind,
 };
-use sui_types::storage::SingleTxContext;
-use sui_types::storage::{ChildObjectResolver, ParentSync, WriteKind};
+use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
 use sui_types::sui_system_state::{
     get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
     CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
@@ -45,7 +45,7 @@ use sui_types::temporary_store::TemporaryStore;
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<
     Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
@@ -125,7 +125,7 @@ fn charge_gas_for_object_read<S>(
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<
     Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     temporary_store: &mut TemporaryStore<S>,
     transaction_kind: TransactionKind,
@@ -139,17 +139,16 @@ fn execute_transaction<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     // First smash gas into the first coin if more than 1 was provided
-    let sender = tx_ctx.sender();
-    let mut gas_object_ref = match temporary_store.smash_gas(sender, gas) {
+    let gas_object_ref = match temporary_store.smash_gas(gas) {
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
-
+    let is_system = transaction_kind.is_system_tx();
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
-        let execution_result = execution_loop::<Mode, _>(
+        let mut execution_result = execution_loop::<Mode, _>(
             temporary_store,
             transaction_kind,
             gas_object_ref.0,
@@ -158,33 +157,56 @@ fn execute_transaction<
             &mut gas_status,
             protocol_config,
         );
-        if execution_result.is_err() {
-            // Roll back the temporary store if execution failed.
-            temporary_store.reset();
-            // re-smash so temporary store is again aware of smashing
-            gas_object_ref = match temporary_store.smash_gas(sender, gas) {
-                Ok(obj_ref) => obj_ref,
-                Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
-            };
-        }
+
+        let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
+
+        // Check if a limit threshold was crossed.
+        // For metered transactions, there is not soft limit.
+        // For system transactions, we allow a soft limit with alerting, and a hard limit where we terminate
+        match check_limit_by_meter!(
+            !gas_status.is_unmetered(),
+            effects_estimated_size,
+            protocol_config.max_serialized_tx_effects_size_bytes(),
+            protocol_config.max_serialized_tx_effects_size_bytes_system_tx()
+        ) {
+            LimitThresholdCrossed::None => (),
+            LimitThresholdCrossed::Soft(_, limit) => {
+                /* TODO: add more alerting */
+                warn!(
+                    effects_estimated_size = effects_estimated_size,
+                    soft_limit = limit,
+                    "Estimated transaction effects size crossed soft limit",
+                )
+            }
+            LimitThresholdCrossed::Hard(_, lim) => {
+                execution_result = Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::EffectsTooLarge {
+                        current_size: effects_estimated_size as u64,
+                        max_size: lim as u64,
+                    },
+                    "Transaction effects are too large",
+                ))
+            }
+        };
         execution_result
     });
-
-    // Make sure every mutable object's version number is incremented.
-    // This needs to happen before `charge_gas_for_storage_changes` so that it
-    // can charge gas for all mutated objects properly.
-    temporary_store.ensure_active_inputs_mutated(sender, &gas_object_ref.0);
     if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(sender, gas_object_ref.0, &mut gas_status, &mut result, gas);
+        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
     }
-
-    let cost_summary = gas_status.summary(result.is_ok());
+    if !is_system {
+        #[cfg(debug_assertions)]
+        {
+            // ensure that this transaction did not create or destroy SUI
+            temporary_store.check_sui_conserved();
+        }
+    }
+    let cost_summary = gas_status.summary();
     (cost_summary, result)
 }
 
 fn execution_loop<
     Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
+    S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     temporary_store: &mut TemporaryStore<S>,
     transaction_kind: TransactionKind,
@@ -220,11 +242,7 @@ fn execution_loop<
                             previous_transaction: tx_ctx.digest(),
                             storage_rebate: 0,
                         };
-                        temporary_store.write_object(
-                            &SingleTxContext::genesis(),
-                            object,
-                            WriteKind::Create,
-                        );
+                        temporary_store.write_object(object, WriteKind::Create);
                     }
                 }
             }
@@ -315,7 +333,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
             change_epoch,
         );
-        temporary_store.reset();
+        temporary_store.drop_writes();
         let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
         let safe_mode_pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -359,11 +377,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             "upgraded system object {:?}",
             new_package.compute_object_reference()
         );
-        temporary_store.write_object(
-            &SingleTxContext::sui_system(),
-            new_package,
-            WriteKind::Mutate,
-        );
+        temporary_store.write_object(new_package, WriteKind::Mutate);
     }
 
     Ok(())

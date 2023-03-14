@@ -21,26 +21,24 @@ describe('Governance API', () => {
     signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
-  it('test requestAddDelegation', async () => {
-    const result = await addDelegation(signer);
+  it('test requestAddStake', async () => {
+    const result = await addStake(signer);
     expect(getExecutionStatusType(result)).toEqual('success');
   });
 
   it('test getDelegatedStakes', async () => {
-    const stakes = await toolbox.provider.getDelegatedStakes(toolbox.address());
+    const stakes = await toolbox.provider.getDelegatedStakes({
+      owner: toolbox.address(),
+    });
     expect(stakes.length).greaterThan(0);
   });
 
-  it('test requestWithdrawDelegation', async () => {
-    // TODO: implement this
-  });
-
-  it('test requestSwitchDelegation', async () => {
+  it('test requestWithdrawStake', async () => {
     // TODO: implement this
   });
 
   it('test getCommitteeInfo', async () => {
-    const committeeInfo = await toolbox.provider.getCommitteeInfo(0);
+    const committeeInfo = await toolbox.provider.getCommitteeInfo({ epoch: 0 });
     expect(committeeInfo.validators?.length).greaterThan(0);
   });
 
@@ -49,7 +47,7 @@ describe('Governance API', () => {
   });
 });
 
-async function addDelegation(signer: RawSigner) {
+async function addStake(signer: RawSigner) {
   const coins = await signer.provider.getCoins({
     owner: await signer.getAddress(),
     coinType: SUI_TYPE_ARG,
@@ -58,7 +56,7 @@ async function addDelegation(signer: RawSigner) {
   const system = await signer.provider.getLatestSuiSystemState();
   const validators = system.activeValidators;
 
-  const tx = await SuiSystemStateUtil.newRequestAddDelegationTxn(
+  const tx = await SuiSystemStateUtil.newRequestAddStakeTxn(
     signer.provider,
     [coins.data[0].coinObjectId],
     BigInt(DEFAULT_STAKED_AMOUNT),
@@ -67,5 +65,10 @@ async function addDelegation(signer: RawSigner) {
 
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
 
-  return await signer.signAndExecuteTransaction(tx);
+  return await signer.signAndExecuteTransaction({
+    transaction: tx,
+    options: {
+      showEffects: true,
+    },
+  });
 }

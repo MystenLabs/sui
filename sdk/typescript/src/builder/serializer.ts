@@ -140,7 +140,7 @@ export function getPureSerializationType(
       return 'address';
     } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
       const optionToVec: SuiMoveNormalizedType = {
-        Vector: normalizedType.Struct.type_arguments[0],
+        Vector: normalizedType.Struct.typeArguments[0],
       };
       return getPureSerializationType(optionToVec, argVal);
     }

@@ -216,15 +216,15 @@ pub trait TransactionBuilder {
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Add delegated stake to a validator's staking pool using multiple coins and amount.
-    #[method(name = "requestAddDelegation")]
-    async fn request_add_delegation(
+    /// Add stake to a validator's staking pool using multiple coins and amount.
+    #[method(name = "requestAddStake")]
+    async fn request_add_stake(
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// Coin<SUI> or LockedCoin<SUI> object to delegate
+        /// Coin<SUI> or LockedCoin<SUI> object to stake
         coins: Vec<ObjectID>,
-        /// delegation amount
+        /// stake amount
         amount: Option<u64>,
         /// the validator's Sui address
         validator: SuiAddress,
@@ -234,9 +234,9 @@ pub trait TransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Withdraw a delegation from a validator's staking pool.
-    #[method(name = "requestWithdrawDelegation")]
-    async fn request_withdraw_delegation(
+    /// Withdraw stake from a validator's staking pool.
+    #[method(name = "requestWithdrawStake")]
+    async fn request_withdraw_stake(
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,

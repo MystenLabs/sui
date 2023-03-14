@@ -7,7 +7,7 @@ import tmp from 'tmp';
 
 import {
   Ed25519Keypair,
-  getEvents,
+  getPublishedObjectChanges,
   getExecutionStatusType,
   JsonRpcProvider,
   fromB64,
@@ -15,8 +15,9 @@ import {
   Connection,
   Coin,
   Transaction,
-  Commands,
   RawSigner,
+  FaucetResponse,
+  assert,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -50,9 +51,9 @@ export class TestToolbox {
   }
 
   async getGasObjectsOwnedByAddress() {
-    const objects = await this.provider.getObjectsOwnedByAddress(
-      this.address(),
-    );
+    const objects = await this.provider.getObjectsOwnedByAddress({
+      owner: this.address(),
+    });
 
     return objects.filter((obj) => Coin.isSUI(obj));
   }
@@ -78,7 +79,7 @@ export async function setup() {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   const provider = getProvider();
-  await retry(() => provider.requestSuiFromFaucet(address), {
+  const resp = await retry(() => provider.requestSuiFromFaucet(address), {
     backoff: 'EXPONENTIAL',
     // overall timeout in 60 seconds
     timeout: 1000 * 60,
@@ -86,7 +87,7 @@ export async function setup() {
     retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
     logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
   });
-
+  assert(resp, FaucetResponse);
   return new TestToolbox(keypair, provider);
 }
 
@@ -112,26 +113,31 @@ export async function publishPackage(
   );
   const tx = new Transaction();
   tx.setGasBudget(DEFAULT_GAS_BUDGET);
-  const cap = tx.add(
-    Commands.Publish(compiledModules.map((m: any) => Array.from(fromB64(m)))),
-  );
-  tx.add(
-    Commands.MoveCall({
-      target: '0x2::package::make_immutable',
-      arguments: [cap],
-    }),
+  const cap = tx.publish(
+    compiledModules.map((m: any) => Array.from(fromB64(m))),
   );
 
-  const publishTxn = await toolbox.signer.signAndExecuteTransaction(tx);
+  // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
+  tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
+
+  const publishTxn = await toolbox.signer.signAndExecuteTransaction({
+    transaction: tx,
+    options: {
+      showEffects: true,
+      showObjectChanges: true,
+    },
+  });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
+  const packageId = getPublishedObjectChanges(publishTxn)[0].packageId.replace(
+    /^(0x)(0+)/,
+    '0x',
+  );
+  expect(packageId).toBeTruthy();
 
-  // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );
 
-  return packageId;
+  return { packageId, publishTxn };
 }

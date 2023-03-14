@@ -10,8 +10,9 @@ use sui_indexer::models::objects::Object;
 use sui_indexer::models::transactions::Transaction;
 use sui_indexer::store::{IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
 use sui_indexer::Indexer;
-use sui_json_rpc_types::{CheckpointId, SuiObjectDataOptions, SuiObjectResponse};
-use sui_types::base_types::ObjectID;
+use sui_json_rpc_types::{CheckpointId, EventFilter};
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::object::ObjectRead;
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -55,6 +56,8 @@ struct Tables {
 }
 
 impl IndexerStore for InMemoryIndexerStore {
+    type ModuleCache = ();
+
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         Ok(self.tables.read().unwrap().checkpoints.len() as i64 - 1)
     }
@@ -74,6 +77,23 @@ impl IndexerStore for InMemoryIndexerStore {
                 .unwrap()
                 .clone(),
         })
+    }
+
+    fn get_event(
+        &self,
+        _id: sui_types::event::EventID,
+    ) -> Result<sui_indexer::models::events::Event, IndexerError> {
+        todo!()
+    }
+
+    fn get_events(
+        &self,
+        _query: EventFilter,
+        _cursor: Option<sui_types::event::EventID>,
+        _limit: Option<usize>,
+        _descending_order: bool,
+    ) -> Result<sui_json_rpc_types::EventPage, IndexerError> {
+        todo!()
     }
 
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
@@ -159,6 +179,13 @@ impl IndexerStore for InMemoryIndexerStore {
         todo!()
     }
 
+    fn multi_get_transactions_by_digests(
+        &self,
+        _txn_digests: &[String],
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        todo!()
+    }
+
     fn read_transactions(
         &self,
         _last_processed_id: i64,
@@ -167,11 +194,11 @@ impl IndexerStore for InMemoryIndexerStore {
         todo!()
     }
 
-    fn get_object_with_options(
+    fn get_object(
         &self,
         _object_id: ObjectID,
-        _options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, IndexerError> {
+        _version: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, IndexerError> {
         todo!();
     }
 
@@ -195,6 +222,10 @@ impl IndexerStore for InMemoryIndexerStore {
     }
 
     fn log_errors(&self, _errors: Vec<IndexerError>) -> Result<(), IndexerError> {
+        todo!()
+    }
+
+    fn module_cache(&self) -> &Self::ModuleCache {
         todo!()
     }
 }

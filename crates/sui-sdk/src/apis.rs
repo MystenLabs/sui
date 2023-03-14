@@ -14,10 +14,10 @@ use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
-    DynamicFieldPage, EventPage, SuiCoinMetadata, SuiCommittee, SuiEventEnvelope, SuiEventFilter,
-    SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage,
+    DynamicFieldPage, EventFilter, EventPage, SuiCoinMetadata, SuiCommittee, SuiEvent,
+    SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo,
+    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -28,7 +28,6 @@ use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::query::{EventQuery, TransactionQuery};
 
 use futures::StreamExt;
 use sui_json_rpc::api::{CoinReadApiClient, EventReadApiClient, ReadApiClient, WriteApiClient};
@@ -77,6 +76,18 @@ impl ReadApi {
             .await?)
     }
 
+    pub async fn try_multi_get_parsed_past_object(
+        &self,
+        past_objects: Vec<SuiGetPastObjectRequest>,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<Vec<SuiPastObjectResponse>> {
+        Ok(self
+            .api
+            .http
+            .try_multi_get_past_objects(past_objects, Some(options))
+            .await?)
+    }
+
     pub async fn get_object_with_options(
         &self,
         object_id: ObjectID,
@@ -89,16 +100,32 @@ impl ReadApi {
             .await?)
     }
 
+    pub async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: SuiObjectDataOptions,
+    ) -> SuiRpcResult<Vec<SuiObjectResponse>> {
+        Ok(self
+            .api
+            .http
+            .multi_get_object_with_options(object_ids, Some(options))
+            .await?)
+    }
+
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
         Ok(self.api.http.get_total_transaction_number().await?)
     }
 
-    pub async fn get_transactions_in_range(
+    pub async fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> SuiRpcResult<Vec<TransactionDigest>> {
-        Ok(self.api.http.get_transactions_in_range(start, end).await?)
+        Ok(self
+            .api
+            .http
+            .get_transactions_in_range_deprecated(start, end)
+            .await?)
     }
 
     pub async fn get_transaction_with_options(
@@ -129,9 +156,9 @@ impl ReadApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    pub async fn get_transactions(
+    pub async fn query_transactions(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: bool,
@@ -139,7 +166,7 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .get_transactions(query, cursor, limit, Some(descending_order))
+            .query_transactions(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
@@ -161,10 +188,10 @@ impl ReadApi {
 
     pub fn get_transactions_stream(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
         descending_order: bool,
-    ) -> impl Stream<Item = TransactionDigest> + '_ {
+    ) -> impl Stream<Item = SuiTransactionResponse> + '_ {
         stream::unfold(
             (vec![], cursor, true, query),
             move |(mut data, cursor, first, query)| async move {
@@ -172,7 +199,7 @@ impl ReadApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .get_transactions(query.clone(), cursor, Some(100), descending_order)
+                        .query_transactions(query.clone(), cursor, Some(100), descending_order)
                         .await
                         .ok()?;
                     let mut data = page.data;
@@ -336,12 +363,11 @@ impl EventApi {
 
     pub async fn subscribe_event(
         &self,
-        filter: SuiEventFilter,
-    ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiEventEnvelope>>> {
+        filter: EventFilter,
+    ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiEvent>>> {
         match &self.api.ws {
             Some(c) => {
-                let subscription: Subscription<SuiEventEnvelope> =
-                    c.subscribe_event(filter).await?;
+                let subscription: Subscription<SuiEvent> = c.subscribe_event(filter).await?;
                 Ok(subscription.map(|item| Ok(item?)))
             }
             _ => Err(Error::Subscription(
@@ -350,9 +376,13 @@ impl EventApi {
         }
     }
 
-    pub async fn get_events(
+    pub async fn get_events(&self, digest: TransactionDigest) -> SuiRpcResult<Vec<SuiEvent>> {
+        Ok(self.api.http.get_events(digest).await?)
+    }
+
+    pub async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: bool,
@@ -360,16 +390,16 @@ impl EventApi {
         Ok(self
             .api
             .http
-            .get_events(query, cursor, limit, Some(descending_order))
+            .query_events(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
     pub fn get_events_stream(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         descending_order: bool,
-    ) -> impl Stream<Item = SuiEventEnvelope> + '_ {
+    ) -> impl Stream<Item = SuiEvent> + '_ {
         stream::unfold(
             (vec![], cursor, true, query),
             move |(mut data, cursor, first, query)| async move {
@@ -377,7 +407,7 @@ impl EventApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .get_events(query.clone(), cursor, Some(100), descending_order)
+                        .query_events(query.clone(), cursor, Some(100), descending_order)
                         .await
                         .ok()?;
                     let mut data = page.data;
@@ -412,15 +442,20 @@ impl QuorumDriver {
     pub async fn execute_transaction(
         &self,
         tx: VerifiedTransaction,
+        options: SuiTransactionResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let request_type =
-            request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
+        let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .execute_transaction(tx_bytes, signatures, request_type.clone())
+            .execute_transaction(
+                tx_bytes,
+                signatures,
+                Some(options),
+                Some(request_type.clone()),
+            )
             .await?;
 
         Ok(match request_type {

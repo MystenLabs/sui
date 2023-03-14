@@ -57,7 +57,11 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
 
         let response = fullnode
             .quorum_driver()
-            .execute_transaction(txn, Some(ExecuteTransactionRequestType::WaitForEffectsCert))
+            .execute_transaction(
+                txn,
+                SuiTransactionResponseOptions::new().with_effects(),
+                Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+            )
             .await?;
 
         assert!(!response.confirmed_local_execution.unwrap());
@@ -82,6 +86,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             .quorum_driver()
             .execute_transaction(
                 txn,
+                SuiTransactionResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;

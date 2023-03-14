@@ -24,6 +24,8 @@ pub struct SuiSystemStateSummary {
     pub epoch: u64,
     /// The current protocol version, starting from 1.
     pub protocol_version: u64,
+    /// The current version of the system state data structure type.
+    pub system_state_version: u64,
     /// The storage fund balance.
     pub storage_fund: u64,
     /// The reference gas price for the current epoch.
@@ -36,13 +38,11 @@ pub struct SuiSystemStateSummary {
     pub epoch_start_timestamp_ms: u64,
 
     // System parameters
-    /// Lower-bound on the amount of stake required to become a validator.
-    pub min_validator_stake: u64,
-    /// Maximum number of active validators at any moment.
-    /// We do not allow the number of validators in any epoch to go above this.
-    pub max_validator_count: u64,
     /// The starting epoch in which various on-chain governance features take effect.
     pub governance_start_epoch: u64,
+
+    /// The duration of an epoch, in milliseconds.
+    pub epoch_duration_ms: u64,
 
     // Stake subsidy information
     /// This counter may be different from the current epoch number if
@@ -74,10 +74,12 @@ pub struct SuiSystemStateSummary {
     pub inactive_pools_id: ObjectID,
     /// Number of inactive staking pools.
     pub inactive_pools_size: u64,
-    /// ID of the object that stores preactive validators, mapping their addresses to their `Validator ` structs.
+    /// ID of the object that stores preactive validators, mapping their addresses to their `Validator` structs.
     pub validator_candidates_id: ObjectID,
     /// Number of preactive validators.
     pub validator_candidates_size: u64,
+    /// Map storing the number of epochs for which each validator has been below the low stake threshold.
+    pub at_risk_validators: Vec<(SuiAddress, u64)>,
     /// A map storing the records of validator reporting each other.
     pub validator_report_records: Vec<(SuiAddress, Vec<SuiAddress>)>,
 }
@@ -181,13 +183,13 @@ pub struct SuiValidatorSummary {
     pub staking_pool_deactivation_epoch: Option<u64>,
     /// The total number of SUI tokens in this pool.
     pub staking_pool_sui_balance: u64,
-    /// The epoch delegation rewards will be added here at the end of each epoch.
+    /// The epoch stake rewards will be added here at the end of each epoch.
     pub rewards_pool: u64,
     /// Total number of pool tokens issued by the pool.
     pub pool_token_balance: u64,
-    /// Pending delegation amount for this epoch.
-    pub pending_delegation: u64,
-    /// Pending delegation withdrawn during the current epoch, emptied at epoch boundaries.
+    /// Pending stake amount for this epoch.
+    pub pending_stake: u64,
+    /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
     pub pending_total_sui_withdraw: u64,
     /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
     pub pending_pool_token_withdraw: u64,

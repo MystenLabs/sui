@@ -13,17 +13,13 @@ module sui::genesis {
     use sui::validator;
     use std::option;
 
-    /// Initial value of the lower-bound on the amount of stake required to become a validator.
-    const INIT_MIN_VALIDATOR_STAKE: u64 = 25_000_000_000_000_000;
-
-    /// Initial value of the upper-bound on the number of validators.
-    const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
-
-    /// Stake subisidy to be given out in the very first epoch. Placeholder value.
-    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
+    /// Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).
+    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1_000_000_000_000_000;
 
     /// The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
     const INIT_STAKE_SUBSIDY_FUND_BALANCE: u64 = 1_000_000_000_000_000_000;
+
+    const INIT_STAKE_SUBSIDY_FUND_BALANCE_TEST_ONLY: u64 = 100_000_000_000_000_000;
 
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
@@ -50,10 +46,11 @@ module sui::genesis {
         protocol_version: u64,
         system_state_version: u64,
         epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
-        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE);
+        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE_TEST_ONLY);
         let storage_fund = balance::zero();
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
@@ -103,8 +100,8 @@ module sui::genesis {
                 primary_address,
                 worker_address,
                 // Initialize all validators with uniform stake taken from the subsidy fund.
-                option::some(balance::split(&mut subsidy_fund, initial_validator_stake_mist)),
-                option::none(),
+                // TODO: change this back to take from subsidy fund instead.
+                option::some(balance::split(&mut sui_supply, initial_validator_stake_mist)),
                 gas_price,
                 commission_rate,
                 true, // validator is active right away
@@ -117,13 +114,12 @@ module sui::genesis {
             validators,
             subsidy_fund,
             storage_fund,
-            INIT_MAX_VALIDATOR_COUNT,
-            INIT_MIN_VALIDATOR_STAKE,
             governance_start_epoch,
             INIT_STAKE_SUBSIDY_AMOUNT,
             protocol_version,
             system_state_version,
             epoch_start_timestamp_ms,
+            epoch_duration_ms,
             ctx,
         );
 

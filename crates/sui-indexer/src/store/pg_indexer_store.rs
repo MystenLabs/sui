@@ -4,17 +4,18 @@
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
-use crate::models::objects::{Object, ObjectStatus};
+use crate::models::events::Event;
+use crate::models::objects::Object;
 use crate::models::transactions::Transaction;
+
 use crate::schema::{
-    addresses, checkpoints, events, move_calls, objects, packages, recipients, transactions,
-};
-use crate::schema::{
-    checkpoints::dsl as checkpoints_dsl, move_calls::dsl as move_calls_dsl,
-    objects::dsl as objects_dsl, recipients::dsl as recipients_dsl,
+    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, events, move_calls,
+    move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
+    packages, recipients, recipients::dsl as recipients_dsl, transactions,
     transactions::dsl as transactions_dsl,
 };
 use crate::store::indexer_store::TemporaryCheckpointStore;
+use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 use async_trait::async_trait;
@@ -24,11 +25,18 @@ use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
-use sui_json_rpc_types::{CheckpointId, SuiObjectDataOptions, SuiObjectResponse};
-use sui_types::base_types::ObjectID;
+use std::sync::Arc;
+use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
+use sui_types::object::ObjectRead;
 use tracing::{error, info};
+
+use sui_types::event::EventID;
+
+const MAX_EVENT_PAGE_SIZE: usize = 1000;
 
 const GET_PARTITION_SQL: &str = r#"
 SELECT parent.relname                           AS table_name,
@@ -46,19 +54,24 @@ GROUP BY table_name;
 pub struct PgIndexerStore {
     cp: PgConnectionPool,
     partition_manager: PartitionManager,
+    pub module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
 
 impl PgIndexerStore {
     pub fn new(cp: PgConnectionPool) -> Self {
+        let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(cp.clone())));
         PgIndexerStore {
             cp: cp.clone(),
             partition_manager: PartitionManager::new(cp).unwrap(),
+            module_cache,
         }
     }
 }
 
 #[async_trait]
 impl IndexerStore for PgIndexerStore {
+    type ModuleCache = SyncModuleCache<IndexerModuleResolver>;
+
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
@@ -102,6 +115,126 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
+    fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                events::table
+                    .filter(events::dsl::transaction_digest.eq(id.tx_digest.base58_encode()))
+                    .filter(events::dsl::event_sequence.eq(id.event_seq as i64))
+                    .first::<Event>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading event in PostgresDB with error {:?}",
+                    e
+                ))
+            })
+    }
+
+    fn get_events(
+        &self,
+        query: EventFilter,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> Result<EventPage, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let mut boxed_query = events::table.into_boxed();
+        match query {
+            EventFilter::All(..) => {}
+            EventFilter::Transaction(digest) => {
+                boxed_query =
+                    boxed_query.filter(events::dsl::transaction_digest.eq(digest.base58_encode()));
+            }
+            EventFilter::MoveModule { package, module } => {
+                boxed_query = boxed_query
+                    .filter(events::dsl::package.eq(package.to_string()))
+                    .filter(events::dsl::module.eq(module.to_string()));
+            }
+            EventFilter::MoveEventType(struct_name) => {
+                boxed_query =
+                    boxed_query.filter(events::dsl::event_type.eq(struct_name.to_string()));
+            }
+            EventFilter::Sender(sender) => {
+                boxed_query = boxed_query.filter(events::dsl::sender.eq(sender.to_string()));
+            }
+            EventFilter::TimeRange {
+                start_time,
+                end_time,
+            } => {
+                boxed_query = boxed_query
+                    .filter(events::dsl::event_time_ms.ge(start_time as i64))
+                    .filter(events::dsl::event_time_ms.lt(end_time as i64));
+            }
+            // TODO: Implement EventFilter to SQL
+            _ => {
+                return Err(IndexerError::NotImplementedError(format!(
+                    "Filter type [{query:?}] not supported by the Indexer."
+                )))
+            }
+        }
+
+        let mut page_limit = limit.unwrap_or(MAX_EVENT_PAGE_SIZE);
+        if page_limit > MAX_EVENT_PAGE_SIZE {
+            Err(IndexerError::InvalidArgumentError(format!(
+                "Limit {} exceeds the maximum page size {}",
+                page_limit, MAX_EVENT_PAGE_SIZE
+            )))?;
+        }
+        // fetch one more item to tell if there is next page
+        page_limit += 1;
+
+        let pg_cursor = cursor
+            .map(|c| {
+                self.get_event(c)?
+                    .id
+                    .ok_or_else(|| IndexerError::PostgresReadError("Event ID is None".to_string()))
+            })
+            .transpose()?;
+        let events_vec: Vec<Event> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                if let Some(pg_cursor) = pg_cursor {
+                    if descending_order {
+                        boxed_query = boxed_query.filter(events::dsl::id.lt(pg_cursor));
+                    } else {
+                        boxed_query = boxed_query.filter(events::dsl::id.gt(pg_cursor));
+                    }
+                }
+                if descending_order {
+                    boxed_query = boxed_query.order(events::id.desc());
+                } else {
+                    boxed_query = boxed_query.order(events::id.asc());
+                }
+                boxed_query.load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading events in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let mut sui_event_vec = events_vec
+            .into_iter()
+            .map(|event| event.try_into())
+            .collect::<Result<Vec<SuiEvent>, _>>()?;
+        // reset to original limit for checking and truncating
+        page_limit -= 1;
+        let has_next_page = sui_event_vec.len() > page_limit;
+        sui_event_vec.truncate(page_limit);
+        let next_cursor = sui_event_vec.last().map(|e| e.id.clone());
+        Ok(EventPage {
+            data: sui_event_vec,
+            next_cursor,
+            has_next_page,
+        })
+    }
+
     fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
@@ -134,6 +267,27 @@ impl IndexerStore for PgIndexerStore {
                 IndexerError::PostgresReadError(format!(
                     "Failed reading transaction with digest {} and err: {:?}",
                     txn_digest, e
+                ))
+            })
+    }
+
+    fn multi_get_transactions_by_digests(
+        &self,
+        txn_digests: &[String],
+    ) -> Result<Vec<Transaction>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                transactions_dsl::transactions
+                    .filter(transactions_dsl::transaction_digest.eq_any(txn_digests))
+                    .load::<Transaction>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transactions with digests {:?} and err: {:?}",
+                    txn_digests, e
                 ))
             })
     }
@@ -171,20 +325,28 @@ impl IndexerStore for PgIndexerStore {
             .transpose()
     }
 
-    fn get_object_with_options(
+    fn get_object(
         &self,
         object_id: ObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<SuiObjectResponse, IndexerError> {
+        version: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         let object = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                objects_dsl::objects
-                    .filter(objects_dsl::object_id.eq(object_id.to_string()))
-                    .first::<Object>(conn)
-                    .optional()
+                if let Some(version) = version {
+                    objects_history::dsl::objects_history
+                        .filter(objects_history::object_id.eq(object_id.to_string()))
+                        .filter(objects_history::version.eq(version.value() as i64))
+                        .get_result(conn)
+                        .optional()
+                } else {
+                    objects_dsl::objects
+                        .filter(objects_dsl::object_id.eq(object_id.to_string()))
+                        .first::<Object>(conn)
+                        .optional()
+                }
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
@@ -193,13 +355,10 @@ impl IndexerStore for PgIndexerStore {
                 ))
             })?;
 
-        Ok(match object {
-            None => SuiObjectResponse::NotExists(object_id),
-            Some(obj) => match obj.object_status {
-                ObjectStatus::Deleted => SuiObjectResponse::Deleted(obj.get_object_ref()?),
-                _ => obj.to_object_response(&options)?,
-            },
-        })
+        match object {
+            None => Ok(ObjectRead::NotExists(object_id)),
+            Some(o) => o.try_into_object_read(&self.module_cache),
+        }
     }
 
     fn get_move_call_sequence_by_digest(
@@ -625,6 +784,10 @@ impl IndexerStore for PgIndexerStore {
             }
         }
         Ok(())
+    }
+
+    fn module_cache(&self) -> &Self::ModuleCache {
+        todo!()
     }
 }
 

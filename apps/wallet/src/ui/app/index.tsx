@@ -24,7 +24,7 @@ import HomePage, {
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
 import CreatePage from '_pages/initialize/create';
-import ImportPage from '_pages/initialize/import';
+import { ImportPage } from '_pages/initialize/import';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';

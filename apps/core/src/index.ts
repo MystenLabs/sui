@@ -5,3 +5,4 @@ export * from './api/SentryRpcClient';
 export * from './hooks/useFormatCoin';
 export * from './utils/formatAmount';
 export * from './api/RpcClientContext';
+export * from './hooks/useTimeAgo';

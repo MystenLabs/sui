@@ -15,6 +15,7 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
 use mysten_metrics::RegistryService;
+use shared_crypto::intent::Intent;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::builder::{ProtocolVersionsConfig, SupportedProtocolVersionsCallback};
@@ -32,7 +33,6 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use sui_types::object::Object;
 
@@ -207,7 +207,6 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    epoch_duration_ms: Option<u64>,
     initial_protocol_version: ProtocolVersion,
     supported_protocol_versions_config: ProtocolVersionsConfig,
     db_checkpoint_config_validators: DBCheckpointConfig,
@@ -222,7 +221,6 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            epoch_duration_ms: None,
             initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
@@ -259,6 +257,7 @@ impl TestClusterBuilder {
         self.db_checkpoint_config_validators = DBCheckpointConfig {
             perform_db_checkpoints_at_epoch_end: true,
             checkpoint_path: None,
+            object_store_config: None,
         };
         self
     }
@@ -267,12 +266,17 @@ impl TestClusterBuilder {
         self.db_checkpoint_config_fullnodes = DBCheckpointConfig {
             perform_db_checkpoints_at_epoch_end: true,
             checkpoint_path: None,
+            object_store_config: None,
         };
         self
     }
 
     pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
-        self.epoch_duration_ms = Some(epoch_duration_ms);
+        let mut genesis_config = self
+            .genesis_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        genesis_config.parameters.epoch_duration_ms = epoch_duration_ms;
+        self.genesis_config = Some(genesis_config);
         self
     }
 
@@ -361,10 +365,6 @@ impl TestClusterBuilder {
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.initial_accounts_config(genesis_config);
-        }
-
-        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
-            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         let mut swarm = builder.build();

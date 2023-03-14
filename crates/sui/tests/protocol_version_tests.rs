@@ -84,7 +84,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -105,7 +105,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
                     // first validator only does not support version FINISH.
@@ -140,7 +140,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx <= 1 {
                     // two validators don't support version FINISH, so we never advance to FINISH.
@@ -223,7 +223,7 @@ mod sim_only_tests {
 
         sui_framework_injection::set_override(sui_framework(to));
         TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_objects([sui_framework_object(from)])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
@@ -283,7 +283,7 @@ mod sim_only_tests {
         // Even though a new framework is available, the required new protocol version is not.
         sui_framework_injection::set_override(sui_framework("compatible"));
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_objects([sui_framework_object("base")])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, START,
@@ -296,7 +296,6 @@ mod sim_only_tests {
     }
 
     #[sim_test]
-    #[ignore = "Blocked by checkpointing problems"]
     async fn test_framework_upgrade_conflicting_versions() {
         ProtocolConfig::poison_get_for_min_version();
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
@@ -305,7 +304,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -353,7 +352,7 @@ mod sim_only_tests {
         });
 
         let test_cluster = TestClusterBuilder::new()
-            .with_epoch_duration_ms(10000)
+            .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))

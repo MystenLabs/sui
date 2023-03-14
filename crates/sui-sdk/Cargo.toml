@@ -27,6 +27,7 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-config = { path = "../sui-config" }
 sui-keys =  { path = "../sui-keys" }
+shared-crypto = { path = "../shared-crypto" }
 
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true

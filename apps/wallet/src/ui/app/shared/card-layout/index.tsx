@@ -1,49 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cva, type VariantProps } from 'class-variance-authority';
-
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 
 import type { ReactNode } from 'react';
 
-const cardLayoutStyles = cva(
-    [
-        'flex flex-col flex-nowrap rounded-20 items-center justify-center bg-alice-blue shadow-wallet-content p-7.5 pt-10 flex-grow w-full',
-    ],
-    {
-        variants: {
-            mode: {
-                box: 'bg-alice-blue max-h-popup-height max-w-popup-width',
-                plain: 'bg-transparent',
-            },
-        },
-        defaultVariants: {
-            mode: 'box',
-        },
-    }
-);
-
-export interface CardLayoutProps extends VariantProps<typeof cardLayoutStyles> {
+export type CardLayoutProps = {
     title?: string;
     subtitle?: string;
     headerCaption?: string;
     icon?: 'success' | 'sui';
     children: ReactNode | ReactNode[];
-}
+};
 
-export default function CardLayout({
+export function CardLayout({
     children,
     title,
     subtitle,
     headerCaption,
     icon,
-    ...styleProps
 }: CardLayoutProps) {
     return (
-        <div className={cardLayoutStyles(styleProps)}>
+        <div className="flex flex-col flex-nowrap rounded-20 items-center bg-sui-lightest shadow-wallet-content p-7.5 pt-10 flex-grow w-full max-h-popup-height max-w-popup-width overflow-auto">
             {icon === 'success' ? (
                 <div className="rounded-full w-12 h-12 border-dotted border-success border-2 flex items-center justify-center mb-2.5 p-1">
                     <div className="bg-success rounded-full h-8 w-8 flex items-center justify-center">

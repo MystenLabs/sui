@@ -24,6 +24,8 @@ export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
 
+export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
+
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';

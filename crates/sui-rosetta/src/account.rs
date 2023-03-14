@@ -72,8 +72,7 @@ async fn get_sub_account_balances(
                 .fold(HashMap::new(), |mut balances, stakes| {
                     for delegation in &stakes.stakes {
                         if let StakeStatus::Active { .. } = delegation.status {
-                            *balances.entry(delegation.token_lock).or_default() +=
-                                delegation.principal as u128;
+                            *balances.entry(None).or_default() += delegation.principal as u128;
                         }
                     }
                     balances
@@ -89,8 +88,7 @@ async fn get_sub_account_balances(
                 .fold(HashMap::new(), |mut balances, stakes| {
                     for delegation in &stakes.stakes {
                         if let StakeStatus::Pending = delegation.status {
-                            *balances.entry(delegation.token_lock).or_default() +=
-                                delegation.principal as u128;
+                            *balances.entry(None).or_default() += delegation.principal as u128;
                         }
                     }
                     balances

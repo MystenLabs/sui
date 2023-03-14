@@ -27,6 +27,7 @@ export const TransactionInput = object({
   index: integer(),
   name: optional(string()),
   value: optional(any()),
+  type: optional(union([literal('pure'), literal('object')])),
 });
 export type TransactionInput = Infer<typeof TransactionInput>;
 

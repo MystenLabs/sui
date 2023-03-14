@@ -2,22 +2,22 @@
 title: How Sui Move differs from Core Move
 ---
 
-This document describes the Sui programming model and highlights the differences between the core (previously Diem) Move language and the Move we use in Sui. First remember, Move is a language and Sui a platform. 
+This document describes the Sui Move programming model and highlights the differences between the core (previously Diem) Move language and the Move used in Sui.
 
 To learn more about the motivations behind creating Sui Move, see [Why We Created Sui Move](https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b).
 
 In general, Move code written for other systems will work in Sui with these exceptions:
 
-* [Global Storage operators](https://move-language.github.io/move/global-storage-operators.html)
-* [Key Abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key)
+ * [Global Storage operators](https://move-language.github.io/move/global-storage-operators.html)
+ * [Key Abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key)
 
 Here is a summary of key differences:
 
-1. Sui uses its own [object-centric global storage](#object-centric-global-storage)
-2. Addresses [represent Object IDs](#addresses-represent-object-ids)
-3. Sui objects have [globally unique IDs](#object-with-key-ability-globally-unique-ids)
-4. Sui has [module initializers (init)](#module-initializers)
-5. Sui [entry points take object references as input](#entry-points-take-object-references-as-input)
+ 1. Sui uses its own [object-centric global storage](#object-centric-global-storage)
+ 1. Addresses [represent Object IDs](#addresses-represent-object-ids)
+ 1. Sui objects have [globally unique IDs](#object-with-key-ability-globally-unique-ids)
+ 1. Sui has [module initializers (init)](#module-initializers)
+ 1. Sui [entry points take object references as input](#entry-points-take-object-references-as-input)
 
 Find a detailed description of each change below.
 
@@ -37,18 +37,18 @@ In Sui, since we don’t support global storage in Move, we don’t need the _ad
 
 ## Object with key ability, globally unique IDs
 
-We need a way to distinguish between objects that are internal to Move and objects that can be passed across the Move-Sui boundary (i.e. objects that can be stored in Sui storage). This is important because we need to be able to serialize/deserialize objects in the Move-Sui boundary, and this process makes assumptions on the shape of the objects.
+We need a way to distinguish between objects that are internal to Sui Move and objects that can be stored in Sui storage. This is important because we need to be able to serialize/deserialize objects in the Move-Sui boundary, and this process makes assumptions on the shape of the objects.
 
 We take advantage of the _key_ ability in Move to annotate a Sui object. In core Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) is used to tell that the type can be used as a key for global storage. Since we don’t touch global storage in Sui Move, we are able to repurpose this ability. We require that any struct with key ability must start with an _id_ field with the _ID_ type. The ID type contains both the ObjectID and the sequence number (a.k.a. version). We have bytecode verifiers in place to make sure that the ID field is immutable and cannot be transferred to other objects (as each object must have a unique ID).
 
 ## Module initializers
 
-As described in [Object-centric global storage](#object-centric-global-storage), Move modules are published into Sui storage. A special initializer function optionally defined in a module is executed (once) at the time of module publication by the Sui runtime for the purpose of pre-initializing module-specific data (e.g., creating singleton objects). The initializer function must have the following properties in order to be executed at publication:
+As described in [Object-centric global storage](#object-centric-global-storage), Sui Move modules are published into Sui storage. A special initializer function optionally defined in a module is executed (once) at the time of module publication by the Sui runtime for the purpose of pre-initializing module-specific data (e.g., creating singleton objects). The initializer function must have the following properties in order to be executed at publication:
 
-* Name `init`
-* Single parameter of `&mut TxContext` type
-* No return values
-* Private
+ * Name `init`
+ * Single parameter of `&mut TxContext` type
+ * No return values
+ * Private
 
 ## Entry points take object references as input
 
@@ -56,4 +56,4 @@ Sui offers entry functions that can be called directly from Sui, in addition to 
 
 ## Conclusion
 
-In summary, Sui takes advantage of Move’s security and flexibility and enhances it with the features described above to vastly improve throughput, reduce delays in finality, and make Move programming easier. Now see [how Sui works](how-sui-works.md). For full details, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
+In summary, Sui takes advantage of Move’s security and flexibility and enhances it with the features described above to vastly improve throughput, reduce delays in finality, and make Sui Move programming easier. Now see [how Sui works](how-sui-works.md). For full details, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.

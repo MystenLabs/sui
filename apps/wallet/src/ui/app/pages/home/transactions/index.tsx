@@ -8,7 +8,7 @@ import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
 import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
-import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
+import { useAppSelector, useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
@@ -19,7 +19,7 @@ function TransactionsPage() {
         isLoading,
         error,
         isError,
-    } = useGetTransactionsByAddress(activeAddress);
+    } = useQueryTransactionsByAddress(activeAddress);
 
     if (isError) {
         return (

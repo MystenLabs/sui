@@ -103,6 +103,8 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         cleanup_initial_delay: Duration,
         cleanup_entries_threshold: usize,
     ) -> Self {
+        let num_shards = if cfg!(msim) { 4 } else { num_shards };
+
         let lock_table: Arc<Vec<RwLock<InnerLockTable<K, L>>>> = Arc::new(
             (0..num_shards)
                 .into_iter()

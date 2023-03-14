@@ -169,8 +169,7 @@ async fn accept_suspended_certificates() {
         {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
             Err(DagError::Suspended(notify)) => {
-                let notify = notify.lock().unwrap().take();
-                accept.push(async move { notify.unwrap().recv().await.unwrap() });
+                accept.push(async move { notify.wait().await });
                 continue;
             }
             Err(e) => panic!("Unexpected error {e}"),
@@ -804,7 +803,7 @@ async fn sync_batches_drops_old() {
         let _ = tx_consensus_round_updates.send(30);
     });
     match synchronizer
-        .sync_batches(&test_header, network.clone(), 10)
+        .sync_header_batches(&test_header, network.clone(), 10)
         .await
     {
         Err(DagError::TooOld(_, _, _)) => (),
@@ -869,8 +868,7 @@ async fn gc_suspended_certificates() {
         {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
             Err(DagError::Suspended(notify)) => {
-                let mut notify = notify.lock().unwrap().take().unwrap();
-                accept.push(async move { notify.recv().await.unwrap() });
+                accept.push(async move { notify.wait().await });
                 continue;
             }
             Err(e) => panic!("Unexpected error {e}"),

@@ -12,16 +12,17 @@ use std::collections::HashSet;
 use std::default::Default;
 use std::path::Path;
 
+use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    intent::Intent,
     messages::{ExecuteTransactionRequestType, Transaction, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::{
@@ -338,7 +339,7 @@ impl SimpleFaucet {
                 warn!(?uuid, ?coin_id, "Insufficient balance, removing from pool");
                 self.metrics.total_discarded_coins.inc();
                 Err(FaucetError::GasCoinWithInsufficientBalance(
-                    coin_id.to_hex_literal(),
+                    coin_id.to_hex_uncompressed(),
                 ))
             }
 
@@ -346,7 +347,7 @@ impl SimpleFaucet {
                 // The coin does not exist, or does not belong to the current active address.
                 warn!(?uuid, ?coin_id, "Invalid, removing from pool");
                 self.metrics.total_discarded_coins.inc();
-                Err(FaucetError::InvalidGasCoin(coin_id.to_hex_literal()))
+                Err(FaucetError::InvalidGasCoin(coin_id.to_hex_uncompressed()))
             }
 
             GasCoinResponse::NoGasCoinAvailable => Err(FaucetError::NoGasCoinAvailable),
@@ -414,6 +415,7 @@ impl SimpleFaucet {
             .quorum_driver()
             .execute_transaction(
                 tx.clone(),
+                SuiTransactionResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await

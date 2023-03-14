@@ -6,6 +6,7 @@ use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -13,7 +14,6 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use sui_types::intent::{Intent, IntentMessage};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{

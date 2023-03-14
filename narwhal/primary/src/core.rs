@@ -43,7 +43,7 @@ pub struct Core {
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+    signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     /// Get a signal when the consensus round changes
     rx_consensus_round_updates: watch::Receiver<Round>,
     /// The depth of the garbage collector.
@@ -79,7 +79,7 @@ impl Core {
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
         synchronizer: Arc<Synchronizer>,
-        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
         rx_consensus_round_updates: watch::Receiver<Round>,
         gc_depth: Round,
         rx_shutdown: ConditionalBroadcastReceiver,
@@ -245,7 +245,7 @@ impl Core {
         committee: Committee,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
-        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
         metrics: Arc<PrimaryMetrics>,
         network: anemo::Network,
         header: Header,

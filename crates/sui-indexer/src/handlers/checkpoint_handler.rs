@@ -4,7 +4,6 @@
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::events::Event;
 use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
@@ -14,16 +13,17 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
-use chrono::NaiveDateTime;
 use futures::future::join_all;
 use futures::FutureExt;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiCommand, SuiObjectData, SuiObjectDataOptions, SuiRawData,
-    SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    OwnedObjectRef, SuiCommand, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
+    SuiRawData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
@@ -38,6 +38,7 @@ const MULTI_GET_CHUNK_SIZE: usize = 500;
 pub struct CheckpointHandler<S> {
     state: S,
     rpc_client: SuiClient,
+    event_handler: Arc<EventHandler>,
     metrics: IndexerCheckpointHandlerMetrics,
 }
 
@@ -45,10 +46,16 @@ impl<S> CheckpointHandler<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    pub fn new(state: S, rpc_client: SuiClient, prometheus_registry: &Registry) -> Self {
+    pub fn new(
+        state: S,
+        rpc_client: SuiClient,
+        event_handler: Arc<EventHandler>,
+        prometheus_registry: &Registry,
+    ) -> Self {
         Self {
             state,
             rpc_client,
+            event_handler,
             metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
         }
     }
@@ -101,7 +108,7 @@ where
 
             // Index checkpoint data
             // TODO: Metrics
-            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(checkpoint)?;
+            let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
 
             // Write to DB
             let db_guard = self.metrics.db_write_request_latency.start_timer();
@@ -114,6 +121,21 @@ where
                 next_cursor_sequence_number
             );
             self.metrics.total_checkpoint_processed.inc();
+            db_guard.stop_and_record();
+
+            // Process websocket subscription
+            let db_guard = self.metrics.db_write_request_latency.start_timer();
+            for tx in &checkpoint.transactions {
+                let effect = tx
+                    .effects
+                    .as_ref()
+                    .expect("Transaction Effect cannot be None");
+                let events = tx
+                    .events
+                    .as_ref()
+                    .expect("Transaction Events cannot be None");
+                self.event_handler.process_events(effect, events).await?;
+            }
             db_guard.stop_and_record();
 
             if let Some(indexed_epoch) = indexed_epoch {
@@ -140,7 +162,10 @@ where
                     .read_api()
                     .multi_get_transactions_with_options(
                         digests.to_vec(),
-                        SuiTransactionResponseOptions::full_content(),
+                        SuiTransactionResponseOptions::new()
+                            .with_effects()
+                            .with_input()
+                            .with_events(),
                     )
             },
         ))
@@ -151,7 +176,7 @@ where
             Ok::<_, Error>(acc)
         })?;
 
-        let all_mutated = transactions
+        let object_changes = transactions
             .iter()
             .flat_map(|tx| {
                 let effects = tx.effects.as_ref().expect("effects should not be empty");
@@ -171,35 +196,55 @@ where
                 },
             );
 
-        // TODO: Use multi get objects
         let rpc = self.rpc_client.clone();
-        let all_mutated_objects = join_all(all_mutated.into_iter().map(|(id, version, status)| {
-            rpc.read_api()
-                .try_get_parsed_past_object(id, version, SuiObjectDataOptions::bcs_lossless())
-                .map(move |resp| (resp, status))
-        }))
-        .await
-        .into_iter()
-        .try_fold(vec![], |mut acc, (response, status)| {
-            acc.push((status, response?.into_object()?));
-            Ok::<_, Error>(acc)
-        })?;
+        let changed_objects =
+            join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
+                let wanted_past_object_statuses: Vec<ObjectStatus> =
+                    objects.iter().map(|(_, _, status)| *status).collect();
+
+                let wanted_past_object_request = objects
+                    .iter()
+                    .map(|(id, seq_num, _)| SuiGetPastObjectRequest {
+                        object_id: *id,
+                        version: *seq_num,
+                    })
+                    .collect();
+
+                rpc.read_api()
+                    .try_multi_get_parsed_past_object(
+                        wanted_past_object_request,
+                        SuiObjectDataOptions::bcs_lossless(),
+                    )
+                    .map(move |resp| (resp, wanted_past_object_statuses))
+            }))
+            .await
+            .into_iter()
+            .try_fold(vec![], |mut acc, chunk| {
+                let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
+                    let object_data = resp.into_object()?;
+                    acc.push(object_data);
+                    Ok::<Vec<SuiObjectData>, Error>(acc)
+                })?;
+                let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
+                acc.extend(mutated_object_chunk);
+                Ok::<_, Error>(acc)
+            })?;
 
         Ok(CheckpointData {
             checkpoint,
             transactions,
-            all_mutated_objects,
+            changed_objects,
         })
     }
 
     fn index_checkpoint(
         &self,
-        data: CheckpointData,
+        data: &CheckpointData,
     ) -> Result<(TemporaryCheckpointStore, Option<TemporaryEpochStore>), IndexerError> {
         let CheckpointData {
             checkpoint,
             transactions,
-            all_mutated_objects,
+            changed_objects,
         } = data;
 
         let previous_cp = if checkpoint.sequence_number == 0 {
@@ -219,38 +264,17 @@ where
         let events = transactions
             .iter()
             .flat_map(|tx| {
-                let mut event_sequence = 0;
                 tx.events
                     .as_ref()
                     .expect("Events can only be None if there's an error in fetching or converting events")
                     .data
                     .iter()
-                    .map(move |event| {
-                        // TODO: we should rethink how we store the raw event in DB
-                        let event_content = serde_json::to_string(event).map_err(|err| {
-                            IndexerError::InsertableParsingError(format!(
-                                "Failed converting event to JSON with error: {:?}",
-                                err
-                            ))
-                        })?;
-                        let event = Event {
-                            id: None,
-                            transaction_digest: tx.digest.to_string(),
-                            event_sequence,
-                            event_time: tx
-                                .timestamp_ms
-                                .and_then(|t| NaiveDateTime::from_timestamp_millis(t as i64)),
-                            event_type: event.get_event_type(),
-                            event_content,
-                        };
-                        event_sequence += 1;
-                        Ok::<_, IndexerError>(event)
-                    })
+                    .map(move |event| event.clone().into())
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Vec<_>>();
 
         // Index objects
-        let tx_objects = all_mutated_objects
+        let tx_objects = changed_objects
             .iter()
             // Unwrap safe here as we requested previous tx data in the request.
             .fold(BTreeMap::<_, Vec<_>>::new(), |mut acc, (status, o)| {
@@ -263,7 +287,7 @@ where
         let objects_changes = transactions
             .iter()
             .map(|tx| {
-                let all_mutated_objects = tx_objects
+                let changed_objects = tx_objects
                     .get(&tx.digest)
                     .unwrap_or(&vec![])
                     .iter()
@@ -293,7 +317,7 @@ where
                     })
                     .collect();
                 TransactionObjectChanges {
-                    mutated_objects: all_mutated_objects,
+                    mutated_objects: changed_objects,
                     deleted_objects: all_deleted_objects,
                 }
             })
@@ -306,7 +330,7 @@ where
             .collect();
 
         // Index packages
-        let packages = Self::index_packages(&transactions, &all_mutated_objects)?;
+        let packages = Self::index_packages(transactions, changed_objects)?;
 
         let move_calls: Vec<MoveCall> = transactions
             .iter()
@@ -390,7 +414,7 @@ where
 
         Ok((
             TemporaryCheckpointStore {
-                checkpoint: Checkpoint::from(&checkpoint, &previous_cp)?,
+                checkpoint: Checkpoint::from(checkpoint, &previous_cp)?,
                 transactions: db_transactions,
                 events,
                 objects_changes,
@@ -405,9 +429,9 @@ where
 
     fn index_packages(
         transactions: &[SuiTransactionResponse],
-        all_mutated_objects: &[(ObjectStatus, SuiObjectData)],
+        changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
-        let object_map = all_mutated_objects
+        let object_map = changed_objects
             .iter()
             .filter_map(|(_, o)| {
                 if let SuiRawData::Package(p) = &o

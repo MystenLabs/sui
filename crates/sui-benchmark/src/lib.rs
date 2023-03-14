@@ -24,6 +24,7 @@ use sui_core::{
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffects, SuiTransactionEffectsAPI,
+    SuiTransactionResponseOptions,
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -44,10 +45,7 @@ use sui_types::{
     },
     object::Object,
 };
-use sui_types::{
-    base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
-    messages::ExecuteTransactionRequestType, object::Owner,
-};
+use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
 use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
@@ -551,8 +549,8 @@ impl ValidatorProxy for FullNodeProxy {
                 .quorum_driver()
                 .execute_transaction(
                     tx.clone(),
-                    // We need to use WaitForLocalExecution to make sure objects are updated on FN
-                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                    SuiTransactionResponseOptions::new().with_effects(),
+                    None,
                 )
                 .await
             {

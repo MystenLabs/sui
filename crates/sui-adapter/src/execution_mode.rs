@@ -200,7 +200,7 @@ fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
         Value::Object(obj) => {
             let mut bytes = vec![];
             obj.write_bcs_bytes(&mut bytes);
-            (TypeTag::Struct(Box::new(obj.type_.clone())), bytes)
+            (obj.type_.clone().into(), bytes)
         }
         Value::Raw(RawValueType::Any, bytes) => {
             // this case shouldn't happen

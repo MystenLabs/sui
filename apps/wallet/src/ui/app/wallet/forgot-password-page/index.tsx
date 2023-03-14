@@ -5,7 +5,7 @@ import PageMainLayout from '_app/shared/page-main-layout';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Loading from '_components/loading';
 import { useInitializedGuard } from '_hooks';
-import ImportPage from '_pages/initialize/import';
+import { ImportPage } from '_pages/initialize/import';
 import PageLayout from '_pages/layout';
 
 import st from './ForgotPasswordPage.module.scss';

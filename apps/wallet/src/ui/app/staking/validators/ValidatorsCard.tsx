@@ -5,7 +5,6 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
 import { getAllStakeSui } from '../getAllStakeSui';
-import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -35,7 +34,7 @@ export function ValidatorsCard() {
     const { data: system } = useSystemState();
     const activeValidators = system?.activeValidators;
 
-    // Total active stake for all delegations
+    // Total active stake for all Staked validators
     const totalStake = useMemo(() => {
         if (!delegatedStake) return 0n;
         return getAllStakeSui(delegatedStake);
@@ -54,18 +53,15 @@ export function ValidatorsCard() {
     const totalEarnTokenReward = useMemo(() => {
         if (!delegatedStake || !activeValidators) return 0n;
         return (
-            delegatedStake.flatMap((delegation) => {
-                return delegation.stakes.reduce((acc, d) => {
-                    const validator = activeValidators.find(
-                        ({ suiAddress }) =>
-                            suiAddress === delegation.validatorAddress
-                    );
-                    return (
-                        acc +
-                        BigInt(validator ? getStakingRewards(validator, d) : 0)
-                    );
-                }, 0n);
-            })[0] || 0n
+            delegatedStake.reduce(
+                (acc, curr) =>
+                    curr.stakes.reduce(
+                        (total, { estimatedReward }) =>
+                            total + BigInt(estimatedReward || 0),
+                        acc
+                    ),
+                0n
+            ) || 0n
         );
     }, [delegatedStake, activeValidators]);
 
@@ -99,7 +95,7 @@ export function ValidatorsCard() {
                         <Card
                             padding="none"
                             header={
-                                <div className="py-2.5">
+                                <div className="py-2.5 flex px-3.75 justify-start w-full">
                                     <Text
                                         variant="captionSmall"
                                         weight="semibold"

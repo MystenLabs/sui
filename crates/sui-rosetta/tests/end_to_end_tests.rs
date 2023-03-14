@@ -15,6 +15,7 @@ use sui_rosetta::types::{
 };
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionEffectsAPI};
+use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_type_tag, SUI_FRAMEWORK_OBJECT_ID};
 use test_utils::network::TestClusterBuilder;
@@ -85,7 +86,11 @@ async fn test_locked_sui() {
     let tx = to_sender_signed_transaction(tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(tx, None)
+        .execute_transaction(
+            tx,
+            SuiTransactionResponseOptions::new(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
         .unwrap();
 
@@ -117,7 +122,7 @@ async fn test_locked_sui() {
 }
 
 #[tokio::test]
-async fn test_get_delegated_sui() {
+async fn test_get_staked_sui() {
     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let address = test_cluster.accounts[0];
     let client = test_cluster.wallet.get_client().await.unwrap();
@@ -130,7 +135,7 @@ async fn test_get_delegated_sui() {
         blockchain: "sui".to_string(),
         network: SuiEnv::LocalNet,
     };
-    // Verify initial balance and delegation
+    // Verify initial balance and stake
     let request = AccountBalanceRequest {
         network_identifier: network_identifier.clone(),
         account_identifier: AccountIdentifier {
@@ -163,7 +168,7 @@ async fn test_get_delegated_sui() {
         .await;
     assert_eq!(response.balances[0].value, 0);
 
-    // Delegate some sui
+    // Stake some sui
     let validator = client
         .governance_api()
         .get_latest_sui_system_state()
@@ -179,7 +184,7 @@ async fn test_get_delegated_sui() {
         .data;
     let delegation_tx = client
         .transaction_builder()
-        .request_add_delegation(
+        .request_add_stake(
             address,
             vec![coins[0].coin_object_id],
             Some(100000),
@@ -192,7 +197,11 @@ async fn test_get_delegated_sui() {
     let tx = to_sender_signed_transaction(delegation_tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(tx, None)
+        .execute_transaction(
+            tx,
+            SuiTransactionResponseOptions::new(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
         .unwrap();
 
@@ -236,7 +245,7 @@ async fn test_delegation() {
         .sui_address;
     let ops = client
         .transaction_builder()
-        .request_add_delegation(sender, vec![coin1.0], Some(100000), validator, None, 10000)
+        .request_add_stake(sender, vec![coin1.0], Some(100000), validator, None, 10000)
         .await
         .unwrap();
 

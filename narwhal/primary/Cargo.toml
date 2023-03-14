@@ -48,6 +48,7 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
+mysten-common.workspace = true
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 anemo.workspace = true

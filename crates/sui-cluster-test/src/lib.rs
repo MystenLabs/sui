@@ -21,9 +21,9 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use test_utils::messages::make_transactions_with_wallet_context;
 
+use shared_crypto::intent::Intent;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
-use sui_types::intent::Intent;
 use sui_types::{
     base_types::SuiAddress,
     messages::{Transaction, TransactionData, VerifiedTransaction},
@@ -138,6 +138,11 @@ impl TestContext {
                 Transaction::from_data(txn_data, Intent::default(), vec![signature])
                     .verify()
                     .unwrap(),
+                SuiTransactionResponseOptions::new()
+                    .with_object_changes()
+                    .with_balance_changes()
+                    .with_effects()
+                    .with_events(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await

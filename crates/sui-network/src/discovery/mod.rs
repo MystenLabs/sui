@@ -62,7 +62,7 @@ pub struct NodeInfo {
     pub timestamp_ms: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TrustedPeerChangeEvent {
     pub new_peers: Vec<PeerInfo>,
 }

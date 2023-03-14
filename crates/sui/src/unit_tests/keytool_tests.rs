@@ -12,6 +12,8 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentScope;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
 use sui_types::base_types::ObjectDigest;
 use sui_types::base_types::ObjectID;
@@ -28,8 +30,6 @@ use sui_types::crypto::Signature;
 use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
-use sui_types::intent::Intent;
-use sui_types::intent::IntentScope;
 use sui_types::messages::TransactionData;
 use tempfile::TempDir;
 

@@ -36,6 +36,7 @@ module.exports = {
                 DEFAULT: '#6fbcf0',
                 bright: '#2A38EB',
                 light: '#E1F3FF',
+                lightest: '#F1F8FD',
                 dark: '#1F6493',
             },
 
@@ -99,6 +100,7 @@ module.exports = {
                 subtitleSmallExtra: ['10px', '1'],
                 caption: ['12px', '1'],
                 captionSmall: ['11px', '1'],
+                captionSmallExtra: ['10px', '1'],
                 iconTextLarge: ['48px', '1'],
 
                 // Heading sizes:

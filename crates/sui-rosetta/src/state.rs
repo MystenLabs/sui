@@ -240,8 +240,8 @@ impl CheckpointBlockProvider {
                     *digest,
                     SuiTransactionResponseOptions::new()
                         .with_input()
-                        .with_events()
-                        .with_effects(),
+                        .with_effects()
+                        .with_balance_changes(),
                 )
                 .await?;
             transactions.push(Transaction {

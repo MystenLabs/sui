@@ -52,7 +52,6 @@ pub struct Stake {
     pub stake_request_epoch: EpochId,
     pub stake_active_epoch: EpochId,
     pub principal: u64,
-    pub token_lock: Option<EpochId>,
     #[serde(flatten)]
     pub status: StakeStatus,
 }

@@ -9,19 +9,19 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 
-/// A representation of a SHA3-256 Digest
+/// A representation of a 32 byte digest
 #[serde_as]
 #[derive(
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
-pub struct Sha3Digest(
+pub struct Digest(
     #[schemars(with = "Base58")]
     #[serde_as(as = "Readable<Base58, Bytes>")]
     [u8; 32],
 );
 
-impl Sha3Digest {
-    pub const ZERO: Self = Sha3Digest([0; 32]);
+impl Digest {
+    pub const ZERO: Self = Digest([0; 32]);
 
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(digest)
@@ -46,44 +46,44 @@ impl Sha3Digest {
     }
 }
 
-impl AsRef<[u8]> for Sha3Digest {
+impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl AsRef<[u8; 32]> for Sha3Digest {
+impl AsRef<[u8; 32]> for Digest {
     fn as_ref(&self) -> &[u8; 32] {
         &self.0
     }
 }
 
-impl From<Sha3Digest> for [u8; 32] {
-    fn from(digest: Sha3Digest) -> Self {
+impl From<Digest> for [u8; 32] {
+    fn from(digest: Digest) -> Self {
         digest.into_inner()
     }
 }
 
-impl From<[u8; 32]> for Sha3Digest {
+impl From<[u8; 32]> for Digest {
     fn from(digest: [u8; 32]) -> Self {
         Self::new(digest)
     }
 }
 
-impl fmt::Display for Sha3Digest {
+impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO avoid the allocation
         f.write_str(&Base58::encode(self.0))
     }
 }
 
-impl fmt::Debug for Sha3Digest {
+impl fmt::Debug for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
 }
 
-impl fmt::LowerHex for Sha3Digest {
+impl fmt::LowerHex for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -97,7 +97,7 @@ impl fmt::LowerHex for Sha3Digest {
     }
 }
 
-impl fmt::UpperHex for Sha3Digest {
+impl fmt::UpperHex for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -115,19 +115,19 @@ impl fmt::UpperHex for Sha3Digest {
 #[derive(
     Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
-pub struct CheckpointDigest(Sha3Digest);
+pub struct CheckpointDigest(Digest);
 
 impl CheckpointDigest {
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
-        Self(Sha3Digest::generate(rng))
+        Self(Digest::generate(rng))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 
     pub const fn inner(&self) -> &[u8; 32] {
@@ -202,19 +202,19 @@ impl std::str::FromStr for CheckpointDigest {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct CheckpointContentsDigest(Sha3Digest);
+pub struct CheckpointContentsDigest(Digest);
 
 impl CheckpointContentsDigest {
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
-        Self(Sha3Digest::generate(rng))
+        Self(Digest::generate(rng))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 
     pub const fn inner(&self) -> &[u8; 32] {
@@ -282,15 +282,15 @@ impl fmt::UpperHex for CheckpointContentsDigest {
 
 /// A digest of a cerificate, which commits to the signatures as well as the tx.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CertificateDigest(Sha3Digest);
+pub struct CertificateDigest(Digest);
 
 impl CertificateDigest {
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 }
 
@@ -302,7 +302,7 @@ impl fmt::Debug for CertificateDigest {
 
 /// A transaction will have a (unique) digest.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionDigest(Sha3Digest);
+pub struct TransactionDigest(Digest);
 
 impl Default for TransactionDigest {
     fn default() -> Self {
@@ -311,10 +311,10 @@ impl Default for TransactionDigest {
 }
 
 impl TransactionDigest {
-    pub const ZERO: Self = Self(Sha3Digest::ZERO);
+    pub const ZERO: Self = Self(Digest::ZERO);
 
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     /// A digest we use to signify the parent transaction was the genesis,
@@ -325,11 +325,11 @@ impl TransactionDigest {
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
-        Self(Sha3Digest::generate(rng))
+        Self(Digest::generate(rng))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 
     pub fn inner(&self) -> &[u8; 32] {
@@ -415,21 +415,21 @@ impl std::str::FromStr for TransactionDigest {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionEffectsDigest(Sha3Digest);
+pub struct TransactionEffectsDigest(Digest);
 
 impl TransactionEffectsDigest {
-    pub const ZERO: Self = Self(Sha3Digest::ZERO);
+    pub const ZERO: Self = Self(Digest::ZERO);
 
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
-        Self(Sha3Digest::generate(rng))
+        Self(Digest::generate(rng))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 
     pub const fn inner(&self) -> &[u8; 32] {
@@ -497,17 +497,17 @@ impl fmt::UpperHex for TransactionEffectsDigest {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionEventsDigest(Sha3Digest);
+pub struct TransactionEventsDigest(Digest);
 
 impl TransactionEventsDigest {
-    pub const ZERO: Self = Self(Sha3Digest::ZERO);
+    pub const ZERO: Self = Self(Digest::ZERO);
 
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 }
 
@@ -521,7 +521,7 @@ impl fmt::Debug for TransactionEventsDigest {
 
 // Each object has a unique digest
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct ObjectDigest(Sha3Digest);
+pub struct ObjectDigest(Digest);
 
 impl ObjectDigest {
     pub const MIN: ObjectDigest = Self::new([u8::MIN; 32]);
@@ -538,15 +538,15 @@ impl ObjectDigest {
         Self::new([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; 32]);
 
     pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Sha3Digest::new(digest))
+        Self(Digest::new(digest))
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
-        Self(Sha3Digest::generate(rng))
+        Self(Digest::generate(rng))
     }
 
     pub fn random() -> Self {
-        Self(Sha3Digest::random())
+        Self(Digest::random())
     }
 
     pub const fn inner(&self) -> &[u8; 32] {

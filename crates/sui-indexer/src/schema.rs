@@ -61,9 +61,13 @@ diesel::table! {
         id -> Int8,
         transaction_digest -> Varchar,
         event_sequence -> Int8,
-        event_time -> Nullable<Timestamp>,
-        event_type -> Varchar,
-        event_content -> Varchar,
+        sender -> Varchar,
+        package -> Varchar,
+        module -> Text,
+        event_type -> Text,
+        event_time_ms -> Nullable<Int8>,
+        parsed_json -> Jsonb,
+        event_bcs -> Bytea,
     }
 }
 
@@ -99,6 +103,7 @@ diesel::table! {
         object_type -> Varchar,
         object_status -> ObjectStatus,
         has_public_transfer -> Bool,
+        storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
     }
 }
@@ -122,6 +127,7 @@ diesel::table! {
         object_type -> Varchar,
         object_status -> ObjectStatus,
         has_public_transfer -> Bool,
+        storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
     }
 }
@@ -192,7 +198,7 @@ diesel::table! {
         recipients -> Array<Nullable<Text>>,
         checkpoint_sequence_number -> Int8,
         transaction_time -> Nullable<Timestamp>,
-        transaction_kind -> Nullable<Text>,
+        transaction_kind -> Text,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,

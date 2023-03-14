@@ -2,6 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
+
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
@@ -11,11 +15,7 @@ use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::parser::parse_struct_tag;
-use mysten_metrics::spawn_monitored_task;
+use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -24,20 +24,6 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::time::Duration;
-use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
-use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
-use sui_types::crypto::AuthoritySignInfo;
-use sui_types::error::UserInputError;
-use sui_types::intent::Intent;
-use sui_types::intent::IntentScope;
-use sui_types::message_envelope::Message;
-use sui_types::parse_sui_struct_tag;
-use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::MOVE_STDLIB_OBJECT_ID;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -46,41 +32,52 @@ use tracing::{debug, error, error_span, info, instrument, trace, warn, Instrumen
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
+use mysten_metrics::spawn_monitored_task;
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
+use shared_crypto::intent::{Intent, IntentScope};
+use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
+use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, DevInspectResults, DryRunTransactionResponse, SuiEvent,
-    SuiEventEnvelope, SuiMoveValue, SuiTransactionEvents,
+    DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
+    SuiTransactionEvents,
 };
 use sui_macros::{fail_point, nondeterministic};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
-    event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
 use sui_types::committee::{EpochId, ProtocolVersion};
-use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
+use sui_types::crypto::AuthoritySignInfo;
+use sui_types::crypto::{user_hash, AuthorityKeyPair, NetworkKeyPair, Signer};
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
+use sui_types::error::UserInputError;
 use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{MoveObject, Owner, PastObjectRead};
-use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::storage::{ObjectKey, WriteKind};
+use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
+use sui_types::query::TransactionFilter;
+use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
+use sui_types::MOVE_STDLIB_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -91,27 +88,23 @@ use sui_types::{
     object::{Object, ObjectFormatOptions, ObjectRead},
     SUI_FRAMEWORK_ADDRESS,
 };
+use typed_store::Map;
 
-use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, EpochStartConfiguration,
-};
-pub use crate::authority::authority_per_epoch_store::{
-    VerifiedCertificateCache, VerifiedCertificateCacheMetrics,
-};
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::event_handler::EventHandler;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::{
-    event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
-};
-use sui_adapter::execution_engine;
-use sui_types::digests::TransactionEventsDigest;
+use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -130,8 +123,8 @@ pub mod move_integration_tests;
 mod gas_tests;
 
 #[cfg(test)]
-#[path = "unit_tests/tbls_tests.rs"]
-mod tbls_tests;
+#[path = "unit_tests/batch_verification_tests.rs"]
+mod batch_verification_tests;
 
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
@@ -139,6 +132,7 @@ pub mod authority_per_epoch_store_pruner;
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
+pub mod epoch_start_configuration;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -438,7 +432,7 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    pub event_handler: Option<Arc<EventHandler>>,
+    pub event_handler: Arc<EventHandler>,
     pub(crate) checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
@@ -498,7 +492,7 @@ impl AuthorityState {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
-            &transaction.data().intent_message.value,
+            &transaction.data().intent_message().value,
         )
         .await?;
 
@@ -544,10 +538,15 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        fp_ensure!(
+            !transaction.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         let tx_digest = *transaction.digest();
         debug!(
             "handle_transaction with transaction data: {:?}",
-            &transaction.data().intent_message.value
+            &transaction.data().intent_message().value
         );
 
         // Ensure an idempotent answer. This is checked before the system_tx check so that
@@ -922,7 +921,7 @@ impl AuthorityState {
         self.metrics.batch_size.observe(
             certificate
                 .data()
-                .intent_message
+                .intent_message()
                 .value
                 .kind()
                 .num_commands() as f64,
@@ -968,7 +967,7 @@ impl AuthorityState {
             *certificate.digest(),
             epoch_store.protocol_config(),
         );
-        let transaction_data = &certificate.data().intent_message.value;
+        let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -981,7 +980,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 epoch_store.move_vm(),
                 gas_status,
-                &epoch_store.epoch_start_configuration().epoch_data(),
+                &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
             );
 
@@ -1005,15 +1004,39 @@ impl AuthorityState {
     ) -> Result<DryRunTransactionResponse, anyhow::Error> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
-            return Err(anyhow!("dry-exec is only support on fullnodes"));
+            return Err(anyhow!("dry-exec is only supported on fullnodes"));
         }
 
-        let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
-            &self.database,
-            epoch_store.as_ref(),
-            &transaction,
-        )
-        .await?;
+        // make a gas object if one was not provided
+        let mut gas_object_refs = transaction.gas().to_vec();
+        let (gas_status, input_objects) = if transaction.gas().is_empty() {
+            let sender = transaction.sender();
+            let protocol_config = epoch_store.protocol_config();
+            let max_tx_gas = protocol_config.max_tx_gas();
+            let gas_object_id = ObjectID::random();
+            let gas_object = Object::new_move(
+                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_tx_gas),
+                Owner::AddressOwner(sender),
+                TransactionDigest::genesis(),
+            );
+            let gas_object_ref = gas_object.compute_object_reference();
+            gas_object_refs = vec![gas_object_ref];
+            transaction_input_checker::check_transaction_input_with_given_gas(
+                &self.database,
+                epoch_store.as_ref(),
+                &transaction,
+                gas_object,
+            )
+            .await?
+        } else {
+            transaction_input_checker::check_transaction_input(
+                &self.database,
+                epoch_store.as_ref(),
+                &transaction,
+            )
+            .await?
+        };
+
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
@@ -1023,7 +1046,7 @@ impl AuthorityState {
             transaction_digest,
             epoch_store.protocol_config(),
         );
-        let (kind, signer, gas) = transaction.execution_parts();
+        let (kind, signer, _) = transaction.execution_parts();
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1037,18 +1060,21 @@ impl AuthorityState {
                 temporary_store,
                 kind,
                 signer,
-                &gas,
+                &gas_object_refs,
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
                 gas_status,
-                &epoch_store.epoch_start_configuration().epoch_data(),
+                &epoch_store.epoch_start_config().epoch_data(),
                 epoch_store.protocol_config(),
             );
+        let tx_digest = *effects.transaction_digest();
         Ok(DryRunTransactionResponse {
             effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
                 inner_temp_store.events,
+                tx_digest,
+                None,
                 epoch_store.module_cache().as_ref(),
             )?,
         })
@@ -1076,8 +1102,9 @@ impl AuthorityState {
         let storage_gas_price = protocol_config.storage_gas_price();
 
         let gas_object_id = ObjectID::random();
+        // give the gas object 2x the max gas to have coin balance to play with during execution
         let gas_object = Object::new_move(
-            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas),
+            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas * 2),
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
@@ -1100,7 +1127,7 @@ impl AuthorityState {
             gas_price,
             gas_budget,
         );
-        let transaction_digest = TransactionDigest::new(sha3_hash(&data));
+        let transaction_digest = TransactionDigest::new(user_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(
@@ -1134,7 +1161,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 &move_vm,
                 gas_status,
-                &epoch_store.epoch_start_configuration().epoch_data(),
+                &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
             );
         DevInspectResults::new(
@@ -1157,6 +1184,7 @@ impl AuthorityState {
         // TODO: index_tx really just need the transaction data here.
         cert: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
+        events: &TransactionEvents,
         timestamp_ms: u64,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<u64> {
@@ -1165,25 +1193,26 @@ impl AuthorityState {
             .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
-            cert.data().intent_message.value.sender(),
+            cert.data().intent_message().value.sender(),
             cert.data()
-                .intent_message
+                .intent_message()
                 .value
                 .input_objects()?
                 .iter()
                 .map(|o| o.object_id()),
             effects
-                .all_mutated()
+                .all_changed_objects()
                 .into_iter()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
-                .intent_message
+                .intent_message()
                 .value
                 .move_calls()
                 .into_iter()
                 .map(|(package, module, function)| {
                     (*package, module.to_owned(), function.to_owned())
                 }),
+            events,
             changes,
             digest,
             timestamp_ms,
@@ -1218,7 +1247,7 @@ impl AuthorityState {
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
 
-        for (oref, owner, kind) in effects.all_mutated() {
+        for (oref, owner, kind) in effects.all_changed_objects() {
             let id = &oref.0;
             // For mutated objects, retrieve old owner and delete old index if there is a owner change.
             if let WriteKind::Mutate = kind {
@@ -1299,7 +1328,7 @@ impl AuthorityState {
             return Ok(None);
         };
         // We only index dynamic field objects
-        if !DynamicFieldInfo::is_dynamic_field(&move_object.type_) {
+        if !move_object.type_().is_dynamic_field() {
             return Ok(None);
         }
         let move_struct = move_object.to_move_struct_with_resolver(
@@ -1310,7 +1339,7 @@ impl AuthorityState {
         let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
 
-        let name_type = DynamicFieldInfo::try_extract_field_name(&move_object.type_, &type_)?;
+        let name_type = move_object.type_().try_extract_field_name(&type_)?;
 
         let bcs_name = bcs::to_bytes(&name_value.clone().undecorate()).map_err(|e| {
             SuiError::ObjectSerializationError {
@@ -1350,7 +1379,7 @@ impl AuthorityState {
                 name,
                 bcs_name,
                 type_,
-                object_type: move_object.type_.type_params[1].to_string(),
+                object_type: move_object.into_type().into_type_params()[1].to_string(),
                 object_id: o.id(),
                 version: o.version(),
                 digest: o.digest(),
@@ -1366,13 +1395,12 @@ impl AuthorityState {
         events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        if self.indexes.is_none() && self.event_handler.is_none() {
+        if self.indexes.is_none() {
             return Ok(());
         }
 
         let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();
-
         // Index tx
         if let Some(indexes) = &self.indexes {
             let res = self
@@ -1381,6 +1409,7 @@ impl AuthorityState {
                     tx_digest,
                     certificate,
                     effects,
+                    events,
                     timestamp_ms,
                     epoch_store,
                 )
@@ -1388,14 +1417,16 @@ impl AuthorityState {
                 .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
 
             // Emit events
-            if let (Some(event_handler), Ok(seq)) = (&self.event_handler, res) {
-                event_handler
+            if res.is_ok() {
+                self.event_handler
                     .process_events(
-                        effects,
-                        events,
-                        timestamp_ms,
-                        seq,
-                        epoch_store.module_cache().as_ref(),
+                        &effects.clone().try_into()?,
+                        &SuiTransactionEvents::try_from(
+                            events.clone(),
+                            *tx_digest,
+                            Some(timestamp_ms),
+                            epoch_store.module_cache(),
+                        )?,
                     )
                     .await
                     .tap_ok(|_| {
@@ -1415,7 +1446,6 @@ impl AuthorityState {
                     .inc_by(events.data.len() as u64);
             }
         };
-
         Ok(())
     }
 
@@ -1550,21 +1580,14 @@ impl AuthorityState {
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
-        event_store: Option<Arc<EventStoreType>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
-        epoch_duration_ms: u64,
         db_checkpoint_config: &DBCheckpointConfig,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
-        let event_handler = event_store.map(|es| {
-            let handler = EventHandler::new(es);
-            handler.regular_cleanup_task();
-            Arc::new(handler)
-        });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(TransactionManager::new(
@@ -1582,7 +1605,7 @@ impl AuthorityState {
             checkpoint_store.clone(),
             store.objects_lock_table.clone(),
             pruning_config,
-            epoch_duration_ms,
+            epoch_store.epoch_start_state().epoch_duration_ms(),
         );
         let state = Arc::new(AuthorityState {
             name,
@@ -1590,7 +1613,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             database: store.clone(),
             indexes,
-            event_handler,
+            event_handler: Arc::new(EventHandler::default()),
             checkpoint_store,
             committee_store,
             transaction_manager,
@@ -1656,7 +1679,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+        let batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1666,7 +1689,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            batch_verifier_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1686,12 +1709,10 @@ impl AuthorityState {
             epoch_store,
             epochs,
             index_store,
-            None,
             checkpoint_store,
             &registry,
             AuthorityStorePruningConfig::default(),
             genesis.objects(),
-            10000,
             &DBCheckpointConfig::default(),
         )
         .await;
@@ -1817,7 +1838,9 @@ impl AuthorityState {
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         Self::check_protocol_version(
             supported_protocol_versions,
-            epoch_start_configuration.protocol_version(),
+            epoch_start_configuration
+                .epoch_start_state()
+                .protocol_version(),
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
@@ -1937,7 +1960,6 @@ impl AuthorityState {
     }
 
     // This function is only used for testing.
-    #[cfg(test)]
     pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
@@ -2148,14 +2170,17 @@ impl AuthorityState {
     pub async fn get_move_objects<T>(
         &self,
         owner: SuiAddress,
-        type_: &StructTag,
+        type_: MoveObjectType,
     ) -> SuiResult<Vec<T>>
     where
         T: DeserializeOwned,
     {
         let object_ids = self
             .get_owner_objects_iterator(owner)?
-            .filter(move |o| Self::matches_type(&ObjectType::Struct(type_.clone()), &o.type_))
+            .filter(|o| match &o.type_ {
+                ObjectType::Struct(s) => Self::matches_type_fuzzy_generics(&type_, s),
+                ObjectType::Package => false,
+            })
             .map(|info| info.object_id);
         let mut move_objects = vec![];
         for id in object_ids {
@@ -2164,17 +2189,14 @@ impl AuthorityState {
         Ok(move_objects)
     }
 
-    fn matches_type(type_: &ObjectType, other_type: &ObjectType) -> bool {
-        match (type_, other_type) {
-            (ObjectType::Package, ObjectType::Package) => true,
-            (ObjectType::Struct(type_), ObjectType::Struct(other_type)) => {
-                type_.address == other_type.address
-                    && type_.module == other_type.module
-                    && type_.name == other_type.name
-                    && (type_.type_params.is_empty() || type_.type_params == other_type.type_params)
-            }
-            _ => false,
-        }
+    // TODO: should be in impl MoveType
+    fn matches_type_fuzzy_generics(type_: &MoveObjectType, other_type: &MoveObjectType) -> bool {
+        type_.address() == other_type.address()
+                    && type_.module() == other_type.module()
+                    && type_.name() == other_type.name()
+                    // TODO: is_empty() looks like a bug here. I think the intention is to support "fuzzy matching" where `get_move_objects`
+                    // leaves type_params unspecified, but I don't actually see any call sites taking advantage of this
+                    && (type_.type_params().is_empty() || type_.type_params() == other_type.type_params())
     }
 
     pub fn get_dynamic_fields(
@@ -2218,12 +2240,13 @@ impl AuthorityState {
         Ok(self.get_indexes()?.next_sequence_number())
     }
 
-    pub fn get_transactions_in_range(
+    pub fn get_transactions_in_range_deprecated(
         &self,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?.get_transactions_in_range(start, end)
+        self.get_indexes()?
+            .get_transactions_in_range_deprecated(start, end)
     }
 
     pub fn get_recent_transactions(
@@ -2298,11 +2321,13 @@ impl AuthorityState {
             .multi_get_checkpoint_by_sequence_number(sequence_numbers)?)
     }
 
-    pub async fn get_transaction_events(
+    pub fn get_transaction_events(
         &self,
-        digest: TransactionEventsDigest,
+        digest: &TransactionEventsDigest,
     ) -> SuiResult<TransactionEvents> {
-        self.database.get_events(&digest)
+        self.database
+            .get_events(digest)?
+            .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -2316,14 +2341,14 @@ impl AuthorityState {
 
     pub fn get_transactions(
         &self,
-        query: TransactionQuery,
+        filter: Option<TransactionFilter>,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
         self.get_indexes()?
-            .get_transactions(query, cursor, limit, reverse)
+            .get_transactions(filter, cursor, limit, reverse)
     }
 
     fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {
@@ -2405,116 +2430,96 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
     }
 
-    /// Returns a full handle to the event store, including inserts... so be careful!
-    fn get_event_store(&self) -> Option<Arc<EventStoreType>> {
-        self.event_handler
-            .as_ref()
-            .map(|handler| handler.event_store.clone())
-    }
-
     pub async fn query_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
-    ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+    ) -> Result<Vec<SuiEvent>, anyhow::Error> {
+        let index_store = self.get_indexes()?;
 
         //Get the tx_num from tx_digest
         let (tx_num, event_num) = if let Some(cursor) = cursor.as_ref() {
-            let tx_seq = self
-                .get_indexes()?
-                .get_transaction_seq(&cursor.tx_digest)?
-                .ok_or_else(|| anyhow!("Transaction [{:?}] not found.", cursor.tx_digest))?;
-            (tx_seq as i64, cursor.event_seq)
+            let tx_seq = index_store.get_transaction_seq(&cursor.tx_digest)?.ok_or(
+                SuiError::TransactionNotFound {
+                    digest: cursor.tx_digest,
+                },
+            )?;
+            (tx_seq, cursor.event_seq as usize)
         } else if descending {
-            (i64::MAX, i64::MAX)
+            (u64::MAX, usize::MAX)
         } else {
             (0, 0)
         };
 
         let limit = limit + 1;
-        let mut stored_events = match query {
-            EventQuery::All => es.all_events(tx_num, event_num, limit, descending).await?,
-            EventQuery::Transaction(digest) => {
-                es.events_by_transaction(digest, tx_num, event_num, limit, descending)
-                    .await?
+        let mut event_keys = match query {
+            EventFilter::All(..) => index_store.all_events(tx_num, event_num, limit, descending)?,
+            EventFilter::Transaction(digest) => {
+                index_store.events_by_transaction(&digest, tx_num, event_num, limit, descending)?
             }
-            EventQuery::MoveModule { package, module } => {
-                let module_id = ModuleId::new(
-                    AccountAddress::from(package),
-                    Identifier::from_str(&module)?,
-                );
-                es.events_by_module_id(&module_id, tx_num, event_num, limit, descending)
-                    .await?
+            EventFilter::MoveModule { package, module } => {
+                let module_id = ModuleId::new(package.into(), module);
+                index_store.events_by_module_id(&module_id, tx_num, event_num, limit, descending)?
             }
-            EventQuery::MoveEvent(struct_name) => {
-                let normalized_struct_name = parse_sui_struct_tag(&struct_name)?.to_string();
-                es.events_by_move_event_struct_name(
-                    &normalized_struct_name,
+            EventFilter::MoveEventType(struct_name) => index_store
+                .events_by_move_event_struct_name(
+                    &struct_name,
                     tx_num,
                     event_num,
                     limit,
                     descending,
-                )
-                .await?
+                )?,
+            EventFilter::Sender(sender) => {
+                index_store.events_by_sender(&sender, tx_num, event_num, limit, descending)?
             }
-            EventQuery::Sender(sender) => {
-                es.events_by_sender(&sender, tx_num, event_num, limit, descending)
-                    .await?
-            }
-            EventQuery::Recipient(recipient) => {
-                es.events_by_recipient(&recipient, tx_num, event_num, limit, descending)
-                    .await?
-            }
-            EventQuery::Object(object) => {
-                es.events_by_object(&object, tx_num, event_num, limit, descending)
-                    .await?
-            }
-            EventQuery::TimeRange {
+            EventFilter::TimeRange {
                 start_time,
                 end_time,
-            } => {
-                es.event_iterator(start_time, end_time, tx_num, event_num, limit, descending)
-                    .await?
-            }
-            EventQuery::EventType(event_type) => {
-                es.events_by_type(event_type, tx_num, event_num, limit, descending)
-                    .await?
+            } => index_store
+                .event_iterator(start_time, end_time, tx_num, event_num, limit, descending)?,
+            _ => {
+                return Err(anyhow!(
+                    "This query type is not supported by the full node."
+                ))
             }
         };
+
         // skip one event if exclusive cursor is provided,
         // otherwise truncate to the original limit.
         if cursor.is_some() {
-            if !stored_events.is_empty() {
-                stored_events.remove(0);
+            if !event_keys.is_empty() {
+                event_keys.remove(0);
             }
         } else {
-            stored_events.truncate(limit - 1);
+            event_keys.truncate(limit - 1);
         }
-        let mut events = StoredEvent::into_event_envelopes(stored_events)?;
-        // populate parsed json event
-        for event in &mut events {
-            if let SuiEvent::MoveEvent {
-                type_, fields, bcs, ..
-            } = &mut event.1.event
-            {
-                let struct_tag = parse_struct_tag(type_)?;
-                let event = Event::move_event_to_move_struct(
-                    &struct_tag,
-                    bcs,
-                    // threading the epoch_store through this API does not
-                    // seem possible, so we just read it from the state (self) and fetch
-                    // the module cache out of it.
-                    // Notice that no matter what module cache we get things
-                    // should work
-                    &**self.epoch_store.load().module_cache(),
-                )?;
-                let (_, event) = type_and_fields_from_move_struct(&struct_tag, event);
-                *fields = Some(event)
-            }
+        let keys = event_keys.iter().map(|(digest, _, seq, _)| (*digest, *seq));
+
+        let stored_events = self
+            .database
+            .perpetual_tables
+            .events
+            .multi_get(keys)?
+            .into_iter()
+            .zip(event_keys.into_iter())
+            .map(|(e, (digest, tx_digest, event_seq, timestamp))| {
+                e.map(|e| (e, tx_digest, event_seq, timestamp))
+                    .ok_or(SuiError::TransactionEventsNotFound { digest })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut events = vec![];
+        for (e, tx_digest, event_seq, timestamp) in stored_events {
+            events.push(SuiEvent::try_from(
+                e,
+                tx_digest,
+                event_seq as u64,
+                Some(timestamp),
+                &**self.epoch_store.load().module_cache(),
+            )?)
         }
         Ok(events)
     }
@@ -2568,7 +2573,7 @@ impl AuthorityState {
             if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
                 let events = if let Some(digest) = effects.events_digest() {
-                    self.database.get_events(digest)?
+                    self.get_transaction_events(digest)?
                 } else {
                     TransactionEvents::default()
                 };
@@ -2698,7 +2703,7 @@ impl AuthorityState {
         // For now write transactions after because if we write before, there is a chance the lock can fail
         // and this can cause invalid transactions to be inserted in the table.
         // https://github.com/MystenLabs/sui/issues/1990
-        epoch_store.insert_transaction(transaction)?;
+        epoch_store.insert_signed_transaction(transaction)?;
 
         Ok(())
     }
@@ -3238,7 +3243,10 @@ impl AuthorityState {
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_epoch, "re-opening AuthorityEpochTables for new epoch");
-        assert_eq!(epoch_start_configuration.epoch(), new_committee.epoch);
+        assert_eq!(
+            epoch_start_configuration.epoch_start_state().epoch(),
+            new_committee.epoch
+        );
         self.db()
             .set_epoch_start_configuration(&epoch_start_configuration)
             .await?;
@@ -3267,8 +3275,9 @@ impl AuthorityState {
 
 #[cfg(msim)]
 pub mod sui_framework_injection {
-    use super::*;
     use std::cell::RefCell;
+
+    use super::*;
 
     // Thread local cache because all simtests run in a single unique thread.
     thread_local! {
@@ -3328,8 +3337,9 @@ pub mod sui_framework_injection {
 
 #[cfg(not(msim))]
 pub mod sui_framework_injection {
-    use super::*;
     use move_binary_format::CompiledModule;
+
+    use super::*;
 
     pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
         sui_framework::get_sui_framework_bytes()

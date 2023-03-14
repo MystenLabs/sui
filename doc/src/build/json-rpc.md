@@ -8,7 +8,7 @@ This guide is useful for developers interested in Sui network interactions via A
 
 For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
-Follow the instructions to [install Sui binaries](install.md).
+Follow the instructions to [install Sui binaries](install.md#install-sui-binaries).
 
 ## Connect to a Sui network
 
@@ -47,6 +47,7 @@ Objects IDs for `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjectsByAddress`](#sui_getObjectsOwnedByAddress) to return object IDs. 
 
 **Important:** As a security best practice, you should serialize data from the JSON-RPC service locally in the same location as the signer. This reduces the risk of trusting data from the service directly.
+
 #### Create an unsigned transaction to transfer a Sui coin from one address to another
 
 ```shell

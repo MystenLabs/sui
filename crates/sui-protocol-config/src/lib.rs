@@ -113,6 +113,7 @@ pub struct Error(pub String);
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
+    package_upgrades: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -141,10 +142,16 @@ pub struct ProtocolConfig {
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
-    max_tx_size: Option<usize>,
+    max_tx_size: Option<u64>,
 
-    /// Maximum number of individual transactions in a Batch transaction.
-    max_tx_in_batch: Option<u32>,
+    /// Maximum number of input objects.
+    max_input_objects: Option<u64>,
+
+    /// Maximum size of serialized transaction effects.
+    max_serialized_tx_effects_size_bytes: Option<u64>,
+
+    /// Maximum size of serialized transaction effects for system transactions.
+    max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
 
     /// Maximum number of gas payment objets for a transaction.
     max_gas_payment_objects: Option<u32>,
@@ -165,16 +172,6 @@ pub struct ProtocolConfig {
     /// Maximum size of a Pure CallArg.
     max_pure_argument_size: Option<u32>,
 
-    /// Maximum size of an ObjVec CallArg.
-    max_object_vec_argument_size: Option<u32>,
-
-    /// Maximum number of coins in Pay* transactions, or a ProgrammableTransaction's
-    /// MergeCoins command.
-    max_coins: Option<u32>,
-
-    /// Maximum number of recipients in Pay* transactions.
-    max_pay_recipients: Option<u32>,
-
     /// Maximum number of Commands in a ProgrammableTransaction.
     max_programmable_tx_commands: Option<u32>,
 
@@ -193,49 +190,58 @@ pub struct ProtocolConfig {
     max_tx_gas: Option<u64>,
 
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
-    max_loop_depth: Option<usize>,
+    max_loop_depth: Option<u64>,
 
     /// Maximum number of type arguments that can be bound to generic type parameters. Enforced by the Move bytecode verifier.
-    max_generic_instantiation_length: Option<usize>,
+    max_generic_instantiation_length: Option<u64>,
 
     /// Maximum number of parameters that a Move function can have. Enforced by the Move bytecode verifier.
-    max_function_parameters: Option<usize>,
+    max_function_parameters: Option<u64>,
 
     /// Maximum number of basic blocks that a Move function can have. Enforced by the Move bytecode verifier.
-    max_basic_blocks: Option<usize>,
+    max_basic_blocks: Option<u64>,
 
     /// Maximum stack size value. Enforced by the Move bytecode verifier.
-    max_value_stack_size: Option<usize>,
+    max_value_stack_size: Option<u64>,
 
     /// Maximum number of "type nodes", a metric for how big a SignatureToken will be when expanded into a fully qualified type. Enforced by the Move bytecode verifier.
-    max_type_nodes: Option<usize>,
+    max_type_nodes: Option<u64>,
 
     /// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
-    max_push_size: Option<usize>,
+    max_push_size: Option<u64>,
 
     /// Maximum number of struct definitions in a module. Enforced by the Move bytecode verifier.
-    max_struct_definitions: Option<usize>,
+    max_struct_definitions: Option<u64>,
 
     /// Maximum number of function definitions in a module. Enforced by the Move bytecode verifier.
-    max_function_definitions: Option<usize>,
+    max_function_definitions: Option<u64>,
 
     /// Maximum number of fields allowed in a struct definition. Enforced by the Move bytecode verifier.
-    max_fields_in_struct: Option<usize>,
+    max_fields_in_struct: Option<u64>,
 
     /// Maximum dependency depth. Enforced by the Move linker when loading dependent modules.
-    max_dependency_depth: Option<usize>,
+    max_dependency_depth: Option<u64>,
 
     /// Maximum number of Move events that a single transaction can emit. Enforced by the VM during execution.
     max_num_event_emit: Option<u64>,
 
     /// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
-    max_num_new_move_object_ids: Option<usize>,
+    max_num_new_move_object_ids: Option<u64>,
+
+    /// Maximum number of new IDs that a single system transaction can create. Enforced by the VM during execution.
+    max_num_new_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum number of IDs that a single transaction can delete. Enforced by the VM during execution.
-    max_num_deleted_move_object_ids: Option<usize>,
+    max_num_deleted_move_object_ids: Option<u64>,
+
+    /// Maximum number of IDs that a single system transaction can delete. Enforced by the VM during execution.
+    max_num_deleted_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
-    max_num_transfered_move_object_ids: Option<usize>,
+    max_num_transfered_move_object_ids: Option<u64>,
+
+    /// Maximum number of IDs that a single system transaction can transfer. Enforced by the VM during execution.
+    max_num_transfered_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
@@ -247,8 +253,14 @@ pub struct ProtocolConfig {
     /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
     object_runtime_max_num_cached_objects: Option<u64>,
 
+    /// Maximum number of cached objects in the object runtime ObjectStore in system transaction. Enforced by object runtime during execution
+    object_runtime_max_num_cached_objects_system_tx: Option<u64>,
+
     /// Maximum number of stored objects accessed by object runtime ObjectStore. Enforced by object runtime during execution
     object_runtime_max_num_store_entries: Option<u64>,
+
+    /// Maximum number of stored objects accessed by object runtime ObjectStore in system transaction. Enforced by object runtime during execution
+    object_runtime_max_num_store_entries_system_tx: Option<u64>,
 
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
@@ -319,12 +331,12 @@ pub struct ProtocolConfig {
     /// Max number of transactions per checkpoint.
     /// Note that this is a protocol constant and not a config as validators must have this set to
     /// the same value, otherwise they *will* fork.
-    max_transactions_per_checkpoint: Option<usize>,
+    max_transactions_per_checkpoint: Option<u64>,
 
     /// Max size of a checkpoint in bytes.
     /// Note that this is a protocol constant and not a config as validators must have this set to
     /// the same value, otherwise they *will* fork.
-    max_checkpoint_size: Option<usize>,
+    max_checkpoint_size: Option<u64>,
 
     /// A protocol upgrade always requires 2f+1 stake to agree. We support a buffer of additional
     /// stake (as a fraction of f, expressed in basis points) that is required before an upgrade
@@ -368,15 +380,34 @@ impl ProtocolConfig {
     //         )))
     //     }
     // }
+
+    pub fn check_package_upgrades_supported(&self) -> Result<(), Error> {
+        if self.feature_flags.package_upgrades {
+            Ok(())
+        } else {
+            Err(Error(format!(
+                "package upgrades are not supported at {:?}",
+                self.version
+            )))
+        }
+    }
 }
 
 // getters
 impl ProtocolConfig {
-    pub fn max_tx_size(&self) -> usize {
+    pub fn max_tx_size(&self) -> u64 {
         self.max_tx_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_tx_in_batch(&self) -> u32 {
-        self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    pub fn max_input_objects(&self) -> u64 {
+        self.max_input_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes_system_tx(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes_system_tx
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_gas_payment_objects(&self) -> u32 {
         self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
@@ -396,15 +427,6 @@ impl ProtocolConfig {
     pub fn max_pure_argument_size(&self) -> u32 {
         self.max_pure_argument_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_object_vec_argument_size(&self) -> u32 {
-        self.max_object_vec_argument_size.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_coins(&self) -> u32 {
-        self.max_coins.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_pay_recipients(&self) -> u32 {
-        self.max_pay_recipients.expect(CONSTANT_ERR_MSG)
-    }
     pub fn max_programmable_tx_commands(&self) -> u32 {
         self.max_programmable_tx_commands.expect(CONSTANT_ERR_MSG)
     }
@@ -420,52 +442,64 @@ impl ProtocolConfig {
     pub fn max_tx_gas(&self) -> u64 {
         self.max_tx_gas.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_loop_depth(&self) -> usize {
+    pub fn max_loop_depth(&self) -> u64 {
         self.max_loop_depth.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_generic_instantiation_length(&self) -> usize {
+    pub fn max_generic_instantiation_length(&self) -> u64 {
         self.max_generic_instantiation_length
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_function_parameters(&self) -> usize {
+    pub fn max_function_parameters(&self) -> u64 {
         self.max_function_parameters.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_basic_blocks(&self) -> usize {
+    pub fn max_basic_blocks(&self) -> u64 {
         self.max_basic_blocks.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_value_stack_size(&self) -> usize {
+    pub fn max_value_stack_size(&self) -> u64 {
         self.max_value_stack_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_type_nodes(&self) -> usize {
+    pub fn max_type_nodes(&self) -> u64 {
         self.max_type_nodes.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_push_size(&self) -> usize {
+    pub fn max_push_size(&self) -> u64 {
         self.max_push_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_struct_definitions(&self) -> usize {
+    pub fn max_struct_definitions(&self) -> u64 {
         self.max_struct_definitions.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_function_definitions(&self) -> usize {
+    pub fn max_function_definitions(&self) -> u64 {
         self.max_function_definitions.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_fields_in_struct(&self) -> usize {
+    pub fn max_fields_in_struct(&self) -> u64 {
         self.max_fields_in_struct.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_dependency_depth(&self) -> usize {
+    pub fn max_dependency_depth(&self) -> u64 {
         self.max_dependency_depth.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_num_event_emit(&self) -> u64 {
         self.max_num_event_emit.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_new_move_object_ids(&self) -> usize {
+    pub fn max_num_new_move_object_ids(&self) -> u64 {
         self.max_num_new_move_object_ids.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_deleted_move_object_ids(&self) -> usize {
+    pub fn max_num_new_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_new_move_object_ids_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_num_deleted_move_object_ids(&self) -> u64 {
         self.max_num_deleted_move_object_ids
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_transfered_move_object_ids(&self) -> usize {
+    pub fn max_num_deleted_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_deleted_move_object_ids_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_num_transfered_move_object_ids(&self) -> u64 {
         self.max_num_transfered_move_object_ids
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_num_transfered_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_transfered_move_object_ids_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_event_emit_size(&self) -> u64 {
@@ -480,6 +514,14 @@ impl ProtocolConfig {
     }
     pub fn object_runtime_max_num_store_entries(&self) -> u64 {
         self.object_runtime_max_num_store_entries
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_cached_objects_system_tx(&self) -> u64 {
+        self.object_runtime_max_num_cached_objects_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_store_entries_system_tx(&self) -> u64 {
+        self.object_runtime_max_num_store_entries_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
     pub fn base_tx_cost_fixed(&self) -> u64 {
@@ -528,11 +570,11 @@ impl ProtocolConfig {
     pub fn storage_gas_price(&self) -> u64 {
         self.storage_gas_price.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_transactions_per_checkpoint(&self) -> usize {
+    pub fn max_transactions_per_checkpoint(&self) -> u64 {
         self.max_transactions_per_checkpoint
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_checkpoint_size(&self) -> usize {
+    pub fn max_checkpoint_size(&self) -> u64 {
         self.max_checkpoint_size.expect(CONSTANT_ERR_MSG)
     }
     pub fn buffer_stake_for_protocol_upgrade_bps(&self) -> u64 {
@@ -583,7 +625,7 @@ impl ProtocolConfig {
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
-    // pub fn new_constant(&self) -> usize {
+    // pub fn new_constant(&self) -> u64 {
     //     self.new_constant.expect(CONSTANT_ERR_MSG)
     // }
 }
@@ -680,21 +722,21 @@ impl ProtocolConfig {
                 feature_flags: Default::default(),
 
                 max_tx_size: Some(64 * 1024),
-                max_tx_in_batch: Some(10),
-                max_gas_payment_objects: Some(32),
+                // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
+                max_input_objects: Some(2048),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
+                max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
+                max_gas_payment_objects: Some(256),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
                 max_pure_argument_size: Some(16 * 1024),
-                max_object_vec_argument_size: Some(128),
-                max_coins: Some(1024),
-                max_pay_recipients: Some(1024),
                 max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
-                max_tx_gas: Some(1_000_000_000),
+                max_tx_gas: Some(10_000_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),
@@ -708,12 +750,17 @@ impl ProtocolConfig {
                 max_dependency_depth: Some(100),
                 max_num_event_emit: Some(256),
                 max_num_new_move_object_ids: Some(2048),
+                max_num_new_move_object_ids_system_tx: Some(2048 * 16),
                 max_num_deleted_move_object_ids: Some(2048),
+                max_num_deleted_move_object_ids_system_tx: Some(2048 * 16),
                 max_num_transfered_move_object_ids: Some(2048),
+                max_num_transfered_move_object_ids_system_tx: Some(2048 * 16),
                 max_event_emit_size: Some(250 * 1024),
                 max_move_vector_len: Some(256 * 1024),
                 object_runtime_max_num_cached_objects: Some(1000),
+                object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
                 object_runtime_max_num_store_entries: Some(1000),
+                object_runtime_max_num_store_entries_system_tx: Some(1000 * 16),
                 base_tx_cost_fixed: Some(110_000),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
@@ -797,7 +844,7 @@ impl ProtocolConfig {
 
 // Setters for tests
 impl ProtocolConfig {
-    pub fn set_max_function_definitions_for_testing(&mut self, m: usize) {
+    pub fn set_max_function_definitions_for_testing(&mut self, m: u64) {
         self.max_function_definitions = Some(m)
     }
     pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
@@ -823,6 +870,66 @@ impl Drop for OverrideGuard {
     }
 }
 
+/// Defines which limit got crossed.
+/// The value which crossed the limit and value of the limit crossed are embedded
+#[derive(PartialEq, Eq)]
+pub enum LimitThresholdCrossed {
+    None,
+    Soft(u128, u128),
+    Hard(u128, u128),
+}
+
+/// Convenience function for comparing limit ranges
+/// V::MAX must be at >= U::MAX and T::MAX
+pub fn check_limit_in_range<T: Into<V>, U: Into<V>, V: PartialOrd + Into<u128>>(
+    x: T,
+    soft_limit: U,
+    hard_limit: V,
+) -> LimitThresholdCrossed {
+    let x: V = x.into();
+    let soft_limit: V = soft_limit.into();
+
+    debug_assert!(soft_limit <= hard_limit);
+
+    // It is important to preserve this comparison order because if soft_limit == hard_limit
+    // we want LimitThresholdCrossed::Hard
+    if x >= hard_limit {
+        LimitThresholdCrossed::Hard(x.into(), hard_limit.into())
+    } else if x < soft_limit {
+        LimitThresholdCrossed::None
+    } else {
+        LimitThresholdCrossed::Soft(x.into(), soft_limit.into())
+    }
+}
+
+#[macro_export]
+macro_rules! check_limit {
+    ($x:expr, $hard:expr) => {
+        check_limit!($x, $hard, $hard)
+    };
+    ($x:expr, $soft:expr, $hard:expr) => {
+        check_limit_in_range($x as u64, $soft, $hard)
+    };
+}
+
+/// Used to check which limits were crossed if the TX is metered (not system tx)
+/// Args are: is_metered, value_to_check, metered_limit, unmetered_limit
+/// metered_limit is always less than or equal to unmetered_hard_limit
+#[macro_export]
+macro_rules! check_limit_by_meter {
+    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr) => {{
+        // If this is metered, we use the metered_limit limit as the upper bound
+        let h = if $is_metered {
+            $metered_limit
+        } else {
+            // Unmetered gets more headroom
+            $unmetered_hard_limit
+        };
+        use sui_protocol_config::check_limit_in_range;
+        check_limit_in_range($x as u64, $metered_limit, h)
+    }};
+}
+
 #[cfg(all(test, not(msim)))]
 mod test {
     use super::*;
@@ -843,5 +950,42 @@ mod test {
                 ProtocolConfig::get_for_version(cur)
             );
         }
+    }
+    #[test]
+    fn limit_range_fn_test() {
+        let low = 100u32;
+        let high = 10000u64;
+
+        assert!(check_limit!(1u8, low, high) == LimitThresholdCrossed::None);
+        assert!(matches!(
+            check_limit!(255u16, low, high),
+            LimitThresholdCrossed::Soft(255u128, 100)
+        ));
+        // This wont compile because lossy
+        //assert!(check_limit!(100000000u128, low, high) == LimitThresholdCrossed::None);
+        // This wont compile because lossy
+        //assert!(check_limit!(100000000usize, low, high) == LimitThresholdCrossed::None);
+
+        assert!(matches!(
+            check_limit!(2550000u64, low, high),
+            LimitThresholdCrossed::Hard(2550000, 10000)
+        ));
+
+        assert!(matches!(
+            check_limit!(2550000u64, high, high),
+            LimitThresholdCrossed::Hard(2550000, 10000)
+        ));
+
+        assert!(matches!(
+            check_limit!(1u8, high),
+            LimitThresholdCrossed::None
+        ));
+
+        assert!(check_limit!(255u16, high) == LimitThresholdCrossed::None);
+
+        assert!(matches!(
+            check_limit!(2550000u64, high),
+            LimitThresholdCrossed::Hard(2550000, 10000)
+        ));
     }
 }

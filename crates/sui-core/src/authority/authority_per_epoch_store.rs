@@ -3,7 +3,6 @@
 
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
-use lru::LruCache;
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::Round;
 use parking_lot::RwLock;
@@ -13,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::iter;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_storage::default_db_options;
@@ -22,7 +20,6 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
-use sui_types::digests::CertificateDigest;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
@@ -36,7 +33,9 @@ use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError}
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper, MAX_TX_RECOVERY_RETRY};
+use crate::batch_bls_verifier::*;
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
     PendingCheckpointInfo,
@@ -48,31 +47,34 @@ use crate::consensus_handler::{
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
 use crate::transaction_manager::TransactionManager;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
+use mysten_common::notify_once::NotifyOnce;
 use mysten_metrics::monitored_scope;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::MutexGuard;
-use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use sui_types::sui_system_state::epoch_start_sui_system_state::{
+    EpochStartSystemState, EpochStartSystemStateTrait,
+};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
+
+use super::epoch_start_configuration::EpochStartConfigTrait;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -113,9 +115,10 @@ pub struct AuthorityPerEpochStore {
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
 
-    // Cache of certificates that are known to have valid signatures.
-    // Lives in per-epoch store because the caching is only valid within an epoch.
-    verified_cert_cache: VerifiedCertificateCache,
+    /// Batch verifier for certificates - also caches certificates that are known to have
+    /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
+    /// within for certs within the current epoch.
+    pub(crate) batch_verifier: BatchCertificateVerifier,
 
     pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
 
@@ -156,75 +159,13 @@ pub struct AuthorityPerEpochStore {
     execution_component: ExecutionComponents,
 }
 
-/// Parameters of the epoch fixed at epoch start.
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct EpochStartConfiguration {
-    system_state: EpochStartSystemState,
-    /// epoch_digest is defined as following
-    /// (1) For the genesis epoch it is set to 0
-    /// (2) For all other epochs it is a digest of the last checkpoint of a previous epoch
-    /// Note that this is in line with how epoch start timestamp is defined
-    epoch_digest: CheckpointDigest,
-}
-
-impl EpochStartConfiguration {
-    pub fn new(system_state: EpochStartSystemState, epoch_digest: CheckpointDigest) -> Self {
-        Self {
-            system_state,
-            epoch_digest,
-        }
-    }
-
-    pub fn new_for_testing() -> Self {
-        Self::new(
-            EpochStartSystemState::new_for_testing(),
-            CheckpointDigest::default(),
-        )
-    }
-
-    pub fn epoch_data(&self) -> EpochData {
-        EpochData::new(
-            self.epoch(),
-            self.epoch_start_timestamp_ms(),
-            self.epoch_digest(),
-        )
-    }
-
-    pub fn epoch_digest(&self) -> CheckpointDigest {
-        self.epoch_digest
-    }
-
-    pub fn epoch(&self) -> EpochId {
-        self.system_state.epoch
-    }
-
-    pub fn protocol_version(&self) -> ProtocolVersion {
-        ProtocolVersion::new(self.system_state.protocol_version)
-    }
-
-    pub fn reference_gas_price(&self) -> u64 {
-        self.system_state.reference_gas_price
-    }
-
-    pub fn safe_mode(&self) -> bool {
-        self.system_state.safe_mode
-    }
-
-    pub fn epoch_start_timestamp_ms(&self) -> u64 {
-        self.system_state.epoch_start_timestamp_ms
-    }
-
-    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
-        &self.system_state
-    }
-}
-
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
 #[derive(DBMapUtils)]
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
-    transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
+    signed_transactions:
+        DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
 
     /// Signatures over transaction effects that were executed in the current epoch.
     /// Store this to avoid re-signing the same effects twice.
@@ -392,7 +333,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
-        verified_cert_cache_metrics: Arc<VerifiedCertificateCacheMetrics>,
+        batch_verifier_metrics: Arc<BatchCertificateVerifierMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -416,16 +357,23 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
-        assert_eq!(epoch_start_configuration.epoch(), epoch_id);
+        assert_eq!(
+            epoch_start_configuration.epoch_start_state().epoch(),
+            epoch_id
+        );
         let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
-        let protocol_version = epoch_start_configuration.protocol_version();
+        let protocol_version = epoch_start_configuration
+            .epoch_start_state()
+            .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
+        let batch_verifier =
+            BatchCertificateVerifier::new(committee.clone(), batch_verifier_metrics);
         Arc::new(Self {
             committee,
             protocol_config,
@@ -436,7 +384,7 @@ impl AuthorityPerEpochStore {
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
-            verified_cert_cache: VerifiedCertificateCache::new(verified_cert_cache_metrics),
+            batch_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -455,7 +403,7 @@ impl AuthorityPerEpochStore {
 
     /// Returns `&Arc<EpochStartConfiguration>`
     /// User can treat this `Arc` as `&EpochStartConfiguration`, or clone the Arc to pass as owned object
-    pub fn epoch_start_configuration(&self) -> &Arc<EpochStartConfiguration> {
+    pub fn epoch_start_config(&self) -> &Arc<EpochStartConfiguration> {
         &self.epoch_start_configuration
     }
 
@@ -482,7 +430,7 @@ impl AuthorityPerEpochStore {
             epoch_start_configuration,
             store,
             self.execution_component.metrics(),
-            self.verified_cert_cache.metrics.clone(),
+            self.batch_verifier.metrics.clone(),
         )
     }
 
@@ -506,10 +454,6 @@ impl AuthorityPerEpochStore {
         self.committee.epoch
     }
 
-    pub fn verified_cert_cache(&self) -> &VerifiedCertificateCache {
-        &self.verified_cert_cache
-    }
-
     pub fn get_state_hash_for_checkpoint(
         &self,
         checkpoint: &CheckpointSequenceNumber,
@@ -528,16 +472,12 @@ impl AuthorityPerEpochStore {
             .insert(checkpoint, accumulator)?)
     }
 
-    pub fn epoch_start_config(&self) -> &EpochStartConfiguration {
-        &self.epoch_start_configuration
-    }
-
     pub fn reference_gas_price(&self) -> u64 {
-        self.epoch_start_config().reference_gas_price()
+        self.epoch_start_state().reference_gas_price()
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {
-        self.epoch_start_config().protocol_version()
+        self.epoch_start_state().protocol_version()
     }
 
     pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
@@ -593,23 +533,27 @@ impl AuthorityPerEpochStore {
         )?)
     }
 
-    pub fn insert_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
+    pub fn insert_signed_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
         Ok(self
             .tables
-            .transactions
+            .signed_transactions
             .insert(transaction.digest(), transaction.serializable_ref())?)
     }
 
     #[cfg(test)]
     pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
-        self.tables.transactions.remove(transaction).unwrap();
+        self.tables.signed_transactions.remove(transaction).unwrap();
     }
 
     pub fn get_signed_transaction(
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
+        Ok(self
+            .tables
+            .signed_transactions
+            .get(tx_digest)?
+            .map(|t| t.into()))
     }
 
     pub fn insert_tx_cert_and_effects_signature(
@@ -1405,7 +1349,7 @@ impl AuthorityPerEpochStore {
             .contains_key(certificate.digest())?);
         let batch = batch.insert_batch(
             &self.tables.user_signatures_for_checkpoints,
-            [(*certificate.digest(), certificate.tx_signatures.clone())],
+            [(*certificate.digest(), certificate.tx_signatures().to_vec())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
     }
@@ -2046,80 +1990,5 @@ impl ExecutionComponents {
 
     pub(crate) fn metrics(&self) -> Arc<ResolverMetrics> {
         self.metrics.clone()
-    }
-}
-
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
-// guess to start with is that it should be 10-20 times larger than peak transactions per second,
-// on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
-
-pub struct VerifiedCertificateCacheMetrics {
-    certificate_signatures_cache_hits: IntCounter,
-    certificate_signatures_cache_evictions: IntCounter,
-}
-
-impl VerifiedCertificateCacheMetrics {
-    pub fn new(registry: &Registry) -> Arc<Self> {
-        Arc::new(Self {
-            certificate_signatures_cache_hits: register_int_counter_with_registry!(
-                "certificate_signatures_cache_hits",
-                "Number of certificates which were known to be verified because of signature cache.",
-                registry
-            )
-            .unwrap(),
-            certificate_signatures_cache_evictions: register_int_counter_with_registry!(
-                "certificate_signatures_cache_evictions",
-                "Number of times we evict a pre-existing key were known to be verified because of signature cache.",
-                registry
-            )
-            .unwrap(),
-        })
-    }
-}
-
-pub struct VerifiedCertificateCache {
-    inner: RwLock<LruCache<CertificateDigest, ()>>,
-    metrics: Arc<VerifiedCertificateCacheMetrics>,
-}
-
-impl VerifiedCertificateCache {
-    pub fn new(metrics: Arc<VerifiedCertificateCacheMetrics>) -> Self {
-        Self {
-            inner: RwLock::new(LruCache::new(
-                NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
-            )),
-            metrics,
-        }
-    }
-
-    pub fn is_cert_verified(&self, digest: &CertificateDigest) -> bool {
-        let inner = self.inner.read();
-        if inner.contains(digest) {
-            self.metrics.certificate_signatures_cache_hits.inc();
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn cache_cert_verified(&self, digest: CertificateDigest) {
-        let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, ()) {
-            if old.0 != digest {
-                self.metrics.certificate_signatures_cache_evictions.inc();
-            }
-        }
-    }
-
-    pub fn cache_certs_verified(&self, digests: Vec<CertificateDigest>) {
-        let mut inner = self.inner.write();
-        digests.into_iter().for_each(|d| {
-            if let Some(old) = inner.push(d, ()) {
-                if old.0 != d {
-                    self.metrics.certificate_signatures_cache_evictions.inc();
-                }
-            }
-        });
     }
 }

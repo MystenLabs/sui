@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::{anyhow, ensure};
+use move_binary_format::file_format::SignatureToken;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
@@ -22,16 +23,11 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
-use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
+use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::messages::{
     Argument, CallArg, Command, InputObjectKind, ObjectArg, TransactionData, TransactionKind,
-};
-
-use sui_types::governance::{
-    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
-    WITHDRAW_DELEGATION_FUN_NAME,
 };
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
@@ -141,7 +137,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         object_id: ObjectID,
         recipient: SuiAddress,
     ) -> anyhow::Result<()> {
-        builder.transfer_object(recipient, self.get_object_ref(object_id).await?);
+        builder.transfer_object(recipient, self.get_object_ref(object_id).await?)?;
         Ok(())
     }
 
@@ -339,6 +335,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         &self,
         id: ObjectID,
         objects: &mut BTreeMap<ObjectID, Object>,
+        expected_type: SignatureToken,
     ) -> Result<ObjectArg, anyhow::Error> {
         let response = self
             .0
@@ -355,8 +352,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                // todo(RWLocks) - do we want to parametrise this?
-                mutable: true, // using mutable reference by default here.
+                mutable: matches!(expected_type, SignatureToken::MutableReference(_)),
             },
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
@@ -391,7 +387,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             ProtocolConfig::get_for_min_version().max_move_package_size(),
         )?;
 
-        let json_args = resolve_move_function_args(
+        let json_args_and_tokens = resolve_move_function_args(
             &package,
             module.clone(),
             function.clone(),
@@ -401,16 +397,19 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         )?;
         let mut check_args = Vec::new();
         let mut objects = BTreeMap::new();
-        for arg in json_args {
+        for (arg, expected_type) in json_args_and_tokens {
             check_args.push(match arg {
-                SuiJsonCallArg::Object(id) => {
-                    CheckCallArg::Object(self.get_object_arg(id, &mut objects).await?)
-                }
+                SuiJsonCallArg::Object(id) => CheckCallArg::Object(
+                    self.get_object_arg(id, &mut objects, expected_type).await?,
+                ),
                 SuiJsonCallArg::Pure(p) => CheckCallArg::Pure(p),
                 SuiJsonCallArg::ObjVec(v) => {
                     let mut object_ids = vec![];
                     for id in v {
-                        object_ids.push(self.get_object_arg(id, &mut objects).await?);
+                        object_ids.push(
+                            self.get_object_arg(id, &mut objects, expected_type.clone())
+                                .await?,
+                        );
                     }
                     CheckCallArg::ObjVec(object_ids)
                 }
@@ -430,11 +429,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let args = check_args
             .into_iter()
             .map(|check_arg| match check_arg {
-                CheckCallArg::Pure(bytes) => builder.input(CallArg::Pure(bytes)).unwrap(),
-                CheckCallArg::Object(obj) => builder.input(CallArg::Object(obj)).unwrap(),
+                CheckCallArg::Pure(bytes) => builder.input(CallArg::Pure(bytes)),
+                CheckCallArg::Object(obj) => builder.input(CallArg::Object(obj)),
                 CheckCallArg::ObjVec(objs) => builder.make_obj_vec(objs),
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
         Ok(args)
     }
 
@@ -636,7 +635,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         ))
     }
 
-    pub async fn request_add_delegation(
+    pub async fn request_add_stake(
         &self,
         signer: SuiAddress,
         mut coins: Vec<ObjectID>,
@@ -660,8 +659,8 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             return Err(anyhow!("Provided object [{coin}] is not a move object."))
         };
         ensure!(
-            Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_),
-            "Expecting either Coin<T> or LockedCoin<T> as input coin objects. Received [{type_}]"
+            type_.is_coin(),
+            "Expecting either Coin<T> input coin objects. Received [{type_}]"
         );
 
         for coin in coins {
@@ -674,13 +673,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         }
         obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
 
-        let function = if Coin::is_coin(type_) {
-            ADD_DELEGATION_MUL_COIN_FUN_NAME
-        } else {
-            ADD_DELEGATION_LOCKED_COIN_FUN_NAME
-        }
-        .to_owned();
-
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             let arguments = vec![
@@ -691,7 +683,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                         mutable: true,
                     }))
                     .unwrap(),
-                builder.make_obj_vec(obj_vec),
+                builder.make_obj_vec(obj_vec)?,
                 builder
                     .input(CallArg::Pure(bcs::to_bytes(&amount)?))
                     .unwrap(),
@@ -702,7 +694,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             builder.command(Command::move_call(
                 SUI_FRAMEWORK_OBJECT_ID,
                 SUI_SYSTEM_MODULE_NAME.to_owned(),
-                function,
+                ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
                 vec![],
                 arguments,
             ));
@@ -717,10 +709,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         ))
     }
 
-    pub async fn request_withdraw_delegation(
+    pub async fn request_withdraw_stake(
         &self,
         signer: SuiAddress,
-        _delegation: ObjectID,
+        _stake: ObjectID,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
@@ -734,7 +726,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             signer,
             SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
-            WITHDRAW_DELEGATION_FUN_NAME.to_owned(),
+            WITHDRAW_STAKE_FUN_NAME.to_owned(),
             vec![],
             gas,
             vec![
