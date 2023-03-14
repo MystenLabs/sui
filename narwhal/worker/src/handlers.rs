@@ -11,9 +11,9 @@ use futures::{stream::FuturesUnordered, StreamExt};
 
 use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
-use store::Store;
+use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
     RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
@@ -33,7 +33,7 @@ pub mod handlers_tests;
 pub struct WorkerReceiverHandler<V> {
     pub id: WorkerId,
     pub tx_others_batch: Sender<WorkerOthersBatchMessage>,
-    pub store: Store<BatchDigest, Batch>,
+    pub store: DBMap<BatchDigest, Batch>,
     pub validator: V,
 }
 
@@ -52,7 +52,9 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
             ));
         }
         let digest = message.batch.digest();
-        self.store.async_write(digest, message.batch).await;
+        self.store.insert(&digest, &message.batch).map_err(|e| {
+            anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
+        })?;
         self.tx_others_batch
             .send(WorkerOthersBatchMessage {
                 digest,
@@ -69,11 +71,9 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
     ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
         // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
         let batch = request.into_body().batch;
-        let batch = self
-            .store
-            .read(batch)
-            .await
-            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+        let batch = self.store.get(&batch).map_err(|e| {
+            anemo::rpc::Status::internal(format!("failed to read from batch store: {e:?}"))
+        })?;
 
         Ok(anemo::Response::new(RequestBatchResponse { batch }))
     }
@@ -90,7 +90,7 @@ pub struct PrimaryReceiverHandler<V> {
     // The worker information cache.
     pub worker_cache: WorkerCache,
     // The batch store
-    pub store: Store<BatchDigest, Batch>,
+    pub store: DBMap<BatchDigest, Batch>,
     // Timeout on RequestBatch RPC.
     pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
@@ -110,7 +110,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         let mut missing = HashSet::new();
         for digest in message.digests.iter() {
             // Check if we already have the batch.
-            match self.store.read(*digest).await {
+            match self.store.get(digest) {
                 Ok(None) => {
                     missing.insert(*digest);
                     debug!("Requesting sync for batch {digest}");
@@ -119,8 +119,9 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                     trace!("Digest {digest} already in store, nothing to sync");
                 }
                 Err(e) => {
-                    error!("Failed to read from batch store: {e}");
-                    return Err(anemo::rpc::Status::from_error(Box::new(e)));
+                    return Err(anemo::rpc::Status::internal(format!(
+                        "failed to read from batch store: {e:?}"
+                    )));
                 }
             };
         }
@@ -229,7 +230,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                             let digest = batch.digest();
                             if missing.remove(&digest) {
-                                self.store.sync_write(digest, batch).await.map_err(|e| {
+                                self.store.insert(&digest, &batch).map_err(|e| {
                                     anemo::rpc::Status::internal(format!(
                                         "failed to write to batch store: {e:?}"
                                     ))
@@ -259,12 +260,11 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         &self,
         request: anemo::Request<WorkerDeleteBatchesMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let digests = request.into_body().digests;
-        self.store
-            .remove_all(digests)
-            .await
-            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
-
+        for digest in request.into_body().digests {
+            self.store.remove(&digest).map_err(|e| {
+                anemo::rpc::Status::internal(format!("failed to remove from batch store: {e:?}"))
+            })?;
+        }
         Ok(anemo::Response::new(()))
     }
 }

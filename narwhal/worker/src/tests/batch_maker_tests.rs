@@ -11,16 +11,15 @@ use store::rocks::ReadWriteOptions;
 use test_utils::{temp_dir, transaction};
 use types::PreSubscribedBroadcastSender;
 
-fn create_batches_store() -> Store<BatchDigest, Batch> {
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+fn create_batches_store() -> DBMap<BatchDigest, Batch> {
+    rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
         Some("batches"),
         &ReadWriteOptions::default(),
     )
-    .unwrap();
-    Store::new(db)
+    .unwrap()
 }
 
 #[tokio::test]
@@ -71,11 +70,7 @@ async fn make_batch() {
     assert!(r1.await.is_ok());
 
     // Ensure the batch is stored
-    assert!(store
-        .notify_read(expected_batch.digest())
-        .await
-        .unwrap()
-        .is_some());
+    assert!(store.get(&expected_batch.digest()).unwrap().is_some());
 }
 
 #[tokio::test]
@@ -122,5 +117,5 @@ async fn batch_timeout() {
     assert!(r0.await.is_ok());
 
     // Ensure the batch is stored
-    assert!(store.notify_read(batch.digest()).await.unwrap().is_some());
+    assert!(store.get(&batch.digest()).unwrap().is_some());
 }
