@@ -141,7 +141,7 @@ export default class ApiProvider {
                     "Signing with Ledger via ApiProvider isn't supported"
                 );
             default:
-                throw new Error(`Encountered unknown account type`);
+                throw new Error('Encountered unknown account type');
         }
     }
 

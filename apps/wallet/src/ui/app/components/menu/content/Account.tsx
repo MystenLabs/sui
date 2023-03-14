@@ -22,8 +22,6 @@ export function Account({ address, accountType }: AccountProps) {
         copySuccessMessage: 'Address copied',
     });
 
-    console.log(accountType);
-
     return (
         <Disclosure>
             {({ open }) => (
