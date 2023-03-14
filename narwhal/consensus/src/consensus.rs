@@ -33,7 +33,7 @@ pub type Dag = BTreeMap<Round, HashMap<PublicKey, (CertificateDigest, Certificat
 /// The state that needs to be persisted for crash-recovery.
 pub struct ConsensusState {
     /// The information about the last committed round and corresponding GC round.
-    pub last_round: CommittedRound,
+    pub last_round: ConsensusRound,
     /// The chosen gc_depth
     pub gc_depth: Round,
     /// Keeps the last committed round for each authority. This map is used to clean up the dag and
@@ -56,7 +56,7 @@ pub struct ConsensusState {
 impl ConsensusState {
     pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee, gc_depth: Round) -> Self {
         Self {
-            last_round: CommittedRound::default(),
+            last_round: ConsensusRound::default(),
             gc_depth,
             last_committed: Default::default(),
             latest_sub_dag_index: 0,
@@ -76,7 +76,7 @@ impl ConsensusState {
         cert_store: CertificateStore,
         committee: &Committee,
     ) -> Self {
-        let last_round = CommittedRound::new_with_gc_depth(last_committed_round, gc_depth);
+        let last_round = ConsensusRound::new_with_gc_depth(last_committed_round, gc_depth);
 
         let dag = Self::construct_dag_from_cert_store(
             cert_store,
@@ -242,13 +242,16 @@ pub trait ConsensusProtocol {
     ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError>;
 }
 
+/// Holds information about a committed round in consensus. When a certificate gets committed then
+/// the corresponding certificate's round is considered a "committed" round. It bears both the
+/// committed round and the corresponding garbage collection round.
 #[derive(Debug, Default, Copy, Clone)]
-pub struct CommittedRound {
+pub struct ConsensusRound {
     pub committed_round: Round,
     pub gc_round: Round,
 }
 
-impl CommittedRound {
+impl ConsensusRound {
     pub fn new(committed_round: Round, gc_round: Round) -> Self {
         Self {
             committed_round,
@@ -272,7 +275,7 @@ impl CommittedRound {
         let last_committed_round = max(self.committed_round, new_committed_round);
         let last_gc_round = gc_round(last_committed_round, gc_depth);
 
-        CommittedRound {
+        ConsensusRound {
             committed_round: last_committed_round,
             gc_round: last_gc_round,
         }
@@ -291,7 +294,7 @@ pub struct Consensus<ConsensusProtocol> {
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
     tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
     /// Outputs the highest committed round & corresponding gc_round in the consensus.
-    tx_consensus_round_updates: watch::Sender<CommittedRound>,
+    tx_consensus_round_updates: watch::Sender<ConsensusRound>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_sequence: metered_channel::Sender<CommittedSubDag>,
 
@@ -318,7 +321,7 @@ where
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
-        tx_consensus_round_updates: watch::Sender<CommittedRound>,
+        tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,

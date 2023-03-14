@@ -59,6 +59,7 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
 pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
     assert!(leader.round() > 0);
+    let gc_round = leader.round().saturating_sub(state.gc_depth);
 
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
@@ -67,7 +68,7 @@ pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificat
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
-        if x.round() == state.last_round.gc_round + 1 {
+        if x.round() == gc_round + 1 {
             // Do not try to order parents of the certificate, since they have been GC'ed.
             continue;
         }
