@@ -2049,26 +2049,26 @@ pub struct TransactionInfoResponse {
 }
 
 #[derive(Clone, Debug)]
-pub enum VerifiedTransactionInfoResponse {
-    Signed(VerifiedSignedTransaction),
+pub enum PlainTransactionInfoResponse {
+    Signed(SignedTransaction),
     ExecutedWithCert(
         VerifiedCertificate,
-        VerifiedSignedTransactionEffects,
+        SignedTransactionEffects,
         TransactionEvents,
     ),
     ExecutedWithoutCert(
         VerifiedTransaction,
-        VerifiedSignedTransactionEffects,
+        SignedTransactionEffects,
         TransactionEvents,
     ),
 }
 
-impl VerifiedTransactionInfoResponse {
+impl PlainTransactionInfoResponse {
     pub fn is_executed(&self) -> bool {
         match self {
-            VerifiedTransactionInfoResponse::Signed(_) => false,
-            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _, _)
-            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
+            PlainTransactionInfoResponse::Signed(_) => false,
+            PlainTransactionInfoResponse::ExecutedWithCert(_, _, _)
+            | PlainTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
         }
     }
 }

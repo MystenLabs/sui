@@ -38,6 +38,7 @@ use sui_types::messages::{
     ConsensusTransactionKey, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
     TransactionKind,
 };
+use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
@@ -1047,7 +1048,10 @@ impl CheckpointSignatureAggregator {
             );
             return Err(());
         }
-        match self.signatures.insert(signature) {
+
+        let envelope =
+            SignedCheckpointSummary::new_from_data_and_sig(self.summary.clone(), signature);
+        match self.signatures.insert(envelope) {
             InsertResult::Failed { error } => {
                 warn!(
                     "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",
@@ -1058,7 +1062,10 @@ impl CheckpointSignatureAggregator {
                 Err(())
             }
             InsertResult::QuorumReached(cert) => Ok(cert),
-            InsertResult::NotEnoughVotes => Err(()),
+            InsertResult::NotEnoughVotes {
+                bad_votes: _,
+                bad_authorities: _,
+            } => Err(()),
         }
     }
 }
