@@ -15,7 +15,6 @@ use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::{GetModule, SyncModuleCache};
 use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
 use prometheus::{
@@ -76,8 +75,8 @@ use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
+use sui_types::temporary_store::{InnerTemporaryStore, TemporaryModuleResolver};
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -3280,38 +3279,6 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
-    }
-}
-
-pub struct TemporaryModuleResolver<'a> {
-    temp_store: &'a InnerTemporaryStore,
-    fallback: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
-}
-
-impl<'a> TemporaryModuleResolver<'a> {
-    pub fn new(
-        temp_store: &'a InnerTemporaryStore,
-        fallback: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
-    ) -> Self {
-        Self {
-            temp_store,
-            fallback,
-        }
-    }
-}
-
-impl GetModule for TemporaryModuleResolver<'_> {
-    type Error = anyhow::Error;
-    type Item = Arc<CompiledModule>;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
-        if let Some((_, o, _)) = obj {
-            if let Some(p) = o.data.try_as_package() {
-                return Ok(Some(Arc::new(p.deserialize_module(&id.name().into())?)));
-            }
-        }
-        self.fallback.get_module_by_id(id)
     }
 }
 

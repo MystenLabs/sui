@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -89,6 +90,38 @@ impl InnerTemporaryStore {
 
     pub fn get_sui_system_state_object(&self) -> Option<SuiSystemState> {
         get_sui_system_state(&self.written).ok()
+    }
+}
+
+pub struct TemporaryModuleResolver<'a, R> {
+    temp_store: &'a InnerTemporaryStore,
+    fallback: R,
+}
+
+impl<'a, R> TemporaryModuleResolver<'a, R> {
+    pub fn new(temp_store: &'a InnerTemporaryStore, fallback: R) -> Self {
+        Self {
+            temp_store,
+            fallback,
+        }
+    }
+}
+
+impl<R> GetModule for TemporaryModuleResolver<'_, R>
+where
+    R: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>,
+{
+    type Error = anyhow::Error;
+    type Item = Arc<CompiledModule>;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
+        if let Some((_, o, _)) = obj {
+            if let Some(p) = o.data.try_as_package() {
+                return Ok(Some(Arc::new(p.deserialize_module(&id.name().into())?)));
+            }
+        }
+        self.fallback.get_module_by_id(id)
     }
 }
 
