@@ -139,10 +139,16 @@ export const accountsAdapterSelectors = accountsAdapter.getSelectors(
 const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
 
-export const activeAccountSelector = ({ account }: RootState) =>
-    Object.values(account.entities).find(
-        (accountEntity) => accountEntity?.address === account.address
-    );
+export const activeAccountSelector = (state: RootState) => {
+    const {
+        account: { address },
+    } = state;
+
+    if (address) {
+        return accountsAdapterSelectors.selectById(state, address);
+    }
+    return null;
+};
 
 export const activeAddressSelector = ({ account }: RootState) =>
     account.address;
