@@ -2,8 +2,8 @@
 	"sideMenu": {
 		"title": "QUICK LINKS",
 		"items": [{
-				"label": "Sui Doc Updates",
-				"link": "doc-updates"
+				"label": "Sui Migration Guide",
+				"link": "doc-updates/sui-migration-guide"
 			},
 			{
 				"label": "Sui Upcoming Breaking Changes",
@@ -50,6 +50,10 @@
 					{
 						"label": "Objects",
 						"fileName": "learn/objects"
+					},
+					{
+						"label": "Object and Package Versioning",
+						"fileName": "learn/object-package-versions"
 					},
 					{
 						"label": "Transactions",
@@ -129,7 +133,20 @@
 				"label": "Create Smart Contracts with Move",
 				"fileName": "build/move/index",
 				"title": "Smart Contracts with Move",
-				"items": [{
+				"items": [
+					{
+						"label": "Move.toml File",
+						"fileName": "build/move/manifest"
+					},
+					{
+						"label": "Move.lock File",
+						"fileName": "build/move/lock-file"
+					},
+					{
+						"label": "Accessing Time in Sui Move",
+						"fileName": "build/"
+					},
+					{
 						"label": "Write Move Packages",
 						"fileName": "build/move/write-package"
 					},
@@ -209,7 +226,7 @@
 				]
 			}
 		],
-		"reference": [{
+			"reference": [{
 				"label": "TypeScript/JavaScript SDK",
 				"link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
 				"external": true
