@@ -39,6 +39,7 @@ jobs:
       # Runs tests much faster - disables signing and verification
       USE_MOCK_CRYPTO: 1
       CARGO_TERM_COLOR: always
+      NUM_CPUS: 24
 
     steps:
     - name: Cargo clean
