@@ -16,7 +16,7 @@ test('import wallet', async ({ page, extensionUrl }) => {
     await page.goto(extensionUrl);
     await page.getByRole('link', { name: /Get Started/ }).click();
     await page.getByRole('link', { name: /Import an Existing Wallet/ }).click();
-    await page.getByLabel('Enter Recovery Phrase').fill(mnemonic);
+    await page.getByLabel('Enter your 12-word Recovery Phrase').type(mnemonic);
     await page.getByRole('button', { name: /Continue/ }).click();
     await page.getByLabel('Create Password').fill('mystenlabs');
     await page.getByLabel('Confirm Password').fill('mystenlabs');

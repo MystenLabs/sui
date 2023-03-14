@@ -7,7 +7,7 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    BigInt, RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 
 use sui_open_rpc_macros::open_rpc;
@@ -63,7 +63,7 @@ pub trait TransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -89,7 +89,7 @@ pub trait TransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -216,15 +216,15 @@ pub trait TransactionBuilder {
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Add delegated stake to a validator's staking pool using multiple coins and amount.
-    #[method(name = "requestAddDelegation")]
-    async fn request_add_delegation(
+    /// Add stake to a validator's staking pool using multiple coins and amount.
+    #[method(name = "requestAddStake")]
+    async fn request_add_stake(
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// Coin<SUI> or LockedCoin<SUI> object to delegate
+        /// Coin<SUI> or LockedCoin<SUI> object to stake
         coins: Vec<ObjectID>,
-        /// delegation amount
+        /// stake amount
         amount: Option<u64>,
         /// the validator's Sui address
         validator: SuiAddress,
@@ -234,9 +234,9 @@ pub trait TransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Withdraw a delegation from a validator's staking pool.
-    #[method(name = "requestWithdrawDelegation")]
-    async fn request_withdraw_delegation(
+    /// Withdraw stake from a validator's staking pool.
+    #[method(name = "requestWithdrawStake")]
+    async fn request_withdraw_stake(
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,

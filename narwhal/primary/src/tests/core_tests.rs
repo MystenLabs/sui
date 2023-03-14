@@ -5,10 +5,12 @@ use super::*;
 use crate::common::create_db_stores;
 
 use crate::primary;
+use consensus::consensus::ConsensusRound;
 use fastcrypto::traits::KeyPair;
 use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use test_utils::CommitteeFixture;
+use tokio::sync::watch;
 use tokio::time::Duration;
 use types::{
     MockPrimaryToPrimary, PreSubscribedBroadcastSender, PrimaryToPrimaryServer, RequestVoteResponse,
@@ -30,7 +32,8 @@ async fn propose_header() {
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
     let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
@@ -109,8 +112,6 @@ async fn propose_header() {
         certificate_store.clone(),
         synchronizer,
         signature_service,
-        rx_consensus_round_updates,
-        /* gc_depth */ 50,
         tx_shutdown.subscribe(),
         rx_headers,
         metrics.clone(),
@@ -141,7 +142,8 @@ async fn propose_header_failure() {
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
     let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
@@ -203,8 +205,6 @@ async fn propose_header_failure() {
         certificate_store.clone(),
         synchronizer,
         signature_service,
-        rx_consensus_round_updates,
-        /* gc_depth */ 50,
         tx_shutdown.subscribe(),
         rx_headers,
         metrics.clone(),
@@ -236,7 +236,8 @@ async fn shutdown_core() {
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
@@ -276,8 +277,6 @@ async fn shutdown_core() {
         certificate_store.clone(),
         synchronizer.clone(),
         signature_service.clone(),
-        rx_consensus_round_updates.clone(),
-        /* gc_depth */ 50,
         tx_shutdown.subscribe(),
         rx_headers,
         metrics.clone(),

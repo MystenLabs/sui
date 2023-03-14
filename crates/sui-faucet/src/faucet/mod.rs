@@ -16,6 +16,7 @@ pub struct FaucetReceipt {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
     pub amount: u64,
     pub id: ObjectID,

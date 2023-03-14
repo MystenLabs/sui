@@ -17,7 +17,7 @@ import { StakeButton } from "../../StakeButton";
 
 interface Props {
   validator: SuiAddress;
-  /** Amount to Delegate */
+  /** Amount to Stake */
   amount: string;
 }
 
@@ -71,7 +71,7 @@ export function AddDelegation({ validator, amount }: Props) {
         data: {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
           module: "sui_system",
-          function: "request_add_delegation_mul_coin",
+          function: "request_add_stake_mul_coin",
           typeArguments: [],
           gasBudget: Number(GAS_BUDGET),
           arguments: [

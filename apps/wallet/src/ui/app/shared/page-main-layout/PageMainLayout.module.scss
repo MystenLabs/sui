@@ -12,6 +12,11 @@
     background-color: v.use(v.$colors-background-color);
 }
 
+.full-screen-container {
+    border-radius: 12px;
+    box-shadow: 0 -5px 20px 5px rgb(111 188 240 / 11%);
+}
+
 .content {
     display: flex;
     flex-flow: column nowrap;
@@ -23,6 +28,10 @@
     overflow: hidden;
     position: relative;
     z-index: 1;
+}
+
+.full-screen-content {
+    border-radius: 20px 20px 12px 12px;
 }
 
 .main {

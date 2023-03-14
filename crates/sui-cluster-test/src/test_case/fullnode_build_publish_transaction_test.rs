@@ -37,6 +37,8 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
         let response = ctx.sign_and_execute(data, "publish basics package").await;
         response
             .effects
+            .as_ref()
+            .unwrap()
             .created()
             .iter()
             .find(|obj_ref| obj_ref.owner == Owner::Immutable)

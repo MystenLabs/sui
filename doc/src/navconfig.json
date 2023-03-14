@@ -203,6 +203,10 @@
 						"fileName": "build/fullnode"
 					},
 					{
+						"label": "Sui Validator node",
+						"fileName": "build/validator-node"
+					},
+					{
 						"label": "Event Query and Subscription",
 						"fileName": "build/event_api"
 					}

@@ -10,7 +10,7 @@ module sui::stake_subsidy {
 
     struct StakeSubsidy has store {
         /// This counter may be different from the current epoch number if
-        /// in some epochs we decide to skip the subsidy. 
+        /// in some epochs we decide to skip the subsidy.
         epoch_counter: u64,
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
         balance: Balance<SUI>,
@@ -23,7 +23,7 @@ module sui::stake_subsidy {
 
     // Placeholder numbers.
     const STAKE_SUBSIDY_DECREASE_RATE: u128 = 1000; // in basis point
-    const STAKE_SUBSIDY_PERIOD_LENGTH: u64 = 30; // in number of epochs
+    const STAKE_SUBSIDY_PERIOD_LENGTH: u64 = 10; // in number of epochs
 
     public(friend) fun create(balance: Balance<SUI>, initial_stake_subsidy_amount: u64): StakeSubsidy {
         StakeSubsidy {

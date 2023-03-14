@@ -39,6 +39,7 @@ async fn synchronize() {
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
         target: target_primary.public_key(),
+        is_certified: false,
     };
 
     let mut mock_server = MockWorkerToWorker::new();
@@ -113,6 +114,7 @@ async fn synchronize_when_batch_exists() {
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
         target: target_primary.public_key(),
+        is_certified: false,
     };
 
     // Send a sync request.

@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::AuthorityStorePruningConfig;
 use crate::node::{
-    default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
-    AuthorityKeyPairWithPath, KeyPairWithPath,
+    default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
+    KeyPairWithPath,
 };
-use crate::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{
     builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
@@ -65,6 +65,19 @@ impl NetworkConfig {
             .build()
     }
 
+    pub fn generate_with_rng_and_epoch_duration<R: rand::CryptoRng + rand::RngCore>(
+        config_dir: &Path,
+        quorum_size: usize,
+        epoch_duration_ms: u64,
+        rng: R,
+    ) -> Self {
+        builder::ConfigBuilder::new(config_dir)
+            .committee_size(NonZeroUsize::new(quorum_size).unwrap())
+            .with_epoch_duration(epoch_duration_ms)
+            .rng(rng)
+            .build()
+    }
+
     pub fn generate(config_dir: &Path, quorum_size: usize) -> Self {
         Self::generate_with_rng(config_dir, quorum_size, OsRng)
     }
@@ -88,6 +101,7 @@ pub struct FullnodeConfigBuilder<'a> {
     // port for admin interface
     admin_port: Option<u16>,
     supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -102,6 +116,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             rpc_port: None,
             admin_port: None,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 
@@ -175,6 +190,11 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
     pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
         self.supported_protocol_versions_config = c;
+        self
+    }
+
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
         self
     }
 
@@ -260,7 +280,6 @@ impl<'a> FullnodeConfigBuilder<'a> {
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
-            epoch_duration_ms: default_epoch_duration_ms(),
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
@@ -271,7 +290,8 @@ impl<'a> FullnodeConfigBuilder<'a> {
             checkpoint_executor_config: Default::default(),
             metrics: None,
             supported_protocol_versions: Some(supported_protocol_versions),
-            state_snapshot_config: StateSnapshotConfig::fullnode_config(),
+            db_checkpoint_config: self.db_checkpoint_config,
+            indirect_objects_threshold: usize::MAX,
         })
     }
 }

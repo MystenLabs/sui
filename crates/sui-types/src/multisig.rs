@@ -20,13 +20,13 @@ use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shared_crypto::intent::IntentMessage;
 use std::hash::{Hash, Hasher};
 
 use crate::{
     base_types::SuiAddress,
     crypto::{PublicKey, Signature},
     error::SuiError,
-    intent::IntentMessage,
 };
 
 #[cfg(test)]

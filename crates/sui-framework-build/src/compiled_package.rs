@@ -4,7 +4,8 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use fastcrypto::encoding::Base64;
@@ -26,15 +27,19 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+use move_package::source_package::parsed_manifest::CustomDepInfo;
 use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
+    package_hooks::PackageHooks,
     resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
 };
+use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
 use sui_types::{
+    base_types::ObjectID,
     error::{SuiError, SuiResult},
     move_package::{FnInfo, FnInfoKey, FnInfoMap},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
@@ -124,48 +129,65 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        let res = if self.print_diags_to_stderr {
-            let resolution_graph = self
-                .config
-                .resolution_graph_for_package(&path, &mut std::io::stderr())
-                .map_err(|err| SuiError::ModuleBuildFailure {
-                    error: format!("{:?}", err),
-                })?;
-            Self::compile_package(resolution_graph, &mut std::io::stderr())
-        } else {
-            let resolution_graph = self
-                .config
-                .resolution_graph_for_package(&path, &mut Vec::new())
-                .map_err(|err| SuiError::ModuleBuildFailure {
-                    error: format!("{:?}", err),
-                })?;
-            Self::compile_package(resolution_graph, &mut Vec::new())
-        };
-
-        // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
-        // format to include anyhow's error context chain.
-        let (package, fn_info) = match res {
-            Err(error) => {
-                return Err(SuiError::ModuleBuildFailure {
-                    error: format!("{:?}", error),
-                })
-            }
-            Ok((package, fn_info)) => (package, fn_info),
-        };
-        let compiled_modules = package.root_modules_map();
-        if self.run_bytecode_verifier {
-            for m in compiled_modules.iter_modules() {
-                move_bytecode_verifier::verify_module(m).map_err(|err| {
-                    SuiError::ModuleVerificationFailure {
-                        error: err.to_string(),
-                    }
-                })?;
-                sui_bytecode_verifier::verify_module(m, &fn_info)?;
-            }
-            // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
-        }
-        Ok(CompiledPackage { package, path })
+        let print_diags_to_stderr = self.print_diags_to_stderr;
+        let run_bytecode_verifier = self.run_bytecode_verifier;
+        let resolution_graph = self.resolution_graph(&path)?;
+        build_from_resolution_graph(
+            path,
+            resolution_graph,
+            run_bytecode_verifier,
+            print_diags_to_stderr,
+        )
     }
+
+    pub fn resolution_graph(self, path: &Path) -> SuiResult<ResolvedGraph> {
+        if self.print_diags_to_stderr {
+            self.config
+                .resolution_graph_for_package(path, &mut std::io::stderr())
+        } else {
+            self.config
+                .resolution_graph_for_package(path, &mut std::io::sink())
+        }
+        .map_err(|err| SuiError::ModuleBuildFailure {
+            error: format!("{:?}", err),
+        })
+    }
+}
+
+pub fn build_from_resolution_graph(
+    path: PathBuf,
+    resolution_graph: ResolvedGraph,
+    run_bytecode_verifier: bool,
+    print_diags_to_stderr: bool,
+) -> SuiResult<CompiledPackage> {
+    let result = if print_diags_to_stderr {
+        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
+    } else {
+        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
+    };
+    // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
+    // format to include anyhow's error context chain.
+    let (package, fn_info) = match result {
+        Err(error) => {
+            return Err(SuiError::ModuleBuildFailure {
+                error: format!("{:?}", error),
+            })
+        }
+        Ok((package, fn_info)) => (package, fn_info),
+    };
+    let compiled_modules = package.root_modules_map();
+    if run_bytecode_verifier {
+        for m in compiled_modules.iter_modules() {
+            move_bytecode_verifier::verify_module(m).map_err(|err| {
+                SuiError::ModuleVerificationFailure {
+                    error: err.to_string(),
+                }
+            })?;
+            sui_bytecode_verifier::verify_module(m, &fn_info)?;
+        }
+        // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
+    }
+    Ok(CompiledPackage { package, path })
 }
 
 impl CompiledPackage {
@@ -449,4 +471,118 @@ impl GetModule for CompiledPackage {
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         Ok(self.package.all_modules_map().get_module(id).ok().cloned())
     }
+}
+
+pub const PUBLISHED_AT_MANIFEST_FIELD: &str = "published-at";
+
+pub struct SuiPackageHooks {}
+
+impl PackageHooks for SuiPackageHooks {
+    fn custom_package_info_fields(&self) -> Vec<String> {
+        vec![PUBLISHED_AT_MANIFEST_FIELD.to_string()]
+    }
+
+    fn custom_dependency_key(&self) -> Option<String> {
+        None
+    }
+
+    fn resolve_custom_dependency(
+        &self,
+        _dep_name: move_symbol_pool::Symbol,
+        _info: &CustomDepInfo,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+pub struct PackageDependencies {
+    /// Set of published dependencies (name and address).
+    pub published: BTreeMap<Symbol, ObjectID>,
+    /// Set of unpublished dependencies (name).
+    pub unpublished: BTreeSet<Symbol>,
+    /// Set of dependencies with invalid `published-at` addresses.
+    pub invalid: BTreeMap<Symbol, String>,
+}
+
+/// Gather transitive package dependencies, partitioned into two sets:
+/// - published dependencies (which contain `published-at` address in manifest); and
+/// - unpublished dependencies (no `published-at` address in manifest).
+pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependencies {
+    let mut published = BTreeMap::new();
+    let mut unpublished = BTreeSet::new();
+    let mut invalid = BTreeMap::new();
+
+    for name in resolution_graph.graph.package_table.keys() {
+        if let Some(package) = &resolution_graph.package_table.get(name) {
+            let value = package
+                .source_package
+                .package
+                .custom_properties
+                .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD));
+
+            if value.is_none() {
+                unpublished.insert(*name);
+                continue;
+            }
+
+            if let Some(id) = value.and_then(|v| ObjectID::from_str(v.as_str()).ok()) {
+                published.insert(*name, id);
+            } else {
+                invalid.insert(*name, value.unwrap().to_string());
+            }
+        }
+    }
+
+    PackageDependencies {
+        published,
+        unpublished,
+        invalid,
+    }
+}
+
+pub fn check_unpublished_dependencies(unpublished: BTreeSet<Symbol>) -> Result<(), SuiError> {
+    if unpublished.is_empty() {
+        return Ok(());
+    };
+
+    let mut error_messages = unpublished
+        .iter()
+        .map(|name| {
+            format!(
+                "Package dependency \"{name}\" does not specify a published address \
+		 (the Move.toml manifest for \"{name}\" does not contain a published-at field).",
+            )
+        })
+        .collect::<Vec<_>>();
+
+    error_messages.push(
+        "If this is intentional, you may use the --with-unpublished-dependencies flag to \
+             continue publishing these dependencies as part of your package (they won't be \
+             linked against existing packages on-chain)."
+            .into(),
+    );
+
+    Err(SuiError::ModulePublishFailure {
+        error: error_messages.join("\n"),
+    })
+}
+
+pub fn check_invalid_dependencies(invalid: BTreeMap<Symbol, String>) -> Result<(), SuiError> {
+    if invalid.is_empty() {
+        return Ok(());
+    }
+
+    let error_messages = invalid
+        .iter()
+        .map(|(name, value)| {
+            format!(
+                "Package dependency \"{name}\" does not specify a valid published \
+		 address: could not parse value \"{value}\" for published-at field."
+            )
+        })
+        .collect::<Vec<_>>();
+
+    Err(SuiError::ModulePublishFailure {
+        error: error_messages.join("\n"),
+    })
 }

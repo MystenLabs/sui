@@ -10,6 +10,7 @@ mod test {
     use std::time::{Duration, Instant};
     use sui_benchmark::benchmark_setup::ProxyGasAndCoin;
     use sui_benchmark::system_state_observer::SystemStateObserver;
+    use sui_benchmark::workloads::batch_payment;
     use sui_benchmark::workloads::workload_configuration::configure_combined_mode;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -17,14 +18,21 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
-    use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
+    use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+    use sui_core::checkpoints::CheckpointStore;
     use sui_macros::{register_fail_points, sim_test};
     use sui_simulator::{configs::*, SimConfig};
+    use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::object::Owner;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tracing::info;
     use typed_store::traits::Map;
+
+    struct DeadValidator {
+        node_id: sui_simulator::task::NodeId,
+        dead_until: std::time::Instant,
+    }
 
     fn test_config() -> SimConfig {
         env_config(
@@ -90,55 +98,70 @@ mod test {
         test_simulated_load(test_cluster, 120).await;
     }
 
+    fn handle_failpoint(
+        dead_validator: Arc<Mutex<Option<DeadValidator>>>,
+        client_node: sui_simulator::task::NodeId,
+        probability: f64,
+    ) {
+        let mut dead_validator = dead_validator.lock().unwrap();
+        let cur_node = sui_simulator::runtime::NodeHandle::current().id();
+
+        // never kill the client node (which is running the test)
+        if cur_node == client_node {
+            return;
+        }
+
+        // do not fail multiple nodes at a time.
+        if let Some(dead) = &*dead_validator {
+            if dead.node_id != cur_node && dead.dead_until > Instant::now() {
+                return;
+            }
+        }
+
+        // otherwise, possibly fail the current node
+        let mut rng = thread_rng();
+        if rng.gen_range(0.0..1.0) < probability {
+            let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+
+            *dead_validator = Some(DeadValidator {
+                node_id: cur_node,
+                dead_until: Instant::now() + restart_after,
+            });
+
+            // must manually release lock before calling kill_current_node, which panics
+            // and would poison the lock.
+            drop(dead_validator);
+
+            sui_simulator::task::kill_current_node(Some(restart_after));
+        }
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
 
-        struct DeadValidator {
-            node_id: sui_simulator::task::NodeId,
-            dead_until: std::time::Instant,
-        }
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
-
         let client_node = sui_simulator::runtime::NodeHandle::current().id();
         register_fail_points(
             &["batch-write", "transaction-commit", "put-cf"],
             move || {
-                let mut dead_validator = dead_validator.lock().unwrap();
-                let cur_node = sui_simulator::runtime::NodeHandle::current().id();
-
-                // never kill the client node (which is running the test)
-                if cur_node == client_node {
-                    return;
-                }
-
-                // do not fail multiple nodes at a time.
-                if let Some(dead) = &*dead_validator {
-                    if dead.node_id != cur_node && dead.dead_until > Instant::now() {
-                        return;
-                    }
-                }
-
-                // otherwise, possibly fail the current node
-                let mut rng = thread_rng();
-                if rng.gen_range(0.0..1.0) < 0.01 {
-                    let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
-
-                    *dead_validator = Some(DeadValidator {
-                        node_id: cur_node,
-                        dead_until: Instant::now() + restart_after,
-                    });
-
-                    // must manually release lock before calling kill_current_node, which panics
-                    // and would poison the lock.
-                    drop(dead_validator);
-
-                    sui_simulator::task::kill_current_node(Some(restart_after));
-                }
+                handle_failpoint(dead_validator.clone(), client_node, 0.01);
             },
         );
+        test_simulated_load(test_cluster, 120).await;
+    }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_reconfig_crashes_during_epoch_change() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10000).await;
+
+        let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
+        let client_node = sui_simulator::runtime::NodeHandle::current().id();
+        register_fail_points(&["before-open-new-epoch-store"], move || {
+            handle_failpoint(dead_validator.clone(), client_node, 1.0);
+        });
         test_simulated_load(test_cluster, 120).await;
     }
 
@@ -151,23 +174,21 @@ mod test {
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
-        let validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
+        let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
+        let validator_path = random_validator_path.unwrap().path();
+        let store = AuthorityPerpetualTables::open_readonly(&validator_path.join("store"));
+        let checkpoint_store = CheckpointStore::open_readonly(&validator_path.join("checkpoints"));
 
-        let db_path = validator_path.unwrap().path().join("checkpoints");
-        let store = CheckpointStore::open_readonly(&db_path);
-        let (pruned, digest) = store
-            .watermarks
-            .get(&CheckpointWatermark::HighestPruned)
-            .unwrap()
-            .unwrap();
+        let pruned = store.pruned_checkpoint.get(&()).unwrap().unwrap();
         assert!(pruned > 0);
-        let pruned_epoch = store
-            .checkpoint_by_digest
-            .get(&digest)
+        let pruned_checkpoint: VerifiedCheckpoint = checkpoint_store
+            .certified_checkpoints
+            .get(&pruned)
             .unwrap()
             .unwrap()
-            .epoch();
-        let expected_checkpoint = store
+            .into();
+        let pruned_epoch = pruned_checkpoint.epoch();
+        let expected_checkpoint = checkpoint_store
             .epoch_last_checkpoint_map
             .get(&pruned_epoch)
             .unwrap()
@@ -246,6 +267,7 @@ mod test {
         let transfer_object_weight = 1;
         let num_transfer_accounts = 2;
         let delegation_weight = 1;
+        let batch_payment_weight = 1;
         let shared_counter_hotness_factor = 50;
 
         let proxy_workloads = configure_combined_mode(
@@ -254,6 +276,7 @@ mod test {
             shared_counter_weight,
             transfer_object_weight,
             delegation_weight,
+            batch_payment_weight,
             shared_counter_hotness_factor,
             target_qps,
             in_flight_ratio,

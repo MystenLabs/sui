@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { createMnemonicValidation } from './validation';
 import Button from '_app/shared/button';
-import CardLayout from '_app/shared/card-layout';
+import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';

@@ -3,17 +3,16 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import { useFormatCoin } from '@mysten/core';
+import { WalletActionStake24 } from '@mysten/icons';
 import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
-import cl from 'classnames';
+import { cx } from 'class-variance-authority';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DelegatedAPY } from '_app/shared/delegated-apy';
 import { Text } from '_app/shared/text';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
-import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { SuiIcons } from '_font-icons/output/sui-icons';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { trackEvent } from '_src/shared/plausible';
 
@@ -23,23 +22,26 @@ export function TokenIconLink({
     accountAddress: SuiAddress;
 }) {
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
-    const { data: delegations, isLoading } =
+    const { data: delegatedStake, isLoading } =
         useGetDelegatedStake(accountAddress);
 
+    // Total active stake for all delegations
     const totalActivePendingStake = useMemo(() => {
-        if (!delegations) return 0n;
-        return delegations.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
+        if (!delegatedStake) return 0n;
+
+        return delegatedStake.reduce(
+            (acc, curr) =>
+                curr.stakes.reduce(
+                    (total, { principal }) => total + BigInt(principal),
+                    acc
+                ),
+
             0n
         );
-    }, [delegations]);
+    }, [delegatedStake]);
 
-    const stakedValidators = useMemo(() => {
-        if (!delegations) return [];
-        return delegations.map(
-            ({ staked_sui }) => staked_sui.validator_address
-        );
-    }, [delegations]);
+    const stakedValidators =
+        delegatedStake?.map(({ validatorAddress }) => validatorAddress) || [];
 
     const [formatted, symbol, queryResult] = useFormatCoin(
         totalActivePendingStake,
@@ -52,8 +54,8 @@ export function TokenIconLink({
             onClick={() => {
                 trackEvent('StakingFromHome');
             }}
-            className={cl(
-                !stakingEnabled && '!bg-gray-40',
+            className={cx(
+                stakingEnabled ? '' : '!bg-gray-40',
                 'flex rounded-2xl w-full p-3.75 justify-between no-underline bg-sui/10'
             )}
             tabIndex={!stakingEnabled ? -1 : undefined}
@@ -64,18 +66,18 @@ export function TokenIconLink({
                 </div>
             ) : (
                 <div className="flex gap-2.5 items-center">
-                    <Icon
-                        icon={SuiIcons.Union}
-                        className={cl(
-                            !stakingEnabled ? 'text-gray-60' : 'text-hero',
-                            'text-heading4 font-normal '
+                    <WalletActionStake24
+                        className={cx(
+                            'text-heading2 bg-transparent',
+                            stakingEnabled ? 'text-hero-dark ' : 'text-gray-60'
                         )}
                     />
+
                     <div className="flex flex-col gap-1.25">
                         <Text
                             variant="body"
                             weight="semibold"
-                            color={!stakingEnabled ? 'gray-60' : 'hero'}
+                            color={stakingEnabled ? 'hero-dark' : 'gray-60'}
                         >
                             {totalActivePendingStake
                                 ? 'Currently Staked'
@@ -85,7 +87,7 @@ export function TokenIconLink({
                             <Text
                                 variant="body"
                                 weight="semibold"
-                                color={!stakingEnabled ? 'gray-60' : 'hero'}
+                                color={stakingEnabled ? 'hero-dark' : 'gray-60'}
                             >
                                 {formatted} {symbol}
                             </Text>

@@ -15,7 +15,6 @@ pub struct QuorumDriverMetrics {
     pub(crate) total_enqueued: IntCounter,
     pub(crate) total_ok_responses: IntCounter,
     pub(crate) total_err_responses: IntCounterVec,
-    pub(crate) total_aggregated_non_recoverable_err: IntCounterVec,
     pub(crate) attempt_times_ok_response: Histogram,
 
     // TODO: add histogram of attempt that tx succeeds
@@ -25,8 +24,6 @@ pub struct QuorumDriverMetrics {
     pub(crate) total_attempts_retrying_conflicting_transaction: IntCounter,
     pub(crate) total_successful_attempts_retrying_conflicting_transaction: IntCounter,
     pub(crate) total_times_conflicting_transaction_already_finalized_when_retrying: IntCounter,
-
-    pub(crate) total_equivocation_detected: IntCounter,
 }
 
 impl QuorumDriverMetrics {
@@ -54,13 +51,6 @@ impl QuorumDriverMetrics {
                 "quorum_driver_total_err_responses",
                 "Total number of requests returned with Err responses, grouped by error type",
                 &["error"],
-                registry,
-            )
-            .unwrap(),
-            total_aggregated_non_recoverable_err: register_int_counter_vec_with_registry!(
-                "quorum_driver_total_aggregated_non_recoverable_err",
-                "Total number of errors return from validators per transaction, grouped by error type",
-                &["error", "tx_recoverable"],
                 registry,
             )
             .unwrap(),
@@ -96,12 +86,6 @@ impl QuorumDriverMetrics {
             total_times_conflicting_transaction_already_finalized_when_retrying: register_int_counter_with_registry!(
                 "quorum_driver_total_times_conflicting_transaction_already_finalized_when_retrying",
                 "Total number of times the conflicting transaction is already finalized when retrying",
-                registry,
-            )
-            .unwrap(),
-            total_equivocation_detected: register_int_counter_with_registry!(
-                "quorum_driver_total_equivocation_detected",
-                "Total number of equivocations that are detected",
                 registry,
             )
             .unwrap(),

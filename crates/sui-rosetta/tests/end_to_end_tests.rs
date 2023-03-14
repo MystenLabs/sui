@@ -6,6 +6,7 @@ mod rosetta_client;
 use crate::rosetta_client::RosettaEndpoint;
 use rosetta_client::{get_random_sui, start_rosetta_test_server};
 use serde_json::json;
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
@@ -14,6 +15,7 @@ use sui_rosetta::types::{
 };
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionEffectsAPI};
+use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_type_tag, SUI_FRAMEWORK_OBJECT_ID};
 use test_utils::network::TestClusterBuilder;
@@ -84,7 +86,11 @@ async fn test_locked_sui() {
     let tx = to_sender_signed_transaction(tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(tx, None)
+        .execute_transaction(
+            tx,
+            SuiTransactionResponseOptions::new(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
         .unwrap();
 
@@ -116,7 +122,7 @@ async fn test_locked_sui() {
 }
 
 #[tokio::test]
-async fn test_get_delegated_sui() {
+async fn test_get_staked_sui() {
     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
     let address = test_cluster.accounts[0];
     let client = test_cluster.wallet.get_client().await.unwrap();
@@ -129,7 +135,7 @@ async fn test_get_delegated_sui() {
         blockchain: "sui".to_string(),
         network: SuiEnv::LocalNet,
     };
-    // Verify initial balance and delegation
+    // Verify initial balance and stake
     let request = AccountBalanceRequest {
         network_identifier: network_identifier.clone(),
         account_identifier: AccountIdentifier {
@@ -162,8 +168,14 @@ async fn test_get_delegated_sui() {
         .await;
     assert_eq!(response.balances[0].value, 0);
 
-    // Delegate some sui
-    let validators = client.governance_api().get_validators().await.unwrap();
+    // Stake some sui
+    let validator = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await
+        .unwrap()
+        .active_validators[0]
+        .sui_address;
     let coins = client
         .coin_read_api()
         .get_coins(address, None, None, None)
@@ -172,11 +184,11 @@ async fn test_get_delegated_sui() {
         .data;
     let delegation_tx = client
         .transaction_builder()
-        .request_add_delegation(
+        .request_add_stake(
             address,
             vec![coins[0].coin_object_id],
             Some(100000),
-            validators[0].sui_address,
+            validator,
             None,
             10000,
         )
@@ -185,7 +197,11 @@ async fn test_get_delegated_sui() {
     let tx = to_sender_signed_transaction(delegation_tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(tx, None)
+        .execute_transaction(
+            tx,
+            SuiTransactionResponseOptions::new(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
         .unwrap();
 
@@ -222,15 +238,14 @@ async fn test_delegation() {
 
     let validator = client
         .governance_api()
-        .get_validators()
+        .get_latest_sui_system_state()
         .await
         .unwrap()
-        .first()
-        .unwrap()
+        .active_validators[0]
         .sui_address;
     let ops = client
         .transaction_builder()
-        .request_add_delegation(sender, vec![coin1.0], Some(100000), validator, None, 10000)
+        .request_add_stake(sender, vec![coin1.0], Some(100000), validator, None, 10000)
         .await
         .unwrap();
 
@@ -240,11 +255,53 @@ async fn test_delegation() {
 
     let tx = client
         .read_api()
-        .get_transaction(response.transaction_identifier.hash)
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionResponseOptions::new().with_effects(),
+        )
         .await
         .unwrap();
 
     println!("Sui TX: {tx:?}");
 
-    assert_eq!(SuiExecutionStatus::Success, *tx.effects.status())
+    assert_eq!(
+        SuiExecutionStatus::Success,
+        *tx.effects.as_ref().unwrap().status()
+    )
+}
+
+#[tokio::test]
+async fn test_pay_sui() {
+    let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    let sender = test_cluster.accounts[0];
+    let recipient = test_cluster.accounts[1];
+    let client = test_cluster.wallet.get_client().await.unwrap();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
+
+    let ops = client
+        .transaction_builder()
+        .pay_sui(sender, vec![coin1.0], vec![recipient], vec![10000], 1000)
+        .await
+        .unwrap();
+
+    let ops = Operations::try_from(ops).unwrap();
+
+    let response = rosetta_client.rosetta_flow(ops, keystore).await;
+
+    let tx = client
+        .read_api()
+        .get_transaction_with_options(
+            response.transaction_identifier.hash,
+            SuiTransactionResponseOptions::new().with_effects(),
+        )
+        .await
+        .unwrap();
+
+    println!("Sui TX: {tx:?}");
+
+    assert_eq!(SuiExecutionStatus::Success, *tx.effects.unwrap().status())
 }

@@ -19,7 +19,7 @@ use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
 use crate::workloads::Gas;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
-use sui_types::object::{generate_test_gas_objects_with_owner, Owner};
+use sui_types::object::{generate_max_test_gas_objects_with_owner, Owner};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
@@ -109,7 +109,7 @@ impl Env {
         let config = Arc::new(network_config);
         // bring up servers ..
         let (owner, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
-        let generated_gas = generate_test_gas_objects_with_owner(2, owner);
+        let generated_gas = generate_max_test_gas_objects_with_owner(2, owner);
         let primary_gas = generated_gas
             .get(0)
             .context("No gas found at index 0")?

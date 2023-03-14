@@ -15,6 +15,7 @@ import {
   record,
   string,
   union,
+  is,
 } from 'superstruct';
 import {
   ObjectId,
@@ -22,6 +23,7 @@ import {
   SequenceNumber,
   TransactionDigest,
 } from './common';
+import { OwnedObjectRef } from './transactions';
 
 export const ObjectType = union([string(), literal('package')]);
 export type ObjectType = Infer<typeof ObjectType>;
@@ -215,8 +217,11 @@ export function getObjectNotExistsResponse(
 }
 
 export function getObjectReference(
-  resp: SuiObjectResponse,
+  resp: SuiObjectResponse | OwnedObjectRef,
 ): SuiObjectRef | undefined {
+  if ('reference' in resp) {
+    return resp.reference;
+  }
   const exists = getSuiObjectData(resp);
   if (exists) {
     return {
@@ -230,12 +235,15 @@ export function getObjectReference(
 
 /* ------------------------------ SuiObjectRef ------------------------------ */
 
-export function getObjectId(data: SuiObjectResponse | SuiObjectRef): ObjectId {
+export function getObjectId(
+  data: SuiObjectResponse | SuiObjectRef | OwnedObjectRef,
+): ObjectId {
   if ('objectId' in data) {
     return data.objectId;
   }
   return (
-    getObjectReference(data)?.objectId ?? getObjectNotExistsResponse(data)!
+    getObjectReference(data)?.objectId ??
+    getObjectNotExistsResponse(data as SuiObjectResponse)!
   );
 }
 
@@ -276,8 +284,11 @@ export function getObjectPreviousTransactionDigest(
 }
 
 export function getObjectOwner(
-  resp: SuiObjectResponse,
+  resp: SuiObjectResponse | ObjectOwner,
 ): ObjectOwner | undefined {
+  if (is(resp, ObjectOwner)) {
+    return resp;
+  }
   return getSuiObjectData(resp)?.owner;
 }
 
@@ -288,7 +299,7 @@ export function getObjectDisplay(
 }
 
 export function getSharedObjectInitialVersion(
-  resp: SuiObjectResponse,
+  resp: SuiObjectResponse | ObjectOwner,
 ): number | undefined {
   const owner = getObjectOwner(resp);
   if (typeof owner === 'object' && 'Shared' in owner) {
@@ -298,12 +309,14 @@ export function getSharedObjectInitialVersion(
   }
 }
 
-export function isSharedObject(resp: SuiObjectResponse): boolean {
+export function isSharedObject(resp: SuiObjectResponse | ObjectOwner): boolean {
   const owner = getObjectOwner(resp);
   return typeof owner === 'object' && 'Shared' in owner;
 }
 
-export function isImmutableObject(resp: SuiObjectResponse): boolean {
+export function isImmutableObject(
+  resp: SuiObjectResponse | ObjectOwner,
+): boolean {
   const owner = getObjectOwner(resp);
   return owner === 'Immutable';
 }

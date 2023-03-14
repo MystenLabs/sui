@@ -36,8 +36,8 @@ impl TestCaseImpl for CoinMergeSplitTest {
 
         let response =
             Self::split_coin(ctx, signer, *primary_coin.id(), amounts, *gas_obj.id()).await;
-        let tx_digest = *response.effects.transaction_digest();
-        let new_coins = response.effects.created();
+        let tx_digest = response.digest;
+        let new_coins = response.effects.as_ref().unwrap().created();
 
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync(vec![tx_digest], 5).await;
@@ -69,7 +69,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
                 Self::merge_coin(ctx, signer, primary_coin_id, coin_to_merge, *gas_obj.id()).await;
             debug!("Verifying the merged coin {} is deleted.", coin_to_merge);
             coins_merged.push(coin_to_merge);
-            txes.push(*response.effects.transaction_digest());
+            txes.push(response.digest);
         }
 
         // Verify fullnode observes the txn

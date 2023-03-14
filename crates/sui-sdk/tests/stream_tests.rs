@@ -4,9 +4,8 @@
 use futures::StreamExt;
 use std::future;
 use sui::client_commands::SuiClientCommands;
+use sui_json_rpc_types::{EventFilter, SuiTransactionResponseQuery};
 use sui_sdk::{SuiClientBuilder, SUI_COIN_TYPE};
-use sui_types::event::EventType;
-use sui_types::query::{EventQuery, TransactionQuery};
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -17,7 +16,7 @@ async fn test_transactions_stream() -> Result<(), anyhow::Error> {
     let client = SuiClientBuilder::default().build(rpc_url).await?;
     let txs = client
         .read_api()
-        .get_transactions_stream(TransactionQuery::All, None, true)
+        .get_transactions_stream(SuiTransactionResponseQuery::default(), None, true)
         .collect::<Vec<_>>()
         .await;
 
@@ -36,7 +35,7 @@ async fn test_transactions_stream() -> Result<(), anyhow::Error> {
 
     let txs = client
         .read_api()
-        .get_transactions_stream(TransactionQuery::All, None, true)
+        .get_transactions_stream(SuiTransactionResponseQuery::default(), None, true)
         .collect::<Vec<_>>()
         .await;
 
@@ -55,31 +54,11 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
     let client = SuiClientBuilder::default().build(rpc_url).await?;
     let events = client
         .event_api()
-        .get_events_stream(EventQuery::All, None, true)
+        .get_events_stream(EventFilter::All(vec![]), None, true)
         .collect::<Vec<_>>()
         .await;
 
     let starting_event_count = events.len();
-
-    let events = client
-        .event_api()
-        .get_events_stream(
-            EventQuery::EventType(EventType::CoinBalanceChange),
-            None,
-            true,
-        )
-        .collect::<Vec<_>>()
-        .await;
-
-    let starting_coin_balance_change_event_count = events.len();
-
-    let events = client
-        .event_api()
-        .get_events_stream(EventQuery::EventType(EventType::NewObject), None, true)
-        .collect::<Vec<_>>()
-        .await;
-
-    let starting_new_object_event_count = events.len();
 
     // execute some transactions
     SuiClientCommands::CreateExampleNFT {
@@ -94,28 +73,11 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
 
     let events = client
         .event_api()
-        .get_events_stream(EventQuery::All, None, true)
+        .get_events_stream(EventFilter::All(vec![]), None, true)
         .collect::<Vec<_>>()
         .await;
-    assert_eq!(starting_event_count + 3, events.len());
+    assert_eq!(starting_event_count + 1, events.len());
 
-    let events = client
-        .event_api()
-        .get_events_stream(
-            EventQuery::EventType(EventType::CoinBalanceChange),
-            None,
-            true,
-        )
-        .collect::<Vec<_>>()
-        .await;
-    assert_eq!(starting_coin_balance_change_event_count + 1, events.len());
-
-    let events = client
-        .event_api()
-        .get_events_stream(EventQuery::EventType(EventType::NewObject), None, true)
-        .collect::<Vec<_>>()
-        .await;
-    assert_eq!(starting_new_object_event_count + 1, events.len());
     Ok(())
 }
 

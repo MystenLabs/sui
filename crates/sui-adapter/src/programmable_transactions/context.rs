@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     marker::PhantomData,
 };
 
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::{CodeOffset, FunctionDefinitionIndex},
+    file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -17,16 +17,19 @@ use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, Run
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
-    storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
+    storage::{ObjectChange, Storage, WriteKind},
 };
 
-use crate::adapter::{missing_unwrapped_msg, new_session};
+use crate::{
+    adapter::{missing_unwrapped_msg, new_session},
+    execution_mode::ExecutionMode,
+};
 
 use super::types::*;
 
@@ -71,7 +74,7 @@ struct AdditionalWrite {
     /// The new owner of the object
     recipient: Owner,
     /// the type of the object,
-    type_: StructTag,
+    type_: MoveObjectType,
     /// if the object has public transfer or not, i.e. if it has store
     has_public_transfer: bool,
     /// contents of the object
@@ -89,7 +92,7 @@ where
         state_view: &'state S,
         tx_context: &'a mut TxContext,
         gas_status: &'a mut SuiGasStatus<'b>,
-        gas_coin: ObjectID,
+        gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
         let mut object_owner_map = BTreeMap::new();
@@ -97,26 +100,39 @@ where
             .into_iter()
             .map(|call_arg| load_call_arg(state_view, &mut object_owner_map, call_arg))
             .collect::<Result<_, ExecutionError>>()?;
-        let mut gas = load_object(
-            state_view,
-            &mut object_owner_map,
-            /* imm override */ false,
-            gas_coin,
-        )?;
-        // subtract the max gas budget. This amount is off limits in the programmable transaction,
-        // so to mimic this "off limits" behavior, we act as if the coin has less balance than
-        // it really does
-        let Some(Value::Object(ObjectValue {
-            contents: ObjectContents::Coin(coin),
-            ..
-        })) = &mut gas.inner.value else {
-            invariant_violation!("Gas object should be a populated coin")
+        let gas = if let Some(gas_coin) = gas_coin_opt {
+            let mut gas = load_object(
+                state_view,
+                &mut object_owner_map,
+                /* imm override */ false,
+                gas_coin,
+            )?;
+            // subtract the max gas budget. This amount is off limits in the programmable transaction,
+            // so to mimic this "off limits" behavior, we act as if the coin has less balance than
+            // it really does
+            let Some(Value::Object(ObjectValue {
+                contents: ObjectContents::Coin(coin),
+                ..
+            })) = &mut gas.inner.value else {
+                invariant_violation!("Gas object should be a populated coin")
+            };
+            let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
+            let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
+                invariant_violation!(
+                    "Transaction input checker should check that there is enough gas"
+                );
+            };
+            coin.balance = Balance::new(new_balance);
+            gas
+        } else {
+            InputValue {
+                object_metadata: None,
+                inner: ResultValue {
+                    last_usage_kind: None,
+                    value: None,
+                },
+            }
         };
-        let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
-        let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
-            invariant_violation!("Transaction input checker should check that there is enough gas");
-        };
-        coin.balance = Balance::new(new_balance);
         let session = new_session(
             vm,
             state_view,
@@ -266,13 +282,7 @@ where
         if val_opt.is_none() {
             return Err(CommandArgumentError::InvalidUsageOfTakenValue);
         }
-        if matches!(
-            input_metadata_opt,
-            Some(InputObjectMetadata {
-                owner: Owner::Immutable,
-                ..
-            })
-        ) {
+        if input_metadata_opt.is_some() && !input_metadata_opt.unwrap().is_mutable_input {
             return Err(CommandArgumentError::InvalidObjectByMutRef);
         }
         V::try_from_value(val_opt.take().unwrap())
@@ -302,7 +312,13 @@ where
     }
 
     /// Restore an argument after being mutably borrowed
-    pub fn restore_arg(&mut self, arg: Argument, value: Value) -> Result<(), ExecutionError> {
+    pub fn restore_arg<Mode: ExecutionMode>(
+        &mut self,
+        updates: &mut Mode::ArgumentUpdates,
+        arg: Argument,
+        value: Value,
+    ) -> Result<(), ExecutionError> {
+        Mode::add_argument_update(self, updates, arg, &value)?;
         let was_mut_opt = self.borrowed.remove(&arg);
         assert_invariant!(
             was_mut_opt.is_some() && was_mut_opt.unwrap(),
@@ -336,7 +352,7 @@ where
     pub fn new_package(
         &mut self,
         modules: Vec<move_binary_format::CompiledModule>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<ObjectID, ExecutionError> {
         // wrap the modules in an object, write it to the store
         let package_object = Object::new_package(
             modules,
@@ -344,8 +360,9 @@ where
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
         )?;
+        let id = package_object.id();
         self.new_packages.push(package_object);
-        Ok(())
+        Ok(id)
     }
 
     /// Finish a command: clearing the borrows and adding the results to the result vector
@@ -362,7 +379,7 @@ where
     }
 
     /// Determine the object changes and collect all user events
-    pub fn finish(self) -> Result<ExecutionResults, ExecutionError> {
+    pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
         use sui_types::error::convert_vm_error;
         let Self {
             protocol_config,
@@ -380,12 +397,12 @@ where
             ..
         } = self;
         let tx_digest = tx_context.digest();
-        let sender = tx_context.sender();
         let mut additional_writes = BTreeMap::new();
         let mut input_object_metadata = BTreeMap::new();
         // Any object value that has not been taken (still has `Some` for it's value) needs to
         // written as it's value might have changed (and eventually it's sequence number will need
         // to increase)
+        let mut by_value_inputs = BTreeSet::new();
         let mut add_input_object_write = |input| {
             let InputValue {
                 object_metadata: object_metadata_opt,
@@ -394,53 +411,60 @@ where
             let Some(object_metadata) = object_metadata_opt else { return };
             let is_mutable_input = object_metadata.is_mutable_input;
             let owner = object_metadata.owner;
+            let id = object_metadata.id;
             input_object_metadata.insert(object_metadata.id, object_metadata);
-            let Some(Value::Object(object_value)) = value else { return };
+            let Some(Value::Object(object_value)) = value else {
+                by_value_inputs.insert(id);
+                return
+            };
             if is_mutable_input {
                 add_additional_write(&mut additional_writes, owner, object_value);
             }
         };
-        let gas_id = gas.object_metadata.as_ref().unwrap().id;
+        let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
         add_input_object_write(gas);
         for input in inputs {
             add_input_object_write(input)
         }
         // check for unused values
-        for (i, command_result) in results.iter().enumerate() {
-            for (j, result_value) in command_result.iter().enumerate() {
-                let ResultValue {
-                    last_usage_kind,
-                    value,
-                } = result_value;
-                match value {
-                    None => (),
-                    Some(Value::Object(_)) => {
-                        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
-                            result_idx: i as u16,
-                            secondary_idx: j as u16,
+        // disable this check for dev inspect
+        if !Mode::allow_arbitrary_values() {
+            for (i, command_result) in results.iter().enumerate() {
+                for (j, result_value) in command_result.iter().enumerate() {
+                    let ResultValue {
+                        last_usage_kind,
+                        value,
+                    } = result_value;
+                    match value {
+                        None => (),
+                        Some(Value::Object(_)) => {
+                            return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+                                result_idx: i as u16,
+                                secondary_idx: j as u16,
+                            }
+                            .into())
                         }
-                        .into())
-                    }
-                    Some(Value::Raw(RawValueType::Any, _)) => (),
-                    Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
-                        // - nothing to check for drop
-                        // - if it does not have drop, but has copy,
-                        //   the last usage must be by value in order to "lie" and say that the
-                        //   last usage is actually a take instead of a clone
-                        // - Otherwise, an error
-                        if abilities.has_drop() {
-                        } else if abilities.has_copy()
-                            && !matches!(last_usage_kind, Some(UsageKind::ByValue))
-                        {
-                            let msg = "The value has copy, but not drop. \
+                        Some(Value::Raw(RawValueType::Any, _)) => (),
+                        Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
+                            // - nothing to check for drop
+                            // - if it does not have drop, but has copy,
+                            //   the last usage must be by value in order to "lie" and say that the
+                            //   last usage is actually a take instead of a clone
+                            // - Otherwise, an error
+                            if abilities.has_drop() {
+                            } else if abilities.has_copy()
+                                && !matches!(last_usage_kind, Some(UsageKind::ByValue))
+                            {
+                                let msg = "The value has copy, but not drop. \
                                 Its last usage must be by-value so it can be taken.";
-                            return Err(ExecutionError::new_with_source(
-                                ExecutionErrorKind::UnusedValueWithoutDrop {
-                                    result_idx: i as u16,
-                                    secondary_idx: j as u16,
-                                },
-                                msg,
-                            ));
+                                return Err(ExecutionError::new_with_source(
+                                    ExecutionErrorKind::UnusedValueWithoutDrop {
+                                        result_idx: i as u16,
+                                        secondary_idx: j as u16,
+                                    },
+                                    msg,
+                                ));
+                            }
                         }
                     }
                 }
@@ -452,7 +476,9 @@ where
             add_additional_write(&mut additional_writes, owner, object_value)
         }
         // Refund unused gas
-        refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
+        if let Some(gas_id) = gas_id_opt {
+            refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
+        }
 
         let (change_set, events, mut native_context_extensions) = session
             .finish_with_extensions()
@@ -467,11 +493,6 @@ where
         let object_runtime: ObjectRuntime = native_context_extensions.remove();
         let new_ids = object_runtime.new_ids().clone();
         // tell the object runtime what input objects were taken and which were transferred
-        let by_value_inputs = input_object_metadata
-            .keys()
-            .copied()
-            .filter(|id| !additional_writes.contains_key(id))
-            .collect();
         let external_transfers = additional_writes.keys().copied().collect();
         let RuntimeResults {
             writes,
@@ -484,12 +505,10 @@ where
             "Events should be taken after every Move call"
         );
         // todo remove this when system events are removed
-        let dummy_event_ctx = SingleTxContext::unused_input(sender);
         let mut object_changes = BTreeMap::new();
         for package in new_packages {
             let id = package.id();
-            let change =
-                ObjectChange::Write(SingleTxContext::publish(sender), package, WriteKind::Create);
+            let change = ObjectChange::Write(package, WriteKind::Create);
             object_changes.insert(id, change);
         }
         for (id, additional_write) in additional_writes {
@@ -526,7 +545,7 @@ where
                 )?
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
-            let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
+            let change = ObjectChange::Write(object, write_kind);
             object_changes.insert(id, change);
         }
 
@@ -538,13 +557,13 @@ where
             !gas_status.is_unmetered(),
             protocol_config,
         );
-        for (id, (write_kind, recipient, ty, tag, value)) in writes {
+        for (id, (write_kind, recipient, ty, move_type, value)) in writes {
             let abilities = tmp_session
                 .get_type_abilities(&ty)
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let has_public_transfer = abilities.has_store();
             let layout = tmp_session
-                .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
+                .get_type_layout(&move_type.clone().into())
                 .map_err(|e| convert_vm_error(e, vm, state_view))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
@@ -554,14 +573,14 @@ where
                     &input_object_metadata,
                     &loaded_child_objects,
                     id,
-                    tag,
+                    move_type,
                     has_public_transfer,
                     bytes,
                     write_kind,
                 )?
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
-            let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
+            let change = ObjectChange::Write(object, write_kind);
             object_changes.insert(id, change);
         }
         for (id, delete_kind) in deletions {
@@ -575,10 +594,7 @@ where
                     Err(_) => invariant_violation!(missing_unwrapped_msg(&id)),
                 },
             };
-            object_changes.insert(
-                id,
-                ObjectChange::Delete(dummy_event_ctx.clone(), version, delete_kind),
-            );
+            object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
         }
         let (change_set, move_events) = tmp_session
             .finish()
@@ -597,6 +613,28 @@ where
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+    }
+
+    /// Special case errors for type arguments to Move functions
+    pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+        use move_core_types::vm_status::StatusCode;
+        use sui_types::messages::TypeArgumentError;
+        match error.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => self.convert_vm_error(error),
+        }
     }
 
     /// Returns true if the value at the argument's location is borrowed, mutably or immutably
@@ -709,10 +747,6 @@ fn load_call_arg<S: Storage>(
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => load_object_arg(state_view, object_owner_map, obj_arg)?,
-        CallArg::ObjVec(_) => {
-            // protected by transaction input checker
-            invariant_violation!("ObjVec is not supported in programmable transactions")
-        }
     })
 }
 
@@ -782,7 +816,7 @@ fn refund_max_gas_budget(
         .value()
         .checked_add(gas_status.max_gax_budget_in_balance()) else {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::TotalCoinBalanceOverflow,
+                ExecutionErrorKind::CoinBalanceOverflow,
                 "Gas coin too large after returning the max gas budget",
             ));
         };
@@ -801,7 +835,7 @@ unsafe fn create_written_object(
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     id: ObjectID,
-    tag: StructTag,
+    type_: MoveObjectType,
     has_public_transfer: bool,
     contents: Vec<u8>,
     write_kind: WriteKind,
@@ -827,7 +861,7 @@ unsafe fn create_written_object(
     );
 
     MoveObject::new_from_execution(
-        tag,
+        type_,
         has_public_transfer,
         old_obj_ver.unwrap_or_else(SequenceNumber::new),
         contents,

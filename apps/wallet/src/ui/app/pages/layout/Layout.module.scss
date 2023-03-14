@@ -3,30 +3,15 @@
 @use '_values/colors';
 
 .container {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-flow: column nowrap;
-    background-color: v.use(v.$colors-main-content-background);
-    background-size: cover;
 
     @include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
 
     &.nav-hidden {
         @include v.set(v.$sizing-nav-height-placeholder, 0);
-    }
-
-    &.forced-popup-size,
-    :global(.is-popup) & {
-        width: val.$sizing-popup-width;
-        height: val.$sizing-popup-height;
-    }
-
-    &.dynamic-size {
-        background: url('_assets/images/welcome_bg.svg') no-repeat center center;
-        background-size: cover;
-        width: 100%;
-        min-height: 100vh;
-        height: 100vh;
     }
 }

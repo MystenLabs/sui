@@ -4,11 +4,12 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
-import { getStakingRewards } from '../getStakingRewards';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { getAllStakeSui } from '../getAllStakeSui';
 import { StakeAmount } from '../home/StakeAmount';
+import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
-import { DelegationCard } from './../home/DelegationCard';
 import BottomMenuLayout, {
     Menu,
     Content,
@@ -19,54 +20,52 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const {
-        data: delegations,
+        data: delegatedStake,
         isLoading,
         isError,
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
     const { data: system } = useSystemState();
+    const activeValidators = system?.activeValidators;
 
-    const activeValidators = system?.validators.active_validators;
-    // Total earn token for all delegations
-    const totalEarnToken = useMemo(() => {
-        if (!delegations || !system) return 0;
+    // Total active stake for all Staked validators
+    const totalStake = useMemo(() => {
+        if (!delegatedStake) return 0n;
+        return getAllStakeSui(delegatedStake);
+    }, [delegatedStake]);
 
-        const activeValidators = system.validators.active_validators;
+    const delegations = useMemo(() => {
+        return delegatedStake?.flatMap((delegation) => {
+            return delegation.stakes.map((d) => ({
+                ...d,
+                validatorAddress: delegation.validatorAddress,
+            }));
+        });
+    }, [delegatedStake]);
 
-        return delegations.reduce(
-            (acc, delegation) =>
-                acc + getStakingRewards(activeValidators, delegation),
-            0
+    // Get total rewards for all delegations
+    const totalEarnTokenReward = useMemo(() => {
+        if (!delegatedStake || !activeValidators) return 0n;
+        return (
+            delegatedStake.reduce(
+                (acc, curr) =>
+                    curr.stakes.reduce(
+                        (total, { estimatedReward }) =>
+                            total + BigInt(estimatedReward || 0),
+                        acc
+                    ),
+                0n
+            ) || 0n
         );
-    }, [delegations, system]);
+    }, [delegatedStake, activeValidators]);
 
-    // Total active stake for all delegations
-
-    const totalActivePendingStake = useMemo(() => {
-        if (!delegations) return 0n;
-        return delegations.reduce(
-            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
-            0n
-        );
-    }, [delegations]);
-
-    const numberOfValidators = useMemo(() => {
-        if (!delegations) return 0;
-        return [
-            ...new Set(
-                delegations.map(
-                    ({ staked_sui }) => staked_sui.validator_address
-                )
-            ),
-        ].length;
-    }, [delegations]);
+    const numberOfValidators = delegatedStake?.length || 0;
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -96,7 +95,7 @@ export function ValidatorsCard() {
                         <Card
                             padding="none"
                             header={
-                                <div className="py-2.5">
+                                <div className="py-2.5 flex px-3.75 justify-start w-full">
                                     <Text
                                         variant="captionSmall"
                                         weight="semibold"
@@ -113,13 +112,13 @@ export function ValidatorsCard() {
                             <div className="flex divide-x divide-solid divide-gray-45 divide-y-0">
                                 <CardItem title="Your Stake">
                                     <StakeAmount
-                                        balance={totalActivePendingStake}
+                                        balance={totalStake}
                                         variant="heading5"
                                     />
                                 </CardItem>
                                 <CardItem title="Earned">
                                     <StakeAmount
-                                        balance={totalEarnToken}
+                                        balance={totalEarnTokenReward}
                                         variant="heading5"
                                         isEarnedRewards
                                     />
@@ -129,13 +128,11 @@ export function ValidatorsCard() {
 
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {system &&
-                                activeValidators &&
-                                delegations.map((delegationObject) => (
-                                    <DelegationCard
-                                        delegationObject={delegationObject}
-                                        activeValidators={activeValidators}
+                                delegations?.map((delegation) => (
+                                    <StakeCard
+                                        delegationObject={delegation}
                                         currentEpoch={+system.epoch}
-                                        key={delegationObject.staked_sui.id.id}
+                                        key={delegation.stakedSuiId}
                                     />
                                 ))}
                         </div>

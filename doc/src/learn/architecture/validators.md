@@ -4,11 +4,11 @@ title: Validators
 
 The Sui network is operated by a set of independent *validators*, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines operated by the same entity). A validator participates in the network by handling read and write requests sent by clients. This section focuses on the latter.
 
-Sui uses proof of stake (PoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing stake and staking rewards in case of misbehavior.
+Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing stake and staking rewards in case of misbehavior.
 
 ## Epochs
 
-Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../../build/cli-client.md#genesis) and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as delegated staking/unstaking, and distribution of staking rewards are also processed at epoch boundaries.
+Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as staking/unstaking, and distribution of staking rewards are also processed at epoch boundaries.
 
 ## Quorums
 
@@ -38,7 +38,7 @@ As with transactions, we note that the process of sharing a certificate with val
 
 ## The role of Narwhal and Bullshark
 
-Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](consensus.md) and the Tusk successor [Bullshark](https://arxiv.org/abs/2201.05677). Narwhal/Bullshark (N/B) are also being implemented by [Mysten Labs](https://mystenlabs.com/) so that when Byzantine agreement is required we use a high-throughput DAG-based consensus to manage shared locks while execution on different shared objects is parallelized.
+Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](consensus.md) and the Tusk successor [Bullshark](https://arxiv.org/abs/2201.05677). Narwhal/Bullshark (N/B) are also being implemented in Sui so that when Byzantine agreement is required it uses a high-throughput DAG-based consensus to manage shared locks while execution on different shared objects is parallelized.
 
 Narwhal enables the parallel ordering of transactions into batches that are collected into concurrently proposed blocks, and Bullshark defines an algorithm for executing the DAG that these blocks form. N/B combined builds a DAG of blocks, concurrently proposed, and creates an order between those blocks as a byproduct of the building of the DAG. But that order is overlaid on top of the causal order of Sui transactions (the "payload" of Narwhal/Bullshark here), and does not substitute for it:
 

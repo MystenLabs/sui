@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
-  SignableTransaction,
   SignedTransaction,
   Transaction,
 } from "@mysten/sui.js";
@@ -30,9 +29,7 @@ export type SuiSignTransactionMethod = (
 
 /** Input for signing transactions. */
 export interface SuiSignTransactionInput {
-  // TODO: Support Transaction builder:
-  // transaction: Transaction | SignableTransaction;
-  transaction: SignableTransaction;
+  transaction: Transaction;
   options?: SuiSignTransactionOptions;
   account: WalletAccount;
   chain: IdentifierString;

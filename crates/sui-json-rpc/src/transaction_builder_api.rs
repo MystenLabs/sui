@@ -8,8 +8,8 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
-    TransactionBytes,
+    BigInt, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode,
+    SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -115,13 +115,20 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .pay(signer, input_coins, recipients, amounts, gas, gas_budget)
+            .pay(
+                signer,
+                input_coins,
+                recipients,
+                amounts.into_iter().map(|a| a.into()).collect(),
+                gas,
+                gas_budget,
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
@@ -131,12 +138,18 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
+            .pay_sui(
+                signer,
+                input_coins,
+                recipients,
+                amounts.into_iter().map(|a| a.into()).collect(),
+                gas_budget,
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
@@ -288,7 +301,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         Ok(TransactionBytes::from_data(data)?)
     }
 
-    async fn request_add_delegation(
+    async fn request_add_stake(
         &self,
         signer: SuiAddress,
         coins: Vec<ObjectID>,
@@ -299,12 +312,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
     ) -> RpcResult<TransactionBytes> {
         Ok(TransactionBytes::from_data(
             self.builder
-                .request_add_delegation(signer, coins, amount, validator, gas, gas_budget)
+                .request_add_stake(signer, coins, amount, validator, gas, gas_budget)
                 .await?,
         )?)
     }
 
-    async fn request_withdraw_delegation(
+    async fn request_withdraw_stake(
         &self,
         signer: SuiAddress,
         delegation: ObjectID,
@@ -314,7 +327,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
     ) -> RpcResult<TransactionBytes> {
         Ok(TransactionBytes::from_data(
             self.builder
-                .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
+                .request_withdraw_stake(signer, delegation, staked_sui, gas, gas_budget)
                 .await?,
         )?)
     }

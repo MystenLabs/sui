@@ -52,6 +52,17 @@ module sui::clock {
     }
 
     #[test_only]
+    /// Expose the functionality of `create()` (usually only done during
+    /// genesis) for tests that want to create a Clock.
+    public fun create_for_testing(ctx: &mut sui::tx_context::TxContext) {
+        transfer::share_object(Clock {
+            id: object::new(ctx),
+            timestamp_ms: 0,
+        })
+    }
+
+
+    #[test_only]
     public fun increment_for_testing(clock: &mut Clock, tick: u64) {
         clock.timestamp_ms = clock.timestamp_ms + tick;
     }

@@ -236,7 +236,7 @@ Add new functions or types, or change dependencies, existing
 functions can't change.
 
 
-<pre><code><b>const</b> <a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>: u8 = 1;
+<pre><code><b>const</b> <a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
 </code></pre>
 
 
@@ -257,7 +257,7 @@ functions or types, change dependencies)
 Only be able to change dependencies.
 
 
-<pre><code><b>const</b> <a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>: u8 = 2;
+<pre><code><b>const</b> <a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
 </code></pre>
 
 

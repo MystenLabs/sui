@@ -6,6 +6,7 @@ import {
     toB64,
     type SignedTransaction,
     type ExportedKeypair,
+    type SignedMessage,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -23,6 +24,7 @@ import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
 import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -96,8 +98,8 @@ export class BackgroundClient {
     public sendTransactionRequestResponse(
         txID: string,
         approved: boolean,
-        txResult?: SuiTransactionResponse,
-        tsResultError?: string,
+        txResult?: SuiTransactionResponse | SignedMessage,
+        txResultError?: string,
         txSigned?: SignedTransaction
     ) {
         this.sendMessage(
@@ -106,7 +108,7 @@ export class BackgroundClient {
                 approved,
                 txID,
                 txResult,
-                tsResultError,
+                txResultError,
                 txSigned,
             })
         );
@@ -298,6 +300,18 @@ export class BackgroundClient {
                     );
                 })
             )
+        );
+    }
+
+    importLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'importLedgerAccounts'>>({
+                    type: 'keyring',
+                    method: 'importLedgerAccounts',
+                    args: { ledgerAccounts },
+                })
+            ).pipe(take(1))
         );
     }
 

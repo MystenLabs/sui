@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 
 const styles = cva(
     [
-        'transition no-underline outline-none bg-transparent group',
+        'transition no-underline outline-none group',
         'flex flex-row flex-nowrap items-center justify-center gap-2',
         'cursor-pointer text-body font-semibold max-w-full min-w-0 w-full',
     ],

@@ -44,7 +44,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let store = make_consensus_store(&store_path);
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics.clone(), &committee);
+        let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
 
         let data_size: usize = certificates
             .iter()
@@ -55,7 +55,6 @@ pub fn process_certificates(c: &mut Criterion) {
         let mut ordering_engine = Bullshark {
             committee: committee.clone(),
             store,
-            gc_depth,
             metrics,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: Default::default(),

@@ -10,3 +10,4 @@ pub mod shell;
 pub mod sui_commands;
 
 pub mod genesis_ceremony;
+pub mod genesis_inspector;

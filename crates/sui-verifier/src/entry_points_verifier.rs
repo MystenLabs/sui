@@ -250,7 +250,7 @@ pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
     STD_UTF8_STRUCT_NAME,
 );
 
-fn is_primitive(
+pub fn is_primitive(
     view: &BinaryIndexedView,
     function_type_args: &[AbilitySet],
     s: &SignatureToken,

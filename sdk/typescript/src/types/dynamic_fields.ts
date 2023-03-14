@@ -4,6 +4,7 @@
 import {
   any,
   array,
+  boolean,
   Infer,
   literal,
   number,
@@ -26,7 +27,8 @@ export const DynamicFieldName = object({
 export type DynamicFieldName = Infer<typeof DynamicFieldName>;
 
 export const DynamicFieldInfo = object({
-  name: union([DynamicFieldName, string()]),
+  name: DynamicFieldName,
+  bcsName: string(),
   type: DynamicFieldType,
   objectType: string(),
   objectId: ObjectId,
@@ -38,5 +40,6 @@ export type DynamicFieldInfo = Infer<typeof DynamicFieldInfo>;
 export const DynamicFieldPage = object({
   data: array(DynamicFieldInfo),
   nextCursor: union([ObjectId, literal(null)]),
+  hasNextPage: boolean(),
 });
 export type DynamicFieldPage = Infer<typeof DynamicFieldPage>;

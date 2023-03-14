@@ -42,6 +42,7 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers", package = "telemetry-subscribers" }
 mysten-network.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+shared-crypto = { path = "../../crates/shared-crypto"}
 
 anemo.workspace = true
 tower = { version = "0.4.13", features = ["full"] }

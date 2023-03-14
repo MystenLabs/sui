@@ -4,6 +4,10 @@
 
 pub mod sql_types {
     #[derive(diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "bcs_bytes"))]
+    pub struct BcsBytes;
+
+    #[derive(diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "object_status"))]
     pub struct ObjectStatus;
 
@@ -57,9 +61,13 @@ diesel::table! {
         id -> Int8,
         transaction_digest -> Varchar,
         event_sequence -> Int8,
-        event_time -> Nullable<Timestamp>,
-        event_type -> Varchar,
-        event_content -> Varchar,
+        sender -> Varchar,
+        package -> Varchar,
+        module -> Text,
+        event_type -> Text,
+        event_time_ms -> Nullable<Int8>,
+        parsed_json -> Jsonb,
+        event_bcs -> Bytea,
     }
 }
 
@@ -80,6 +88,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
     use super::sql_types::ObjectStatus;
+    use super::sql_types::BcsBytes;
 
     objects (object_id) {
         epoch -> Int8,
@@ -93,6 +102,9 @@ diesel::table! {
         previous_transaction -> Varchar,
         object_type -> Varchar,
         object_status -> ObjectStatus,
+        has_public_transfer -> Bool,
+        storage_rebate -> Int8,
+        bcs -> Array<Nullable<BcsBytes>>,
     }
 }
 
@@ -100,6 +112,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::OwnerType;
     use super::sql_types::ObjectStatus;
+    use super::sql_types::BcsBytes;
 
     objects_history (epoch, object_id, version) {
         epoch -> Int8,
@@ -113,6 +126,9 @@ diesel::table! {
         previous_transaction -> Varchar,
         object_type -> Varchar,
         object_status -> ObjectStatus,
+        has_public_transfer -> Bool,
+        storage_rebate -> Int8,
+        bcs -> Array<Nullable<BcsBytes>>,
     }
 }
 
@@ -153,18 +169,24 @@ diesel::table! {
 }
 
 diesel::table! {
-    package_logs (last_processed_id) {
-        last_processed_id -> Int8,
+    use diesel::sql_types::*;
+    use super::sql_types::BcsBytes;
+
+    packages (package_id, version) {
+        package_id -> Varchar,
+        version -> Int8,
+        author -> Varchar,
+        data -> Array<Nullable<BcsBytes>>,
     }
 }
 
 diesel::table! {
-    packages (id) {
+    recipients (id) {
         id -> Int8,
-        package_id -> Text,
-        author -> Text,
-        module_names -> Array<Nullable<Text>>,
-        package_content -> Text,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        recipient -> Varchar,
     }
 }
 
@@ -176,7 +198,7 @@ diesel::table! {
         recipients -> Array<Nullable<Text>>,
         checkpoint_sequence_number -> Int8,
         transaction_time -> Nullable<Timestamp>,
-        transaction_kinds -> Array<Nullable<Text>>,
+        transaction_kind -> Text,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,
@@ -208,7 +230,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     objects_history,
     owner,
     owner_history,
-    package_logs,
     packages,
+    recipients,
     transactions,
 );

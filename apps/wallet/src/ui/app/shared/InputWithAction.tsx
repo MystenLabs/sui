@@ -36,31 +36,31 @@ const styles = cva(
     }
 );
 
-export interface InputWithActionProps
-    extends VariantProps<typeof styles>,
-        Omit<ComponentProps<'input'>, 'className'> {
-    actionText: string;
-    onActionClicked?: PillProps['onClick'];
-    actionType?: PillProps['type'];
-    name: string;
-    prefix?: string;
-    suffix?: string;
-    actionDisabled?: boolean | 'auto';
-    allowNegative?: boolean;
-    allowDecimals?: boolean;
-}
+export type InputWithActionProps = VariantProps<typeof styles> &
+    (
+        | (Omit<ComponentProps<'input'>, 'className' | 'type'> & {
+              type?: 'text' | 'number' | 'password' | 'email';
+          })
+        | (Omit<
+              ComponentProps<typeof NumberInput>,
+              'form' | 'field' | 'meta'
+          > & { type: 'numberInput' })
+    ) & {
+        actionText: string;
+        onActionClicked?: PillProps['onClick'];
+        actionType?: PillProps['type'];
+        name: string;
+        actionDisabled?: boolean | 'auto';
+    };
 
 export function InputWithAction({
     actionText,
     onActionClicked,
-    allowNegative,
     actionType = 'submit',
-    type = 'number',
+    type,
     disabled = false,
     actionDisabled = false,
     name,
-    prefix,
-    suffix,
     dark,
     rounded,
     ...props
@@ -79,7 +79,7 @@ export function InputWithAction({
     return (
         <>
             <div className="flex flex-row flex-nowrap items-center relative">
-                {type === 'number' ? (
+                {type === 'numberInput' ? (
                     <NumberInput
                         className={styles({ rounded })}
                         allowNegative
@@ -88,9 +88,6 @@ export function InputWithAction({
                         field={field}
                         meta={meta}
                         disabled={isInputDisabled}
-                        decimals={true}
-                        prefix={prefix}
-                        suffix={suffix}
                     />
                 ) : (
                     <input

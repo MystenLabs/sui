@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-mod errors;
+pub mod errors;
 pub(crate) mod iter;
 pub(crate) mod keys;
 pub mod util;
@@ -22,7 +22,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
-    env, fs,
+    env,
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc,
@@ -381,25 +381,15 @@ impl RocksDB {
         delegate_call!(self.flush())
     }
 
-    pub fn checkpoint(&self, path: &Path) -> Result<PathBuf, TypedStoreError> {
-        let (checkpoint, path) = match self {
-            Self::DBWithThreadMode(d) => (Checkpoint::new(&d.underlying)?, d.db_path.join(path)),
-            Self::OptimisticTransactionDB(d) => {
-                (Checkpoint::new(&d.underlying)?, d.db_path.join(path))
-            }
+    pub fn checkpoint(&self, path: &Path) -> Result<(), TypedStoreError> {
+        let checkpoint = match self {
+            Self::DBWithThreadMode(d) => Checkpoint::new(&d.underlying)?,
+            Self::OptimisticTransactionDB(d) => Checkpoint::new(&d.underlying)?,
         };
-        if path.exists() {
-            fs::remove_dir_all(path.clone()).map_err(|e| {
-                TypedStoreError::RocksDBError(format!(
-                    "Failed to delete existing checkpoint dir: {:?}",
-                    e.to_string()
-                ))
-            })?;
-        }
         checkpoint
-            .create_checkpoint(&path)
+            .create_checkpoint(path)
             .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
-        Ok(path)
+        Ok(())
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
@@ -702,8 +692,10 @@ impl<K, V> DBMap<K, V> {
             .iterator_cf(&self.cf(), self.opts.readopts(), IteratorMode::Start)
     }
 
-    pub fn flush(&self) -> Result<(), rocksdb::Error> {
-        self.rocksdb.flush_cf(&self.cf())
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        self.rocksdb
+            .flush_cf(&self.cf())
+            .map_err(|e| TypedStoreError::RocksDBError(e.into_string()))
     }
 
     pub fn set_options(&self, opts: &[(&str, &str)]) -> Result<(), rocksdb::Error> {
@@ -900,6 +892,10 @@ impl<K, V> DBMap<K, V> {
 
     pub fn transaction_without_snapshot(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
         DBTransaction::new_without_snapshot(&self.rocksdb)
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> Result<(), TypedStoreError> {
+        self.rocksdb.checkpoint(path)
     }
 
     pub fn table_summary(&self) -> eyre::Result<TableSummary> {

@@ -18,17 +18,17 @@ export const Address: StoryObj<PageHeaderProps> = {
     },
 };
 
-export const CallTransaction: StoryObj<PageHeaderProps> = {
+export const ProgrammableTransaction: StoryObj<PageHeaderProps> = {
     args: {
         title,
-        type: 'Call',
+        type: 'ProgrammableTransaction',
         status: 'success',
     },
 };
 
 export const CallTransactionFailure: StoryObj<PageHeaderProps> = {
     args: {
-        ...CallTransaction.args,
+        ...ProgrammableTransaction.args,
         status: 'failure',
     },
 };
@@ -37,6 +37,13 @@ export const ChangeEpoch: StoryObj<PageHeaderProps> = {
     args: {
         title,
         type: 'ChangeEpoch',
+    },
+};
+
+export const Checkpoint: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Checkpoint',
     },
 };
 
@@ -60,28 +67,5 @@ export const PackageLongSubtitle: StoryObj<PageHeaderProps> = {
         title,
         type: 'Package',
         subtitle: title,
-    },
-};
-
-export const Pay: StoryObj<PageHeaderProps> = {
-    args: {
-        title,
-        type: 'Pay',
-    },
-};
-
-export const TransferObject: StoryObj<PageHeaderProps> = {
-    args: {
-        title,
-        type: 'TransferObject',
-        status: 'success',
-    },
-};
-
-export const TransferSui: StoryObj<PageHeaderProps> = {
-    args: {
-        title,
-        type: 'TransferSui',
-        status: 'success',
     },
 };
