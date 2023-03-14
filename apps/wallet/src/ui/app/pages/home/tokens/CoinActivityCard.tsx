@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
-import {} from '_helpers';
 import { useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
