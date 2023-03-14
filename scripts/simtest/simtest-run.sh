@@ -2,9 +2,12 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
-# NUM_CPUS=$(sysctl -n hw.ncpu) # mac
-# NUM_CPUS=64 # We can increase this later if needed
+# show env variables
+env
+
+if [ -z "$NUM_CPUS" ]; then
+  NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
+fi
 
 # filter out some tests that give spurious failures.
 TEST_FILTER="(not test(test_move_call_args_linter_command)) & (not test(test_package_publish_command))"
@@ -40,7 +43,7 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
   SIM_STRESS_TEST_DURATION_SECS=300 \
   scripts/simtest/cargo-simtest simtest \
     --package sui-benchmark \
-    --test-threads 1 \
+    --test-threads "$NUM_CPUS" \
     --profile simtestnightly \
     -E "$TEST_FILTER" > "$LOG_FILE" 2>&1 &
 done

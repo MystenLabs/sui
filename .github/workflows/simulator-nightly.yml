@@ -45,7 +45,11 @@ jobs:
       run: |
         cd ~/sui && cargo clean && git restore Cargo.lock
 
-    - name: Checkout sui repo and cargo clean
+    - name: Tmpfs clean
+      run: |
+        sudo rm -rf /tmp/*.*
+
+    - name: Checkout sui repo
       run: |
         cd ~/sui && git fetch origin && git rebase origin/main
 
