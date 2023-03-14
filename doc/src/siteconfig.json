@@ -131,8 +131,8 @@
         "name": "What's New",
         "sublist": [
           {
-            "name": "Doc Updates",
-            "url": "/doc-updates"
+            "name": "Sui Migration Guide",
+            "url": "/doc-updates/sui-migration-guide"
           },
           {
             "name": "Sui Breaking Changes",
