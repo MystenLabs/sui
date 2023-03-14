@@ -15,6 +15,7 @@ use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use move_binary_format::compatibility::Compatibility;
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::{GetModule, SyncModuleCache};
 use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
 use prometheus::{
@@ -1070,13 +1071,17 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
             );
         let tx_digest = *effects.transaction_digest();
+
+        let module_cache =
+            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+
         Ok(DryRunTransactionResponse {
             effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
-                inner_temp_store.events,
+                inner_temp_store.events.clone(),
                 tx_digest,
                 None,
-                epoch_store.module_cache().as_ref(),
+                &module_cache,
             )?,
         })
     }
@@ -1165,11 +1170,15 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
             );
+
+        let module_cache =
+            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+
         DevInspectResults::new(
             effects,
-            inner_temp_store.events,
+            inner_temp_store.events.clone(),
             execution_result,
-            epoch_store.module_cache().as_ref(),
+            &module_cache,
         )
     }
 
@@ -3271,6 +3280,38 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+}
+
+pub struct TemporaryModuleResolver<'a> {
+    temp_store: &'a InnerTemporaryStore,
+    fallback: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+}
+
+impl<'a> TemporaryModuleResolver<'a> {
+    pub fn new(
+        temp_store: &'a InnerTemporaryStore,
+        fallback: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+    ) -> Self {
+        Self {
+            temp_store,
+            fallback,
+        }
+    }
+}
+
+impl GetModule for TemporaryModuleResolver<'_> {
+    type Error = anyhow::Error;
+    type Item = Arc<CompiledModule>;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
+        if let Some((_, o, _)) = obj {
+            if let Some(p) = o.data.try_as_package() {
+                return Ok(Some(Arc::new(p.deserialize_module(&id.name().into())?)));
+            }
+        }
+        self.fallback.get_module_by_id(id)
     }
 }
 
