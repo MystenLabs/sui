@@ -660,10 +660,10 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
     /// This intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
     /// but *before* we have updated object versions
     pub fn check_sui_conserved(&self) {
-        if !self.dynamic_fields_touched().is_empty() {
-            // TODO: check conservation in the presence of dynamic fields
-            return;
-        }
+        // if !self.dynamic_fields_touched().is_empty() {
+        //     // TODO: check conservation in the presence of dynamic fields
+        //     return;
+        // }
         let gas_summary = &self.gas_charged.as_ref().unwrap().1;
         let storage_fund_rebate_inflow =
             gas_summary.storage_fund_rebate_inflow(self.storage_rebate_rate);
