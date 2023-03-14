@@ -8,7 +8,6 @@ use std::time::Duration;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 
 use sui_core::safe_client::SafeClientMetricsBase;
-use sui_core::signature_verifier::DefaultSignatureVerifier;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_macros::sim_test;
 
@@ -34,7 +33,7 @@ async fn basic_checkpoints_integration_test() {
         &keypair,
         None,
     );
-    let net = AuthorityAggregator::<_, DefaultSignatureVerifier>::new_from_local_system_state(
+    let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),
