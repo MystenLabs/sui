@@ -133,10 +133,11 @@ function ItemView({ data }: { data: TxItemView }) {
                     // handle sender -> recipient display in one line
                     let links: LinkObj[] = [];
                     let label = item.label;
-                    if (Array.isArray(item)) {
-                        links = getAddressesLinks(item);
-                        label = 'Sender, Recipient';
-                    }
+                    // MUSTFIX(chris): uncomment
+                    // if (Array.isArray(item)) {
+                    //     links = getAddressesLinks(item);
+                    //     label = 'Sender, Recipient';
+                    // }
 
                     return (
                         <div

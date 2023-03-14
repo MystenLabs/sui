@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+export {};
 // import { useRpcClient } from '@mysten/core';
 // import {
 //     getEventSender,

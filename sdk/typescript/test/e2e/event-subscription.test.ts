@@ -3,11 +3,7 @@
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { SuiEvent, Transaction } from '../../src';
-import {
-  DEFAULT_GAS_BUDGET,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
 
 describe('Event Subscription API', () => {
   let toolbox: TestToolbox;

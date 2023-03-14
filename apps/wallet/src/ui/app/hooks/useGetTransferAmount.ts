@@ -4,7 +4,7 @@
 import { SUI_TYPE_ARG, getTransactionKind } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { getEventsSummary, getAmount } from '_helpers';
+import { getAmount } from '_helpers';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
 
@@ -16,7 +16,7 @@ export function useGetTransferAmount({
     activeAddress: SuiAddress;
 }) {
     const { effects, events } = txn;
-    const { coins } = getEventsSummary(events!, activeAddress);
+    // const { coins } = getEventsSummary(events!, activeAddress);
 
     const suiTransfer = useMemo(() => {
         const txdetails = getTransactionKind(txn)!;
@@ -31,13 +31,15 @@ export function useGetTransferAmount({
         );
     }, [txn, effects, events]);
 
-    const transferAmount = useMemo(() => {
-        return suiTransfer?.length
-            ? suiTransfer
-            : coins.filter(
-                  ({ receiverAddress }) => receiverAddress === activeAddress
-              );
-    }, [suiTransfer, coins, activeAddress]);
+    // MUSTFIX(chris)
+    // const transferAmount = useMemo(() => {
+    //     return suiTransfer?.length
+    //         ? suiTransfer
+    //         : coins.filter(
+    //               ({ receiverAddress }) => receiverAddress === activeAddress
+    //           );
+    // }, [suiTransfer, coins, activeAddress]);
 
-    return suiTransfer ?? transferAmount;
+    // return suiTransfer ?? transferAmount;
+    return suiTransfer;
 }

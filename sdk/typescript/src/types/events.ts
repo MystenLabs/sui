@@ -34,15 +34,15 @@ export const SuiEvent = object({
   id: EventId,
   // Move package where this event was emitted.
   packageId: ObjectId,
-  /// Move module where this event was emitted.
+  // Move module where this event was emitted.
   transactionModule: string(),
-  /// Sender's Sui address.
+  // Sender's Sui address.
   sender: SuiAddress,
-  /// Move event type.
+  // Move event type.
   type: string(),
-  /// Parsed json value of the event
+  // Parsed json value of the event
   parsedJson: optional(record(string(), any())),
-  /// Base 58 encoded bcs bytes of the move event
+  // Base 58 encoded bcs bytes of the move event
   bcs: optional(string()),
   timestampMs: optional(integer()),
 });
@@ -66,7 +66,7 @@ export type EventId = Infer<typeof EventId>;
 // mirrors sui_json_rpc_types::SuiEventFilter
 export type SuiEventFilter =
   | { Package: ObjectId }
-  | { MoveModule: { package: ObjectId; module: String } }
+  | { MoveModule: { package: ObjectId; module: string } }
   | { MoveEventType: string }
   | { MoveEventField: MoveEventField }
   | { Transaction: TransactionDigest }
