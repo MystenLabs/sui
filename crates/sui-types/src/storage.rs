@@ -23,6 +23,8 @@ use crate::{
     event::Event,
     object::Object,
 };
+use move_binary_format::CompiledModule;
+use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
@@ -95,6 +97,29 @@ impl<S: BackingPackageStore> BackingPackageStore for &mut S {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         BackingPackageStore::get_package(*self, package_id)
     }
+}
+
+pub fn get_module<S: BackingPackageStore>(
+    store: S,
+    module_id: &ModuleId,
+) -> Result<Option<Vec<u8>>, SuiError> {
+    Ok(store
+        .get_package(&ObjectID::from(*module_id.address()))?
+        .and_then(|package| {
+            package.data.try_as_package().and_then(|package| {
+                package
+                    .serialized_module_map()
+                    .get(module_id.name().as_str())
+                    .cloned()
+            })
+        }))
+}
+
+pub fn get_module_by_id<S: BackingPackageStore>(
+    store: S,
+    id: &ModuleId,
+) -> anyhow::Result<Option<CompiledModule>, SuiError> {
+    Ok(get_module(store, id)?.map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
 }
 
 pub trait ParentSync {

@@ -2187,7 +2187,7 @@ impl AuthorityState {
         let object_ids = self
             .get_owner_objects_iterator(owner)?
             .filter(|o| match &o.type_ {
-                ObjectType::Struct(s) => Self::matches_type_fuzzy_generics(&type_, s),
+                ObjectType::Struct(s) => type_.matches_type_fuzzy_generics(s),
                 ObjectType::Package => false,
             })
             .map(|info| info.object_id);
@@ -2196,16 +2196,6 @@ impl AuthorityState {
             move_objects.push(self.get_move_object(&id).await?)
         }
         Ok(move_objects)
-    }
-
-    // TODO: should be in impl MoveType
-    fn matches_type_fuzzy_generics(type_: &MoveObjectType, other_type: &MoveObjectType) -> bool {
-        type_.address() == other_type.address()
-                    && type_.module() == other_type.module()
-                    && type_.name() == other_type.name()
-                    // TODO: is_empty() looks like a bug here. I think the intention is to support "fuzzy matching" where `get_move_objects`
-                    // leaves type_params unspecified, but I don't actually see any call sites taking advantage of this
-                    && (type_.type_params().is_empty() || type_.type_params() == other_type.type_params())
     }
 
     pub fn get_dynamic_fields(
