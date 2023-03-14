@@ -87,7 +87,7 @@ export function useTimeAgo(
 
     const formattedTime = useMemo(
         () => timeAgo(timeFrom, now, shortedTimeLabel, endLabel),
-        [now, timeFrom, shortedTimeLabel]
+        [now, timeFrom, shortedTimeLabel, endLabel]
     );
 
     useEffect(() => {
