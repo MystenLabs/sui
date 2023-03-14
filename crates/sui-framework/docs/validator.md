@@ -6,10 +6,14 @@
 
 
 -  [Struct `ValidatorMetadata`](#0x2_validator_ValidatorMetadata)
+-  [Struct `ValidatorMetadataV2`](#0x2_validator_ValidatorMetadataV2)
 -  [Struct `Validator`](#0x2_validator_Validator)
+-  [Struct `ValidatorV2`](#0x2_validator_ValidatorV2)
 -  [Struct `StakingRequestEvent`](#0x2_validator_StakingRequestEvent)
 -  [Struct `UnstakingRequestEvent`](#0x2_validator_UnstakingRequestEvent)
 -  [Constants](#@Constants_0)
+-  [Function `upgrade`](#0x2_validator_upgrade)
+-  [Function `upgrade_metadata`](#0x2_validator_upgrade_metadata)
 -  [Function `new_metadata`](#0x2_validator_new_metadata)
 -  [Function `new`](#0x2_validator_new)
 -  [Function `deactivate`](#0x2_validator_deactivate)
@@ -252,6 +256,159 @@
 
 </details>
 
+<a name="0x2_validator_ValidatorMetadataV2"></a>
+
+## Struct `ValidatorMetadataV2`
+
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_ValidatorMetadataV2">ValidatorMetadataV2</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>new_dummy_metadata_field: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>sui_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>proof_of_possession: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>name: <a href="_String">string::String</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>description: <a href="_String">string::String</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>image_url: <a href="url.md#0x2_url_Url">url::Url</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>project_url: <a href="url.md#0x2_url_Url">url::Url</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>net_address: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>p2p_address: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>primary_address: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>worker_address: <a href="">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_protocol_pubkey_bytes: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_proof_of_possession: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_network_pubkey_bytes: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_worker_pubkey_bytes: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_net_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_p2p_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_primary_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_worker_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="0x2_validator_Validator"></a>
 
 ## Struct `Validator`
@@ -322,6 +479,87 @@
 </dt>
 <dd>
  The commission rate of the validator starting the next epoch, in basis point.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_ValidatorV2"></a>
+
+## Struct `ValidatorV2`
+
+
+
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_ValidatorV2">ValidatorV2</a> <b>has</b> store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>new_dummy_validator_field: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>metadata: <a href="validator.md#0x2_validator_ValidatorMetadataV2">validator::ValidatorMetadataV2</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="voting_power.md#0x2_voting_power">voting_power</a>: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>operation_cap_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>gas_price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>commission_rate: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_gas_price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>next_epoch_commission_rate: u64</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -471,7 +709,7 @@ Capability code is not valid
 
 <a name="0x2_validator_EInvalidProofOfPossession"></a>
 
-Invalid proof_of_possesion field in ValidatorMetadata
+Invalid proof_of_possession field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EInvalidProofOfPossession">EInvalidProofOfPossession</a>: u64 = 0;
@@ -577,6 +815,122 @@ Intended validator is not a candidate one.
 </code></pre>
 
 
+
+<a name="0x2_validator_upgrade"></a>
+
+## Function `upgrade`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_upgrade">upgrade</a>(self: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>): <a href="validator.md#0x2_validator_ValidatorV2">validator::ValidatorV2</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_upgrade">upgrade</a>(self: <a href="validator.md#0x2_validator_Validator">Validator</a>): <a href="validator.md#0x2_validator_ValidatorV2">ValidatorV2</a> {
+    <b>let</b> <a href="validator.md#0x2_validator_Validator">Validator</a> {
+        metadata,
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>,
+        operation_cap_id,
+        gas_price,
+        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+        commission_rate,
+        next_epoch_stake,
+        next_epoch_gas_price,
+        next_epoch_commission_rate,
+    } = self;
+    <a href="validator.md#0x2_validator_ValidatorV2">ValidatorV2</a> {
+        new_dummy_validator_field: 3,
+        metadata: <a href="validator.md#0x2_validator_upgrade_metadata">upgrade_metadata</a>(metadata),
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>,
+        operation_cap_id,
+        gas_price,
+        <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+        commission_rate,
+        next_epoch_stake,
+        next_epoch_gas_price,
+        next_epoch_commission_rate,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_upgrade_metadata"></a>
+
+## Function `upgrade_metadata`
+
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_upgrade_metadata">upgrade_metadata</a>(self: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>): <a href="validator.md#0x2_validator_ValidatorMetadataV2">validator::ValidatorMetadataV2</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_upgrade_metadata">upgrade_metadata</a>(self: <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>): <a href="validator.md#0x2_validator_ValidatorMetadataV2">ValidatorMetadataV2</a> {
+    <b>let</b> <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
+        sui_address,
+        protocol_pubkey_bytes,
+        network_pubkey_bytes,
+        worker_pubkey_bytes,
+        proof_of_possession,
+        name,
+        description,
+        image_url,
+        project_url,
+        net_address,
+        p2p_address,
+        primary_address,
+        worker_address,
+        next_epoch_protocol_pubkey_bytes,
+        next_epoch_proof_of_possession,
+        next_epoch_network_pubkey_bytes,
+        next_epoch_worker_pubkey_bytes,
+        next_epoch_net_address,
+        next_epoch_p2p_address,
+        next_epoch_primary_address,
+        next_epoch_worker_address,
+    } = self;
+    <a href="validator.md#0x2_validator_ValidatorMetadataV2">ValidatorMetadataV2</a> {
+        new_dummy_metadata_field: 4,
+        sui_address,
+        protocol_pubkey_bytes,
+        network_pubkey_bytes,
+        worker_pubkey_bytes,
+        proof_of_possession,
+        name,
+        description,
+        image_url,
+        project_url,
+        net_address,
+        p2p_address,
+        primary_address,
+        worker_address,
+        next_epoch_protocol_pubkey_bytes,
+        next_epoch_proof_of_possession,
+        next_epoch_network_pubkey_bytes,
+        next_epoch_worker_pubkey_bytes,
+        next_epoch_net_address,
+        next_epoch_p2p_address,
+        next_epoch_primary_address,
+        next_epoch_worker_address,
+    }
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="0x2_validator_new_metadata"></a>
 

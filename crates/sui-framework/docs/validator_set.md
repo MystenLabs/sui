@@ -6,6 +6,7 @@
 
 
 -  [Struct `ValidatorSet`](#0x2_validator_set_ValidatorSet)
+-  [Struct `ValidatorSetV2`](#0x2_validator_set_ValidatorSetV2)
 -  [Struct `ValidatorEpochInfoEvent`](#0x2_validator_set_ValidatorEpochInfoEvent)
 -  [Struct `ValidatorJoinEvent`](#0x2_validator_set_ValidatorJoinEvent)
 -  [Struct `ValidatorLeaveEvent`](#0x2_validator_set_ValidatorLeaveEvent)
@@ -19,6 +20,8 @@
 -  [Function `request_withdraw_stake`](#0x2_validator_set_request_withdraw_stake)
 -  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
+-  [Function `upgrade`](#0x2_validator_set_upgrade)
+-  [Function `upgrade_active_validators`](#0x2_validator_set_upgrade_active_validators)
 -  [Function `update_and_process_low_stake_departures`](#0x2_validator_set_update_and_process_low_stake_departures)
 -  [Function `effectuate_staged_metadata`](#0x2_validator_set_effectuate_staged_metadata)
 -  [Function `derive_reference_gas_price`](#0x2_validator_set_derive_reference_gas_price)
@@ -158,6 +161,81 @@
 </dt>
 <dd>
  Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_set_ValidatorSetV2"></a>
+
+## Struct `ValidatorSetV2`
+
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x2_validator_set_ValidatorSetV2">ValidatorSetV2</a> <b>has</b> store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>new_dummy_validator_set_field: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>total_stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>active_validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_ValidatorV2">validator::ValidatorV2</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pending_active_validators: <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x2_validator_ValidatorV2">validator::ValidatorV2</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pending_removals: <a href="">vector</a>&lt;u64&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>staking_pool_mappings: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <b>address</b>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>inactive_validators: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_candidates: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>at_risk_validators: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -903,6 +981,83 @@ It does the following things:
     // At this point, self.active_validators are updated for next epoch.
     // Now we process the staged <a href="validator.md#0x2_validator">validator</a> metadata.
     <a href="validator_set.md#0x2_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_upgrade"></a>
+
+## Function `upgrade`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_upgrade">upgrade</a>(self: <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator_set.md#0x2_validator_set_ValidatorSetV2">validator_set::ValidatorSetV2</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_upgrade">upgrade</a>(self: <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &<b>mut</b> TxContext): <a href="validator_set.md#0x2_validator_set_ValidatorSetV2">ValidatorSetV2</a> {
+    <b>let</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a> {
+        total_stake,
+        active_validators,
+        pending_active_validators,
+        pending_removals,
+        staking_pool_mappings,
+        inactive_validators,
+        validator_candidates,
+        at_risk_validators,
+    } = self;
+    // This is guaranteed <b>to</b> be empty since we process all pending active validators before upgrade.
+    <a href="table_vec.md#0x2_table_vec_destroy_empty">table_vec::destroy_empty</a>(pending_active_validators);
+    <a href="validator_set.md#0x2_validator_set_ValidatorSetV2">ValidatorSetV2</a> {
+        new_dummy_validator_set_field: 2,
+        total_stake,
+        active_validators: <a href="validator_set.md#0x2_validator_set_upgrade_active_validators">upgrade_active_validators</a>(active_validators),
+        pending_active_validators: <a href="table_vec.md#0x2_table_vec_empty">table_vec::empty</a>(ctx),
+        pending_removals,
+        staking_pool_mappings,
+        inactive_validators,
+        validator_candidates,
+        at_risk_validators,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_upgrade_active_validators"></a>
+
+## Function `upgrade_active_validators`
+
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_upgrade_active_validators">upgrade_active_validators</a>(active_validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;): <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_ValidatorV2">validator::ValidatorV2</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_upgrade_active_validators">upgrade_active_validators</a>(active_validators: <a href="">vector</a>&lt;Validator&gt;): <a href="">vector</a>&lt;ValidatorV2&gt; {
+    <b>let</b> ret = <a href="">vector</a>[];
+    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&active_validators)) {
+        <b>let</b> v = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> active_validators);
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> ret, <a href="validator.md#0x2_validator_upgrade">validator::upgrade</a>(v));
+    };
+    <a href="_destroy_empty">vector::destroy_empty</a>(active_validators);
+    <a href="_reverse">vector::reverse</a>(&<b>mut</b> ret);
+    ret
 }
 </code></pre>
 

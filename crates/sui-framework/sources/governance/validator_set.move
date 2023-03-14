@@ -8,7 +8,7 @@ module sui::validator_set {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::{Self, Validator, staking_pool_id, sui_address};
+    use sui::validator::{Self, Validator, staking_pool_id, sui_address, ValidatorV2};
     use sui::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
     use sui::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
     use sui::object::{Self, ID};
@@ -59,6 +59,20 @@ module sui::validator_set {
         validator_candidates: Table<address, Validator>,
 
         /// Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+        at_risk_validators: VecMap<address, u64>,
+    }
+
+    // To replace ValidatorSet in the next upgrade.
+    struct ValidatorSetV2 has store {
+        // This is a new field added in V2.
+        new_dummy_validator_set_field: u64,
+        total_stake: u64,
+        active_validators: vector<ValidatorV2>,
+        pending_active_validators: TableVec<ValidatorV2>,
+        pending_removals: vector<u64>,
+        staking_pool_mappings: Table<ID, address>,
+        inactive_validators: Table<ID, Validator>,
+        validator_candidates: Table<address, Validator>,
         at_risk_validators: VecMap<address, u64>,
     }
 
@@ -382,6 +396,43 @@ module sui::validator_set {
         // At this point, self.active_validators are updated for next epoch.
         // Now we process the staged validator metadata.
         effectuate_staged_metadata(self);
+    }
+
+    public(friend) fun upgrade(self: ValidatorSet, ctx: &mut TxContext): ValidatorSetV2 {
+        let ValidatorSet {
+            total_stake,
+            active_validators,
+            pending_active_validators,
+            pending_removals,
+            staking_pool_mappings,
+            inactive_validators,
+            validator_candidates,
+            at_risk_validators,
+        } = self;
+        // This is guaranteed to be empty since we process all pending active validators before upgrade.
+        table_vec::destroy_empty(pending_active_validators);
+        ValidatorSetV2 {
+            new_dummy_validator_set_field: 2,
+            total_stake,
+            active_validators: upgrade_active_validators(active_validators),
+            pending_active_validators: table_vec::empty(ctx),
+            pending_removals,
+            staking_pool_mappings,
+            inactive_validators,
+            validator_candidates,
+            at_risk_validators,
+        }
+    }
+
+    fun upgrade_active_validators(active_validators: vector<Validator>): vector<ValidatorV2> {
+        let ret = vector[];
+        while (!vector::is_empty(&active_validators)) {
+            let v = vector::pop_back(&mut active_validators);
+            vector::push_back(&mut ret, validator::upgrade(v));
+        };
+        vector::destroy_empty(active_validators);
+        vector::reverse(&mut ret);
+        ret
     }
 
     fun update_and_process_low_stake_departures(

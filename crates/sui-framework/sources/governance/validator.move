@@ -31,7 +31,7 @@ module sui::validator {
     #[test_only]
     friend sui::governance_test_utils;
 
-    /// Invalid proof_of_possesion field in ValidatorMetadata
+    /// Invalid proof_of_possession field in ValidatorMetadata
     const EInvalidProofOfPossession: u64 = 0;
 
     /// Invalid pubkey_bytes field in ValidatorMetadata
@@ -109,6 +109,33 @@ module sui::validator {
         next_epoch_worker_address: Option<vector<u8>>,
     }
 
+    // To replace ValidatorMetadata in the next upgrade.
+    struct ValidatorMetadataV2 has store, drop, copy {
+        // This is a new field added in V2.
+        new_dummy_metadata_field: u64,
+        sui_address: address,
+        protocol_pubkey_bytes: vector<u8>,
+        network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
+        proof_of_possession: vector<u8>,
+        name: String,
+        description: String,
+        image_url: Url,
+        project_url: Url,
+        net_address: vector<u8>,
+        p2p_address: vector<u8>,
+        primary_address: vector<u8>,
+        worker_address: vector<u8>,
+        next_epoch_protocol_pubkey_bytes: Option<vector<u8>>,
+        next_epoch_proof_of_possession: Option<vector<u8>>,
+        next_epoch_network_pubkey_bytes: Option<vector<u8>>,
+        next_epoch_worker_pubkey_bytes: Option<vector<u8>>,
+        next_epoch_net_address: Option<vector<u8>>,
+        next_epoch_p2p_address: Option<vector<u8>>,
+        next_epoch_primary_address: Option<vector<u8>>,
+        next_epoch_worker_address: Option<vector<u8>>,
+    }
+
     struct Validator has store {
         /// Summary of the validator.
         metadata: ValidatorMetadata,
@@ -129,6 +156,97 @@ module sui::validator {
         next_epoch_gas_price: u64,
         /// The commission rate of the validator starting the next epoch, in basis point.
         next_epoch_commission_rate: u64,
+    }
+
+    // To replace Validator in the next upgrade.
+    struct ValidatorV2 has store {
+        // This is a new field added in V2.
+        new_dummy_validator_field: u64,
+        metadata: ValidatorMetadataV2,
+        voting_power: u64,
+        operation_cap_id: ID,
+        gas_price: u64,
+        staking_pool: StakingPool,
+        commission_rate: u64,
+        next_epoch_stake: u64,
+        next_epoch_gas_price: u64,
+        next_epoch_commission_rate: u64,
+    }
+
+    public(friend) fun upgrade(self: Validator): ValidatorV2 {
+        let Validator {
+            metadata,
+            voting_power,
+            operation_cap_id,
+            gas_price,
+            staking_pool,
+            commission_rate,
+            next_epoch_stake,
+            next_epoch_gas_price,
+            next_epoch_commission_rate,
+        } = self;
+        ValidatorV2 {
+            new_dummy_validator_field: 3,
+            metadata: upgrade_metadata(metadata),
+            voting_power,
+            operation_cap_id,
+            gas_price,
+            staking_pool,
+            commission_rate,
+            next_epoch_stake,
+            next_epoch_gas_price,
+            next_epoch_commission_rate,
+        }
+    }
+
+    fun upgrade_metadata(self: ValidatorMetadata): ValidatorMetadataV2 {
+        let ValidatorMetadata {
+            sui_address,
+            protocol_pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            next_epoch_protocol_pubkey_bytes,
+            next_epoch_proof_of_possession,
+            next_epoch_network_pubkey_bytes,
+            next_epoch_worker_pubkey_bytes,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_primary_address,
+            next_epoch_worker_address,
+        } = self;
+        ValidatorMetadataV2 {
+            new_dummy_metadata_field: 4,
+            sui_address,
+            protocol_pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            next_epoch_protocol_pubkey_bytes,
+            next_epoch_proof_of_possession,
+            next_epoch_network_pubkey_bytes,
+            next_epoch_worker_pubkey_bytes,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_primary_address,
+            next_epoch_worker_address,
+        }
     }
 
     /// Event emitted when a new stake request is received.
