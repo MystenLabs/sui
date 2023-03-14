@@ -48,7 +48,7 @@ module sui::object {
 
     // === id ===
 
-    /// Create an `ID`. Not to be mistaken for `object::new()` which
+    /// Create an `ID`. Not to be mistaken for `object::new` which
     /// generates a new UID.
     public fun new_id(ctx: &mut TxContext): ID {
         ID { bytes: tx_context::new_object(ctx) }
