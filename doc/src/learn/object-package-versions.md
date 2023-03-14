@@ -1,4 +1,6 @@
-# Object Versions
+---
+title: Object and Package Versioning
+---
 
 You reference every object stored on chain by an ID and **version**.  When a transaction modifies an object, it writes the new contents to an on-chain reference with the same ID but a later version. This means that a single object (with ID `I`) might appear in multiple entries in the distributed store:
 
@@ -12,13 +14,13 @@ Despite appearing multiple times in the store, only one version of the object is
 
 Versions are strictly increasing and (ID, version) pairs are never re-used. This structure allows node operators to prune their stores of old object versions that are now inaccessible, if they choose. This is not a requirement, though, as node operators might keep prior object versions around to serve requests for an object's history, either from other nodes that are catching up, or from RPC requests.
 
-## Move Objects
+## Move objects
 
-Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm for objects. The use of Lamport timestamps guarantees that versions never get re-used:  The new version for objects touched by a transaction is one greater than the max version among all input objects to the transaction.  For example, a transaction transferring an object `O` at version `5` using a gas object `G` at version `3` updates both `O` and `G` versions to `1 + max(5, 3) = 6`. 
+Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm for objects. The use of Lamport timestamps guarantees that versions never get re-used as the new version for objects touched by a transaction is one greater than the max version among all input objects to the transaction.  For example, a transaction transferring an object `O` at version `5` using a gas object `G` at version `3` updates both `O` and `G` versions to `1 + max(5, 3) = 6`. 
 
 The relevance of Lamport versions for maintaining the "no (ID, version) re-use" invariant or for accessing an object as a transaction input changes depending on that object's ownership, as detailed in the following sections.
 
-### Address-owned Objects
+### Address-owned objects
 
 You must reference address-owned transaction inputs at a specific ID and version. When a validator signs a transaction with an owned object input at a specific version, that version of the object is **locked** to that transaction. Validators reject requests to sign other transactions that require the same input (same ID and version).
 
@@ -26,17 +28,17 @@ If `F + 1` validators sign one transaction that takes an object as input, and a 
 
 Only an object's owner can equivocate it, but this is not a desirable thing to do.  You can avoid equivocation by carefully managing the versions of address-owned input objects.
 
-### Immutable Objects
+### Immutable objects
 
 Like address-owned objects, you reference immutable objects at an ID and version, but they do not need to be locked as their contents and versions do not change. Their version is relevant because they could have started life as an address-owned object before being frozen. The given version identifies the point at which they became immutable.
 
-### Shared Objects
+### Shared objects
 
 Specifying a shared transaction input is slightly more complex. You reference it by its ID, the version it was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise version the transaction accesses because it is decided by consensus during transaction scheduling. When scheduling multiple transactions that touch the same shared object, validators agree the order of those transactions, and pick each transaction's input versions for the shared object accordingly (one transaction's output version becomes the next transaction's input version, and so on).
 
 Shared transaction inputs that you reference immutably participate in scheduling, but don't modify the object or increment its version.
 
-### Wrapped Objects
+### Wrapped objects
 
 The `make_wrapped` function in the following example creates an `Inner` object, wrapped in an `Outer` object, which is sent back to the transaction sender.
 
@@ -107,7 +109,7 @@ This leads to the following chain of inequalities for `I`'s version before wrapp
 
 So `I`'s version before wrapping is less than `I`'s version after unwrapping.
 
-### Dynamic Fields
+### Dynamic fields
 
 From a versioning perspective, values held in dynamic fields behave like wrapped objects:
 
@@ -128,9 +130,9 @@ So the version of the new `Field` instance will be greater than the version of t
 
 ## Packages
 
-Move Packages are also stored on-chain and are also versioned, but follow a different versioning scheme to objects because they are immutable from their inception. This means that you refer to package transaction inputs (e.g. the package that a function is from for a move call transaction) by just their ID, and are always loaded at their latest version.
+Move packages are also versioned and stored on chain, but follow a different versioning scheme to objects because they are immutable from their inception. This means that you refer to package transaction inputs (e.g. the package that a function is from for a move call transaction) by just their ID, and are always loaded at their latest version.
 
-## User Packages
+### User packages
 
 Every time you publish or upgrade a package **a new ID is generated**, a newly published package will have its version set to **1**, whereas an upgraded package's version will be one greater than the package it is upgrading.  Unlike objects, older versions of a package remain accessible even after being upgraded.  For example, imagine a package `P` that is published and upgraded twice.  It might be represented in the store as:
 
@@ -142,7 +144,7 @@ Every time you publish or upgrade a package **a new ID is generated**, a newly p
 
 In the example above, all three versions of the same package are at different IDs. The packages have increasing versions but it is possible to call into v1, even though v2 and v3 exist on-chain.
 
-## Framework Packages
+### Framework packages
 
 Framework packages (such as the Move standard library at `0x1` and the Sui Framework at `0x2`) are a special-case because their IDs must remain stable across upgrades.  The network can upgrade framework packages while preserving their IDs via a system transaction, but can only perform this operation on epoch boundaries because they are considered immutable like other packages.  New versions of framework packages retain the same ID as their predecessor, but increment their version by one:
 
@@ -153,4 +155,3 @@ Framework packages (such as the Move standard library at `0x1` and the Sui Frame
 ```
 
 The prior example shows the on-chain representation of the first three versions of the Move standard library.
-
