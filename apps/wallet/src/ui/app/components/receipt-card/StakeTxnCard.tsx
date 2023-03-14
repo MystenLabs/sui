@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getMoveEvent, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '_app/staking/calculateAPY';
@@ -27,22 +27,22 @@ export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
         if (!events) return null;
 
         const event = events.find(
-            (event) =>
-                event.type === 'moveEvent' &&
-                event.content.type === REQUEST_DELEGATION_EVENT
+            (event) => event.type === REQUEST_DELEGATION_EVENT
         );
-        if (!event) return null;
-        const moveEvent = getMoveEvent(event);
-        return moveEvent;
+        return event ?? null;
     }, [events]);
 
     const { data: system } = useSystemState();
 
     const validatorData = useMemo(() => {
-        if (!system || !stakingData || !stakingData.fields.validatorAddress)
+        if (
+            !system ||
+            !stakingData ||
+            !stakingData.parsedJson?.validatorAddress
+        )
             return null;
         return system.activeValidators.find(
-            (av) => av.suiAddress === stakingData.fields.validator_address
+            (av) => av.suiAddress === stakingData.parsedJson?.validator_address
         );
     }, [stakingData, system]);
 
@@ -52,18 +52,20 @@ export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
     }, [validatorData, system]);
 
     const rewardEpoch = useMemo(() => {
-        if (!system || !stakingData?.fields.epoch) return 0;
+        if (!system || !stakingData?.parsedJson?.epoch) return 0;
         // show reward epoch only after 2 epochs
-        const rewardStarts = +stakingData.fields.epoch + 2;
+        const rewardStarts = +stakingData.parsedJson?.epoch + 2;
         return +system.epoch > rewardStarts ? rewardStarts : 0;
     }, [stakingData, system]);
 
     return (
         <>
-            {stakingData?.fields.validator_address && (
+            {stakingData?.parsedJson?.validator_address && (
                 <div className="mb-3.5 w-full">
                     <ValidatorLogo
-                        validatorAddress={stakingData.fields.validator_address}
+                        validatorAddress={
+                            stakingData.parsedJson?.validator_address
+                        }
                         showAddress
                         iconSize="md"
                         size="body"
@@ -83,9 +85,9 @@ export function StakeTxnCard({ txnEffects, events }: StakeTxnCardProps) {
                 </Text>
             </div>
 
-            {stakingData?.fields.amount && (
+            {stakingData?.parsedJson?.amount && (
                 <TxnAmount
-                    amount={stakingData.fields.amount}
+                    amount={stakingData.parsedJson?.amount}
                     coinType={SUI_TYPE_ARG}
                     label="Stake"
                 />

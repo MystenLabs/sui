@@ -7,6 +7,7 @@ use crate::authority::authority_tests::{
     call_move, call_move_, execute_programmable_transaction, init_state_with_ids,
     send_and_confirm_transaction, TestCallArg,
 };
+use move_core_types::identifier::Identifier;
 use sui_types::{
     error::ExecutionErrorKind, object::Data,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -21,7 +22,6 @@ use sui_framework_build::compiled_package::{
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
-    event::{Event, EventType},
     messages::ExecutionStatus,
 };
 
@@ -410,17 +410,8 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].event_type(), EventType::CoinBalanceChange);
-    assert_eq!(events[1].event_type(), EventType::NewObject);
     let parent = effects.created()[0].0;
-    assert_eq!(events[1].object_id(), Some(parent.0));
 
     // Create a child.
     let effects = call_move(
@@ -436,15 +427,8 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].event_type(), EventType::CoinBalanceChange);
-    assert_eq!(events[1].event_type(), EventType::NewObject);
     let child = effects.created()[0].0;
 
     // Mutate the child directly should work fine.
@@ -536,15 +520,8 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].event_type(), EventType::CoinBalanceChange);
-    assert_eq!(events[1].event_type(), EventType::NewObject);
     let new_parent = effects.created()[0].0;
 
     // Transfer the child to the new_parent.
@@ -564,59 +541,8 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
-
-    assert_eq!(events.len(), 6);
-    let num_transfers = events
-        .iter()
-        .filter(|e| matches!(e.event_type(), EventType::TransferObject { .. }))
-        .count();
-    assert_eq!(num_transfers, 1);
-    let num_created = events
-        .iter()
-        .filter(|e| matches!(e.event_type(), EventType::NewObject { .. }))
-        .count();
-    assert_eq!(num_created, 1);
-    let child_event = events
-        .iter()
-        .find(|e| e.object_id() == Some(child.0))
-        .unwrap();
-    let num_deleted = events
-        .iter()
-        .filter(|e| matches!(e.event_type(), EventType::DeleteObject { .. }))
-        .count();
-    assert_eq!(num_deleted, 1);
-    let (recipient, object_type) = match child_event {
-        Event::TransferObject {
-            recipient,
-            object_type,
-            ..
-        } => (recipient, object_type),
-        _ => panic!("Unexpected event type: {:?}", child_event),
-    };
-    assert_eq!(object_type, &format!("{}::object_owner::Child", package.0));
-    let new_field_id = match recipient {
-        Owner::ObjectOwner(field_id) => (*field_id).into(),
-        Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
-    };
-    let new_field_object = authority.get_object(&new_field_id).await.unwrap().unwrap();
-    assert_eq!(
-        new_field_object.owner,
-        Owner::ObjectOwner(new_parent.0.into())
-    );
-
-    let child_effect = effects
-        .mutated()
-        .iter()
-        .find(|((id, _, _), _)| id == &child.0)
-        .unwrap();
-    // Check that the child is now owned by the new parent.
-    assert_eq!(child_effect.1, new_field_id);
 
     // Delete the child. This should fail as the child cannot be used as a transaction argument
     let effects = call_move(
@@ -665,16 +591,10 @@ async fn test_create_then_delete_parent_child() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
     // Creates 3 objects, the parent, a field, and the child
     assert_eq!(effects.created().len(), 3);
-    // Creates 4 events, gas charge, child, parent and wrapped object
-    assert_eq!(events.len(), 4);
     let parent = effects
         .created()
         .iter()
@@ -699,7 +619,6 @@ async fn test_create_then_delete_parent_child() {
     assert!(effects.status().is_ok());
     // Check that both objects were deleted.
     assert_eq!(effects.deleted().len(), 3);
-    assert_eq!(events.len(), 4);
 }
 
 #[tokio::test]
@@ -733,11 +652,7 @@ async fn test_create_then_delete_parent_child_wrap() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
     // Modifies the gas object
     assert_eq!(effects.mutated().len(), 1);
@@ -745,7 +660,6 @@ async fn test_create_then_delete_parent_child_wrap() {
     assert_eq!(effects.created().len(), 2);
     // not wrapped as it wasn't first created
     assert_eq!(effects.wrapped().len(), 0);
-    assert_eq!(events.len(), 3);
 
     let gas_ref = effects.mutated()[0].0;
 
@@ -777,11 +691,7 @@ async fn test_create_then_delete_parent_child_wrap() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
 
     // The parent and field are considered deleted, the child doesn't count because it wasn't
@@ -789,7 +699,6 @@ async fn test_create_then_delete_parent_child_wrap() {
     assert_eq!(effects.deleted().len(), 2);
     // The child was never created so it is not unwrapped.
     assert_eq!(effects.unwrapped_then_deleted().len(), 0);
-    assert_eq!(events.len(), 3);
 
     assert_eq!(
         effects
@@ -836,17 +745,9 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].event_type(), EventType::CoinBalanceChange);
-    assert_eq!(events[1].event_type(), EventType::NewObject);
     let parent = effects.created()[0].0;
-    assert_eq!(events[1].object_id(), Some(parent.0));
 
     // Create a child.
     let effects = call_move(
@@ -862,15 +763,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
     assert!(effects.status().is_ok());
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].event_type(), EventType::CoinBalanceChange);
-    assert_eq!(events[1].event_type(), EventType::NewObject);
     let child = effects.created()[0].0;
 
     // Add the child to the parent.
@@ -888,15 +781,10 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
     assert_eq!(effects.created().len(), 1);
     assert_eq!(effects.wrapped().len(), 1);
-    assert_eq!(events.len(), 4);
 
     // Delete the parent and child altogether.
     let effects = call_move(
@@ -912,17 +800,12 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
-    let events = if let Some(digest) = &effects.events_digest() {
-        authority.get_transaction_events(digest).unwrap().data
-    } else {
-        vec![]
-    };
+
     assert!(effects.status().is_ok());
     // Check that parent object was deleted.
     assert_eq!(effects.deleted().len(), 2);
     // Check that child object was unwrapped and deleted.
     assert_eq!(effects.unwrapped_then_deleted().len(), 1);
-    assert_eq!(events.len(), 4);
 }
 
 #[tokio::test]

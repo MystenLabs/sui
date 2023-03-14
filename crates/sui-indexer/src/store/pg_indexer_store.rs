@@ -28,14 +28,13 @@ use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json_rpc_types::{CheckpointId, EventPage, SuiEventEnvelope};
+use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::object::ObjectRead;
 use tracing::{error, info};
 
 use sui_types::event::EventID;
-use sui_types::query::EventQuery;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 
@@ -71,6 +70,8 @@ impl PgIndexerStore {
 
 #[async_trait]
 impl IndexerStore for PgIndexerStore {
+    type ModuleCache = SyncModuleCache<IndexerModuleResolver>;
+
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
@@ -122,7 +123,7 @@ impl IndexerStore for PgIndexerStore {
             .run(|conn| {
                 events::table
                     .filter(events::dsl::transaction_digest.eq(id.tx_digest.base58_encode()))
-                    .filter(events::dsl::event_sequence.eq(id.event_seq))
+                    .filter(events::dsl::event_sequence.eq(id.event_seq as i64))
                     .first::<Event>(conn)
             })
             .map_err(|e| {
@@ -135,7 +136,7 @@ impl IndexerStore for PgIndexerStore {
 
     fn get_events(
         &self,
-        query: EventQuery,
+        query: EventFilter,
         cursor: Option<EventID>,
         limit: Option<usize>,
         descending_order: bool,
@@ -143,23 +144,24 @@ impl IndexerStore for PgIndexerStore {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         let mut boxed_query = events::table.into_boxed();
         match query {
-            EventQuery::All => {}
-            EventQuery::Transaction(digest) => {
+            EventFilter::All(..) => {}
+            EventFilter::Transaction(digest) => {
                 boxed_query =
                     boxed_query.filter(events::dsl::transaction_digest.eq(digest.base58_encode()));
             }
-            EventQuery::MoveModule { package, module } => {
+            EventFilter::MoveModule { package, module } => {
                 boxed_query = boxed_query
                     .filter(events::dsl::package.eq(package.to_string()))
-                    .filter(events::dsl::module.eq(module));
+                    .filter(events::dsl::module.eq(module.to_string()));
             }
-            EventQuery::MoveEvent(struct_name) => {
-                boxed_query = boxed_query.filter(events::dsl::event_type.eq(struct_name));
+            EventFilter::MoveEventType(struct_name) => {
+                boxed_query =
+                    boxed_query.filter(events::dsl::event_type.eq(struct_name.to_string()));
             }
-            EventQuery::Sender(sender) => {
+            EventFilter::Sender(sender) => {
                 boxed_query = boxed_query.filter(events::dsl::sender.eq(sender.to_string()));
             }
-            EventQuery::TimeRange {
+            EventFilter::TimeRange {
                 start_time,
                 end_time,
             } => {
@@ -167,11 +169,11 @@ impl IndexerStore for PgIndexerStore {
                     .filter(events::dsl::event_time_ms.ge(start_time as i64))
                     .filter(events::dsl::event_time_ms.lt(end_time as i64));
             }
-            EventQuery::EventType(_) => {}
+            // TODO: Implement EventFilter to SQL
             _ => {
-                return Err(IndexerError::NotImplementedError(
-                    "Querying events by Recipient and Object is deprecated.".to_string(),
-                ));
+                return Err(IndexerError::NotImplementedError(format!(
+                    "Filter type [{query:?}] not supported by the Indexer."
+                )))
             }
         }
 
@@ -217,17 +219,17 @@ impl IndexerStore for PgIndexerStore {
                 ))
             })?;
 
-        let mut event_envelope_vec: Vec<SuiEventEnvelope> = events_vec
+        let mut sui_event_vec = events_vec
             .into_iter()
             .map(|event| event.try_into())
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<SuiEvent>, _>>()?;
         // reset to original limit for checking and truncating
         page_limit -= 1;
-        let has_next_page = event_envelope_vec.len() > page_limit;
-        event_envelope_vec.truncate(page_limit);
-        let next_cursor = event_envelope_vec.last().map(|e| e.id.clone());
+        let has_next_page = sui_event_vec.len() > page_limit;
+        sui_event_vec.truncate(page_limit);
+        let next_cursor = sui_event_vec.last().map(|e| e.id.clone());
         Ok(EventPage {
-            data: event_envelope_vec,
+            data: sui_event_vec,
             next_cursor,
             has_next_page,
         })
@@ -782,6 +784,10 @@ impl IndexerStore for PgIndexerStore {
             }
         }
         Ok(())
+    }
+
+    fn module_cache(&self) -> &Self::ModuleCache {
+        todo!()
     }
 }
 

@@ -432,6 +432,9 @@ pub enum SuiError {
     #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
     SuiSystemStateReadError(String),
 
+    #[error("Unexpected version error: {0}")]
+    UnexpectedVersion(String),
+
     #[error("Message version is not supported at the current protocol version: {error}")]
     WrongMessageVersion { error: String },
 

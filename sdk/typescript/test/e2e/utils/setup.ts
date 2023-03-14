@@ -7,7 +7,7 @@ import tmp from 'tmp';
 
 import {
   Ed25519Keypair,
-  getEvents,
+  getPublishedObjectChanges,
   getExecutionStatusType,
   JsonRpcProvider,
   fromB64,
@@ -124,15 +124,17 @@ export async function publishPackage(
     transaction: tx,
     options: {
       showEffects: true,
-      showEvents: true,
+      showObjectChanges: true,
     },
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn)?.find((e) => e.type === 'publish');
+  const packageId = getPublishedObjectChanges(publishTxn)[0].packageId.replace(
+    /^(0x)(0+)/,
+    '0x',
+  );
+  expect(packageId).toBeTruthy();
 
-  // @ts-ignore: Publish not narrowed:
-  const packageId = publishEvent?.content.packageId.replace(/^(0x)(0+)/, '0x');
   console.info(
     `Published package ${packageId} from address ${await toolbox.signer.getAddress()}}`,
   );

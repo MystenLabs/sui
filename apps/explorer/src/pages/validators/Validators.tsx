@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getMoveEvent,
-    isEventType,
-    type SuiValidatorSummary,
-    type SuiEventEnvelope,
-} from '@mysten/sui.js';
+import { type SuiValidatorSummary, type SuiEvent } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -38,7 +33,7 @@ const NodeMap = lazy(() => import('../../components/node-map'));
 export function validatorsTableData(
     validators: SuiValidatorSummary[],
     epoch: number,
-    validatorsEvents: SuiEventEnvelope[]
+    validatorsEvents: SuiEvent[]
 ) {
     return {
         data: validators.map((validator) => {
@@ -61,7 +56,7 @@ export function validatorsTableData(
                 commission: +validator.commissionRate / 100,
                 img: img,
                 address: validator.suiAddress,
-                lastReward: event?.fields.stake_rewards || 0,
+                lastReward: event?.stake_rewards || 0,
                 atRisk: totalStake < VALIDATOR_LOW_STAKE_THRESHOLD,
             };
         }),
@@ -224,11 +219,8 @@ function ValidatorPageResult() {
         if (!validatorEvents) return 0;
         let totalRewards = 0;
 
-        validatorEvents.data.forEach(({ event }) => {
-            if (isEventType(event, 'moveEvent')) {
-                const moveEvent = getMoveEvent(event)!;
-                totalRewards += +moveEvent.fields.stake_rewards;
-            }
+        validatorEvents.data.forEach(({ parsedJson }) => {
+            totalRewards += +parsedJson!.stake_rewards;
         });
 
         return totalRewards;

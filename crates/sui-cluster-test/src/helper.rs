@@ -2,18 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
-use tracing::{debug, trace};
-
+use move_core_types::language_storage::TypeTag;
 use sui_json_rpc_types::{
-    SuiData, SuiEvent, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    BalanceChange, SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
 };
 use sui_sdk::SuiClient;
-use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::GasCoin;
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
-    object::Owner,
-};
+use sui_types::{base_types::ObjectID, object::Owner, parse_sui_type_tag};
+use tracing::{debug, trace};
 
 /// A util struct that helps verify Sui Object.
 /// Use builder style to construct the conditions.
@@ -165,49 +161,23 @@ macro_rules! assert_eq_if_present {
 }
 
 #[derive(Default, Debug)]
-pub struct CoinBalanceChangeEventChecker {
-    package_id: Option<ObjectID>,
-    transaction_module: Option<String>,
-    sender: Option<SuiAddress>,
+pub struct BalanceChangeChecker {
     owner: Option<Owner>,
-    change_type: Option<BalanceChangeType>,
-    coin_type: Option<String>,
-    coin_object_id: Option<ObjectID>,
-    version: Option<SequenceNumber>,
+    coin_type: Option<TypeTag>,
     amount: Option<i128>,
 }
 
-impl CoinBalanceChangeEventChecker {
+impl BalanceChangeChecker {
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn package_id(mut self, package_id: ObjectID) -> Self {
-        self.package_id = Some(package_id);
-        self
-    }
-    pub fn transaction_module(mut self, transaction_module: String) -> Self {
-        self.transaction_module = Some(transaction_module);
-        self
-    }
-    pub fn sender(mut self, sender: SuiAddress) -> Self {
-        self.sender = Some(sender);
-        self
-    }
     pub fn owner(mut self, owner: Owner) -> Self {
         self.owner = Some(owner);
         self
     }
     pub fn coin_type(mut self, coin_type: &str) -> Self {
-        self.coin_type = Some(coin_type.to_string());
-        self
-    }
-    pub fn coin_object_id(mut self, coin_object_id: ObjectID) -> Self {
-        self.coin_object_id = Some(coin_object_id);
-        self
-    }
-    pub fn version(mut self, version: SequenceNumber) -> Self {
-        self.version = Some(version);
+        self.coin_type = Some(parse_sui_type_tag(coin_type).unwrap());
         self
     }
 
@@ -216,36 +186,15 @@ impl CoinBalanceChangeEventChecker {
         self
     }
 
-    pub fn check(self, event: &SuiEvent) {
-        if let SuiEvent::CoinBalanceChange {
-            package_id,
-            transaction_module: _,
-            sender,
-            change_type,
+    pub fn check(self, event: &BalanceChange) {
+        let BalanceChange {
             owner,
             coin_type,
-            coin_object_id,
-            version,
             amount,
-        } = event
-        {
-            assert_eq_if_present!(self.package_id, package_id, "package_id");
-            // Disabled for programmable transaction migration,
-            // it will be removed soon
-            // assert_eq_if_present!(
-            //     self.transaction_module,
-            //     transaction_module,
-            //     "transaction_module"
-            // );
-            assert_eq_if_present!(self.sender, sender, "sender");
-            assert_eq_if_present!(self.owner, owner, "owner");
-            assert_eq_if_present!(self.change_type, change_type, "change_type");
-            assert_eq_if_present!(self.coin_type, coin_type, "coin_type");
-            assert_eq_if_present!(self.coin_object_id, coin_object_id, "coin_object_id");
-            assert_eq_if_present!(self.version, version, "version");
-            assert_eq_if_present!(self.amount, amount, "version");
-        } else {
-            panic!("event {:?} is not TransferObject Event", event);
-        }
+        } = event;
+
+        assert_eq_if_present!(self.owner, owner, "owner");
+        assert_eq_if_present!(self.coin_type, coin_type, "coin_type");
+        assert_eq_if_present!(self.amount, amount, "version");
     }
 }

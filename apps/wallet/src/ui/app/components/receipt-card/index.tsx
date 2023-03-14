@@ -24,8 +24,7 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
-import { getTxnEffectsEventID } from '_components/transactions-card';
-import { TxnImage } from '_components/transactions-card/TxnImage';
+// import { TxnImage } from '_components/transactions-card/TxnImage';
 import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
 import { TxnGasSummary } from '_src/ui/app/components/receipt-card/TxnGasSummary';
 import { Text } from '_src/ui/app/shared/text';
@@ -38,7 +37,7 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { events } = txn;
+    // const { events } = txn;
     const timestamp = txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
@@ -51,9 +50,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         address: activeAddress,
     });
 
-    const objectId = useMemo(() => {
-        return getTxnEffectsEventID(events!, activeAddress)[0];
-    }, [events, activeAddress]);
+    // const objectId = useMemo(() => {
+    //     return getTxnEffectsEventID(events!, activeAddress)[0];
+    // }, [events, activeAddress]);
 
     const transferAmount = useGetTransferAmount({
         txn,
@@ -61,7 +60,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     });
 
     const totalSuiAmount = useMemo(() => {
-        const amount = transferAmount.find(
+        const amount = transferAmount?.find(
             ({ coinType }) => coinType === SUI_TYPE_ARG
         )?.amount;
         return amount ? Math.abs(amount) : null;
@@ -99,7 +98,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         txnStatusText = 'Received';
     }
 
-    const nftObjectLabel = transferAmount?.length ? txnStatusText : 'Call';
+    // const nftObjectLabel = transferAmount?.length ? txnStatusText : 'Call';
 
     return (
         <div className="block relative w-full">
@@ -143,14 +142,14 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                     ) 
                     )} */}
                     <>
-                        {objectId && (
+                        {/* {objectId && (
                             <TxnImage
                                 id={objectId}
                                 actionLabel={nftObjectLabel}
                             />
-                        )}
+                        )} */}
 
-                        {transferAmount.length > 0
+                        {transferAmount && transferAmount.length > 0
                             ? transferAmount.map(
                                   ({ amount, coinType, receiverAddress }) => {
                                       return (
@@ -190,7 +189,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         )}
 
                         {txnKind === 'ChangeEpoch' &&
-                            !transferAmount.length && (
+                            !transferAmount?.length && (
                                 <TxnAddress
                                     address={recipientAddress!}
                                     label="From"

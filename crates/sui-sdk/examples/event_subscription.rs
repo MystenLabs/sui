@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::StreamExt;
-use sui_sdk::rpc_types::SuiEventFilter;
+use sui_json_rpc_types::EventFilter;
 use sui_sdk::SuiClientBuilder;
 
 #[tokio::main]
@@ -13,7 +13,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
     let mut subscribe_all = sui
         .event_api()
-        .subscribe_event(SuiEventFilter::All(vec![]))
+        .subscribe_event(EventFilter::All(vec![]))
         .await?;
     loop {
         println!("{:?}", subscribe_all.next().await);

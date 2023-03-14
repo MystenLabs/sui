@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Neg;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use futures::future;
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
+use move_core_types::ident_str;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
+use serde_json::json;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
+use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
-    SuiExecutionStatus, SuiMoveStruct, SuiMoveValue, SuiTransactionEffectsAPI,
+    type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionEffectsAPI,
     SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
@@ -23,8 +24,7 @@ use sui_node::SuiNode;
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
-use sui_types::event::BalanceChangeType;
-use sui_types::event::Event;
+use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse, GasData,
@@ -32,13 +32,10 @@ use sui_types::messages::{
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::query::{EventQuery, TransactionFilter};
+use sui_types::query::TransactionFilter;
+use sui_types::sui_framework_address_concat_string;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    messages::TransactionInfoRequest,
-};
-use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::messages::{
@@ -156,8 +153,6 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-const HOUR_MS: u64 = 3_600_000;
-
 #[sim_test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
@@ -229,8 +224,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
 
-    let (transferred_object, sender, receiver, digest, gas, gas_used) =
-        transfer_coin(context).await?;
+    let (transferred_object, sender, receiver, digest, _, _) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -299,46 +293,31 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // Unfortunately event store writes seem to add some latency so this wait is needed
     sleep(Duration::from_millis(1000)).await;
 
-    // one event is stored, and can be looked up by digest
+    /* // one event is stored, and can be looked up by digest
     // query by timestamp verifies that a timestamp is inserted, within an hour
-    let sender_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "unused_input_object".into(),
-        sender,
+    let sender_balance_change = BalanceChange {
         change_type: BalanceChangeType::Pay,
-        owner: Owner::AddressOwner(sender),
-        coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(1),
-        coin_object_id: transferred_object,
+        owner: sender,
+        coin_type: parse_struct_tag("0x2::sui::SUI").unwrap(),
         amount: -100000000000000,
     };
-    let recipient_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "unused_input_object".into(),
-        sender,
+    let recipient_balance_change = BalanceChange {
         change_type: BalanceChangeType::Receive,
-        owner: Owner::AddressOwner(receiver),
-        coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(2),
-        coin_object_id: transferred_object,
+        owner: receiver,
+        coin_type: parse_struct_tag("0x2::sui::SUI").unwrap(),
         amount: 100000000000000,
     };
-    let gas_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "gas".into(),
-        sender,
+    let gas_balance_change = BalanceChange {
         change_type: BalanceChangeType::Gas,
-        owner: Owner::AddressOwner(sender),
-        coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
+        owner: sender,
+        coin_type: parse_struct_tag("0x2::sui::SUI").unwrap(),
         amount: (gas_used as i128).neg(),
     };
 
     // query all events
     let all_events = node
         .state()
-        .query_events(
+        .get_transaction_events(
             EventQuery::TimeRange {
                 start_time: ts.unwrap() - HOUR_MS,
                 end_time: ts.unwrap() + HOUR_MS,
@@ -438,7 +417,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
     assert_eq!(events_by_module.len(), 2);
     assert_eq!(events_by_module[0], sender_event);
-    assert_eq!(events_by_module[1], recipient_event);
+    assert_eq!(events_by_module[1], recipient_event);*/
 
     Ok(())
 }
@@ -585,13 +564,16 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     let context = &mut test_cluster.wallet;
 
-    let mut sub: Subscription<SuiEventEnvelope> = ws_client
+    let mut sub: Subscription<SuiEvent> = ws_client
         .subscribe(
             "sui_subscribeEvent",
-            rpc_params![SuiEventFilter::MoveEventType(
-                sui_framework_address_concat_string("::devnet_nft::MintNFTEvent")
+            rpc_params![EventFilter::MoveEventType(
+                parse_struct_tag(&sui_framework_address_concat_string(
+                    "::devnet_nft::MintNFTEvent"
+                ))
+                .unwrap()
             )],
-            "sui_unsubscribeEvent",
+            "sui_unsubscribeEvents",
         )
         .await
         .unwrap();
@@ -603,26 +585,20 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     // Wait for streaming
     let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEventEnvelope {
-            event: SuiEvent::MoveEvent {
-                type_, fields, bcs, ..
-            },
+        Ok(Some(Ok(SuiEvent {
+            type_,
+            parsed_json,
+            bcs,
             ..
         }))) => {
-            assert_eq!(type_, struct_tag_str,);
+            assert_eq!(type_.to_string(), struct_tag_str,);
             assert_eq!(
-                fields,
-                Some(SuiMoveStruct::WithFields(BTreeMap::from([
-                    ("creator".into(), SuiMoveValue::Address(sender)),
-                    (
-                        "name".into(),
-                        SuiMoveValue::String("example_nft_name".into())
-                    ),
-                    (
-                        "object_id".into(),
-                        SuiMoveValue::Address(SuiAddress::from(object_id))
-                    ),
-                ])))
+                parsed_json,
+                json!({
+                    "creator" : sender,
+                    "name": "example_nft_name",
+                    "object_id" : object_id,
+                })
             );
             bcs
         }
@@ -639,23 +615,29 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     .unwrap();
     let (_, expected_parsed_event) =
         type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
-    let expected_event = SuiEvent::MoveEvent {
+    let expected_event = SuiEvent {
+        id: EventID {
+            tx_digest: digest,
+            event_seq: 0,
+        },
         package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "devnet_nft".into(),
+        transaction_module: ident_str!("devnet_nft").into(),
         sender,
-        type_,
-        fields: Some(expected_parsed_event),
+        type_: type_tag,
+        parsed_json: expected_parsed_event.to_json_value(),
         bcs,
+        timestamp_ms: None,
     };
 
-    // Query by move event struct name
-    let events_by_sender = node
-        .state()
-        .query_events(EventQuery::MoveEvent(struct_tag_str), None, 10, false)
+    // get tx events
+    let events = test_cluster
+        .sui_client()
+        .event_api()
+        .get_events(digest)
         .await?;
-    assert_eq!(events_by_sender.len(), 1);
-    assert_eq!(events_by_sender[0].1.event, expected_event);
-    assert_eq!(events_by_sender[0].1.tx_digest, digest);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0], expected_event);
+    assert_eq!(events[0].id.tx_digest, digest);
 
     // No more
     match timeout(Duration::from_secs(5), sub.next()).await {
@@ -679,13 +661,11 @@ async fn test_full_node_event_read_api_ok() {
         .await
         .unwrap();
 
-    let sender = test_cluster.get_address_0();
-    let receiver = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (transferred_object, _, _, digest, gas, gas_used) = transfer_coin(context).await.unwrap();
+    let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -708,138 +688,6 @@ async fn test_full_node_event_read_api_ok() {
 
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
-    let sender_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "unused_input_object".into(),
-        sender,
-        change_type: BalanceChangeType::Pay,
-        owner: Owner::AddressOwner(sender),
-        coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(1),
-        coin_object_id: transferred_object,
-        amount: -100000000000000,
-    };
-    let recipient_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "unused_input_object".into(),
-        sender,
-        change_type: BalanceChangeType::Receive,
-        owner: Owner::AddressOwner(receiver),
-        coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(2),
-        coin_object_id: transferred_object,
-        amount: 100000000000000,
-    };
-    let gas_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "gas".into(),
-        sender,
-        change_type: BalanceChangeType::Gas,
-        owner: Owner::AddressOwner(sender),
-        coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
-        amount: (gas_used as i128).neg(),
-    };
-
-    // query by sender
-    let params = rpc_params![EventQuery::Sender(sender), None::<u64>, 10, false];
-
-    let events_by_sender: EventPage = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events_by_sender.data[0].tx_digest, digest);
-    let events_by_sender = events_by_sender
-        .data
-        .into_iter()
-        .map(|envelope| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_sender.len(), 3);
-    assert_eq!(events_by_sender[0], gas_event.clone());
-    assert_eq!(events_by_sender[1], sender_event.clone());
-    assert_eq!(events_by_sender[2], recipient_event.clone());
-
-    // query by tx digest
-    let params = rpc_params![EventQuery::Transaction(digest), None::<u64>, 10, false];
-    let events_by_tx: EventPage = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events_by_tx.data[0].tx_digest, digest);
-    let events_by_tx = events_by_tx
-        .data
-        .into_iter()
-        .map(|envelope| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_tx.len(), 3);
-    assert_eq!(events_by_tx[0], gas_event);
-    assert_eq!(events_by_tx[1], sender_event.clone());
-    assert_eq!(events_by_tx[2], recipient_event.clone());
-
-    // query by recipient
-    let params = rpc_params![
-        EventQuery::Recipient(Owner::AddressOwner(receiver)),
-        None::<u64>,
-        10,
-        false
-    ];
-    let events_by_recipient: EventPage = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events_by_recipient.data.last().unwrap().tx_digest, digest);
-    let events_by_recipient = events_by_recipient
-        .data
-        .into_iter()
-        .map(|envelope| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_recipient.last().unwrap(), &recipient_event);
-
-    // query by object
-    let params = rpc_params![
-        EventQuery::Object(transferred_object),
-        None::<u64>,
-        10,
-        false
-    ];
-    let events_by_object: EventPage = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events_by_object.data.last().unwrap().tx_digest, digest);
-    let events_by_object = events_by_object
-        .data
-        .into_iter()
-        .map(|envelope| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_object.len(), 3);
-    assert_eq!(events_by_object[1], sender_event.clone());
-    assert_eq!(events_by_object[2], recipient_event.clone());
-
-    // query by transaction module
-    let params = rpc_params![
-        EventQuery::MoveModule {
-            package: SUI_FRAMEWORK_OBJECT_ID,
-            module: "unused_input_object".to_string()
-        },
-        None::<u64>,
-        10,
-        false
-    ];
-    let events_by_module: EventPage = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events_by_module.data[0].tx_digest, digest);
-    let events_by_module = events_by_module
-        .data
-        .into_iter()
-        .map(|envelope| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_module.len(), 2);
-    assert_eq!(events_by_module[0], sender_event);
-    assert_eq!(events_by_module[1], recipient_event);
 
     let (_sender, _object_id, digest2) = create_devnet_nft(context).await.unwrap();
     wait_for_tx(digest2, node.state().clone()).await;
@@ -848,47 +696,13 @@ async fn test_full_node_event_read_api_ok() {
     sleep(Duration::from_secs(5)).await;
 
     // query by move event struct name
-    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
-    let params = rpc_params![
-        EventQuery::MoveEvent(struct_tag_str),
-        None::<u64>,
-        10,
-        false
-    ];
-    let events_by_sender: EventPage = jsonrpc_client
+    let params = rpc_params![digest2];
+    let events: Vec<SuiEvent> = jsonrpc_client
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(events_by_sender.data.len(), 1);
-    assert_eq!(events_by_sender.data[0].tx_digest, digest2);
-
-    // query all transactions
-    let ts2 = node.state().get_timestamp_ms(&digest2).await.unwrap();
-    let params = rpc_params![
-        EventQuery::TimeRange {
-            start_time: ts.unwrap() - HOUR_MS,
-            end_time: ts2.unwrap() + HOUR_MS
-        },
-        None::<u64>,
-        100,
-        false
-    ];
-    let all_events: EventPage = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    // genesis txn
-    // The first txn emits TransferObject(sender), TransferObject(recipient), Gas
-    // The second txn emits MoveEvent, NewObject and Gas
-    let tx_digests = all_events.data.iter().map(|envelope| envelope.tx_digest);
-    // Sorted in ascending time
-    let tx_digests: Vec<_> = tx_digests
-        .filter(|d| *d == digest || *d == digest2)
-        .collect();
-    assert_eq!(
-        tx_digests,
-        vec![digest, digest, digest, digest2, digest2, digest2]
-    );
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].id.tx_digest, digest2);
 }
 
 #[sim_test]
