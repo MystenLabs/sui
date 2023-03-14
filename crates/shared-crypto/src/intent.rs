@@ -169,3 +169,11 @@ pub(crate) mod private {
     pub trait SealedIntent {}
     impl<T> SealedIntent for IntentMessage<T> {}
 }
+
+/// Hashing intent is used to prevent hash collision when hashing a message.
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[repr(u8)]
+pub enum HashingIntentScope {
+    ChildObjectId = 0,
+    RegularObjectId = 1,
+}

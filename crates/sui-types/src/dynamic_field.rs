@@ -19,6 +19,7 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use shared_crypto::intent::HashingIntentScope;
 use std::fmt::{Display, Formatter};
 
 /// Rust version of the Move sui::dynamic_field::Field type
@@ -218,6 +219,7 @@ where
 
     // hash(parent || key || key_type_tag)
     let mut hasher = InternalHash::default();
+    hasher.update([HashingIntentScope::ChildObjectId as u8]);
     hasher.update(parent.into());
     hasher.update(key_bytes.len().to_le_bytes());
     hasher.update(key_bytes);

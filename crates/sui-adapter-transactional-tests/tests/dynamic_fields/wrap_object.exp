@@ -12,42 +12,38 @@ created: object(107), object(108), object(109)
 written: object(106)
 
 task 3 'view-object'. lines 45-45:
-Owner: Object ID: ( fake(109) )
+Owner: Account Address ( A )
 Version: 2
 Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'run'. lines 47-47:
-created: object(111)
-written: object(107), object(110)
-deleted: object(108), object(109)
+Error: Object 0x10657ef7b778bf4c19b3a32a445a7634f0388b82b53799c7deabda07d101d337 is owned by object 0xf2c06d97f4ad9da4a8a6cfb80dd73173302be0c6c245c62279a4bc86a366f33c. Objects owned by other objects cannot be used as input arguments.
 
 task 5 'run'. lines 50-50:
-created: object(113), object(114), object(115)
-written: object(112)
+created: object(112), object(113), object(114)
+written: object(111)
 
 task 6 'view-object'. lines 52-52:
-Owner: Object ID: ( fake(115) )
+Owner: Object ID: ( fake(113) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(112)}}
 
 task 7 'run'. lines 54-54:
-written: object(113), object(116)
-deleted: object(114), object(115)
+written: object(113), object(115)
+deleted: object(112), object(114)
 
 task 8 'run'. lines 57-57:
-created: object(118), object(119), object(120)
-written: object(117)
+created: object(117), object(118), object(119)
+written: object(116)
 
 task 9 'view-object'. lines 59-59:
-Owner: Object ID: ( fake(120) )
+Owner: Object ID: ( fake(118) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(117)}}
 
 task 10 'run'. lines 61-61:
-written: object(118), object(119), object(121)
-deleted: object(120)
+written: object(117), object(118), object(120)
+deleted: object(119)
 
 task 11 'view-object'. lines 63-63:
-Owner: Account Address ( A )
-Version: 3
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
+No object at id 119
