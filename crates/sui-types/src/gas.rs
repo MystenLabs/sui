@@ -37,11 +37,11 @@ pub type GasPrice = GasQuantity<GasPriceUnit>;
 pub type SuiGas = GasQuantity<SuiGasUnit>;
 
 macro_rules! ok_or_gas_balance_error {
-    ($balance:expr, $budget:expr) => {
-        if $balance < $budget {
-            Err(UserInputError::GasBalanceTooLowToCoverGasBudget {
+    ($balance:expr, $required:expr) => {
+        if $balance < $required {
+            Err(UserInputError::GasBalanceTooLow {
                 gas_balance: $balance,
-                gas_budget: $budget,
+                needed_gas_amount: $required,
             })
         } else {
             Ok(())
@@ -503,15 +503,11 @@ pub fn check_gas_balance(
     }
 
     let mut gas_balance = get_gas_balance(gas_object)? as u128;
-    let gas_budget_amount = (gas_budget as u128) * (gas_price as u128);
+    let required_gas_amount = (gas_budget as u128) * (gas_price as u128);
     for extra_obj in more_gas_objs {
         gas_balance += get_gas_balance(&extra_obj)? as u128;
     }
-    ok_or_gas_balance_error!(gas_balance, gas_budget_amount)?;
-
-    let total_balance = gas_balance;
-    let total_amount = gas_budget as u128;
-    ok_or_gas_balance_error!(total_balance, total_amount)
+    ok_or_gas_balance_error!(gas_balance, required_gas_amount)
 }
 
 /// Create a new gas status with the given `gas_budget`, and charge the transaction flat fee.

@@ -57,9 +57,9 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::GasBalanceTooLow {
             gas_balance: 1000,
-            gas_budget: 1200,
+            needed_gas_amount: 1200,
         }
     );
 }
@@ -110,9 +110,9 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::GasBalanceTooLow {
             gas_balance: 1000,
-            gas_budget: 1001,
+            needed_gas_amount: 1001,
         }
     );
 }
@@ -299,9 +299,9 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::GasBalanceTooLow {
             gas_balance: 1000,
-            gas_budget: 2000,
+            needed_gas_amount: 2000,
         }
     );
 }
@@ -316,9 +316,9 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
 
     assert_eq!(
         UserInputError::try_from(res.txn_result.unwrap_err()).unwrap(),
-        UserInputError::GasBalanceTooLowToCoverGasBudget {
+        UserInputError::GasBalanceTooLow {
             gas_balance: 2000,
-            gas_budget: 2500,
+            needed_gas_amount: 2500,
         }
     );
 }

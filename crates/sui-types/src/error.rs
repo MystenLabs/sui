@@ -127,11 +127,14 @@ pub enum UserInputError {
     #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than gas budget: {:?}.",
+        "Balance of gas object {:?} is lower than the needed amount: {:?}.",
         gas_balance,
-        gas_budget
+        needed_gas_amount
     )]
-    GasBalanceTooLowToCoverGasBudget { gas_balance: u128, gas_budget: u128 },
+    GasBalanceTooLow {
+        gas_balance: u128,
+        needed_gas_amount: u128,
+    },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
     #[error(
