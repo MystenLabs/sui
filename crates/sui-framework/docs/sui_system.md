@@ -47,6 +47,7 @@
 -  [Function `update_candidate_validator_network_pubkey`](#0x2_sui_system_update_candidate_validator_network_pubkey)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
+-  [Function `get_safe_mode`](#0x2_sui_system_get_safe_mode)
 -  [Function `consensus_commit_prologue`](#0x2_sui_system_consensus_commit_prologue)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
@@ -1925,6 +1926,32 @@ version
     self.epoch = new_epoch;
     self.protocol_version = next_protocol_version;
     self.safe_mode = <b>true</b>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_get_safe_mode"></a>
+
+## Function `get_safe_mode`
+
+Temp entry point to cause framework upgrade
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_get_safe_mode">get_safe_mode</a>(wrapper: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_get_safe_mode">get_safe_mode</a>(wrapper: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>) {
+    <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(wrapper);
+    self.safe_mode;
 }
 </code></pre>
 
