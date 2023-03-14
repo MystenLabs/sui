@@ -606,35 +606,23 @@ export class JsonRpcProvider {
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { InputObject: objectID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { MutatedObject: objectID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
+    const filters = [
+      { filter: { InputObject: objectID } },
+      { filter: { MutatedObject: objectID } },
     ];
-
     try {
       if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
         throw new Error('Invalid Sui Object id');
       }
-      const results = await this.client.batchRequestWithType(
-        requests,
-        PaginatedTransactionResponse,
-        this.options.skipDataValidation,
+      const results = await Promise.all(
+        filters.map((filter) =>
+          this.client.requestWithType(
+            'sui_queryTransactions',
+            [{ filter }, null, null, descendingOrder],
+            PaginatedTransactionResponse,
+            this.options.skipDataValidation,
+          ),
+        ),
       );
       return [
         ...results[0].data.map((r) => r.digest),
@@ -655,34 +643,20 @@ export class JsonRpcProvider {
     addressID: SuiAddress,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { ToAddress: addressID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { FromAddress: addressID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
-    ];
+    const filters = [{ ToAddress: addressID }, { FromAddress: addressID }];
     try {
       if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
         throw new Error('Invalid Sui address');
       }
-      const results = await this.client.batchRequestWithType(
-        requests,
-        PaginatedTransactionResponse,
-        this.options.skipDataValidation,
+      const results = await Promise.all(
+        filters.map((filter) =>
+          this.client.requestWithType(
+            'sui_queryTransactions',
+            [{ filter }, null, null, descendingOrder],
+            PaginatedTransactionResponse,
+            this.options.skipDataValidation,
+          ),
+        ),
       );
       return [
         ...results[0].data.map((r) => r.digest),
