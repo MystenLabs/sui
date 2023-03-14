@@ -445,7 +445,7 @@ impl GenesisChainParameters {
     }
 
     fn test_epoch_duration_ms() -> u64 {
-        10000
+        3600000
     }
 }
 
