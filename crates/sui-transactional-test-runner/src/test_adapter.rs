@@ -28,12 +28,12 @@ use move_transactional_test_runner::{
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::fmt::Write;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
     sync::Arc,
 };
-use std::{fmt::Write, str::FromStr};
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
@@ -56,8 +56,8 @@ use sui_types::{
     },
     object::{self, Data, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     object::{MoveObject, Owner},
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_ADDRESS,
+    MOVE_STDLIB_ADDRESS, MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_OBJECT_ID,
 };
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
@@ -302,10 +302,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             buf
         };
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let dependencies: Vec<_> = dependencies
+        let mut dependencies: Vec<_> = dependencies
             .into_iter()
-            .map(|d| ObjectID::from_str(&d))
+            .map(|d| {
+                let addr = self.compiled_state.named_address_mapping.get(&d);
+                if addr.is_none() {
+                    bail!("There is no published module address corresponding to name address {d}");
+                }
+                let id: ObjectID = addr.unwrap().into_inner().into();
+                Ok(id)
+            })
             .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on Sui framework and (transitively) on Move
+        // stdlib so these don't have to be provided explicitly as parameters
+        dependencies.push(MOVE_STDLIB_OBJECT_ID);
+        dependencies.push(SUI_FRAMEWORK_OBJECT_ID);
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {

@@ -329,7 +329,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     let pkg = Object::new_package_for_testing(
         modules,
         TransactionDigest::genesis(),
-        &[std_move_pkg, sui_move_pkg],
+        [&std_move_pkg, &sui_move_pkg],
     )
     .unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
