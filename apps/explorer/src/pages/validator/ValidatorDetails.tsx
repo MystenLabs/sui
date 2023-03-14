@@ -65,6 +65,13 @@ function ValidatorDetails() {
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
                 />
+                {/* todo: include this banner for at-risk validators
+                <Banner variant="error" fullWidth>
+                    <Text variant="p2/semibold">At Risk</Text>
+                    This validator will be removed from the Sui network of
+                    validators if the SUI staked falls below 25 million for 7
+                    consecutive epochs.
+                </Banner> */}
             </div>
         </div>
     );

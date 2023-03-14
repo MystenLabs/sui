@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useRpcClient } from '@mysten/core';
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
@@ -19,6 +20,8 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
+import { CheckpointsTable } from '~/pages/epochs/CheckpointsTable';
+import { EpochsTable } from '~/pages/epochs/EpochsTable';
 import { Banner } from '~/ui/Banner';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -26,6 +29,7 @@ import { PlayPause } from '~/ui/PlayPause';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
+import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -107,6 +111,7 @@ export function LatestTxCard({
     paginationtype = DEFAULT_PAGINATION_TYPE,
     txPerPage: initialTxPerPage,
 }: Props) {
+    const { on: mockUIEnabled } = useFeature(GROWTHBOOK_FEATURES.MOCK_UI);
     const [paused, setPaused] = useState(false);
     const [txPerPage, setTxPerPage] = useState(
         initialTxPerPage || NUMBER_OF_TX_PER_PAGE
@@ -234,6 +239,12 @@ export function LatestTxCard({
                 <div className="relative">
                     <TabList>
                         <Tab>Transactions</Tab>
+                        {mockUIEnabled ? (
+                            <>
+                                <Tab>Checkpoints</Tab>
+                                <Tab>Epochs</Tab>
+                            </>
+                        ) : null}
                     </TabList>
                     <div className="absolute inset-y-0 right-0 -top-1">
                         <PlayPause
@@ -275,6 +286,16 @@ export function LatestTxCard({
                         {paginationtype !== 'none' &&
                             PaginationWithStatsOrStatsWithLink}
                     </TabPanel>
+                    {mockUIEnabled ? (
+                        <>
+                            <TabPanel>
+                                <CheckpointsTable />
+                            </TabPanel>
+                            <TabPanel>
+                                <EpochsTable />
+                            </TabPanel>
+                        </>
+                    ) : null}
                 </TabPanels>
             </TabGroup>
         </div>
