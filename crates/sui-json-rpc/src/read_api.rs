@@ -426,8 +426,8 @@ impl ReadApiServer for ReadApi {
         if opts.show_balance_changes || opts.show_object_changes {
             // Not supported because it's likely the response will easily exceed response limit
             return Err(anyhow!(UserInputError::Unsupported(
-                "show_balance_changes and show_object_changes is not available on \
-                multiGetTransactions"
+                "show_balance_changes and show_object_changes is not available on\
+                 multiGetTransactions"
                     .to_string()
             ))
             .into());
