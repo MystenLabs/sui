@@ -435,11 +435,11 @@ impl ConsensusAdapter {
                     .submit_to_consensus(&transaction, epoch_store)
                     .await
                 {
-                    // This can happen during Narwhal reconfig or when the validator is struggling
-                    // to get its certificate included into Narwhal output, so retry a few times.
+                    // This can happen during Narwhal reconfig, or when the Narwhal worker has
+                    // full internal buffers and needs to back pressure, so retry a few times.
                     if retries > 3 {
                         warn!(
-                            "Failed to submit transaction {:?} to own narwhal worker: {:?}. Retry {}",
+                            "Failed to submit transaction {:?} to own narwhal worker: {:?}. Retry #{}",
                             transaction_key, e, retries,
                         );
                     }
@@ -469,7 +469,7 @@ impl ConsensusAdapter {
                 });
             };
             match select(processed_waiter, submit_inner.boxed()).await {
-                Either::Left((processed, _submitted)) => processed,
+                Either::Left((processed, _submit_inner)) => processed,
                 Either::Right(((), processed_waiter)) => {
                     debug!("Submitted {transaction_key:?} to consensus");
                     processed_waiter.await
