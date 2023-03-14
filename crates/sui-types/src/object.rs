@@ -542,10 +542,11 @@ impl Object {
 
     /// Create a system package which is not subject to size limits. Panics if the object ID is not
     /// a known system package.
-    pub fn new_system_package(
+    pub fn new_system_package<'p>(
         modules: Vec<CompiledModule>,
         version: SequenceNumber,
         previous_transaction: TransactionDigest,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let ret = Self::new_package(
             modules,
@@ -553,7 +554,7 @@ impl Object {
             previous_transaction,
             // System objects are not subject to limits
             u64::MAX,
-            &[], // no external dependencies
+            dependencies,
         )?;
         assert!(ret.is_system_package());
         Ok(ret)
