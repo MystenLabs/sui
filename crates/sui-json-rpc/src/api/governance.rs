@@ -17,7 +17,10 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 pub trait GovernanceReadApi {
     /// Return one or more [DelegatedStake]
     #[method(name = "getStakesByIds")]
-    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>>;
+    async fn get_stakes_by_ids(
+        &self,
+        staked_sui_id: Vec<ObjectID>,
+    ) -> RpcResult<Vec<DelegatedStake>>;
 
     /// Return all [DelegatedStake].
     #[method(name = "getStakes")]

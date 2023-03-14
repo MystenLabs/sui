@@ -525,10 +525,7 @@ impl GovernanceApi {
     }
 
     /// Return all [DelegatedStake].
-    pub async fn get_stakes(
-        &self,
-        owner: SuiAddress,
-    ) -> SuiRpcResult<Vec<DelegatedStake>> {
+    pub async fn get_stakes(&self, owner: SuiAddress) -> SuiRpcResult<Vec<DelegatedStake>> {
         Ok(self.api.http.get_stakes(owner).await?)
     }
 

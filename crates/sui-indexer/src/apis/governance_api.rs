@@ -27,7 +27,10 @@ impl GovernanceReadApi {
 
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApi {
-    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>> {
+    async fn get_stakes_by_ids(
+        &self,
+        staked_sui_id: Vec<ObjectID>,
+    ) -> RpcResult<Vec<DelegatedStake>> {
         self.fullnode.get_stakes_by_ids(staked_sui_id).await
     }
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {

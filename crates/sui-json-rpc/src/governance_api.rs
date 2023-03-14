@@ -40,7 +40,10 @@ impl GovernanceReadApi {
             .await?)
     }
 
-    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> Result<Vec<DelegatedStake>, Error> {
+    async fn get_stakes_by_ids(
+        &self,
+        staked_sui_id: Vec<ObjectID>,
+    ) -> Result<Vec<DelegatedStake>, Error> {
         let stakes = futures::future::try_join_all(
             staked_sui_id
                 .iter()
@@ -167,7 +170,10 @@ impl GovernanceReadApi {
 
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApi {
-    async fn get_stakes_by_ids(&self, staked_sui_id: Vec<ObjectID>) -> RpcResult<Vec<DelegatedStake>> {
+    async fn get_stakes_by_ids(
+        &self,
+        staked_sui_id: Vec<ObjectID>,
+    ) -> RpcResult<Vec<DelegatedStake>> {
         Ok(self.get_stakes_by_ids(staked_sui_id).await?)
     }
 
