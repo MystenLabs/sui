@@ -1,5 +1,5 @@
 ---
-title: `Move.lock` File for Move Packages
+title: Move.lock
 ---
 
 When you build a Move package, the process creates a `Move.lock` file at the root of your package. The file acts as a communication layer between the Move compiler and other tools, like chain-specific command line interfaces and third-party package managers. The `Move.lock` file contains information about your package, including its dependencies, that aids operations like verification of source code against on-chain packages and package manager compatibility.    
