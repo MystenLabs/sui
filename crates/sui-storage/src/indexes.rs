@@ -24,12 +24,10 @@ use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
 use typed_store::rocks::DBOptions;
-use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocks::{default_db_options, point_lookup_db_options, DBMap, MetricConf};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
-
-use crate::{default_db_options, point_lookup_db_options};
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);

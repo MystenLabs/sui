@@ -5,14 +5,15 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
 use std::path::Path;
-use sui_storage::point_lookup_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
-use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions};
+use typed_store::rocks::{
+    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{

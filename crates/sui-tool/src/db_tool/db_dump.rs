@@ -12,13 +12,12 @@ use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::StoreData;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
-use sui_storage::default_db_options;
 use sui_storage::write_ahead_log::DBWriteAheadLogTables;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
 use sui_types::temporary_store::InnerTemporaryStore;
-use typed_store::rocks::MetricConf;
+use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Clone, Parser, Debug, ValueEnum)]

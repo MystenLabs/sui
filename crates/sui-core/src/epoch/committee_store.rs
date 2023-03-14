@@ -6,11 +6,10 @@ use rocksdb::Options;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::point_lookup_db_options;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiError, SuiResult};
-use typed_store::rocks::{DBMap, DBOptions, MetricConf};
+use typed_store::rocks::{point_lookup_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store::Map;
