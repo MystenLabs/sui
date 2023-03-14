@@ -13,11 +13,13 @@ module sui::genesis {
     use sui::validator;
     use std::option;
 
-    /// Stake subisidy to be given out in the very first epoch. Placeholder value.
-    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
+    /// Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).
+    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1_000_000_000_000_000;
 
     /// The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
     const INIT_STAKE_SUBSIDY_FUND_BALANCE: u64 = 1_000_000_000_000_000_000;
+
+    const INIT_STAKE_SUBSIDY_FUND_BALANCE_TEST_ONLY: u64 = 100_000_000_000_000_000;
 
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
@@ -48,7 +50,7 @@ module sui::genesis {
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
-        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE);
+        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE_TEST_ONLY);
         let storage_fund = balance::zero();
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
@@ -98,7 +100,8 @@ module sui::genesis {
                 primary_address,
                 worker_address,
                 // Initialize all validators with uniform stake taken from the subsidy fund.
-                option::some(balance::split(&mut subsidy_fund, initial_validator_stake_mist)),
+                // TODO: change this back to take from subsidy fund instead.
+                option::some(balance::split(&mut sui_supply, initial_validator_stake_mist)),
                 gas_price,
                 commission_rate,
                 true, // validator is active right away
