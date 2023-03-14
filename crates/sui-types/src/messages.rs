@@ -28,9 +28,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
-use move_binary_format::CompiledModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
@@ -437,28 +435,6 @@ impl Command {
         }))
     }
 
-    fn publish_command_input_objects(
-        modules: &[Vec<u8>],
-        _dep_ids: &[ObjectID],
-    ) -> Vec<InputObjectKind> {
-        // For module publishing, all the dependent packages are implicit input objects
-        // because they must all be on-chain in order for the package to publish.
-        // All authorities must have the same view of those dependencies in order
-        // to achieve consistent publish results.
-        let compiled_modules = modules
-            .iter()
-            .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
-                Ok(m) => Some(m),
-                // We will ignore this error here and simply let latter execution
-                // to discover this error again and fail the transaction.
-                // It's preferable to let transaction fail and charge gas when
-                // malformed package is provided.
-                Err(_) => None,
-            })
-            .collect::<Vec<_>>();
-        Transaction::input_objects_in_compiled_modules(&compiled_modules)
-    }
-
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Command::Upgrade(_, deps, package_id, _) => deps
@@ -466,9 +442,10 @@ impl Command {
                 .map(|id| InputObjectKind::MovePackage(*id))
                 .chain(Some(InputObjectKind::MovePackage(*package_id)))
                 .collect(),
-            Command::Publish(modules, dep_ids) => {
-                Self::publish_command_input_objects(modules, dep_ids)
-            }
+            Command::Publish(_, deps) => deps
+                .iter()
+                .map(|id| InputObjectKind::MovePackage(*id))
+                .collect(),
             Command::MoveCall(c) => c.input_objects(),
             Command::MakeMoveVec(Some(t), _) => {
                 let mut packages = BTreeSet::new();
@@ -1720,28 +1697,6 @@ impl<S> Envelope<SenderSignedData, S> {
             .value
             .shared_input_objects()
             .into_iter()
-    }
-
-    pub fn input_objects_in_compiled_modules(
-        compiled_modules: &[CompiledModule],
-    ) -> Vec<InputObjectKind> {
-        let to_be_published: BTreeSet<_> = compiled_modules.iter().map(|m| m.self_id()).collect();
-        let mut dependent_packages = BTreeSet::new();
-        for module in compiled_modules {
-            for handle in &module.module_handles {
-                if !to_be_published.contains(&module.module_id_for_handle(handle)) {
-                    let address = ObjectID::from(*module.address_identifier_at(handle.address));
-                    dependent_packages.insert(address);
-                }
-            }
-        }
-
-        // We don't care about the digest of the dependent packages.
-        // They are all read-only on-chain and their digest never changes.
-        dependent_packages
-            .into_iter()
-            .map(InputObjectKind::MovePackage)
-            .collect::<Vec<_>>()
     }
 
     pub fn is_system_tx(&self) -> bool {
