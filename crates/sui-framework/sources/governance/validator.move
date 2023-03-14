@@ -219,7 +219,6 @@ module sui::validator {
         initial_stake_option: Option<Balance<SUI>>,
         gas_price: u64,
         commission_rate: u64,
-        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -257,7 +256,6 @@ module sui::validator {
             initial_stake_option,
             gas_price,
             commission_rate,
-            is_active_at_genesis,
             ctx
         )
     }
@@ -741,7 +739,6 @@ module sui::validator {
         initial_stake_option: Option<Balance<SUI>>,
         gas_price: u64,
         commission_rate: u64,
-        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         let sui_address = metadata.sui_address;
@@ -751,10 +748,6 @@ module sui::validator {
             else 0;
 
         let staking_pool = staking_pool::new(ctx);
-
-        if (is_active_at_genesis) {
-            staking_pool::activate_staking_pool(&mut staking_pool, 0);
-        };
 
         // Add the validator's starting stake to the staking pool if there exists one.
         if (option::is_some(&initial_stake_option)) {
@@ -815,7 +808,7 @@ module sui::validator {
         is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
-        new_from_metadata(
+        let validator = new_from_metadata(
             new_metadata(
                 sui_address,
                 protocol_pubkey_bytes,
@@ -835,8 +828,13 @@ module sui::validator {
             initial_stake_option,
             gas_price,
             commission_rate,
-            is_active_at_genesis,
             ctx
-        )
+        );
+
+        if (is_active_at_genesis) {
+            activate(&mut validator, 0);
+        };
+
+        validator
     }
 }

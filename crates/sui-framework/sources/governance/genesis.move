@@ -85,7 +85,8 @@ module sui::genesis {
             let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
-            vector::push_back(&mut validators, validator::new(
+
+            let validator = validator::new(
                 sui_address,
                 pubkey,
                 network_pubkey,
@@ -104,9 +105,13 @@ module sui::genesis {
                 option::some(balance::split(&mut sui_supply, initial_validator_stake_mist)),
                 gas_price,
                 commission_rate,
-                true, // validator is active right away
                 ctx
-            ));
+            );
+
+            validator::activate(&mut validator, 0);
+
+            vector::push_back(&mut validators, validator);
+
             i = i + 1;
         };
 
