@@ -302,7 +302,7 @@ fn test_multisig_address() {
         MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![w1, w2, w3], threshold).unwrap();
     let address: SuiAddress = multisig_pk.into();
     assert_eq!(
-        SuiAddress::from_str("0x43247fc96101763052ccc4f0417257a4270a537c45576ec6cd631c712085f389")
+        SuiAddress::from_str("0xe35c69eb504de34afdbd9f307fb3ca152646c92d549fea00065d26fc422109ea")
             .unwrap(),
         address
     );

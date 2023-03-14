@@ -34,7 +34,7 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::collection_types::VecMap;
-use sui_types::crypto::user_hash;
+use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::{DisplayCreatedEvent, DisplayObject};
 use sui_types::dynamic_field::DynamicFieldName;
@@ -922,7 +922,7 @@ pub fn get_transaction_data_and_digest(
         },
         tx_data,
     );
-    let txn_digest = TransactionDigest::new(user_hash(&intent_msg.value));
+    let txn_digest = TransactionDigest::new(default_hash(&intent_msg.value));
     Ok((intent_msg.value, txn_digest))
 }
 

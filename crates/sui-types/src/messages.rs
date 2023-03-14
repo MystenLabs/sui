@@ -6,8 +6,8 @@ use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
-    internal_hash, user_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, InternalHash, Signature, Signer, SuiSignatureInner,
+    default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, TransactionEventsDigest};
@@ -1637,7 +1637,7 @@ impl Message for SenderSignedData {
     const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionDigest::new(user_hash(&self.intent_message().value))
+        TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
@@ -1874,7 +1874,7 @@ pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorum
 
 impl CertifiedTransaction {
     pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = InternalHash::default();
+        let mut digest = DefaultHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
@@ -2724,7 +2724,7 @@ pub struct TransactionEvents {
 
 impl TransactionEvents {
     pub fn digest(&self) -> TransactionEventsDigest {
-        TransactionEventsDigest::new(internal_hash(self))
+        TransactionEventsDigest::new(default_hash(self))
     }
 }
 
@@ -2733,7 +2733,7 @@ impl Message for TransactionEffects {
     const SCOPE: IntentScope = IntentScope::TransactionEffects;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest::new(internal_hash(self))
+        TransactionEffectsDigest::new(default_hash(self))
     }
 
     fn verify(&self, _sig_epoch: Option<EpochId>) -> SuiResult {
