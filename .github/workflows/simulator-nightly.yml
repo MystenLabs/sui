@@ -39,13 +39,18 @@ jobs:
       # Runs tests much faster - disables signing and verification
       USE_MOCK_CRYPTO: 1
       CARGO_TERM_COLOR: always
+      NUM_CPUS: 24
 
     steps:
     - name: Cargo clean
       run: |
         cd ~/sui && cargo clean && git restore Cargo.lock
 
-    - name: Checkout sui repo and cargo clean
+    - name: Tmpfs clean
+      run: |
+        sudo rm -rf /tmp/*.*
+
+    - name: Checkout sui repo
       run: |
         cd ~/sui && git fetch origin && git rebase origin/main
 
