@@ -38,6 +38,7 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
@@ -384,17 +385,81 @@ pub struct GenesisValidatorInfo {
     pub proof_of_possession: AuthoritySignature,
 }
 
+impl From<GenesisValidatorInfo> for GenesisValidatorMetadata {
+    fn from(
+        GenesisValidatorInfo {
+            info,
+            proof_of_possession,
+        }: GenesisValidatorInfo,
+    ) -> Self {
+        let sui_address = info.sui_address();
+
+        Self {
+            name: info.name,
+            description: info.description,
+            image_url: info.image_url,
+            project_url: info.project_url,
+            sui_address,
+            gas_price: info.gas_price,
+            commission_rate: info.commission_rate,
+            protocol_public_key: info.protocol_key.as_bytes().to_vec(),
+            proof_of_possession: proof_of_possession.as_ref().to_vec(),
+            network_public_key: info.network_key.as_bytes().to_vec(),
+            worker_public_key: info.worker_key.as_bytes().to_vec(),
+            network_address: info.network_address,
+            p2p_address: info.p2p_address,
+            primary_address: info.narwhal_primary_address,
+            worker_address: info.narwhal_worker_address,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct GenesisValidatorMetadata {
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
+
+    pub sui_address: SuiAddress,
+
+    pub gas_price: u64,
+    pub commission_rate: u64,
+
+    pub protocol_public_key: Vec<u8>, //AuthorityPublicKeyBytes,
+    pub proof_of_possession: Vec<u8>, // AuthoritySignature,
+
+    pub network_public_key: Vec<u8>, // NetworkPublicKey,
+    pub worker_public_key: Vec<u8>,  // NetworkPublicKey,
+
+    pub network_address: Multiaddr,
+    pub p2p_address: Multiaddr,
+    pub primary_address: Multiaddr,
+    pub worker_address: Multiaddr,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct GenesisChainParameters {
+    pub initial_sui_custody_account_address: SuiAddress,
+    pub initial_validator_stake_mist: u64,
+    pub governance_start_epoch: u64,
+    pub chain_start_timestamp_ms: u64,
+    pub epoch_duration_ms: u64,
+}
+
 /// Initial set of parameters for a chain.
 #[derive(Serialize, Deserialize)]
-pub struct GenesisChainParameters {
-    #[serde(default = "GenesisChainParameters::default_timestamp_ms")]
+pub struct GenesisCeremonyParameters {
+    #[serde(default = "GenesisCeremonyParameters::default_timestamp_ms")]
     pub timestamp_ms: u64,
 
     /// protocol version that the chain starts at.
     #[serde(default = "ProtocolVersion::max")]
     pub protocol_version: ProtocolVersion,
 
-    #[serde(default = "GenesisChainParameters::default_allow_insertion_of_extra_objects")]
+    #[serde(default = "GenesisCeremonyParameters::default_allow_insertion_of_extra_objects")]
     pub allow_insertion_of_extra_objects: bool,
 
     /// The initial account address that will own the initial 9 Billion Sui that is minted at
@@ -404,7 +469,7 @@ pub struct GenesisChainParameters {
 
     /// The initial amount of Sui (denominated in Mist) given to genesis validators for their
     /// initial stake.
-    #[serde(default = "GenesisChainParameters::test_initial_validator_stake_mist")]
+    #[serde(default = "GenesisCeremonyParameters::test_initial_validator_stake_mist")]
     pub initial_validator_stake_mist: u64,
 
     /// The starting epoch in which various on-chain governance features take effect. E.g.
@@ -415,12 +480,12 @@ pub struct GenesisChainParameters {
     pub governance_start_epoch: u64,
 
     /// The duration of an epoch, in milliseconds.
-    #[serde(default = "GenesisChainParameters::default_epoch_duration_ms")]
+    #[serde(default = "GenesisCeremonyParameters::default_epoch_duration_ms")]
     pub epoch_duration_ms: u64,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
-impl GenesisChainParameters {
+impl GenesisCeremonyParameters {
     pub fn new() -> Self {
         Self {
             timestamp_ms: Self::default_timestamp_ms(),
@@ -454,14 +519,14 @@ impl GenesisChainParameters {
     }
 }
 
-impl Default for GenesisChainParameters {
+impl Default for GenesisCeremonyParameters {
     fn default() -> Self {
         Self::new()
     }
 }
 
 pub struct Builder {
-    parameters: GenesisChainParameters,
+    parameters: GenesisCeremonyParameters,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
     // Validator signatures over checkpoint
@@ -486,7 +551,7 @@ impl Builder {
         }
     }
 
-    pub fn with_parameters(mut self, parameters: GenesisChainParameters) -> Self {
+    pub fn with_parameters(mut self, parameters: GenesisCeremonyParameters) -> Self {
         self.parameters = parameters;
         self
     }
@@ -788,7 +853,7 @@ fn get_genesis_context(epoch_data: &EpochData) -> TxContext {
 }
 
 fn build_unsigned_genesis_data(
-    parameters: &GenesisChainParameters,
+    parameters: &GenesisCeremonyParameters,
     validators: &[GenesisValidatorInfo],
     objects: &[Object],
 ) -> UnsignedGenesis {
@@ -832,7 +897,7 @@ fn build_unsigned_genesis_data(
 }
 
 fn create_genesis_checkpoint(
-    parameters: &GenesisChainParameters,
+    parameters: &GenesisCeremonyParameters,
     transaction: &Transaction,
     effects: &TransactionEffects,
 ) -> (CheckpointSummary, CheckpointContents) {
@@ -954,7 +1019,7 @@ fn create_genesis_objects(
     modules: &[(Vec<CompiledModule>, Vec<ObjectID>)],
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
-    parameters: &GenesisChainParameters,
+    parameters: &GenesisCeremonyParameters,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
     let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
@@ -1072,7 +1137,7 @@ pub fn generate_genesis_system_object(
     move_vm: &MoveVM,
     committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
-    parameters: &GenesisChainParameters,
+    parameters: &GenesisCeremonyParameters,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
@@ -1084,43 +1149,19 @@ pub fn generate_genesis_system_object(
         &protocol_config,
     );
 
-    let mut pubkeys = Vec::new();
-    let mut network_pubkeys = Vec::new();
-    let mut worker_pubkeys = Vec::new();
-    let mut proof_of_possessions = Vec::new();
-    let mut sui_addresses = Vec::new();
-    let mut network_addresses = Vec::new();
-    let mut p2p_addresses = Vec::new();
-    let mut primary_addresses = Vec::new();
-    let mut worker_addresses = Vec::new();
-    let mut names = Vec::new();
-    let mut descriptions = Vec::new();
-    let mut image_url = Vec::new();
-    let mut project_url = Vec::new();
-    let mut gas_prices = Vec::new();
-    let mut commission_rates = Vec::new();
+    let genesis_chain_parameters = GenesisChainParameters {
+        initial_sui_custody_account_address: parameters.initial_sui_custody_account_address,
+        initial_validator_stake_mist: parameters.initial_validator_stake_mist,
+        governance_start_epoch: parameters.governance_start_epoch,
+        chain_start_timestamp_ms: parameters.timestamp_ms,
+        epoch_duration_ms: parameters.epoch_duration_ms,
+    };
 
-    for GenesisValidatorInfo {
-        info: validator,
-        proof_of_possession,
-    } in committee
-    {
-        pubkeys.push(validator.protocol_key());
-        network_pubkeys.push(validator.network_key().as_bytes().to_vec());
-        worker_pubkeys.push(validator.worker_key().as_bytes().to_vec());
-        proof_of_possessions.push(proof_of_possession.as_ref().to_vec());
-        sui_addresses.push(validator.sui_address());
-        network_addresses.push(validator.network_address());
-        p2p_addresses.push(validator.p2p_address());
-        primary_addresses.push(validator.narwhal_primary_address());
-        worker_addresses.push(validator.narwhal_worker_address());
-        names.push(validator.name().to_owned().into_bytes());
-        descriptions.push(validator.description.clone().into_bytes());
-        image_url.push(validator.image_url.clone().into_bytes());
-        project_url.push(validator.project_url.clone().into_bytes());
-        gas_prices.push(validator.gas_price());
-        commission_rates.push(validator.commission_rate());
-    }
+    let genesis_validators = committee
+        .iter()
+        .cloned()
+        .map(GenesisValidatorMetadata::from)
+        .collect::<Vec<_>>();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -1131,30 +1172,10 @@ pub fn generate_genesis_system_object(
                 ident_str!("create").to_owned(),
                 vec![],
                 vec![
-                    CallArg::Pure(
-                        bcs::to_bytes(&parameters.initial_sui_custody_account_address).unwrap(),
-                    ),
-                    CallArg::Pure(bcs::to_bytes(&parameters.initial_validator_stake_mist).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&parameters.governance_start_epoch).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&descriptions).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&image_url).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&p2p_addresses).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&primary_addresses).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&genesis_chain_parameters).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&genesis_validators).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&parameters.timestamp_ms).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&parameters.epoch_duration_ms).unwrap()),
                 ],
             )
             .unwrap();

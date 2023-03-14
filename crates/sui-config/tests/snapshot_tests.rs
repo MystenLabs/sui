@@ -20,7 +20,7 @@ use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_config::genesis::GenesisChainParameters;
+use sui_config::genesis::GenesisCeremonyParameters;
 use sui_config::ValidatorInfo;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -81,9 +81,9 @@ fn populated_genesis_snapshot_matches() {
     let genesis = Builder::new()
         .add_objects(objects)
         .add_validator(validator, pop)
-        .with_parameters(GenesisChainParameters {
+        .with_parameters(GenesisCeremonyParameters {
             timestamp_ms: 10,
-            ..GenesisChainParameters::new()
+            ..GenesisCeremonyParameters::new()
         })
         .add_validator_signature(&key)
         .build();
