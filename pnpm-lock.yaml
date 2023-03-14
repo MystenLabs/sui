@@ -525,7 +525,6 @@ importers:
       eslint-plugin-prettier: ^4.2.1
       husky: ^7.0.4
       jayson: ^4.0.0
-      js-sha3: ^0.8.0
       mockttp: ^2.7.0
       prettier: ^2.8.4
       rpc-websockets: ^7.5.1
@@ -534,7 +533,6 @@ importers:
       tmp: ^0.2.1
       ts-node: ^10.9.1
       ts-retry-promise: ^0.7.0
-      tslib: ^2.5.0
       tsup: ^6.6.3
       tweetnacl: ^1.0.3
       typedoc: ^0.23.26
@@ -550,7 +548,6 @@ importers:
       '@scure/bip39': 1.1.1
       '@suchipi/femver': 1.0.0
       jayson: 4.0.0
-      js-sha3: 0.8.0
       rpc-websockets: 7.5.1
       superstruct: 1.0.3
       tweetnacl: 1.0.3
@@ -569,7 +566,6 @@ importers:
       tmp: 0.2.1
       ts-node: 10.9.1_typescript@4.9.5
       ts-retry-promise: 0.7.0
-      tslib: 2.5.0
       tsup: 6.6.3_6qtx7vkbdhwvdm4crzlegk4mvi
       typedoc: 0.23.26_typescript@4.9.5
       typescript: 4.9.5
@@ -14519,10 +14515,6 @@ packages:
 
   /js-sdsl/4.2.0:
     resolution: {integrity: sha512-dyBIzQBDkCqCu+0upx25Y2jGdbTGxE9fshMsCdK0ViOongpV+n5tXRcZY9v7CaVQ79AGS9KA1KHtojxiM7aXSQ==}
-
-  /js-sha3/0.8.0:
-    resolution: {integrity: sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==}
-    dev: false
 
   /js-tokens/4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
