@@ -41,8 +41,6 @@ pub struct Bullshark {
     pub committee: Committee,
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore>,
-    /// The depth of the garbage collector.
-    pub gc_depth: Round,
 
     pub metrics: Arc<ConsensusMetrics>,
     /// The last time we had a successful leader election
@@ -103,7 +101,7 @@ impl ConsensusProtocol for Bullshark {
         // Get the certificate's digest of the leader. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r;
-        if leader_round <= state.last_committed_round {
+        if leader_round <= state.last_round.committed_round {
             return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
         }
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
@@ -163,9 +161,9 @@ impl ConsensusProtocol for Bullshark {
             let mut sequence = Vec::new();
 
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-            for x in utils::order_dag(self.gc_depth, leader, state) {
+            for x in utils::order_dag(leader, state) {
                 // Update and clean up internal state.
-                state.update(&x, self.gc_depth);
+                state.update(&x);
 
                 // For logging.
                 min_round = min_round.min(x.round());
@@ -243,14 +241,12 @@ impl Bullshark {
     pub fn new(
         committee: Committee,
         store: Arc<ConsensusStore>,
-        gc_depth: Round,
         metrics: Arc<ConsensusMetrics>,
         num_sub_dags_per_schedule: u64,
     ) -> Self {
         Self {
             committee,
             store,
-            gc_depth,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
