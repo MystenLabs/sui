@@ -5,7 +5,7 @@ use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
 use std::path::Path;
-use sui_storage::default_db_options;
+use sui_storage::point_lookup_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
@@ -299,11 +299,11 @@ impl Iterator for LiveSetIter<'_> {
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
 
 fn objects_table_default_config() -> DBOptions {
-    let db_options = default_db_options(None, None).1;
+    let db_options = point_lookup_db_options();
     DBOptions {
         options: db_options.options,
         rw_options: ReadWriteOptions {
@@ -313,15 +313,15 @@ fn objects_table_default_config() -> DBOptions {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
 
 fn effects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
 
 fn indirect_move_objects_table_default_config() -> DBOptions {
-    let mut options = default_db_options(None, None).1;
+    let mut options = point_lookup_db_options();
     options.options.set_merge_operator(
         "refcount operator",
         reference_count_merge_operator,

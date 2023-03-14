@@ -19,7 +19,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
-use sui_storage::default_db_options;
+use sui_storage::point_lookup_db_options;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tracing::{debug, error, info, warn};
@@ -347,5 +347,5 @@ impl CheckpointIndexStore {
 }
 
 fn default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
