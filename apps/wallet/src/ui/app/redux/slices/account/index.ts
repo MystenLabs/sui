@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -85,14 +86,14 @@ const accountsAdapter = createEntityAdapter<SerializedAccount>({
 
 type AccountState = {
     creating: boolean;
-    serializedInfo: SerializedAccount | null;
+    address: SuiAddress | null;
     isLocked: boolean | null;
     isInitialized: boolean | null;
 };
 
 const initialState = accountsAdapter.getInitialState<AccountState>({
     creating: false,
-    serializedInfo: null,
+    address: null,
     isLocked: null,
     isInitialized: null,
 });
@@ -111,10 +112,8 @@ const accountSlice = createSlice({
         ) => {
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
-            state.serializedInfo =
-                payload.accounts.find(
-                    (account) => account.address === payload.activeAddress
-                ) ?? null;
+            // The addresses are already normalized at this point
+            state.address = payload.activeAddress;
             accountsAdapter.setAll(state, payload.accounts);
         },
     },
@@ -142,7 +141,9 @@ const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
 
 export const activeAccountSelector = ({ account }: RootState) =>
-    account.serializedInfo;
+    Object.values(account.entities).find(
+        (accountEntity) => accountEntity?.address === account.address
+    );
 
 export const activeAddressSelector = ({ account }: RootState) =>
-    account.serializedInfo?.address;
+    account.address;
