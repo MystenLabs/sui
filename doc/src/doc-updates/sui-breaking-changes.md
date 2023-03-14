@@ -148,6 +148,7 @@ fun new(ctx: &mut TxContext): Counter {
 **[Breaking change]** - `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message. You must also include the hash_function name represented by u8. See [PR 7773](https://github.com/MystenLabs/sui/pull/7773) for more details.
 
 **Resolution**
+
 `ecdsa_k1::ecrecover(sig, hashed_msg, hash_function)` is now updated to `ecdsa_k1::secp256k1_ecrecover(sig, msg, hash_function)`
 
 `ecdsa_k1::secp256k1_verify(sig, pk, hashed_msg)` is now updated to `ecdsa_k1::secp256k1_verify(sig, pk, msg, hash_function)`
