@@ -20,12 +20,11 @@ export function useEpoch() {
       prevTimestamp: number;
       data: SystemEpochInfo;
     } | null> => {
-      const { data } = await provider.getEvents(
-        { MoveEvent: SYSTEM_EPOCH_INFO },
-        null,
-        2,
-        "descending"
-      );
+      const { data } = await provider.getEvents({
+        query: { MoveEvent: SYSTEM_EPOCH_INFO },
+        limit: 2,
+        order: "descending",
+      });
       const [evt, prevEvt] = data;
 
       // should never happen; it's a platform requirement.

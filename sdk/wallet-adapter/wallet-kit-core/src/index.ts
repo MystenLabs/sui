@@ -9,6 +9,7 @@ import {
 } from "@mysten/wallet-adapter-base";
 import { localStorageAdapter, StorageAdapter } from "./storage";
 import {
+  SuiSignAndExecuteTransactionInput,
   SuiSignMessageInput,
   SuiSignTransactionInput,
   WalletAccount,
@@ -68,7 +69,7 @@ export interface WalletKitCore {
   ) => ReturnType<WalletAdapter["signTransaction"]>;
   signAndExecuteTransaction: (
     transactionInput: OptionalProperties<
-      SuiSignTransactionInput,
+      SuiSignAndExecuteTransactionInput,
       "chain" | "account"
     >
   ) => ReturnType<WalletAdapter["signAndExecuteTransaction"]>;

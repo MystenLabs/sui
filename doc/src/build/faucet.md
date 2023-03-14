@@ -22,8 +22,6 @@ To request tokens from the faucet, you must own a wallet address that can receiv
 
 You can request test tokens within [Sui Wallet](../explore/wallet-browser.md#add-sui-tokens-to-your-sui-wallet).
 
-**Important:** This option is disabled for Testnet in Testnet Wave 2. Use the Discord channels instead for Testnet Wave 2.
-
 ## 3. Request test tokens through cURL
 
 Use the following cURL command to request tokens directly from the faucet server:
@@ -40,8 +38,6 @@ curl --location --request POST 'https://faucet.devnet.sui.io/gas' \
 
 Replace `'https://faucet.devnet.sui.io/gas'` with `http://127.0.0.1:5003/gas` when working with a local network.
 
-**Important:** This option is disabled for Testnet in Testnet Wave 2. Use the Discord channels instead for Testnet Wave 2.
-
 ## 4. Request test tokens through TypeScript SDK
 
 You can also access the faucet through the TS-SDK.
@@ -55,8 +51,3 @@ await provider.requestSuiFromFaucet(
   '<YOUR SUI ADDRESS>'
 );
 ```
-
-**Important:** This option is disabled for Testnet in Testnet Wave 2. Use the Discord channels instead for Testnet Wave 2.
-Related topics:
-
-- [Connect to Sui Devnet](../build/devnet.md).

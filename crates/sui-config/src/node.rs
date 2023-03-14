@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
+use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
@@ -60,13 +61,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    // TODO: It will be removed down the road.
-    /// Epoch duration in ms.
-    /// u64::MAX means reconfiguration is disabled
-    /// Exposing this in config to allow easier testing with shorter epoch.
-    #[serde(default = "default_epoch_duration_ms")]
-    pub epoch_duration_ms: u64,
-
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -100,7 +94,10 @@ pub struct NodeConfig {
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
 
     #[serde(default)]
-    pub state_snapshot_config: StateSnapshotConfig,
+    pub db_checkpoint_config: DBCheckpointConfig,
+
+    #[serde(default)]
+    pub indirect_objects_threshold: usize,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -144,11 +141,6 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 
 pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
-}
-
-pub fn default_epoch_duration_ms() -> u64 {
-    // 24 Hrs
-    24 * 60 * 60 * 1000
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
@@ -198,8 +190,12 @@ impl NodeConfig {
         (&self.account_key_pair().public()).into()
     }
 
-    pub fn db_path(&self) -> &Path {
-        &self.db_path
+    pub fn db_path(&self) -> PathBuf {
+        self.db_path.join("live")
+    }
+
+    pub fn db_checkpoint_path(&self) -> PathBuf {
+        self.db_path.join("db_checkpoints")
     }
 
     pub fn network_address(&self) -> &Multiaddr {
@@ -339,17 +335,13 @@ pub struct MetricsConfig {
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct StateSnapshotConfig {
-    pub enabled: bool,
-}
-
-impl StateSnapshotConfig {
-    pub fn validator_config() -> Self {
-        Self { enabled: false }
-    }
-    pub fn fullnode_config() -> Self {
-        Self { enabled: true }
-    }
+pub struct DBCheckpointConfig {
+    #[serde(default)]
+    pub perform_db_checkpoints_at_epoch_end: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_store_config: Option<ObjectStoreConfig>,
 }
 
 /// Publicly known information about a validator
@@ -644,11 +636,21 @@ mod tests {
 
         let mut s = serde_yaml::to_string(&g).unwrap();
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        loaded_genesis
+            .genesis()
+            .unwrap()
+            .checkpoint_contents()
+            .digest(); // cache digest before comparing.
         assert_eq!(g, loaded_genesis);
 
         // If both in-place and file location are provided, prefer the in-place variant
         s.push_str("\ngenesis-file-location: path/to/file");
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        loaded_genesis
+            .genesis()
+            .unwrap()
+            .checkpoint_contents()
+            .digest(); // cache digest before comparing.
         assert_eq!(g, loaded_genesis);
     }
 
@@ -663,6 +665,7 @@ mod tests {
         genesis.save(file.path()).unwrap();
 
         let loaded_genesis = genesis_config.genesis().unwrap();
+        loaded_genesis.checkpoint_contents().digest(); // cache digest before comparing.
         assert_eq!(&genesis, loaded_genesis);
     }
 

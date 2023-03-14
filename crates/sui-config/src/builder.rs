@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::node::{
-    default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
-    AuthorityKeyPairWithPath, KeyPairWithPath, StateSnapshotConfig,
+    default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
+    KeyPairWithPath,
 };
 use crate::{
     genesis,
@@ -15,7 +15,9 @@ use crate::{
 };
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
-use narwhal_config::{NetworkAdminServerParameters, Parameters as ConsensusParameters};
+use narwhal_config::{
+    NetworkAdminServerParameters, Parameters as ConsensusParameters, PrometheusMetricsParameters,
+};
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -71,12 +73,13 @@ pub struct ConfigBuilder<R = OsRng> {
     additional_objects: Vec<Object>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
-    epoch_duration_ms: u64,
     // the initial protocol version
     pub protocol_version: ProtocolVersion,
 
     // the versions that are supported by each validator
     supported_protocol_versions_config: ProtocolVersionsConfig,
+
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl ConfigBuilder {
@@ -96,9 +99,9 @@ impl ConfigBuilder {
             } else {
                 ValidatorIpSelection::Localhost
             },
-            epoch_duration_ms: default_epoch_duration_ms(),
             protocol_version: ProtocolVersion::MAX,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 }
@@ -140,7 +143,11 @@ impl<R> ConfigBuilder<R> {
     }
 
     pub fn with_epoch_duration(mut self, epoch_duration_ms: u64) -> Self {
-        self.epoch_duration_ms = epoch_duration_ms;
+        let mut initial_accounts_config = self
+            .initial_accounts_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        initial_accounts_config.parameters.epoch_duration_ms = epoch_duration_ms;
+        self.initial_accounts_config = Some(initial_accounts_config);
         self
     }
 
@@ -167,6 +174,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -177,9 +189,9 @@ impl<R> ConfigBuilder<R> {
             additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
-            epoch_duration_ms: self.epoch_duration_ms,
             protocol_version: self.protocol_version,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
+            db_checkpoint_config: self.db_checkpoint_config,
         }
     }
 }
@@ -265,6 +277,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         worker_key_pair,
                         account_key_pair,
                         network_key_pair,
+                        None,
                         ip.clone(),
                         index,
                     ),
@@ -388,15 +401,22 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                                 ),
                             },
                         },
+                        prometheus_metrics: PrometheusMetricsParameters {
+                            socket_addr: validator.genesis_info.narwhal_metrics_address,
+                        },
                         ..Default::default()
                     },
                 };
 
                 let p2p_config = P2pConfig {
-                    listen_address: utils::udp_multiaddr_to_listen_address(
-                        &validator.genesis_info.p2p_address,
-                    )
-                    .unwrap(),
+                    listen_address: validator.genesis_info.p2p_listen_address.unwrap_or_else(
+                        || {
+                            utils::udp_multiaddr_to_listen_address(
+                                &validator.genesis_info.p2p_address,
+                            )
+                            .unwrap()
+                        },
+                    ),
                     external_address: Some(validator.genesis_info.p2p_address),
                     ..Default::default()
                 };
@@ -420,7 +440,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     )),
                     db_path,
                     network_address,
-                    metrics_address: utils::available_local_socket_address(),
+                    metrics_address: validator.genesis_info.metrics_address,
                     // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
                     // provide the entire socket address here to avoid confusion.
                     admin_interface_port: match self.validator_ip_sel {
@@ -430,7 +450,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
-                    epoch_duration_ms: self.epoch_duration_ms,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
@@ -441,7 +460,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     checkpoint_executor_config: Default::default(),
                     metrics: None,
                     supported_protocol_versions: Some(supported_protocol_versions),
-                    state_snapshot_config: StateSnapshotConfig::validator_config(),
+                    db_checkpoint_config: self.db_checkpoint_config.clone(),
+                    indirect_objects_threshold: usize::MAX,
                 }
             })
             .collect();

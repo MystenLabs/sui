@@ -32,13 +32,11 @@ pub mod digests;
 pub mod display;
 pub mod dynamic_field;
 pub mod event;
-pub mod filter;
 pub mod gas;
 pub mod gas_coin;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
-pub mod intent;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
@@ -105,5 +103,15 @@ fn resolve_address(addr: &str) -> Option<AccountAddress> {
         "std" => Some(MOVE_STDLIB_ADDRESS),
         "sui" => Some(SUI_FRAMEWORK_ADDRESS),
         _ => None,
+    }
+}
+
+pub trait MoveTypeTagTrait {
+    fn get_type_tag() -> TypeTag;
+}
+
+impl MoveTypeTagTrait for u64 {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::U64
     }
 }

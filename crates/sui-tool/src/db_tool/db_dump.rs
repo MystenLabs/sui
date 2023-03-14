@@ -11,7 +11,7 @@ use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::authority_store_types::StoreData;
-use sui_core::epoch::committee_store::CommitteeStore;
+use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_storage::default_db_options;
 use sui_storage::write_ahead_log::DBWriteAheadLogTables;
 use sui_storage::IndexStoreTables;
@@ -83,7 +83,7 @@ pub fn table_summary(
             .table_summary(table_name)
         }
         StoreName::Epoch => {
-            CommitteeStore::get_read_only_handle(db_path, None, None, MetricConf::default())
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .table_summary(table_name)
         }
     }
@@ -102,6 +102,8 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
     for (key, value) in iter {
+        let value = value.migrate().into_inner();
+
         if let StoreData::Move(object) = value.data {
             if object_id != key.0 {
                 for (k, cnt) in data.iter() {
@@ -157,11 +159,8 @@ pub fn dump_table(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
         StoreName::Epoch => {
-            CommitteeStore::get_read_only_handle(db_path, None, None, MetricConf::default()).dump(
-                table_name,
-                page_size,
-                page_number,
-            )
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .dump(table_name, page_size, page_number)
         }
     }
     .map_err(|err| anyhow!(err.to_string()))

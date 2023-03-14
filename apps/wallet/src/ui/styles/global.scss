@@ -13,6 +13,16 @@
     }
 }
 
+@layer components {
+    .custom-scrollbar::-webkit-scrollbar {
+        @apply w-1.5;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-50 rounded-full;
+    }
+}
+
 html,
 body {
     min-width: 0;
@@ -30,10 +40,28 @@ body {
     font-family: InterVariable, sans-serif;
 }
 
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100vh;
+    background: url('_assets/images/primary_wallet_bg.svg') no-repeat center
+        center;
+    background-size: cover;
+    position: relative;
+}
+
 #root {
     display: flex;
     align-items: center;
+    justify-content: center;
     flex-flow: column nowrap;
+}
+
+#overlay-container {
+    position: absolute;
+    z-index: 99999;
 }
 
 * {

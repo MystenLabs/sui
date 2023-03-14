@@ -32,7 +32,7 @@ interface TypeReference {
     address: string;
     module: string;
     name: string;
-    type_arguments: SuiMoveNormalizedType[];
+    typeArguments: SuiMoveNormalizedType[];
 }
 
 /** Takes a normalized move type and returns the address information contained within it */
@@ -63,14 +63,14 @@ function ModuleView({ id, name, code }: Props) {
         if (!normalizedModule) {
             return typeReferences;
         }
-        Object.values(normalizedModule.exposed_functions).forEach(
+        Object.values(normalizedModule.exposedFunctions).forEach(
             (exposedFunction) => {
                 exposedFunction.parameters.forEach((param) => {
                     const unwrappedType = unwrapTypeReference(param);
                     if (!unwrappedType) return;
                     typeReferences[unwrappedType.name] = unwrappedType;
 
-                    unwrappedType.type_arguments.forEach((typeArg) => {
+                    unwrappedType.typeArguments.forEach((typeArg) => {
                         const unwrappedTypeArg = unwrapTypeReference(typeArg);
                         if (!unwrappedTypeArg) return;
                         typeReferences[unwrappedTypeArg.name] =

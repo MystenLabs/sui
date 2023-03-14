@@ -11,6 +11,7 @@ import {
     useNavigate,
 } from 'react-router-dom';
 
+import { ImportLedgerAccounts } from '../../ledger/ImportLedgerAccounts';
 import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
 import { ExportAccount } from './ExportAccount';
@@ -48,12 +49,18 @@ function MenuContent() {
         [isOpen, navigate, closeMenuUrl]
     );
     useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
+
     const isMultiAccountsEnabled = useFeature(
         FEATURES.WALLET_MULTI_ACCOUNTS
     ).on;
+    const { on: isLedgerIntegrationEnabled } = useFeature(
+        FEATURES.WALLET_LEDGER_INTEGRATION
+    );
+
     if (!isOpen) {
         return null;
     }
+
     return (
         <div className="absolute flex flex-col justify-items-stretch inset-0 bg-white pb-8 px-2.5 z-50 rounded-tl-20 rounded-tr-20 overflow-y-auto">
             <ErrorBoundary>
@@ -87,6 +94,12 @@ function MenuContent() {
                                 <Navigate to={menuHomeUrl} replace={true} />
                             }
                         />
+                        {isLedgerIntegrationEnabled && (
+                            <Route
+                                path="/import-ledger-accounts"
+                                element={<ImportLedgerAccounts />}
+                            />
+                        )}
                     </Routes>
                 </MainLocationContext.Provider>
             </ErrorBoundary>

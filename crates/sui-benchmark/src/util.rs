@@ -62,7 +62,7 @@ pub fn make_split_coin_tx(
         ],
         1000000,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
-    );
+    )?;
     let verified_tx = to_sender_signed_transaction(split_coin, keypair);
     Ok(verified_tx)
 }
@@ -75,7 +75,7 @@ pub fn make_pay_tx(
     gas: ObjectRef,
     keypair: &AccountKeyPair,
     gas_price: Option<u64>,
-) -> VerifiedTransaction {
+) -> Result<VerifiedTransaction> {
     let pay = TransactionData::new_pay(
         sender,
         input_coins,
@@ -84,8 +84,8 @@ pub fn make_pay_tx(
         gas,
         1000000,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
-    );
-    to_sender_signed_transaction(pay, keypair)
+    )?;
+    Ok(to_sender_signed_transaction(pay, keypair))
 }
 
 pub async fn split_coin_and_pay(
@@ -135,7 +135,7 @@ pub async fn split_coin_and_pay(
         updated_gas.0,
         &gas.2,
         Some(gas_price),
-    );
+    )?;
     let effects = proxy.execute_transaction(verified_tx.into()).await?;
     let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
         .iter()
@@ -178,7 +178,7 @@ pub async fn generate_all_gas_for_test(
     info!(
         "Generating gas with number of coins for shared counter init = {:?}, number of coins for \
     shared counter payloads = {:?}, number of transfer object token = {:?}, number of coins for \
-    transfer object payloads = {:?}, number of coins for delegation payloads = {:?}",
+    transfer object payloads = {:?}, number of coins for delegation payloads = {:?}, number of coins for batch payment payloads = {:?}",
         workload_gas_config
             .shared_counter_workload_init_gas_config
             .len(),
@@ -190,6 +190,7 @@ pub async fn generate_all_gas_for_test(
             .transfer_object_workload_payload_gas_config
             .len(),
         workload_gas_config.delegation_gas_configs.len(),
+        workload_gas_config.batch_payment_gas_config.len()
     );
     let mut coin_configs = vec![];
     coin_configs.extend(
@@ -217,6 +218,7 @@ pub async fn generate_all_gas_for_test(
             .cloned(),
     );
     coin_configs.extend(workload_gas_config.delegation_gas_configs.iter().cloned());
+    coin_configs.extend(workload_gas_config.batch_payment_gas_config.iter().cloned());
     let mut primary_gas = gas;
     let mut pay_coin = coin;
     let mut new_gas_coins: Vec<Gas> = vec![];
@@ -292,6 +294,17 @@ pub async fn generate_all_gas_for_test(
             new_gas_coins.remove(index)
         })
         .collect();
+    let batch_payment_payload_gas: Vec<Gas> = workload_gas_config
+        .batch_payment_gas_config
+        .iter()
+        .map(|c| {
+            let (index, _) = new_gas_coins
+                .iter()
+                .find_position(|g| g.1.get_owner_address().unwrap() == c.address)
+                .unwrap();
+            new_gas_coins.remove(index)
+        })
+        .collect();
     let workload_init_config = WorkloadInitGas {
         shared_counter_init_gas,
     };
@@ -301,6 +314,7 @@ pub async fn generate_all_gas_for_test(
         transfer_object_payload_gas,
         shared_counter_payload_gas,
         delegation_payload_gas,
+        batch_payment_payload_gas,
     };
 
     Ok((workload_init_config, workload_payload_config))

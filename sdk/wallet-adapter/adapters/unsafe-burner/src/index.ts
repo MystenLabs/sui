@@ -4,7 +4,6 @@
 import {
   Ed25519Keypair,
   JsonRpcProvider,
-  LocalTxnDataSerializer,
   RawSigner,
   Connection,
   devnetConnection,
@@ -37,11 +36,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
       features: ["sui:signAndExecuteTransaction", "sui:signTransaction"],
       publicKey: this.#keypair.getPublicKey().toBytes(),
     });
-    this.#signer = new RawSigner(
-      this.#keypair,
-      this.#provider,
-      new LocalTxnDataSerializer(this.#provider)
-    );
+    this.#signer = new RawSigner(this.#keypair, this.#provider);
     this.connecting = false;
     this.connected = false;
 
@@ -55,21 +50,24 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   }
 
   signMessage: WalletAdapter["signMessage"] = async (messageInput) => {
-    return this.#signer.signMessage(messageInput.message);
+    return this.#signer.signMessage({ message: messageInput.message });
   };
 
   signTransaction: WalletAdapter["signTransaction"] = async (
     transactionInput
   ) => {
-    return this.#signer.signTransaction(transactionInput.transaction);
+    return this.#signer.signTransaction({
+      transaction: transactionInput.transaction,
+    });
   };
 
   signAndExecuteTransaction: WalletAdapter["signAndExecuteTransaction"] =
     async (transactionInput) => {
-      return await this.#signer.signAndExecuteTransaction(
-        transactionInput.transaction,
-        transactionInput.options?.requestType
-      );
+      return await this.#signer.signAndExecuteTransaction({
+        transaction: transactionInput.transaction,
+        options: transactionInput.options?.contentOptions,
+        requestType: transactionInput.options?.requestType,
+      });
     };
 
   async connect() {

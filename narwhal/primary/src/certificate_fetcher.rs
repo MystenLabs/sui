@@ -4,6 +4,7 @@
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Network;
 use config::Committee;
+use consensus::consensus::ConsensusRound;
 use crypto::{NetworkPublicKey, PublicKey};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -59,10 +60,8 @@ pub(crate) struct CertificateFetcher {
     committee: Committee,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
-    /// Receiver for signal of round changes. Used for calculating gc_round.
-    rx_consensus_round_updates: watch::Receiver<u64>,
-    /// The depth of the garbage collector.
-    gc_depth: Round,
+    /// Receiver for signal of round changes.
+    rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives certificates with missing parents from the `Synchronizer`.
@@ -97,8 +96,7 @@ impl CertificateFetcher {
         committee: Committee,
         network: anemo::Network,
         certificate_store: CertificateStore,
-        rx_consensus_round_updates: watch::Receiver<u64>,
-        gc_depth: Round,
+        rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificate_fetcher: Receiver<Certificate>,
         synchronizer: Arc<Synchronizer>,
@@ -118,7 +116,6 @@ impl CertificateFetcher {
                     committee,
                     certificate_store,
                     rx_consensus_round_updates,
-                    gc_depth,
                     rx_shutdown,
                     rx_certificate_fetcher,
                     targets: BTreeMap::new(),
@@ -282,10 +279,7 @@ impl CertificateFetcher {
     }
 
     fn gc_round(&self) -> Round {
-        self.rx_consensus_round_updates
-            .borrow()
-            .to_owned()
-            .saturating_sub(self.gc_depth)
+        self.rx_consensus_round_updates.borrow().gc_round
     }
 }
 

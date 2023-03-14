@@ -109,7 +109,7 @@ impl SuiJsonValue {
     }
 
     pub fn from_object_id(id: ObjectID) -> SuiJsonValue {
-        Self(JsonValue::String(id.to_hex_literal()))
+        Self(JsonValue::String(id.to_hex_uncompressed()))
     }
 
     pub fn to_bcs_bytes(&self, ty: &MoveTypeLayout) -> Result<Vec<u8>, anyhow::Error> {
@@ -124,6 +124,10 @@ impl SuiJsonValue {
 
     pub fn to_json_value(&self) -> JsonValue {
         self.0.clone()
+    }
+
+    pub fn to_sui_address(&self) -> anyhow::Result<SuiAddress> {
+        json_value_to_sui_address(&self.0)
     }
 
     fn handle_inner_struct_layout(
@@ -244,13 +248,9 @@ impl SuiJsonValue {
                 )
             }
 
-            (JsonValue::String(s), MoveTypeLayout::Address) => {
-                let s = s.trim().to_lowercase();
-                if !s.starts_with(HEX_PREFIX) {
-                    bail!("Address hex string must start with 0x.",);
-                }
-                let r = SuiAddress::from_str(&s)?;
-                MoveValue::Address(r.into())
+            (v, MoveTypeLayout::Address) => {
+                let addr = json_value_to_sui_address(v)?;
+                MoveValue::Address(addr.into())
             }
             _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })
@@ -260,6 +260,19 @@ impl SuiJsonValue {
 impl Debug for SuiJsonValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
+    match value {
+        JsonValue::String(s) => {
+            let s = s.trim().to_lowercase();
+            if !s.starts_with(HEX_PREFIX) {
+                bail!("Address hex string must start with 0x.",);
+            }
+            Ok(SuiAddress::from_str(&s)?)
+        }
+        v => bail!("Unexpected arg {v} for expected type address"),
     }
 }
 
@@ -316,14 +329,6 @@ impl TryFrom<CallArg> for SuiJsonValue {
             | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
                 SuiJsonValue::new(Value::String(Hex::encode(id)))
             }
-            CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
-                vec.iter()
-                    .map(|obj_arg| match obj_arg {
-                        ObjectArg::ImmOrOwnedObject((id, _, _))
-                        | ObjectArg::SharedObject { id, .. } => Value::String(Hex::encode(id)),
-                    })
-                    .collect(),
-            )),
         }
     }
 }
@@ -651,7 +656,7 @@ pub fn resolve_move_function_args(
     type_args: &[TypeTag],
     combined_args_json: Vec<SuiJsonValue>,
     allow_arbitrary_function_call: bool,
-) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
+) -> Result<Vec<(SuiJsonCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
     let module = package.deserialize_module(&module_ident)?;
     let function_str = function.as_ident_str();
@@ -695,7 +700,13 @@ pub fn resolve_move_function_args(
     }
 
     // Check that the args are valid and convert to the correct format
-    resolve_call_args(&view, type_args, &combined_args_json, parameters)
+    let call_args = resolve_call_args(&view, type_args, &combined_args_json, parameters)?;
+    let tupled_call_args = call_args
+        .iter()
+        .zip(parameters.iter())
+        .map(|(arg, expected_type)| (arg.clone(), expected_type.clone()))
+        .collect::<Vec<(SuiJsonCallArg, SignatureToken)>>();
+    Ok(tupled_call_args)
 }
 
 fn convert_string_to_u256(s: &str) -> Result<U256, anyhow::Error> {

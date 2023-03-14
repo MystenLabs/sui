@@ -156,7 +156,7 @@ impl LocalAuthorityClient {
             .into_inner();
 
         let events = if let Some(digest) = signed_effects.events_digest() {
-            state.get_transaction_events(*digest).await?
+            state.get_transaction_events(digest)?
         } else {
             TransactionEvents::default()
         };
@@ -315,6 +315,10 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn set_tx_info_response(&mut self, resp: HandleTransactionResponse) {
         self.tx_info_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_tx_info_response_error(&mut self, error: SuiError) {
+        self.tx_info_resp_to_return = Err(error);
     }
 
     pub fn reset_tx_info_response(&mut self) {

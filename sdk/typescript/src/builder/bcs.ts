@@ -9,7 +9,7 @@ import { CommandArgument, MoveCallCommand } from './Commands';
 
 export const ARGUMENT_INNER = 'Argument';
 export const VECTOR = 'vector';
-export const OPTION = 'Option;';
+export const OPTION = 'Option';
 export const CALL_ARG = 'CallArg';
 export const TYPE_TAG = 'TypeTag';
 export const OBJECT_ARG = 'ObjectArg';
@@ -74,7 +74,7 @@ export const builder = new BCS(bcs)
     /**
      * Publish a Move module.
      */
-    Publish: [VECTOR, [VECTOR, BCS.U8]],
+    Publish: { modules: [VECTOR, [VECTOR, BCS.U8]] },
     /**
      * Build a vector of objects using the input arguments.
      * It is impossible to construct a `vector<T: key>` otherwise,

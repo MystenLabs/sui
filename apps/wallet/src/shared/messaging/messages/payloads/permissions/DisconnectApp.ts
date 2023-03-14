@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress } from '@mysten/sui.js/src';
+import { type SuiAddress } from '@mysten/sui.js';
 
 import { isBasePayload } from '_payloads';
 

@@ -10,12 +10,12 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
+use std::sync::Arc;
 use std::time::Duration;
-use std::{sync::Arc, time::Instant};
 use storage::CertificateStore;
 use store::Store;
 use tokio::{
-    sync::{oneshot, watch},
+    sync::oneshot,
     task::{JoinHandle, JoinSet},
 };
 use tracing::{debug, enabled, error, info, instrument, warn};
@@ -24,7 +24,7 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::Receiver,
     Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderDigest,
-    PrimaryToPrimaryClient, RequestVoteRequest, Round, Vote,
+    PrimaryToPrimaryClient, RequestVoteRequest, Vote,
 };
 
 #[cfg(test)]
@@ -43,19 +43,11 @@ pub struct Core {
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-    /// Get a signal when the consensus round changes
-    rx_consensus_round_updates: watch::Receiver<Round>,
-    /// The depth of the garbage collector.
-    gc_depth: Round,
-
+    signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives our newly created headers from the `Proposer`.
     rx_headers: Receiver<Header>,
-
-    /// The last garbage collected round.
-    gc_round: Round,
     /// Used to cancel vote requests for a previously-proposed header that is being replaced
     /// before a certificate could be formed.
     cancel_proposed_header: Option<oneshot::Sender<()>>,
@@ -79,9 +71,7 @@ impl Core {
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
         synchronizer: Arc<Synchronizer>,
-        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-        rx_consensus_round_updates: watch::Receiver<Round>,
-        gc_depth: Round,
+        signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_headers: Receiver<Header>,
         metrics: Arc<PrimaryMetrics>,
@@ -96,11 +86,8 @@ impl Core {
                     certificate_store,
                     synchronizer,
                     signature_service,
-                    rx_consensus_round_updates,
-                    gc_depth,
                     rx_shutdown,
                     rx_headers,
-                    gc_round: 0,
                     cancel_proposed_header: None,
                     propose_header_tasks: JoinSet::new(),
                     network: primary_network,
@@ -245,7 +232,7 @@ impl Core {
         committee: Committee,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
-        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
         metrics: Arc<PrimaryMetrics>,
         network: anemo::Network,
         header: Header,
@@ -410,23 +397,6 @@ impl Core {
 
                 _ = self.rx_shutdown.receiver.recv() => {
                     return Ok(self);
-                }
-
-                // Check whether the consensus round has changed, to clean up structures
-                Ok(()) = self.rx_consensus_round_updates.changed() => {
-                    let round = *self.rx_consensus_round_updates.borrow();
-                    if round > self.gc_depth {
-                        let now = Instant::now();
-
-                        let gc_round = round - self.gc_depth;
-                        self.gc_round = gc_round;
-
-                        self.metrics
-                            .gc_core_latency
-                            .observe(now.elapsed().as_secs_f64());
-                    }
-
-                    Ok(())
                 }
             };
 

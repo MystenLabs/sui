@@ -5,6 +5,7 @@ use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
 use fastcrypto::traits::KeyPair;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs;
 use std::path::{Path, PathBuf};
 use sui_keys::key_derive::generate_new_key;
@@ -13,7 +14,6 @@ use sui_keys::keypair_file::{
     write_keypair_to_file,
 };
 use sui_types::crypto::{PublicKey, Signature};
-use sui_types::intent::{Intent, IntentMessage};
 use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;

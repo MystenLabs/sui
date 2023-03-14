@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::committee::Committee;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 
@@ -28,7 +28,7 @@ pub trait ReconfigObserver<A, S = DefaultSignatureVerifier> {
 /// A ReconfigObserver that subscribes to a reconfig channel of new committee.
 /// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
-    reconfig_rx: tokio::sync::broadcast::Receiver<(CommitteeWithNetworkMetadata, ProtocolVersion)>,
+    reconfig_rx: tokio::sync::broadcast::Receiver<(Committee, ProtocolVersion)>,
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
@@ -37,10 +37,7 @@ pub struct OnsiteReconfigObserver {
 
 impl OnsiteReconfigObserver {
     pub fn new(
-        reconfig_rx: tokio::sync::broadcast::Receiver<(
-            CommitteeWithNetworkMetadata,
-            ProtocolVersion,
-        )>,
+        reconfig_rx: tokio::sync::broadcast::Receiver<(Committee, ProtocolVersion)>,
         authority_store: Arc<AuthorityStore>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,

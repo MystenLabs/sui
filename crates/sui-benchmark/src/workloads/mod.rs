@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod batch_payment;
 pub mod delegation;
 pub mod payload;
 pub mod shared_counter;
@@ -19,6 +20,8 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::object::Owner;
 use transfer_object::TransferObjectWorkload;
 use workload::*;
+
+use self::batch_payment::BatchPaymentWorkload;
 
 pub type Gas = (ObjectRef, Owner, Arc<AccountKeyPair>);
 
@@ -54,6 +57,8 @@ pub struct WorkloadPayloadGas {
     pub shared_counter_payload_gas: Vec<Gas>,
     // Gas coins needed to run delegation flow
     pub delegation_payload_gas: Vec<Gas>,
+    // Gas coins needed to run batch payment flow
+    pub batch_payment_payload_gas: Vec<Gas>,
 }
 
 #[derive(Clone)]
@@ -63,6 +68,7 @@ pub struct WorkloadGasConfig {
     pub transfer_object_workload_tokens: Vec<GasCoinConfig>,
     pub transfer_object_workload_payload_gas_config: Vec<GasCoinConfig>,
     pub delegation_gas_configs: Vec<GasCoinConfig>,
+    pub batch_payment_gas_config: Vec<GasCoinConfig>,
 }
 
 pub fn make_combination_workload(
@@ -73,6 +79,7 @@ pub fn make_combination_workload(
     shared_counter_weight: u32,
     transfer_object_weight: u32,
     delegation_weight: u32,
+    batch_payment_weight: u32,
     payload_config: WorkloadPayloadGas,
 ) -> WorkloadInfo {
     let mut workloads = HashMap::<WorkloadType, (u32, Box<dyn Workload<dyn Payload>>)>::new();
@@ -93,6 +100,12 @@ pub fn make_combination_workload(
         workloads
             .entry(WorkloadType::Delegation)
             .or_insert((delegation_weight, workload));
+    }
+    if batch_payment_weight > 0 {
+        let workload = Box::new(BatchPaymentWorkload::default());
+        workloads
+            .entry(WorkloadType::BatchPayment)
+            .or_insert((batch_payment_weight, workload));
     }
     let workload = CombinationWorkload::new_boxed(workloads);
     WorkloadInfo {
@@ -159,6 +172,25 @@ pub fn make_delegation_workload(
             num_workers,
             max_in_flight_ops,
             workload: DelegationWorkload::new_boxed(),
+            payload_config,
+        })
+    }
+}
+
+pub fn make_batch_payment_workload(
+    target_qps: u64,
+    num_workers: u64,
+    max_in_flight_ops: u64,
+    payload_config: WorkloadPayloadGas,
+) -> Option<WorkloadInfo> {
+    if target_qps == 0 || max_in_flight_ops == 0 || num_workers == 0 {
+        None
+    } else {
+        Some(WorkloadInfo {
+            target_qps,
+            num_workers,
+            max_in_flight_ops,
+            workload: Box::new(BatchPaymentWorkload::default()),
             payload_config,
         })
     }

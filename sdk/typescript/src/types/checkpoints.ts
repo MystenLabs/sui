@@ -10,15 +10,14 @@ import {
   string,
   union,
   tuple,
-  optional,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
 
 export const GasCostSummary = object({
-  computation_cost: number(),
-  storage_cost: number(),
-  storage_rebate: number(),
+  computationCost: number(),
+  storageCost: number(),
+  storageRebate: number(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -28,11 +27,18 @@ export type CheckPointContentsDigest = Infer<typeof CheckPointContentsDigest>;
 export const CheckpointDigest = string();
 export type CheckpointDigest = Infer<typeof CheckpointDigest>;
 
+export const ECMHLiveObjectSetDigest = object({
+  digest: array(number()),
+});
+export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
+
+export const CheckpointCommitment = union([ECMHLiveObjectSetDigest]);
+export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
+
 export const EndOfEpochData = object({
-  next_epoch_committee: array(tuple([string(), number()])),
-  next_epoch_protocol_version: number(),
-  // Need to remove optional after we hit the next network version
-  root_state_digest: optional(array(number())),
+  nextEpochCommittee: array(tuple([string(), number()])),
+  nextEpochProtocolVersion: number(),
+  checkpointCommitments: array(CheckpointCommitment),
 });
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 
@@ -51,5 +57,6 @@ export const Checkpoint = object({
   timestampMs: union([number(), literal(null)]),
   endOfEpochData: union([EndOfEpochData, literal(null)]),
   transactions: array(TransactionDigest),
+  checkpointCommitments: array(CheckpointCommitment),
 });
 export type Checkpoint = Infer<typeof Checkpoint>;

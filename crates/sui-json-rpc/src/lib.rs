@@ -16,21 +16,24 @@ use tap::TapFallible;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
-use crate::error::Error;
+pub use balance_changes::*;
+pub use object_changes::*;
 use sui_open_rpc::{Module, Project};
 
+use crate::error::Error;
 use crate::metrics::MetricsLogger;
 use crate::routing_layer::RoutingLayer;
 
 pub mod api;
+mod balance_changes;
 pub mod coin_api;
 pub mod error;
 pub mod event_api;
 pub mod governance_api;
 mod metrics;
+mod object_changes;
 pub mod read_api;
 mod routing_layer;
-pub mod threshold_bls_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 

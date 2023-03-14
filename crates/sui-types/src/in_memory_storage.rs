@@ -5,8 +5,12 @@ use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ParentSync, WriteKind},
+    storage::{
+        BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectStore, ParentSync, WriteKind,
+    },
 };
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
 
@@ -75,6 +79,29 @@ impl ModuleResolver for &mut InMemoryStorage {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)
+    }
+}
+
+impl ObjectStore for InMemoryStorage {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.persistent.get(object_id).cloned())
+    }
+}
+
+impl ObjectStore for &mut InMemoryStorage {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.persistent.get(object_id).cloned())
+    }
+}
+
+impl GetModule for InMemoryStorage {
+    type Error = SuiError;
+    type Item = CompiledModule;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        Ok(self
+            .get_module(id)?
+            .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
     }
 }
 

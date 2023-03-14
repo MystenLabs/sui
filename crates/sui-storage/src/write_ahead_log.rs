@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 
-use crate::mutex_table::{LockGuard, MutexTable};
+use crate::mutex_table::{MutexGuard, MutexTable};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -112,7 +112,7 @@ pub struct DBTxGuard<
 > {
     tx: TransactionDigest,
     retry_num: u32,
-    _mutex_guard: LockGuard,
+    _mutex_guard: MutexGuard,
     wal: &'a DBWriteAheadLog<C, ExecutionOutput>,
     dead: bool,
 }
@@ -125,7 +125,7 @@ where
     fn new(
         tx: &TransactionDigest,
         retry_num: u32,
-        _mutex_guard: LockGuard,
+        _mutex_guard: MutexGuard,
         wal: &'a DBWriteAheadLog<C, ExecutionOutput>,
     ) -> Self {
         Self {
@@ -331,7 +331,7 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug + Send + Sync,
 {
     type Guard = DBTxGuard<'a, C, ExecutionOutput>;
-    type LockGuard = LockGuard;
+    type LockGuard = MutexGuard;
 
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
     async fn begin_tx<'b>(

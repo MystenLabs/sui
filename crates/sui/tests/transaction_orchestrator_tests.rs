@@ -93,6 +93,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 
     let temp_dir = tempfile::tempdir().unwrap();
     let reconfig_channel = node.subscribe_to_epoch_change();
+    tokio::task::yield_now().await;
     let orchestrator = TransactiondOrchestrator::new_with_network_clients(
         node.state(),
         reconfig_channel,

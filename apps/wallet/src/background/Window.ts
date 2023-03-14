@@ -26,8 +26,8 @@ export class Window {
         const w = await Browser.windows.create({
             url: this._url,
             focused: true,
-            width: 360,
-            height: 595,
+            width: 380,
+            height: 640,
             type: 'popup',
             top: top,
             left: Math.floor(left + width - 450),

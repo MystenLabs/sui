@@ -51,6 +51,8 @@ ARG PROFILE=release
 WORKDIR sui
 # Both bench and release profiles copy from release dir
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
+# Staged migration from /usr/local/bin to /opt/sui/bin
+COPY --from=builder /sui/target/release/sui-node /opt/sui/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION

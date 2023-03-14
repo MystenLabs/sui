@@ -1,31 +1,25 @@
 ---
-title: Narwhal, Bullshark, and Tusk, Sui's Mempool and Consensus Engines
+title: Narwhal and Bullshark, Sui's Mempool and Consensus Engines
 ---
 
-This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs and used in Sui. As of Dec 2022, Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
+This is a brief introduction to [Narwhal](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs. Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
 
 The names highlight that the components split the responsibilities of:
-- ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
-- agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2209.05633) or [Tusk](https://arxiv.org/abs/2105.11827)
-
-In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency. See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
-
-Still, you may easily use Tusk instead of Bullshark by updating the order engine [in source](https://github.com/MystenLabs/sui/blob/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191), however this part is experimental and does not provide unpredictable leader election yet.
-
-Consensus is accomplished in two layered modules, so Narwhal can also be coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
+ * ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
+ * agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2209.05633)
 
 The Sui Consensus Engine represents the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reach throughputs of more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
 The Sui Consensus Engine approach can offer dramatic scalability benefits in the following cases:
-- a blockchain that has experimented with larger and larger blocks and has measured runaway latencies before the execution phase
-- a blockchain with fast execution (e.g., focused on transactions or with an UTXO data model), but which mempool and consensus do not keep up
+ * a blockchain that has experimented with larger and larger blocks and has measured runaway latencies before the execution phase
+ * a blockchain with fast execution (e.g., focused on transactions or with an UTXO data model), but which mempool and consensus do not keep up
 
 ## Features
 
 The Narwhal mempool offers:
-* a high-throughput data availability engine, with cryptographic proofs of data availability at a [primary node](https://github.com/MystenLabs/sui/blob/main/narwhal/primary)
-* a structured graph data structure for traversing this information
-* a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/sui/blob/main/narwhal/worker)
+ * a high-throughput data availability engine, with cryptographic proofs of data availability at a [primary node](https://github.com/MystenLabs/sui/blob/main/narwhal/primary)
+ * a structured graph data structure for traversing this information
+ * a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/sui/blob/main/narwhal/worker)
 
 The [consensus](https://github.com/MystenLabs/sui/blob/main/narwhal/consensus) component offers a zero-message overhead consensus algorithm, leveraging graph traversals.
 
@@ -73,11 +67,9 @@ flowchart TB
 
 ## How it works
 
-* The graph construction allows inserting more transactions in the system at each authority and at each round.
-* The certificates prove the data availability of each collection, or block, at each round.
-* Their contents constitute a DAG that can be traversed identically at each honest node.
-
-While the Bullshark or Tusk consensus selects  a posteriori a specific DAG traversal among several, both they and external consensus algorithms can add more sophistication to their selection of blocks / collections to reflect priority concerns.
+ * The graph construction allows inserting more transactions in the system at each authority and at each round.
+ * The certificates prove the data availability of each collection, or block, at each round.
+ * Their contents constitute a DAG that can be traversed identically at each honest node.
 
 ## Dependencies
 
@@ -105,8 +97,8 @@ A simplified version of Bullshark that is used in Sui today.
 
 ### Bibliography
 
-- Danezis, G., Kogias, E. K., Sonnino, A., & Spiegelman, A. (2021). Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus. ArXiv:2105.11827 [Cs]. http://arxiv.org/abs/2105.11827
-- Giridharan, N., Kokoris-Kogias, L., Sonnino, A., & Spiegelman, A. (2022). Bullshark: DAG BFT Protocols Made Practical. ArXiv:2201.05677 [Cs]. http://arxiv.org/abs/2201.05677
-- Spiegelman, A., Giridharan, N., Sonnino, A., & Kokoris-Kogias, L. (2022). Bullshark: The Partially Synchronous Version. ArXiv:2209.05633 [Cs]. https://arxiv.org/abs/2209.05633
-- Keidar, I., Kokoris-Kogias, E., Naor, O., & Spiegelman, A. (2021). All You Need is DAG. ArXiv:2102.08325 [Cs]. http://arxiv.org/abs/2102.08325
-- Wang, Q., Yu, J., Chen, S., & Xiang, Y. (2020). SoK: Diving into DAG-based Blockchain Systems. ArXiv:2012.06128 [Cs]. http://arxiv.org/abs/2012.06128
+ * Danezis, G., Kogias, E. K., Sonnino, A., & Spiegelman, A. (2021). Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus. ArXiv:2105.11827 [Cs]. http://arxiv.org/abs/2105.11827
+ * Giridharan, N., Kokoris-Kogias, L., Sonnino, A., & Spiegelman, A. (2022). Bullshark: DAG BFT Protocols Made Practical. ArXiv:2201.05677 [Cs]. http://arxiv.org/abs/2201.05677
+ * Spiegelman, A., Giridharan, N., Sonnino, A., & Kokoris-Kogias, L. (2022). Bullshark: The Partially Synchronous Version. ArXiv:2209.05633 [Cs]. https://arxiv.org/abs/2209.05633
+ * Keidar, I., Kokoris-Kogias, E., Naor, O., & Spiegelman, A. (2021). All You Need is DAG. ArXiv:2102.08325 [Cs]. http://arxiv.org/abs/2102.08325
+ * Wang, Q., Yu, J., Chen, S., & Xiang, Y. (2020). SoK: Diving into DAG-based Blockchain Systems. ArXiv:2012.06128 [Cs]. http://arxiv.org/abs/2012.06128

@@ -1,15 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use enum_dispatch::enum_dispatch;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
-use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
+use crate::committee::{Committee, StakeUnit};
+use crate::sui_system_state::multiaddr_to_anemo_address;
+use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
 use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
+
+#[enum_dispatch]
+pub trait EpochStartSystemStateTrait {
+    fn epoch(&self) -> EpochId;
+    fn protocol_version(&self) -> ProtocolVersion;
+    fn reference_gas_price(&self) -> u64;
+    fn safe_mode(&self) -> bool;
+    fn epoch_start_timestamp_ms(&self) -> u64;
+    fn epoch_duration_ms(&self) -> u64;
+    fn get_sui_committee(&self) -> Committee;
+    fn get_narwhal_committee(&self) -> NarwhalCommittee;
+    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
+    fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
+    fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache;
+}
 
 /// This type captures the minimum amount of information from SuiSystemState needed by a validator
 /// to run the protocol. This allows us to decouple from the actual SuiSystemState type, and hence
@@ -19,16 +37,53 @@ use sui_protocol_config::ProtocolVersion;
 /// also add new db tables to store the new version. This is OK because we only store one copy of
 /// this as part of EpochStartConfiguration for the most recent epoch in the db.
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct EpochStartSystemState {
-    pub epoch: EpochId,
-    pub protocol_version: u64,
-    pub reference_gas_price: u64,
-    pub safe_mode: bool,
-    pub epoch_start_timestamp_ms: u64,
-    pub active_validators: Vec<EpochStartValidatorInfo>,
+#[enum_dispatch(EpochStartSystemStateTrait)]
+pub enum EpochStartSystemState {
+    V1(EpochStartSystemStateV1),
 }
 
 impl EpochStartSystemState {
+    pub fn new_v1(
+        epoch: EpochId,
+        protocol_version: u64,
+        reference_gas_price: u64,
+        safe_mode: bool,
+        epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
+        active_validators: Vec<EpochStartValidatorInfoV1>,
+    ) -> Self {
+        Self::V1(EpochStartSystemStateV1 {
+            epoch,
+            protocol_version,
+            reference_gas_price,
+            safe_mode,
+            epoch_start_timestamp_ms,
+            epoch_duration_ms,
+            active_validators,
+        })
+    }
+
+    pub fn new_for_testing() -> Self {
+        Self::new_for_testing_with_epoch(0)
+    }
+
+    pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
+        Self::V1(EpochStartSystemStateV1::new_for_testing_with_epoch(epoch))
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartSystemStateV1 {
+    epoch: EpochId,
+    protocol_version: u64,
+    reference_gas_price: u64,
+    safe_mode: bool,
+    epoch_start_timestamp_ms: u64,
+    epoch_duration_ms: u64,
+    active_validators: Vec<EpochStartValidatorInfoV1>,
+}
+
+impl EpochStartSystemStateV1 {
     pub fn new_for_testing() -> Self {
         Self::new_for_testing_with_epoch(0)
     }
@@ -40,29 +95,51 @@ impl EpochStartSystemState {
             reference_gas_price: 1,
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
+            epoch_duration_ms: 1000,
             active_validators: vec![],
         }
     }
+}
 
-    pub fn get_sui_committee(&self) -> CommitteeWithNetworkMetadata {
-        let mut voting_rights = BTreeMap::new();
-        let mut network_metadata = BTreeMap::new();
-        for validator in &self.active_validators {
-            let (name, voting_stake, metadata) = validator.to_stake_and_network_metadata();
-            voting_rights.insert(name, voting_stake);
-            network_metadata.insert(name, metadata);
-        }
-        CommitteeWithNetworkMetadata {
-            committee: Committee::new(self.epoch, voting_rights)
-                // unwrap is safe because we should have verified the committee on-chain.
-                // TODO: Make sure we actually verify it.
-                .unwrap(),
-            network_metadata,
-        }
+impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
+    fn epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    fn protocol_version(&self) -> ProtocolVersion {
+        ProtocolVersion::new(self.protocol_version)
+    }
+
+    fn reference_gas_price(&self) -> u64 {
+        self.reference_gas_price
+    }
+
+    fn safe_mode(&self) -> bool {
+        self.safe_mode
+    }
+
+    fn epoch_start_timestamp_ms(&self) -> u64 {
+        self.epoch_start_timestamp_ms
+    }
+
+    fn epoch_duration_ms(&self) -> u64 {
+        self.epoch_duration_ms
+    }
+
+    fn get_sui_committee(&self) -> Committee {
+        let voting_rights = self
+            .active_validators
+            .iter()
+            .map(|validator| (validator.authority_name(), validator.voting_power))
+            .collect();
+        Committee::new(self.epoch, voting_rights)
+            // unwrap is safe because we should have verified the committee on-chain.
+            // MUSTFIX: Make sure we always have a valid committee.
+            .unwrap()
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn get_narwhal_committee(&self) -> NarwhalCommittee {
+    fn get_narwhal_committee(&self) -> NarwhalCommittee {
         let narwhal_committee = self
             .active_validators
             .iter()
@@ -82,7 +159,20 @@ impl EpochStartSystemState {
         }
     }
 
-    pub fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
+    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo> {
+        self.active_validators
+            .iter()
+            .filter(|validator| validator.authority_name() != excluding_self)
+            .map(|validator| PeerInfo {
+                peer_id: PeerId(validator.narwhal_network_pubkey.0.to_bytes()),
+                affinity: PeerAffinity::High,
+                address: vec![multiaddr_to_anemo_address(&validator.p2p_address)
+                    .expect("p2p address must be valid anemo address and verified on-chain")],
+            })
+            .collect()
+    }
+
+    fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId> {
         self.active_validators
             .iter()
             .map(|validator| {
@@ -95,7 +185,7 @@ impl EpochStartSystemState {
     }
 
     #[allow(clippy::mutable_key_type)]
-    pub fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache {
+    fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache {
         let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
             .active_validators
             .iter()
@@ -123,7 +213,7 @@ impl EpochStartSystemState {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct EpochStartValidatorInfo {
+pub struct EpochStartValidatorInfoV1 {
     pub sui_address: SuiAddress,
     pub protocol_pubkey: narwhal_crypto::PublicKey,
     pub narwhal_network_pubkey: narwhal_crypto::NetworkPublicKey,
@@ -135,18 +225,7 @@ pub struct EpochStartValidatorInfo {
     pub voting_power: StakeUnit,
 }
 
-impl EpochStartValidatorInfo {
-    pub fn to_stake_and_network_metadata(&self) -> (AuthorityName, StakeUnit, NetworkMetadata) {
-        (
-            (&self.protocol_pubkey).into(),
-            self.voting_power,
-            NetworkMetadata {
-                network_pubkey: self.narwhal_network_pubkey.clone(),
-                network_address: self.sui_net_address.clone(),
-                p2p_address: self.p2p_address.clone(),
-            },
-        )
-    }
+impl EpochStartValidatorInfoV1 {
     pub fn authority_name(&self) -> AuthorityName {
         (&self.protocol_pubkey).into()
     }

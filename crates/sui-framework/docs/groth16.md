@@ -252,7 +252,7 @@ Creates a Groth16 <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints
 
 ## Function `prepare_verifying_key`
 
-@param veriyfing_key: An Arkworks canonical serialization of a verifying key.
+@param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
 
 Returns four vectors of bytes representing the four components of a prepared verifying key.
 This step computes one pairing e(P, Q), and binds the verification to one particular proof statement.

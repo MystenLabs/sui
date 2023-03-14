@@ -24,6 +24,8 @@ export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
 
+export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
+
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';
@@ -109,25 +111,6 @@ export class Coin {
   }
 
   /**
-   * Convenience method for select an arbitrary coin object that has a balance greater than or
-   * equal to `amount`
-   *
-   * @param amount coin balance
-   * @param exclude object ids of the coins to exclude
-   * @return an arbitrary coin with balance greater than or equal to `amount
-   */
-  static selectCoinWithBalanceGreaterThanOrEqual(
-    coins: CoinStruct[],
-    amount: bigint,
-    exclude: ObjectId[] = [],
-  ): CoinStruct | undefined {
-    return coins.find(
-      ({ coinObjectId, balance }) =>
-        !exclude.includes(coinObjectId) && BigInt(balance) >= amount,
-    );
-  }
-
-  /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
    * or equal to `amount`. The output can be used for `PayTransaction`
    *
@@ -204,10 +187,6 @@ export class Coin {
     }
     const balance = getObjectFields(data)?.balance;
     return BigInt(balance);
-  }
-
-  static getZero(): bigint {
-    return BigInt(0);
   }
 
   private static getType(data: ObjectData): string | undefined {

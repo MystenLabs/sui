@@ -2,17 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  define,
   Infer,
   literal,
   number,
   object,
   string,
   union,
-  unknown,
 } from 'superstruct';
-import { CallArg, TransactionData, TransactionDataBCS } from './sui-bcs';
-import { sha256Hash } from '../cryptography/hash';
-import { BCS, fromB58, toB58 } from '@mysten/bcs';
+import { CallArg } from './sui-bcs';
+import { fromB58 } from '@mysten/bcs';
 
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
@@ -48,13 +47,13 @@ export const ObjectOwner = union([
 ]);
 export type ObjectOwner = Infer<typeof ObjectOwner>;
 
-export const SuiJsonValue = unknown();
 export type SuiJsonValue =
   | boolean
   | number
   | string
   | CallArg
   | Array<SuiJsonValue>;
+export const SuiJsonValue = define<SuiJsonValue>('SuiJsonValue', () => true);
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
@@ -114,36 +113,6 @@ export function normalizeSuiObjectId(
   forceAdd0x: boolean = false,
 ): ObjectId {
   return normalizeSuiAddress(value, forceAdd0x);
-}
-
-export function prepareTxDataForBcs(data: TransactionData): TransactionDataBCS {
-  switch (data.messageVersion) {
-    case 1: {
-      let { messageVersion: _, ...rest } = data;
-      return { V1: rest };
-    }
-    default:
-      throw new Error(`Unknown message version ${data.messageVersion}`);
-  }
-}
-
-/**
- * Generate transaction digest.
- *
- * @param data transaction data
- * @param signatureScheme signature scheme
- * @param signature signature as a base64 string
- * @param publicKey public key
- */
-export function generateTransactionDigest(
-  data: TransactionData,
-  bcs: BCS,
-): string {
-  let dataBcs = prepareTxDataForBcs(data);
-  const txBytes = bcs.ser('TransactionData', dataBcs).toBytes();
-  const hash = sha256Hash('TransactionData', txBytes);
-
-  return toB58(hash);
 }
 
 function isHex(value: string): boolean {

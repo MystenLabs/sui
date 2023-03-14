@@ -7,30 +7,32 @@ import { useMemo } from 'react';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
-import { getEventsSummary } from '_helpers';
-import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
+import { useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 export function CoinActivitiesCard({ coinType }: { coinType: string }) {
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useActiveAddress();
     const {
         data: txns,
         isLoading,
         error,
         isError,
-    } = useGetTransactionsByAddress(activeAddress);
+    } = useQueryTransactionsByAddress(activeAddress);
 
     // filter txns by coinType
     const txnByCoinType = useMemo(() => {
         if (!txns || !activeAddress) return null;
-        return txns?.filter((txn) => {
-            const { coins } = getEventsSummary(txn.events, activeAddress);
-            // find txn with coinType from eventsSummary
-            return !!coins.find(
-                ({ coinType: summaryCoinType }) => summaryCoinType === coinType
-            );
-        });
-    }, [txns, activeAddress, coinType]);
+        return [];
+        // return txns?.filter((txn) => {
+        //     const { coins } = getEventsSummary(txn.events!, activeAddress);
+        //     // find txn with coinType from eventsSummary
+        //     return !!coins.find(
+        //         ({ coinType: summaryCoinType }) => summaryCoinType === coinType
+        //     );
+        // });
+    }, [txns, activeAddress]);
+    // }, [txns, activeAddress, coinType]);
 
     if (isError) {
         return (

@@ -23,6 +23,8 @@ bip32 = "0.4.0"
 prettytable-rs = "0.10.0"
 git-version = "0.3.5"
 const-str = "0.5.3"
+rand = "0.8.5"
+inquire = "0.6.0"
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
@@ -37,8 +39,10 @@ sui-keys = { path = "../sui-keys" }
 sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-protocol-config = { path = "../sui-protocol-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
+move-bytecode-utils.workspace = true
 
 rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
@@ -61,6 +65,7 @@ move-stackless-bytecode.workspace = true
 move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
+move-symbol-pool.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 multiaddr = "0.17.0"
 
@@ -76,6 +81,7 @@ jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
 
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
+expect-test = "1.4.0"
 move-binary-format.workspace = true
 move-package.workspace = true
 sui-core = { path = "../sui-core" }
@@ -84,8 +90,15 @@ sui-node = { path = "../sui-node" }
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 mysten-metrics = { path = "../mysten-metrics" }
+sui-tool = { path = "../sui-tool" }
 
 assert_cmd = "2.0.6"
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
+
+
+[[example]]
+name = "generate-genesis-checkpoint"
+path = "src/generate_genesis_checkpoint.rs"
+test = false

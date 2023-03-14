@@ -68,7 +68,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             /* max_gas */ 10_000,
-        );
+        )
+        .unwrap();
 
         let transaction = to_sender_signed_transaction(data, &keypair);
 

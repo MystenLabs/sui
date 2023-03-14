@@ -43,7 +43,10 @@ pub fn bls12381_min_sig_verify(
 
     let public_key =
         match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-            Ok(public_key) => public_key,
+            Ok(public_key) => match public_key.validate() {
+                Ok(_) => public_key,
+                Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+            },
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 
@@ -80,7 +83,10 @@ pub fn bls12381_min_pk_verify(
 
     let public_key =
         match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-            Ok(public_key) => public_key,
+            Ok(public_key) => match public_key.validate() {
+                Ok(_) => public_key,
+                Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+            },
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 

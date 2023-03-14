@@ -9,12 +9,15 @@ use crate::workloads::shared_counter::SharedCounterWorkload;
 use crate::workloads::transfer_object::TransferObjectWorkload;
 use crate::workloads::workload::WorkloadInfo;
 use crate::workloads::{
-    make_combination_workload, make_delegation_workload, make_shared_counter_workload,
-    make_transfer_object_workload, WorkloadGasConfig, WorkloadInitGas, WorkloadPayloadGas,
+    make_batch_payment_workload, make_combination_workload, make_delegation_workload,
+    make_shared_counter_workload, make_transfer_object_workload, WorkloadGasConfig,
+    WorkloadInitGas, WorkloadPayloadGas,
 };
 use crate::ValidatorProxy;
 use anyhow::Result;
 use std::sync::Arc;
+
+use super::batch_payment::BatchPaymentWorkload;
 
 pub enum WorkloadConfiguration {
     // Each worker runs all workloads with similar configuration. Backpressure for one workload impact others
@@ -38,6 +41,7 @@ impl WorkloadConfiguration {
                 shared_counter,
                 transfer_object,
                 delegation,
+                batch_payment,
                 shared_counter_hotness_factor,
                 ..
             } => match self {
@@ -48,6 +52,7 @@ impl WorkloadConfiguration {
                         shared_counter,
                         transfer_object,
                         delegation,
+                        batch_payment,
                         shared_counter_hotness_factor,
                         target_qps,
                         in_flight_ratio,
@@ -64,6 +69,7 @@ impl WorkloadConfiguration {
                         shared_counter,
                         transfer_object,
                         delegation,
+                        batch_payment,
                         shared_counter_hotness_factor,
                         target_qps,
                         in_flight_ratio,
@@ -84,6 +90,7 @@ impl WorkloadConfiguration {
         shared_counter_weight: u32,
         transfer_object_weight: u32,
         delegation_weight: u32,
+        batch_payment_weight: u32,
         shared_counter_hotness_factor: u32,
         target_qps: u64,
         in_flight_ratio: u64,
@@ -98,10 +105,14 @@ impl WorkloadConfiguration {
         let split_transfer_object_weight =
             (transfer_object_weight as f64 / num_proxies as f64).ceil() as u32;
         let split_delegation_weight = (delegation_weight as f64 / num_proxies as f64).ceil() as u32;
+        let split_batch_payment_weight =
+            (batch_payment_weight as f64 / num_proxies as f64).ceil() as u32;
+        let sum_weights = (split_shared_counter_weight
+            + split_transfer_object_weight
+            + split_delegation_weight
+            + split_batch_payment_weight) as f32;
 
-        let shared_counter_weight_ratio = split_shared_counter_weight as f32
-            / (split_shared_counter_weight + split_transfer_object_weight + split_delegation_weight)
-                as f32;
+        let shared_counter_weight_ratio = split_shared_counter_weight as f32 / sum_weights;
         let shared_counter_qps = (shared_counter_weight_ratio * split_target_qps as f32) as u64;
         let shared_counter_num_workers =
             (shared_counter_weight_ratio * num_workers as f32).ceil() as u64;
@@ -110,20 +121,22 @@ impl WorkloadConfiguration {
             1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
         let num_shared_counters = (shared_counter_max_ops as f32 * shared_counter_ratio) as u64;
 
-        let transfer_object_weight_ratio = split_transfer_object_weight as f32
-            / (split_shared_counter_weight + split_transfer_object_weight + split_delegation_weight)
-                as f32;
+        let transfer_object_weight_ratio = split_transfer_object_weight as f32 / sum_weights;
         let transfer_object_qps = (transfer_object_weight_ratio * split_target_qps as f32) as u64;
         let transfer_object_num_workers =
             (transfer_object_weight_ratio * num_workers as f32).ceil() as u64;
         let transfer_object_max_ops = transfer_object_qps * in_flight_ratio;
 
-        let delegate_weight_ratio = split_delegation_weight as f32
-            / (split_shared_counter_weight + split_transfer_object_weight + split_delegation_weight)
-                as f32;
+        let delegate_weight_ratio = split_delegation_weight as f32 / sum_weights;
         let delegate_qps = (delegate_weight_ratio * split_target_qps as f32) as u64;
         let delegate_num_workers = (delegate_weight_ratio * num_workers as f32).ceil() as u64;
         let delegate_max_ops = delegate_qps * in_flight_ratio;
+
+        let batch_payment_weight_ratio = batch_payment_weight as f32 / sum_weights;
+        let batch_payment_qps = (batch_payment_weight_ratio * split_target_qps as f32) as u64;
+        let batch_payment_num_workers =
+            (batch_payment_weight_ratio * num_workers as f32).ceil() as u64;
+        let batch_payment_max_ops = batch_payment_qps * in_flight_ratio;
 
         let mut workload_gas_configs = vec![];
 
@@ -166,12 +179,18 @@ impl WorkloadConfiguration {
             } else {
                 vec![]
             };
+            let batch_payment_gas_config = if batch_payment_weight > 0 {
+                BatchPaymentWorkload::generate_gas_config_for_payloads(batch_payment_max_ops)
+            } else {
+                Vec::new()
+            };
             workload_gas_configs.push(WorkloadGasConfig {
                 shared_counter_workload_init_gas_config,
                 shared_counter_workload_payload_gas_config,
                 transfer_object_workload_tokens,
                 transfer_object_workload_payload_gas_config,
                 delegation_gas_configs,
+                batch_payment_gas_config,
             });
         }
 
@@ -202,6 +221,7 @@ impl WorkloadConfiguration {
                     transfer_object_payload_gas: vec![],
                     shared_counter_payload_gas: workload_payload_gas.shared_counter_payload_gas,
                     delegation_payload_gas: vec![],
+                    batch_payment_payload_gas: vec![],
                 },
             ) {
                 shared_counter_workload
@@ -224,6 +244,7 @@ impl WorkloadConfiguration {
                     transfer_object_payload_gas: workload_payload_gas.transfer_object_payload_gas,
                     shared_counter_payload_gas: vec![],
                     delegation_payload_gas: vec![],
+                    batch_payment_payload_gas: vec![],
                 },
             ) {
                 transfer_object_workload
@@ -247,9 +268,24 @@ impl WorkloadConfiguration {
                     transfer_object_payload_gas: vec![],
                     shared_counter_payload_gas: vec![],
                     delegation_payload_gas: workload_payload_gas.delegation_payload_gas,
+                    batch_payment_payload_gas: vec![],
                 },
             ) {
                 workloads.push(delegation_workload);
+            }
+            if let Some(batch_payment_workload) = make_batch_payment_workload(
+                batch_payment_qps,
+                batch_payment_num_workers,
+                batch_payment_max_ops,
+                WorkloadPayloadGas {
+                    transfer_tokens: vec![],
+                    transfer_object_payload_gas: vec![],
+                    shared_counter_payload_gas: vec![],
+                    delegation_payload_gas: vec![],
+                    batch_payment_payload_gas: workload_payload_gas.batch_payment_payload_gas,
+                },
+            ) {
+                workloads.push(batch_payment_workload);
             }
 
             proxy_workloads.push((proxy_gas_and_coin.proxy.clone(), workloads));
@@ -264,6 +300,7 @@ pub async fn configure_combined_mode(
     shared_counter_weight: u32,
     transfer_object_weight: u32,
     delegation_weight: u32,
+    batch_payment_weight: u32,
     shared_counter_hotness_factor: u32,
     target_qps: u64,
     in_flight_ratio: u64,
@@ -281,6 +318,8 @@ pub async fn configure_combined_mode(
     let split_transfer_object_weight =
         (transfer_object_weight as f64 / num_proxies as f64).ceil() as u32;
     let split_delegation_weight = (delegation_weight as f64 / num_proxies as f64).ceil() as u32;
+    let split_batch_payment_weight =
+        (batch_payment_weight as f64 / num_proxies as f64).ceil() as u32;
 
     let shared_counter_ratio =
         1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
@@ -316,6 +355,11 @@ pub async fn configure_combined_mode(
         } else {
             vec![]
         };
+        let batch_payment_gas_config = if split_batch_payment_weight > 0 {
+            BatchPaymentWorkload::generate_gas_config_for_payloads(max_ops)
+        } else {
+            vec![]
+        };
         let (shared_counter_workload_init_gas_config, shared_counter_workload_payload_gas_config) =
             all_shared_counter_coin_configs.unwrap_or((vec![], vec![]));
         let (transfer_object_workload_tokens, transfer_object_workload_payload_gas_config) =
@@ -327,6 +371,7 @@ pub async fn configure_combined_mode(
             transfer_object_workload_tokens,
             transfer_object_workload_payload_gas_config,
             delegation_gas_configs,
+            batch_payment_gas_config,
         });
     }
 
@@ -355,6 +400,7 @@ pub async fn configure_combined_mode(
             split_shared_counter_weight,
             split_transfer_object_weight,
             split_delegation_weight,
+            split_batch_payment_weight,
             workload_payload_gas,
         );
         combination_workload
