@@ -142,6 +142,7 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                                 color="steel-darker"
                                 weight="semibold"
                                 label="in"
+                                endLabel="--"
                             />
                         ) : (
                             <Text
