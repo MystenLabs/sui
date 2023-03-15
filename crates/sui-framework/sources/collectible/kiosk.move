@@ -40,6 +40,7 @@ module sui::kiosk {
     use sui::tx_context::{TxContext, sender};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
+    use sui::bag::{Self, Bag};
     use sui::sui::SUI;
     use sui::event;
 
@@ -64,6 +65,10 @@ module sui::kiosk {
     const EListedExclusively: u64 = 7;
     /// `PurchaseCap` does not match the `Kiosk`.
     const EWrongKiosk: u64 = 8;
+    /// Trying to allow a `TransferRequest` with unresolved constraints.
+    const EUnresolvedConstraints: u64 = 9;
+    /// Attempt to attach an unregistered constraint to the `TransferRequest`.
+    const EConstraintNotRegistered: u64 = 10;
 
     /// An object that stores collectibles of all sorts.
     /// For sale, for collecting reasons, for fun.
@@ -112,6 +117,10 @@ module sui::kiosk {
         /// Can be used by the TransferPolicy implementors to
         /// create an allowlist of Kiosks which can trade the type.
         from: ID,
+        /// A Bag of custom constraints attached to the `TransferRequest`.
+        /// The attachments must be resolved before `TransferRequest` can
+        /// be completed and unpacked to accept the transfer.
+        constraints: Bag
     }
 
     /// A unique capability that allows owner of the `T` to authorize
@@ -288,7 +297,7 @@ module sui::kiosk {
     /// After a confirmation is received from the creator, an item can be placed to
     /// a destination safe.
     public fun purchase<T: key + store>(
-        self: &mut Kiosk, id: ID, payment: Coin<SUI>
+        self: &mut Kiosk, id: ID, payment: Coin<SUI>, ctx: &mut TxContext
     ): (T, TransferRequest<T>) {
         let price = df::remove<Offer, u64>(&mut self.id, Offer { id, is_exclusive: false });
         let inner = dof::remove<Key, T>(&mut self.id, Key { id });
@@ -300,6 +309,7 @@ module sui::kiosk {
         (inner, TransferRequest<T> {
             paid: price,
             from: object::id(self),
+            constraints: bag::new(ctx),
         })
     }
 
@@ -326,7 +336,7 @@ module sui::kiosk {
     /// Unpack the `PurchaseCap` and call `purchase`. Sets the payment amount
     /// as the price for the listing making sure it's no less than `min_amount`.
     public fun purchase_with_cap<T: key + store>(
-        self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>
+        self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>, ctx: &mut TxContext
     ): (T, TransferRequest<T>) {
         let PurchaseCap { id, item_id, kiosk_id, min_price } = purchase_cap;
         let paid = coin::value(&payment);
@@ -338,7 +348,7 @@ module sui::kiosk {
         df::add(&mut self.id, Offer { id: item_id, is_exclusive: false }, paid);
         object::delete(id);
 
-        purchase<T>(self, item_id, payment)
+        purchase<T>(self, item_id, payment, ctx)
     }
 
     /// Return the `PurchaseCap` without making a purchase; remove an active offer and
@@ -362,7 +372,9 @@ module sui::kiosk {
     public fun allow_transfer<T: key + store>(
         _cap: &TransferPolicyCap<T>, req: TransferRequest<T>
     ): (u64, ID) {
-        let TransferRequest { paid, from } = req;
+        let TransferRequest { paid, from, constraints } = req;
+        assert!(bag::length(&constraints) == 0, EUnresolvedConstraints);
+        bag::destroy_empty(constraints);
         (paid, from)
     }
 
@@ -381,6 +393,38 @@ module sui::kiosk {
         };
 
         coin::take(&mut self.profits, amount, ctx)
+    }
+
+    // === Extensions functionality ===
+
+    /// A custom key for extensions to register custom "constraints" for transfers.
+    struct ConstraintKey<phantom C: store> has copy, drop, store {}
+
+    /// Register a new "Constraint" in the `Kiosk` by giving it a sample of the
+    /// constraint struct and taking it back. This simple witness-ish mechanic
+    /// allows for slightly-more-optimized storage while not requiring a `drop`
+    /// on the `C`.
+    public fun enable_constraint<C: store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, sample: C
+    ): C {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        df::add(&mut self.id, ConstraintKey<C> {}, true);
+        sample
+    }
+
+    /// Attach a registered `Constraint` to the `TransferRequest`.
+    public fun attach_constraint<T: key + store, C: store>(
+        self: &mut Kiosk, req: TransferRequest<T>, constraint: C
+    ) {
+        assert!(df::exists_<ConstraintKey<C>>(&self.id, ConstraintKey<C> {}), EConstraintNotRegistered);
+        bag::add(&mut req.constraints, ConstraintKey<C> {}, constraint);
+    }
+
+    /// Remove a constraint attached to the transfer in the extension.
+    public fun resolve_constraint<T: key + store, C: store>(
+        _cap: TransferPolicyCap<T>, req: TransferRequest<T>
+    ): C {
+        bag::remove(&mut req.constraints, ConstraintKey<C> {})
     }
 
     // === Kiosk fields access ===
