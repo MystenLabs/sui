@@ -253,6 +253,7 @@ mod test {
         let num_transfer_accounts = 2;
         let delegation_weight = 1;
         let batch_payment_weight = 1;
+        let adversarial_weight = 1;
         let shared_counter_hotness_factor = 50;
 
         let workloads = WorkloadConfiguration::build_workloads(
@@ -262,6 +263,7 @@ mod test {
             transfer_object_weight,
             delegation_weight,
             batch_payment_weight,
+            adversarial_weight,
             batch_payment_size,
             shared_counter_hotness_factor,
             target_qps,

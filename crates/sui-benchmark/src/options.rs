@@ -130,18 +130,11 @@ pub enum RunSpec {
     // will likely change in future to support
     // more representative workloads.
     Bench {
+        // ----- workloads ----
         // relative weight of shared counter
         // transaction in the benchmark workload
         #[clap(long, default_value = "0")]
         shared_counter: u32,
-        // 100 for max hotness i.e all requests target
-        // just the same shared counter, 0 for no hotness
-        // i.e. all requests target a different shared
-        // counter. The way total number of counters to
-        // create is computed roughly as:
-        // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
-        #[clap(long, default_value = "50")]
-        shared_counter_hotness_factor: u32,
         // relative weight of transfer object
         // transactions in the benchmark workload
         #[clap(long, default_value = "1")]
@@ -152,9 +145,24 @@ pub enum RunSpec {
         // relative weight of batch payment transactions in the benchmark workload
         #[clap(long, default_value = "0")]
         batch_payment: u32,
+        // relative weight of adversarial transactions in the benchmark workload
+        #[clap(long, default_value = "0")]
+        adversarial: u32,
+
+        // --- workload-specific options --- (TODO: use subcommands or similar)
+        // 100 for max hotness i.e all requests target
+        // just the same shared counter, 0 for no hotness
+        // i.e. all requests target a different shared
+        // counter. The way total number of counters to
+        // create is computed roughly as:
+        // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
+        #[clap(long, default_value = "50")]
+        shared_counter_hotness_factor: u32,
         // batch size use for batch payment workload
         #[clap(long, default_value = "15")]
         batch_payment_size: u32,
+
+        // --- generic options ---
         // Target qps
         #[clap(long, default_value = "1000", global = true)]
         target_qps: u64,
