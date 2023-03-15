@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { calculateAPY, roundFloat } from '@mysten/core';
 import { type SuiValidatorSummary, type SuiEvent } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
-import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetSystemObject } from '~/hooks/useGetObject';
 import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { Banner } from '~/ui/Banner';
@@ -21,7 +21,6 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
-import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 3;
 

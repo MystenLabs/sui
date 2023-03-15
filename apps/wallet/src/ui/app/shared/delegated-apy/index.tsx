@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { roundFloat, calculateAPY } from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { calculateAPY } from '../../staking/calculateAPY';
 import { useSystemState } from '../../staking/useSystemState';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { roundFloat } from '_helpers';
 
 const APY_DECIMALS = 3;
 

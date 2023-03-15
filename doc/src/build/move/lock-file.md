@@ -4,7 +4,7 @@ title: Move.lock
 
 When you build a Move package, the process creates a `Move.lock` file at the root of your package. The file acts as a communication layer between the Move compiler and other tools, like chain-specific command line interfaces and third-party package managers. The `Move.lock` file contains information about your package, including its dependencies, that aids operations like verification of source code against on-chain packages and package manager compatibility.    
 
-Like the [`Move.toml'](manifest.md) file, the `Move.lock` file is a text-based `toml` file. Unlike the package manifest, the `Move.lock` file is not intended for you to edit directly. Processes on the toolchain, like the Move compiler, access and edit the file to read and append relevant information. You also must not move the file from the root, as it needs to be at the same level as your `Move.toml` manifest. 
+Like the [Move.toml](manifest.md) file, the `Move.lock` file is a text-based `toml` file. Unlike the package manifest, the `Move.lock` file is not intended for you to edit directly. Processes on the toolchain, like the Move compiler, access and edit the file to read and append relevant information. You also must not move the file from the root, as it needs to be at the same level as your `Move.toml` manifest. 
 
 If you are using source control for your package, make sure the `Move.lock` file is checked in to your repository. This ensures every build of your package is an exact replica of the original.   
 

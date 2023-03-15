@@ -56,5 +56,3 @@ export const ButtonConnectedTo = forwardRef<
         </button>
     );
 });
-
-ButtonConnectedTo.displayName = 'ButtonConnectedTo';

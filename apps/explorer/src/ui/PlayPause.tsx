@@ -9,7 +9,7 @@ export interface PlayPauseProps {
     onChange(): void;
 }
 
-// TODO: Create generalized `IconButton` component:
+// TODO: Have this leverage the `IconButton` component:
 export function PlayPause({ paused, onChange }: PlayPauseProps) {
     return (
         <button

@@ -75,8 +75,8 @@ use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
+use sui_types::temporary_store::{InnerTemporaryStore, TemporaryModuleResolver};
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -1070,13 +1070,17 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
             );
         let tx_digest = *effects.transaction_digest();
+
+        let module_cache =
+            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+
         Ok(DryRunTransactionResponse {
             effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
-                inner_temp_store.events,
+                inner_temp_store.events.clone(),
                 tx_digest,
                 None,
-                epoch_store.module_cache().as_ref(),
+                &module_cache,
             )?,
         })
     }
@@ -1165,11 +1169,15 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
             );
+
+        let module_cache =
+            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+
         DevInspectResults::new(
             effects,
-            inner_temp_store.events,
+            inner_temp_store.events.clone(),
             execution_result,
-            epoch_store.module_cache().as_ref(),
+            &module_cache,
         )
     }
 
@@ -2179,7 +2187,7 @@ impl AuthorityState {
         let object_ids = self
             .get_owner_objects_iterator(owner)?
             .filter(|o| match &o.type_ {
-                ObjectType::Struct(s) => Self::matches_type_fuzzy_generics(&type_, s),
+                ObjectType::Struct(s) => type_.matches_type_fuzzy_generics(s),
                 ObjectType::Package => false,
             })
             .map(|info| info.object_id);
@@ -2188,16 +2196,6 @@ impl AuthorityState {
             move_objects.push(self.get_move_object(&id).await?)
         }
         Ok(move_objects)
-    }
-
-    // TODO: should be in impl MoveType
-    fn matches_type_fuzzy_generics(type_: &MoveObjectType, other_type: &MoveObjectType) -> bool {
-        type_.address() == other_type.address()
-                    && type_.module() == other_type.module()
-                    && type_.name() == other_type.name()
-                    // TODO: is_empty() looks like a bug here. I think the intention is to support "fuzzy matching" where `get_move_objects`
-                    // leaves type_params unspecified, but I don't actually see any call sites taking advantage of this
-                    && (type_.type_params().is_empty() || type_.type_params() == other_type.type_params())
     }
 
     pub fn get_dynamic_fields(

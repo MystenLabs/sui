@@ -1420,10 +1420,7 @@ async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
     ])
     .await?;
 
-    let stake = client
-        .governance_api()
-        .get_delegated_stakes(address)
-        .await?;
+    let stake = client.governance_api().get_stakes(address).await?;
 
     assert_eq!(1, stake.len());
     assert_eq!(
@@ -1475,10 +1472,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
     ])
     .await?;
 
-    let stake = client
-        .governance_api()
-        .get_delegated_stakes(address)
-        .await?;
+    let stake = client.governance_api().get_stakes(address).await?;
 
     assert_eq!(1, stake.len());
     assert_eq!(

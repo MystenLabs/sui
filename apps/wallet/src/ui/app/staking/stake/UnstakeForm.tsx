@@ -3,21 +3,20 @@
 
 import { useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { Form, useFormikContext } from 'formik';
-import { useEffect } from 'react';
+import { Form } from 'formik';
+import { useMemo } from 'react';
 
-import LoadingIndicator from '../../components/loading/LoadingIndicator';
-import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
+import { useTransactionGasBudget } from '../../hooks';
+import { GAS_SYMBOL } from '../../redux/slices/sui-objects/Coin';
 import { Heading } from '../../shared/heading';
 import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
+import { createUnstakeTransaction } from './utils/transaction';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
-import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
-import type { FormValues } from './StakingCard';
-
 export type StakeFromProps = {
+    stakedSuiId: string;
     coinBalance: bigint;
     coinType: string;
     stakingReward?: number;
@@ -25,16 +24,12 @@ export type StakeFromProps = {
 };
 
 export function UnStakeForm({
+    stakedSuiId,
     coinBalance,
     coinType,
     stakingReward,
     epoch,
 }: StakeFromProps) {
-    const { setFieldValue } = useFormikContext<FormValues>();
-    const { gasBudget, isLoading } = useGasBudgetInMist(
-        DEFAULT_GAS_BUDGET_FOR_STAKE
-    );
-    const [gasBudgetFormatted, symbol] = useFormatCoin(gasBudget, SUI_TYPE_ARG);
     const [rewards, rewardSymbol] = useFormatCoin(stakingReward, SUI_TYPE_ARG);
     const [totalSui] = useFormatCoin(
         BigInt(stakingReward || 0) + coinBalance,
@@ -42,17 +37,15 @@ export function UnStakeForm({
     );
     const [tokenBalance] = useFormatCoin(coinBalance, coinType);
 
+    const transaction = useMemo(
+        () => createUnstakeTransaction(stakedSuiId),
+        [stakedSuiId]
+    );
+    const { data: gasBudget } = useTransactionGasBudget(transaction);
+
     const { data: currentEpochEndTime } = useGetTimeBeforeEpochNumber(
         epoch + 1 || 0
     );
-
-    useEffect(() => {
-        setFieldValue(
-            'gasBudget',
-            isLoading ? '' : (gasBudget || 0).toString(),
-            true
-        );
-    }, [setFieldValue, gasBudget, isLoading]);
 
     return (
         <Form
@@ -111,7 +104,7 @@ export function UnStakeForm({
                                 weight="medium"
                                 color="steel-dark"
                             >
-                                {symbol}
+                                {GAS_SYMBOL}
                             </Text>
                         </div>
                     </div>
@@ -131,7 +124,7 @@ export function UnStakeForm({
                             weight="medium"
                             color="steel-darker"
                         >
-                            {tokenBalance} {symbol}
+                            {tokenBalance} {GAS_SYMBOL}
                         </Text>
                     </div>
                     <div className="flex gap-0.5 justify-between w-full">
@@ -164,11 +157,7 @@ export function UnStakeForm({
                         </Text>
 
                         <Text variant="body" weight="medium" color="steel-dark">
-                            {isLoading ? (
-                                <LoadingIndicator />
-                            ) : (
-                                `${gasBudgetFormatted} ${symbol}`
-                            )}
+                            {gasBudget || '-'} {GAS_SYMBOL}
                         </Text>
                     </div>
                 </Card>

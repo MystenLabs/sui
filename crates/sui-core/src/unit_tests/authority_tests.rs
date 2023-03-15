@@ -2,15 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
-use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
-use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::{
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
-    authority_server::AuthorityServer,
-    checkpoints::CheckpointServiceNoop,
-    test_utils::init_state_parameters_from_rng,
-};
+use std::collections::HashSet;
+use std::fs;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::{convert::TryInto, env};
+
 use bcs;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::{
@@ -19,6 +17,7 @@ use move_binary_format::{
 };
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
+use move_core_types::parser::parse_type_tag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
@@ -28,33 +27,25 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
-use std::collections::HashSet;
-use std::fs;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use tracing::info;
+
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
     SuiTransactionEffectsAPI, SuiTypeTag,
 };
-use sui_types::error::UserInputError;
-use sui_types::gas_coin::GasCoin;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::utils::{
-    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
-};
-use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
-
-use crate::epoch::epoch_metrics::EpochMetrics;
-use move_core_types::parser::parse_type_tag;
-use std::{convert::TryInto, env};
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
+use sui_types::error::UserInputError;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Data;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
+use sui_types::utils::{
+    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
+};
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -64,7 +55,19 @@ use sui_types::{
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use tracing::info;
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
+
+use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
+use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::{
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    authority_server::AuthorityServer,
+    checkpoints::CheckpointServiceNoop,
+    test_utils::init_state_parameters_from_rng,
+};
+
+use super::*;
 
 pub enum TestCallArg {
     Pure(Vec<u8>),
@@ -5191,4 +5194,77 @@ async fn test_gas_smashing() {
     run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
     // use a small amount less than what 3 coins above reported (with success)
     run_and_check(three_coin_gas, 3, three_coin_gas - 1, false).await;
+}
+
+#[tokio::test]
+async fn test_for_inc_201_dev_inspect() {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (_, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/publish_with_event");
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.command(Command::Publish(modules));
+    let kind = TransactionKind::programmable(builder.finish());
+    let DevInspectResults { events, .. } = fullnode
+        .dev_inspect_transaction(sender, kind, Some(1))
+        .await
+        .unwrap();
+
+    assert_eq!(1, events.data.len());
+    assert_eq!(
+        "PublishEvent".to_string(),
+        events.data[0].type_.name.to_string()
+    );
+    assert_eq!(json!({"foo":"bar"}), events.data[0].parsed_json);
+}
+
+#[tokio::test]
+async fn test_for_inc_201_dry_run() {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (_, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/publish_with_event");
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(modules);
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
+
+    let signed = to_sender_signed_transaction(txn_data, &sender_key);
+    let DryRunTransactionResponse { events, .. } = fullnode
+        .dry_exec_transaction(
+            signed.data().intent_message().value.clone(),
+            *signed.digest(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(1, events.data.len());
+    assert_eq!(
+        "PublishEvent".to_string(),
+        events.data[0].type_.name.to_string()
+    );
+    assert_eq!(json!({"foo":"bar"}), events.data[0].parsed_json);
 }

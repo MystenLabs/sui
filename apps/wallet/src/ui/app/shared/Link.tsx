@@ -93,5 +93,3 @@ export const Link = forwardRef(
         </ButtonOrLink>
     )
 );
-
-Link.displayName = 'Link';

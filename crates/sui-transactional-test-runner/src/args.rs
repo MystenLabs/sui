@@ -22,6 +22,8 @@ pub struct SuiRunArgs {
     pub sender: Option<String>,
     #[clap(long = "view-events")]
     pub view_events: bool,
+    #[clap(long = "view-gas-used")]
+    pub view_gas_used: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -30,6 +32,8 @@ pub struct SuiPublishArgs {
     pub sender: Option<String>,
     #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
     pub upgradeable: bool,
+    #[clap(long = "view-gas-used")]
+    pub view_gas_used: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -52,6 +56,8 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "view-gas-used")]
+    pub view_gas_used: bool,
 }
 
 #[derive(Debug, clap::Parser)]
