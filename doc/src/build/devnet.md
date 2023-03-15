@@ -215,7 +215,7 @@ To demonstrate this, <PLAYER_ADDRESS> represents the address of the player to re
 sui client new-address ed25519
 ```
 
-The command returns the following message and a 24 word recovery phrase for the address:
+The command returns the following message and a 24-word recovery phrase for the address:
 
 ```
 Created new keypair for address with scheme Secp256k1: [0xbaab7e8bda187e69fd402b6b5dbfda35b3baa7a2d71e3f1c58d698ae8f13ba88]
