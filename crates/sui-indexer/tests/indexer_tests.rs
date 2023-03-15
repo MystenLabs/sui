@@ -9,7 +9,7 @@ use sui_indexer::models::checkpoints::Checkpoint;
 use sui_indexer::models::objects::Object;
 use sui_indexer::models::transactions::Transaction;
 use sui_indexer::store::{IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore};
-use sui_indexer::Indexer;
+use sui_indexer::{Indexer, IndexerConfig};
 use sui_json_rpc_types::{CheckpointId, EventFilter};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::ObjectRead;
@@ -22,7 +22,9 @@ async fn test_genesis() {
 
     let s = store.clone();
     let _handle = tokio::task::spawn(async move {
-        Indexer::start(test_cluster.rpc_url(), &Registry::default(), s).await
+        let mut config = IndexerConfig::default();
+        config.rpc_client_url = test_cluster.rpc_url().to_string();
+        Indexer::start(&config, &Registry::default(), s).await
     });
 
     // Allow indexer to process the data

@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
 use backoff::retry;
 use backoff::ExponentialBackoff;
+use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
@@ -42,26 +44,59 @@ pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 // TODO: placeholder, read from env or config file.
 pub const FAKE_PKG_VERSION: &str = "0.0.0";
 
+#[derive(Parser, Clone, Debug)]
+#[clap(
+    name = "Sui indexer",
+    about = "An off-fullnode service serving data from Sui protocol",
+    rename_all = "kebab-case"
+)]
+pub struct IndexerConfig {
+    #[clap(long)]
+    pub db_url: String,
+    #[clap(long)]
+    pub rpc_client_url: String,
+    #[clap(long, default_value = "0.0.0.0", global = true)]
+    pub client_metric_host: String,
+    #[clap(long, default_value = "9184", global = true)]
+    pub client_metric_port: u16,
+    #[clap(long, default_value = "0.0.0.0", global = true)]
+    pub rpc_server_url: String,
+    #[clap(long, default_value = "9000", global = true)]
+    pub rpc_server_port: u16,
+}
+
+impl IndexerConfig {
+    pub fn default() -> Self {
+        Self {
+            db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
+            rpc_client_url: "http://127.0.0.1:9000".to_string(),
+            client_metric_host: "0.0.0.0".to_string(),
+            client_metric_port: 9184,
+            rpc_server_url: "0.0.0.0".to_string(),
+            rpc_server_port: 9000,
+        }
+    }
+}
+
 pub struct Indexer;
 
 impl Indexer {
     pub async fn start<S: IndexerStore + Sync + Send + Clone + 'static>(
-        fullnode_url: &str,
+        config: &IndexerConfig,
         registry: &Registry,
         store: S,
     ) -> Result<(), IndexerError> {
         let event_handler = Arc::new(EventHandler::default());
-        let handle =
-            build_json_rpc_server(registry, store.clone(), event_handler.clone(), fullnode_url)
-                .await
-                .expect("Json rpc server should not run into errors upon start.");
+        let handle = build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
         // let JSON RPC server run forever.
         spawn_monitored_task!(handle.stopped());
         info!("Sui indexer started...");
 
         backoff::future::retry(ExponentialBackoff::default(), || async {
             let event_handler_clone = event_handler.clone();
-            let rpc_client = new_rpc_client(fullnode_url).await?;
+            let rpc_client = new_rpc_client(config.rpc_client_url.as_str()).await?;
             // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
             // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
             let cp = CheckpointHandler::new(
@@ -125,7 +160,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     prometheus_registry: &Registry,
     state: S,
     event_handler: Arc<EventHandler>,
-    fullnode_url: &str,
+    config: &IndexerConfig,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(FAKE_PKG_VERSION, prometheus_registry);
 
@@ -136,7 +171,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         .max_request_body_size(2 << 30)
         .max_concurrent_requests(usize::MAX)
         .set_headers(headers.clone())
-        .build(fullnode_url)
+        .build(config.rpc_client_url.as_str())
         .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
 
     builder.register_module(ReadApi::new(state.clone(), http_client.clone()))?;
@@ -145,7 +180,10 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
     builder.register_module(EventReadApi::new(state, http_client.clone(), event_handler))?;
     builder.register_module(WriteApi::new(http_client))?;
-    // TODO: placeholder, read from env or config file.
-    let default_socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3030);
+    let default_socket_addr = SocketAddr::new(
+        // unwrap() here is safe b/c the address is a static config.
+        IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),
+        config.rpc_server_port,
+    );
     Ok(builder.start(default_socket_addr).await?)
 }
