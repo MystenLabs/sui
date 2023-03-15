@@ -29,6 +29,7 @@ impl WorkloadConfiguration {
                 transfer_object,
                 delegation,
                 batch_payment,
+                batch_payment_size,
                 shared_counter_hotness_factor,
                 ..
             } => {
@@ -39,6 +40,7 @@ impl WorkloadConfiguration {
                     transfer_object,
                     delegation,
                     batch_payment,
+                    batch_payment_size,
                     shared_counter_hotness_factor,
                     target_qps,
                     in_flight_ratio,
@@ -58,6 +60,7 @@ impl WorkloadConfiguration {
         transfer_object_weight: u32,
         delegation_weight: u32,
         batch_payment_weight: u32,
+        batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
         target_qps: u64,
         in_flight_ratio: u64,
@@ -98,6 +101,7 @@ impl WorkloadConfiguration {
             target_qps,
             num_workers,
             in_flight_ratio,
+            batch_payment_size,
         );
         workload_builders.push(batch_payment_workload);
         let (workload_params, workload_builders): (Vec<_>, Vec<_>) = workload_builders
