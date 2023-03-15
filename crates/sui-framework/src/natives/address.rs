@@ -4,9 +4,7 @@
 use crate::natives::NativesCostTable;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
-use move_vm_runtime::{
-    native_charge_gas_early_exit, native_functions::NativeContext, native_gas_total_cost,
-};
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
@@ -14,7 +12,7 @@ use smallvec::smallvec;
 use std::{collections::VecDeque, ops::Mul};
 
 const E_ADDRESS_PARSE_ERROR: u64 = 0;
-
+#[derive(Clone)]
 pub struct AddressFromBytesCostParams {
     pub copy_bytes_to_address_cost_per_byte: InternalGas,
 }
@@ -31,21 +29,23 @@ pub fn from_bytes(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
-    let mut gas_left = context.gas_budget();
-    let natvies_cost_table: &NativesCostTable = context.extensions_mut().get();
-    let address_from_bytes_cost_params = &natvies_cost_table.address_from_bytes_cost_params;
+
+    let address_from_bytes_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .address_from_bytes_cost_params
+        .clone();
 
     let addr_bytes = pop_arg!(args, Vec<u8>);
     // Copying bytes is a simple low-cost operation
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_from_bytes_cost_params
             .copy_bytes_to_address_cost_per_byte
             .mul((AccountAddress::LENGTH as u64).into())
     );
 
-    let cost = native_gas_total_cost!(context, gas_left);
+    let cost = context.gas_used();
 
     // Address parsing can fail if fed the incorrect number of bytes.
     Ok(match AccountAddress::from_bytes(addr_bytes) {
@@ -53,7 +53,7 @@ pub fn from_bytes(
         Err(_) => NativeResult::err(cost, E_ADDRESS_PARSE_ERROR),
     })
 }
-
+#[derive(Clone)]
 pub struct AddressToU256CostParams {
     pub address_to_vec_cost_per_byte: InternalGas,
     pub address_vec_reverse_cost_per_byte: InternalGas,
@@ -73,15 +73,17 @@ pub fn to_u256(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
-    let mut gas_left = context.gas_budget();
-    let natvies_cost_table: &NativesCostTable = context.extensions_mut().get();
-    let address_to_u256_cost_params = &natvies_cost_table.address_to_u256_cost_params;
+
+    let address_to_u256_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .address_to_u256_cost_params
+        .clone();
 
     let addr = pop_arg!(args, AccountAddress);
     // Copying bytes is a simple low-cost operation
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_to_u256_cost_params
             .address_to_vec_cost_per_byte
             .mul((AccountAddress::LENGTH as u64).into())
@@ -90,7 +92,6 @@ pub fn to_u256(
     // Reversing bytes is a simple low-cost operation
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_to_u256_cost_params
             .address_vec_reverse_cost_per_byte
             .mul((AccountAddress::LENGTH as u64).into())
@@ -100,19 +101,16 @@ pub fn to_u256(
     // Copying bytes and converting to Value::u256 are simple low-cost operation
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_to_u256_cost_params
             .copy_convert_to_u256_cost_per_byte
             .mul((2 * AccountAddress::LENGTH as u64).into())
     );
     // unwrap safe because we know addr_bytes_le is length 32
     let u256_val = Value::u256(U256::from_le_bytes(&addr_bytes_le.try_into().unwrap()));
-    Ok(NativeResult::ok(
-        native_gas_total_cost!(context, gas_left),
-        smallvec![u256_val],
-    ))
+    Ok(NativeResult::ok(context.gas_used(), smallvec![u256_val]))
 }
 
+#[derive(Clone)]
 pub struct AddressFromU256CostParams {
     pub u256_to_bytes_to_vec_cost_per_byte: InternalGas,
     pub u256_bytes_vec_reverse_cost_per_byte: InternalGas,
@@ -132,16 +130,18 @@ pub fn from_u256(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
-    let mut gas_left = context.gas_budget();
-    let natvies_cost_table: &NativesCostTable = context.extensions_mut().get();
-    let address_from_u256_cost_params = &natvies_cost_table.address_from_u256_cost_params;
+
+    let address_from_u256_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .address_from_u256_cost_params
+        .clone();
 
     let u256 = pop_arg!(args, U256);
 
     // Copying bytes snd converting sre simple low-cost operations
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_from_u256_cost_params
             .u256_to_bytes_to_vec_cost_per_byte
             .mul((2 * AccountAddress::LENGTH as u64).into())
@@ -150,7 +150,6 @@ pub fn from_u256(
     // Reversing bytes is a simple low-cost operation
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_from_u256_cost_params
             .u256_bytes_vec_reverse_cost_per_byte
             .mul((AccountAddress::LENGTH as u64).into())
@@ -160,15 +159,11 @@ pub fn from_u256(
     // Copying bytes and converting sre simple low-cost operations
     native_charge_gas_early_exit!(
         context,
-        gas_left,
         address_from_u256_cost_params
             .copy_convert_to_address_cost_per_byte
             .mul((2 * AccountAddress::LENGTH as u64).into())
     );
     // unwrap safe because we are passing a 32 byte slice
     let addr_val = Value::address(AccountAddress::from_bytes(&u256_bytes[..]).unwrap());
-    Ok(NativeResult::ok(
-        native_gas_total_cost!(context, gas_left),
-        smallvec![addr_val],
-    ))
+    Ok(NativeResult::ok(context.gas_used(), smallvec![addr_val]))
 }
