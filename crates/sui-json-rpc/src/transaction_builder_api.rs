@@ -128,11 +128,17 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         sui_object_id: ObjectID,
         gas_budget: BigInt,
         recipient: SuiAddress,
-        amount: Option<u64>,
+        amount: Option<BigInt>,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .builder
-            .transfer_sui(signer, sui_object_id, gas_budget.into(), recipient, amount)
+            .transfer_sui(
+                signer,
+                sui_object_id,
+                gas_budget.into(),
+                recipient,
+                amount.map(<u64>::from),
+            )
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
@@ -338,14 +344,21 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coins: Vec<ObjectID>,
-        amount: Option<u64>,
+        amount: Option<BigInt>,
         validator: SuiAddress,
         gas: Option<ObjectID>,
         gas_budget: BigInt,
     ) -> RpcResult<TransactionBytes> {
         Ok(TransactionBytes::from_data(
             self.builder
-                .request_add_stake(signer, coins, amount, validator, gas, gas_budget.into())
+                .request_add_stake(
+                    signer,
+                    coins,
+                    amount.map(<u64>::from),
+                    validator,
+                    gas,
+                    gas_budget.into(),
+                )
                 .await?,
         )?)
     }

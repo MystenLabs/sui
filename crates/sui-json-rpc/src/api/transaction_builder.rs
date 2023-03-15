@@ -46,7 +46,7 @@ pub trait TransactionBuilder {
         /// the recipient's Sui address
         recipient: SuiAddress,
         /// the amount to be split out and transferred
-        amount: Option<u64>,
+        amount: Option<BigInt>,
     ) -> RpcResult<TransactionBytes>;
 
     /// Send `Coin<T>` to a list of addresses, where `T` can be any coin type, following a list of amounts,
@@ -225,7 +225,7 @@ pub trait TransactionBuilder {
         /// Coin<SUI> or LockedCoin<SUI> object to stake
         coins: Vec<ObjectID>,
         /// stake amount
-        amount: Option<u64>,
+        amount: Option<BigInt>,
         /// the validator's Sui address
         validator: SuiAddress,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided

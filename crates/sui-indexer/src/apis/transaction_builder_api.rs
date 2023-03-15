@@ -48,7 +48,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         sui_object_id: ObjectID,
         gas_budget: BigInt,
         recipient: SuiAddress,
-        amount: Option<u64>,
+        amount: Option<BigInt>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
@@ -189,7 +189,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coins: Vec<ObjectID>,
-        amount: Option<u64>,
+        amount: Option<BigInt>,
         validator: SuiAddress,
         gas: Option<ObjectID>,
         gas_budget: BigInt,

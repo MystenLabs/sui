@@ -870,7 +870,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         .request_add_stake(
             *address,
             vec![coin],
-            Some(1000000),
+            Some(1000000.into()),
             validator,
             None,
             10000.into(),
@@ -939,7 +939,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
                 coins.data[1].coin_object_id,
                 coins.data[2].coin_object_id,
             ],
-            Some(1000000),
+            Some(1000000.into()),
             validator,
             None,
             10000.into(),
