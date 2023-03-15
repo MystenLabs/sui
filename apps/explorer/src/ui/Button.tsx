@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
+import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
 import { LoadingSpinner } from './LoadingSpinner';
@@ -43,30 +44,27 @@ export function Button({
     after,
     ...props
 }: ButtonProps) {
-    const childrenContent = (
-        <div className="inline-flex flex-nowrap gap-2">
-            {before}
-            {children}
-            {after}
-        </div>
-    );
-
     return (
         <ButtonOrLink
             className={buttonStyles({ variant, size })}
             {...props}
             disabled={props.disabled || loading}
         >
-            {loading ? (
-                <>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                        <LoadingSpinner />
-                    </div>
-                    <div className="text-transparent">{childrenContent}</div>
-                </>
-            ) : (
-                childrenContent
+            {loading && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <LoadingSpinner />
+                </div>
             )}
+            <div
+                className={clsx(
+                    'inline-flex flex-nowrap gap-2',
+                    loading && 'text-transparent'
+                )}
+            >
+                {before}
+                {children}
+                {after}
+            </div>
         </ButtonOrLink>
     );
 }
