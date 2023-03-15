@@ -400,7 +400,8 @@ impl InMemoryStore {
                 .insert(tx.effects.digest(), tx.effects.to_owned());
         }
         let contents = contents.into_inner().into_checkpoint_contents();
-        self.checkpoint_contents.insert(contents.digest(), contents);
+        self.checkpoint_contents
+            .insert(*contents.digest(), contents);
     }
 
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {

@@ -84,7 +84,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     assert_eq!(
         res.txn_result.as_ref().unwrap().status(),
         &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance,
+            error: ExecutionFailureStatus::InsufficientCoinBalance,
             command: Some(2)
         },
     );
@@ -137,7 +137,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
     assert_eq!(
         res.txn_result.as_ref().unwrap().status(),
         &ExecutionStatus::Failure {
-            error: ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance,
+            error: ExecutionFailureStatus::InsufficientCoinBalance,
             command: Some(2)
         },
     );

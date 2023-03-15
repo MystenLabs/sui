@@ -14,8 +14,8 @@ backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project
 bcs = "0.1.4"
 chrono = { version = "0.4.23", features = ["clock", "serde"] }
 clap = { version = "3.2.17", features = ["derive"] }
-diesel = { version = "2.0.0", features = ["chrono", "postgres", "r2d2", "serde_json"] }
-diesel-derive-enum = { version = "2.0.0", features = ["postgres"] }
+diesel = { version = "2.0.3", features = ["chrono", "postgres", "r2d2", "serde_json"] }
+diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 futures = "0.3.23"
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 jsonrpsee-proc-macros = "0.16.2"

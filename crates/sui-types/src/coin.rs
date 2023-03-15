@@ -9,17 +9,20 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::{MoveObjectType, SequenceNumber};
 use crate::committee::EpochId;
 use crate::object::{MoveObject, Owner};
-use crate::storage::{DeleteKind, SingleTxContext, WriteKind};
+use crate::storage::{SingleTxContext, WriteKind};
 use crate::temporary_store::TemporaryStore;
 use crate::{
     balance::{Balance, Supply},
-    error::{ExecutionError, ExecutionErrorKind},
+    error::ExecutionError,
     object::{Data, Object},
 };
 use crate::{base_types::TransactionDigest, error::SuiError};
+use crate::{
+    base_types::{MoveObjectType, SequenceNumber},
+    error::ExecutionErrorKind,
+};
 use crate::{
     base_types::{ObjectID, SuiAddress},
     id::UID,
@@ -72,19 +75,14 @@ impl Coin {
     }
 
     /// Create a coin from BCS bytes
-    pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, ExecutionError> {
-        bcs::from_bytes(content).map_err(|err| {
-            ExecutionError::new_with_source(
-                ExecutionErrorKind::InvalidCoinObject,
-                format!("Unable to deserialize coin object: {:?}", err),
-            )
-        })
+    pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, bcs::Error> {
+        bcs::from_bytes(content)
     }
 
     /// If the given object is a Coin, deserialize its contents and extract the balance Ok(Some(u64)).
     /// If it's not a Coin, return Ok(None).
     /// The cost is 2 comparisons if not a coin, and deserialization if its a Coin.
-    pub fn extract_balance_if_coin(object: &Object) -> Result<Option<u64>, ExecutionError> {
+    pub fn extract_balance_if_coin(object: &Object) -> Result<Option<u64>, bcs::Error> {
         match &object.data {
             Data::Move(move_obj) => {
                 if !move_obj.is_coin() {
@@ -126,86 +124,25 @@ impl Coin {
         }
     }
 
-    // Shift balance of coins_to_merge to this coin.
-    // Related coin objects need to be updated in temporary_store to persist the changes,
-    // including deleting the coin objects that have been merged.
-    pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) -> Result<(), ExecutionError> {
-        let Some(total_coins) =
-            coins_to_merge.iter().fold(Some(0u64), |acc, c| acc?.checked_add(c.value())) else {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::CoinTooLarge,
-                    format!("Coin {} exceeds maximum value", self.id())
-                ))
-            };
-
-        for coin in coins_to_merge.iter_mut() {
-            // unwrap() is safe because balance value is the same as coin value
-            coin.balance.withdraw(coin.value()).unwrap();
-        }
-        let Some(new_balance) = self.value().checked_add(total_coins) else {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::CoinTooLarge,
-                format!("Coin {} exceeds maximum value", self.id())
-            ))
+    /// Add balance to this coin, erroring if the new total balance exceeds the maximum
+    pub fn add(&mut self, balance: Balance) -> Result<(), ExecutionError> {
+        let Some(new_value) = self.value().checked_add(balance.value())
+        else {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::CoinBalanceOverflow,
+            ));
         };
-        self.balance = Balance::new(new_balance);
+        self.balance = Balance::new(new_value);
         Ok(())
     }
 
     // Split amount out of this coin to a new coin.
     // Related coin objects need to be updated in temporary_store to persist the changes,
     // including creating the coin object related to the newly created coin.
-    pub fn split_coin(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
+    pub fn split(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
         self.balance.withdraw(amount)?;
         Ok(Coin::new(new_coin_id, amount))
     }
-}
-
-pub fn check_coins(
-    coin_objects: &[Object],
-    mut coin_type: Option<MoveObjectType>,
-) -> Result<(Vec<Coin>, MoveObjectType), ExecutionError> {
-    if coin_objects.is_empty() {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::EmptyInputCoins,
-            "Pay transaction requires a non-empty list of input coins".to_string(),
-        ));
-    }
-    let mut coins = Vec::new();
-    for coin_obj in coin_objects {
-        match &coin_obj.data {
-            Data::Move(move_obj) => {
-                if !move_obj.is_coin() {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::InvalidCoinObject,
-                        "Provided non-Coin<T> object as input to pay/pay_sui/pay_all_sui transaction".to_string(),
-                    ));
-                }
-                if let Some(typ) = &coin_type {
-                    if move_obj.type_() != typ {
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::CoinTypeMismatch,
-                            format!("Coin type check failed in pay/pay_sui/pay_all_sui transaction, expected: {:?}, found: {:}", typ, move_obj.type_()),
-                        ));
-                    }
-                } else {
-                    coin_type = Some(move_obj.type_().clone())
-                }
-
-                let coin = Coin::from_bcs_bytes(move_obj.contents())
-                    .expect("Deserializing coin object should not fail");
-                coins.push(coin)
-            }
-            _ => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::InvalidCoinObject,
-                    "Provided non-Coin<T> object as input to pay transaction".to_string(),
-                ))
-            }
-        }
-    }
-    // safe because coin_objects must be non-empty, and coin_type must be set in loop above.
-    Ok((coins, coin_type.unwrap()))
 }
 
 // Rust version of the Move sui::coin::TreasuryCap type
@@ -247,36 +184,6 @@ pub fn transfer_coin<S>(
         previous_transaction,
     );
     temporary_store.write_object(ctx, new_coin, WriteKind::Create);
-}
-
-// A helper function for pay_sui and pay_all_sui.
-// It updates the gas_coin_obj based on the updated gas_coin, transfers gas_coin_obj to
-// recipient when needed, and then deletes all other input coins other than gas_coin_obj.
-pub fn update_input_coins<S>(
-    ctx: &SingleTxContext,
-    temporary_store: &mut TemporaryStore<S>,
-    coin_objects: &mut Vec<Object>,
-    gas_coin: &Coin,
-    recipient: Option<SuiAddress>,
-) {
-    let mut gas_coin_obj = coin_objects.remove(0);
-    let new_contents = bcs::to_bytes(gas_coin).expect("Coin serialization should not fail");
-    // unwrap is safe because we checked that it was a coin object above.
-    let move_obj = gas_coin_obj.data.try_as_move_mut().unwrap();
-    move_obj.update_coin_contents(new_contents);
-    if let Some(recipient) = recipient {
-        gas_coin_obj.transfer(recipient);
-    }
-    temporary_store.write_object(ctx, gas_coin_obj, WriteKind::Mutate);
-
-    for coin_object in coin_objects.iter() {
-        temporary_store.delete_object(
-            ctx,
-            &coin_object.id(),
-            coin_object.version(),
-            DeleteKind::Normal,
-        )
-    }
 }
 
 // Rust version of the Move sui::coin::CoinMetadata type

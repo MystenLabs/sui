@@ -10,7 +10,7 @@ import {
   getObjectReference,
   GetTxnDigestsResponse,
   ObjectId,
-  PaginatedTransactionDigests,
+  PaginatedTransactionResponse,
   SubscriptionId,
   SuiAddress,
   SuiEventEnvelope,
@@ -24,7 +24,7 @@ import {
   SuiObjectRef,
   SuiTransactionResponse,
   TransactionDigest,
-  TransactionQuery,
+  SuiTransactionResponseQuery,
   SUI_TYPE_ARG,
   RpcApiVersion,
   parseVersionFromString,
@@ -539,17 +539,17 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
-  async getTransactions(
-    query: TransactionQuery,
+  async queryTransactions(
+    query: SuiTransactionResponseQuery,
     cursor: TransactionDigest | null = null,
     limit: number | null = null,
     order: Order = 'descending',
-  ): Promise<PaginatedTransactionDigests> {
+  ): Promise<PaginatedTransactionResponse> {
     try {
       return await this.client.requestWithType(
-        'sui_getTransactions',
+        'sui_queryTransactions',
         [query, cursor, limit, order === 'descending'],
-        PaginatedTransactionDigests,
+        PaginatedTransactionResponse,
         this.options.skipDataValidation,
       );
     } catch (err) {
@@ -559,18 +559,32 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionsForObject(
+  /**
+   * @deprecated this method will be removed by April 2023.
+   * Use `queryTransactions` instead
+   */
+  async queryTransactionsForObjectDeprecated(
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { InputObject: objectID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
       {
-        method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { MutatedObject: objectID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
     ];
 
@@ -580,10 +594,13 @@ export class JsonRpcProvider extends Provider {
       }
       const results = await this.client.batchRequestWithType(
         requests,
-        PaginatedTransactionDigests,
+        PaginatedTransactionResponse,
         this.options.skipDataValidation,
       );
-      return [...results[0].data, ...results[1].data];
+      return [
+        ...results[0].data.map((r) => r.digest),
+        ...results[1].data.map((r) => r.digest),
+      ];
     } catch (err) {
       throw new Error(
         `Error getting transactions for object: ${err} for id ${objectID}`,
@@ -591,18 +608,32 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransactionsForAddress(
+  /**
+   * @deprecated this method will be removed by April 2023.
+   * Use `queryTransactions` instead
+   */
+  async queryTransactionsForAddressDeprecated(
     addressID: SuiAddress,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { ToAddress: addressID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
       {
-        method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }, null, null, descendingOrder],
+        method: 'sui_queryTransactions',
+        args: [
+          { filter: { FromAddress: addressID } },
+          null,
+          null,
+          descendingOrder,
+        ],
       },
     ];
     try {
@@ -611,10 +642,13 @@ export class JsonRpcProvider extends Provider {
       }
       const results = await this.client.batchRequestWithType(
         requests,
-        PaginatedTransactionDigests,
+        PaginatedTransactionResponse,
         this.options.skipDataValidation,
       );
-      return [...results[0].data, ...results[1].data];
+      return [
+        ...results[0].data.map((r) => r.digest),
+        ...results[1].data.map((r) => r.digest),
+      ];
     } catch (err) {
       throw new Error(
         `Error getting transactions for address: ${err} for id ${addressID}`,

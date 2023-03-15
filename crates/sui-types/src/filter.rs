@@ -49,7 +49,7 @@ impl EventFilter {
                 matches!(&item.event.package_id(), Some(id) if id == object_id)
             }
             EventFilter::Module(module) => {
-                matches!(item.event.module_name(), Some(name) if name == module.as_str())
+                matches!(item.event.module_name(), Some(name) if name == module.as_ident_str())
             }
             EventFilter::ObjectId(object_id) => {
                 matches!(item.event.object_id(), Some(id) if &id == object_id)

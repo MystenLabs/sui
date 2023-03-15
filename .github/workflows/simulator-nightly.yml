@@ -38,8 +38,6 @@ jobs:
       RUST_LOG: off
       # Runs tests much faster - disables signing and verification
       USE_MOCK_CRYPTO: 1
-      MSIM_TEST_NUM: 30
-      SIM_STRESS_TEST_DURATION_SECS: 300
       CARGO_TERM_COLOR: always
 
     steps:

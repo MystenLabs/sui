@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { Keyring } from '.';
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
+import { type DerivedAccount } from './DerivedAccount';
 import { VaultStorage } from './VaultStorage';
 import Alarm from '_src/background/Alarms';
 import {
@@ -59,12 +60,11 @@ describe('Keyring', () => {
 
         describe('getActiveAccount', () => {
             it('returns as active account the first derived from mnemonic', async () => {
-                expect((await k.getActiveAccount())!.address).toBe(
+                const account = (await k.getActiveAccount()) as DerivedAccount;
+                expect(account.address).toBe(
                     '0x9c08076187d961f1ed809a9d803fa49037a92039d04f539255072713a180dd5c'
                 );
-                expect((await k.getActiveAccount())!.derivationPath).toBe(
-                    "m/44'/784'/0'/0'/0'"
-                );
+                expect(account.derivationPath).toBe("m/44'/784'/0'/0'/0'");
             });
         });
 

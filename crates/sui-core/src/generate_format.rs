@@ -10,6 +10,7 @@ use move_core_types::{
 use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
+use sui_types::crypto::Signer;
 use sui_types::{
     base_types::{
         self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
@@ -19,15 +20,11 @@ use sui_types::{
         AuthoritySignature, KeypairTraits, Signature,
     },
     messages::{
-        Argument, CallArg, Command, EntryArgumentErrorKind, EntryTypeArgumentErrorKind,
-        ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind, TransactionKind,
+        Argument, CallArg, Command, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus,
+        ObjectArg, ObjectInfoRequestKind, TransactionKind, TypeArgumentError,
     },
     object::{Data, Owner},
     storage::DeleteKind,
-};
-use sui_types::{
-    crypto::Signer,
-    messages::{CommandArgumentError, PackageUpgradeError},
 };
 use typed_store::rocks::TypedStoreError;
 
@@ -80,8 +77,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ExecutionStatus>(&samples)?;
     tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
     tracer.trace_type::<AbortLocation>(&samples)?;
-    tracer.trace_type::<EntryArgumentErrorKind>(&samples)?;
-    tracer.trace_type::<EntryTypeArgumentErrorKind>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<ObjectArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;
@@ -97,7 +92,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Argument>(&samples)?;
     tracer.trace_type::<Command>(&samples)?;
     tracer.trace_type::<CommandArgumentError>(&samples)?;
-    tracer.trace_type::<PackageUpgradeError>(&samples)?;
+    tracer.trace_type::<TypeArgumentError>(&samples)?;
 
     tracer.registry()
 }

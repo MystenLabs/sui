@@ -640,6 +640,7 @@ impl Builder {
             let validators = committee.clone().into_values().collect::<Vec<_>>();
 
             let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
+            loaded_genesis.1.digest(); // cache digest before compare
             assert_eq!(
                 &built, loaded_genesis,
                 "loaded genesis does not match built genesis"
@@ -768,7 +769,7 @@ fn create_genesis_checkpoint(
         epoch: 0,
         sequence_number: 0,
         network_total_transactions: contents.size().try_into().unwrap(),
-        content_digest: contents.digest(),
+        content_digest: *contents.digest(),
         previous_digest: None,
         epoch_rolling_gas_cost_summary: Default::default(),
         end_of_epoch_data: None,
@@ -1119,7 +1120,9 @@ mod test {
         let genesis = network_config.genesis;
 
         let s = serde_yaml::to_string(&genesis).unwrap();
-        let from_s = serde_yaml::from_str(&s).unwrap();
+        let from_s: Genesis = serde_yaml::from_str(&s).unwrap();
+        // cache the digest so that the comparison succeeds.
+        from_s.checkpoint_contents.digest();
         assert_eq!(genesis, from_s);
     }
 

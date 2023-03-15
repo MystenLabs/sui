@@ -8,11 +8,15 @@ import {
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
+import {
+    AccountType,
+    type SerializedAccount,
+} from '_src/background/keyring/Account';
+
 import type { SuiAddress } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
-import type { AccountSerialized } from '_src/background/keyring/Account';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const createVault = createAsyncThunk<
@@ -51,13 +55,13 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
-const accountsAdapter = createEntityAdapter<AccountSerialized>({
+const accountsAdapter = createEntityAdapter<SerializedAccount>({
     selectId: ({ address }) => address,
     sortComparer: (a, b) => {
         if (a.type !== b.type) {
             // first derived accounts
-            return a.type === 'derived' ? -1 : 1;
-        } else if (a.type === 'derived') {
+            return a.type === AccountType.DERIVED ? -1 : 1;
+        } else if (a.type === AccountType.DERIVED) {
             // sort derived accounts by derivation path
             return (a.derivationPath || '').localeCompare(
                 b.derivationPath || '',

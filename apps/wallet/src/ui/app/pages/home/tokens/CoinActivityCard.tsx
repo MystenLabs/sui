@@ -8,7 +8,7 @@ import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TransactionCard } from '_components/transactions-card';
 import { getEventsSummary } from '_helpers';
-import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
+import { useAppSelector, useQueryTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
 export function CoinActivitiesCard({ coinType }: { coinType: string }) {
@@ -18,7 +18,7 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
         isLoading,
         error,
         isError,
-    } = useGetTransactionsByAddress(activeAddress);
+    } = useQueryTransactionsByAddress(activeAddress);
 
     // filter txns by coinType
     const txnByCoinType = useMemo(() => {

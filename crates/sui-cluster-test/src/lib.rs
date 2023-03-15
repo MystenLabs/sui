@@ -138,7 +138,9 @@ impl TestContext {
                 Transaction::from_data(txn_data, Intent::default(), vec![signature])
                     .verify()
                     .unwrap(),
-                SuiTransactionResponseOptions::new().with_effects(),
+                SuiTransactionResponseOptions::new()
+                    .with_effects()
+                    .with_events(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await

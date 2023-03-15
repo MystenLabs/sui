@@ -3,7 +3,6 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-  Commands,
   getCreatedObjects,
   getObjectId,
   getSharedObjectInitialVersion,
@@ -60,44 +59,36 @@ describe('Transaction Serialization and deserialization', () => {
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        target: '0x2::sui_system::request_add_stake',
-        arguments: [
-          tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
-          tx.object(coins[2].objectId),
-          tx.pure(validatorAddress),
-        ],
-      }),
-    );
+    tx.moveCall({
+      target: '0x2::sui_system::request_add_stake',
+      arguments: [
+        tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
+        tx.object(coins[2].objectId),
+        tx.pure(validatorAddress),
+      ],
+    });
     await serializeAndDeserialize(tx, [true]);
   });
 
   it('Move Shared Object Call with immutable reference', async () => {
     const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::value`,
-        arguments: [tx.object(sharedObjectId)],
-      }),
-    );
+    tx.moveCall({
+      target: `${packageId}::serializer_tests::value`,
+      arguments: [tx.object(sharedObjectId)],
+    });
     await serializeAndDeserialize(tx, [false]);
   });
 
   it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
     const tx = new Transaction();
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::value`,
-        arguments: [tx.object(sharedObjectId)],
-      }),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::serializer_tests::set_value`,
-        arguments: [tx.object(sharedObjectId)],
-      }),
-    );
+    tx.moveCall({
+      target: `${packageId}::serializer_tests::value`,
+      arguments: [tx.object(sharedObjectId)],
+    });
+    tx.moveCall({
+      target: `${packageId}::serializer_tests::set_value`,
+      arguments: [tx.object(sharedObjectId)],
+    });
     await serializeAndDeserialize(tx, [true]);
   });
 });

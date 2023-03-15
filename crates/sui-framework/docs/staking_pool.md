@@ -18,7 +18,7 @@
 -  [Function `process_pending_stakes_and_withdraws`](#0x2_staking_pool_process_pending_stakes_and_withdraws)
 -  [Function `process_pending_stake_withdraw`](#0x2_staking_pool_process_pending_stake_withdraw)
 -  [Function `process_pending_stake`](#0x2_staking_pool_process_pending_stake)
--  [Function `withdraw_rewards_and_burn_pool_tokens`](#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens)
+-  [Function `withdraw_rewards`](#0x2_staking_pool_withdraw_rewards)
 -  [Function `activate_staking_pool`](#0x2_staking_pool_activate_staking_pool)
 -  [Function `request_withdraw_stake_preactive`](#0x2_staking_pool_request_withdraw_stake_preactive)
 -  [Function `deactivate_staking_pool`](#0x2_staking_pool_deactivate_staking_pool)
@@ -116,14 +116,14 @@ A staking pool embedded in each validator struct in the system state object.
 </dt>
 <dd>
  Exchange rate history of previous epochs. Key is the epoch number.
- The entries start from the <code>starting_epoch</code> of this pool and contain exchange rates at the beginning of each epoch,
+ The entries start from the <code>activation_epoch</code> of this pool and contains exchange rates at the beginning of each epoch,
  i.e., right after the rewards for the previous epoch have been deposited into the pool.
 </dd>
 <dt>
 <code>pending_stake: u64</code>
 </dt>
 <dd>
- Pending stake amount for this epoch.
+ Pending stake amount for this epoch, emptied at epoch boundaries.
 </dd>
 <dt>
 <code>pending_total_sui_withdraw: u64</code>
@@ -480,9 +480,9 @@ Request to stake to a staking pool. The stake starts counting at the beginning o
 
 ## Function `request_withdraw_stake`
 
-Request to withdraw <code>principal_withdraw_amount</code> of stake plus rewards from a staking pool.
-This amount of principal and corresponding rewards in SUI are withdrawn and transferred to the staker.
-A proportional amount of pool tokens is burnt.
+Request to withdraw the given stake plus rewards from a staking pool.
+Both the principal and corresponding rewards in SUI are withdrawn and transferred to the staker.
+A proportional amount of pool token withdraw is recorded and processed at epoch change time.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake">request_withdraw_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
@@ -504,7 +504,7 @@ A proportional amount of pool tokens is burnt.
     <b>let</b> staker = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> principal_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
 
-    <b>let</b> rewards_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(
+    <b>let</b> rewards_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards">withdraw_rewards</a>(
         pool, principal_withdraw_amount, pool_token_withdraw_amount, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx)
     );
     <b>let</b> total_sui_withdraw_amount = principal_withdraw_amount + <a href="balance.md#0x2_balance_value">balance::value</a>(&rewards_withdraw);
@@ -716,9 +716,9 @@ Called at epoch boundaries to process the pending stake.
 
 </details>
 
-<a name="0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens"></a>
+<a name="0x2_staking_pool_withdraw_rewards"></a>
 
-## Function `withdraw_rewards_and_burn_pool_tokens`
+## Function `withdraw_rewards`
 
 This function does the following:
 1. Calculates the total amount of SUI (including principal and rewards) that the provided pool tokens represent
@@ -727,10 +727,9 @@ at the current exchange rate.
 stake we should withdraw.
 3. Withdraws the rewards portion from the rewards pool at the current exchange rate. We only withdraw the rewards
 portion because the principal portion was already taken out of the staker's self custodied StakedSui.
-4. Since SUI tokens are withdrawn, we need to burn the corresponding pool tokens to keep the exchange rate the same.
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, principal_withdraw_amount: u64, pool_token_withdraw_amount: u64, epoch: u64): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards">withdraw_rewards</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, principal_withdraw_amount: u64, pool_token_withdraw_amount: u64, epoch: u64): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -739,7 +738,7 @@ portion because the principal portion was already taken out of the staker's self
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards">withdraw_rewards</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     principal_withdraw_amount: u64,
     pool_token_withdraw_amount: u64,
@@ -767,6 +766,7 @@ portion because the principal portion was already taken out of the staker's self
 
 ## Function `activate_staking_pool`
 
+Called by <code><a href="validator.md#0x2_validator">validator</a></code> module to activate a staking pool.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, activation_epoch: u64)
@@ -801,6 +801,7 @@ portion because the principal portion was already taken out of the staker's self
 
 ## Function `request_withdraw_stake_preactive`
 
+Withdraw stake from a preactive staking pool.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake_preactive">request_withdraw_stake_preactive</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
@@ -826,6 +827,8 @@ portion because the principal portion was already taken out of the staker's self
 
     <b>let</b> principal = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
     <b>let</b> withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal);
+    // The exchange rate is always 1:1 for a preactive pool so we decrement the
+    // same amount for both sui_balance and pool_token_balance.
     pool.sui_balance = pool.sui_balance - withdraw_amount;
     pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
@@ -1173,7 +1176,7 @@ Returns true if all the staking parameters of the staked sui except the principa
 
 ## Function `pending_stake_amount`
 
-Calculate the total value of the pending staking requests for this staking pool.
+Returns the total value of the pending staking requests for this staking pool.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_amount">pending_stake_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): u64
@@ -1198,7 +1201,7 @@ Calculate the total value of the pending staking requests for this staking pool.
 
 ## Function `pending_stake_withdraw_amount`
 
-Calculate the current the total withdrawal from the staking pool this epoch.
+Returns the total withdrawal from the staking pool this epoch.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): u64

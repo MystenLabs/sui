@@ -12,13 +12,14 @@ use std::str::FromStr;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::ObjectChange;
 
-use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
-    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiEvent, SuiExecutionStatus,
+    Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes,
 };
+use sui_json_rpc_types::{SuiObjectInfo, SuiTransactionResponseQuery};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
@@ -27,7 +28,7 @@ use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
-use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::query::{EventQuery, TransactionFilter};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
@@ -289,17 +290,20 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_events()),
+            Some(
+                SuiTransactionResponseOptions::new()
+                    .with_object_changes()
+                    .with_events(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
-    let events = tx_response.events.as_ref().unwrap();
-    let package_id = events
-        .data
+    let object_changes = tx_response.object_changes.unwrap();
+    let package_id = object_changes
         .iter()
         .find_map(|e| {
-            if let SuiEvent::Publish { package_id, .. } = e {
+            if let ObjectChange::Published { package_id, .. } = e {
                 Some(package_id)
             } else {
                 None
@@ -347,17 +351,20 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_events()),
+            Some(
+                SuiTransactionResponseOptions::new()
+                    .with_object_changes()
+                    .with_events(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
-    let events = tx_response.events.as_ref().unwrap();
-    let package_id = events
-        .data
+    let object_changes = tx_response.object_changes.as_ref().unwrap();
+    let package_id = object_changes
         .iter()
         .find_map(|e| {
-            if let SuiEvent::Publish { package_id, .. } = e {
+            if let ObjectChange::Published { package_id, .. } = e {
                 Some(package_id)
             } else {
                 None
@@ -371,19 +378,17 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     assert_eq!(0, result.value);
 
-    let treasury_cap = events
-        .data
+    let object_changes = tx_response.object_changes.as_ref().unwrap();
+    let treasury_cap = object_changes
         .iter()
         .find_map(|e| {
-            if let SuiEvent::NewObject {
+            if let ObjectChange::Created {
                 object_id,
                 object_type,
                 ..
             } = e
             {
-                if TreasuryCap::type_(parse_sui_struct_tag(&coin_name).unwrap())
-                    == parse_sui_struct_tag(object_type).unwrap()
-                {
+                if &TreasuryCap::type_(parse_sui_struct_tag(&coin_name).unwrap()) == object_type {
                     Some(object_id)
                 } else {
                     None
@@ -554,7 +559,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions with smaller range
     let tx = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(3), true)
+        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(3), true)
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
@@ -563,7 +568,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get all transactions paged
     let first_page = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(5), false)
+        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(5), false)
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
@@ -571,7 +576,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     let second_page = client
         .read_api()
-        .get_transactions(TransactionQuery::All, first_page.next_cursor, None, false)
+        .query_transactions(
+            SuiTransactionResponseQuery::default(),
+            first_page.next_cursor,
+            None,
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(16, second_page.data.len());
@@ -584,19 +594,21 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get 10 latest transactions paged
     let latest = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(10), true)
+        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(10), true)
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
-    assert_eq!(Some(all_txs_rev[9]), latest.next_cursor);
+    assert_eq!(Some(all_txs_rev[9].digest), latest.next_cursor);
     assert_eq!(all_txs_rev[0..10], latest.data);
     assert!(latest.has_next_page);
 
     // test get from address txs in ascending order
     let address_txs_asc = client
         .read_api()
-        .get_transactions(
-            TransactionQuery::FromAddress(cluster.accounts[0]),
+        .query_transactions(
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(
+                cluster.accounts[0],
+            )),
             None,
             None,
             false,
@@ -608,8 +620,10 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get from address txs in descending order
     let address_txs_desc = client
         .read_api()
-        .get_transactions(
-            TransactionQuery::FromAddress(cluster.accounts[0]),
+        .query_transactions(
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(
+                cluster.accounts[0],
+            )),
             None,
             None,
             true,
@@ -626,16 +640,16 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions
     let tx = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(20), true)
+        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(20), true)
         .await
         .unwrap();
     assert_eq!(20, tx.data.len());
 
     // test get_transaction
-    for tx_digest in tx.data {
+    for tx_resp in tx.data {
         let response: SuiTransactionResponse = client
             .read_api()
-            .get_transaction_with_options(tx_digest, SuiTransactionResponseOptions::new())
+            .get_transaction_with_options(tx_resp.digest, SuiTransactionResponseOptions::new())
             .await
             .unwrap();
         assert!(tx_responses

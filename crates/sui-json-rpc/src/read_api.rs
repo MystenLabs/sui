@@ -1,31 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fastcrypto::encoding::Base64;
 use futures::future::join_all;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-use tap::TapFallible;
-use tracing::debug;
-
-use fastcrypto::encoding::Base64;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
+use sui_types::messages::TransactionDataAPI;
+use tap::TapFallible;
+use tracing::debug;
+
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionsPage,
+    BalanceChange, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectChange,
+    ObjectValueKind, Page, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
+    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -44,14 +47,16 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
-use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::query::EventQuery;
 
 use crate::api::cap_page_limit;
 use crate::api::ReadApiServer;
-use crate::error::Error;
-use crate::SuiRpcModule;
-
 use crate::api::QUERY_MAX_RESULT_LIMIT;
+use crate::error::Error;
+use crate::{
+    get_balance_change_from_effect, get_object_change_from_effect, ObjectProviderCache,
+    SuiRpcModule,
+};
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
@@ -71,6 +76,8 @@ struct IntermediateTransactionResponse {
     effects: Option<TransactionEffects>,
     events: Option<SuiTransactionEvents>,
     checkpoint_seq: Option<CheckpointSequenceNumber>,
+    balance_changes: Option<Vec<BalanceChange>>,
+    object_changes: Option<Vec<ObjectChange>>,
     timestamp: Option<CheckpointTimestamp>,
     errors: Vec<String>,
 }
@@ -324,7 +331,8 @@ impl ReadApiServer for ReadApi {
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
-        if opts.show_input {
+        // the input is needed for object_changes to retrieve the sender address.
+        if opts.show_input || opts.show_object_changes {
             temp_response.transaction =
                 Some(self.state.get_executed_transaction(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
@@ -362,8 +370,7 @@ impl ReadApiServer for ReadApi {
             if let Some(digest) = temp_response.effects.as_ref().unwrap().events_digest() {
                 let events = self
                     .state
-                    .get_transaction_events(*digest)
-                    .await
+                    .get_transaction_events(digest)
                     .map_err(Error::from)?;
                 match to_sui_transaction_events(self, events) {
                     Ok(e) => temp_response.events = Some(e),
@@ -373,6 +380,28 @@ impl ReadApiServer for ReadApi {
                 // events field will be Some if and only if `show_events` is true and
                 // there is no error in converting fetching events
                 temp_response.events = Some(SuiTransactionEvents::default());
+            }
+        }
+
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        if opts.show_balance_changes {
+            if let Some(effects) = &temp_response.effects {
+                let balance_changes = get_balance_change_from_effect(&object_cache, effects)
+                    .await
+                    .map_err(Error::SuiError)?;
+                temp_response.balance_changes = Some(balance_changes);
+            }
+        }
+
+        if opts.show_object_changes {
+            if let (Some(effects), Some(input)) =
+                (&temp_response.effects, &temp_response.transaction)
+            {
+                let sender = input.data().intent_message.value.sender();
+                let object_changes = get_object_change_from_effect(&object_cache, sender, effects)
+                    .await
+                    .map_err(Error::SuiError)?;
+                temp_response.object_changes = Some(object_changes);
             }
         }
 
@@ -392,6 +421,18 @@ impl ReadApiServer for ReadApi {
             })
             .into());
         }
+
+        let opts = opts.unwrap_or_default();
+        if opts.show_balance_changes || opts.show_object_changes {
+            // Not supported because it's likely the response will easily exceed response limit
+            return Err(anyhow!(UserInputError::Unsupported(
+                "show_balance_changes and show_object_changes is not available on \
+                multiGetTransactions"
+                    .to_string()
+            ))
+            .into());
+        }
+
         // use LinkedHashMap to dedup and can iterate in insertion order.
         let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
             LinkedHashMap::from_iter(
@@ -402,8 +443,6 @@ impl ReadApiServer for ReadApi {
         if temp_response.len() < num_digests {
             return Err(anyhow!("The list of digests in the input contain duplicates").into());
         }
-
-        let opts = opts.unwrap_or_default();
 
         if opts.show_input {
             let transactions = self
@@ -647,9 +686,9 @@ impl ReadApiServer for ReadApi {
         }?)
     }
 
-    async fn get_transactions(
+    async fn query_transactions(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         // exclusive cursor if `Some`, otherwise start from the beginning
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
@@ -657,16 +696,37 @@ impl ReadApiServer for ReadApi {
     ) -> RpcResult<TransactionsPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
+        let opts = query.options.unwrap_or_default();
+        if opts.show_balance_changes || opts.show_object_changes {
+            // Not supported because it's likely the response will easily exceed response limit
+            return Err(anyhow!(UserInputError::Unsupported(
+                "show_balance_changes and show_object_changes is not available on \
+                queryTransactions"
+                    .to_string()
+            ))
+            .into());
+        }
 
         // Retrieve 1 extra item for next cursor
-        let mut data = self
-            .state
-            .get_transactions(query, cursor, Some(limit + 1), descending)?;
+        let mut digests =
+            self.state
+                .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
 
         // extract next cursor
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
-        let next_cursor = data.last().cloned().map_or(cursor, Some);
+        let has_next_page = digests.len() > limit;
+        digests.truncate(limit);
+        let next_cursor = digests.last().cloned().map_or(cursor, Some);
+
+        let data: Vec<SuiTransactionResponse> = if opts.only_digest() {
+            digests
+                .into_iter()
+                .map(SuiTransactionResponse::new)
+                .collect()
+        } else {
+            self.multi_get_transactions_with_options(digests, Some(opts))
+                .await?
+        };
+
         Ok(Page {
             data,
             next_cursor,
@@ -1000,5 +1060,12 @@ fn convert_to_response(
         response.events = cache.events;
     }
 
+    if opts.show_balance_changes {
+        response.balance_changes = cache.balance_changes;
+    }
+
+    if opts.show_object_changes {
+        response.object_changes = cache.object_changes;
+    }
     response
 }

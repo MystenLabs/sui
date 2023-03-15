@@ -183,7 +183,7 @@ impl ProgrammableTransactionBuilder {
         self.command(Command::Publish(modules))
     }
 
-    pub fn publish(&mut self, modules: Vec<Vec<u8>>) {
+    pub fn publish_immutable(&mut self, modules: Vec<Vec<u8>>) {
         let cap = self.publish_upgradeable(modules);
         self.commands
             .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
@@ -201,7 +201,7 @@ impl ProgrammableTransactionBuilder {
         transitive_deps: Vec<ObjectID>,
         modules: Vec<Vec<u8>>,
     ) -> Argument {
-        self.command(Command::Upgrade(upgrade_ticket, transitive_deps, modules))
+        self.command(Command::Upgrade(modules, transitive_deps, upgrade_ticket))
     }
 
     pub fn transfer_arg(&mut self, recipient: SuiAddress, arg: Argument) {

@@ -185,7 +185,10 @@ impl ObjectValue {
         contents: &[u8],
     ) -> Result<Self, ExecutionError> {
         let contents = if type_.is_coin() {
-            ObjectContents::Coin(Coin::from_bcs_bytes(contents)?)
+            let Ok(coin) = Coin::from_bcs_bytes(contents) else{
+                invariant_violation!("Could not deserialize a coin")
+            };
+            ObjectContents::Coin(coin)
         } else {
             ObjectContents::Raw(contents.to_vec())
         };

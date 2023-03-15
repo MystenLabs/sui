@@ -26,10 +26,19 @@ pub struct DelegationTestPayload {
 }
 
 impl Payload for DelegationTestPayload {
+    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        let coin = match self.coin {
+            None => Some(effects.created().get(0).unwrap().0),
+            Some(_) => None,
+        };
+        self.coin = coin;
+        self.gas = effects.gas_object().0;
+    }
+
     /// delegation flow is split into two phases
     /// first `make_transaction` call creates separate coin object for future delegation
     /// followup call creates delegation transaction itself
-    fn make_transaction(&self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> VerifiedTransaction {
         match self.coin {
             Some(coin) => make_staking_transaction(
                 self.gas,
@@ -50,26 +59,12 @@ impl Payload for DelegationTestPayload {
         }
     }
 
-    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
-        let coin = match self.coin {
-            None => Some(effects.created().get(0).unwrap().0),
-            Some(_) => None,
-        };
-        Box::new(DelegationTestPayload {
-            coin,
-            gas: effects.gas_object().0,
-            validator: self.validator,
-            sender: self.sender,
-            keypair: self.keypair,
-            system_state_observer: self.system_state_observer,
-        })
-    }
-
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Delegation
     }
 }
 
+#[derive(Debug)]
 pub struct DelegationWorkload;
 
 impl DelegationWorkload {
@@ -133,9 +128,5 @@ impl Workload<dyn Payload> for DelegationWorkload {
 
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Delegation
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DelegationWorkload")
     }
 }

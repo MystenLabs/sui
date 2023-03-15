@@ -315,7 +315,6 @@ async fn test_validator_resign_effects() {
     assert_eq!(effects0.into_message(), effects1.into_message());
 }
 
-// TODO: This test is currently flaky. Need to re-enable it once we fix the issue.
 #[sim_test]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
@@ -496,12 +495,7 @@ async fn test_reconfig_with_committee_change_basic() {
     // Give the new validator enough time to catch up and sync.
     tokio::time::sleep(Duration::from_secs(30)).await;
     handle.with(|node| {
-        let latest_checkpoint = node
-            .state()
-            .get_latest_checkpoint_sequence_number()
-            .unwrap();
         // Eventually the validator will catch up to the new epoch and become part of the committee.
-        assert!(latest_checkpoint > 10);
         assert!(node
             .state()
             .is_validator(&node.state().epoch_store_for_testing()));

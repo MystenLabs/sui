@@ -9,8 +9,8 @@ expression: common_costs_actual
     "storageRebate": 0
   },
   "Publish": {
-    "computationCost": 638,
-    "storageCost": 133,
+    "computationCost": 640,
+    "storageCost": 154,
     "storageRebate": 0
   },
   "SharedCounterAssertValue": {

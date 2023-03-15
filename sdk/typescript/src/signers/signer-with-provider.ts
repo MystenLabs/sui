@@ -6,7 +6,6 @@ import { Transaction } from '../builder';
 import { TransactionDataBuilder } from '../builder/TransactionData';
 import { SerializedSignature } from '../cryptography/signature';
 import { Provider } from '../providers/provider';
-import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
 import {
   ExecuteTransactionRequestType,
@@ -59,8 +58,8 @@ export abstract class SignerWithProvider implements Signer {
     );
   }
 
-  constructor(provider?: Provider) {
-    this.provider = provider || new VoidProvider();
+  constructor(provider: Provider) {
+    this.provider = provider;
   }
 
   /**

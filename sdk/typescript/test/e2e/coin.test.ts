@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Coin,
-  Commands,
   normalizeSuiObjectId,
   ObjectId,
   SuiObjectInfo,
@@ -29,8 +28,8 @@ describe('Coin related API', () => {
     tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const recieverInput = tx.pure(toolbox.address());
     SPLIT_AMOUNTS.forEach((amount) => {
-      const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(amount)));
-      tx.add(Commands.TransferObjects([coin], recieverInput));
+      const coin = tx.splitCoin(tx.gas, tx.pure(amount));
+      tx.transferObjects([coin], recieverInput);
     });
 
     // split coins into desired amount

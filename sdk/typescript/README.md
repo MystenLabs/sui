@@ -234,72 +234,87 @@ For any operations that involves signing or submitting transactions, you should 
 To transfer a `0x2::coin::Coin<SUI>`:
 
 ```typescript
-import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const transferTxn = await signer.transferObject({
-  objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
-  gasBudget: 1000,
-  recipient: '0xd84058cb73bdeabe123b56632713dcd65e1a6c92',
-});
-console.log('transferTxn', transferTxn);
+const tx = new Transaction();
+tx.transferObjects(
+  [tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0')],
+  tx.pure('0xd84058cb73bdeabe123b56632713dcd65e1a6c92'),
+);
+const result = await signer.signAndExecuteTransaction(tx);
+console.log({ result });
 ```
 
-To split a `0x2::coin::Coin<SUI>` into multiple coins
+To split the gas coin into another coin:
 
 ```typescript
-import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const splitTxn = await signer.splitCoin({
-  coinObjectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
-  // Say if the original coin has a balance of 100,
-  // This function will create three new coins of amount 10, 20, 30,
-  // respectively, the original coin will retain the remaining balance(40).
-  splitAmounts: [10, 20, 30],
-  gasBudget: 1000,
-});
-console.log('SplitCoin txn', splitTxn);
+const tx = new Transaction();
+const coin = tx.splitCoin(tx.gas, tx.pure(1000));
+tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
+const result = await signer.signAndExecuteTransaction(tx);
+console.log({ result });
 ```
 
 To merge two coins:
 
 ```typescript
-import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const mergeTxn = await signer.mergeCoin({
-  primaryCoin: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
-  coinToMerge: '0xcc460051569bfb888dedaf5182e76f473ee351af',
-  gasBudget: 1000,
-});
-console.log('MergeCoin txn', mergeTxn);
+const tx = new Transaction();
+tx.mergeCoin(tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0'), [
+  tx.object('0xcc460051569bfb888dedaf5182e76f473ee351af'),
+]);
+const result = await signer.signAndExecuteTransaction(tx);
+console.log({ result });
 ```
 
 To make a move call:
 
 ```typescript
-import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const packageObjectId = '0x...';
-const moveCallTxn = await signer.executeMoveCall({
-  packageObjectId,
-  module: 'nft',
-  function: 'mint',
-  typeArguments: [],
-  arguments: ['Example NFT'],
-  gasBudget: 10000,
+const tx = new Transaction();
+tx.moveCall({
+  target: `${packageObjectId}::nft::mint`,
+  arguments: [tx.pure('Example NFT')],
 });
-console.log('moveCallTxn', moveCallTxn);
+const result = await signer.signAndExecuteTransaction(tx);
+console.log({ result });
 ```
 
 Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
@@ -347,7 +362,12 @@ const devNftSub = await provider.subscribeEvent(
 To publish a package:
 
 ```typescript
-import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
 const { execSync } = require('child_process');
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
@@ -359,12 +379,10 @@ const compiledModules = JSON.parse(
     { encoding: 'utf-8' },
   ),
 );
-
-const publishTxn = await signer.publish({
-  compiledModules: compiledModules,
-  gasBudget: 10000,
-});
-console.log('publishTxn', publishTxn);
+const tx = new Transaction();
+tx.publish(compiledModules);
+const result = await signer.signAndExecuteTransaction(tx);
+console.log({ result });
 ```
 
 Alternatively, a Secp256k1 can be initiated:

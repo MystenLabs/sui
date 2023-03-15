@@ -384,7 +384,7 @@ impl Event {
 
     /// Extract a module name, if available, from a SuiEvent
     // TODO: should we switch to IdentStr or &str?  These are more complicated to make work due to lifetimes
-    pub fn module_name(&self) -> Option<&str> {
+    pub fn module_name(&self) -> Option<&IdentStr> {
         match self {
             Event::MoveEvent {
                 transaction_module, ..
@@ -403,7 +403,7 @@ impl Event {
             }
             | Event::CoinBalanceChange {
                 transaction_module, ..
-            } => Some(transaction_module.as_str()),
+            } => Some(transaction_module),
             _ => None,
         }
     }
@@ -449,9 +449,9 @@ impl Event {
 
     /// Extracts the move event name (StructTag) from a SuiEvent, if available
     /// "0x2::devnet_nft::MintNFTEvent"
-    pub fn move_event_name(&self) -> Option<String> {
+    pub fn move_event_name(&self) -> Option<&StructTag> {
         if let Event::MoveEvent { type_, .. } = self {
-            Some(type_.to_string())
+            Some(type_)
         } else {
             None
         }

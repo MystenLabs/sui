@@ -87,8 +87,8 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
         return null;
 
     const [from, to] = await Promise.all([
-        rpc.getTransactions({ FromAddress: normalized }, null, 1),
-        rpc.getTransactions({ ToAddress: normalized }, null, 1),
+        rpc.queryTransactions({ filter: { FromAddress: normalized } }, null, 1),
+        rpc.queryTransactions({ filter: { ToAddress: normalized } }, null, 1),
     ]);
 
     if (from.data?.length || to.data?.length) {

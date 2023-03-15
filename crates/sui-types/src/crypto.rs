@@ -546,10 +546,15 @@ where
 }
 
 pub const TEST_COMMITTEE_SIZE: usize = 4;
-/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+
 pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
+    random_committee_key_pairs_of_size(TEST_COMMITTEE_SIZE)
+}
+
+/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
-    (0..TEST_COMMITTEE_SIZE)
+    (0..size)
         .map(|_| {
             // TODO: We are generating the keys 4 times to match exactly as how we generate
             // keys in ConfigBuilder::build (sui-config/src/builder.rs). This is because
