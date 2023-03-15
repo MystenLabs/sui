@@ -3,6 +3,7 @@
 
 // import { Transaction } from '@mysten/sui.js';
 import { useCallback, useMemo } from 'react';
+import toast from 'react-hot-toast';
 
 import { Permissions } from './Permissions';
 import { SummaryCard } from './SummaryCard';
@@ -11,6 +12,8 @@ import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
+import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
+import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 
 import st from './TransactionRequest.module.scss';
@@ -25,6 +28,11 @@ export type TransactionRequestProps = {
 };
 
 export function TransactionRequest({ txRequest }: TransactionRequestProps) {
+    const accounts = useAccounts();
+    const accountForTransaction = accounts.find(
+        (account) => account.address === txRequest.tx.account
+    );
+    const { initializeLedgerSignerInstance } = useSuiLedgerClient();
     const dispatch = useAppDispatch();
     // const tx = useMemo(
     //     () => Transaction.from(txRequest.tx.data),
@@ -33,15 +41,28 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     const addressForTransaction = txRequest.tx.account;
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
-            await dispatch(
-                respondToTransactionRequest({
-                    approved,
-                    txRequestID: txRequest.id,
-                    addressForTransaction,
-                })
-            );
+            if (accountForTransaction) {
+                await dispatch(
+                    respondToTransactionRequest({
+                        approved,
+                        txRequestID: txRequest.id,
+                        accountForTransaction,
+                        initializeLedgerSignerInstance,
+                    })
+                );
+            } else {
+                toast.error(
+                    `Account for address ${txRequest.tx.account} not found`
+                );
+            }
         },
-        [dispatch, txRequest, addressForTransaction]
+        [
+            accountForTransaction,
+            dispatch,
+            txRequest.id,
+            txRequest.tx.account,
+            initializeLedgerSignerInstance,
+        ]
     );
 
     // TODO: Add back metadata support:

@@ -3,16 +3,22 @@
 
 import {
     fromB64,
+    type SignerWithProvider,
     Transaction,
     type SignedMessage,
     type SignedTransaction,
-    type SuiAddress,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
     createSlice,
 } from '@reduxjs/toolkit';
+
+import {
+    AccountType,
+    type SerializedAccount,
+} from '_src/background/keyring/Account';
+import { type LedgerSigner } from '_src/ui/app/LedgerSigner';
 
 import type { SuiTransactionResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -37,13 +43,21 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        addressForTransaction: SuiAddress;
+        accountForTransaction: SerializedAccount;
+        initializeLedgerSignerInstance: (
+            derivationPath: string
+        ) => Promise<LedgerSigner>;
     },
     AppThunkConfig
 >(
     'respond-to-transaction-request',
     async (
-        { txRequestID, approved, addressForTransaction },
+        {
+            txRequestID,
+            approved,
+            accountForTransaction,
+            initializeLedgerSignerInstance,
+        },
         { extra: { background, api }, getState }
     ) => {
         const state = getState();
@@ -56,10 +70,18 @@ export const respondToTransactionRequest = createAsyncThunk<
             undefined;
         let txResultError: string | undefined;
         if (approved) {
-            const signer = api.getSignerInstance(
-                addressForTransaction,
-                background
-            );
+            let signer: SignerWithProvider | undefined;
+            if (accountForTransaction.type === AccountType.LEDGER) {
+                signer = await initializeLedgerSignerInstance(
+                    accountForTransaction.derivationPath
+                );
+            } else {
+                signer = api.getSignerInstance(
+                    accountForTransaction,
+                    background
+                );
+            }
+
             try {
                 if (txRequest.tx.type === 'sign-message') {
                     txResult = await signer.signMessage({
