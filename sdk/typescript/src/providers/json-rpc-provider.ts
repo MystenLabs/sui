@@ -58,7 +58,7 @@ import {
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { any, is, number, array } from 'superstruct';
+import { any, is, number, array, string } from 'superstruct';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
@@ -826,12 +826,12 @@ export class JsonRpcProvider {
   /**
    * Getting the reference gas price for the network
    */
-  async getReferenceGasPrice(): Promise<number> {
+  async getReferenceGasPrice(): Promise<string> {
     try {
       return await this.client.requestWithType(
         'sui_getReferenceGasPrice',
         [],
-        number(),
+        string(),
         this.options.skipDataValidation,
       );
     } catch (err) {

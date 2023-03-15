@@ -263,6 +263,6 @@ impl DataReader for ReadApi {
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.get_reference_gas_price().await?)
+        Ok(self.get_reference_gas_price().await?.into())
     }
 }

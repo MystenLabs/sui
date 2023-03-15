@@ -13,11 +13,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
-    DynamicFieldPage, EventFilter, EventPage, SuiCoinMetadata, SuiCommittee, SuiEvent,
-    SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
+    Balance, BigInt, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
+    DryRunTransactionResponse, DynamicFieldPage, EventFilter, EventPage, SuiCoinMetadata,
+    SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions,
+    SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+    TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -224,8 +225,8 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<BigInt> {
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 
     pub async fn dry_run_transaction(
@@ -541,7 +542,7 @@ impl GovernanceApi {
     }
 
     /// Return the reference gas price for the network
-    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<BigInt> {
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 }

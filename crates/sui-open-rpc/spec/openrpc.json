@@ -43,9 +43,7 @@
           "name": "gas_price",
           "description": "Gas is not charged, but gas usage is still calculated. Default to use reference gas price",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         },
         {
@@ -1082,12 +1080,10 @@
       "description": "Return the reference gas price for the network",
       "params": [],
       "result": {
-        "name": "u64",
+        "name": "BigInt",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/BigInt"
         }
       }
     },

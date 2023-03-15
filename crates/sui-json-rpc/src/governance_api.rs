@@ -4,7 +4,7 @@
 use jsonrpsee::core::RpcResult;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{BigInt, SuiCommittee};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 use crate::api::GovernanceReadApiServer;
@@ -199,9 +199,9 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .into_sui_system_state_summary())
     }
 
-    async fn get_reference_gas_price(&self) -> RpcResult<u64> {
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(epoch_store.reference_gas_price())
+        Ok(epoch_store.reference_gas_price().into())
     }
 }
 
