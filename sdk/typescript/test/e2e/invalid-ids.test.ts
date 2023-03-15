@@ -15,7 +15,7 @@ describe('Object id/Address/Transaction digest validation', () => {
   it('Test all functions with invalid Sui Address', async () => {
     //empty id
     expect(
-      toolbox.provider.getObjectsOwnedByAddress({ owner: '' }),
+      toolbox.provider.getOwnedObjects({ owner: '' }),
     ).rejects.toThrowError(/Invalid Sui address/);
 
     //wrong id

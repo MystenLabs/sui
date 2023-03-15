@@ -19,10 +19,10 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
-    SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef, SuiObjectResponse,
-    SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
-    SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiParsedData,
+    SuiPastObjectResponse, SuiTransaction, SuiTransactionData, SuiTransactionEffects,
+    SuiTransactionEffectsV1, SuiTransactionResponse, SuiTransactionResponseOptions,
+    TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -74,7 +74,7 @@ impl RpcExampleProvider {
             self.batch_transaction_examples(),
             self.get_object_example(),
             self.get_past_object_example(),
-            self.get_objects_owned_by_address(),
+            self.get_owned_objects(),
             self.get_total_transaction_number(),
             self.get_transaction(),
             self.query_transactions(),
@@ -301,24 +301,40 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_objects_owned_by_address(&mut self) -> Examples {
+    fn get_owned_objects(&mut self) -> Examples {
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let result = (0..4)
-            .map(|_| SuiObjectInfo {
+            .map(|_| SuiObjectData {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: ObjectType::Struct(MoveObjectType::GasCoin).to_string(),
-                owner: Owner::AddressOwner(owner),
-                previous_transaction: TransactionDigest::new(self.rng.gen()),
+                type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+                owner: Some(Owner::AddressOwner(owner)),
+                previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
+                storage_rebate: None,
+                display: None,
+                content: None,
+                bcs: None,
             })
             .collect::<Vec<_>>();
 
         Examples::new(
-            "sui_getObjectsOwnedByAddress",
+            "sui_getOwnedObjects",
             vec![ExamplePairing::new(
                 "Get objects owned by an address",
-                vec![("address", json!(owner))],
+                vec![
+                    ("address", json!(owner)),
+                    (
+                        "options",
+                        json!(SuiObjectDataOptions::new()
+                            .with_type()
+                            .with_owner()
+                            .with_previous_transaction()),
+                    ),
+                    ("cursor", json!(ObjectID::new(self.rng.gen()))),
+                    ("limit", json!(100)),
+                    ("at_checkpoint", json!(None::<CheckpointId>)),
+                ],
                 json!(result),
             )],
         )

@@ -5,9 +5,9 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiGetPastObjectRequest,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectsPage,
+    SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
     TransactionsPage,
 };
@@ -22,12 +22,20 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 #[rpc(server, client, namespace = "sui")]
 pub trait ReadApi {
     /// Return the list of objects owned by an address.
-    #[method(name = "getObjectsOwnedByAddress")]
-    async fn get_objects_owned_by_address(
+    #[method(name = "getOwnedObjects")]
+    async fn get_owned_objects(
         &self,
         /// the owner's Sui address
         address: SuiAddress,
-    ) -> RpcResult<Vec<SuiObjectInfo>>;
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+        /// Optional paging cursor
+        cursor: Option<ObjectID>,
+        /// Max number of items returned per page, default to [MAX_GET_OWNED_OBJECT_SIZE] if not specified.
+        limit: Option<usize>,
+        /// If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.
+        at_checkpoint: Option<CheckpointId>,
+    ) -> RpcResult<ObjectsPage>;
 
     /// Return the list of dynamic field objects owned by an object.
     #[method(name = "getDynamicFields")]
