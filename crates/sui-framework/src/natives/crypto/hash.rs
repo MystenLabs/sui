@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::legacy_empty_cost;
+use crate::{legacy_empty_cost, natives::NativesCostTable};
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
-use move_vm_runtime::native_functions::NativeContext;
+use move_core_types::gas_algebra::InternalGas;
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -11,12 +12,14 @@ use move_vm_types::{
     values::{Value, VectorRef},
 };
 use smallvec::smallvec;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Mul};
 
 fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
+    // The caller provides the cost per byte
+    msg_cost_per_byte: InternalGas,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
@@ -24,6 +27,13 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
     let msg = pop_arg!(args, VectorRef);
+    let msg_ref = msg.as_bytes_ref();
+
+    // Charge the msg dependent costs
+    native_charge_gas_early_exit!(
+        context,
+        msg_cost_per_byte.mul((msg_ref.len() as u64).into())
+    );
 
     Ok(NativeResult::ok(
         cost,
@@ -33,18 +43,76 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     ))
 }
 
+#[derive(Clone)]
+pub struct HashKeccak256CostParams {
+    /// Base cost for invoking the `blake2b256` function
+    pub hash_keccak256_cost_base: InternalGas,
+    /// Cost per byte of `data`
+    pub hash_keccak256_data_cost_per_byte: InternalGas,
+}
+
+/***************************************************************************************************
+ * native fun keccak256
+ * Implementation of the Move native function `hash::keccak256(data: &vector<u8>): vector<u8>`
+ *   gas cost: hash_keccak256_cost_base                               | base cost for function call and fixed opers
+ *              + hash_keccak256_data_cost_per_byte * msg.len()       | cost depends on length of message
+ **************************************************************************************************/
 pub fn keccak256(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    hash::<Keccak256, 32>(context, ty_args, args)
+    // Load the cost paramaters from the protocol config
+    let hash_keccak256_cost_params = &context
+        .extensions()
+        .get::<NativesCostTable>()
+        .hash_keccak256_cost_params
+        .clone();
+    // Charge the base cost for this oper
+    native_charge_gas_early_exit!(context, hash_keccak256_cost_params.hash_keccak256_cost_base);
+
+    hash::<Keccak256, 32>(
+        context,
+        ty_args,
+        args,
+        hash_keccak256_cost_params.hash_keccak256_cost_base,
+    )
 }
 
+#[derive(Clone)]
+pub struct HashBlake2b256CostParams {
+    /// Base cost for invoking the `blake2b256` function
+    pub hash_blake2b256_cost_base: InternalGas,
+    /// Cost per byte of `data`
+    pub hash_blake2b256_data_cost_per_byte: InternalGas,
+}
+/***************************************************************************************************
+ * native fun blake2b256
+ * Implementation of the Move native function `hash::blake2b256(data: &vector<u8>): vector<u8>`
+ *   gas cost: hash_blake2b256_cost_base                               | base cost for function call and fixed opers
+ *              + hash_blake2b256_data_cost_per_byte * msg.len()       | cost depends on length of message
+ **************************************************************************************************/
 pub fn blake2b256(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    hash::<Blake2b256, 32>(context, ty_args, args)
+    // Load the cost paramaters from the protocol config
+    let hash_blake2b256_cost_params = &context
+        .extensions()
+        .get::<NativesCostTable>()
+        .hash_blake2b256_cost_params
+        .clone();
+    // Charge the base cost for this oper
+    native_charge_gas_early_exit!(
+        context,
+        hash_blake2b256_cost_params.hash_blake2b256_cost_base
+    );
+
+    hash::<Blake2b256, 32>(
+        context,
+        ty_args,
+        args,
+        hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_byte,
+    )
 }
