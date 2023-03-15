@@ -37,6 +37,7 @@ use tracing::{error, info};
 use sui_types::event::EventID;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
+const PG_COMMIT_CHUNK_SIZE: usize = 1000;
 
 const GET_PARTITION_SQL: &str = r#"
 SELECT parent.relname                           AS table_name,
@@ -689,8 +690,187 @@ impl IndexerStore for PgIndexerStore {
         } = data;
 
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        // Commit indexed transactions
+        for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(transactions::table)
+                        .values(transaction_chunk)
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing transactions to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
 
-        // Commit indexed checkpoint in one transaction
+        // Commit indexed events
+        for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(events::table)
+                        .values(event_chunk)
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing events to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Commit indexed objects
+        for changes in objects_changes {
+            for mutated_object_change_chunk in changes.mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE)
+            {
+                pg_pool_conn
+                    .build_transaction()
+                    .serializable()
+                    .read_write()
+                    .run(|conn| {
+                        diesel::insert_into(objects::table)
+                            .values(mutated_object_change_chunk)
+                            .on_conflict(objects::object_id)
+                            .do_update()
+                            .set((
+                                objects::epoch.eq(excluded(objects::epoch)),
+                                objects::checkpoint.eq(excluded(objects::checkpoint)),
+                                objects::version.eq(excluded(objects::version)),
+                                objects::object_digest.eq(excluded(objects::object_digest)),
+                                objects::owner_address.eq(excluded(objects::owner_address)),
+                                objects::previous_transaction
+                                    .eq(excluded(objects::previous_transaction)),
+                                objects::object_status.eq(excluded(objects::object_status)),
+                            ))
+                            .execute(conn)
+                    })
+                    .map_err(|e| {
+                        IndexerError::PostgresWriteError(format!(
+                            "Failed writing objects to PostgresDB with error: {:?}",
+                            e
+                        ))
+                    })?;
+            }
+
+            for deleted_object_change_chunk in changes.deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE)
+            {
+                pg_pool_conn
+                    .build_transaction()
+                    .serializable()
+                    .read_write()
+                    .run(|conn| {
+                        diesel::insert_into(objects::table)
+                            .values(deleted_object_change_chunk)
+                            .on_conflict(objects::object_id)
+                            .do_update()
+                            .set((
+                                objects::epoch.eq(excluded(objects::epoch)),
+                                objects::checkpoint.eq(excluded(objects::checkpoint)),
+                                objects::version.eq(excluded(objects::version)),
+                                objects::previous_transaction
+                                    .eq(excluded(objects::previous_transaction)),
+                                objects::object_status.eq(excluded(objects::object_status)),
+                            ))
+                            .execute(conn)
+                    })
+                    .map_err(|e| {
+                        IndexerError::PostgresWriteError(format!(
+                            "Failed writing objects to PostgresDB with error: {:?}",
+                            e
+                        ))
+                    })?;
+            }
+        }
+
+        // Commit indexed addresses
+        for addresses_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(addresses::table)
+                        .values(addresses_chunk)
+                        .on_conflict(addresses::account_address)
+                        .do_nothing()
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing addresses to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Commit indexed packages
+        for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(packages::table)
+                        .values(packages_chunk)
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing packages to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Commit indexed move calls
+        for move_calls_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(move_calls::table)
+                        .values(move_calls_chunk)
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing move_calls to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Commit indexed recipients
+        for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(recipients::table)
+                        .values(recipients_chunk)
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing recipients to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Commit indexed checkpoint last, so that if the checkpoint is committed,
+        // all related data have been committed as well.
         pg_pool_conn
             .build_transaction()
             .serializable()
@@ -698,74 +878,12 @@ impl IndexerStore for PgIndexerStore {
             .run(|conn| {
                 diesel::insert_into(checkpoints::table)
                     .values(checkpoint)
-                    .execute(conn)?;
-
-                diesel::insert_into(transactions::table)
-                    .values(transactions)
-                    .execute(conn)?;
-
-                diesel::insert_into(events::table)
-                    .values(events)
-                    .execute(conn)?;
-
-                // Object need to bulk insert by transaction to prevent same object mutated twice in the same sql call,
-                // which will result in "ON CONFLICT DO UPDATE command cannot affect row a second time" error
-                for changes in objects_changes {
-                    diesel::insert_into(objects::table)
-                        .values(&changes.mutated_objects)
-                        .on_conflict(objects::object_id)
-                        .do_update()
-                        .set((
-                            objects::epoch.eq(excluded(objects::epoch)),
-                            objects::checkpoint.eq(excluded(objects::checkpoint)),
-                            objects::version.eq(excluded(objects::version)),
-                            objects::object_digest.eq(excluded(objects::object_digest)),
-                            objects::owner_address.eq(excluded(objects::owner_address)),
-                            objects::previous_transaction.eq(excluded(objects::previous_transaction)),
-                            objects::object_status.eq(excluded(objects::object_status)),
-                        ))
-                        .execute(conn)?;
-
-                    diesel::insert_into(objects::table)
-                        .values(&changes.deleted_objects)
-                        .on_conflict(objects::object_id)
-                        .do_update()
-                        .set((
-                            objects::epoch.eq(excluded(objects::epoch)),
-                            objects::checkpoint.eq(excluded(objects::checkpoint)),
-                            objects::version.eq(excluded(objects::version)),
-                            objects::previous_transaction.eq(excluded(objects::previous_transaction)),
-                            objects::object_status.eq(excluded(objects::object_status)),
-                        ))
-                        .execute(conn)?;
-                }
-
-                // Only insert once for address, skip if conflict
-                diesel::insert_into(addresses::table)
-                    .values(addresses)
-                    .on_conflict(addresses::account_address)
-                    .do_nothing()
-                    .execute(conn)?;
-
-                diesel::insert_into(packages::table)
-                    .values(packages)
-                    // We need to keep multiple version of the object in the database because of package upgrade.
-                    // Package with the same version number will not change, ignoring conflicts.
-                    .on_conflict_do_nothing()
-                    .execute(conn)?;
-
-                diesel::insert_into(move_calls::table)
-                    .values(move_calls)
-                    .execute(conn)?;
-
-                diesel::insert_into(recipients::table)
-                    .values(recipients)
                     .execute(conn)
             })
             .map_err(|e| {
                 IndexerError::PostgresWriteError(format!(
-                    "Failed writing checkpoint to PostgresDB with transactions {:?} and error: {:?}",
-                    transactions, e
+                    "Failed writing checkpoint to PostgresDB with error: {:?}",
+                    e
                 ))
             })
     }
