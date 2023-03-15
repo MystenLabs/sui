@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
+import { type ReactNode } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
@@ -26,10 +27,26 @@ const linkStyles = cva([], {
 
 export interface LinkProps
     extends ButtonOrLinkProps,
-        VariantProps<typeof linkStyles> {}
+        VariantProps<typeof linkStyles> {
+    before?: ReactNode;
+    after?: ReactNode;
+}
 
-export function Link({ variant, size, ...props }: LinkProps) {
+export function Link({
+    variant,
+    size,
+    before,
+    after,
+    children,
+    ...props
+}: LinkProps) {
     return (
-        <ButtonOrLink className={linkStyles({ variant, size })} {...props} />
+        <ButtonOrLink className={linkStyles({ variant, size })} {...props}>
+            <div className="inline-flex flex-nowrap gap-2">
+                {before}
+                {children}
+                {after}
+            </div>
+        </ButtonOrLink>
     );
 }
