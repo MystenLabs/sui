@@ -12,7 +12,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::checkpoint::Checkpoint;
+use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -1791,8 +1791,8 @@ pub struct DBOptions {
     pub rw_options: ReadWriteOptions,
 }
 
-/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
-pub fn default_db_options() -> DBOptions {
+/// Base options to be used across all rocksdb instances.
+pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
@@ -1838,13 +1838,36 @@ pub fn default_db_options() -> DBOptions {
     }
 }
 
+/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
+pub fn default_db_options() -> DBOptions {
+    let mut opt = base_db_options();
+
+    // Set options mostly similar to those used in optimize_for_point_lookup(),
+    // except non-default binary and hash index, to hopefully reduce lookup latencies
+    // without causing any regression for scanning, with slightly more memory usages.
+    // https://github.com/facebook/rocksdb/blob/11cb6af6e5009c51794641905ca40ce5beec7fee/options/options.cc#L611-L621
+    let mut block_options = BlockBasedOptions::default();
+    // Configure a 64MiB block cache.
+    block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
+    // Set a bloomfilter with 1% false positive rate.
+    block_options.set_bloom_filter(10.0, false);
+
+    // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
+    block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
+
+    opt.options.set_block_based_table_factory(&block_options);
+    // Set memtable bloomfilter.
+    opt.options.set_memtable_prefix_bloom_ratio(0.02);
+
+    opt
+}
+
 /// Creates a default RocksDB option, optimized for point lookup.
 pub fn point_lookup_db_options() -> DBOptions {
     let mut db_options = default_db_options();
     db_options
         .options
         .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
-    db_options.options.set_memtable_whole_key_filtering(true);
     db_options
 }
 
