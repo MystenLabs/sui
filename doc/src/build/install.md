@@ -141,7 +141,7 @@ Use the following command to install `libssl-dev`:
 sudo apt-get install libssl-dev
 ```
 
-If your Linux version does not have `libssl-dev` [find a correct package name here](https://index.ros.org/d/libssl-dev/).
+If the version of Linux you use doesn't support `libssl-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libssl-dev/).
 
 (Optional) If you have OpenSSL you might also need to also install `pkg-config`:
 
@@ -157,7 +157,7 @@ Use the following command to install `libclang-dev`:
 sudo apt-get install libclang-dev
 ```
 
-If your Linux version does not have `libclang-dev` [find a correct package name here](https://index.ros.org/d/libclang-dev/).
+If the version of Linux you use doesn't support `libclang-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libclang-dev/).
 
 ### libpq-dev
 
@@ -166,8 +166,7 @@ Use the following command to install `libpq-dev`:
 ```shell
 sudo apt-get install libpq-dev
 ```
-
-If your Linux version does not have `libpq-dev` [find a correct package name here](https://index.ros.org/d/libpq-dev/).
+If the version of Linux you use doesn't support `libpq-dev`, find an equivalent package for it on the [ROS Index](https://index.ros.org/d/libpq-dev/).
 
 ### build-essential
 Use the following command to install `build-essential`"
