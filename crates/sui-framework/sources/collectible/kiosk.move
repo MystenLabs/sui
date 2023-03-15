@@ -32,16 +32,16 @@
 /// be used to implement application-specific transfer rules.
 ///
 module sui::kiosk {
+    use std::type_name;
     use std::option::{Self, Option};
     use sui::object::{Self, UID, ID};
     use sui::dynamic_field as df;
-    use sui::package::{Self, Publisher};
     use sui::tx_context::{TxContext, sender};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::event;
-    use sui::nft_safe::{Self, NftSafe, OwnerCap};
+    use sui::nft_safe::{Self, NftSafe, OwnerCap, TransferRequest};
 
     // Collectible is a special case to avoid storing `Publisher`.
     friend sui::collectible;
@@ -97,24 +97,6 @@ module sui::kiosk {
         min_price: u64
     }
 
-    /// A "Hot Potato" forcing the buyer to get a transfer permission
-    /// from the item type (`T`) owner on purchase attempt.
-    struct TransferRequest<phantom T: key + store> {
-        /// Amount of SUI paid for the item. Can be used to
-        /// calculate the fee / transfer policy enforcement.
-        paid: u64,
-        /// The ID of the Kiosk the object is being sold from.
-        /// Can be used by the TransferPolicy implementors to
-        /// create an allowlist of Kiosks which can trade the type.
-        from: ID,
-    }
-
-    /// A unique capability that allows owner of the `T` to authorize
-    /// transfers. Can only be created with the `Publisher` object.
-    struct TransferPolicyCap<phantom T: key + store> has key, store {
-        id: UID
-    }
-
     // === Dynamic Field keys ===
 
     /// Dynamic field key for an active offer to purchase the T. If an
@@ -130,12 +112,6 @@ module sui::kiosk {
         kiosk: ID,
         id: ID,
         price: u64
-    }
-
-    /// Emitted when a publisher creates a new `TransferPolicyCap` making
-    /// the discoverability and tracking the supported types easier.
-    struct TransferPolicyCapIssued<phantom T: key + store> has copy, drop {
-        id: ID
     }
 
     // === New Kiosk + ownership modes ===
@@ -178,41 +154,6 @@ module sui::kiosk {
         assert!(object::id(self) == nft_safe::owner_cap_safe(owner), ENotOwner);
         let kiosk = nft_safe::borrow_inner_mut(self);
         kiosk.owner = sender(ctx);
-    }
-
-    // === Publisher functions ===
-
-    /// Register a type in the Kiosk system and receive an `TransferPolicyCap`
-    /// which is required to confirm kiosk deals for the `T`. If there's no
-    /// `TransferPolicyCap` available for use, the type can not be traded in
-    /// kiosks.
-    public fun new_transfer_policy_cap<T: key + store>(
-        pub: &Publisher, ctx: &mut TxContext
-    ): TransferPolicyCap<T> {
-        assert!(package::from_package<T>(pub), 0);
-        let id = object::new(ctx);
-        event::emit(TransferPolicyCapIssued<T> { id: object::uid_to_inner(&id) });
-        TransferPolicyCap { id }
-    }
-
-    /// Special case for the `sui::collectible` module to be able to register
-    /// type without a `Publisher` object. Is not magical and a similar logic
-    /// can be implemented for the regular `register_type` call for wrapped types.
-    public(friend) fun new_transfer_policy_cap_protected<T: key + store>(
-        ctx: &mut TxContext
-    ): TransferPolicyCap<T> {
-        let id = object::new(ctx);
-        event::emit(TransferPolicyCapIssued<T> { id: object::uid_to_inner(&id) });
-        TransferPolicyCap { id }
-    }
-
-    /// Destroy a TransferPolicyCap.
-    /// Can be performed by any party as long as they own it.
-    public fun destroy_transfer_policy_cap<T: key + store>(
-        cap: TransferPolicyCap<T>
-    ) {
-        let TransferPolicyCap { id } = cap;
-        object::delete(id);
     }
 
     // === Place and take from the Kiosk ===
@@ -288,9 +229,17 @@ module sui::kiosk {
     public fun purchase<T: key + store>(
         self: &mut NftSafe<Kiosk>, nft_id: ID, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
-        let item = nft_safe::get_nft_to_inner_entity<Kiosk, Witness, T>(
+        let tx_info = nft_safe::get_transaction_info(
+            balance::value(coin::balance(&payment)),
+            type_name::get<SUI>(),
+            object::id(self)
+        );
+              
+
+        let (item, request) = nft_safe::get_nft_to_inner_entity<Kiosk, Witness, T>(
             self,
             nft_id,
+            tx_info,
             Witness {}
         );
 
@@ -299,10 +248,7 @@ module sui::kiosk {
         assert!(price == coin::value(&payment), EIncorrectAmount);
         balance::join(&mut kiosk.profits, coin::into_balance(payment));
 
-        (item, TransferRequest<T> {
-            paid: price,
-            from: object::id(self),
-        })
+        (item, request)
     }
 
     // === Trading Functionality: Exclusive listing with `PurchaseCap` ===
@@ -320,7 +266,7 @@ module sui::kiosk {
         // to claim the NFT.
         let purchase_cap_uid = object::new(ctx);
         nft_safe::exclusively_list_nft(
-            self, owner, &purchase_cap_uid, nft_id, Witness {}
+            self, owner, nft_id, &purchase_cap_uid, Witness {}
         );
 
         let kiosk = nft_safe::borrow_inner_mut(self);
@@ -345,22 +291,25 @@ module sui::kiosk {
             id: purchase_cap_uid, item_id, safe_id: _, min_price
         } = purchase_cap;
 
+        let tx_info = nft_safe::get_transaction_info(
+            balance::value(coin::balance(&payment)),
+            type_name::get<SUI>(),
+            object::uid_to_inner(&purchase_cap_uid)
+        );
+
         let paid = coin::value(&payment);
         assert!(paid >= min_price, EIncorrectAmount);
 
-        let nft = nft_safe::get_nft<Kiosk, Witness, T>(
-            self, item_id, &purchase_cap_uid, Witness {}
+        let (nft, request) = nft_safe::get_nft<Kiosk, Witness, T>(
+            self, &purchase_cap_uid, item_id, tx_info, Witness {}
         );
         object::delete(purchase_cap_uid);
 
         let kiosk = nft_safe::borrow_inner_mut(self);
-        let price = df::remove<Offer, u64>(&mut kiosk.id, Offer { id: item_id });
+        df::remove<Offer, u64>(&mut kiosk.id, Offer { id: item_id });
         balance::join(&mut kiosk.profits, coin::into_balance(payment));
 
-        (nft, TransferRequest<T> {
-            paid: price,
-            from: object::id(self),
-        })
+        (nft, request)
     }
 
     /// Return the `PurchaseCap` without making a purchase; remove an active offer and
@@ -381,19 +330,6 @@ module sui::kiosk {
         let kiosk = nft_safe::borrow_inner_mut(self);
         df::remove<Offer, u64>(&mut kiosk.id, Offer { id: item_id });
         object::delete(id)
-    }
-
-    /// Allow a `TransferRequest` for the type `T`. The call is protected
-    /// by the type constraint, as only the publisher of the `T` can get
-    /// `TransferPolicyCap<T>`.
-    ///
-    /// Note: unless there's a policy for `T` to allow transfers,
-    /// Kiosk trades will not be possible.
-    public fun allow_transfer<T: key + store>(
-        _cap: &TransferPolicyCap<T>, req: TransferRequest<T>
-    ): (u64, ID) {
-        let TransferRequest { paid, from } = req;
-        (paid, from)
     }
 
     /// Withdraw profits from the Kiosk.

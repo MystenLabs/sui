@@ -106,6 +106,9 @@ module sui::nft_safe {
     /// The logic requires that no NFTs are stored in the safe.
     const EMustBeEmpty: u64 = 5;
 
+    /// ID provided does not match NftSafe ID
+    const ESafeIdMismatch: u64 = 6;
+
 
     struct NftSafe<I: key + store> has key, store {
         id: UID,
@@ -136,6 +139,36 @@ module sui::nft_safe {
         safe: ID,
     }
 
+    /// A "Hot Potato" forcing the buyer to get a transfer permission
+    /// from the item type (`NFT`) owner on purchase attempt.
+    struct TransferRequest<phantom NFT: key + store> {
+        /// Amount of SUI paid for the item. Can be used to
+        /// calculate the fee / transfer policy enforcement.
+        paid: u64,
+        /// We use type reflection to avoid generics
+        currency: TypeName,
+        /// The ID of the Safe the object is being sold from.
+        /// Can be used by the TransferPolicy implementors to
+        /// create an allowlist of Kiosks which can trade the type.
+        from: ID,
+    }
+
+    /// A wrapper around transaction information required 
+    /// to produce a TransferRequest.
+    struct TransactionInfo has store, copy, drop {
+        amount: u64,
+        /// We use type reflection to avoid generics
+        currency: TypeName,
+        /// The ID of the Safe the object is being sold from.
+        from: ID,
+    }
+
+    /// A unique capability that allows owner of the `NFT` to authorize
+    /// transfers. Can only be created with the `Publisher` object.
+    struct TransferPolicyCap<phantom NFT: key + store> has key, store {
+        id: UID
+    }
+
     struct DepositEvent has copy, drop {
         safe: ID,
         nft: ID,
@@ -144,6 +177,12 @@ module sui::nft_safe {
     struct TransferEvent has copy, drop {
         safe: ID,
         nft: ID,
+    }
+
+    /// Emitted when a NFT collection witness creates a new `TransferPolicyCap`
+    /// making the discoverability and tracking the supported types easier.
+    struct TransferPolicyCapIssued<phantom T: key + store> has copy, drop {
+        id: ID
     }
 
     public fun new<I: key + store>(
@@ -214,8 +253,8 @@ module sui::nft_safe {
     public fun exclusively_list_nft<I: key + store, IW: drop>(
         self: &mut NftSafe<I>,
         owner_cap: &OwnerCap,
-        entity_id: &UID,
         nft_id: ID,
+        entity_id: &UID,
         _inner_witness: IW,
     ) {
         types::assert_same_module<I, IW>();
@@ -262,10 +301,11 @@ module sui::nft_safe {
     /// With this token, a transfer can be performed.
     public fun get_nft<I: key + store, IW: drop, NFT: key + store>(
         self: &mut NftSafe<I>,
-        nft_id: ID,
         entity_id: &UID,
+        nft_id: ID,
+        tx_info: TransactionInfo,
         _inner_witness: IW,
-    ): NFT {
+    ): (NFT, TransferRequest<NFT>) {
         types::assert_same_module<I, IW>();
         assert_has_nft(self, &nft_id);
 
@@ -275,7 +315,10 @@ module sui::nft_safe {
         let entity_auth = object::uid_to_inner(entity_id);
         vec_set::remove(&mut ref.listed_with, &entity_auth);
 
-        dof::remove<ID, NFT>(&mut self.id, nft_id)
+        let request = get_transfer_request_from_info<NFT>(tx_info);
+        let nft = dof::remove<ID, NFT>(&mut self.id, nft_id);
+
+        (nft, request)
     }
 
     /// Get an NFT out of the safe as the owner.
@@ -302,8 +345,9 @@ module sui::nft_safe {
     public fun get_nft_to_inner_entity<I: key + store, IW: drop, NFT: key + store>(
         self: &mut NftSafe<I>,
         nft_id: ID,
+        tx_info: TransactionInfo,
         _inner_witness: IW,
-    ): NFT {
+    ): (NFT, TransferRequest<NFT>) {
         types::assert_same_module<I, IW>();
         assert_has_nft(self, &nft_id);
 
@@ -313,7 +357,10 @@ module sui::nft_safe {
         let entity_auth = object::id(&self.inner);
         vec_set::remove(&mut ref.listed_with, &entity_auth);
 
-        dof::remove<ID, NFT>(&mut self.id, nft_id)
+        let request = get_transfer_request_from_info<NFT>(tx_info);
+        let nft = dof::remove<ID, NFT>(&mut self.id, nft_id);
+
+        (nft, request)
     }
 
     /// Removes all access to an NFT.
@@ -404,6 +451,80 @@ module sui::nft_safe {
         inner
     }
 
+    // === Transfer Policy functions ===
+
+    /// Register a type in the Kiosk system and receive an `TransferPolicyCap`
+    /// which is required to confirm kiosk deals for the `T`. If there's no
+    /// `TransferPolicyCap` available for use, the type can not be traded in
+    /// kiosks.
+    public fun new_transfer_policy_cap<W: drop, NFT: key + store>(
+        _nft_witness: W, ctx: &mut TxContext
+    ): TransferPolicyCap<NFT> {
+        types::assert_same_module<NFT, W>();
+
+        let id = object::new(ctx);
+        event::emit(TransferPolicyCapIssued<NFT> { id: object::uid_to_inner(&id) });
+        TransferPolicyCap { id }
+    }
+
+    /// Destroy a TransferPolicyCap.
+    /// Can be performed by any party as long as they own it.
+    public fun destroy_transfer_policy_cap<NFT: key + store>(
+        cap: TransferPolicyCap<NFT>
+    ) {
+        let TransferPolicyCap { id } = cap;
+        object::delete(id);
+    }
+
+    public fun get_transfer_request<I: key + store, NFT: key + store>(
+        self: &NftSafe<I>,
+        price: u64,
+        currency: TypeName,
+    ): TransferRequest<NFT> {
+        
+        TransferRequest<NFT> {
+            paid: price,
+            currency,
+            from: object::id(self),
+        }
+    }
+
+    // TODO: Revisit comment/design
+    /// Allow a `TransferRequest` for the type `NFT`. The call is protected
+    /// by the type constraint, as only the publisher of the `NFT` can get
+    /// `TransferPolicyCap<NFT>`.
+    ///
+    /// Note: unless there's a policy for `NFT` to allow transfers,
+    /// Safe trades will not be possible.
+    public fun allow_transfer<T: key + store>(
+        _cap: &TransferPolicyCap<T>, req: TransferRequest<T>
+    ): (u64, TypeName, ID) {
+        let TransferRequest { paid, currency, from } = req;
+        (paid, currency, from)
+    }
+
+    public fun get_transaction_info(
+        amount: u64,
+        currency: TypeName,
+        from: ID,
+    ): TransactionInfo{
+        TransactionInfo {
+            amount,
+            currency,
+            from,
+        }
+    }
+
+    public fun get_transfer_request_from_info<NFT: key + store>(
+        tx_info: TransactionInfo
+    ): TransferRequest<NFT> {
+        TransferRequest {
+            paid: tx_info.amount,            
+            currency: tx_info.currency,            
+            from: tx_info.from,            
+        }
+    }
+
     // // === Getters ===
 
     public fun borrow_nft<I: key + store, NFT: key + store>(
@@ -466,5 +587,9 @@ module sui::nft_safe {
 
     fun assert_not_listed(ref: &NftRef) {
         assert!(vec_set::size(&ref.listed_with) == 0, ENftAlreadyListed);
+    }
+
+    public fun assert_id<I: key + store>(safe: &NftSafe<I>, id: ID) {
+        assert!(object::id(safe) == id, ESafeIdMismatch);
     }
 }

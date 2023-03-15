@@ -6,7 +6,7 @@
 /// base for building on top.
 module sui::royalty {
     use std::option::{Self, Option};
-    use sui::kiosk::{Self, TransferRequest, TransferPolicyCap};
+    use sui::nft_safe::{Self, TransferRequest, TransferPolicyCap};
     use sui::tx_context::{sender, TxContext};
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
@@ -79,7 +79,7 @@ module sui::royalty {
         transfer_request: TransferRequest<T>,
         coin: &mut Coin<SUI>
     ) {
-        let (paid, _from) = kiosk::allow_transfer(&policy.cap, transfer_request);
+        let (paid, _currency, _from) = nft_safe::allow_transfer(&policy.cap, transfer_request);
         let amount = (((paid as u128) * (policy.amount_bp as u128) / (MAX_AMOUNT as u128)) as u64);
 
         let royalty_payment = balance::split(coin::balance_mut(coin), amount);

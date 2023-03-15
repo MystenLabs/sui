@@ -15,7 +15,7 @@ module sui::collectible {
     use sui::tx_context::TxContext;
     use sui::display::{Self, Display};
     use sui::package::{Self, Publisher};
-    use sui::kiosk::{Self, TransferPolicyCap};
+    use sui::nft_safe::{Self, TransferPolicyCap};
     use sui::borrow::{Self, Borrow, Referent};
 
     /// A witness type passed is not an OTW.
@@ -32,6 +32,8 @@ module sui::collectible {
     const EWrongCreatorsLength: u64 = 5;
     /// Metadatas length does not match `img_urls` length
     const EWrongMetadatasLength: u64 = 6;
+
+    struct Witness has drop {}
 
     /// Basic collectible - should contain only unique information (eg
     /// if all collectibles have the same description, it should be put
@@ -83,7 +85,7 @@ module sui::collectible {
 
         (
             publisher,
-            kiosk::new_transfer_policy_cap_protected<Collectible<T>>(ctx),
+            nft_safe::new_transfer_policy_cap<Witness, Collectible<T>>(Witness {}, ctx),
             CollectionCreatorCap<T> {
                 id: object::new(ctx),
                 minted: 0,
