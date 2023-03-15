@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use dashmap::DashMap;
+use tracing::log::{error, trace};
 use std::future::Future;
+use futures::task::{Waker, ArcWake, waker};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering, AtomicPtr};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
-use once_cell::sync::OnceCell;
+use once_cell::sync::{OnceCell, Lazy};
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
 use tap::TapFallible;
 use tracing::warn;
@@ -74,6 +77,117 @@ pub fn get_metrics() -> Option<&'static Metrics> {
     METRICS.get()
 }
 
+// static COUNTER: Lazy<Arc<AtomicUsize>> = Lazy::new(|| Arc::new(AtomicUsize::new(0)));
+static COUNTER: AtomicUsize = AtomicUsize::new(1);
+
+thread_local! {
+    pub static CURRENT_ID: AtomicUsize = AtomicUsize::new(0);
+}
+
+struct CausalWaker {
+    waker: Waker,
+    id: usize,
+    _name: &'static str,
+}
+
+impl CausalWaker {
+    pub fn new(waker: Waker, id: usize, _name:&'static str) -> Arc<Self> {
+        Arc::new(
+            CausalWaker {
+                waker,
+                id,
+                _name, 
+            }
+        )
+    }
+
+}
+
+impl ArcWake for CausalWaker {
+    // Required method
+    fn wake_by_ref(arc_self: &Arc<Self>){
+        let my_id = CURRENT_ID.with(|c| {
+            c.load(Ordering::Relaxed)
+        });
+        trace!("WAKE {} from {}",arc_self.id,  my_id);
+        arc_self.waker.wake_by_ref();
+    }
+
+    // Provided method
+    fn wake(self: Arc<Self>) {
+
+        let my_id = CURRENT_ID.with(|c| {
+            c.load(Ordering::Relaxed)
+        });
+
+        trace!("WAKE WAKE {} from {}",self.id,  my_id);
+
+        self.waker.wake_by_ref();
+    }
+}
+
+pub struct CausalWakerLogFuture<F: Sized> {
+    f: Pin<Box<F>>,
+    id: usize,
+    old_id: usize,
+    _name: &'static str,
+}
+
+impl<F> CausalWakerLogFuture<F> {
+
+    pub fn new(_name: &'static str, fut: F, old_id: usize) -> Self {
+
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        trace!("WAKE NAME {} {} FROM {}", id, _name, old_id);
+
+        CausalWakerLogFuture {
+            f: Box::pin(fut),
+            id,
+            old_id,
+            _name,
+        }
+    }
+}
+
+impl<F: Future> Future for CausalWakerLogFuture<F> {
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+
+        CURRENT_ID.with(|c| {
+            c.store(self.id, Ordering::Relaxed);
+        });
+
+        let new_waker = waker(CausalWaker::new(cx.waker().clone(), self.id, self._name));
+        let mut new_context = Context::from_waker(&new_waker);
+        let ret = self.f.as_mut().poll(&mut new_context);
+
+        CURRENT_ID.with(|c| {
+            c.store(0, Ordering::Relaxed);
+        });
+
+        match &ret {
+            Poll::Ready(_) => {
+                trace!("WAKE RETN {} from {}",self.old_id,  self.id);
+                return ret ;
+            },
+            Poll:: Pending => return ret,
+        }
+    }
+}
+
+impl<F> Drop for CausalWakerLogFuture<F> {
+    fn drop(&mut self) {
+        trace!("WAKE DROP {}", self.id);
+    }
+}
+
+pub fn get_current_task_id() -> usize {
+    CURRENT_ID.with(|c| {
+        c.load(Ordering::Relaxed)
+    })
+}
+
 #[macro_export]
 macro_rules! monitored_future {
     ($fut: expr) => {{
@@ -86,6 +200,8 @@ macro_rules! monitored_future {
         } else {
             concat!(file!(), ':', $name)
         };
+
+        let my_id = mysten_metrics::get_current_task_id();
 
         async move {
             let metrics = mysten_metrics::get_metrics();
@@ -118,7 +234,7 @@ macro_rules! monitored_future {
                 );
             }
 
-            $fut.await
+            mysten_metrics::CausalWakerLogFuture::new(location, $fut, my_id).await
         }
     }};
 }

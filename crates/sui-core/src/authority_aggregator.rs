@@ -630,14 +630,16 @@ where
             .map(|name| {
                 let client = &self.authority_clients[name];
                 let execute = map_each_authority.clone();
-                monitored_future!(async move {
+                // monitored_future!(
+                    async move {
                     (
                         *name,
                         execute(*name, client)
                             .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
                             .await,
                     )
-                })
+                }
+            //)
             })
             .collect();
 

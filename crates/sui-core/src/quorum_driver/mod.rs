@@ -768,7 +768,8 @@ where
             }
             metrics.current_requests_in_flight.dec();
             let qd = quorum_driver.clone();
-            spawn_monitored_task!(QuorumDriverHandler::process_task(qd, task));
+            // spawn_monitored_task!(
+            tokio::task::spawn(QuorumDriverHandler::process_task(qd, task));
         }
     }
 }
