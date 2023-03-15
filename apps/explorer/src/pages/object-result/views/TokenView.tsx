@@ -18,7 +18,6 @@ import {
 import {
     trimStdLibPrefix,
     genFileTypeMsg,
-    normalizeSuiAddress,
 } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
@@ -26,6 +25,7 @@ import styles from './ObjectView.module.css';
 
 import { ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
+import { normalizeSuiAddress } from '@mysten/sui.js';
 
 function TokenView({ data }: { data: DataType }) {
     const viewedData = {

@@ -53,5 +53,3 @@ export const Pill = forwardRef(
         </ButtonOrLink>
     )
 );
-
-Pill.displayName = 'Pill';

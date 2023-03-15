@@ -18,25 +18,18 @@ export const Address: StoryObj<PageHeaderProps> = {
     },
 };
 
-export const ProgrammableTransaction: StoryObj<PageHeaderProps> = {
+export const Transaction: StoryObj<PageHeaderProps> = {
     args: {
         title,
-        type: 'ProgrammableTransaction',
+        type: 'Transaction',
         status: 'success',
     },
 };
 
-export const CallTransactionFailure: StoryObj<PageHeaderProps> = {
+export const TransactionFailure: StoryObj<PageHeaderProps> = {
     args: {
-        ...ProgrammableTransaction.args,
+        ...Transaction.args,
         status: 'failure',
-    },
-};
-
-export const ChangeEpoch: StoryObj<PageHeaderProps> = {
-    args: {
-        title,
-        type: 'ChangeEpoch',
     },
 };
 

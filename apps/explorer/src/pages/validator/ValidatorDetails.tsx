@@ -14,7 +14,6 @@ import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 
 function ValidatorDetails() {
     const { id } = useParams();
-    // TODO: Use `getValidators` once that API returns more data:
     const { data, isLoading } = useGetSystemObject();
 
     const validatorData = useMemo(() => {

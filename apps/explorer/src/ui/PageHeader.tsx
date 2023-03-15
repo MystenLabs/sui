@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CopyNew24, Flag16 } from '@mysten/icons';
-import { type TransactionKindName } from '@mysten/sui.js';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
@@ -10,13 +9,11 @@ import { Heading } from './Heading';
 import { ReactComponent as ImageIcon } from './icons/image.svg';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
-import { ReactComponent as ChangeEpochIcon } from './icons/transactions/changeEpoch.svg';
 
 export type PageHeaderType =
-    | TransactionKindName
+    | 'Transaction'
     | 'Checkpoint'
     | 'Address'
-    | 'Checkpoint'
     | 'Object'
     | 'Package';
 
@@ -28,8 +25,7 @@ export interface PageHeaderProps {
 }
 
 const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
-    ProgrammableTransaction: CallIcon,
-    ChangeEpoch: ChangeEpochIcon,
+    Transaction: CallIcon,
     Checkpoint: Flag16,
     Object: ImageIcon,
     Package: CallIcon,

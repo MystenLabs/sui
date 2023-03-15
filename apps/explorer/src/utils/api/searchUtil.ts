@@ -5,6 +5,7 @@ import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 
 import { DefaultRpcClient as rpc, type Network } from './DefaultRpcClient';
 
+/** @deprecated */
 export const navigateWithUnknown = async (
     input: string,
     navigate: Function,
@@ -96,12 +97,7 @@ export const navigateWithUnknown = async (
                         pac?.category === 'address' ||
                         pac?.category === 'transaction')
                 ) {
-                    navigate(
-                        `../${pac.category}/${encodeURIComponent(input)}`,
-                        {
-                            state: pac.data,
-                        }
-                    );
+                    navigate(`../${pac.category}/${encodeURIComponent(input)}`);
                 } else {
                     throw new Error(
                         'Something wrong with navigateWithUnknown function'
