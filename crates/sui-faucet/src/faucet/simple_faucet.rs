@@ -54,8 +54,8 @@ enum GasCoinResponse {
     ValidGasCoin(ObjectID),
 }
 
-const DEFAULT_GAS_BUDGET: u64 = 1000;
-const PAY_SUI_GAS: u64 = 1000;
+// TODO: replace this with dryrun at the SDK level
+const DEFAULT_GAS_COMPUTATION_BUCKET: u64 = 10000;
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -163,7 +163,7 @@ impl SimpleFaucet {
         };
 
         match self.get_gas_coin_and_check_faucet_owner(coin_id).await {
-            Ok(Some(gas_coin)) if gas_coin.value() >= total_amount + PAY_SUI_GAS => {
+            Ok(Some(gas_coin)) if gas_coin.value() >= total_amount => {
                 info!(?uuid, ?coin_id, "balance: {}", gas_coin.value());
                 GasCoinResponse::ValidGasCoin(coin_id)
             }
@@ -299,18 +299,13 @@ impl SimpleFaucet {
     ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {
         let number_of_coins = amounts.len();
         let total_amount: u64 = amounts.iter().sum();
+        let gas_cost = self.get_gas_cost().await?;
 
-        let gas_coin_response = self.prepare_gas_coin(total_amount, uuid).await;
+        let gas_coin_response = self.prepare_gas_coin(total_amount + gas_cost, uuid).await;
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
                 let tx_data = self
-                    .build_pay_sui_txn(
-                        coin_id,
-                        self.active_address,
-                        recipient,
-                        amounts,
-                        DEFAULT_GAS_BUDGET,
-                    )
+                    .build_pay_sui_txn(coin_id, self.active_address, recipient, amounts, gas_cost)
                     .await
                     .map_err(FaucetError::internal)?;
 
@@ -332,7 +327,9 @@ impl SimpleFaucet {
 
             GasCoinResponse::UnknownGasCoin(coin_id) => {
                 self.recycle_gas_coin(coin_id, uuid).await;
-                Err(FaucetError::FullnodeReadingError)
+                Err(FaucetError::FullnodeReadingError(format!(
+                    "unknown gas coin {coin_id:?}"
+                )))
             }
 
             GasCoinResponse::GasCoinWithInsufficientBalance(coin_id) => {
@@ -429,6 +426,24 @@ impl SimpleFaucet {
                     e
                 )
             })?)
+    }
+
+    async fn get_gas_cost(&self) -> Result<u64, FaucetError> {
+        let gas_price = self.get_gas_price().await?;
+        Ok(gas_price * DEFAULT_GAS_COMPUTATION_BUCKET)
+    }
+
+    async fn get_gas_price(&self) -> Result<u64, FaucetError> {
+        let client = self
+            .wallet
+            .get_client()
+            .await
+            .map_err(|e| FaucetError::Wallet(format!("Unable to get client: {e:?}")))?;
+        client
+            .read_api()
+            .get_reference_gas_price()
+            .await
+            .map_err(|e| FaucetError::FullnodeReadingError(format!("Error fetch gas price {e:?}")))
     }
 
     async fn build_pay_sui_txn(
@@ -722,7 +737,7 @@ mod tests {
         let tiny_value = 1;
         let res = SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
-            amounts: Some(vec![tiny_value + PAY_SUI_GAS]),
+            amounts: Some(vec![tiny_value + DEFAULT_GAS_COMPUTATION_BUCKET]),
             gas_budget: 50000,
             gas: None,
             count: None,
@@ -750,7 +765,7 @@ mod tests {
             .find(|gas| gas.id() == &tiny_coin_id)
             .unwrap()
             .value();
-        assert_eq!(tiny_amount, tiny_value + PAY_SUI_GAS);
+        assert_eq!(tiny_amount, tiny_value + DEFAULT_GAS_COMPUTATION_BUCKET);
         info!("tiny coin id: {:?}, amount: {}", tiny_coin_id, tiny_amount);
 
         let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
@@ -761,7 +776,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Ask for a value higher than tiny coin + PAY_SUI_GAS
+        // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
         let number_of_coins = gases.len();
         let amounts = &vec![tiny_value + 1; number_of_coins - 1];
         // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
