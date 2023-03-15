@@ -83,16 +83,15 @@ Use the steps in this section to install and configure a Sui Full node directly 
     ```
 ## Set up Sui addresses
 
-Sui addresses do not require on-chain initialization, you own an address if you own the key for the address. You can derive a Sui address by hashing the signature flag byte + public key bytes. The following code sample demonstrates how to derive a Sui address in Rust:
+Sui addresses do not require on-chain initialization, you can spend from an address if it corresponds to your private key. You can derive a Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. The following code sample demonstrates how to derive a Sui address in Rust:
 
 ```rust
-let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1
-// Hash the [flag, public key] bytearray using SHA3-256
-let mut hasher = Sha3_256::default();
+let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = Multisig
+// Hash the [flag, public key] bytearray using Blake2b
+let mut hasher = UserHash::default();
 hasher.update([flag]);
 hasher.update(pk);
 let g_arr = hasher.finalize();
-
 
 // The first 32 bytes is the Sui address.
 let mut res = [0u8; SUI_ADDRESS_LENGTH]; // SUI_ADDRESS_LENGTH = 32
@@ -108,11 +107,11 @@ Sui supports both addresses with and without a 0x prefix. Sui recommends that yo
 
 You can track balance changes by calling `sui_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `sui_getBalance` requests.
 
-The following bash example demonstrates how to use `sui_getBalance` for address 0xa38bc2aa63c34e37821f7abb34dbbe97b7ab2ea2. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
+The following bash example demonstrates how to use `sui_getBalance` for address 0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
 
 ```bash
 rpc="https://fullnode.devnet.sui.io:443"
-address="0xa38bc2aa63c34e37821f7abb34dbbe97b7ab2ea2"
+address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
 data="{\"jsonrpc\": \"2.0\", \"method\": \"sui_getBalance\", \"id\": 1, \"params\": [\"$address\"]}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
@@ -145,7 +144,7 @@ async fn main() -> Result<(), anyhow::Error> {
    let sui = SuiClientBuilder::default().build(
       "https://fullnode.devnet.sui.io:443",
    ).await.unwrap();
-   let address = SuiAddress::from_str("0xa38bc2aa63c34e37821f7abb34dbbe97b7ab2ea2")?;
+   let address = SuiAddress::from_str("0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3")?;
    let objects = sui.read_api().get_balance(address).await?;
    println!("{:?}", objects);
    Ok(())
@@ -159,8 +158,8 @@ The following example demonstrates how to filter events for an address using bas
 
 ```bash
 rpc="https://fullnode.devnet.sui.io:443"
-address="0xa38bc2aa63c34e37821f7abb34dbbe97b7ab2ea2"
-data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0xa38bc2aa63c34e37821f7abb34dbbe97b7ab2ea2\"}}, null, null, true ]}"
+address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
+data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3\"}}, null, null, true ]}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
@@ -229,6 +228,12 @@ Sui supports the following API operations related to transferring SUI between ad
 
  * [sui_transferSui](https://docs.sui.io/sui-jsonrpc#sui_transferSui)
     This method accepts only one SUI token object and an amount to send to the recipient. It uses the same token for gas fees, so the amount to transfer must be strictly less than the value of the SUI token used.
+
+## Signing Transactions
+
+Please refer to [offline signing](https://github.com/MystenLabs/sui/blob/d0aceaea613b33fc969f7ca2cdd84b8a35e87de3/crates/sui/offline_signing.md) for more details on signature validity requirements.
+
+A native weighted multi-sig multi-scheme signature is also supported. Please see [multisig](https://github.com/MystenLabs/sui/blob/d0aceaea613b33fc969f7ca2cdd84b8a35e87de3/crates/sui/multisig.md) for details. 
 
 ## SUI Staking and Delegation
 
@@ -339,7 +344,7 @@ Specific amounts to be determined prior to Sui Mainnet.
 
 ### How to stake and un-stake SUI?
 
-Sui Wallet supports both stake and un-staking. Staking via Move code or the Sui CLI is also possible – the relevant functions are in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
+Sui Wallet supports both stake and un-staking. Staking via Move code or the Sui CLI is also possible - the relevant functions are in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
 
 ### Where are the Sui Developer Docs?
 
@@ -366,7 +371,7 @@ Yes, the gas price is dynamic and exposed via the [sui_getReferenceGasPrice](htt
 
 ### How can I delete an object within Sui?
 
-You can delete objects (in most cases) only if the Move module that defines the object type includes a Move function that can delete the object, such as when a Move contract writer explicitly wants the object to be deletable).[https://docs.sui.io/devnet/build/programming-with-objects/ch2-using-objects#option-1-delete-the-object](https://docs.sui.io/devnet/build/programming-with-objects/ch2-using-objects#option-1-delete-the-object)
+You can delete objects (in most cases) only if the Move module that defines the object type includes a Move function that can delete the object, such as when a Move contract writer explicitly wants the object to be deletable.[https://docs.sui.io/devnet/build/programming-with-objects/ch2-using-objects#option-1-delete-the-object](https://docs.sui.io/devnet/build/programming-with-objects/ch2-using-objects#option-1-delete-the-object)
 
 If the delete function is defined in the Move module, you can delete the object by invoking the Move call using CLI or wallet. Here’s an example:
 
