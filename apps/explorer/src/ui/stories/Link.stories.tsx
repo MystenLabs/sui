@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CheckFill16, Search16 } from '@mysten/icons';
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { CheckFill16, Search16 } from '../../../../icons';
 import { Link, type LinkProps } from '../Link';
 
 export default {
