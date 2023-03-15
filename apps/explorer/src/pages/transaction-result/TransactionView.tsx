@@ -319,7 +319,9 @@ export function TransactionView({
                                 {gasFeesExpanded && (
                                     <>
                                         <DescriptionItem title="Gas Price">
-                                            <GasAmount amount={Number(gasPrice)} />
+                                            <GasAmount
+                                                amount={Number(gasPrice)}
+                                            />
                                         </DescriptionItem>
                                         <DescriptionItem title="Computation Fee">
                                             <GasAmount
