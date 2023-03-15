@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY }from '@mysten/core';
+import { calculateAPY } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
