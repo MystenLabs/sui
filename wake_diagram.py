@@ -1,11 +1,17 @@
 import re
 from collections import Counter
 
+# https://github.com/MystenLabs/sui/blob/instrument_tasks/crates/sui-core/src/authority.rs#L15
+base_url = "https://github.com/MystenLabs/sui/blob/instrument_tasks/"
+
 data = open("wake_trace.txt").read()
 name_lines = re.findall("WAKE NAME ([0-9]+) (.+) FROM ([0-9]+)", data)
 
 names = {"0": "-"}
 relations = {}
+drops = {}
+spawns = {}
+returns = {}
 node_names = {}
 node_names_num = 1
 cnt = {}
@@ -14,6 +20,11 @@ for (id, name, from_id) in name_lines:
     names[id] = name
     node_names[name] = f"n{node_names_num}"
     node_names_num += 1
+
+    try:
+        spawns[name] += 1
+    except:
+        spawns[name] = 1
 
     try:
         relations[("spawn", name, names[from_id])] += 1
@@ -31,11 +42,42 @@ for (idt, idf) in wake_lines:
 retn_lines = re.findall("WAKE RETN ([0-9]+) from ([0-9]+)", data)
 
 for (idt, idf) in retn_lines:
+
+    name = names[idf]
+
+    try:
+        returns[name] += 1
+    except:
+        returns[name] = 1
+
     try:
         relations[("return", names[idt], names[idf])] += 1
     except:
         relations[("return", names[idt], names[idf])] = 1
 
+drop_lines = re.findall("WAKE DROP ([0-9]+)", data)
+
+for nid in drop_lines:
+    name = names[nid]
+
+    try:
+        drops[name] += 1
+    except:
+        drops[name] = 1
+
+
+# ----
+
+urls = {}
+for (name, nid) in node_names.items():
+    [base, ref] = name.split(":")
+    try:
+        ref = int(ref.strip())
+        url = base_url + base + "#L" + str(ref)
+    except:
+        url = base_url+base
+    urls[name] = url
+    
 for ((w, n, t), v) in relations.items():
     if t != "-":
         cnt[n] = cnt.get(n,0)+1
@@ -46,7 +88,16 @@ for name, nid in node_names.items():
     # if cnt.get(name,0) > 0:
     num = relations.get(("spawn", name, "-"), 0)
     num_str = f" ({num})" if num > 0 else ""
-    node_str += f'{nid} [label="{name}{num_str}", shape=box];\n'
+
+    inflight = int(spawns.get(name,0))- int(drops.get(name,0))
+    spawn_drop = f" in-flight:{inflight}" if inflight > num else ""
+
+    color = 'color="red",' if spawn_drop != "" else ""
+
+    cancelled = int(drops.get(name,0))- int(returns.get(name,0)) 
+    cancel_drop = f" d-r:{cancelled}" if cancelled > 0 else ""
+
+    node_str += f'{nid} [{color}label="{name}{spawn_drop}{cancel_drop}{num_str}", shape=box, href="{urls[name]}"];\n'
 
 style = {
     "spawn" : "bold",
