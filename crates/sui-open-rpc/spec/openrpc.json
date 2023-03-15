@@ -3093,8 +3093,7 @@
         "type": "object",
         "required": [
           "effects",
-          "events",
-          "results"
+          "events"
         ],
         "properties": {
           "effects": {
@@ -3103,6 +3102,13 @@
               {
                 "$ref": "#/components/schemas/TransactionEffects"
               }
+            ]
+          },
+          "error": {
+            "description": "Execution error from executing the transaction commands",
+            "type": [
+              "string",
+              "null"
             ]
           },
           "events": {
@@ -3114,11 +3120,13 @@
           },
           "results": {
             "description": "Execution results (including return values) from executing the transaction commands",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Result_of_Array_of_SuiExecutionResult_or_String"
-              }
-            ]
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SuiExecutionResult"
+            }
           }
         }
       },
@@ -4814,35 +4822,6 @@
               },
               "version": {
                 "$ref": "#/components/schemas/SequenceNumber"
-              }
-            }
-          }
-        ]
-      },
-      "Result_of_Array_of_SuiExecutionResult_or_String": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Ok"
-            ],
-            "properties": {
-              "Ok": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiExecutionResult"
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "Err"
-            ],
-            "properties": {
-              "Err": {
-                "type": "string"
               }
             }
           }
