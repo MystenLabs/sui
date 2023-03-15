@@ -21,15 +21,19 @@ export function useGetObject(
             rpc.getObject({
                 id: normalizedObjId,
                 options: {
-                    showType: true,
-                    showContent: true,
+                    showDisplay: true,
+                    // showType: true,
+                    // showContent: true,
                     showOwner: true,
-                    showPreviousTransaction: true,
-                    showStorageRebate: true,
+                    // showPreviousTransaction: true,
+                    // showStorageRebate: true,
                 },
             }),
         { enabled: !!objectId }
     );
+
+    if (typeof response.data?.details === 'object') {
+    }
 
     return response;
 }

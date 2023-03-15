@@ -112,6 +112,27 @@ export const MIST_PER_SUI = BigInt(1000000000);
 export const ObjectDigest = string();
 export type ObjectDigest = Infer<typeof ObjectDigest>;
 
+/**
+ * Config for fetching object data
+ */
+export const SuiObjectDataOptions = object({
+  /* Whether to fetch the object type, default to be true */
+  showType: optional(boolean()),
+  /* Whether to fetch the object content, default to be false */
+  showContent: optional(boolean()),
+  /* Whether to fetch the object content in BCS bytes, default to be false */
+  showBcs: optional(boolean()),
+  /* Whether to fetch the object owner, default to be false */
+  showOwner: optional(boolean()),
+  /* Whether to fetch the previous transaction digest, default to be false */
+  showPreviousTransaction: optional(boolean()),
+  /* Whether to fetch the storage rebate, default to be false */
+  showStorageRebate: optional(boolean()),
+  /* Whether to fetch the display metadata, default to be false */
+  showDisplay: optional(boolean()),
+});
+export type SuiObjectDataOptions = Infer<typeof SuiObjectDataOptions>;
+
 export const SuiObjectData = object({
   objectId: ObjectId,
   version: SequenceNumber,
@@ -151,28 +172,18 @@ export const SuiObjectData = object({
    */
   display: optional(record(string(), string())),
 });
-export type SuiObjectData = Infer<typeof SuiObjectData>;
 
-/**
- * Config for fetching object data
- */
-export const SuiObjectDataOptions = object({
-  /* Whether to fetch the object type, default to be true */
-  showType: optional(boolean()),
-  /* Whether to fetch the object content, default to be false */
-  showContent: optional(boolean()),
-  /* Whether to fetch the object content in BCS bytes, default to be false */
-  showBcs: optional(boolean()),
-  /* Whether to fetch the object owner, default to be false */
-  showOwner: optional(boolean()),
-  /* Whether to fetch the previous transaction digest, default to be false */
-  showPreviousTransaction: optional(boolean()),
-  /* Whether to fetch the storage rebate, default to be false */
-  showStorageRebate: optional(boolean()),
-  /* Whether to fetch the display metadata, default to be false */
-  showDisplay: optional(boolean()),
-});
-export type SuiObjectDataOptions = Infer<typeof SuiObjectDataOptions>;
+type SuiObjectDataBase = Infer<typeof SuiObjectData>;
+type WithDisplay<T extends SuiObjectDataOptions> = T extends {
+  showDisplay: true;
+}
+  ? Required<Pick<SuiObjectDataBase, 'display'>> & { foo: true }
+  : {};
+
+export type SuiObjectData<T extends SuiObjectDataOptions> = Infer<
+  typeof SuiObjectData
+> &
+  WithDisplay<T>;
 
 export const ObjectStatus = union([
   literal('Exists'),
@@ -188,7 +199,10 @@ export const SuiObjectResponse = object({
   status: ObjectStatus,
   details: union([SuiObjectData, ObjectId, SuiObjectRef]),
 });
-export type SuiObjectResponse = Infer<typeof SuiObjectResponse>;
+export type SuiObjectResponse<T extends SuiObjectDataOptions = any> = {
+  status: ObjectStatus;
+  details: string | SuiObjectData<T>;
+};
 
 export type Order = 'ascending' | 'descending';
 

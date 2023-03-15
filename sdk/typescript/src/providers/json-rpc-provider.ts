@@ -535,15 +535,16 @@ export class JsonRpcProvider {
   /**
    * Get details about an object
    */
-  async getObject(input: {
+  async getObject<T extends SuiObjectDataOptions>(input: {
     id: ObjectId;
-    options?: SuiObjectDataOptions;
-  }): Promise<SuiObjectResponse> {
+    options?: T;
+  }): Promise<SuiObjectResponse<T>> {
     try {
       if (!input.id || !isValidSuiObjectId(normalizeSuiObjectId(input.id))) {
         throw new Error('Invalid Sui Object id');
       }
-      return await this.client.requestWithType(
+
+      return await this.client.requestWithType<SuiObjectResponse<T>>(
         'sui_getObject',
         [input.id, input.options],
         SuiObjectResponse,
