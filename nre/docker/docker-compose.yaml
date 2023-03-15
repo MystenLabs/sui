@@ -24,7 +24,7 @@ services:
       - suidb:/opt/sui/db:rw
     command:
       [
-        "/opt/sui/bin/sui-node",
+        "/usr/local/bin/sui-node",
         "--config-path",
         "/opt/sui/config/validator.yaml",
       ]
@@ -32,8 +32,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-file: 10
-        max-size: 5g
+        max-file: "10"
+        max-size: "5g"
 
 volumes:
   suidb:
