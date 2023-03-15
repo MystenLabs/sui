@@ -8,6 +8,7 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
+use serde_json::json;
 use signature::rand_core::OsRng;
 use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -32,7 +33,7 @@ use sui_types::messages::{
 use test_utils::network::TestClusterBuilder;
 
 use crate::state::extract_balance_changes_from_ops;
-use crate::types::{ConstructionMetadata, TransactionMetadata};
+use crate::types::ConstructionMetadata;
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -495,9 +496,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let sender = get_random_address(&network.accounts, vec![]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
-    let gas = get_random_sui(&client, sender, vec![coin1.0, coin2.0]).await;
+    let gas = get_random_sui(&client, sender, vec![]).await;
     let validator = client
         .governance_api()
         .get_latest_sui_system_state()
@@ -505,32 +504,27 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         .unwrap()
         .active_validators[0]
         .sui_address;
-    let data = client
-        .transaction_builder()
-        .request_add_stake(
-            sender,
-            vec![coin1.0, coin2.0],
-            Some(100000),
-            validator,
-            Some(gas.0),
-            10000,
-        )
-        .await?;
 
-    let ops: Operations = data.clone().try_into()?;
+    let ops: Operations = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-100000" , "currency": { "symbol": "SUI", "decimals": 9}},
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
     let metadata = ConstructionMetadata {
-        tx_metadata: TransactionMetadata::Delegation {
-            coins: vec![coin1, coin2],
-        },
         sender,
-        gas: vec![gas],
+        coins: vec![gas],
+        objects: vec![],
+        total_coin_value: 0,
         gas_price: client.read_api().get_reference_gas_price().await?,
         budget: 10000,
     };
-    let parsed_data = ops
-        .into_internal(Some(metadata.tx_metadata.clone().into()))?
-        .try_into_data(metadata)?;
-    assert_eq!(data, parsed_data);
+    let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
+    assert_eq!(ops, Operations::try_from(parsed_data)?);
 
     Ok(())
 }

@@ -59,6 +59,9 @@ pub enum Error {
     #[error("Error executing transaction: {0}")]
     TransactionExecutionError(String),
 
+    #[error("{0}")]
+    TransactionDryRunError(String),
+
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
     #[error(transparent)]

@@ -1,11 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use fastcrypto::encoding::{Encoding, Hex};
-use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponseOptions};
+use futures::StreamExt;
+
+use shared_crypto::intent::{Intent, IntentMessage};
+use sui_json_rpc_types::{
+    StakeStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponseOptions,
+};
+use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
+use sui_types::error::SuiError;
 use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
@@ -17,13 +26,9 @@ use crate::types::{
     ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
     ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
     InternalOperation, MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
-    TransactionIdentifierResponse, TransactionMetadata,
+    TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
-use axum::extract::State;
-use axum_extra::extract::WithRejection;
-use shared_crypto::intent::{Intent, IntentMessage};
-use sui_sdk::rpc_types::SuiExecutionStatus;
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
 
@@ -56,7 +61,7 @@ pub async fn payloads(
 
     let data = request
         .operations
-        .into_internal(Some(metadata.tx_metadata.clone().into()))?
+        .into_internal()?
         .try_into_data(metadata)?;
     let intent_msg = IntentMessage::new(Intent::default(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
@@ -160,7 +165,7 @@ pub async fn preprocess(
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let internal_operation = request.operations.into_internal(request.metadata)?;
+    let internal_operation = request.operations.into_internal()?;
     let sender = internal_operation.sender();
 
     Ok(ConstructionPreprocessResponse {
@@ -205,82 +210,113 @@ pub async fn metadata(
         .get_reference_gas_price()
         .await?;
 
-    let (tx_metadata, gas, budget) = match &option.internal_operation {
-        InternalOperation::PaySui {
-            sender, amounts, ..
-        } => {
-            let amount = amounts.iter().sum::<u64>() as u128;
-            let sender_coins = context
-                .client
-                .coin_read_api()
-                .select_coins(
-                    *sender,
-                    None,
-                    amount + (1000 * gas_price as u128),
-                    None,
-                    vec![],
-                )
-                .await?
-                .into_iter()
-                .map(|coin| coin.object_ref())
-                .collect::<Vec<_>>();
-            (TransactionMetadata::PaySui, sender_coins, 1000)
+    // Get sender, amount, and rough budget for the operation
+    let (total_required_amount, objects, budget) = match &option.internal_operation {
+        InternalOperation::PaySui { amounts, .. } => {
+            let amount = amounts.iter().sum::<u64>();
+            (Some(amount), vec![], 1000)
         }
-        InternalOperation::Delegation {
-            sender,
-            validator,
-            amount,
-        } => {
-            let coins = context
-                .client
-                .coin_read_api()
-                .select_coins(*sender, None, *amount, None, vec![])
-                .await?
-                .into_iter()
-                .map(|coin| coin.object_ref())
-                .collect::<Vec<_>>();
+        InternalOperation::Stake { amount, .. } => (*amount, vec![], 1200),
+        InternalOperation::WithdrawStake { sender, stake_ids } => {
+            let stake_ids = if stake_ids.is_empty() {
+                // unstake all
+                context
+                    .client
+                    .governance_api()
+                    .get_stakes(*sender)
+                    .await?
+                    .into_iter()
+                    .flat_map(|s| {
+                        s.stakes.into_iter().filter_map(|s| {
+                            if let StakeStatus::Active { .. } = s.status {
+                                Some(s.staked_sui_id)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect()
+            } else {
+                stake_ids.clone()
+            };
 
-            let data = context
+            if stake_ids.is_empty() {
+                return Err(Error::InvalidInput("No active stake to withdraw".into()));
+            }
+
+            let responses = context
                 .client
-                .transaction_builder()
-                .request_add_stake(
-                    *sender,
-                    coins.iter().map(|coin| coin.0).collect(),
-                    Some(*amount as u64),
-                    *validator,
-                    None,
-                    13000,
-                )
+                .read_api()
+                .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
                 .await?;
+            let stake_refs = responses
+                .into_iter()
+                .map(|stake| stake.into_object().map(|o| o.object_ref()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(SuiError::from)?;
 
-            (
-                TransactionMetadata::Delegation { coins },
-                data.gas().to_vec(),
-                13000,
-            )
+            (Some(0), stake_refs, 2000)
         }
     };
+
+    // Try select coins for required amounts
+    let coins = if let Some(amount) = total_required_amount {
+        let total_amount = amount + (budget * gas_price);
+        context
+            .client
+            .coin_read_api()
+            .select_coins(sender, None, total_amount.into(), None, vec![])
+            .await
+            .ok()
+    } else {
+        None
+    };
+    // If required amount is None (all SUI) or failed to select coin (might not have enough SUI), select all coins.
+    let coins = if let Some(coins) = coins {
+        coins
+    } else {
+        context
+            .client
+            .coin_read_api()
+            .get_coins_stream(sender, None)
+            .collect::<Vec<_>>()
+            .await
+    };
+
+    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
+
+    let coins = coins
+        .into_iter()
+        .map(|c| c.object_ref())
+        .collect::<Vec<_>>();
 
     // get gas estimation from dry-run, this will also return any tx error.
     let data = option
         .internal_operation
         .try_into_data(ConstructionMetadata {
-            tx_metadata: tx_metadata.clone(),
             sender,
-            gas: gas.clone(),
+            coins: coins.clone(),
+            objects: objects.clone(),
+            total_coin_value,
             gas_price: 1,
             budget,
         })?;
-    let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
-    let budget =
-        dry_run.effects.gas_used().computation_cost + dry_run.effects.gas_used().storage_cost;
+    let dry_run = context.client.read_api().dry_run_transaction(data).await?;
+    let effects = dry_run.effects;
+
+    if let SuiExecutionStatus::Failure { error } = effects.status() {
+        return Err(Error::TransactionDryRunError(error.to_string()));
+    }
+
+    let budget = effects.gas_used().computation_cost + effects.gas_used().storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
-            tx_metadata,
             sender,
-            gas,
+            coins,
+            objects,
+            total_coin_value,
             gas_price,
             budget,
         },

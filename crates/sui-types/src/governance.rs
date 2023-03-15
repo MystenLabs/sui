@@ -22,7 +22,7 @@ pub const STAKING_POOL_MODULE_NAME: &IdentStr = ident_str!("staking_pool");
 pub const STAKED_SUI_STRUCT_NAME: &IdentStr = ident_str!("StakedSui");
 
 pub const ADD_STAKE_MUL_COIN_FUN_NAME: &IdentStr = ident_str!("request_add_stake_mul_coin");
-pub const ADD_STAKE_FUN_NAME: &IdentStr = ident_str!("request_add_stake_mul_coin");
+pub const ADD_STAKE_FUN_NAME: &IdentStr = ident_str!("request_add_stake");
 pub const WITHDRAW_STAKE_FUN_NAME: &IdentStr = ident_str!("request_withdraw_stake");
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

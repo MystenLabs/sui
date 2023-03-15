@@ -46,7 +46,14 @@ pub async fn transaction(
     let response = context
         .client
         .read_api()
-        .get_transaction_with_options(digest, SuiTransactionResponseOptions::full_content())
+        .get_transaction_with_options(
+            digest,
+            SuiTransactionResponseOptions::new()
+                .with_input()
+                .with_events()
+                .with_effects()
+                .with_balance_changes(),
+        )
         .await?;
     let hash = response.digest;
 
