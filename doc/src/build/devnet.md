@@ -66,7 +66,7 @@ Press **Enter** to connect to Sui Devnet. To use a custom RPC server, enter the 
 Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:
 ```
 
-Type **0**, **1**, or **2** to select a key scheme.
+Press **0**, **1**, or **2** to select a key scheme.
 
 Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and recovery phrase for the address:
 
