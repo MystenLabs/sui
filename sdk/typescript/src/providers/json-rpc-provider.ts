@@ -3,7 +3,6 @@
 
 import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
-  Coin,
   ExecuteTransactionRequestType,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
@@ -21,7 +20,6 @@ import {
   SuiTransactionResponse,
   TransactionDigest,
   SuiTransactionResponseQuery,
-  SUI_TYPE_ARG,
   RpcApiVersion,
   parseVersionFromString,
   PaginatedEvents,
@@ -47,7 +45,6 @@ import {
   DryRunTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
-  CoinStruct,
   SuiTransactionResponseOptions,
   SuiEvent,
 } from '../types';
@@ -492,44 +489,6 @@ export class JsonRpcProvider {
         `Error fetching owned object: ${err} for address ${input.owner}`,
       );
     }
-  }
-
-  /** @deprecated */
-  async selectCoinsWithBalanceGreaterThanOrEqual(
-    address: SuiAddress,
-    amount: bigint,
-    typeArg: string = SUI_TYPE_ARG,
-    exclude: ObjectId[] = [],
-  ): Promise<CoinStruct[]> {
-    const coinsStruct = await this.getCoins({
-      owner: address,
-      coinType: typeArg,
-    });
-    return Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coinsStruct.data,
-      amount,
-      exclude,
-    );
-  }
-
-  /** @deprecated */
-  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-    address: SuiAddress,
-    amount: bigint,
-    typeArg: string = SUI_TYPE_ARG,
-    exclude: ObjectId[] = [],
-  ): Promise<CoinStruct[]> {
-    const coinsStruct = await this.getCoins({
-      owner: address,
-      coinType: typeArg,
-    });
-    const coins = coinsStruct.data;
-
-    return Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-      coins,
-      amount,
-      exclude,
-    );
   }
 
   /**
