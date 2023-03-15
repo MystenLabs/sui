@@ -15,7 +15,10 @@ describe('Dynamic Fields Reading API', () => {
     ({ packageId } = await publishPackage(packagePath, toolbox));
 
     await toolbox.provider
-      .getObjectsOwnedByAddress({ owner: toolbox.address() })
+      .getOwnedObjects({
+        owner: toolbox.address(),
+        options: { showType: true },
+      })
       .then(function (objects) {
         const obj = objects.filter(
           (o) => o.type === `${packageId}::dynamic_fields_test::Test`,

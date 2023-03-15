@@ -9,12 +9,13 @@ use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::ObjectChange;
+use sui_json_rpc_types::ObjectsPage;
+use sui_json_rpc_types::SuiTransactionResponseQuery;
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
     SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes,
 };
-use sui_json_rpc_types::{SuiObjectInfo, SuiTransactionResponseQuery};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_types::balance::Supply;
@@ -40,11 +41,23 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    assert_eq!(5, objects.len());
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::new()),
+            None,
+            None,
+            None,
+        )
+        .await?;
+    assert_eq!(5, objects.data.len());
 
     // Multiget objectIDs test
-    let object_digests = objects.iter().map(|o| o.object_id).collect();
+    let object_digests = objects
+        .data
+        .iter()
+        .map(|o| o.object().unwrap().object_id)
+        .collect();
 
     let object_resp = http_client
         .multi_get_object_with_options(object_digests, None)
@@ -59,16 +72,22 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let obj = objects.clone().first().unwrap().object().unwrap().object_id;
+    let gas = objects.clone().last().unwrap().object().unwrap().object_id;
 
     let transaction_bytes: TransactionBytes = http_client
-        .transfer_object(
-            *address,
-            objects.first().unwrap().object_id,
-            Some(objects.last().unwrap().object_id),
-            1000,
-            *address,
-        )
+        .transfer_object(*address, obj, Some(gas), 1000, *address)
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -101,8 +120,16 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    let gas = objects.first().unwrap();
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?;
+    let gas = objects.data.first().unwrap().object().unwrap();
 
     let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
@@ -135,9 +162,19 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    let gas = objects.first().unwrap();
-    let coin = &objects[1];
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas = objects.first().unwrap().object().unwrap();
+    let coin = &objects[1].object()?;
 
     // now do the call
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
@@ -186,9 +223,19 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
-    for oref in objects {
+    for obj in objects {
+        let oref = obj.into_object().unwrap();
         let result = http_client
             .get_object_with_options(
                 oref.object_id,
@@ -265,8 +312,18 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    let gas = objects.first().unwrap();
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas = objects.first().unwrap().object().unwrap();
 
     // Publish test coin package
     let compiled_modules = BuildConfig::default()
@@ -326,8 +383,17 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    let gas = objects.first().unwrap();
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+    let gas = objects.first().unwrap().object().unwrap();
 
     // Publish test coin package
     let compiled_modules = BuildConfig::new_for_testing()
@@ -445,12 +511,22 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
-    let gas_id = objects.last().unwrap().object_id;
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+    let gas_id = objects.last().unwrap().object().unwrap().object_id;
 
     // Make some transactions
     let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
-    for oref in &objects[..objects.len() - 1] {
+    for obj in &objects[..objects.len() - 1] {
+        let oref = obj.object().unwrap();
         let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
@@ -525,13 +601,20 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     for address in cluster.accounts.iter() {
         let objects = client
             .read_api()
-            .get_objects_owned_by_address(*address)
-            .await
-            .unwrap();
-        let gas_id = objects.last().unwrap().object_id;
+            .get_owned_objects(
+                *address,
+                Some(SuiObjectDataOptions::full_content()),
+                None,
+                None,
+                None,
+            )
+            .await?
+            .data;
+        let gas_id = objects.last().unwrap().object().unwrap().object_id;
 
         // Make some transactions
-        for oref in &objects[..objects.len() - 1] {
+        for obj in &objects[..objects.len() - 1] {
+            let oref = obj.object().unwrap();
             let data = client
                 .transaction_builder()
                 .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
@@ -663,7 +746,16 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
     assert_eq!(5, objects.len());
     // verify coins and balance before test
     let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
@@ -730,8 +822,16 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
 
-    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
-    assert_eq!(5, objects.len());
+    let objects: ObjectsPage = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?;
+    assert_eq!(5, objects.data.len());
 
     // Check StakedSui object before test
     let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
@@ -743,16 +843,10 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         .active_validators[0]
         .sui_address;
 
+    let coin = objects.data[0].object()?.object_id;
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
-        .request_add_stake(
-            *address,
-            vec![objects[0].object_id],
-            Some(1000000),
-            validator,
-            None,
-            10000,
-        )
+        .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);

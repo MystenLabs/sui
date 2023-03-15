@@ -2157,9 +2157,14 @@ impl AuthorityState {
             .map(|o| o.owner)
     }
 
-    pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
+    pub fn get_owner_objects(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> SuiResult<Vec<ObjectInfo>> {
         if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects(owner)
+            indexes.get_owner_objects(owner, cursor, limit)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }

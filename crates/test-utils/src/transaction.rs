@@ -13,8 +13,8 @@ use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -320,9 +320,22 @@ pub async fn transfer_coin(
     let client = context.get_client().await.unwrap();
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(sender)
+        .get_owned_objects(
+            sender,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
         .await?;
-    let object_to_send = object_refs.get(1).unwrap().object_id;
+    let object_to_send = object_refs
+        .data
+        .get(1)
+        .expect("REASON")
+        .clone()
+        .into_object()
+        .unwrap()
+        .object_id;
 
     // Send an object
     info!(
