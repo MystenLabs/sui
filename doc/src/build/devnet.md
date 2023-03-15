@@ -47,11 +47,13 @@ To connect the Sui client to Sui Devnet, run the following command:
 ```shell
 sui client
 ```
+
 The first time you start Sui client, it displays the following message:
 
 ```
 Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui full node server [y/n]?
 ```
+
 Press **y** and then press **Enter**. It then asks for the RPC server URL: 
 
 ```
@@ -100,10 +102,7 @@ Note that in the following sections, the object ID's, addresses, and authority s
 
  1. Join [Discord](https://discord.gg/sui). 
    If you try to join the Sui Discord channel using a newly created Discord account you may need to wait a few days for validation. 
- 1. Get your Sui client address:
-   ```shell
-   sui client active-address
-   ```
+ 1. Get your Sui client address: `sui client active-address`
  1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) Discord channel.
   Send the following message to the channel with your client address:
   !faucet <Your client address>
@@ -136,11 +135,11 @@ To view the created object in [Sui Explorer](https://explorer.sui.io), append th
 
 The following command demonstrates how to customize the name, description, or image of the NFT:
 ```shell
-$ sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
+sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
 ```
 
 The command returns a new object ID:
-```shell
+```
 Successfully created an ExampleNFT:
 
 ----- 0x2::devnet_nft::DevNetNFT (0xa80a070133bfe7330eb8c02f5d91aaa9a6afe630eeb8b9ef9be08725642a02e1[0x3]) -----
