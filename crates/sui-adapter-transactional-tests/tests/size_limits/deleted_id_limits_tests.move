@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on number of deleted IDs 
+// Test limts on number of deleted IDs
 
 //# init --addresses Test=0x0
 
@@ -33,16 +33,16 @@ module Test::M1 {
 }
 
 // delete below delete count limit should succeed
-//# run Test::M1::delete_n_ids --args 1
+//# run Test::M1::delete_n_ids --args 1 --gas-budget 1000000
 
 // delete below delete count limit should succeed
-//# run Test::M1::delete_n_ids --args 256
+//# run Test::M1::delete_n_ids --args 256 --gas-budget 1000000
 
 // delete at delete count limit should succeed
-//# run Test::M1::delete_n_ids --args 2048
+//# run Test::M1::delete_n_ids --args 2048 --gas-budget 1000000
 
 // delete above delete count limit should fail
-//# run Test::M1::delete_n_ids --args 2049
+//# run Test::M1::delete_n_ids --args 2049 --gas-budget 1000000
 
 // delete above delete count limit should fail
-//# run Test::M1::delete_n_ids --args 4096
+//# run Test::M1::delete_n_ids --args 4096 --gas-budget 1000000
