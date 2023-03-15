@@ -32,8 +32,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-file: 10
-        max-size: 5g
+        max-file: "10"
+        max-size: "5g"
 
 volumes:
   suidb:
