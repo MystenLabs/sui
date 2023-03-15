@@ -17,5 +17,5 @@ task 4 'run'. lines 40-48:
 written: object(108)
 
 task 5 'run'. lines 50-50:
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: Some("Function expects std::ascii::String but provided argument's value does not match"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidBCSBytes }, source: Some("Function expects std::ascii::String but provided argument's value does not match"), command: Some(0) } }
