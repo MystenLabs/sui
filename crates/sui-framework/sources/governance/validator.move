@@ -251,6 +251,80 @@ module sui::validator {
         )
     }
 
+    public(friend) fun upgrade(self: Validator): Validator {
+        let Validator {
+            metadata,
+            voting_power,
+            operation_cap_id,
+            gas_price,
+            staking_pool,
+            commission_rate,
+            next_epoch_stake,
+            next_epoch_gas_price,
+            next_epoch_commission_rate,
+        } = self;
+        Validator {
+            metadata: upgrade_metadata(metadata),
+            voting_power,
+            operation_cap_id,
+            gas_price,
+            staking_pool,
+            commission_rate,
+            next_epoch_stake,
+            next_epoch_gas_price,
+            next_epoch_commission_rate,
+        }
+    }
+
+    fun upgrade_metadata(self: ValidatorMetadata): ValidatorMetadata {
+        let ValidatorMetadata {
+            sui_address,
+            protocol_pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            next_epoch_protocol_pubkey_bytes,
+            next_epoch_proof_of_possession,
+            next_epoch_network_pubkey_bytes,
+            next_epoch_worker_pubkey_bytes,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_primary_address,
+            next_epoch_worker_address,
+        } = self;
+        ValidatorMetadata {
+            sui_address,
+            protocol_pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            next_epoch_protocol_pubkey_bytes,
+            next_epoch_proof_of_possession,
+            next_epoch_network_pubkey_bytes,
+            next_epoch_worker_pubkey_bytes,
+            next_epoch_net_address,
+            next_epoch_p2p_address,
+            next_epoch_primary_address,
+            next_epoch_worker_address,
+        }
+    }
+
     /// Deactivate this validator's staking pool
     public(friend) fun deactivate(self: &mut Validator, deactivation_epoch: u64) {
         staking_pool::deactivate_staking_pool(&mut self.staking_pool, deactivation_epoch)

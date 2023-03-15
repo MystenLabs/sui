@@ -115,6 +115,7 @@ module sui::sui_system_state_inner {
     const EReportRecordNotFound: u64 = 4;
     const EBpsTooLarge: u64 = 5;
     const EStakedSuiFromWrongEpoch: u64 = 6;
+    const EInvalidUpgrade: u64 = 7;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -812,13 +813,38 @@ module sui::sui_system_state_inner {
     public(friend) fun upgrade_system_state(
         self: SuiSystemStateInner,
         new_system_state_version: u64,
-        _ctx: &mut TxContext,
+        ctx: &mut TxContext,
     ): SuiSystemStateInner {
         // Whenever we upgrade the system state version, we will have to first
         // ship a framework upgrade that introduces a new system state type, and make this
         // function generate such type from the old state.
-        self.system_state_version = new_system_state_version;
-        self
+        let SuiSystemStateInner {
+            epoch,
+            protocol_version,
+            system_state_version,
+            validators,
+            storage_fund,
+            parameters,
+            reference_gas_price,
+            validator_report_records,
+            stake_subsidy,
+            safe_mode,
+            epoch_start_timestamp_ms,
+        } = self;
+        assert!(system_state_version != new_system_state_version, EInvalidUpgrade);
+        SuiSystemStateInner {
+            epoch,
+            protocol_version,
+            system_state_version: new_system_state_version,
+            validators: validator_set::upgrade(validators, ctx),
+            storage_fund,
+            parameters,
+            reference_gas_price,
+            validator_report_records,
+            stake_subsidy,
+            safe_mode,
+            epoch_start_timestamp_ms,
+        }
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.

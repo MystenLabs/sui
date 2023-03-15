@@ -730,6 +730,42 @@ module sui::validator_set {
         validator_cap::new_from_unverified(cap)
     }
 
+    public(friend) fun upgrade(self: ValidatorSet, ctx: &mut TxContext): ValidatorSet {
+        let ValidatorSet {
+            total_stake,
+            active_validators,
+            pending_active_validators,
+            pending_removals,
+            staking_pool_mappings,
+            inactive_validators,
+            validator_candidates,
+            at_risk_validators,
+        } = self;
+        // This is guaranteed to be empty since we process all pending active validators before upgrade.
+        table_vec::destroy_empty(pending_active_validators);
+        ValidatorSet {
+            total_stake,
+            active_validators: upgrade_active_validators(active_validators),
+            pending_active_validators: table_vec::empty(ctx),
+            pending_removals,
+            staking_pool_mappings,
+            inactive_validators,
+            validator_candidates,
+            at_risk_validators,
+        }
+    }
+
+    fun upgrade_active_validators(active_validators: vector<Validator>): vector<Validator> {
+        let ret = vector[];
+        while (!vector::is_empty(&active_validators)) {
+            let v = vector::pop_back(&mut active_validators);
+            vector::push_back(&mut ret, validator::upgrade(v));
+        };
+        vector::destroy_empty(active_validators);
+        vector::reverse(&mut ret);
+        ret
+    }
+
     /// Process the pending withdraw requests. For each pending request, the validator
     /// is removed from `validators` and its staking pool is put into the `inactive_validators` table.
     fun process_pending_removals(

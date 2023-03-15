@@ -28,6 +28,8 @@ module sui::sui_system {
     #[test_only]
     friend sui::governance_test_utils;
 
+    const EInvalidUpgrade: u64 = 0;
+
     struct SuiSystemState has key {
         id: UID,
         version: u64,
@@ -498,7 +500,7 @@ module sui::sui_system {
         if (new_system_state_version != wrapper.version) {
             // If we are upgrading the system state, we need to make sure that the protocol version
             // is also upgraded.
-            assert!(old_protocol_version != next_protocol_version, 0);
+            assert!(old_protocol_version != next_protocol_version, EInvalidUpgrade);
             let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
             let new_state = sui_system_state_inner::upgrade_system_state(cur_state, new_system_state_version, ctx);
             wrapper.version = new_system_state_version;
