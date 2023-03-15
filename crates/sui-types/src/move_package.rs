@@ -272,11 +272,9 @@ impl MovePackage {
                  }| module_name.len() + struct_name.len() + ObjectID::LENGTH,
             )
             .sum::<usize>();
-        let linkage_table_size = self
-            .linkage_table
-            .iter()
-            .map(|_| ObjectID::LENGTH + (ObjectID::LENGTH + 8/* SequenceNumber */))
-            .sum::<usize>();
+
+        let linkage_table_size = self.linkage_table.len()
+            * (ObjectID::LENGTH + (ObjectID::LENGTH + 8/* SequenceNumber */));
 
         8 /* SequenceNumber */ + module_map_size + type_origin_table_size + linkage_table_size
     }

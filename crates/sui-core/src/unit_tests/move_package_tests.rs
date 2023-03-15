@@ -6,9 +6,10 @@ use move_binary_format::file_format::CompiledModule;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::{
     base_types::ObjectID,
+    digests::TransactionDigest,
     error::ExecutionErrorKind,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
-    object::OBJECT_START_VERSION,
+    object::{Data, Object, OBJECT_START_VERSION},
 };
 
 use std::{collections::BTreeMap, path::PathBuf};
@@ -95,6 +96,21 @@ fn test_new_initial() {
         &type_origin_table! {
             c::C => c_id1,
         }
+    );
+
+    // also test that move package sizes used for gas computations are estimated correctly (small
+    // constant differences can be tolerated and are due to BCS encoding)
+    let a_pkg_obj = Object::new_package_from_data(Data::Package(a_pkg), TransactionDigest::ZERO);
+    let b_pkg_obj = Object::new_package_from_data(Data::Package(b_pkg), TransactionDigest::ZERO);
+    let c_pkg_obj = Object::new_package_from_data(Data::Package(c_pkg), TransactionDigest::ZERO);
+    let a_serialized = bcs::to_bytes(&a_pkg_obj).unwrap();
+    let b_serialized = bcs::to_bytes(&b_pkg_obj).unwrap();
+    let c_serialized = bcs::to_bytes(&c_pkg_obj).unwrap();
+    assert_eq!(a_pkg_obj.object_size_for_gas_metering(), a_serialized.len());
+    assert_eq!(b_pkg_obj.object_size_for_gas_metering(), b_serialized.len());
+    assert_eq!(
+        c_pkg_obj.object_size_for_gas_metering() + 2,
+        c_serialized.len()
     );
 }
 
