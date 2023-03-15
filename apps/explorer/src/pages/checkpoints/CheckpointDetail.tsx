@@ -17,17 +17,18 @@ import { Text } from '~/ui/Text';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 function CheckpointDetail() {
-    const { digest } = useParams<{ digest: string }>();
-    const rpc = useRpcClient();
+    const { id } = useParams<{ id: string }>();
+    const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
-    const { data, isError, isLoading } = useQuery(['checkpoints', digest], () =>
-        rpc.getCheckpoint({ id: digest! })
+    const rpc = useRpcClient();
+    const { data, isError, isLoading } = useQuery(['checkpoints', id], () =>
+        rpc.getCheckpoint({ id: digestOrSequenceNumber! })
     );
 
     if (isError)
         return (
             <Banner variant="error" fullWidth>
-                There was an issue retrieving data for checkpoint: {digest}
+                There was an issue retrieving data for checkpoint: {id}
             </Banner>
         );
 
