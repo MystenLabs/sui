@@ -1,13 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+use std::str::FromStr;
+use std::sync::Arc;
+
+use anyhow::anyhow;
+use async_trait::async_trait;
+use diesel::dsl::{count, max};
+use diesel::sql_types::VarChar;
+use diesel::upsert::excluded;
+use diesel::{ExpressionMethods, PgArrayExpressionMethods};
+use diesel::{OptionalExtension, QueryableByName};
+use diesel::{QueryDsl, RunQueryDsl};
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use tracing::{error, info};
+
+use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::committee::EpochId;
+use sui_types::event::EventID;
+use sui_types::object::ObjectRead;
+
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::error_logs::commit_error_logs;
 use crate::models::events::Event;
 use crate::models::objects::Object;
 use crate::models::transactions::Transaction;
-
 use crate::schema::{
     addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, events, move_calls,
     move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
@@ -18,23 +38,6 @@ use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::{IndexerStore, TemporaryEpochStore};
 use crate::{get_pg_pool_connection, PgConnectionPool};
-use async_trait::async_trait;
-use diesel::dsl::{count, max};
-use diesel::sql_types::VarChar;
-use diesel::upsert::excluded;
-use diesel::{ExpressionMethods, PgArrayExpressionMethods};
-use diesel::{OptionalExtension, QueryableByName};
-use diesel::{QueryDsl, RunQueryDsl};
-use move_bytecode_utils::module_cache::SyncModuleCache;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
-use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::committee::EpochId;
-use sui_types::object::ObjectRead;
-use tracing::{error, info};
-
-use sui_types::event::EventID;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
@@ -888,9 +891,9 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
-    fn persist_epoch(&self, _data: &TemporaryEpochStore) -> Result<usize, IndexerError> {
+    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         // TODO: create new partition on epoch change
-        self.partition_manager.advance_epoch(1)
+        self.partition_manager.advance_epoch(data.epoch_id + 1)
     }
 
     fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError> {
@@ -912,40 +915,43 @@ impl IndexerStore for PgIndexerStore {
 #[derive(Clone)]
 struct PartitionManager {
     cp: PgConnectionPool,
-    tables: Vec<String>,
 }
 
 impl PartitionManager {
     fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
         // Find all tables with partition
-        let mut manager = Self { cp, tables: vec![] };
+        let manager = Self { cp };
         let tables = manager.get_table_partitions()?;
         info!(
             "Found {} tables with partitions : [{:?}]",
             tables.len(),
             tables
         );
-        for (table, _) in tables {
-            manager.tables.push(table)
-        }
         Ok(manager)
     }
-    fn advance_epoch(&self, next_epoch_id: EpochId) -> Result<usize, IndexerError> {
+    fn advance_epoch(&self, next_epoch_id: EpochId) -> Result<(), IndexerError> {
+        let tables = self.get_table_partitions()?;
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-        pg_pool_conn
+        let table_updated = pg_pool_conn
             .build_transaction()
             .read_write().serializable()
             .run(|conn| {
-                for table in &self.tables {
-                    let sql = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_id}) TO ({});", next_epoch_id+1);
-                    diesel::sql_query(sql).execute(conn)?;
+                let mut updated_table = vec![];
+                for (table, last_partition) in &tables {
+                    if last_partition < &next_epoch_id {
+                        let sql = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_id}) TO ({});", next_epoch_id+1);
+                        diesel::sql_query(sql).execute(conn)?;
+                        updated_table.push(table);
+                    }
                 }
-                Ok::<_, diesel::result::Error>(self.tables.len())
+                Ok::<_, diesel::result::Error>(updated_table)
             })
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))?;
+        info! {"Created epoch partition {next_epoch_id} for {table_updated:?}"};
+        Ok(())
     }
 
-    fn get_table_partitions(&self) -> Result<BTreeMap<String, String>, IndexerError> {
+    fn get_table_partitions(&self) -> Result<BTreeMap<String, u64>, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
 
         #[derive(QueryableByName, Debug, Clone)]
@@ -962,7 +968,11 @@ impl PartitionManager {
             .run(|conn| diesel::sql_query(GET_PARTITION_SQL).load(conn))
             .map_err(|e| IndexerError::PostgresReadError(e.to_string()))?
             .into_iter()
-            .map(|table: PartitionedTable| (table.table_name, table.last_partition))
-            .collect())
+            .map(|table: PartitionedTable| {
+                u64::from_str(&table.last_partition)
+                    .map(|last_partition| (table.table_name, last_partition))
+                    .map_err(|e| anyhow!(e))
+            })
+            .collect::<Result<_, _>>()?)
     }
 }

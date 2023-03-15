@@ -117,7 +117,7 @@ pub trait IndexerStore {
     ) -> Result<Vec<Transaction>, IndexerError>;
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
-    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<usize, IndexerError>;
+    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
     fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError>;
 
@@ -151,4 +151,5 @@ pub struct TransactionObjectChanges {
 // Per epoch indexing
 pub struct TemporaryEpochStore {
     pub owner_index: Vec<ObjectOwner>,
+    pub epoch_id: u64,
 }
