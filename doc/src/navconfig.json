@@ -144,7 +144,7 @@
 					},
 					{
 						"label": "Accessing Time in Sui Move",
-						"fileName": "build/"
+						"fileName": "build/time"
 					},
 					{
 						"label": "Write Move Packages",
