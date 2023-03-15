@@ -39,13 +39,14 @@ use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
+// TODO: (jian) update example after pagination changes
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let sui = SuiClientBuilder::default().build(
       "https://fullnode.devnet.sui.io:443",
     ).await.unwrap();
     let address = SuiAddress::from_str("0xbcab7526033aa0e014f634bf51316715dda0907a7fab5a8d7e3bd44e634a4d44")?;
-    let objects = sui.read_api().get_objects_owned_by_address(address).await?;
+    let objects = sui.read_api().get_owned_objects(address).await?;
     println!("{:?}", objects);
     Ok(())
 }

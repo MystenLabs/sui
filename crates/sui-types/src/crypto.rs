@@ -1070,10 +1070,10 @@ pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
         committee: &Committee,
     ) -> SuiResult;
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'a Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()>;
 }
@@ -1090,10 +1090,10 @@ impl AuthoritySignInfoTrait for EmptySignInfo {
         Ok(())
     }
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a>(
         &self,
-        _committee: &Committee,
-        _obligation: &mut VerificationObligation,
+        _committee: &'a Committee,
+        _obligation: &mut VerificationObligation<'a>,
         _message_index: usize,
     ) -> SuiResult<()> {
         Ok(())
@@ -1120,10 +1120,10 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
         Ok(())
     }
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'a Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()> {
         fp_ensure!(
@@ -1226,7 +1226,6 @@ pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
 }
 
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
-pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 
 // Variant of [AuthorityStrongQuorumSignInfo] but with a serialized signature, to be used in
 // external APIs.
@@ -1273,7 +1272,6 @@ impl TryFrom<&SuiAuthorityStrongQuorumSignInfo> for AuthorityStrongQuorumSignInf
 //
 // see also https://github.com/MystenLabs/sui/issues/266
 static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
-static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
 
 impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
     for AuthorityQuorumSignInfo<STRONG_THRESHOLD>
@@ -1291,10 +1289,10 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
         Ok(())
     }
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'a Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()> {
         // Check epoch
@@ -1547,14 +1545,14 @@ pub fn default_hash<S: Signable<DefaultHash>>(signable: &S) -> [u8; 32] {
 }
 
 #[derive(Default)]
-pub struct VerificationObligation {
+pub struct VerificationObligation<'a> {
     pub messages: Vec<Vec<u8>>,
     pub signatures: Vec<AggregateAuthoritySignature>,
-    pub public_keys: Vec<Vec<AuthorityPublicKey>>,
+    pub public_keys: Vec<Vec<&'a AuthorityPublicKey>>,
 }
 
-impl VerificationObligation {
-    pub fn new() -> VerificationObligation {
+impl<'a> VerificationObligation<'a> {
+    pub fn new() -> VerificationObligation<'a> {
         VerificationObligation::default()
     }
 
@@ -1578,13 +1576,13 @@ impl VerificationObligation {
     pub fn add_signature_and_public_key(
         &mut self,
         signature: &AuthoritySignature,
-        public_key: &AuthorityPublicKey,
+        public_key: &'a AuthorityPublicKey,
         idx: usize,
     ) -> SuiResult<()> {
         self.public_keys
             .get_mut(idx)
             .ok_or(SuiError::InvalidAuthenticator)?
-            .push(public_key.clone());
+            .push(public_key);
         self.signatures
             .get_mut(idx)
             .ok_or(SuiError::InvalidAuthenticator)?
@@ -1596,12 +1594,13 @@ impl VerificationObligation {
     }
 
     pub fn verify_all(self) -> SuiResult<()> {
+        let mut pks = Vec::with_capacity(self.public_keys.len());
+        for pk in self.public_keys {
+            pks.push(pk.into_iter());
+        }
         AggregateAuthoritySignature::batch_verify(
             &self.signatures.iter().collect::<Vec<_>>()[..],
-            self.public_keys
-                .iter()
-                .map(|x| x.iter())
-                .collect::<Vec<_>>(),
+            pks,
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
         .map_err(|error| SuiError::InvalidSignature {
@@ -1625,7 +1624,7 @@ pub mod bcs_signable_test {
     use super::VerificationObligation;
 
     #[cfg(test)]
-    pub fn get_obligation_input<T>(value: &T) -> (VerificationObligation, usize)
+    pub fn get_obligation_input<T>(value: &T) -> (VerificationObligation<'_>, usize)
     where
         T: super::bcs_signable::BcsSignable,
     {

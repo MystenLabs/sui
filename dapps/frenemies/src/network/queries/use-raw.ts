@@ -26,8 +26,7 @@ function useObjectsOwnedByAddress() {
   const { currentAccount } = useWalletKit();
   return useQuery(
     ["owned", currentAccount?.address],
-    async () =>
-      provider.getObjectsOwnedByAddress({ owner: currentAccount?.address! }),
+    async () => provider.getOwnedObjects({ owner: currentAccount?.address! }),
     {
       enabled: !!currentAccount?.address,
       refetchInterval: 2 * 60 * 1000,

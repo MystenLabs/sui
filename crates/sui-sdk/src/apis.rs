@@ -14,9 +14,9 @@ use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
-    DynamicFieldPage, EventFilter, EventPage, SuiCoinMetadata, SuiCommittee, SuiEvent,
-    SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectInfo,
-    SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiCoinMetadata, SuiCommittee, SuiEvent,
+    SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_types::balance::Supply;
@@ -43,11 +43,19 @@ impl ReadApi {
         Self { api }
     }
 
-    pub async fn get_objects_owned_by_address(
+    pub async fn get_owned_objects(
         &self,
         address: SuiAddress,
-    ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
-        Ok(self.api.http.get_objects_owned_by_address(address).await?)
+        options: Option<SuiObjectDataOptions>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+        checkpoint: Option<CheckpointId>,
+    ) -> SuiRpcResult<ObjectsPage> {
+        Ok(self
+            .api
+            .http
+            .get_owned_objects(address, options, cursor, limit, checkpoint)
+            .await?)
     }
 
     pub async fn get_dynamic_fields(

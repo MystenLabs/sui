@@ -3,7 +3,7 @@
 use crate::proposer_store::ProposerKey;
 use crate::{CertificateStore, ProposerStore};
 use config::WorkerId;
-use crypto::PublicKey;
+use crypto::{PublicKey, PublicKeyBytes};
 use std::sync::Arc;
 use store::rocks::DBMap;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
@@ -78,8 +78,8 @@ impl NodeStorage {
             Self::VOTES_CF;<PublicKey, VoteInfo>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-            Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-            Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+            Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
+            Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,

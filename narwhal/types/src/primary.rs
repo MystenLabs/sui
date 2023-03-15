@@ -10,7 +10,7 @@ use bytes::Bytes;
 use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
     to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
-    NarwhalAuthoritySignature, PublicKey, Signature,
+    NarwhalAuthoritySignature, PublicKey, PublicKeyBytes, Signature,
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
@@ -843,15 +843,15 @@ pub struct FetchCertificatesRequest {
     /// - rounds of certificates to be skipped from the response and
     /// - the GC round.
     /// These rounds are skipped because the requestor already has them.
-    pub skip_rounds: Vec<(PublicKey, Vec<u8>)>,
+    pub skip_rounds: Vec<(PublicKeyBytes, Vec<u8>)>,
     /// Maximum number of certificates that should be returned.
     pub max_items: usize,
 }
 
 impl FetchCertificatesRequest {
     #[allow(clippy::mutable_key_type)]
-    pub fn get_bounds(&self) -> (Round, BTreeMap<PublicKey, BTreeSet<Round>>) {
-        let skip_rounds: BTreeMap<PublicKey, BTreeSet<Round>> = self
+    pub fn get_bounds(&self) -> (Round, BTreeMap<PublicKeyBytes, BTreeSet<Round>>) {
+        let skip_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>> = self
             .skip_rounds
             .iter()
             .filter_map(|(k, serialized)| {
@@ -877,7 +877,7 @@ impl FetchCertificatesRequest {
     pub fn set_bounds(
         mut self,
         gc_round: Round,
-        skip_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
+        skip_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>>,
     ) -> Self {
         self.exclusive_lower_bound = gc_round;
         self.skip_rounds = skip_rounds

@@ -28,6 +28,7 @@ pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
 pub use read::ReadApiServer;
 
+// use anyhow::anyhow;
 pub use transaction_builder::TransactionBuilderClient;
 pub use transaction_builder::TransactionBuilderOpenRpc;
 pub use transaction_builder::TransactionBuilderServer;
@@ -38,11 +39,23 @@ pub use transaction_builder::TransactionBuilderServer;
 /// for document purposes.
 pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 
+pub const MAX_GET_OWNED_OBJECT_LIMIT: usize = 256;
+
 pub fn cap_page_limit(limit: Option<usize>) -> usize {
     let limit = limit.unwrap_or_default();
     if limit > QUERY_MAX_RESULT_LIMIT || limit == 0 {
         QUERY_MAX_RESULT_LIMIT
     } else {
         limit
+    }
+}
+
+pub fn cap_page_objects_limit(limit: Option<usize>) -> Result<usize, anyhow::Error> {
+    let limit = limit.unwrap_or(MAX_GET_OWNED_OBJECT_LIMIT);
+    if limit > MAX_GET_OWNED_OBJECT_LIMIT || limit == 0 {
+        Ok(MAX_GET_OWNED_OBJECT_LIMIT)
+        // MUSTFIXD(jian): implement this error: Err(anyhow!("limit is greater than max get owned object size"))
+    } else {
+        Ok(limit)
     }
 }

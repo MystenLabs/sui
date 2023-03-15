@@ -11,7 +11,7 @@ use bincode::Options;
 use config::{Committee, Parameters, WorkerId};
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::{PublicKey, PublicKeyBytes};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -1003,6 +1003,7 @@ async fn test_fetch_certificates_handler() {
                 authorities
                     .clone()
                     .into_iter()
+                    .map(|a| PublicKeyBytes::from(&a))
                     .zip(
                         skip_rounds_vec
                             .into_iter()
@@ -1167,8 +1168,8 @@ async fn test_process_payload_availability_when_failures() {
         payload_map,
     ) = store::reopen!(&rocksdb,
         test_utils::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
         test_utils::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     let certificate_store = CertificateStore::new(
