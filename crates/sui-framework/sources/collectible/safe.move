@@ -281,7 +281,7 @@ module sui::nft_safe {
 
     /// Given object is added to the safe and can be listed from now on.
     public fun deposit_nft<T: key + store>(
-        self: &mut NftSafe, owner_cap: &OwnerCap, nft: T,
+        self: &mut NftSafe, _owner_cap: &OwnerCap, nft: T,
     ) {
         let nft_id = object::id(&nft);
 
