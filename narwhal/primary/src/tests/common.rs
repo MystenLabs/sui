@@ -14,7 +14,7 @@ use types::{
     WorkerSynchronizeMessage,
 };
 
-use crypto::PublicKey;
+use crypto::{PublicKey, PublicKeyBytes};
 use storage::PayloadToken;
 use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
@@ -48,8 +48,8 @@ pub fn create_db_stores() -> (
     ) = reopen!(&rocksdb,
         HEADERS_CF;<HeaderDigest, Header>,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-        CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+        CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
+        CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (
