@@ -48,7 +48,6 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::transaction_manager::TransactionManager;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
@@ -1554,18 +1553,10 @@ impl AuthorityPerEpochStore {
         &self,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
-        transaction_manager: &Arc<TransactionManager>,
         parent_sync_store: impl ParentSync,
-    ) -> SuiResult {
-        if let Some(certificate) = self
-            .process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
-            .await?
-        {
-            // The certificate has already been inserted into the pending_certificates table by
-            // process_consensus_transaction() above.
-            transaction_manager.enqueue(vec![certificate], self)?;
-        }
-        Ok(())
+    ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
+        self.process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
+            .await
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,

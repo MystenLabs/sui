@@ -115,10 +115,10 @@ async fn submit_transaction_to_consensus_adapter() {
                 .handle_consensus_transaction(
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.transaction_manager(),
                     self.0.db(),
                 )
-                .await
+                .await?;
+            Ok(())
         }
     }
     // Make a new consensus adapter instance.

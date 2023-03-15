@@ -9,6 +9,7 @@ use crate::checkpoints::CheckpointService;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
 use mysten_metrics::monitored_scope;
+use mysten_metrics::spawn_monitored_task;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use serde::{Deserialize, Serialize};
@@ -174,6 +175,8 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
+        let mut to_enqueue = Vec::new();
+
         for sequenced_transaction in sequenced_transactions {
             let verified_transaction = match self.epoch_store.verify_consensus_transaction(
                 sequenced_transaction,
@@ -183,20 +186,38 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 Err(()) => continue,
             };
 
-            self.epoch_store
+            if let Some(cert) = self
+                .epoch_store
                 .handle_consensus_transaction(
                     verified_transaction,
                     &self.checkpoint_service,
-                    &self.transaction_manager,
                     &self.parent_sync_store,
                 )
                 .await
-                .expect("Unrecoverable error in consensus handler");
+                .expect("Unrecoverable error in consensus handler")
+            {
+                to_enqueue.push(cert);
+            }
         }
 
         self.epoch_store
             .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
-            .expect("Unrecoverable error in consensus handler when processing commit boundary")
+            .expect("Unrecoverable error in consensus handler when processing commit boundary");
+
+        let transaction_manager = self.transaction_manager.clone();
+        let epoch_store = self.epoch_store.clone();
+        spawn_monitored_task!(async move {
+            // All certificates have already been inserted into the pending_certificates table by
+            // AuthorityPerEpochStore::process_consensus_transaction().
+            //
+            // expect ok - This should not fail, and it used to be done inside of
+            // handle_consensus_output (above), which also has an expect on the output. Also,
+            // if this somehow did fail, the cert would be forgotten until the next restart +
+            // re-read from the pending table.
+            transaction_manager
+                .enqueue(to_enqueue, &epoch_store)
+                .expect("TransactionManager::enqueue cannot fail");
+        });
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {
