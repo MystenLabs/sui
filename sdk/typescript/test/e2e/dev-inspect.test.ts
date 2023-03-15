@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RawSigner, Transaction } from '../../src';
+import { RawSigner, SuiObjectData, Transaction } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test dev inspect', () => {
@@ -26,10 +26,11 @@ describe('Test dev inspect', () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const tx = new Transaction();
+    const coin_0 = coins[0].details as SuiObjectData;
     const obj = tx.moveCall({
       target: `${packageId}::serializer_tests::return_struct`,
       typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-      arguments: [tx.pure(coins[0].objectId)],
+      arguments: [tx.pure(coin_0.objectId)],
     });
 
     // TODO: Ideally dev inspect transactions wouldn't need this, but they do for now

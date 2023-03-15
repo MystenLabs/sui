@@ -25,13 +25,14 @@ use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectChange,
     ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents,
-    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
-    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+    MoveObjectType, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
+    TxSequenceNumber,
 };
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
@@ -118,15 +119,19 @@ impl ReadApiServer for ReadApi {
         &self,
         address: SuiAddress,
         // exclusive cursor if `Some`, otherwise start from the beginning
-        options: Option<SuiObjectDataOptions>,
+        query: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
         if at_checkpoint.is_some() {
-            return Err(anyhow!("at_checkpoint param currently not supported").into());
+            return Err(anyhow!(UserInputError::Unsupported(
+                "at_checkpoint param currently not supported".to_string()
+            ))
+            .into());
         }
         let limit = cap_page_objects_limit(limit)?;
+        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
 
         // MUSTFIXD(jian): multi-get-object for content/storage rebate if opt.show_content is true
@@ -142,6 +147,25 @@ impl ReadApiServer for ReadApi {
             .last()
             .cloned()
             .map_or(cursor, |o_info| Some(o_info.object_id));
+
+        // filter here by filter options until we index tables by those options
+        match filter {
+            Some(SuiObjectDataFilter::StructType(struct_tag)) => {
+                objects.retain(|obj| obj.type_.to_string() == struct_tag.to_string())
+            }
+            Some(SuiObjectDataFilter::MoveModule { package, module }) => objects.retain(|obj| {
+                if let ObjectType::Struct(MoveObjectType::Other(ref tag)) = obj.type_ {
+                    tag.address.to_string() == package.to_string()
+                        && tag.module.to_string() == module.to_string()
+                } else {
+                    false
+                }
+            }),
+            Some(SuiObjectDataFilter::Package(package_id)) => {
+                objects.retain(|obj| obj.type_.to_string().contains(&package_id.to_string()))
+            }
+            None => {}
+        }
 
         let data = objects.into_iter().try_fold(vec![], |mut acc, o_info| {
             let o_resp = SuiObjectResponse::try_from((o_info, options.clone()))?;

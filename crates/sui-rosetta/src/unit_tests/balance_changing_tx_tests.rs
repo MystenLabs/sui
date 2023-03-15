@@ -16,12 +16,13 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::operations::Operations;
 use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_json_rpc_types::{ObjectChange, SuiObjectRef};
+use sui_json_rpc_types::{
+    ObjectChange, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponseQuery,
+};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI,
-    SuiTransactionResponse,
+    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -667,7 +668,12 @@ async fn get_random_sui(
         .read_api()
         .get_owned_objects(
             sender,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             /* cursor */ None,
             /* limit */ None,
             /* at_checkpoint */ None,
@@ -702,7 +708,12 @@ async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             /* cursor */ None,
             /* limit */ None,
             /* at_checkpoint */ None,
