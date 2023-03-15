@@ -14,10 +14,14 @@ use std::collections::VecDeque;
 
 pub const INVALID_VERIFYING_KEY: u64 = 0;
 pub const INVALID_CURVE: u64 = 1;
+pub const TOO_MANY_PUBLIC_INPUTS: u64 = 2;
 
 // These must match the corresponding values in sui::groth16::Curve.
 pub const BLS12381: u8 = 0;
 pub const BN254: u8 = 1;
+
+// We need to set an upper bound on the number of public inputs to avoid a DoS attack
+pub const MAX_PUBLIC_INPUTS: usize = 8;
 
 pub fn prepare_verifying_key_internal(
     _context: &mut NativeContext,
@@ -91,6 +95,11 @@ pub fn verify_groth16_proof_internal(
 
     let result;
     if curve == BLS12381 {
+        if public_proof_inputs.len()
+            > fastcrypto_zkp::bls12381::conversions::SCALAR_SIZE * MAX_PUBLIC_INPUTS
+        {
+            return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+        }
         result = fastcrypto_zkp::bls12381::api::verify_groth16_in_bytes(
             &vk_gamma_abc_g1,
             &alpha_g1_beta_g2,
@@ -100,6 +109,9 @@ pub fn verify_groth16_proof_internal(
             &proof_points,
         );
     } else if curve == BN254 {
+        if public_proof_inputs.len() > fastcrypto_zkp::bn254::api::SCALAR_SIZE * MAX_PUBLIC_INPUTS {
+            return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+        }
         result = fastcrypto_zkp::bn254::api::verify_groth16_in_bytes(
             &vk_gamma_abc_g1,
             &alpha_g1_beta_g2,

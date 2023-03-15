@@ -180,6 +180,15 @@ A <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints</a></code> wrap
 
 
 
+<a name="0x2_groth16_ETooManyPublicInputs"></a>
+
+
+
+<pre><code><b>const</b> <a href="groth16.md#0x2_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0x2_groth16_bls12381"></a>
 
 ## Function `bls12381`
