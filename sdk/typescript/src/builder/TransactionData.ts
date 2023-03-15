@@ -16,12 +16,12 @@ import {
   string,
   union,
 } from 'superstruct';
-import { sha256Hash } from '../cryptography/hash';
+import { hashTypedData } from '../cryptography/hash';
 import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
 import { BuilderCallArg, PureCallArg } from './Inputs';
-import { create } from './utils';
+import { create, DeepReadonly } from './utils';
 
 export const TransactionExpiration = optional(
   nullable(
@@ -70,7 +70,9 @@ function prepareSuiAddress(address: string) {
   return normalizeSuiAddress(address).replace('0x', '');
 }
 
-const TRANSACTION_DATA_MAX_SIZE = 64 * 1024;
+// NOTE: This value should be kept in sync with the corresponding value in
+// crates/sui-protocol-config/src/lib.rs
+const TRANSACTION_DATA_MAX_SIZE = 128 * 1024;
 
 export class TransactionDataBuilder {
   static fromBytes(bytes: Uint8Array) {
@@ -121,7 +123,7 @@ export class TransactionDataBuilder {
    * @returns transaction digest.
    */
   static getDigestFromBytes(bytes: Uint8Array) {
-    const hash = sha256Hash('TransactionData', bytes);
+    const hash = hashTypedData('TransactionData', bytes);
     return toB58(hash);
   }
 
@@ -140,23 +142,16 @@ export class TransactionDataBuilder {
     this.commands = clone?.commands ?? [];
   }
 
-  build({ onlyTransactionKind }: { onlyTransactionKind?: boolean } = {}) {
-    if (!this.gasConfig.budget) {
-      throw new Error('Missing gas budget');
-    }
-
-    if (!this.gasConfig.payment) {
-      throw new Error('Missing gas payment');
-    }
-
-    if (!this.gasConfig.price) {
-      throw new Error('Missing gas price');
-    }
-
-    if (!this.sender) {
-      throw new Error('Missing transaction sender');
-    }
-
+  build({
+    overrides,
+    onlyTransactionKind,
+  }: {
+    overrides?: Pick<
+      Partial<TransactionDataBuilder>,
+      'sender' | 'gasConfig' | 'expiration'
+    >;
+    onlyTransactionKind?: boolean;
+  } = {}) {
     // Resolve inputs down to values:
     const inputs = this.inputs.map((input) => {
       assert(input.value, BuilderCallArg);
@@ -176,14 +171,34 @@ export class TransactionDataBuilder {
         .toBytes();
     }
 
+    const expiration = overrides?.expiration ?? this.expiration;
+    const sender = overrides?.sender ?? this.sender;
+    const gasConfig = { ...this.gasConfig, ...overrides?.gasConfig };
+
+    if (!sender) {
+      throw new Error('Missing transaction sender');
+    }
+
+    if (!gasConfig.budget) {
+      throw new Error('Missing gas budget');
+    }
+
+    if (!gasConfig.payment) {
+      throw new Error('Missing gas payment');
+    }
+
+    if (!gasConfig.price) {
+      throw new Error('Missing gas price');
+    }
+
     const transactionData = {
-      sender: prepareSuiAddress(this.sender),
-      expiration: this.expiration ? this.expiration : { None: true },
+      sender: prepareSuiAddress(sender),
+      expiration: expiration ? expiration : { None: true },
       gasData: {
-        payment: this.gasConfig.payment,
-        owner: prepareSuiAddress(this.gasConfig.owner ?? this.sender),
-        price: BigInt(this.gasConfig.price),
-        budget: BigInt(this.gasConfig.budget),
+        payment: gasConfig.payment,
+        owner: prepareSuiAddress(this.gasConfig.owner ?? sender),
+        price: BigInt(gasConfig.price),
+        budget: BigInt(gasConfig.budget),
       },
       kind: {
         ProgrammableTransaction: {
@@ -207,7 +222,7 @@ export class TransactionDataBuilder {
     return TransactionDataBuilder.getDigestFromBytes(bytes);
   }
 
-  snapshot(): SerializedTransactionDataBuilder {
+  snapshot(): DeepReadonly<SerializedTransactionDataBuilder> {
     const allInputsProvided = this.inputs.every((input) => !!input.value);
 
     if (!allInputsProvided) {

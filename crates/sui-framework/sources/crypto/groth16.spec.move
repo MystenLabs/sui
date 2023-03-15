@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 spec sui::groth16 {
-    spec prepare_verifying_key {
+    spec prepare_verifying_key_internal {
         pragma opaque;
         // TODO: stub to be replaced by actual abort conditions if any
         aborts_if [abstract] true;

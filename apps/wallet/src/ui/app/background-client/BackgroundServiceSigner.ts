@@ -4,7 +4,7 @@
 import { type SerializedSignature, SignerWithProvider } from '@mysten/sui.js';
 
 import type { BackgroundClient } from '.';
-import type { Provider, SuiAddress } from '@mysten/sui.js';
+import type { JsonRpcProvider, SuiAddress } from '@mysten/sui.js';
 
 export class BackgroundServiceSigner extends SignerWithProvider {
     readonly #address: SuiAddress;
@@ -13,7 +13,7 @@ export class BackgroundServiceSigner extends SignerWithProvider {
     constructor(
         address: SuiAddress,
         backgroundClient: BackgroundClient,
-        provider: Provider
+        provider: JsonRpcProvider
     ) {
         super(provider);
         this.#address = address;
@@ -28,7 +28,7 @@ export class BackgroundServiceSigner extends SignerWithProvider {
         return this.#backgroundClient.signData(this.#address, data);
     }
 
-    connect(provider: Provider): SignerWithProvider {
+    connect(provider: JsonRpcProvider): SignerWithProvider {
         return new BackgroundServiceSigner(
             this.#address,
             this.#backgroundClient,

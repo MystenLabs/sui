@@ -7,7 +7,7 @@ NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 # NUM_CPUS=64 # We can increase this later if needed
 
 # filter out some tests that give spurious failures.
-TEST_FILTER="(not test(test_move_call_args_linter_command)) & (not test(test_package_publish_command))"
+TEST_FILTER="(not test(~cli_tests))"
 
 DATE=$(date +%s)
 SEED="$DATE"
@@ -22,7 +22,8 @@ MSIM_TEST_NUM=30 \
 scripts/simtest/cargo-simtest simtest \
   --package sui \
   --package sui-core \
-  --profile simtestnightly
+  --profile simtestnightly \
+  -E "$TEST_FILTER"
 
 # create logs directory
 SIMTEST_LOGS_DIR=~/simtest_logs
@@ -43,6 +44,8 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
     --test-threads 1 \
     --profile simtestnightly \
     -E "$TEST_FILTER" > "$LOG_FILE" 2>&1 &
+
+    grep -Hn FAIL "$LOG_FILE"
 done
 
 # wait for all the jobs to end

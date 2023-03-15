@@ -104,6 +104,7 @@ importers:
       eslint-config-react-app: ^7.0.1
       eslint-plugin-header: ^3.1.1
       framer-motion: ^8.1.9
+      happy-dom: ^8.1.2
       onchange: ^7.1.0
       plausible-tracker: ^0.3.8
       playwright: ^1.29.1
@@ -191,6 +192,7 @@ importers:
       eslint-config-prettier: 8.6.0_eslint@8.31.0
       eslint-config-react-app: 7.0.1_iukboom6ndih5an6iafl45j2fe
       eslint-plugin-header: 3.1.1_eslint@8.31.0
+      happy-dom: 8.1.2
       onchange: 7.1.0
       playwright: 1.29.1
       postcss: 8.4.21
@@ -203,7 +205,7 @@ importers:
       typescript: 4.9.4
       vite: 4.0.4_@types+node@18.11.18
       vite-plugin-svgr: 2.4.0_vite@4.0.4
-      vitest: 0.26.3_@vitest+ui@0.26.3
+      vitest: 0.26.3_nnc6v4qssw4u2mary2z2vuz4tu
 
   apps/icons:
     specifiers:
@@ -523,7 +525,6 @@ importers:
       eslint-plugin-prettier: ^4.2.1
       husky: ^7.0.4
       jayson: ^4.0.0
-      js-sha3: ^0.8.0
       mockttp: ^2.7.0
       prettier: ^2.8.4
       rpc-websockets: ^7.5.1
@@ -532,7 +533,6 @@ importers:
       tmp: ^0.2.1
       ts-node: ^10.9.1
       ts-retry-promise: ^0.7.0
-      tslib: ^2.5.0
       tsup: ^6.6.3
       tweetnacl: ^1.0.3
       typedoc: ^0.23.26
@@ -548,7 +548,6 @@ importers:
       '@scure/bip39': 1.1.1
       '@suchipi/femver': 1.0.0
       jayson: 4.0.0
-      js-sha3: 0.8.0
       rpc-websockets: 7.5.1
       superstruct: 1.0.3
       tweetnacl: 1.0.3
@@ -567,7 +566,6 @@ importers:
       tmp: 0.2.1
       ts-node: 10.9.1_typescript@4.9.5
       ts-retry-promise: 0.7.0
-      tslib: 2.5.0
       tsup: 6.6.3_6qtx7vkbdhwvdm4crzlegk4mvi
       typedoc: 0.23.26_typescript@4.9.5
       typescript: 4.9.5
@@ -668,6 +666,7 @@ importers:
     specifiers:
       '@mysten/wallet-kit': workspace:*
       '@types/node': 18.11.10
+      '@types/react': ^18.0.26
       next: ^13.0.6
       nextra: latest
       nextra-theme-docs: latest
@@ -683,6 +682,7 @@ importers:
       react-dom: 18.2.0_react@18.2.0
     devDependencies:
       '@types/node': 18.11.10
+      '@types/react': 18.0.26
       typescript: 4.9.5
 
   sdk/wallet-adapter/wallet-kit:
@@ -14516,10 +14516,6 @@ packages:
   /js-sdsl/4.2.0:
     resolution: {integrity: sha512-dyBIzQBDkCqCu+0upx25Y2jGdbTGxE9fshMsCdK0ViOongpV+n5tXRcZY9v7CaVQ79AGS9KA1KHtojxiM7aXSQ==}
 
-  /js-sha3/0.8.0:
-    resolution: {integrity: sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==}
-    dev: false
-
   /js-tokens/4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -21725,7 +21721,7 @@ packages:
       - terser
     dev: true
 
-  /vitest/0.26.3_@vitest+ui@0.26.3:
+  /vitest/0.26.3_nnc6v4qssw4u2mary2z2vuz4tu:
     resolution: {integrity: sha512-FmHxU9aUCxTi23keF3vxb/Qp0lYXaaJ+jRLGOUmMS3qVTOJvgGE+f1VArupA6pEhaG2Ans4X+zV9dqM5WISMbg==}
     engines: {node: '>=v14.16.0'}
     hasBin: true
@@ -21755,6 +21751,7 @@ packages:
       acorn-walk: 8.2.0
       chai: 4.3.7
       debug: 4.3.4
+      happy-dom: 8.1.2
       local-pkg: 0.4.2
       source-map: 0.6.1
       strip-literal: 1.0.0

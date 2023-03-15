@@ -6,13 +6,13 @@ Welcome to the guide for making remote procedure calls (RPC) to the Sui network.
 
 This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
 
-For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
+For a similar guide on Sui network interactions via CLI, refer to the [Sui Client CLI](cli-client.md) documentation.
 
-Follow the instructions to [install Sui binaries](install.md).
+Follow the instructions to [install Sui binaries](install.md#install-sui-binaries).
 
 ## Connect to a Sui network
 
-You can connect to a Sui Full node on Devnet. Follow the guidance in the [Connect to Sui Devnet](../build/devnet.md) topic to start making RPC calls to the Sui network.
+You can connect to a Sui Full node on a Sui network. Follow the guidance in the [Connect to Sui Devnet](../build/devnet.md) topic to start making RPC calls to the Sui network.
 
 To configure your own Sui Full node, see [Configure a Sui Full node](fullnode.md).
 
@@ -47,6 +47,7 @@ Objects IDs for `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjectsByAddress`](#sui_getObjectsOwnedByAddress) to return object IDs. 
 
 **Important:** As a security best practice, you should serialize data from the JSON-RPC service locally in the same location as the signer. This reduces the risk of trusting data from the service directly.
+
 #### Create an unsigned transaction to transfer a Sui coin from one address to another
 
 ```shell

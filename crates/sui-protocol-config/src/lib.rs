@@ -142,10 +142,18 @@ pub struct ProtocolConfig {
 
     // ==== Transaction input limits ====
     /// Maximum serialized size of a transaction (in bytes).
-    max_tx_size: Option<u64>,
+    // NOTE: This value should be kept in sync with the corresponding value in
+    // sdk/typescript/src/builder/TransactionData.ts
+    max_tx_size_bytes: Option<u64>,
 
-    /// Maximum number of individual transactions in a Batch transaction.
-    max_tx_in_batch: Option<u32>,
+    /// Maximum number of input objects.
+    max_input_objects: Option<u64>,
+
+    /// Maximum size of serialized transaction effects.
+    max_serialized_tx_effects_size_bytes: Option<u64>,
+
+    /// Maximum size of serialized transaction effects for system transactions.
+    max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
 
     /// Maximum number of gas payment objets for a transaction.
     max_gas_payment_objects: Option<u32>,
@@ -165,16 +173,6 @@ pub struct ProtocolConfig {
 
     /// Maximum size of a Pure CallArg.
     max_pure_argument_size: Option<u32>,
-
-    /// Maximum size of an ObjVec CallArg.
-    max_object_vec_argument_size: Option<u32>,
-
-    /// Maximum number of coins in Pay* transactions, or a ProgrammableTransaction's
-    /// MergeCoins command.
-    max_coins: Option<u32>,
-
-    /// Maximum number of recipients in Pay* transactions.
-    max_pay_recipients: Option<u32>,
 
     /// Maximum number of Commands in a ProgrammableTransaction.
     max_programmable_tx_commands: Option<u32>,
@@ -340,7 +338,7 @@ pub struct ProtocolConfig {
     /// Max size of a checkpoint in bytes.
     /// Note that this is a protocol constant and not a config as validators must have this set to
     /// the same value, otherwise they *will* fork.
-    max_checkpoint_size: Option<u64>,
+    max_checkpoint_size_bytes: Option<u64>,
 
     /// A protocol upgrade always requires 2f+1 stake to agree. We support a buffer of additional
     /// stake (as a fraction of f, expressed in basis points) that is required before an upgrade
@@ -399,11 +397,19 @@ impl ProtocolConfig {
 
 // getters
 impl ProtocolConfig {
-    pub fn max_tx_size(&self) -> u64 {
-        self.max_tx_size.expect(CONSTANT_ERR_MSG)
+    pub fn max_tx_size_bytes(&self) -> u64 {
+        self.max_tx_size_bytes.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_tx_in_batch(&self) -> u32 {
-        self.max_tx_in_batch.expect(CONSTANT_ERR_MSG)
+    pub fn max_input_objects(&self) -> u64 {
+        self.max_input_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes_system_tx(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes_system_tx
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_gas_payment_objects(&self) -> u32 {
         self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
@@ -422,15 +428,6 @@ impl ProtocolConfig {
     }
     pub fn max_pure_argument_size(&self) -> u32 {
         self.max_pure_argument_size.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_object_vec_argument_size(&self) -> u32 {
-        self.max_object_vec_argument_size.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_coins(&self) -> u32 {
-        self.max_coins.expect(CONSTANT_ERR_MSG)
-    }
-    pub fn max_pay_recipients(&self) -> u32 {
-        self.max_pay_recipients.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_programmable_tx_commands(&self) -> u32 {
         self.max_programmable_tx_commands.expect(CONSTANT_ERR_MSG)
@@ -579,8 +576,8 @@ impl ProtocolConfig {
         self.max_transactions_per_checkpoint
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_checkpoint_size(&self) -> u64 {
-        self.max_checkpoint_size.expect(CONSTANT_ERR_MSG)
+    pub fn max_checkpoint_size_bytes(&self) -> u64 {
+        self.max_checkpoint_size_bytes.expect(CONSTANT_ERR_MSG)
     }
     pub fn buffer_stake_for_protocol_upgrade_bps(&self) -> u64 {
         self.buffer_stake_for_protocol_upgrade_bps
@@ -726,22 +723,22 @@ impl ProtocolConfig {
                 // All flags are disabled in V1
                 feature_flags: Default::default(),
 
-                max_tx_size: Some(64 * 1024),
-                max_tx_in_batch: Some(10),
-                max_gas_payment_objects: Some(32),
+                max_tx_size_bytes: Some(128 * 1024),
+                // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
+                max_input_objects: Some(2048),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
+                max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
+                max_gas_payment_objects: Some(256),
                 max_modules_in_publish: Some(128),
                 max_arguments: Some(512),
                 max_type_arguments: Some(16),
                 max_type_argument_depth: Some(16),
                 max_pure_argument_size: Some(16 * 1024),
-                max_object_vec_argument_size: Some(128),
-                max_coins: Some(1024),
-                max_pay_recipients: Some(1024),
                 max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
-                max_tx_gas: Some(1_000_000_000),
+                max_tx_gas: Some(10_000_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),
@@ -781,7 +778,7 @@ impl ProtocolConfig {
                 reward_slashing_rate: Some(5000),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
-                max_checkpoint_size: Some(30 * 1024 * 1024),
+                max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
                 // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
                 // TODO: tune based on experience in testnet
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),

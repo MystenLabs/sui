@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntGauge, IntGaugeVec,
-    Registry,
-};
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::sync::Arc;
 
 pub struct EpochMetrics {
@@ -71,9 +68,6 @@ pub struct EpochMetrics {
     /// to become useful in the network after reconfiguration.
     // TODO: This needs to be reported properly.
     pub epoch_first_checkpoint_ready_time_since_epoch_begin_ms: IntGauge,
-
-    /// Tallying rule scores for all validators this epoch.
-    pub tallying_rule_scores: IntGaugeVec,
 
     /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
     pub is_safe_mode: IntGauge,
@@ -147,12 +141,6 @@ impl EpochMetrics {
             epoch_first_checkpoint_ready_time_since_epoch_begin_ms: register_int_gauge_with_registry!(
                 "epoch_first_checkpoint_created_time_since_epoch_begin_ms",
                 "Time interval from when the epoch opens at new epoch to the first checkpoint is created locally",
-                registry
-            ).unwrap(),
-            tallying_rule_scores: register_int_gauge_vec_with_registry!(
-                "tallying_rule_scores",
-                "Tallying rule scores for validators each epoch",
-                &["validator", "epoch"],
                 registry
             ).unwrap(),
             is_safe_mode: register_int_gauge_with_registry!(

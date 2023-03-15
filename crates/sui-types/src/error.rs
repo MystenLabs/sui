@@ -127,11 +127,14 @@ pub enum UserInputError {
     #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
     GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
     #[error(
-        "Balance of gas object {:?} is lower than gas budget: {:?}.",
+        "Balance of gas object {:?} is lower than the needed amount: {:?}.",
         gas_balance,
-        gas_budget
+        needed_gas_amount
     )]
-    GasBalanceTooLowToCoverGasBudget { gas_balance: u128, gas_budget: u128 },
+    GasBalanceTooLow {
+        gas_balance: u128,
+        needed_gas_amount: u128,
+    },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
     #[error(
@@ -423,11 +426,14 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
-    #[error("Failed to get the system state object content")]
-    SuiSystemStateNotFound,
+    #[error("Failed to read dynamic field from table in the object store: {0}")]
+    DynamicFieldReadError(String),
 
-    #[error("Found the sui system state object but it has an unexpected version")]
-    SuiSystemStateUnexpectedVersion,
+    #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
+    SuiSystemStateReadError(String),
+
+    #[error("Unexpected version error: {0}")]
+    UnexpectedVersion(String),
 
     #[error("Message version is not supported at the current protocol version: {error}")]
     WrongMessageVersion { error: String },

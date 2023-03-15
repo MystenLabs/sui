@@ -17,7 +17,6 @@ describe('Test ID as args to entry functions', () => {
 
   it('Test ID as arg to entry functions', async () => {
     const tx = new Transaction();
-    tx.setGasBudget(2000);
     tx.moveCall({
       target: `${packageId}::test::test_id`,
       arguments: [
@@ -26,8 +25,11 @@ describe('Test ID as args to entry functions', () => {
         ),
       ],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
-      showEffects: true,
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
   });

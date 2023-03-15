@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{anyhow, Context, Result};
 use clap::*;
 
@@ -61,8 +62,8 @@ async fn main() -> Result<()> {
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
     let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
 
-    if (opts.gas_request_chunk_size > max_num_new_move_object_ids as u64)
-        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids as u64)
+    if (opts.gas_request_chunk_size > max_num_new_move_object_ids)
+        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids)
     {
         eprintln!(
             "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
@@ -92,10 +93,9 @@ async fn main() -> Result<()> {
         // whole network.
         let mut system_state_observer = SystemStateObserver::new(
             bench_setup
-                .proxy_and_coins
+                .proxies
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for system state observer")?
-                .proxy
                 .clone(),
         );
         system_state_observer.reference_gas_price.changed().await?;
@@ -119,19 +119,12 @@ async fn main() -> Result<()> {
     let registry_clone = registry.clone();
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
-            let workload_configuration = if opts.disjoint_mode {
-                WorkloadConfiguration::Disjoint
-            } else {
-                WorkloadConfiguration::Combined
-            };
-
-            let proxy_workloads = workload_configuration
-                .configure(
-                    bench_setup.proxy_and_coins,
-                    &opts,
-                    system_state_observer.clone(),
-                )
-                .await?;
+            let workloads = WorkloadConfiguration::configure(
+                bench_setup.bank,
+                &opts,
+                system_state_observer.clone(),
+            )
+            .await?;
             let interval = opts.run_duration;
             // We only show continuous progress in stderr
             // if benchmark is running in unbounded mode,
@@ -141,7 +134,8 @@ async fn main() -> Result<()> {
             let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
             driver
                 .run(
-                    proxy_workloads,
+                    bench_setup.proxies,
+                    workloads,
                     system_state_observer,
                     &registry_clone,
                     show_progress,

@@ -121,7 +121,7 @@ impl CoinMergeSplitTest {
         let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 2000];
 
         let data = ctx
-            .build_transaction_remotely("sui_mergeCoins", params)
+            .build_transaction_remotely("unsafe_mergeCoins", params)
             .await
             .unwrap();
 
@@ -138,7 +138,7 @@ impl CoinMergeSplitTest {
         let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 2000];
 
         let data = ctx
-            .build_transaction_remotely("sui_splitCoin", params)
+            .build_transaction_remotely("unsafe_splitCoin", params)
             .await
             .unwrap();
 

@@ -12,18 +12,15 @@ created: object(107), object(108), object(109), object(110)
 written: object(106)
 
 task 3 'view-object'. lines 44-44:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(107) )
 Version: 2
 Contents: t::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)}}}
 
 task 4 'run'. lines 46-46:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object (function index 2) at offset 0, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 2, instruction: 0, function_name: Some("share_object") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 0)] }), command: Some(0) } }
+Error: Object 0xe6ff026a903dda0711f951bab1d01161791f0f6fe94badadcb0424cf05bd591d is owned by object 0xf2c06d97f4ad9da4a8a6cfb80dd73173302be0c6c245c62279a4bc86a366f33c. Objects owned by other objects cannot be used as input arguments.
 
 task 5 'run'. lines 48-48:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object (function index 2) at offset 0, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 2, instruction: 0, function_name: Some("share_object") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 0)] }), command: Some(0) } }
+Error: Object 0xe6ff026a903dda0711f951bab1d01161791f0f6fe94badadcb0424cf05bd591d is owned by object 0xf2c06d97f4ad9da4a8a6cfb80dd73173302be0c6c245c62279a4bc86a366f33c. Objects owned by other objects cannot be used as input arguments.
 
 task 6 'run'. lines 50-50:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object (function index 2) at offset 0, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 2, instruction: 0, function_name: Some("share_object") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 0)] }), command: Some(0) } }
+Error: Object 0xe6ff026a903dda0711f951bab1d01161791f0f6fe94badadcb0424cf05bd591d is owned by object 0xf2c06d97f4ad9da4a8a6cfb80dd73173302be0c6c245c62279a4bc86a366f33c. Objects owned by other objects cannot be used as input arguments.

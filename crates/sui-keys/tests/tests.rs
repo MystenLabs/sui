@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::str::FromStr;
 
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::HashFunction;
 use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
+use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
 use sui_types::{
     base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::Ed25519SuiSignature,
@@ -34,7 +34,7 @@ fn mnemonic_test() {
 fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
     let expected_address =
-        SuiAddress::from_str("0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357")?;
+        SuiAddress::from_str("0x936accb491f0facaac668baaedcf4d0cfc6da1120b66f77fa6a43af718669973")?;
 
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
@@ -47,7 +47,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let pubkey = keystore.keys()[0].clone();
     assert_eq!(pubkey.flag(), Ed25519SuiSignature::SCHEME.flag());
 
-    let mut hasher = Sha3_256::default();
+    let mut hasher = DefaultHash::default();
     hasher.update([pubkey.flag()]);
     hasher.update(pubkey);
     let g_arr = hasher.finalize();

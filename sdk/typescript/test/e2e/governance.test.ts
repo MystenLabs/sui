@@ -8,7 +8,7 @@ import {
   SuiSystemStateUtil,
   SUI_TYPE_ARG,
 } from '../../src';
-import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 const DEFAULT_STAKED_AMOUNT = 1;
 
@@ -27,7 +27,9 @@ describe('Governance API', () => {
   });
 
   it('test getDelegatedStakes', async () => {
-    const stakes = await toolbox.provider.getDelegatedStakes(toolbox.address());
+    const stakes = await toolbox.provider.getDelegatedStakes({
+      owner: toolbox.address(),
+    });
     expect(stakes.length).greaterThan(0);
   });
 
@@ -36,7 +38,7 @@ describe('Governance API', () => {
   });
 
   it('test getCommitteeInfo', async () => {
-    const committeeInfo = await toolbox.provider.getCommitteeInfo(0);
+    const committeeInfo = await toolbox.provider.getCommitteeInfo({ epoch: 0 });
     expect(committeeInfo.validators?.length).greaterThan(0);
   });
 
@@ -61,9 +63,10 @@ async function addStake(signer: RawSigner) {
     validators[0].suiAddress,
   );
 
-  tx.setGasBudget(DEFAULT_GAS_BUDGET);
-
-  return await signer.signAndExecuteTransaction(tx, {
-    showEffects: true,
+  return await signer.signAndExecuteTransaction({
+    transaction: tx,
+    options: {
+      showEffects: true,
+    },
   });
 }

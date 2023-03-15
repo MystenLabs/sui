@@ -43,7 +43,7 @@ fn test_signed_values() {
         /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 0,
     );
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, authorities);
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer_with_dummy_gas_price(
@@ -120,7 +120,7 @@ fn test_certificates() {
         /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, authorities);
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer_with_dummy_gas_price(
@@ -193,7 +193,7 @@ fn test_new_with_signatures() {
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     let quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures.clone(), &committee)
             .unwrap();
@@ -240,7 +240,7 @@ fn test_handle_reject_malicious_signature() {
         };
     }
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
@@ -321,7 +321,7 @@ fn test_bitmap_out_of_range() {
         ));
     }
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
 
@@ -362,7 +362,7 @@ fn test_reject_extra_public_key() {
         signatures[3].clone(),
     ];
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
             .unwrap();
@@ -400,7 +400,7 @@ fn test_reject_reuse_signatures() {
         signatures[2].clone(),
     ];
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     let quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
             .unwrap();
@@ -429,7 +429,7 @@ fn test_empty_bitmap() {
         ));
     }
 
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     quorum.signers_map = RoaringBitmap::new();
@@ -453,7 +453,7 @@ fn test_digest_caching() {
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, authorities);
 
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer_with_dummy_gas_price(
@@ -481,7 +481,7 @@ fn test_digest_caching() {
 
     signed_tx
         .data_mut_for_testing()
-        .intent_message
+        .intent_message_mut_for_testing()
         .value
         .gas_data_mut()
         .budget += 1;
@@ -620,7 +620,7 @@ fn test_user_signature_committed_in_signed_transactions() {
     // Ensure that signed tx verifies against the transaction with a correct user signature.
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
-    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let committee = Committee::new(0, authorities.clone());
     assert!(signed_tx_a
         .auth_sig()
         .verify_secure(
@@ -883,7 +883,7 @@ fn verify_sender_signature_correctly_with_flag() {
     let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, authorities);
 
     // create a receiver keypair with Secp256k1
     let receiver_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
@@ -925,7 +925,7 @@ fn verify_sender_signature_correctly_with_flag() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
-    let s = match &transaction.data().tx_signatures[0] {
+    let s = match &transaction.data().tx_signatures()[0] {
         GenericSignature::Signature(s) => s,
         _ => panic!("invalid"),
     };
@@ -953,7 +953,7 @@ fn verify_sender_signature_correctly_with_flag() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    let s = match &transaction_1.data().tx_signatures[0] {
+    let s = match &transaction_1.data().tx_signatures()[0] {
         GenericSignature::Signature(s) => s,
         _ => panic!("unexpected signature scheme"),
     };
@@ -1020,7 +1020,7 @@ fn test_change_epoch_transaction() {
     assert!(tx.is_system_tx());
     assert_eq!(
         tx.data()
-            .intent_message
+            .intent_message()
             .value
             .input_objects()
             .unwrap()
@@ -1044,7 +1044,7 @@ fn test_consensus_commit_prologue_transaction() {
     assert!(tx.is_system_tx());
     assert_eq!(
         tx.data()
-            .intent_message
+            .intent_message()
             .value
             .input_objects()
             .unwrap()
@@ -1283,12 +1283,19 @@ fn test_certificate_digest() {
     let digest = cert.certificate_digest();
 
     // mutating a tx sig changes the digest.
-    cert.data_mut_for_testing().tx_signatures[0] = t2.tx_signatures[0].clone();
+    *cert
+        .data_mut_for_testing()
+        .tx_signatures_mut_for_testing()
+        .get_mut(0)
+        .unwrap() = t2.tx_signatures()[0].clone();
     assert_ne!(digest, cert.certificate_digest());
 
     // mutating intent changes the digest
     cert = orig.clone();
-    cert.data_mut_for_testing().intent_message.intent.scope = IntentScope::TransactionEffects;
+    cert.data_mut_for_testing()
+        .intent_message_mut_for_testing()
+        .intent
+        .scope = IntentScope::TransactionEffects;
     assert_ne!(digest, cert.certificate_digest());
 
     // mutating signature epoch changes digest
@@ -1300,4 +1307,40 @@ fn test_certificate_digest() {
     cert = orig;
     *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
     assert_ne!(digest, cert.certificate_digest());
+}
+
+// Use this to ensure that our approximation for components used in effects size are not smaller than expected
+// If this test fails, the value of the constant must be increased
+#[test]
+fn check_approx_effects_components_size() {
+    use std::mem::size_of;
+
+    assert!(
+        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMMARY,
+        "Update APPROX_SIZE_OF_GAS_COST_SUMMARY constant"
+    );
+    assert!(
+        size_of::<EpochId>() < APPROX_SIZE_OF_EPOCH_ID,
+        "Update APPROX_SIZE_OF_EPOCH_ID constant"
+    );
+    assert!(
+        size_of::<Option<TransactionEventsDigest>>() < APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
+        "Update APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST constant"
+    );
+    assert!(
+        size_of::<ObjectRef>() < APPROX_SIZE_OF_OBJECT_REF,
+        "Update APPROX_SIZE_OF_OBJECT_REF constant"
+    );
+    assert!(
+        size_of::<TransactionDigest>() < APPROX_SIZE_OF_TX_DIGEST,
+        "Update APPROX_SIZE_OF_TX_DIGEST constant"
+    );
+    assert!(
+        size_of::<Owner>() < APPROX_SIZE_OF_OWNER,
+        "Update APPROX_SIZE_OF_OWNER constant"
+    );
+    assert!(
+        size_of::<ExecutionStatus>() < APPROX_SIZE_OF_EXECUTION_STATUS,
+        "Update APPROX_SIZE_OF_EXECUTION_STATUS constant"
+    );
 }

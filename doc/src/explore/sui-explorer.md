@@ -13,7 +13,7 @@ title: Sui Explorer
 
 ## Choose a network
 
-When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL. Use the drop-down menu at the top-right of the page to choose a different network.
+When you open Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL. Use the drop-down menu at the top-right of the page to choose a different network.
 
 ## Finding your transaction
 
@@ -23,14 +23,13 @@ You can search for the transactions using an address, object ID, or transaction 
 1. Open your Sui Wallet.
 1. Click the clipboard icon to copy your wallet address.
 1. Open the Sui Explorer.
-1. Select the **Coins** tab if it is not currently selected.
 1. In the search field, paste your wallet address and then press **Enter**.
 
 The Explorer displays the **Address** details page for your wallet address. You should see the same transaction in Explorer that you see in your wallet history. Click on a transaction to view the details for it.
 
 ## Explorer start page
 
-When you open Sui Explorer, the page displays the transactions and top validators on the network. The **Transactions** table lists the most recent transaction first.
+When you open Sui Explorer, the page displays network stats, transactions, and top validators on the network. The **Transactions** table lists the most recent transaction first.
 
 The **Top Validators** table lists the top validators on the network and includes a map showing the geographic locations of all nodes on the network.
 

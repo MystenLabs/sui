@@ -18,20 +18,25 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transaction', async () => {
-    const resp = await toolbox.provider.queryTransactions({}, null, 1);
+    const resp = await toolbox.provider.queryTransactions({
+      limit: 1,
+    });
     const digest = resp.data[0].digest;
-    const txn = await toolbox.provider.getTransactionResponse(digest);
+    const txn = await toolbox.provider.getTransaction({ digest });
     expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
   it('Query Transactions with opts', async () => {
     const options = { showEvents: true, showEffects: true };
-    const resp = await toolbox.provider.queryTransactions({ options }, null, 1);
+    const resp = await toolbox.provider.queryTransactions({
+      options,
+      limit: 1,
+    });
     const digest = resp.data[0].digest;
-    const response2 = await toolbox.provider.getTransactionResponse(
+    const response2 = await toolbox.provider.getTransaction({
       digest,
       options,
-    );
+    });
     expect(resp.data[0]).toEqual(response2);
   });
 
@@ -42,37 +47,29 @@ describe('Transaction Reading API', () => {
     );
     expect(resp.length).to.greaterThan(0);
 
-    const allTransactions = await toolbox.provider.queryTransactions(
-      {},
-      null,
-      10,
-    );
+    const allTransactions = await toolbox.provider.queryTransactions({
+      limit: 10,
+    });
     expect(allTransactions.data.length).to.greaterThan(0);
 
-    const resp2 = await toolbox.provider.queryTransactions(
-      { filter: { ToAddress: toolbox.address() } },
-      null,
-      null,
-    );
-    const resp3 = await toolbox.provider.queryTransactions(
-      { filter: { FromAddress: toolbox.address() } },
-      null,
-      null,
-    );
+    const resp2 = await toolbox.provider.queryTransactions({
+      filter: { ToAddress: toolbox.address() },
+    });
+    const resp3 = await toolbox.provider.queryTransactions({
+      filter: { FromAddress: toolbox.address() },
+    });
     expect([...resp2.data, ...resp3.data].map((r) => r.digest)).toEqual(resp);
   });
 
   it('Genesis exists', async () => {
-    const allTransactions = await toolbox.provider.queryTransactions(
-      {},
-      null,
-      1,
-      'ascending',
-    );
-    const resp = await toolbox.provider.getTransactionResponse(
-      allTransactions.data[0].digest,
-      { showInput: true },
-    );
+    const allTransactions = await toolbox.provider.queryTransactions({
+      limit: 1,
+      order: 'ascending',
+    });
+    const resp = await toolbox.provider.getTransaction({
+      digest: allTransactions.data[0].digest,
+      options: { showInput: true },
+    });
     const txKind = getTransactionKind(resp)!;
     expect(txKind.kind === 'Genesis').toBe(true);
   });

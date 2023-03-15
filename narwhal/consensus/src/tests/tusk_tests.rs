@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use crate::consensus::ConsensusRound;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
 #[allow(unused_imports)]
@@ -40,7 +41,8 @@ async fn commit_one() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
@@ -104,7 +106,8 @@ async fn dead_node() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -224,7 +227,8 @@ async fn not_enough_support() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -313,7 +317,8 @@ async fn missing_leader() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -377,7 +382,8 @@ async fn restart_with_new_committee() {
         let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
         let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-        let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+        let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+            watch::channel(ConsensusRound::default());
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let store = make_consensus_store(&test_utils::temp_dir());

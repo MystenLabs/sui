@@ -396,7 +396,7 @@ pub struct CheckpointBuilder {
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
     max_transactions_per_checkpoint: usize,
-    max_checkpoint_size: usize,
+    max_checkpoint_size_bytes: usize,
 }
 
 pub struct CheckpointAggregator {
@@ -430,7 +430,7 @@ impl CheckpointBuilder {
         notify_aggregator: Arc<Notify>,
         metrics: Arc<CheckpointMetrics>,
         max_transactions_per_checkpoint: usize,
-        max_checkpoint_size: usize,
+        max_checkpoint_size_bytes: usize,
     ) -> Self {
         Self {
             state,
@@ -444,7 +444,7 @@ impl CheckpointBuilder {
             notify_aggregator,
             metrics,
             max_transactions_per_checkpoint,
-            max_checkpoint_size,
+            max_checkpoint_size_bytes,
         }
     }
 
@@ -564,11 +564,11 @@ impl CheckpointBuilder {
                 + bcs::serialized_size(&effects)?
                 + bcs::serialized_size(&signatures)?;
             if chunk.len() == self.max_transactions_per_checkpoint
-                || (chunk_size + size) > self.max_checkpoint_size
+                || (chunk_size + size) > self.max_checkpoint_size_bytes
             {
                 if chunk.is_empty() {
                     // Always allow at least one tx in a checkpoint.
-                    warn!("Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.", self.max_checkpoint_size);
+                    warn!("Size of single transaction ({size}) exceeds max checkpoint size ({}); allowing excessively large checkpoint to go through.", self.max_checkpoint_size_bytes);
                 } else {
                     chunks.push(chunk);
                     chunk = Vec::new();
@@ -1097,10 +1097,10 @@ impl CheckpointService {
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         metrics: Arc<CheckpointMetrics>,
         max_transactions_per_checkpoint: usize,
-        max_checkpoint_size: usize,
+        max_checkpoint_size_bytes: usize,
     ) -> (Arc<Self>, watch::Sender<()> /* The exit sender */) {
         info!(
-            "Starting checkpoint service with {max_transactions_per_checkpoint} max_transactions_per_checkpoint and {max_checkpoint_size} max_checkpoint_size"
+            "Starting checkpoint service with {max_transactions_per_checkpoint} max_transactions_per_checkpoint and {max_checkpoint_size_bytes} max_checkpoint_size_bytes"
         );
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
@@ -1119,7 +1119,7 @@ impl CheckpointService {
             notify_aggregator.clone(),
             metrics.clone(),
             max_transactions_per_checkpoint,
-            max_checkpoint_size,
+            max_checkpoint_size_bytes,
         );
 
         spawn_monitored_task!(builder.run());

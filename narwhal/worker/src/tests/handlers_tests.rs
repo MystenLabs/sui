@@ -39,6 +39,7 @@ async fn synchronize() {
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
         target: target_primary.public_key(),
+        is_certified: false,
     };
 
     let mut mock_server = MockWorkerToWorker::new();
@@ -56,7 +57,7 @@ async fn synchronize() {
     let _recv_network = target_worker.new_network(routes);
 
     // Check not in store
-    assert!(store.read(digest).await.unwrap().is_none());
+    assert!(store.get(&digest).unwrap().is_none());
 
     // Send a sync request.
     let mut request = anemo::Request::new(message);
@@ -75,7 +76,7 @@ async fn synchronize() {
     handler.synchronize(request).await.unwrap();
 
     // Check its now stored
-    assert!(store.notify_read(digest).await.unwrap().is_some())
+    assert!(store.get(&digest).unwrap().is_some())
 }
 
 #[tokio::test]
@@ -106,13 +107,14 @@ async fn synchronize_when_batch_exists() {
     let batch = test_utils::batch();
     let batch_id = batch.digest();
     let missing = vec![batch_id];
-    store.async_write(batch_id, batch).await;
+    store.insert(&batch_id, &batch).unwrap();
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
         target: target_primary.public_key(),
+        is_certified: false,
     };
 
     // Send a sync request.
@@ -137,7 +139,7 @@ async fn delete_batches() {
     let store = test_utils::open_batch_store();
     let batch = test_utils::batch();
     let digest = batch.digest();
-    store.async_write(digest, batch.clone()).await;
+    store.insert(&digest, &batch).unwrap();
 
     // Send a delete request.
     let handler = PrimaryReceiverHandler {
@@ -158,5 +160,5 @@ async fn delete_batches() {
         .await
         .unwrap();
 
-    assert!(store.read(digest).await.unwrap().is_none());
+    assert!(store.get(&digest).unwrap().is_none());
 }

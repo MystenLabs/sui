@@ -19,18 +19,15 @@ use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::event::EventType;
 use sui_types::fp_ensure;
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
 use typed_store::rocks::DBOptions;
-use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocks::{default_db_options, point_lookup_db_options, DBMap, MetricConf};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
-
-use crate::default_db_options;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
@@ -110,14 +107,6 @@ pub struct IndexStoreTables {
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
     #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
-
-    // Can be removed after removing system events
-    #[default_options_override_fn = "index_table_default_config"]
-    event_by_recipient: DBMap<(Owner, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
-    event_by_object: DBMap<(ObjectID, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
-    event_by_event_type: DBMap<(EventType, EventId), EventIndex>,
 }
 
 pub struct IndexStore {
@@ -127,37 +116,37 @@ pub struct IndexStore {
 
 // These functions are used to initialize the DB tables
 fn transactions_order_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_seq_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_from_addr_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_to_addr_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_by_input_object_id_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_by_mutated_object_id_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_by_move_function_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn timestamps_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).1
+    point_lookup_db_options()
 }
 fn owner_index_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn dynamic_field_index_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn index_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 
 impl IndexStore {
@@ -280,56 +269,28 @@ impl IndexStore {
                 .data
                 .iter()
                 .enumerate()
-                .filter_map(|(i, e)| match (e.package_id(), e.module_name()) {
-                    (Some(id), Some(module)) => Some((i, ModuleId::new(id.into(), module.into()))),
-                    _ => None,
+                .map(|(i, e)| {
+                    (
+                        i,
+                        ModuleId::new(e.package_id.into(), e.transaction_module.clone()),
+                    )
                 })
                 .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
         )?;
         let batch = batch.insert_batch(
             &self.tables.event_by_sender,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.sender().map(|s| (i, s)))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
+            events.data.iter().enumerate().map(|(i, e)| {
+                (
+                    (e.sender, (sequence, i)),
+                    (event_digest, *digest, timestamp_ms),
+                )
+            }),
         )?;
         let batch = batch.insert_batch(
             &self.tables.event_by_move_event,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.move_event_name().map(|s| (i, s.clone())))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
-        )?;
-
-        let batch = batch.insert_batch(
-            &self.tables.event_by_recipient,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.recipient().map(|s| (i, *s)))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
-        )?;
-
-        let batch = batch.insert_batch(
-            &self.tables.event_by_object,
-            events
-                .data
-                .iter()
-                .enumerate()
-                .filter_map(|(i, e)| e.object_id().map(|s| (i, s)))
-                .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
-        )?;
-
-        let batch = batch.insert_batch(
-            &self.tables.event_by_event_type,
             events.data.iter().enumerate().map(|(i, e)| {
                 (
-                    (e.event_type(), (sequence, i)),
+                    (e.type_.clone(), (sequence, i)),
                     (event_digest, *digest, timestamp_ms),
                 )
             }),
@@ -381,7 +342,7 @@ impl IndexStore {
             Some(TransactionFilter::InputObject(object_id)) => {
                 self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?
             }
-            Some(TransactionFilter::MutatedObject(object_id)) => {
+            Some(TransactionFilter::ChangedObject(object_id)) => {
                 self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?
             }
             Some(TransactionFilter::FromAddress(address)) => {
@@ -805,60 +766,6 @@ impl IndexStore {
         Self::get_event_from_index(
             &self.tables.event_by_sender,
             sender,
-            tx_seq,
-            event_seq,
-            limit,
-            descending,
-        )
-    }
-
-    pub fn events_by_recipient(
-        &self,
-        recipient: &Owner,
-        tx_seq: TxSequenceNumber,
-        event_seq: usize,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
-        Self::get_event_from_index(
-            &self.tables.event_by_recipient,
-            recipient,
-            tx_seq,
-            event_seq,
-            limit,
-            descending,
-        )
-    }
-
-    pub fn events_by_object(
-        &self,
-        object: &ObjectID,
-        tx_seq: TxSequenceNumber,
-        event_seq: usize,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
-        Self::get_event_from_index(
-            &self.tables.event_by_object,
-            object,
-            tx_seq,
-            event_seq,
-            limit,
-            descending,
-        )
-    }
-
-    pub fn events_by_type(
-        &self,
-        event_type: &EventType,
-        tx_seq: TxSequenceNumber,
-        event_seq: usize,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
-        Self::get_event_from_index(
-            &self.tables.event_by_event_type,
-            event_type,
             tx_seq,
             event_seq,
             limit,

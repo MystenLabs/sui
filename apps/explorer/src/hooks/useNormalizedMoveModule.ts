@@ -13,7 +13,11 @@ export function useNormalizedMoveModule(
     const rpc = useRpcClient();
     return useQuery(
         ['normalized-module', packageId, moduleName],
-        async () => await rpc.getNormalizedMoveModule(packageId!, moduleName!),
+        async () =>
+            await rpc.getNormalizedMoveModule({
+                package: packageId!,
+                module: moduleName!,
+            }),
         {
             enabled: !!(packageId && moduleName),
         }

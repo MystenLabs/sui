@@ -26,6 +26,7 @@ use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{SuiClientConfig, SuiEnv};
 use crate::console::start_console;
+use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use sui_move::{self, execute_move_command};
@@ -110,6 +111,12 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
+    },
+
+    /// Tool for Fire Drill
+    FireDrill {
+        #[clap(subcommand)]
+        fire_drill: FireDrill,
     },
 }
 
@@ -246,6 +253,7 @@ impl SuiCommand {
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
         }
     }
 }
@@ -339,9 +347,9 @@ async fn genesis(
     }
 
     let validator_info = genesis_conf.validator_config_info.take();
-    let mut builder = ConfigBuilder::new(sui_config_dir);
+    let builder = ConfigBuilder::new(sui_config_dir);
     if let Some(epoch_duration_ms) = epoch_duration_ms {
-        builder = builder.with_epoch_duration(epoch_duration_ms);
+        genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
     let mut network_config = if let Some(validators) = validator_info {
         builder

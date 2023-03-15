@@ -8,6 +8,7 @@ import { UserApproveContainer } from '../../components/user-approve-container';
 import { useAppDispatch } from '../../hooks';
 import { respondToTransactionRequest } from '../../redux/slices/transaction-requests';
 import { Heading } from '../../shared/heading';
+import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
 import { Text } from '../../shared/text';
 import { type SignMessageApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 
@@ -16,8 +17,22 @@ export type SignMessageRequestProps = {
 };
 
 export function SignMessageRequest({ request }: SignMessageRequestProps) {
-    const message = useMemo(() => {
-        return new TextDecoder().decode(fromB64(request.tx.message));
+    const { message, type } = useMemo(() => {
+        const messageBytes = fromB64(request.tx.message);
+        let message: string = request.tx.message;
+        let type: 'utf8' | 'base64' = 'base64';
+        try {
+            message = new TextDecoder('utf8', { fatal: true }).decode(
+                messageBytes
+            );
+            type = 'utf8';
+        } catch (e) {
+            // do nothing
+        }
+        return {
+            message,
+            type,
+        };
     }, [request.tx.message]);
     const dispatch = useAppDispatch();
     return (
@@ -38,6 +53,7 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
             address={request.tx.accountAddress}
             scrollable
         >
+            <PageMainLayoutTitle title="Sign Message" />
             <div className="flex flex-col flex-nowrap items-stretch border border-solid border-gray-50 rounded-15 overflow-y-auto overflow-x-hidden">
                 <div className="sticky top-0 bg-white p-5 pb-2.5">
                     <Heading
@@ -50,7 +66,12 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
                     </Heading>
                 </div>
                 <div className="px-5 pb-5 break-words">
-                    <Text variant="p2" weight="medium" color="steel-darker">
+                    <Text
+                        variant="p2"
+                        weight="medium"
+                        color="steel-darker"
+                        mono={type === 'base64'}
+                    >
                         {message}
                     </Text>
                 </div>

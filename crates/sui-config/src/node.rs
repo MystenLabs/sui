@@ -61,13 +61,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    // TODO: It will be removed down the road.
-    /// Epoch duration in ms.
-    /// u64::MAX means reconfiguration is disabled
-    /// Exposing this in config to allow easier testing with shorter epoch.
-    #[serde(default = "default_epoch_duration_ms")]
-    pub epoch_duration_ms: u64,
-
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -148,11 +141,6 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 
 pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
-}
-
-pub fn default_epoch_duration_ms() -> u64 {
-    // 24 Hrs
-    24 * 60 * 60 * 1000
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {

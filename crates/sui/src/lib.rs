@@ -5,6 +5,7 @@
 pub mod client_commands;
 pub mod config;
 pub mod console;
+pub mod fire_drill;
 pub mod keytool;
 pub mod shell;
 pub mod sui_commands;

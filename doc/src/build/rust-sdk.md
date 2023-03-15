@@ -1,40 +1,38 @@
 ---
-title: Interact with Sui over Rust SDK
+title: Interact with Sui using the Rust SDK
 ---
 
 ## Overview
-The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Rust language JSON-RPC wrapper and crypto utilities you can use to interact with the [Sui Devnet](../build/devnet.md) and [Sui Full node](fullnode.md).
 
-The [`SuiClient`](cli-client.md) can be used to create an HTTP or a WebSocket client (`SuiClient::new`).
-See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of available methods.
+The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Rust language JSON-RPC wrapper and crypto utilities you can use to interact with Sui.
 
-> Note: As of [Sui version 0.6.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.0), the WebSocket client is for [subscription only](event_api.md#subscribe-to-sui-events); use the HTTP client for other API methods.
+Use the [`SuiClient`](cli-client.md) to create an HTTP or a WebSocket client (`SuiClient::new`). See the [JSON-RPC](json-rpc.md#sui-json-rpc-methods) documentation for the list of available methods.
+
+**Note:** The WebSocket client supports only [subscription](event_api.md#subscribe-to-sui-events); use the HTTP client for other API methods.
 
 ## References
 
-Find the `rustdoc` output for key Sui projects at:
-
-* Sui blockchain - https://mystenlabs.github.io/sui/
-* Narwhal and Bullshark consensus engine - https://mystenlabs.github.io/narwhal/
-* Mysten Labs infrastructure - https://mystenlabs.github.io/mysten-infra/
+View the documentation for the [crates used in Sui](https://mystenlabs.github.io/sui/).
 
 ## Configuration
-Add the `sui-sdk` crate in your [`Cargo.toml`](https://doc.rust-lang.org/cargo/reference/manifest.html) file like so:
-```toml
+
+Add the `sui-sdk` crate in your [`Cargo.toml`](https://doc.rust-lang.org/cargo/reference/manifest.html) file:
+
+```bash
 [dependencies]
 sui-sdk = { git = "https://github.com/MystenLabs/sui" }
 ```
-If you are connecting to the devnet, use the `devnet` branch instead:
-```toml
+
+Include the `branch` argument to use a specific branch of the Sui repository:
+
+```bash
 [dependencies]
 sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
 ```
 
-## Examples
+## Example 1 - Get all objects owned by an address
 
-### Example 1 - Get all objects owned by an address
-
-This will print a list of object summaries owned by the address `"0xec11cad080d0496a53bafcea629fcbcfff2a9866"`:
+This code example prints a list of object summaries owned by the specified address.
 
 ```rust
 use std::str::FromStr;
@@ -46,7 +44,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let sui = SuiClientBuilder::default().build(
       "https://fullnode.devnet.sui.io:443",
     ).await.unwrap();
-    let address = SuiAddress::from_str("0xec11cad080d0496a53bafcea629fcbcfff2a9866")?;
+    let address = SuiAddress::from_str("0xbcab7526033aa0e014f634bf51316715dda0907a7fab5a8d7e3bd44e634a4d44")?;
     let objects = sui.read_api().get_objects_owned_by_address(address).await?;
     println!("{:?}", objects);
     Ok(())
@@ -55,7 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 You can verify the result with the [Sui Explorer](https://explorer.sui.io/) if you are using the Sui Devnet Full node.
 
-### Example 2 - Create and execute transaction
+## Example 2 - Create and execute transaction
 
 Use this example to conduct a transaction in Sui using the Sui Devnet Full node:
 
@@ -83,9 +81,9 @@ async fn main() -> Result<(), anyhow::Error> {
         None => panic!("Cannot obtain home directory path"),
     };
 
-    let my_address = SuiAddress::from_str("0x47722589dc23d63e82862f7814070002ffaaa465")?;
-    let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
-    let recipient = SuiAddress::from_str("0xbd42a850e81ebb8f80283266951d4f4f5722e301")?;
+    let my_address = SuiAddress::from_str("0xbcab7526033aa0e014f634bf51316715dda0907a7fab5a8d7e3bd44e634a4d44")?;
+    let gas_object_id = ObjectID::from_str("0xe638c76768804cebc0ab43e103999886641b0269a46783f2b454e2f8880b5255")?;
+    let recipient = SuiAddress::from_str("0x727b37454ab13d5c1dbb22e8741bff72b145d1e660f71b275c01f24e7860e5e5")?;
 
     // Create a sui transfer transaction
     let transfer_tx = sui
@@ -108,7 +106,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-### Example 3 - Event subscription
+## Example 3 - Event subscription
 
 Use the WebSocket client to [subscribe to events](event_api.md#subscribe-to-sui-events).
 
@@ -128,9 +126,6 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 }
 ```
-> Note: You will need to connect to a fullnode for the Event subscription service, see [Full node setup](fullnode.md#fullnode-setup) if you want to run a Sui Fullnode.
 
+**Note:** The Event subscription service requires a running Sui Full node. To learn more, see [Full node setup](fullnode.md#fullnode-setup).
 
-## Larger examples
-
-See the Sui Rust SDK README for the [Tic Tac Toe](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) example.

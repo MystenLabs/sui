@@ -29,7 +29,7 @@ const getResultsForTransaction = async (
 ) => {
     if (!isValidTransactionDigest(query)) return null;
 
-    const txdata = await rpc.getTransactionResponse(query);
+    const txdata = await rpc.getTransaction({ digest: query });
     return {
         label: 'transaction',
         results: [
@@ -46,7 +46,7 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
     const normalized = normalizeSuiObjectId(query);
     if (!isValidSuiObjectId(normalized)) return null;
 
-    const { details, status } = await rpc.getObject(normalized);
+    const { details, status } = await rpc.getObject({ id: normalized });
     if (is(details, SuiObjectData) && status === 'Exists') {
         return {
             label: 'object',
@@ -64,7 +64,7 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
 };
 
 const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
-    const { digest } = await rpc.getCheckpoint(query);
+    const { digest } = await rpc.getCheckpoint({ id: query });
     if (digest) {
         return {
             label: 'checkpoint',
@@ -87,8 +87,11 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
         return null;
 
     const [from, to] = await Promise.all([
-        rpc.queryTransactions({ filter: { FromAddress: normalized } }, null, 1),
-        rpc.queryTransactions({ filter: { ToAddress: normalized } }, null, 1),
+        rpc.queryTransactions({
+            filter: { FromAddress: normalized },
+            limit: 1,
+        }),
+        rpc.queryTransactions({ filter: { ToAddress: normalized }, limit: 1 }),
     ]);
 
     if (from.data?.length || to.data?.length) {

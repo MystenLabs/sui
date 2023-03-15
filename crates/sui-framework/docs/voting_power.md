@@ -63,6 +63,15 @@
 ## Constants
 
 
+<a name="0x2_voting_power_EInvalidVotingPower"></a>
+
+
+
+<pre><code><b>const</b> <a href="voting_power.md#0x2_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>: u64 = 4;
+</code></pre>
+
+
+
 <a name="0x2_voting_power_ERelativePowerMismatch"></a>
 
 
@@ -369,6 +378,7 @@ Check a few invariants that must hold after setting the voting power.
     <b>let</b> total = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="voting_power.md#0x2_voting_power">voting_power</a> = <a href="validator.md#0x2_validator_voting_power">validator::voting_power</a>(<a href="_borrow">vector::borrow</a>(v, i));
+        <b>assert</b>!(<a href="voting_power.md#0x2_voting_power">voting_power</a> &gt; 0, <a href="voting_power.md#0x2_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>);
         total = total + <a href="voting_power.md#0x2_voting_power">voting_power</a>;
         i = i + 1;
     };

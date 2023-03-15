@@ -4,10 +4,10 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
-import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
@@ -20,7 +20,6 @@ import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -38,7 +37,7 @@ export function DelegationDetailCard({
         isError: errorValidators,
     } = useSystemState();
 
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const {
         data: allDelegation,
@@ -61,10 +60,7 @@ export function DelegationDetailCard({
 
     const totalStake = BigInt(delegationData?.principal || 0n);
 
-    const suiEarned = useMemo(() => {
-        if (!validatorData || !delegationData) return 0n;
-        return getStakingRewards(validatorData, delegationData);
-    }, [delegationData, validatorData]);
+    const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
 
     const apy = useMemo(() => {
         if (!validatorData || !system) return 0;

@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
-use std::ops::Neg;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -17,9 +15,8 @@ use tracing::trace;
 
 use crate::coin::Coin;
 use crate::committee::EpochId;
-use crate::event::BalanceChangeType;
 use crate::messages::TransactionEvents;
-use crate::storage::{ObjectStore, SingleTxContext};
+use crate::storage::ObjectStore;
 use crate::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateWrapper,
 };
@@ -31,7 +28,6 @@ use crate::{
     event::Event,
     fp_bail, gas,
     gas::{GasCostSummary, SuiGasStatus},
-    is_system_package,
     messages::{ExecutionStatus, InputObjects, TransactionEffects},
     object::Owner,
     object::{Data, Object},
@@ -111,12 +107,12 @@ pub struct TemporaryStore<S> {
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.
-    written: BTreeMap<ObjectID, (SingleTxContext, Object, WriteKind)>, // Objects written
+    written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
-    deleted: BTreeMap<ObjectID, (SingleTxContext, SequenceNumber, DeleteKind)>,
+    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
-    gas_charged: Option<(SuiAddress, ObjectID, GasCostSummary)>,
+    gas_charged: Option<(ObjectID, GasCostSummary)>,
     storage_rebate_rate: u64,
     protocol_version: ProtocolVersion,
 }
@@ -156,8 +152,8 @@ impl<S> TemporaryStore<S> {
     /// Return the dynamic field objects that are written or deleted by this transaction
     pub fn dynamic_fields_touched(&self) -> Vec<ObjectID> {
         let mut dynamic_fields = Vec::new();
-        for (id, v) in &self.written {
-            match v.2 {
+        for (id, (_, kind)) in &self.written {
+            match kind {
                 WriteKind::Mutate => {
                     if !self.input_objects.contains_key(id) {
                         dynamic_fields.push(*id)
@@ -166,8 +162,8 @@ impl<S> TemporaryStore<S> {
                 WriteKind::Create | WriteKind::Unwrap => (),
             }
         }
-        for (id, v) in &self.deleted {
-            match v.2 {
+        for (id, (_, kind)) in &self.deleted {
+            match kind {
                 DeleteKind::Normal => {
                     // TODO: is this how a deleted dynamic field will show up?
                     if !self.input_objects.contains_key(id) {
@@ -189,30 +185,8 @@ impl<S> TemporaryStore<S> {
 
         let mut written = BTreeMap::new();
         let mut deleted = BTreeMap::new();
-        let mut events = Vec::new();
 
-        // Extract gas id and charged gas amount, this can be None for unmetered transactions.
-        let (gas_id, gas_charged) =
-            if let Some((sender, coin_id, ref gas_charged)) = self.gas_charged {
-                // Safe to unwrap, gas must be an input object.
-                let gas = &self.input_objects[&coin_id];
-                // Emit event for gas charges.
-                events.push(Event::balance_change(
-                    &SingleTxContext::gas(sender),
-                    BalanceChangeType::Gas,
-                    gas.owner,
-                    coin_id,
-                    gas.version(),
-                    &gas.struct_tag().unwrap(),
-                    gas_charged.net_gas_usage().neg() as i128,
-                ));
-                (Some(coin_id), gas_charged.net_gas_usage() as i128)
-            } else {
-                // Gas charge can be None for genesis transactions.
-                (None, 0)
-            };
-
-        for (id, (ctx, mut obj, kind)) in self.written {
+        for (id, (mut obj, kind)) in self.written {
             // Update the version for the written object, as long as it is a move object and not a
             // package (whose versions are handled separately).
             if let Some(obj) = obj.data.try_as_move_mut() {
@@ -235,252 +209,32 @@ impl<S> TemporaryStore<S> {
                     *initial_shared_version = self.lamport_timestamp;
                 }
             }
-
-            // Create events for writes
-            let old_obj = self.input_objects.get(&id);
-            let written_events =
-                Self::create_written_events(ctx, kind, id, &obj, old_obj, gas_id, gas_charged);
-            events.extend(written_events);
             written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
 
-        for (id, (ctx, mut version, kind)) in self.deleted {
+        for (id, (mut version, kind)) in self.deleted {
             // Update the version, post-delete.
             version.increment_to(self.lamport_timestamp);
-
-            // Create events for each deleted changes
-            let deleted_obj = self.input_objects.get(&id);
-            let balance = deleted_obj
-                .and_then(|o| Coin::extract_balance_if_coin(o).ok())
-                .flatten();
-
-            let event = match (deleted_obj, balance) {
-                // Object is an owned (provided as input) coin object, create a spend event for the remaining balance.
-                (Some(deleted_obj), Some(balance)) => {
-                    let balance = balance as i128;
-                    Event::balance_change(
-                        &ctx,
-                        BalanceChangeType::Pay,
-                        deleted_obj.owner,
-                        id,
-                        deleted_obj.version(),
-                        &deleted_obj.struct_tag().unwrap(),
-                        balance.neg(),
-                    )
-                }
-                // If deleted object is not owned coin, emit a delete event.
-                _ => Event::DeleteObject {
-                    package_id: ctx.package_id,
-                    transaction_module: ctx.transaction_module.clone(),
-                    sender: ctx.sender,
-                    object_id: id,
-                    version,
-                },
-            };
-            events.push(event);
             deleted.insert(id, (version, kind));
         }
 
         // Combine object events with move events.
-        events.extend(self.events);
 
         InnerTemporaryStore {
             objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
             written,
             deleted,
-            events: TransactionEvents { data: events },
+            events: TransactionEvents { data: self.events },
         }
-    }
-
-    fn create_written_events(
-        ctx: SingleTxContext,
-        kind: WriteKind,
-        id: ObjectID,
-        obj: &Object,
-        old_obj: Option<&Object>,
-        gas_id: Option<ObjectID>,
-        gas_charged: i128,
-    ) -> Vec<Event> {
-        match (kind, Coin::extract_balance_if_coin(obj), old_obj) {
-            // For mutation of existing coin, we need to compute the coin balance delta
-            // and emit appropriate event depends on ownership changes
-            (WriteKind::Mutate, Ok(Some(_)), Some(old_obj)) => {
-                Self::create_coin_mutate_events(&ctx, gas_id, obj, old_obj, gas_charged)
-            }
-            // For all other coin change (unwrap/create), we emit full balance transfer event to the new address owner.
-            (_, Ok(Some(balance)), _) => {
-                if let Owner::AddressOwner(_) = obj.owner {
-                    vec![Event::balance_change(
-                        &ctx,
-                        BalanceChangeType::Receive,
-                        obj.owner,
-                        obj.id(),
-                        obj.version(),
-                        &obj.struct_tag().unwrap(),
-                        balance as i128,
-                    )]
-                } else {
-                    vec![]
-                }
-            }
-            // For non-coin mutation
-            (WriteKind::Mutate, Ok(None), old_obj) | (WriteKind::Unwrap, Ok(None), old_obj) => {
-                if obj.is_package() {
-                    // System transactions for framework upgrades will mutate packages.  Treat this
-                    // as a "publish" of a new version of the framework.
-                    assert!(
-                        ctx.sender == SuiAddress::ZERO,
-                        "Only validators can modify packages"
-                    );
-                    assert!(
-                        is_system_package(id),
-                        "Only system packages can be modified in place"
-                    );
-
-                    vec![Event::Publish {
-                        sender: ctx.sender,
-                        package_id: id,
-                        version: obj.version(),
-                        digest: obj.digest(),
-                    }]
-                } else {
-                    // We emit transfer object event for ownership changes
-                    // if old object is none (unwrapping object) or if old owner != new owner.
-                    let mut events = vec![];
-
-                    if old_obj.map(|o| o.owner) != Some(obj.owner) {
-                        events.push(Event::transfer_object(
-                            &ctx,
-                            obj.owner,
-                            // Safe to unwrap, package case handled above
-                            obj.data.struct_tag().unwrap().to_string(),
-                            obj.id(),
-                            obj.version(),
-                        ));
-                    }
-                    // Emit mutate event if there are data changes.
-                    if old_obj.is_some() && old_obj.unwrap().data != obj.data {
-                        events.push(Event::MutateObject {
-                            package_id: ctx.package_id,
-                            transaction_module: ctx.transaction_module,
-                            sender: ctx.sender,
-                            object_type: obj.data.struct_tag().unwrap().to_string(),
-                            object_id: obj.id(),
-                            version: obj.version(),
-                        });
-                    }
-                    events
-                }
-            }
-            // For create object, if the object type is package, emit a Publish event, else emit NewObject event.
-            (WriteKind::Create, Ok(None), _) => {
-                vec![if obj.is_package() {
-                    Event::Publish {
-                        sender: ctx.sender,
-                        package_id: id,
-                        version: obj.version(),
-                        digest: obj.digest(),
-                    }
-                } else {
-                    Event::new_object(
-                        &ctx,
-                        obj.owner,
-                        obj.struct_tag().unwrap().to_string(),
-                        id,
-                        obj.version(),
-                    )
-                }]
-            }
-            _ => vec![],
-        }
-    }
-
-    fn create_coin_mutate_events(
-        ctx: &SingleTxContext,
-        gas_id: Option<ObjectID>,
-        coin: &Object,
-        old_coin: &Object,
-        gas_charged: i128,
-    ) -> Vec<Event> {
-        // We know this is a coin, safe to unwrap.
-        let coin_object_type = coin.struct_tag().unwrap();
-        let mut events = vec![];
-
-        let old_balance = Coin::extract_balance_if_coin(old_coin);
-        let balance = Coin::extract_balance_if_coin(coin);
-
-        if let (Ok(Some(old_balance)), Ok(Some(balance))) = (old_balance, balance) {
-            let old_balance = old_balance as i128;
-            let balance = balance as i128;
-
-            // Deduct gas from the old balance if the object is also the gas coin.
-            let old_balance = if Some(coin.id()) == gas_id {
-                old_balance - gas_charged
-            } else {
-                old_balance
-            };
-
-            match (old_coin.owner == coin.owner, old_balance.cmp(&balance)) {
-                // same owner, old balance > new balance, spending balance.
-                // For the spend event, we are spending from the old coin so the event will use the old coin version and owner info.
-                (true, Ordering::Greater) => events.push(Event::balance_change(
-                    ctx,
-                    BalanceChangeType::Pay,
-                    old_coin.owner,
-                    old_coin.id(),
-                    old_coin.version(),
-                    &coin_object_type,
-                    balance - old_balance,
-                )),
-                // Same owner, balance increased.
-                (true, Ordering::Less) => events.push(Event::balance_change(
-                    ctx,
-                    BalanceChangeType::Receive,
-                    coin.owner,
-                    coin.id(),
-                    coin.version(),
-                    &coin_object_type,
-                    balance - old_balance,
-                )),
-                // ownership changed, add an event for spending and one for receiving.
-                (false, _) => {
-                    events.push(Event::balance_change(
-                        ctx,
-                        BalanceChangeType::Pay,
-                        old_coin.owner,
-                        coin.id(),
-                        old_coin.version(),
-                        &coin_object_type,
-                        // negative amount indicate spend.
-                        old_balance.neg(),
-                    ));
-                    events.push(Event::balance_change(
-                        ctx,
-                        BalanceChangeType::Receive,
-                        coin.owner,
-                        coin.id(),
-                        coin.version(),
-                        &coin_object_type,
-                        balance,
-                    ));
-                }
-                _ => {}
-            }
-        }
-        events
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
     /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
-    /// We skip the gas object, because gas object will be updated separately.
-    pub fn ensure_active_inputs_mutated(&mut self, sender: SuiAddress, gas_object_id: &ObjectID) {
+    fn ensure_active_inputs_mutated(&mut self) {
         let mut to_be_updated = vec![];
         for (id, _seq, _) in &self.mutable_input_refs {
-            if id == gas_object_id {
-                continue;
-            }
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
                 // because the for loop is holding a reference to `self`, and calling
@@ -490,54 +244,47 @@ impl<S> TemporaryStore<S> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.write_object(
-                &SingleTxContext::unused_input(sender),
-                object,
-                WriteKind::Mutate,
-            );
+            self.write_object(object, WriteKind::Mutate);
         }
     }
 
-    /// For every object changes, charge gas accordingly. Since by this point we haven't charged gas yet,
-    /// the gas object hasn't been mutated yet. Passing in `gas_object_size` so that we can also charge
-    /// for the gas object mutation in advance.
-    pub fn charge_gas_for_storage_changes(
+    /// Compute storage gas for each mutable input object (including the gas coin), and each created object.
+    /// Compute storage refunds for each deleted object
+    /// Will *not* charge any computation gas. Returns the total size in bytes of all deleted objects + all mutated objects,
+    /// which the caller can use to charge computation gas
+    fn charge_gas_for_storage_changes(
         &mut self,
-        sender: SuiAddress,
         gas_status: &mut SuiGasStatus<'_>,
-        gas_object: &mut Object,
-    ) -> Result<(), ExecutionError> {
-        let mut objects_to_update = vec![];
-        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
-        if !self.written.contains_key(&gas_object.id()) {
-            let gas_object_size = gas_object.object_size_for_gas_metering();
-            gas_object.storage_rebate = gas_status.charge_storage_mutation(
-                gas_object_size,
-                gas_object_size,
-                gas_object.storage_rebate.into(),
-            )?;
-            objects_to_update.push((
-                SingleTxContext::gas(sender),
-                gas_object.clone(),
-                WriteKind::Mutate,
-            ));
-        }
+        gas_object_id: ObjectID,
+    ) -> Result<u64, ExecutionError> {
+        let mut total_bytes_written_deleted = 0;
 
-        for (object_id, (ctx, object, write_kind)) in &mut self.written {
+        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
+        let gas_object = self
+            .read_object(&gas_object_id)
+            .expect("We constructed the object map so it should always have the gas object id")
+            .clone();
+        self.written
+            .entry(gas_object_id)
+            .or_insert_with(|| (gas_object, WriteKind::Mutate));
+        self.ensure_active_inputs_mutated();
+        let mut objects_to_update = vec![];
+
+        for (object_id, (object, write_kind)) in &mut self.written {
             let (old_object_size, storage_rebate) = self
                 .input_objects
                 .get(object_id)
                 .map(|old| (old.object_size_for_gas_metering(), old.storage_rebate))
                 .unwrap_or((0, 0));
-            let new_storage_rebate = gas_status.charge_storage_mutation(
-                old_object_size,
-                object.object_size_for_gas_metering(),
-                storage_rebate.into(),
-            )?;
+
+            let new_object_size = object.object_size_for_gas_metering();
+            let new_storage_rebate =
+                gas_status.charge_storage_mutation(new_object_size, storage_rebate.into())?;
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
-                objects_to_update.push((ctx.clone(), object.clone(), *write_kind));
+                objects_to_update.push((object.clone(), *write_kind));
             }
+            total_bytes_written_deleted += old_object_size + new_object_size;
         }
 
         for object_id in self.deleted.keys() {
@@ -546,21 +293,17 @@ impl<S> TemporaryStore<S> {
             // object was unwrapped and then deleted. The rebate would have been provided already when
             // mutating the object that wrapped this object.
             if let Some(old_object) = self.input_objects.get(object_id) {
-                gas_status.charge_storage_mutation(
-                    old_object.object_size_for_gas_metering(),
-                    0,
-                    old_object.storage_rebate.into(),
-                )?;
+                gas_status.charge_storage_mutation(0, old_object.storage_rebate.into())?;
+                total_bytes_written_deleted += old_object.object_size_for_gas_metering();
             }
         }
 
         // Write all objects at the end only if all previous gas charges succeeded.
         // This avoids polluting the temporary store state if this function failed.
-        for (ctx, object, write_kind) in objects_to_update {
-            self.write_object(&ctx, object, write_kind);
+        for (object, write_kind) in objects_to_update {
+            self.write_object(object, write_kind);
         }
-
-        Ok(())
+        Ok(total_bytes_written_deleted as u64)
     }
 
     pub fn to_effects(
@@ -576,13 +319,13 @@ impl<S> TemporaryStore<S> {
         let mut modified_at_versions = vec![];
 
         // Remember the versions objects were updated from in case of rollback.
-        self.written.iter_mut().for_each(|(id, (_, obj, kind))| {
+        self.written.iter_mut().for_each(|(id, (obj, kind))| {
             if *kind == WriteKind::Mutate {
                 modified_at_versions.push((*id, obj.version()))
             }
         });
 
-        self.deleted.iter_mut().for_each(|(id, (_, version, _))| {
+        self.deleted.iter_mut().for_each(|(id, (version, _))| {
             modified_at_versions.push((*id, *version));
         });
 
@@ -688,7 +431,7 @@ impl<S> TemporaryStore<S> {
             {
                 self.written
                     .iter()
-                    .all(|(_, (_, obj, _))| obj.previous_transaction == self.tx_digest)
+                    .all(|(_, (obj, _))| obj.previous_transaction == self.tx_digest)
             },
             "Object previous transaction not properly set",
         );
@@ -698,7 +441,7 @@ impl<S> TemporaryStore<S> {
     // is that an entry is not both added and deleted by the
     // caller.
 
-    pub fn write_object(&mut self, ctx: &SingleTxContext, mut object: Object, kind: WriteKind) {
+    pub fn write_object(&mut self, mut object: Object, kind: WriteKind) {
         // there should be no write after delete
         debug_assert!(self.deleted.get(&object.id()).is_none());
         // Check it is not read-only
@@ -725,50 +468,68 @@ impl<S> TemporaryStore<S> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self.written
-            .insert(object.id(), (ctx.clone(), object, kind));
+        self.written.insert(object.id(), (object, kind));
     }
 
+    /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of mutated objects
+    /// 2. Deduct computation gas costs and storage costs to `gas_object_id`, credit storage rebates to `gas_object_id`.
+    // The happy path of this function follows (1) + (2) and is fairly simple. Most of the complexity is in the unhappy paths:
+    // - if execution aborted before calling this function, we have to dump all writes + re-smash gas, then charge for storage
+    // - if we run out of gas while charging for storage, we have to dump all writes + re-smash gas, then charge for storage again
     pub fn charge_gas<T>(
         &mut self,
-        sender: SuiAddress,
         gas_object_id: ObjectID,
         gas_status: &mut SuiGasStatus<'_>,
-        result: &mut Result<T, ExecutionError>,
+        execution_result: &mut Result<T, ExecutionError>,
         gas: &[ObjectRef],
     ) {
-        // We must call `read_object` instead of getting it from `temporary_store.objects`
-        // because a `TransferSui` transaction may have already mutated the gas object and put
-        // it in `temporary_store.written`.
-        let mut gas_object = self
-            .read_object(&gas_object_id)
-            .expect("We constructed the object map so it should always have the gas object id")
-            .clone();
-        trace!(?gas_object_id, "Obtained gas object");
-        if let Err(err) = self.charge_gas_for_storage_changes(sender, gas_status, &mut gas_object) {
-            // If `result` is already `Err`, we basically have two errors at the same time.
-            // Users should be generally more interested in the actual execution error, so we
-            // let that shadow the out of gas error. Also in this case, we don't need to reset
-            // the `temporary_store` because `charge_gas_for_storage_changes` won't mutate
-            // `temporary_store` if gas charge failed.
-            //
-            // If `result` is `Ok`, now we failed when charging gas, we have to reset
-            // the `temporary_store` to eliminate all effects caused by the execution,
-            // and re-ensure all mutable objects' versions are incremented.
-            if result.is_ok() {
-                self.reset();
-                let gas_object_id = match self.smash_gas(sender, gas) {
-                    Ok(obj_ref) => obj_ref.0,
-                    Err(_) => gas[0].0, // this cannot fail, but we use gas[0] anyway
-                };
-                self.ensure_active_inputs_mutated(sender, &gas_object_id);
-                *result = Err(err);
+        // at this point, we have done some charging for computation, but have not yet set the storage rebate or storage gas units
+        assert!(gas_status.storage_rebate() == 0);
+        assert!(gas_status.storage_gas_units() == 0);
+
+        if let Err(err) = gas_status.bucketize_computation() {
+            if execution_result.is_ok() {
+                *execution_result = Err(err);
+            }
+        }
+        if execution_result.is_err() {
+            // Tx execution aborted--need to dump writes, deletes, etc before charging storage gas
+            self.reset(gas, gas_status);
+        }
+
+        if let Err(err) = self
+            .charge_gas_for_storage_changes(gas_status, gas_object_id)
+            .and_then(|total_bytes_written_deleted| {
+                gas_status.charge_computation_gas_for_storage_mutation(total_bytes_written_deleted)
+            })
+        {
+            // Ran out of gas while charging for storage changes. reset store, now at state just after gas smashing
+            self.reset(gas, gas_status);
+
+            // charge for storage again. This will now account only for the storage cost of gas coins
+            if self
+                .charge_gas_for_storage_changes(gas_status, gas_object_id)
+                .and_then(|total_bytes_written_deleted| {
+                    gas_status
+                        .charge_computation_gas_for_storage_mutation(total_bytes_written_deleted)
+                })
+                .is_err()
+            {
+                // TODO: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
+                // perhaps that check isn't there?
+                trace!("out of gas while charging for gas smashing")
+            }
+
+            // if execution succeeded, but we ran out of gas while charging for storage, overwrite the successful execution result
+            // with an out of gas failure
+            if execution_result.is_ok() {
+                *execution_result = Err(err)
             }
         }
         let cost_summary = gas_status.summary();
         let gas_used = cost_summary.gas_used();
 
-        // We must re-fetch the gas object from the temporary store, as it may have been reset
+        // Important to fetch the gas object here instead of earlier, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
         gas::deduct_gas(
@@ -778,21 +539,11 @@ impl<S> TemporaryStore<S> {
         );
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
-        // Do not overwrite inner transaction context for gas charge
-        let ctx = if let Some((ctx, ..)) = self.written.get(&gas_object_id) {
-            ctx.clone()
-        } else {
-            SingleTxContext::gas(sender)
-        };
-        self.write_object(&ctx, gas_object, WriteKind::Mutate);
-        self.gas_charged = Some((sender, gas_object_id, cost_summary));
+        self.write_object(gas_object, WriteKind::Mutate);
+        self.gas_charged = Some((gas_object_id, cost_summary));
     }
 
-    pub fn smash_gas(
-        &mut self,
-        sender: SuiAddress,
-        gas: &[ObjectRef],
-    ) -> Result<ObjectRef, ExecutionError> {
+    pub fn smash_gas(&mut self, gas: &[ObjectRef]) -> Result<ObjectRef, ExecutionError> {
         if gas.len() > 1 {
             let mut gas_coins: Vec<(Object, Coin)> = gas
                 .iter()
@@ -817,11 +568,9 @@ impl<S> TemporaryStore<S> {
                 })
                 .collect::<Result<_, _>>()?;
             let (mut gas_object, mut gas_coin) = gas_coins.swap_remove(0);
-            let ctx = SingleTxContext::gas(sender);
             for (other_object, other_coin) in gas_coins {
                 gas_coin.add(other_coin.balance)?;
                 self.delete_object(
-                    &ctx,
                     &other_object.id(),
                     other_object.version(),
                     DeleteKind::Normal,
@@ -833,18 +582,12 @@ impl<S> TemporaryStore<S> {
             // unwrap is safe because we checked that it was a coin object above.
             let move_obj = gas_object.data.try_as_move_mut().unwrap();
             move_obj.update_coin_contents(new_contents);
-            self.write_object(&ctx, gas_object, WriteKind::Mutate);
+            self.write_object(gas_object, WriteKind::Mutate);
         }
         Ok(gas[0])
     }
 
-    pub fn delete_object(
-        &mut self,
-        ctx: &SingleTxContext,
-        id: &ObjectID,
-        version: SequenceNumber,
-        kind: DeleteKind,
-    ) {
+    pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
         debug_assert!(self.written.get(id).is_none());
         // Check it is not read-only
@@ -859,14 +602,23 @@ impl<S> TemporaryStore<S> {
 
         // For object deletion, we will increment the version when converting the store to effects
         // so the object will eventually show up in the parent_sync table with a new version.
-        self.deleted.insert(*id, (ctx.clone(), version, kind));
+        self.deleted.insert(*id, (version, kind));
     }
 
-    /// Resets any mutations and deletions recorded in the store.
-    pub fn reset(&mut self) {
+    pub fn drop_writes(&mut self) {
         self.written.clear();
         self.deleted.clear();
         self.events.clear();
+    }
+
+    /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and
+    /// rebates, then Re-runs gas smashing. Effects on store are now as if we were about to begin execution
+    fn reset(&mut self, gas: &[ObjectRef], gas_status: &mut SuiGasStatus<'_>) {
+        self.drop_writes();
+        gas_status.reset_storage_cost_and_rebate();
+
+        self.smash_gas(gas)
+            .expect("Gas smashing cannot fail because it already succeeded when we did it before on the same `gas`");
     }
 
     pub fn log_event(&mut self, event: Event) {
@@ -878,21 +630,27 @@ impl<S> TemporaryStore<S> {
         debug_assert!(self.deleted.get(id).is_none());
         self.written
             .get(id)
-            .map(|(_, obj, _kind)| obj)
+            .map(|(obj, _kind)| obj)
             .or_else(|| self.input_objects.get(id))
     }
 
     pub fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
         for (id, change) in changes {
             match change {
-                ObjectChange::Write(ctx, new_value, kind) => {
-                    self.write_object(&ctx, new_value, kind)
-                }
-                ObjectChange::Delete(ctx, version, kind) => {
-                    self.delete_object(&ctx, &id, version, kind)
-                }
+                ObjectChange::Write(new_value, kind) => self.write_object(new_value, kind),
+                ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
             }
         }
+    }
+
+    pub fn estimate_effects_size_upperbound(&self) -> usize {
+        // In the worst case, the number of deps is equal to the number of input objects
+        TransactionEffects::estimate_effects_size_upperbound(
+            self.written.len(),
+            self.mutable_input_refs.len(),
+            self.deleted.len(),
+            self.input_objects.len(),
+        )
     }
 }
 
@@ -906,7 +664,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
             // TODO: check conservation in the presence of dynamic fields
             return;
         }
-        let gas_summary = &self.gas_charged.as_ref().unwrap().2;
+        let gas_summary = &self.gas_charged.as_ref().unwrap().1;
         let storage_fund_rebate_inflow =
             gas_summary.storage_fund_rebate_inflow(self.storage_rebate_rate);
 
@@ -932,9 +690,9 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         // sum of the storage rebate fields of all objects written by this tx
         let mut output_rebate_amount = 0;
         // total SUI in output objects
-        let output_sui = self.written.values().fold(0, |acc, v| {
-            output_rebate_amount += v.1.storage_rebate;
-            acc + v.1.get_total_sui(&self).unwrap()
+        let output_sui = self.written.values().fold(0, |acc, (o, _)| {
+            output_rebate_amount += o.storage_rebate;
+            acc + o.get_total_sui(&self).unwrap()
         });
 
         // storage gas cost should be equal to total rebates of mutated objects + storage fund rebate inflow (see below).
@@ -961,7 +719,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(child).is_none());
-        let obj_opt = self.written.get(child).map(|(_, obj, _kind)| obj);
+        let obj_opt = self.written.get(child).map(|(obj, _kind)| obj);
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
         } else {
@@ -972,7 +730,9 @@ impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
 
 impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     fn reset(&mut self) {
-        TemporaryStore::reset(self)
+        self.written.clear();
+        self.deleted.clear();
+        self.events.clear();
     }
 
     fn log_event(&mut self, event: Event) {
@@ -1067,7 +827,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
 
     fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         let package_id = &ObjectID::from(*module_id.address());
-        if let Some((_, obj, _)) = self.written.get(package_id) {
+        if let Some((obj, _)) = self.written.get(package_id) {
             Ok(Some(
                 obj.data
                     .try_as_package()

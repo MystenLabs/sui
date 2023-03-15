@@ -27,6 +27,7 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Committee, Parameters, WorkerCache, WorkerId, WorkerInfo};
+use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{
@@ -110,7 +111,7 @@ impl Primary {
         vote_digest_store: Store<PublicKey, VoteInfo>,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-        rx_consensus_round_updates: watch::Receiver<Round>,
+        rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
@@ -334,6 +335,13 @@ impl Primary {
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
+            // Increase send and receive buffer sizes on the primary, since the primary also
+            // needs to fetch payloads.
+            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
+            quic_config.stream_receive_window = Some(100 << 20);
+            quic_config.receive_window = Some(200 << 20);
+            quic_config.send_window = Some(200 << 20);
+            quic_config.crypto_buffer_size = Some(1 << 20);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
@@ -460,8 +468,6 @@ impl Primary {
             certificate_store.clone(),
             synchronizer.clone(),
             signature_service,
-            rx_consensus_round_updates.clone(),
-            parameters.gc_depth,
             tx_shutdown.subscribe(),
             rx_headers,
             node_metrics.clone(),
@@ -476,7 +482,6 @@ impl Primary {
             network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
-            parameters.gc_depth,
             tx_shutdown.subscribe(),
             rx_certificate_fetcher,
             synchronizer.clone(),
@@ -816,7 +821,7 @@ impl PrimaryReceiverHandler {
 
         // Synchronize all batches referenced in the header.
         self.synchronizer
-            .sync_batches(header, network, /* max_age */ 0)
+            .sync_header_batches(header, network, /* max_age */ 0)
             .await?;
 
         // Check that the time of the header is smaller than the current time. If not but the difference is

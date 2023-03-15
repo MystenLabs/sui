@@ -21,6 +21,7 @@ mod pg_integration {
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
     use sui_json_rpc::api::ReadApiClient;
     use sui_json_rpc_types::{SuiMoveObject, SuiParsedMoveObject, SuiTransactionResponseOptions};
+    use sui_types::gas_coin::GasCoin;
     use sui_types::object::ObjectFormatOptions;
 
     #[tokio::test]
@@ -87,11 +88,7 @@ mod pg_integration {
         )
         .unwrap();
 
-        assert_eq!(
-            "0x2::coin::Coin<0x2::sui::SUI>".to_string(),
-            parsed_coin.type_
-        );
-
+        assert_eq!(GasCoin::type_(), parsed_coin.type_);
         drop(handle);
     }
 

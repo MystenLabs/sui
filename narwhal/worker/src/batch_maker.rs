@@ -6,7 +6,7 @@ use crate::metrics::WorkerMetrics;
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::hash::Hash;
 use futures::stream::FuturesUnordered;
-use store::Store;
+use store::{rocks::DBMap, Map};
 
 use config::WorkerId;
 use tracing::{debug, error};
@@ -56,7 +56,7 @@ pub struct BatchMaker {
     /// Average resident time in the batch would be ~ (batch seal time - creation time) / 2
     batch_start_timestamp: Instant,
     /// The batch store to store our own batches.
-    store: Store<BatchDigest, Batch>,
+    store: DBMap<BatchDigest, Batch>,
     // Output channel to send out batches' digests.
     tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
 }
@@ -71,7 +71,7 @@ impl BatchMaker {
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
         tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
         node_metrics: Arc<WorkerMetrics>,
-        store: Store<BatchDigest, Batch>,
+        store: DBMap<BatchDigest, Batch>,
         tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -272,7 +272,7 @@ impl BatchMaker {
             // Now save it to disk
             let digest = batch.digest();
 
-            if let Err(e) = store.sync_write(digest, batch).await {
+            if let Err(e) = store.insert(&digest, &batch) {
                 error!("Store failed with error: {:?}", e);
                 return;
             }

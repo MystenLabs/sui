@@ -740,7 +740,7 @@ fn test_from_str() {
     assert!(test.0.is_boolean());
 
     // test id without quotes
-    let object_id = ObjectID::random().to_hex_literal();
+    let object_id = ObjectID::random().to_hex_uncompressed();
     let test = SuiJsonValue::from_str(&object_id).unwrap();
     assert!(test.0.is_string());
     assert_eq!(object_id, test.0.as_str().unwrap());
@@ -758,5 +758,15 @@ fn test_from_str() {
     // test string with quotes
     let test = SuiJsonValue::from_str("\"Some string\"").unwrap();
     assert!(test.0.is_string());
-    assert_eq!("Some string", test.0.as_str().unwrap())
+    assert_eq!("Some string", test.0.as_str().unwrap());
+
+    let test = SuiJsonValue::from_object_id(
+        ObjectID::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
+            .unwrap(),
+    );
+    assert!(test.0.is_string());
+    assert_eq!(
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+        test.0.as_str().unwrap()
+    );
 }

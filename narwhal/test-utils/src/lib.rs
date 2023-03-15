@@ -29,7 +29,7 @@ use std::{
 };
 use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
-use store::{reopen, rocks, rocks::DBMap, Store};
+use store::{reopen, rocks, rocks::DBMap};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
@@ -362,16 +362,15 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
 
 const BATCHES_CF: &str = "batches";
 
-pub fn open_batch_store() -> Store<BatchDigest, Batch> {
-    let db = DBMap::<BatchDigest, Batch>::open(
+pub fn open_batch_store() -> DBMap<BatchDigest, Batch> {
+    DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
         Some(BATCHES_CF),
         &ReadWriteOptions::default(),
     )
-    .unwrap();
-    Store::new(db)
+    .unwrap()
 }
 
 // Creates one certificate per authority starting and finishing at the specified rounds (inclusive).
