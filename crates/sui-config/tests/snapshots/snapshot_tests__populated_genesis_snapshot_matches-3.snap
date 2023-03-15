@@ -267,7 +267,7 @@ validators:
   staking_pool_mappings:
     id: "0x21b9800ce7318a8f51d3672e177e67635cbcec39fc0f36ea64e620967b4a63dd"
     size: 1
-  inactive_pools:
+  inactive_validators:
     id: "0x3461b4ad7e16e4f2e9477d40f0c47ab4c7019fb761e3b4e312ba2ce69c84a3cc"
     size: 0
   validator_candidates:

@@ -19,6 +19,8 @@ module sui::validator_set {
     use sui::event;
     use sui::table_vec::{Self, TableVec};
     use sui::voting_power;
+    use sui::validator_wrapper::ValidatorWrapper;
+    use sui::validator_wrapper;
 
     friend sui::sui_system_state_inner;
 
@@ -49,7 +51,7 @@ module sui::validator_set {
         /// Mapping from a staking pool ID to the inactive validator that has that pool as its staking pool.
         /// When a validator is deactivated the validator is removed from `active_validators` it
         /// is added to this table so that stakers can continue to withdraw their stake from it.
-        inactive_validators: Table<ID, Validator>,
+        inactive_validators: Table<ID, ValidatorWrapper>,
 
         /// Table storing preactive validators, mapping their addresses to their `Validator ` structs.
         /// When an address calls `request_add_validator_candidate`, they get added to this table and become a preactive
@@ -183,7 +185,11 @@ module sui::validator_set {
         validator::deactivate(&mut validator, tx_context::epoch(ctx));
 
         // Add to the inactive tables.
-        table::add(&mut self.inactive_validators, staking_pool_id, validator);
+        table::add(
+            &mut self.inactive_validators,
+            staking_pool_id,
+            validator_wrapper::create_v1(validator, ctx),
+        );
     }
 
     /// Called by `sui_system` to add a new validator to `pending_active_validators`, which will be
@@ -260,7 +266,8 @@ module sui::validator_set {
             validator::request_withdraw_stake(validator, staked_sui, ctx);
         } else { // This is an inactive pool.
             assert!(table::contains(&self.inactive_validators, staking_pool_id), ENoPoolFound);
-            let validator = table::borrow_mut(&mut self.inactive_validators, staking_pool_id);
+            let wrapper = table::borrow_mut(&mut self.inactive_validators, staking_pool_id);
+            let validator = validator_wrapper::load_validator_maybe_upgrade(wrapper);
             validator::request_withdraw_stake(validator, staked_sui, ctx);
         }
     }
@@ -777,7 +784,11 @@ module sui::validator_set {
 
         // Deactivate the validator and its staking pool
         validator::deactivate(&mut validator, new_epoch);
-        table::add(&mut self.inactive_validators, validator_pool_id, validator);
+        table::add(
+            &mut self.inactive_validators,
+            validator_pool_id,
+            validator_wrapper::create_v1(validator, ctx),
+        );
     }
 
     fun clean_report_records_leaving_validator(
