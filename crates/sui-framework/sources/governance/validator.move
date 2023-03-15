@@ -19,6 +19,7 @@ module sui::validator {
     use sui::event;
     friend sui::genesis;
     friend sui::sui_system_state_inner;
+    friend sui::validator_wrapper;
     friend sui::validator_set;
     friend sui::voting_power;
 

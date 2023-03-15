@@ -24,7 +24,7 @@ use sui_types::messages::{
     VerifiedTransaction,
 };
 use sui_types::object::{generate_test_gas_objects_with_owner, Object};
-use sui_types::sui_system_state::{get_validator_from_table, SuiSystemStateTrait};
+use sui_types::sui_system_state::{get_wrapped_validator_from_table, SuiSystemStateTrait};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
@@ -377,7 +377,7 @@ async fn test_inactive_validator_pool_read() {
         let inactive_pool_id = system_state
             .into_sui_system_state_summary()
             .inactive_pools_id;
-        let validator = get_validator_from_table(
+        let validator = get_wrapped_validator_from_table(
             version,
             node.state().db().as_ref(),
             inactive_pool_id,

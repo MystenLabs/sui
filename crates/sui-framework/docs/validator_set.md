@@ -80,6 +80,7 @@
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="validator_cap.md#0x2_validator_cap">0x2::validator_cap</a>;
+<b>use</b> <a href="validator_wrapper.md#0x2_validator_wrapper">0x2::validator_wrapper</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="vec_set.md#0x2_vec_set">0x2::vec_set</a>;
 <b>use</b> <a href="voting_power.md#0x2_voting_power">0x2::voting_power</a>;
@@ -136,7 +137,7 @@
  Mappings from staking pool's ID to the sui address of a validator.
 </dd>
 <dt>
-<code>inactive_validators: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
+<code>inactive_validators: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>&gt;</code>
 </dt>
 <dd>
  Mapping from a staking pool ID to the inactive validator that has that pool as its staking pool.
@@ -592,7 +593,11 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
     <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx));
 
     // Add <b>to</b> the inactive tables.
-    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, staking_pool_id, <a href="validator.md#0x2_validator">validator</a>);
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> self.inactive_validators,
+        staking_pool_id,
+        <a href="validator_wrapper.md#0x2_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="validator.md#0x2_validator">validator</a>, ctx),
+    );
 }
 </code></pre>
 
@@ -746,7 +751,8 @@ the stake and any rewards corresponding to it will be immediately processed.
         <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
     } <b>else</b> { // This is an inactive pool.
         <b>assert</b>!(<a href="table.md#0x2_table_contains">table::contains</a>(&self.inactive_validators, staking_pool_id), <a href="validator_set.md#0x2_validator_set_ENoPoolFound">ENoPoolFound</a>);
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.inactive_validators, staking_pool_id);
+        <b>let</b> wrapper = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.inactive_validators, staking_pool_id);
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_wrapper.md#0x2_validator_wrapper_load_validator_maybe_upgrade">validator_wrapper::load_validator_maybe_upgrade</a>(wrapper);
         <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
     }
 }
@@ -1873,7 +1879,11 @@ is removed from <code>validators</code> and its staking pool is put into the <co
 
     // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
     <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
-    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> self.inactive_validators,
+        validator_pool_id,
+        <a href="validator_wrapper.md#0x2_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="validator.md#0x2_validator">validator</a>, ctx),
+    );
 }
 </code></pre>
 

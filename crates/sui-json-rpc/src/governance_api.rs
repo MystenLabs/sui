@@ -22,7 +22,7 @@ use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
+use sui_types::sui_system_state::{get_wrapped_validator_from_table, SuiSystemState};
 
 pub struct GovernanceReadApi {
     state: Arc<AuthorityState>,
@@ -122,7 +122,7 @@ impl GovernanceReadApi {
             Ok(active_rate)
         } else {
             // try find from inactive pool
-            let validator = get_validator_from_table(
+            let validator = get_wrapped_validator_from_table(
                 system_state.system_state_version,
                 self.state.db().as_ref(),
                 system_state.inactive_pools_id,

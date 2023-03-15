@@ -176,7 +176,7 @@ where
 /// Given a system state type version, and the ID of the table, along with a key, retrieve the
 /// dynamic field as a Validator type. We need the version to determine which inner type to use for
 /// the Validator type.
-pub fn get_validator_from_table<S, K>(
+pub fn get_wrapped_validator_from_table<S, K>(
     system_state_version: u64,
     object_store: &S,
     table_id: ObjectID,
@@ -186,9 +186,15 @@ where
     S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned,
 {
+    let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)?;
+    let versioned = field.inner;
     match system_state_version {
         1 => {
-            let validator: ValidatorV1 = get_dynamic_field_from_store(object_store, table_id, key)?;
+            let validator: ValidatorV1 = get_dynamic_field_from_store(
+                object_store,
+                versioned.id.id.bytes,
+                &system_state_version,
+            )?;
             Ok(validator.into_sui_validator_summary())
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
@@ -238,4 +244,15 @@ impl PoolTokenExchangeRate {
             self.pool_token_amount as f64 / self.sui_amount as f64
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Versioned {
+    pub id: UID,
+    pub version: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct ValidatorWrapper {
+    pub inner: Versioned,
 }
