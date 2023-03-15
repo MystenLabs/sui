@@ -4,7 +4,6 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
@@ -133,15 +132,14 @@ impl SafeClientMetrics {
 /// See `SafeClientMetrics::new` for description of each metrics.
 /// The metrics are per validator client.
 #[derive(Clone)]
-pub struct SafeClient<C, S = DefaultSignatureVerifier> {
+pub struct SafeClient<C> {
     authority_client: C,
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
     metrics: SafeClientMetrics,
-    verifier: S,
 }
 
-impl<C, S: SignatureVerifier + Default> SafeClient<C, S> {
+impl<C> SafeClient<C> {
     pub fn new(
         authority_client: C,
         committee_store: Arc<CommitteeStore>,
@@ -153,12 +151,11 @@ impl<C, S: SignatureVerifier + Default> SafeClient<C, S> {
             committee_store,
             address,
             metrics,
-            verifier: Default::default(),
         }
     }
 }
 
-impl<C, S: SignatureVerifier> SafeClient<C, S> {
+impl<C> SafeClient<C> {
     pub fn authority_client(&self) -> &C {
         &self.authority_client
     }
@@ -174,12 +171,12 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
             .ok_or(SuiError::MissingCommitteeAtEpoch(*epoch_id))
     }
 
-    fn check_signed_effects(
+    fn check_signed_effects_plain(
         &self,
         digest: &TransactionDigest,
         signed_effects: SignedTransactionEffects,
         expected_effects_digest: Option<&TransactionEffectsDigest>,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+    ) -> SuiResult<SignedTransactionEffects> {
         // Check it has the right signer
         fp_ensure!(
             signed_effects.auth_sig().authority == self.address,
@@ -193,7 +190,7 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
         );
         // Checks it concerns the right tx
         fp_ensure!(
-            *signed_effects.data().transaction_digest() == *digest,
+            signed_effects.data().transaction_digest() == digest,
             SuiError::ByzantineAuthoritySuspicion {
                 authority: self.address,
                 reason: "Unexpected tx digest in the signed effects".to_string()
@@ -209,8 +206,8 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
                 }
             );
         }
-        let committee = self.get_committee(&signed_effects.epoch())?;
-        self.verifier.verify_one(signed_effects, &committee)
+        self.get_committee(&signed_effects.epoch())?;
+        Ok(signed_effects)
     }
 
     fn check_transaction_info(
@@ -218,7 +215,7 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
         digest: &TransactionDigest,
         transaction: VerifiedTransaction,
         status: TransactionStatus,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<PlainTransactionInfoResponse> {
         fp_ensure!(
             digest == transaction.digest(),
             SuiError::ByzantineAuthoritySuspicion {
@@ -228,19 +225,17 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
         );
         match status {
             TransactionStatus::Signed(signed) => {
-                let committee = self.get_committee(&signed.epoch)?;
-                let signed_transaction =
-                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed);
-                let transaction = self.verifier.verify_one(signed_transaction, &committee)?;
-                Ok(VerifiedTransactionInfoResponse::Signed(transaction))
+                self.get_committee(&signed.epoch)?;
+                Ok(PlainTransactionInfoResponse::Signed(
+                    SignedTransaction::new_from_data_and_sig(transaction.into_message(), signed),
+                ))
             }
             TransactionStatus::Executed(cert_opt, effects, events) => {
-                let signed_effects = self.check_signed_effects(digest, effects, None)?;
+                let signed_effects = self.check_signed_effects_plain(digest, effects, None)?;
                 match cert_opt {
                     Some(cert) => {
                         let committee = self.get_committee(&cert.epoch)?;
-                        Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(
-                            // todo - use self.verifier
+                        Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             CertifiedTransaction::new_from_data_and_sig(
                                 transaction.into_message(),
                                 cert,
@@ -250,7 +245,7 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
                             events,
                         ))
                     }
-                    None => Ok(VerifiedTransactionInfoResponse::ExecutedWithoutCert(
+                    None => Ok(PlainTransactionInfoResponse::ExecutedWithoutCert(
                         transaction,
                         signed_effects,
                         events,
@@ -287,7 +282,7 @@ impl<C, S: SignatureVerifier> SafeClient<C, S> {
     }
 }
 
-impl<C, S: SignatureVerifier> SafeClient<C, S>
+impl<C> SafeClient<C>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -295,7 +290,7 @@ where
     pub async fn handle_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+    ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
@@ -314,9 +309,13 @@ where
         &self,
         digest: &TransactionDigest,
         response: HandleCertificateResponse,
-    ) -> SuiResult<VerifiedHandleCertificateResponse> {
-        Ok(VerifiedHandleCertificateResponse {
-            signed_effects: self.check_signed_effects(digest, response.signed_effects, None)?,
+    ) -> SuiResult<HandleCertificateResponse> {
+        Ok(HandleCertificateResponse {
+            signed_effects: self.check_signed_effects_plain(
+                digest,
+                response.signed_effects,
+                None,
+            )?,
             events: response.events,
         })
     }
@@ -325,7 +324,7 @@ where
     pub async fn handle_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> Result<VerifiedHandleCertificateResponse, SuiError> {
+    ) -> Result<HandleCertificateResponse, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
@@ -366,7 +365,7 @@ where
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+    ) -> Result<PlainTransactionInfoResponse, SuiError> {
         self.metrics
             .total_requests_handle_transaction_info_request
             .inc();

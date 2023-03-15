@@ -30,12 +30,11 @@ use crate::authority_aggregator::{
     ProcessTransactionResult,
 };
 use crate::authority_client::AuthorityAPI;
-use crate::signature_verifier::{DefaultSignatureVerifier, SignatureVerifier};
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction, VerifiedTransactionInfoResponse,
+    PlainTransactionInfoResponse, QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction,
 };
 
 use self::reconfig_observer::ReconfigObserver;
@@ -66,8 +65,8 @@ impl Debug for QuorumDriverTask {
     }
 }
 
-pub struct QuorumDriver<A, S = DefaultSignatureVerifier> {
-    validators: ArcSwap<AuthorityAggregator<A, S>>,
+pub struct QuorumDriver<A> {
+    validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumDriverTask>,
     effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
@@ -75,9 +74,9 @@ pub struct QuorumDriver<A, S = DefaultSignatureVerifier> {
     max_retry_times: u8,
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S> {
+impl<A> QuorumDriver<A> {
     pub(crate) fn new(
-        validators: ArcSwap<AuthorityAggregator<A, S>>,
+        validators: ArcSwap<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumDriverTask>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
@@ -94,7 +93,7 @@ impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S> {
         }
     }
 
-    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A, S>> {
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
         &self.validators
     }
 
@@ -198,7 +197,7 @@ impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S> {
     }
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriver<A, S>
+impl<A> QuorumDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -424,7 +423,7 @@ where
         Ok(response)
     }
 
-    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A, S>>) {
+    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
         info!(
             "Quorum Driver updating AuthorityAggregator with committee {}",
             new_validators.committee
@@ -453,7 +452,7 @@ where
         // If we are able to get a certificate right away, we use it and execute the cert;
         // otherwise, we have to re-form a cert and execute it.
         let verified_transaction = match response {
-            VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
+            PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _) => {
                 self.metrics
                     .total_times_conflicting_transaction_already_finalized_when_retrying
                     .inc();
@@ -482,8 +481,10 @@ where
                 // We only try it once.
                 return Ok(result.is_ok());
             }
-            VerifiedTransactionInfoResponse::Signed(signed) => signed.into_unsigned(),
-            VerifiedTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
+            PlainTransactionInfoResponse::Signed(signed) => {
+                signed.verify(&self.clone_committee())?.into_unsigned()
+            }
+            PlainTransactionInfoResponse::ExecutedWithoutCert(transaction, _, _) => transaction,
         };
         // Now ask validators to execute this transaction.
         let result = self
@@ -511,22 +512,22 @@ where
     }
 }
 
-pub struct QuorumDriverHandler<A, S = DefaultSignatureVerifier> {
-    quorum_driver: Arc<QuorumDriver<A, S>>,
+pub struct QuorumDriverHandler<A> {
+    quorum_driver: Arc<QuorumDriver<A>>,
     effects_subscriber: tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>,
     quorum_driver_metrics: Arc<QuorumDriverMetrics>,
-    reconfig_observer: Arc<dyn ReconfigObserver<A, S> + Sync + Send>,
+    reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
     _processor_handle: JoinHandle<()>,
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriverHandler<A, S>
+impl<A> QuorumDriverHandler<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub(crate) fn new(
-        validators: Arc<AuthorityAggregator<A, S>>,
+        validators: Arc<AuthorityAggregator<A>>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
-        reconfig_observer: Arc<dyn ReconfigObserver<A, S> + Sync + Send>,
+        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u8,
     ) -> Self {
@@ -633,7 +634,7 @@ where
         }
     }
 
-    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriver<A, S>> {
+    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriver<A>> {
         self.quorum_driver.clone()
     }
 
@@ -643,7 +644,7 @@ where
         self.effects_subscriber.resubscribe()
     }
 
-    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A, S>> {
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
         self.quorum_driver.authority_aggregator()
     }
 
@@ -654,7 +655,7 @@ where
     /// Process a QuorumDriverTask.
     /// The function has no return value - the corresponding actions of task result
     /// are performed in this call.
-    async fn process_task(quorum_driver: Arc<QuorumDriver<A, S>>, task: QuorumDriverTask) {
+    async fn process_task(quorum_driver: Arc<QuorumDriver<A>>, task: QuorumDriverTask) {
         debug!(?task, "Quorum Driver processing task");
         let QuorumDriverTask {
             transaction,
@@ -727,7 +728,7 @@ where
     }
 
     fn handle_error(
-        quorum_driver: Arc<QuorumDriver<A, S>>,
+        quorum_driver: Arc<QuorumDriver<A>>,
         transaction: VerifiedTransaction,
         err: Option<QuorumDriverError>,
         tx_cert: Option<VerifiedCertificate>,
@@ -750,7 +751,7 @@ where
     }
 
     async fn task_queue_processor(
-        quorum_driver: Arc<QuorumDriver<A, S>>,
+        quorum_driver: Arc<QuorumDriver<A>>,
         mut task_receiver: Receiver<QuorumDriverTask>,
         metrics: Arc<QuorumDriverMetrics>,
     ) {
@@ -773,22 +774,19 @@ where
     }
 }
 
-pub struct QuorumDriverHandlerBuilder<A, S = DefaultSignatureVerifier> {
-    validators: Arc<AuthorityAggregator<A, S>>,
+pub struct QuorumDriverHandlerBuilder<A> {
+    validators: Arc<AuthorityAggregator<A>>,
     metrics: Arc<QuorumDriverMetrics>,
     notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,
-    reconfig_observer: Option<Arc<dyn ReconfigObserver<A, S> + Sync + Send>>,
+    reconfig_observer: Option<Arc<dyn ReconfigObserver<A> + Sync + Send>>,
     max_retry_times: u8,
 }
 
-impl<A, S: SignatureVerifier + Default> QuorumDriverHandlerBuilder<A, S>
+impl<A> QuorumDriverHandlerBuilder<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(
-        validators: Arc<AuthorityAggregator<A, S>>,
-        metrics: Arc<QuorumDriverMetrics>,
-    ) -> Self {
+    pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: Arc<QuorumDriverMetrics>) -> Self {
         Self {
             validators,
             metrics,
@@ -808,7 +806,7 @@ where
 
     pub fn with_reconfig_observer(
         mut self,
-        reconfig_observer: Arc<dyn ReconfigObserver<A, S> + Sync + Send>,
+        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
     ) -> Self {
         self.reconfig_observer = Some(reconfig_observer);
         self
@@ -820,7 +818,7 @@ where
         self
     }
 
-    pub fn start(self) -> QuorumDriverHandler<A, S> {
+    pub fn start(self) -> QuorumDriverHandler<A> {
         QuorumDriverHandler::new(
             self.validators,
             self.notifier.unwrap_or_else(|| {

@@ -2048,27 +2048,33 @@ pub struct TransactionInfoResponse {
     pub status: TransactionStatus,
 }
 
+/// This enum represents all possible states of a response returned from
+/// the safe client. Note that [struct SignedTransaction] and
+/// [struct SignedTransactionEffects] are represented as an Envelope
+/// instead of an VerifiedEnvelope. This is because the verification is
+/// now performed by the authority aggregator as an aggregated signature,
+/// instead of in SafeClient.
 #[derive(Clone, Debug)]
-pub enum VerifiedTransactionInfoResponse {
-    Signed(VerifiedSignedTransaction),
+pub enum PlainTransactionInfoResponse {
+    Signed(SignedTransaction),
     ExecutedWithCert(
         VerifiedCertificate,
-        VerifiedSignedTransactionEffects,
+        SignedTransactionEffects,
         TransactionEvents,
     ),
     ExecutedWithoutCert(
         VerifiedTransaction,
-        VerifiedSignedTransactionEffects,
+        SignedTransactionEffects,
         TransactionEvents,
     ),
 }
 
-impl VerifiedTransactionInfoResponse {
+impl PlainTransactionInfoResponse {
     pub fn is_executed(&self) -> bool {
         match self {
-            VerifiedTransactionInfoResponse::Signed(_) => false,
-            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _, _)
-            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
+            PlainTransactionInfoResponse::Signed(_) => false,
+            PlainTransactionInfoResponse::ExecutedWithCert(_, _, _)
+            | PlainTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
         }
     }
 }
