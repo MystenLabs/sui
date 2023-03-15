@@ -65,6 +65,7 @@ export function SuiLedgerClientProvider({
                         api.instance.fullNode
                     );
                 } catch (error) {
+                    console.log('ERR', error);
                     throw new Error('Failed to connect');
                 }
             }
@@ -124,10 +125,12 @@ async function requestConnectionToLedger() {
             return await TransportWebUSB.request();
         }
     } catch (error) {
+        console.log('ERROR CONNECTING', error);
         throw new LedgerConnectionFailedError(
             "Unable to connect to the user's Ledger device"
         );
     }
+    console.log('NO WAY TO CONNECT TO LEDGER');
     throw new LedgerNoTransportMechanismError(
         "There are no supported transport mechanisms to connect to the user's Ledger device"
     );
@@ -142,6 +145,7 @@ async function forceConnectionToLedger() {
             transport = await TransportWebUSB.openConnected();
         }
     } catch (error) {
+        console.log('ERROR', error);
         throw new LedgerConnectionFailedError(
             "Unable to connect to the user's Ledger device"
         );
