@@ -75,8 +75,8 @@ use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
+use sui_types::temporary_store::{InnerTemporaryStore, TemporaryModuleResolver};
 use sui_types::MOVE_STDLIB_OBJECT_ID;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -1070,13 +1070,17 @@ impl AuthorityState {
                 epoch_store.protocol_config(),
             );
         let tx_digest = *effects.transaction_digest();
+
+        let module_cache =
+            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+
         Ok(DryRunTransactionResponse {
             effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(
-                inner_temp_store.events,
+                inner_temp_store.events.clone(),
                 tx_digest,
                 None,
-                epoch_store.module_cache().as_ref(),
+                &module_cache,
             )?,
         })
     }
@@ -1165,11 +1169,15 @@ impl AuthorityState {
                 &epoch_store.epoch_start_config().epoch_data(),
                 protocol_config,
             );
+
+        let module_cache =
+            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+
         DevInspectResults::new(
             effects,
-            inner_temp_store.events,
+            inner_temp_store.events.clone(),
             execution_result,
-            epoch_store.module_cache().as_ref(),
+            &module_cache,
         )
     }
 
