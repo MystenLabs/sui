@@ -513,7 +513,7 @@ impl RocksDBBatch {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct MetricConf {
     pub db_name_override: Option<String>,
     pub read_sample_interval: SamplingInterval,
