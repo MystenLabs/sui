@@ -7,11 +7,10 @@
 module sui::royalty {
     use std::option::{Self, Option};
     use sui::nft_safe::{Self, TransferRequest, TransferPolicy, TransferCap};
-    use sui::tx_context::{sender, TxContext};
+    use sui::tx_context::TxContext;
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
     use sui::coin::{Self, Coin};
-    use sui::transfer;
     use sui::sui::SUI;
     use sui::event;
 
@@ -38,8 +37,8 @@ module sui::royalty {
         /// Accumulated balance - the owner of the Policy can withdraw
         /// at any time.
         balance: Balance<SUI>,
-        /// Store creator address for visibility and discoverability purposes
-        owner: address
+        /// Store cap ID for visibility and discoverability purposes
+        royalty_collector_cap: ID,
     }
 
     /// A Capability that grants the bearer the ability to change the amount of
@@ -61,20 +60,13 @@ module sui::royalty {
         id: ID,
     }
 
-    /// Event: fired when a free-for-all policy was issued for `T`. Since the object
-    /// is immutably shared, everyone in the ecosystem can discover and use this
-    /// object to allow `TransferRequest<T>`.
-    struct ZeroPolicyCreated<phantom T: key + store> has copy, drop {
-        id: ID
-    }
-
     // === Public / Everyone ===
 
     /// Perform a Royalty payment and signs the transfer.
     /// 
     /// The hot potato transfer request object now has an extra signature.
-    /// Its policy defines how many signatures are necessary to finalize the 
-    /// trade.
+    /// Its `TransferPolicy<T>` defines how many signatures are necessary to
+    /// finalize the trade.
     public fun pay_and_sign<T: key + store>(
         policy: &mut RoyaltyPolicy<T>,
         transfer_request: TransferRequest<T>,
@@ -105,14 +97,6 @@ module sui::royalty {
 
     // === Creator only ===
 
-    /// A special function used to explicitly indicate that all of the
-    /// trades can be performed freely. To achieve that, the `TransferCap`
-    /// is immutably shared making it available for free use by anyone on the network.
-    entry public fun set_zero_policy<T: key + store>(cap: TransferCap<T>) {
-        event::emit(ZeroPolicyCreated<T> { id: object::id(&cap) });
-        transfer::freeze_object(cap)
-    }
-
     /// Create new `RoyaltyPolicy` for the `T` and require an `amount`
     /// percentage of the trade amount for the transfer to be approved.
     public fun new_royalty_policy<T: key + store>(
@@ -122,15 +106,16 @@ module sui::royalty {
     ): (RoyaltyPolicy<T>, RoyaltyCollectorCap<T>) {
         assert!(amount_bp <= MAX_AMOUNT && amount_bp != 0, EIncorrectAmount);
 
+        let royalty_collector_cap_uid = object::new(ctx);
         let policy = RoyaltyPolicy {
             cap, amount_bp,
             id: object::new(ctx),
-            owner: sender(ctx),
             balance: balance::zero(),
+            royalty_collector_cap: object::uid_to_inner(&royalty_collector_cap_uid)
         };
         let id = object::id(&policy);
         let cap = RoyaltyCollectorCap {
-            id: object::new(ctx),
+            id: royalty_collector_cap_uid,
             policy_id: id
         };
 
@@ -147,15 +132,6 @@ module sui::royalty {
     ) {
         assert!(amount > 0 && amount <= MAX_AMOUNT, EIncorrectAmount);
         policy.amount_bp = amount
-    }
-
-    /// Change the `owner` field to the tx sender.
-    public fun set_owner<T: key + store>(
-        policy: &mut RoyaltyPolicy<T>,
-        _cap: &RoyaltyCollectorCap<T>,
-        ctx: &TxContext
-    ) {
-        policy.owner = sender(ctx)
     }
 
     /// Withdraw `amount` of SUI from the `policy.balance`.
@@ -183,7 +159,9 @@ module sui::royalty {
         cap: RoyaltyCollectorCap<T>,
         ctx: &mut TxContext
     ): (TransferCap<T>, Coin<SUI>) {
-        let RoyaltyPolicy { id, amount_bp: _, owner: _, cap: transfer_cap, balance } = policy;
+        let RoyaltyPolicy {
+            id, amount_bp: _, royalty_collector_cap: _, cap: transfer_cap, balance
+        } = policy;
         let RoyaltyCollectorCap { id: cap_id, policy_id: _ } = cap;
 
         object::delete(cap_id);
