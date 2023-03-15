@@ -40,6 +40,7 @@ module sui::nft_safe {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::dynamic_object_field::{Self as dof};
+    use sui::event;
     use sui::object::{Self, ID, UID};
     use sui::package::{Self, Publisher};
     use sui::sui::SUI;
@@ -159,12 +160,10 @@ module sui::nft_safe {
 
     // === Events ===
 
-    struct NftListedEvent has copy, drop {
+    struct NftPubliclyListedEvent has copy, drop {
         safe: ID,
         nft: ID,
-        entity: Option<ID>,
         price: u64,
-        nft_type: ascii::String,
     }
 
     // === Royalty interface ===
@@ -311,6 +310,12 @@ module sui::nft_safe {
         assert_ref_not_exclusively_listed(ref);
 
         option::fill(&mut ref.listed_for, price);
+
+        event::emit(NftPubliclyListedEvent {
+            safe: object::id(self),
+            nft: nft_id,
+            price,
+        });
     }
 
     /// Buy a publicly listed NFT.
