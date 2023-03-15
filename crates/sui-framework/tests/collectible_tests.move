@@ -27,7 +27,8 @@ module sui::boars {
         let sender = sender(ctx);
         let (
             publisher,
-            type_owner_cap,
+            transfer_policy,
+            transfer_cap,
             creator_cap
         ) = collectible::create_collection<BOARS, Boar>(otw, option::some(CAP), ctx);
 
@@ -50,12 +51,14 @@ module sui::boars {
         display::update_version(&mut display);
         collectible::return_display(&mut creator_cap, display, borrow);
 
-        let (policy, royalty_cap) = royalty::new_royalty_policy(type_owner_cap, 500, ctx);
+        let (royalty_policy, royalty_cap) =
+            royalty::new_royalty_policy(transfer_cap, 500, ctx);
 
         transfer(royalty_cap, sender);
         transfer(creator_cap, sender);
         transfer(publisher, sender);
-        share_object(policy)
+        share_object(transfer_policy);
+        share_object(royalty_policy);
     }
 
     #[test_only]
