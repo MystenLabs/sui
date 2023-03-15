@@ -29,7 +29,6 @@ require additional work on the creator side to set up metadata creation methods.
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="display.md#0x2_display">0x2::display</a>;
-<b>use</b> <a href="nft_safe.md#0x2_nft_safe">0x2::nft_safe</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -232,7 +231,7 @@ Type parameter <code>T</code> is phantom; so we constrain it via <code>Publisher
 defined in the same module as the OTW. Aborts otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="nft_safe.md#0x2_nft_safe_TransferPolicy">nft_safe::TransferPolicy</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="nft_safe.md#0x2_nft_safe_TransferCap">nft_safe::TransferCap</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="collectible.md#0x2_collectible_create_collection">create_collection</a>&lt;OTW: drop, T: store&gt;(otw: OTW, max_supply: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="package.md#0x2_package_Publisher">package::Publisher</a>, <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">collectible::Collectible</a>&lt;T&gt;&gt;, <a href="collectible.md#0x2_collectible_CollectionCreatorCap">collectible::CollectionCreatorCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -245,8 +244,6 @@ defined in the same module as the OTW. Aborts otherwise.
     otw: OTW, max_supply: Option&lt;u64&gt;, ctx: &<b>mut</b> TxContext
 ): (
     Publisher,
-    <a href="nft_safe.md#0x2_nft_safe_TransferPolicy">nft_safe::TransferPolicy</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
-    <a href="nft_safe.md#0x2_nft_safe_TransferCap">nft_safe::TransferCap</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
     Display&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;,
     <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt;
 ) {
@@ -255,18 +252,8 @@ defined in the same module as the OTW. Aborts otherwise.
     <b>let</b> pub = <a href="package.md#0x2_package_claim">package::claim</a>(otw, ctx);
     <b>assert</b>!(<a href="package.md#0x2_package_from_module">package::from_module</a>&lt;T&gt;(&pub), <a href="collectible.md#0x2_collectible_EModuleDoesNotContainT">EModuleDoesNotContainT</a>);
 
-    <b>let</b> transfer_cap = <a href="nft_safe.md#0x2_nft_safe_new_transfer_cap">nft_safe::new_transfer_cap</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(&pub, ctx);
-    <b>let</b> transfer_cap_count = 1;
-    <b>let</b> transfer_policy = <a href="nft_safe.md#0x2_nft_safe_new_transfer_policy">nft_safe::new_transfer_policy</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(
-        &pub,
-        transfer_cap_count,
-        ctx,
-    );
-
     (
         pub,
-        transfer_policy,
-        transfer_cap,
         <a href="display.md#0x2_display_new_protected">display::new_protected</a>&lt;<a href="collectible.md#0x2_collectible_Collectible">Collectible</a>&lt;T&gt;&gt;(ctx),
         <a href="collectible.md#0x2_collectible_CollectionCreatorCap">CollectionCreatorCap</a>&lt;T&gt; {
             id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
