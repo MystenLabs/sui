@@ -9,6 +9,7 @@ use std::vec;
 use anyhow::anyhow;
 use move_core_types::ident_str;
 use move_core_types::language_storage::StructTag;
+use move_core_types::value::MoveTypeLayout;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -231,18 +232,6 @@ impl Operations {
         enum KnownValue {
             GasCoin(u64),
         }
-        macro_rules! bcs_json_to_value {
-            ($value:expr) => {
-                $value.to_json_value().as_array().and_then(|v| {
-                    // value is a byte array
-                    let bytes = v
-                        .iter()
-                        .flat_map(|v| v.as_u64().map(|n| n as u8))
-                        .collect::<Vec<_>>();
-                    bcs::from_bytes(&bytes).ok()
-                })
-            };
-        }
         fn resolve_result(
             known_results: &[Vec<KnownValue>],
             i: u16,
@@ -254,7 +243,18 @@ impl Operations {
         }
         fn split_coin(inputs: &[SuiJsonValue], amount: SuiArgument) -> Option<Vec<KnownValue>> {
             let amount: u64 = match amount {
-                SuiArgument::Input(i) => bcs_json_to_value!(&inputs[i as usize])?,
+                SuiArgument::Input(i) => {
+                    let input = inputs[i as usize]
+                        .to_bcs_bytes(&MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)))
+                        .ok()?;
+                    let input = if input.len() == 8 {
+                        input
+                    } else {
+                        bcs::from_bytes::<Vec<u8>>(&input).ok()?
+                    };
+                    // convert to u64
+                    bcs::from_bytes(&input).ok()?
+                }
                 SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
                     return None
                 }
