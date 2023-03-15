@@ -482,7 +482,7 @@ export class Transaction {
             if (arg.kind !== 'Input') return;
             const input = inputs[arg.index];
             // Skip if the input is already resolved
-            if (is(input, BuilderCallArg)) return;
+            if (is(input.value, BuilderCallArg)) return;
 
             const inputValue = input.value;
 
