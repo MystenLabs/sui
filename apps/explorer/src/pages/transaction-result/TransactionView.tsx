@@ -313,13 +313,13 @@ export function TransactionView({
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={gasBudget} />
+                                    <GasAmount amount={Number(gasBudget)} />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (
                                     <>
                                         <DescriptionItem title="Gas Price">
-                                            <GasAmount amount={gasPrice} />
+                                            <GasAmount amount={Number(gasPrice)} />
                                         </DescriptionItem>
                                         <DescriptionItem title="Computation Fee">
                                             <GasAmount
