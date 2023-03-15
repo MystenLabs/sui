@@ -145,7 +145,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let _object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(address, Some(SuiObjectDataOptions::new()), None, None, None)
         .await?;
 
     Ok(())
@@ -179,7 +179,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         "--function",
         "transfer",
         "--args",
-        &coins.first().unwrap().object_id.to_string(),
+        &coins.first().unwrap().object()?.object_id.to_string(),
         &test_cluster.get_address_1().to_string(),
         "--gas-budget",
         "10000",
@@ -270,11 +270,12 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(address, Some(SuiObjectDataOptions::new()), None, None, None)
+        .await?
+        .data;
 
     // Check log output contains all object ids.
-    let object_id = object_refs.first().unwrap().object_id;
+    let object_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     SuiClientCommands::Object {
         id: object_id,
@@ -304,11 +305,17 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(address, Some(SuiObjectDataOptions::new()), None, None, None)
         .await?;
 
-    let object_id = object_refs.first().unwrap().object_id;
-    let object_to_send = object_refs.get(1).unwrap().object_id;
+    let object_id = object_refs
+        .data
+        .first()
+        .unwrap()
+        .object()
+        .unwrap()
+        .object_id;
+    let object_to_send = object_refs.data.get(1).unwrap().object().unwrap().object_id;
 
     SuiClientCommands::Gas {
         address: Some(address),
@@ -352,9 +359,16 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // publish the object basics package
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address1)
-        .await?;
-    let gas_obj_id = object_refs.first().unwrap().object_id;
+        .get_owned_objects(
+            address1,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("move_call_args_linter");
     let build_config = BuildConfig::default();
@@ -399,8 +413,20 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address1)
-        .await?;
+        .get_owned_objects(
+            address1,
+            Some(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            ),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
     // Create an object for address1 using Move call
 
@@ -408,10 +434,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // Get a gas object
     let coins: Vec<_> = object_refs
         .iter()
-        .filter(|object_ref| object_ref.type_ == "0x2::coin::Coin<0x2::sui::SUI>")
+        .filter(|object_ref| object_ref.object().unwrap().is_gas_coin())
         .collect();
-    let gas = coins.first().unwrap().object_id;
-    let obj = coins.get(1).unwrap().object_id;
+    let gas = coins.first().unwrap().object()?.object_id;
+    let obj = coins.get(1).unwrap().object()?.object_id;
 
     // Create the args
     let args = vec![
@@ -530,11 +556,18 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
     // Check log output contains all object ids.
-    let gas_obj_id = object_refs.first().unwrap().object_id;
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
@@ -587,10 +620,17 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
-    let gas_obj_id = object_refs.first().unwrap().object_id;
+    let gas_obj_id = object_refs.first().unwrap().object()?.object_id;
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
@@ -642,10 +682,17 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
-    let gas_obj_id = object_refs.first().unwrap().object_id;
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
@@ -683,10 +730,17 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
-    let gas_obj_id = object_refs.first().unwrap().object_id;
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
@@ -723,12 +777,19 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
     // Check log output contains all object ids.
-    let gas_obj_id = object_refs.first().unwrap().object_id;
-    let obj_id = object_refs.get(1).unwrap().object_id;
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+    let obj_id = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
         gas: Some(gas_obj_id),
@@ -804,11 +865,17 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
         .await?;
 
     // Check log output contains all object ids.
-    let obj_id = object_refs.get(1).unwrap().object_id;
+    let obj_id = object_refs.data.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
         gas: None,
@@ -875,7 +942,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         .execute(context)
         .await?;
 
-    let mut cmd_objs = if let SuiClientCommandResult::Objects(v) = os {
+    let cmd_objs = if let SuiClientCommandResult::Objects(v) = os {
         v
     } else {
         panic!("Command failed")
@@ -883,13 +950,21 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Check that we indeed fetched for addr1
     let client = context.get_client().await?;
-    let mut actual_objs = client
+    let actual_objs = client
         .read_api()
-        .get_objects_owned_by_address(addr1)
+        .get_owned_objects(
+            addr1,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
         .await
-        .unwrap();
-    cmd_objs.sort();
-    actual_objs.sort();
+        .unwrap()
+        .data;
+    // TODO (jian): impl Ord on SuiObjectResponse
+    // cmd_objs.sort();
+    // actual_objs.sort();
     assert_eq!(cmd_objs, actual_objs);
 
     // Switch the address
@@ -1062,13 +1137,20 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
     // Check log output contains all object ids.
-    let gas = object_refs.first().unwrap().object_id;
-    let primary_coin = object_refs.get(1).unwrap().object_id;
-    let coin_to_merge = object_refs.get(2).unwrap().object_id;
+    let gas = object_refs.first().unwrap().object().unwrap().object_id;
+    let primary_coin = object_refs.get(1).unwrap().object().unwrap().object_id;
+    let coin_to_merge = object_refs.get(2).unwrap().object().unwrap().object_id;
 
     let total_value = get_gas_value(&get_object(primary_coin, context).await.unwrap())
         + get_gas_value(&get_object(coin_to_merge, context).await.unwrap());
@@ -1106,11 +1188,17 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
         .await?;
 
-    let primary_coin = object_refs.get(1).unwrap().object_id;
-    let coin_to_merge = object_refs.get(2).unwrap().object_id;
+    let primary_coin = object_refs.data.get(1).unwrap().object()?.object_id;
+    let coin_to_merge = object_refs.data.get(2).unwrap().object()?.object_id;
 
     let total_value = get_gas_value(&get_object(primary_coin, context).await.unwrap())
         + get_gas_value(&get_object(coin_to_merge, context).await.unwrap());
@@ -1158,12 +1246,18 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
         .await?;
 
     // Check log output contains all object ids.
-    let gas = object_refs.first().unwrap().object_id;
-    let mut coin = object_refs.get(1).unwrap().object_id;
+    let gas = object_refs.data.first().unwrap().object()?.object_id;
+    let mut coin = object_refs.data.get(1).unwrap().object()?.object_id;
 
     let orig_value = get_gas_value(&get_object(coin, context).await.unwrap());
 
@@ -1209,13 +1303,21 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
     // Get another coin
     for c in object_refs {
-        if get_gas_value(&get_object(c.object_id, context).await.unwrap()) > 2000 {
-            coin = c.object_id;
+        let coin_data = c.into_object().unwrap();
+        if get_gas_value(&get_object(coin_data.object_id, context).await.unwrap()) > 2000 {
+            coin = coin_data.object_id;
         }
     }
     let orig_value = get_gas_value(&get_object(coin, context).await.unwrap());
@@ -1265,13 +1367,21 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
 
     // Get another coin
     for c in object_refs {
-        if get_gas_value(&get_object(c.object_id, context).await.unwrap()) > 2000 {
-            coin = c.object_id;
+        let coin_data = c.into_object().unwrap();
+        if get_gas_value(&get_object(coin_data.object_id, context).await.unwrap()) > 2000 {
+            coin = coin_data.object_id;
         }
     }
     let orig_value = get_gas_value(&get_object(coin, context).await.unwrap());
@@ -1363,9 +1473,16 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
-    let coin = object_refs.get(1).unwrap().object_id;
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+    let coin = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     SuiClientCommands::SerializeTransferSui {
         to: address1,

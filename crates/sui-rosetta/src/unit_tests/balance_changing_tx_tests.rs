@@ -671,16 +671,27 @@ async fn get_random_sui(
 ) -> ObjectRef {
     let coins = client
         .read_api()
-        .get_objects_owned_by_address(sender)
+        .get_owned_objects(
+            sender,
+            Some(SuiObjectDataOptions::full_content()),
+            /* cursor */ None,
+            /* limit */ None,
+            /* at_checkpoint */ None,
+        )
         .await
-        .unwrap();
-    let coin = coins
+        .unwrap()
+        .data;
+
+    let coin_resp = coins
         .iter()
         .filter(|object| {
-            object.type_ == GasCoin::type_().to_string() && !except.contains(&object.object_id)
+            let obj = object.object().unwrap();
+            obj.is_gas_coin() && !except.contains(&obj.object_id)
         })
         .choose(&mut OsRng::default())
         .unwrap();
+
+    let coin = coin_resp.object().unwrap();
     (coin.object_id, coin.version, coin.digest)
 }
 
@@ -695,15 +706,24 @@ fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiA
 async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
     let coins = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            /* cursor */ None,
+            /* limit */ None,
+            /* at_checkpoint */ None,
+        )
         .await
-        .unwrap();
+        .unwrap()
+        .data;
+
     let mut balance = 0u64;
     for coin in coins {
-        if coin.type_ == GasCoin::type_().to_string() {
+        let obj = coin.into_object().unwrap();
+        if obj.is_gas_coin() {
             let object = client
                 .read_api()
-                .get_object_with_options(coin.object_id, SuiObjectDataOptions::new().with_bcs())
+                .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
                 .await
                 .unwrap();
             let coin: GasCoin = object

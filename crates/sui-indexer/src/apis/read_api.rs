@@ -11,9 +11,9 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page, SuiGetPastObjectRequest,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
+    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectsPage, Page,
+    SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
     TransactionsPage,
 };
@@ -212,11 +212,17 @@ impl<S> ReadApiServer for ReadApi<S>
 where
     S: IndexerStore + Sync + Send + 'static,
 {
-    async fn get_objects_owned_by_address(
+    async fn get_owned_objects(
         &self,
         address: SuiAddress,
-    ) -> RpcResult<Vec<SuiObjectInfo>> {
-        self.fullnode.get_objects_owned_by_address(address).await
+        options: Option<SuiObjectDataOptions>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> RpcResult<ObjectsPage> {
+        self.fullnode
+            .get_owned_objects(address, options, cursor, limit, at_checkpoint)
+            .await
     }
 
     async fn get_object_with_options(

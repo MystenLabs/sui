@@ -35,7 +35,7 @@ export const navigateWithUnknown = async (
     else if (isValidSuiAddress(input) || isGenesisLibAddress(input)) {
         const addrObjPromise = Promise.allSettled([
             rpc(network)
-                .getObjectsOwnedByAddress({ owner: input })
+                .getOwnedObjects({ owner: input })
                 .then((data) => {
                     if (data.length <= 0)
                         throw new Error('No objects for Address');
