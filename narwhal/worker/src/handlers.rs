@@ -238,7 +238,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                             }
                         }
                         if missing.is_empty() {
-                            break;
+                            return Ok(anemo::Response::new(()));
                         }
                     }
                     Err(e) => {
