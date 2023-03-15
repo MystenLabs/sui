@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CheckFill16 } from '@mysten/icons';
+import { CheckFill16, Search16 } from '@mysten/icons';
 import { type StoryObj, type Meta } from '@storybook/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { Button, type ButtonProps } from '../Button';
-import { ReactComponent as CallIcon } from '../icons/transactions/call.svg';
 
 export default {
     component: Button,
@@ -75,12 +74,12 @@ export const OutlineLoading: StoryObj<ButtonProps> = {
 
 export const ButtonWithPrefixIcon: StoryObj<ButtonProps> = {
     ...Primary,
-    args: { prefixIcon: <CheckFill16 /> },
+    args: { before: <CheckFill16 /> },
 };
 
 export const ButtonWithPostfixIcon: StoryObj<ButtonProps> = {
     ...Primary,
-    args: { postfixIcon: <CallIcon /> },
+    args: { after: <Search16 /> },
 };
 
 export const ButtonWithIcons: StoryObj<ButtonProps> = {

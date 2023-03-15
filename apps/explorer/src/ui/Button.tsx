@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
+import { type ReactNode } from 'react';
 
 import { LoadingSpinner } from './LoadingSpinner';
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
@@ -29,6 +30,8 @@ export interface ButtonProps
     extends VariantProps<typeof buttonStyles>,
         ButtonOrLinkProps {
     loading?: boolean;
+    before?: ReactNode;
+    after?: ReactNode;
 }
 
 export function Button({
@@ -36,8 +39,18 @@ export function Button({
     size,
     loading,
     children,
+    before,
+    after,
     ...props
 }: ButtonProps) {
+    const childrenContent = (
+        <div className="inline-flex flex-nowrap gap-2">
+            {before}
+            {children}
+            {after}
+        </div>
+    );
+
     return (
         <ButtonOrLink
             className={buttonStyles({ variant, size })}
@@ -49,10 +62,10 @@ export function Button({
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
                         <LoadingSpinner />
                     </div>
-                    <div className="text-transparent">{children}</div>
+                    <div className="text-transparent">{childrenContent}</div>
                 </>
             ) : (
-                children
+                childrenContent
             )}
         </ButtonOrLink>
     );

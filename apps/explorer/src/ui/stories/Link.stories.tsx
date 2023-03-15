@@ -3,9 +3,8 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { CheckFill16 } from '../../../../icons';
+import { CheckFill16, Search16 } from '../../../../icons';
 import { Link, type LinkProps } from '../Link';
-import { ReactComponent as CallIcon } from '../icons/transactions/call.svg';
 
 export default {
     component: Link,
@@ -37,7 +36,7 @@ export const LinkWithPrefixIcon: StoryObj<LinkProps> = {
     args: {
         variant: 'text',
         children: 'View more',
-        prefixIcon: <CheckFill16 />,
+        before: <CheckFill16 />,
     },
 };
 
@@ -45,7 +44,7 @@ export const LinkWithPostfixIcon: StoryObj<LinkProps> = {
     args: {
         variant: 'mono',
         children: '0x0000000000000000000000000000000000000002',
-        postfixIcon: <CallIcon />,
+        after: <Search16 />,
     },
 };
 
@@ -53,7 +52,7 @@ export const LinkWithIcons: StoryObj<LinkProps> = {
     args: {
         variant: 'text',
         children: 'View more',
-        prefixIcon: <CheckFill16 />,
-        postfixIcon: <CallIcon />,
+        before: <CheckFill16 />,
+        after: <Search16 />,
     },
 };
