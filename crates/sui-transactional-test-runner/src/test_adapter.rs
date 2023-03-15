@@ -41,6 +41,7 @@ use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
+use sui_types::messages::CallArg;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -59,7 +60,6 @@ use sui_types::{
 };
 use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{epoch_data::EpochData, messages::Command};
-use sui_types::{gas::SuiCostTable, messages::CallArg};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 
@@ -560,8 +560,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 sender,
                 gas_budget,
                 inputs,
+                view_events,
+                view_gas_used,
             }) => {
-                //  self.compiled_state().resolve_type_args(type_args)?;
                 let inputs = self.compiled_state().resolve_args(inputs)?;
                 let inputs: Vec<CallArg> = inputs
                     .into_iter()
@@ -587,7 +588,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
-                let output = self.object_summary_output(&summary, false);
+                let output = self.object_summary_output(&summary, view_events, view_gas_used);
                 Ok(output)
             }
         }

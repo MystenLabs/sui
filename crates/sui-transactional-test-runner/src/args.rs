@@ -72,6 +72,10 @@ pub struct ProgrammableTransactionCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "view-events")]
+    pub view_events: bool,
+    #[clap(long = "view-gas-used")]
+    pub view_gas_used: bool,
     #[clap(
         long = "inputs",
         parse(try_from_str = ParsedValue::parse),

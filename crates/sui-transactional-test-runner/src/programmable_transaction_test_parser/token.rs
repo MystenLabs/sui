@@ -13,6 +13,8 @@ pub enum CommandToken {
     Whitespace,
     // // or /* */
     Comment,
+    // //>
+    CommandStart,
     // alpha numeric
     Ident,
     // digits
@@ -56,6 +58,7 @@ impl Display for CommandToken {
             CommandToken::Comment => "[comment]",
             CommandToken::Ident => "[identifier]",
             CommandToken::Number => "[num]",
+            CommandToken::CommandStart => "//>",
             CommandToken::ColonColon => "::",
             CommandToken::Colon => ":",
             CommandToken::Comma => ",",
@@ -113,11 +116,30 @@ impl Token for CommandToken {
         if s.starts_with('<') {
             return Ok(parse_sub_token_string(s, '<', '>')?.map(|len| (Self::TypeArgString, len)));
         }
+        // start of a command
+        if s.starts_with("//>") {
+            return Ok(Some((Self::CommandStart, 3)));
+        }
         // comments
         if s.starts_with("//") {
-            let end = s.find('\n').map(|end| end + 1).unwrap_or(s.len());
-            return Ok(Some((Self::Comment, end)));
+            let mut chars = s.chars().peekable();
+            let mut n = 0;
+            let mut in_whitespace_from_start = true;
+            while let Some(c) = chars.next() {
+                n += 1;
+                if c == '\n' {
+                    break;
+                }
+                if in_whitespace_from_start && c == '>' {
+                    bail!("Remove whitespace between // and > to start a command");
+                }
+                if !c.is_whitespace() {
+                    in_whitespace_from_start = false;
+                }
+            }
+            return Ok(Some((Self::Comment, n)));
         }
+        // TODO support nested comments /* */
         if s.starts_with("/*") {
             let Some(end) = s.find("*/") else {
                 bail!("Unexpected of string after start of comment '/*'")
@@ -152,7 +174,7 @@ impl Token for CommandToken {
                     .count();
                 (CommandToken::Number, len)
             }
-            c if c.is_ascii_alphabetic() => {
+            c if c.is_ascii_alphabetic() || c == '_' => {
                 // c + remaining
                 let len = 1 + chars
                     .take_while(|c| identifier::is_valid_identifier_char(*c))

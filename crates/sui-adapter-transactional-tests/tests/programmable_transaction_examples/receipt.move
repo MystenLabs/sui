@@ -28,8 +28,8 @@ module test::m1 {
 
 //# programmable
 
-0: test::m1::prologue();
-1: test::m1::execute(Result(0));
-2: test::m1::epilogue(Result(0));
+//> 0: test::m1::prologue();
+//> test::m1::execute(Result(0));
+//> test::m1::epilogue(Result(0));
 
 //# view-object 106

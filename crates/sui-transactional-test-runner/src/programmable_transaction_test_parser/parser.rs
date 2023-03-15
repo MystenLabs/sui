@@ -70,7 +70,7 @@ where
 
     pub fn parse_commands(&mut self) -> Result<Vec<ParsedCommand>> {
         let commands = self.inner().parse_list(
-            |p| CommandParser::from_parser(p).parse_command_with_index(),
+            |p| CommandParser::from_parser(p).parse_command_start(),
             CommandToken::Semi,
             /* not checked */ CommandToken::Void,
             /* allow_trailing_delim */ true,
@@ -93,7 +93,8 @@ where
         Ok(commands)
     }
 
-    pub fn parse_command_with_index(&mut self) -> Result<(Option<usize>, ParsedCommand)> {
+    pub fn parse_command_start(&mut self) -> Result<(Option<usize>, ParsedCommand)> {
+        self.inner().advance(CommandToken::CommandStart)?;
         let idx = if let Some(CommandToken::Number) = self.inner().peek_tok() {
             let num = self.inner().advance(CommandToken::Number)?;
             let idx = usize::from_str(num).context("Invalid command index annotation")?;
