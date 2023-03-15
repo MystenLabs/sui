@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcClient, type RpcParams } from '@mysten/sui.js';
+import { JsonRpcClient } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import { type SpanStatusType } from '@sentry/tracing';
 
@@ -43,12 +43,6 @@ export class SentryRpcClient extends JsonRpcClient {
     async request(method: string, args: any) {
         return this.#withRequest(method, { args }, () =>
             super.request(method, args)
-        );
-    }
-
-    async batchRequest(requests: RpcParams[]) {
-        return this.#withRequest('batch', { requests }, () =>
-            super.batchRequest(requests)
         );
     }
 }
