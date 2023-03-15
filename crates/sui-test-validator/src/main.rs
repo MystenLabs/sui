@@ -34,6 +34,10 @@ struct Args {
     /// Port to start the Sui faucet on
     #[clap(long, default_value = "9123")]
     faucet_port: u16,
+
+    /// The duration for epochs (defaults to one minute)
+    #[clap(long, default_value = "60000")]
+    epoch_duration_ms: u64,
 }
 
 #[tokio::main]
@@ -48,6 +52,7 @@ async fn main() -> Result<()> {
         env: Env::NewLocal,
         fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
         faucet_address: None,
+        epoch_duration_ms: Some(args.epoch_duration_ms),
     })
     .await?;
 

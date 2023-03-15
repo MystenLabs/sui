@@ -22,6 +22,8 @@ pub struct ClusterTestOpt {
     pub faucet_address: Option<String>,
     #[clap(long)]
     pub fullnode_address: Option<String>,
+    #[clap(long)]
+    pub epoch_duration_ms: Option<u64>,
 }
 
 impl ClusterTestOpt {
@@ -30,6 +32,7 @@ impl ClusterTestOpt {
             env: Env::NewLocal,
             faucet_address: None,
             fullnode_address: None,
+            epoch_duration_ms: None,
         }
     }
 }
