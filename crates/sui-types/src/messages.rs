@@ -152,9 +152,10 @@ pub struct ChangeEpoch {
     pub epoch_start_timestamp_ms: u64,
     /// System packages (specifically framework and move stdlib) that are written before the new
     /// epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
-    /// the validator must write out the modules below.  Modules are given in their serialized form,
-    /// and include the ObjectID within their serialized form.
-    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
+    /// the validator must write out the modules below.  Modules are provided with the version they
+    /// will be upgraded to, their modules in serialized form (which include their package ID), and
+    /// a list of their transitive dependencies.
+    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -1808,7 +1809,7 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
         epoch_start_timestamp_ms: u64,
-        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,

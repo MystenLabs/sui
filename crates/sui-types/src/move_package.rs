@@ -253,6 +253,55 @@ impl MovePackage {
         )
     }
 
+    pub fn new_system(
+        version: SequenceNumber,
+        modules: Vec<CompiledModule>,
+        dependencies: impl IntoIterator<Item = ObjectID>,
+    ) -> Self {
+        let module = modules
+            .first()
+            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
+
+        let storage_id = ObjectID::from(*module.address());
+        let type_origin_table = build_initial_type_origin_table(&modules);
+
+        let linkage_table = BTreeMap::from_iter(dependencies.into_iter().map(|dep| {
+            let info = UpgradeInfo {
+                upgraded_id: dep,
+                // The upgraded version is used by other packages that transitively depend on this
+                // system package, to make sure that if they choose a different version to depend on
+                // compared to their dependencies, they pick a greater version.
+                //
+                // However, in the case of system packages, although they can be upgraded, unlike
+                // other packages, only one version can be in use on the network at any given time,
+                // so it is not possible for the a package to require a different system package
+                // version compared to its dependencies.
+                //
+                // This reason, coupled with the fact that system packages can only depend on each
+                // other, mean that their own linkage tables always report a version of zero.
+                upgraded_version: SequenceNumber::new(),
+            };
+            (dep, info)
+        }));
+
+        let module_map = BTreeMap::from_iter(modules.into_iter().map(|module| {
+            let name = module.name().to_string();
+            let mut bytes = Vec::new();
+            module.serialize(&mut bytes).unwrap();
+            (name, bytes)
+        }));
+
+        Self::new(
+            storage_id,
+            version,
+            module_map,
+            u64::MAX, // System packages are not subject to the size limit
+            type_origin_table,
+            linkage_table,
+        )
+        .expect("System packages are not subject to a size limit")
+    }
+
     fn from_module_iter_with_type_origin_table<'p>(
         storage_id: ObjectID,
         self_id: ObjectID,

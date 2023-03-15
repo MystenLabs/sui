@@ -61,7 +61,7 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
-    use sui_framework::make_std_sui_move_pkgs;
+    use sui_framework::get_move_stdlib_package;
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
@@ -596,13 +596,12 @@ mod sim_only_tests {
 
     /// Like `sui_framework`, but package the modules in an `Object`.
     fn sui_framework_object(fixture: &str) -> Object {
-        let (std_move_pkg, _) = make_std_sui_move_pkgs();
         Object::new_package(
             sui_framework(fixture),
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
-            [&std_move_pkg],
+            &[get_move_stdlib_package()],
         )
         .unwrap()
     }
