@@ -29,6 +29,7 @@ use sui_types::crypto::{
 use sui_types::crypto::{DefaultHash, PublicKey as AccountsPublicKey};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
+use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
@@ -442,8 +443,6 @@ pub struct GenesisValidatorMetadata {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GenesisChainParameters {
-    pub initial_sui_custody_account_address: SuiAddress,
-    pub initial_validator_stake_mist: u64,
     pub governance_start_epoch: u64,
     pub chain_start_timestamp_ms: u64,
     pub epoch_duration_ms: u64,
@@ -461,16 +460,6 @@ pub struct GenesisCeremonyParameters {
 
     #[serde(default = "GenesisCeremonyParameters::default_allow_insertion_of_extra_objects")]
     pub allow_insertion_of_extra_objects: bool,
-
-    /// The initial account address that will own the initial 9 Billion Sui that is minted at
-    /// genesis.
-    #[serde(default)]
-    pub initial_sui_custody_account_address: SuiAddress,
-
-    /// The initial amount of Sui (denominated in Mist) given to genesis validators for their
-    /// initial stake.
-    #[serde(default = "GenesisCeremonyParameters::test_initial_validator_stake_mist")]
-    pub initial_validator_stake_mist: u64,
 
     /// The starting epoch in which various on-chain governance features take effect. E.g.
     /// - stake subsidies are paid out
@@ -491,8 +480,6 @@ impl GenesisCeremonyParameters {
             timestamp_ms: Self::default_timestamp_ms(),
             protocol_version: ProtocolVersion::MAX,
             allow_insertion_of_extra_objects: true,
-            initial_sui_custody_account_address: SuiAddress::default(),
-            initial_validator_stake_mist: Self::test_initial_validator_stake_mist(),
             governance_start_epoch: 0,
             epoch_duration_ms: Self::default_epoch_duration_ms(),
         }
@@ -509,10 +496,6 @@ impl GenesisCeremonyParameters {
         true
     }
 
-    fn test_initial_validator_stake_mist() -> u64 {
-        sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI
-    }
-
     fn default_epoch_duration_ms() -> u64 {
         // 24 hrs
         24 * 60 * 60 * 1000
@@ -527,6 +510,7 @@ impl Default for GenesisCeremonyParameters {
 
 pub struct Builder {
     parameters: GenesisCeremonyParameters,
+    token_distribution_schedule: Option<TokenDistributionSchedule>,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
     // Validator signatures over checkpoint
@@ -544,6 +528,7 @@ impl Builder {
     pub fn new() -> Self {
         Self {
             parameters: Default::default(),
+            token_distribution_schedule: None,
             objects: Default::default(),
             validators: Default::default(),
             signatures: Default::default(),
@@ -626,11 +611,23 @@ impl Builder {
         let objects = self.objects.clone().into_values().collect::<Vec<_>>();
         let validators = self.validators.clone().into_values().collect::<Vec<_>>();
 
+        let token_distribution_schedule =
+            if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
+                token_distribution_schedule.clone()
+            } else {
+                TokenDistributionSchedule::new_for_validators_with_default_allocation(
+                    validators.iter().map(|v| v.info.sui_address()),
+                )
+            };
+
         self.built_genesis = Some(build_unsigned_genesis_data(
             &self.parameters,
+            &token_distribution_schedule,
             &validators,
             &objects,
         ));
+
+        self.token_distribution_schedule = Some(token_distribution_schedule);
 
         self.built_genesis.clone().unwrap()
     }
@@ -717,6 +714,16 @@ impl Builder {
         )
         .context("unable to deserialize genesis parameters")?;
 
+        let token_distribution_schedule_file =
+            path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE);
+        let token_distribution_schedule = if token_distribution_schedule_file.exists() {
+            Some(TokenDistributionSchedule::from_csv(fs::File::open(
+                token_distribution_schedule_file,
+            )?)?)
+        } else {
+            None
+        };
+
         // Load Objects
         let mut objects = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
@@ -760,35 +767,40 @@ impl Builder {
             committee.insert(validator_info.info.protocol_key(), validator_info);
         }
 
-        let unsigned_genesis_file = path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE);
-        let loaded_genesis = if unsigned_genesis_file.exists() {
-            let unsigned_genesis_bytes = fs::read(unsigned_genesis_file)?;
-            let loaded_genesis: UnsignedGenesis = bcs::from_bytes(&unsigned_genesis_bytes)?;
-            Some(loaded_genesis)
-        } else {
-            None
-        };
-
-        // Verify it matches
-        if let Some(loaded_genesis) = &loaded_genesis {
-            let objects = objects.clone().into_values().collect::<Vec<_>>();
-            let validators = committee.clone().into_values().collect::<Vec<_>>();
-
-            let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
-            loaded_genesis.checkpoint_contents.digest(); // cache digest before compare
-            assert_eq!(
-                &built, loaded_genesis,
-                "loaded genesis does not match built genesis"
-            );
-        }
-
-        Ok(Self {
+        let mut builder = Self {
             parameters,
+            token_distribution_schedule,
             objects,
             validators: committee,
             signatures,
-            built_genesis: loaded_genesis,
-        })
+            built_genesis: None, // Leave this as none, will build and compare below
+        };
+
+        let unsigned_genesis_file = path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE);
+        if unsigned_genesis_file.exists() {
+            let unsigned_genesis_bytes = fs::read(unsigned_genesis_file)?;
+            let loaded_genesis: UnsignedGenesis = bcs::from_bytes(&unsigned_genesis_bytes)?;
+
+            // If we have a built genesis, then we must have a token_distribution_schedule present
+            // as well.
+            assert!(
+                builder.token_distribution_schedule.is_some(),
+                "If a built genesis is present, then there must also be a token-distribution-schedule present"
+            );
+
+            // Verify loaded genesis matches one build from the constituent parts
+            let built = builder.build_unsigned_genesis_checkpoint();
+            loaded_genesis.checkpoint_contents.digest(); // cache digest before compare
+            assert_eq!(
+                built, loaded_genesis,
+                "loaded genesis does not match built genesis"
+            );
+
+            // Just to double check that its set after building above
+            assert!(builder.unsigned_genesis_checkpoint().is_some());
+        }
+
+        Ok(builder)
     }
 
     pub fn save<P: AsRef<Path>>(self, path: P) -> Result<(), anyhow::Error> {
@@ -800,6 +812,12 @@ impl Builder {
         // Write parameters
         let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
         fs::write(parameters_file, serde_yaml::to_vec(&self.parameters)?)?;
+
+        if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
+            token_distribution_schedule.to_csv(fs::File::create(
+                path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE),
+            )?)?;
+        }
 
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
@@ -854,6 +872,7 @@ fn get_genesis_context(epoch_data: &EpochData) -> TxContext {
 
 fn build_unsigned_genesis_data(
     parameters: &GenesisCeremonyParameters,
+    token_distribution_schedule: &TokenDistributionSchedule,
     validators: &[GenesisValidatorInfo],
     objects: &[Object],
 ) -> UnsignedGenesis {
@@ -878,8 +897,14 @@ fn build_unsigned_genesis_data(
         ),
     ];
 
-    let objects =
-        create_genesis_objects(&mut genesis_ctx, &modules, objects, validators, parameters);
+    let objects = create_genesis_objects(
+        &mut genesis_ctx,
+        &modules,
+        objects,
+        validators,
+        parameters,
+        token_distribution_schedule,
+    );
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, &epoch_data);
@@ -1020,6 +1045,7 @@ fn create_genesis_objects(
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
     parameters: &GenesisCeremonyParameters,
+    token_distribution_schedule: &TokenDistributionSchedule,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
     let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
@@ -1045,8 +1071,15 @@ fn create_genesis_objects(
         store.insert_object(object.to_owned());
     }
 
-    generate_genesis_system_object(&mut store, &move_vm, validators, genesis_ctx, parameters)
-        .unwrap();
+    generate_genesis_system_object(
+        &mut store,
+        &move_vm,
+        validators,
+        genesis_ctx,
+        parameters,
+        token_distribution_schedule,
+    )
+    .unwrap();
 
     store.into_inner().into_values().collect()
 }
@@ -1138,6 +1171,7 @@ pub fn generate_genesis_system_object(
     committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
     parameters: &GenesisCeremonyParameters,
+    token_distribution_schedule: &TokenDistributionSchedule,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
@@ -1150,8 +1184,6 @@ pub fn generate_genesis_system_object(
     );
 
     let genesis_chain_parameters = GenesisChainParameters {
-        initial_sui_custody_account_address: parameters.initial_sui_custody_account_address,
-        initial_validator_stake_mist: parameters.initial_validator_stake_mist,
         governance_start_epoch: parameters.governance_start_epoch,
         chain_start_timestamp_ms: parameters.timestamp_ms,
         epoch_duration_ms: parameters.epoch_duration_ms,
@@ -1162,6 +1194,11 @@ pub fn generate_genesis_system_object(
         .cloned()
         .map(GenesisValidatorMetadata::from)
         .collect::<Vec<_>>();
+
+    token_distribution_schedule.validate();
+    token_distribution_schedule.check_all_stake_operations_are_for_valid_validators(
+        genesis_validators.iter().map(|v| v.sui_address),
+    );
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -1174,6 +1211,7 @@ pub fn generate_genesis_system_object(
                 vec![
                     CallArg::Pure(bcs::to_bytes(&genesis_chain_parameters).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&genesis_validators).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&token_distribution_schedule).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
                 ],
@@ -1203,8 +1241,153 @@ pub fn generate_genesis_system_object(
 const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
+const GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE: &str = "token-distribution-schedule";
 const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
 const GENESIS_BUILDER_UNSIGNED_GENESIS_FILE: &str = "unsigned-genesis";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TokenDistributionSchedule {
+    pub stake_subsidy_fund_mist: u64,
+    pub allocations: Vec<TokenAllocation>,
+}
+
+impl TokenDistributionSchedule {
+    pub fn validate(&self) {
+        let mut total_mist = self.stake_subsidy_fund_mist;
+
+        for allocation in &self.allocations {
+            total_mist += allocation.amount_mist;
+        }
+
+        if total_mist != TOTAL_SUPPLY_MIST {
+            panic!("TokenDistributionSchedule adds up to {total_mist} and not expected {TOTAL_SUPPLY_MIST}");
+        }
+    }
+
+    fn check_all_stake_operations_are_for_valid_validators<I: IntoIterator<Item = SuiAddress>>(
+        &self,
+        validators: I,
+    ) {
+        use std::collections::HashMap;
+
+        let mut validators: HashMap<SuiAddress, u64> =
+            validators.into_iter().map(|a| (a, 0)).collect();
+
+        // Check that all allocations are for valid validators, while summing up all allocations
+        // for each validator
+        for allocation in &self.allocations {
+            if let Some(staked_with_validator) = &allocation.staked_with_validator {
+                *validators
+                    .get_mut(staked_with_validator)
+                    .expect("allocation must be staked with valid validator") +=
+                    allocation.amount_mist;
+            }
+        }
+
+        // Check that all validators have sufficient stake allocated to ensure they meet the
+        // minimum stake threshold
+        let minimum_required_stake =
+            sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI;
+        for (validator, stake) in validators {
+            if stake < minimum_required_stake {
+                panic!("validator {validator} has '{stake}' stake and does not meet the minimum required stake threshold of '{minimum_required_stake}'");
+            }
+        }
+    }
+
+    fn new_for_validators_with_default_allocation<I: IntoIterator<Item = SuiAddress>>(
+        validators: I,
+    ) -> Self {
+        let mut supply = TOTAL_SUPPLY_MIST;
+        let default_allocation =
+            sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI;
+
+        let allocations = validators
+            .into_iter()
+            .map(|a| {
+                supply -= default_allocation;
+                TokenAllocation {
+                    recipient_address: a,
+                    amount_mist: default_allocation,
+                    staked_with_validator: Some(a),
+                }
+            })
+            .collect();
+
+        let schedule = Self {
+            stake_subsidy_fund_mist: supply,
+            allocations,
+        };
+
+        schedule.validate();
+        schedule
+    }
+
+    /// Helper to read a TokenDistributionSchedule from a csv file.
+    ///
+    /// The file is encoded such that the final entry in the CSV file is used to denote the
+    /// allocation to the stake subsidy fund. It must be in the following format:
+    /// '0x0000000000000000000000000000000000000000000000000000000000000000,<amount to stake subsidy fund>,'
+    ///
+    /// All entries in a token distribution schedule must add up to 10B Sui.
+    pub fn from_csv<R: std::io::Read>(reader: R) -> Result<Self> {
+        let mut reader = csv::Reader::from_reader(reader);
+        let mut allocations: Vec<TokenAllocation> =
+            reader.deserialize().collect::<Result<_, _>>()?;
+        assert_eq!(
+            TOTAL_SUPPLY_MIST,
+            allocations.iter().map(|a| a.amount_mist).sum::<u64>(),
+            "Token Distribution Schedule must add up to 10B Sui",
+        );
+        let stake_subsidy_fund_allocation = allocations.pop().unwrap();
+        assert_eq!(
+            SuiAddress::default(),
+            stake_subsidy_fund_allocation.recipient_address,
+            "Final allocation must be for stake subsidy fund",
+        );
+        assert!(
+            stake_subsidy_fund_allocation
+                .staked_with_validator
+                .is_none(),
+            "Can't stake the stake subsidy fund",
+        );
+
+        let schedule = Self {
+            stake_subsidy_fund_mist: stake_subsidy_fund_allocation.amount_mist,
+            allocations,
+        };
+
+        schedule.validate();
+        Ok(schedule)
+    }
+
+    pub fn to_csv<W: std::io::Write>(&self, writer: W) -> Result<()> {
+        let mut writer = csv::Writer::from_writer(writer);
+
+        for allocation in &self.allocations {
+            writer.serialize(allocation)?;
+        }
+
+        writer.serialize(TokenAllocation {
+            recipient_address: SuiAddress::default(),
+            amount_mist: self.stake_subsidy_fund_mist,
+            staked_with_validator: None,
+        })?;
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TokenAllocation {
+    pub recipient_address: SuiAddress,
+    pub amount_mist: u64,
+
+    /// Indicates if this allocation should be staked at genesis and with which validator
+    pub staked_with_validator: Option<SuiAddress>,
+}
 
 #[cfg(test)]
 mod test {
@@ -1215,6 +1398,23 @@ mod test {
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         NetworkKeyPair,
     };
+
+    #[test]
+    fn allocation_csv() {
+        let schedule = TokenDistributionSchedule::new_for_validators_with_default_allocation([
+            SuiAddress::random_for_testing_only(),
+            SuiAddress::random_for_testing_only(),
+        ]);
+        let mut output = Vec::new();
+
+        schedule.to_csv(&mut output).unwrap();
+
+        let parsed_schedule = TokenDistributionSchedule::from_csv(output.as_slice()).unwrap();
+
+        assert_eq!(schedule, parsed_schedule);
+
+        std::io::Write::write_all(&mut std::io::stdout(), &output).unwrap();
+    }
 
     #[test]
     fn roundtrip() {

@@ -1470,7 +1470,7 @@ Aborts if any address isn't in the given validator set.
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1479,7 +1479,7 @@ Aborts if any address isn't in the given validator set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(
     validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;,
     validator_address: <b>address</b>,
 ): &<b>mut</b> Validator {

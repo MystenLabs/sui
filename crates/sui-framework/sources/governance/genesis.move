@@ -4,22 +4,18 @@
 module sui::genesis {
     use std::vector;
 
-    use sui::balance;
+    use sui::balance::{Balance, Self};
     use sui::coin;
     use sui::clock;
-    use sui::sui;
+    use sui::sui::{Self, SUI};
     use sui::sui_system;
-    use sui::tx_context::TxContext;
-    use sui::validator;
-    use std::option;
+    use sui::tx_context::{Self, TxContext};
+    use sui::validator::{Self, Validator};
+    use sui::validator_set;
+    use std::option::{Option, Self};
 
     /// Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).
     const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1_000_000_000_000_000;
-
-    /// The initial balance of the Subsidy fund in Mist (1 Billion * 10^9)
-    const INIT_STAKE_SUBSIDY_FUND_BALANCE: u64 = 1_000_000_000_000_000_000;
-
-    const INIT_STAKE_SUBSIDY_FUND_BALANCE_TEST_ONLY: u64 = 100_000_000_000_000_000;
 
     struct GenesisValidatorMetadata has drop, copy {
         name: vector<u8>,
@@ -45,11 +41,22 @@ module sui::genesis {
     }
 
     struct GenesisChainParameters has drop, copy {
-        initial_sui_custody_account_address: address,
-        initial_validator_stake_mist: u64,
         governance_start_epoch: u64,
         chain_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+    }
+
+    struct TokenDistributionSchedule has drop, copy {
+        stake_subsidy_fund_mist: u64,
+        allocations: vector<TokenAllocation>,
+    }
+
+    struct TokenAllocation has drop, copy {
+        recipient_address: address,
+        amount_mist: u64,
+
+        /// Indicates if this allocation should be staked at genesis and with which validator
+        staked_with_validator: Option<address>,
     }
 
     /// This function will be explicitly called once at genesis.
@@ -58,13 +65,22 @@ module sui::genesis {
     fun create(
         genesis_chain_parameters: GenesisChainParameters,
         genesis_validators: vector<GenesisValidatorMetadata>,
+        token_distribution_schedule: TokenDistributionSchedule,
         protocol_version: u64,
         system_state_version: u64,
         ctx: &mut TxContext,
     ) {
+        // Ensure this is only called at genesis
+        assert!(tx_context::epoch(ctx) == 0, 0);
+
         let sui_supply = sui::new(ctx);
-        let subsidy_fund = balance::split(&mut sui_supply, INIT_STAKE_SUBSIDY_FUND_BALANCE_TEST_ONLY);
+        let subsidy_fund = balance::split(
+            &mut sui_supply,
+            token_distribution_schedule.stake_subsidy_fund_mist
+        );
         let storage_fund = balance::zero();
+
+        // Create all the `Validator` structs
         let validators = vector::empty();
         let count = vector::length(&genesis_validators);
         let i = 0;
@@ -101,20 +117,29 @@ module sui::genesis {
                 p2p_address,
                 primary_address,
                 worker_address,
-                // Initialize all validators with uniform stake taken from the subsidy fund.
-                // TODO: change this back to take from subsidy fund instead.
-                option::some(balance::split(&mut sui_supply, genesis_chain_parameters.initial_validator_stake_mist)),
+                // Initialize all validators with no stake. Stake distribution
+                // will be handled by the 'allocate_tokens' call bellow.
+                option::none(),
                 gas_price,
                 commission_rate,
                 ctx
             );
 
-            validator::activate(&mut validator, 0);
-
             vector::push_back(&mut validators, validator);
 
             i = i + 1;
         };
+
+        // Allocate tokens and staking operations
+        allocate_tokens(
+            sui_supply,
+            token_distribution_schedule.allocations,
+            &mut validators,
+            ctx
+        );
+
+        // Activate all validators
+        activate_validators(&mut validators);
 
         sui_system::create(
             validators,
@@ -130,8 +155,55 @@ module sui::genesis {
         );
 
         clock::create();
+    }
 
-        // Transfer the remaining balance of sui's supply to the initial account
-        sui::transfer(coin::from_balance(sui_supply, ctx), genesis_chain_parameters.initial_sui_custody_account_address);
+    fun allocate_tokens(
+        sui_supply: Balance<SUI>,
+        allocations: vector<TokenAllocation>,
+        validators: &mut vector<Validator>,
+        ctx: &mut TxContext,
+    ) {
+        let count = vector::length(&allocations);
+        let i = 0;
+        while (i < count) {
+            let allocation = *vector::borrow(&allocations, i);
+
+            let allocation_balance = balance::split(&mut sui_supply, allocation.amount_mist);
+
+            if (option::is_some(&allocation.staked_with_validator)) {
+                let validator_address = option::destroy_some(allocation.staked_with_validator);
+                let validator = validator_set::get_validator_mut(validators, validator_address);
+                validator::request_add_stake_at_genesis(
+                    validator,
+                    allocation_balance,
+                    allocation.recipient_address,
+                    ctx
+                );
+            } else {
+                sui::transfer(
+                    coin::from_balance(allocation_balance, ctx),
+                    allocation.recipient_address,
+                );
+            };
+
+            i = i + 1;
+        };
+
+        // Provided allocations must fully allocate the sui_supply and there
+        // should be none left at this point.
+        balance::destroy_zero(sui_supply);
+    }
+
+    fun activate_validators(validators: &mut vector<Validator>) {
+        // Activate all genesis validators
+        let count = vector::length(validators);
+        let i = 0;
+        while (i < count) {
+            let validator = vector::borrow_mut(validators, i);
+            validator::activate(validator, 0);
+
+            i = i + 1;
+        };
+
     }
 }

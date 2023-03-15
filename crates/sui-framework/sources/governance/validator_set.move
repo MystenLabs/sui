@@ -24,6 +24,7 @@ module sui::validator_set {
     use sui::bag::Bag;
     use sui::bag;
 
+    friend sui::genesis;
     friend sui::sui_system_state_inner;
 
     #[test_only]
@@ -623,7 +624,7 @@ module sui::validator_set {
         res
     }
 
-    fun get_validator_mut(
+    public(friend) fun get_validator_mut(
         validators: &mut vector<Validator>,
         validator_address: address,
     ): &mut Validator {

@@ -16,6 +16,7 @@
 -  [Function `activate`](#0x2_validator_activate)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_stake`](#0x2_validator_request_add_stake)
+-  [Function `request_add_stake_at_genesis`](#0x2_validator_request_add_stake_at_genesis)
 -  [Function `request_withdraw_stake`](#0x2_validator_request_withdraw_stake)
 -  [Function `request_set_gas_price`](#0x2_validator_request_set_gas_price)
 -  [Function `set_candidate_gas_price`](#0x2_validator_set_candidate_gas_price)
@@ -849,6 +850,51 @@ Request to add stake to the validator's staking pool, processed at the end of th
             amount: stake_amount,
         }
     );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_request_add_stake_at_genesis"></a>
+
+## Function `request_add_stake_at_genesis`
+
+Request to add stake to the validator's staking pool at genesis
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, staker_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(
+    self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>,
+    stake: Balance&lt;SUI&gt;,
+    staker_address: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, 0);
+    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
+    <b>assert</b>!(stake_amount &gt; 0, 0);
+
+    <a href="staking_pool.md#0x2_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
+        &<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+        stake,
+        self.metadata.sui_address,
+        staker_address,
+        0, // epoch 0 -- <a href="genesis.md#0x2_genesis">genesis</a>
+        ctx
+    );
+
+    // Process stake right away
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_stake">staking_pool::process_pending_stake</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    self.next_epoch_stake = self.next_epoch_stake + stake_amount;
 }
 </code></pre>
 
