@@ -20,6 +20,7 @@ pub use scopeguard;
 use uuid::Uuid;
 
 pub mod histogram;
+use core::arch::x86_64::_rdtsc;
 
 #[derive(Debug)]
 pub struct Metrics {
@@ -131,6 +132,7 @@ pub struct CausalWakerLogFuture<F: Sized> {
     id: usize,
     old_id: usize,
     _name: &'static str,
+    instructions : u64,
 }
 
 impl<F> CausalWakerLogFuture<F> {
@@ -145,6 +147,7 @@ impl<F> CausalWakerLogFuture<F> {
             id,
             old_id,
             _name,
+            instructions: 0,
         }
     }
 }
@@ -153,9 +156,12 @@ impl<F: Future> Future for CausalWakerLogFuture<F> {
     type Output = F::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let start_inst = unsafe { _rdtsc() };
 
-        CURRENT_ID.with(|c| {
+        let old_id = CURRENT_ID.with(|c| {
+            let old_id = c.load(Ordering::Relaxed);
             c.store(self.id, Ordering::Relaxed);
+            old_id
         });
 
         let new_waker = waker(CausalWaker::new(cx.waker().clone(), self.id, self._name));
@@ -163,8 +169,11 @@ impl<F: Future> Future for CausalWakerLogFuture<F> {
         let ret = self.f.as_mut().poll(&mut new_context);
 
         CURRENT_ID.with(|c| {
-            c.store(0, Ordering::Relaxed);
+            c.store(old_id, Ordering::Relaxed);
         });
+
+        let end_inst = unsafe { _rdtsc() };
+        self.instructions += end_inst - start_inst;
 
         match &ret {
             Poll::Ready(_) => {
@@ -178,7 +187,7 @@ impl<F: Future> Future for CausalWakerLogFuture<F> {
 
 impl<F> Drop for CausalWakerLogFuture<F> {
     fn drop(&mut self) {
-        trace!("WAKE DROP {}", self.id);
+        trace!("WAKE DROP {} CYCLES {}", self.id, self.instructions);
     }
 }
 

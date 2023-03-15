@@ -15,6 +15,7 @@ returns = {}
 node_names = {}
 node_names_num = 1
 cnt = {}
+cycles = {}
 
 for (id, name, from_id) in name_lines:
     names[id] = name
@@ -55,16 +56,19 @@ for (idt, idf) in retn_lines:
     except:
         relations[("return", names[idt], names[idf])] = 1
 
-drop_lines = re.findall("WAKE DROP ([0-9]+)", data)
+drop_lines = re.findall("WAKE DROP ([0-9]+) CYCLES ([0-9]+)", data)
+total_inst = 0
 
-for nid in drop_lines:
+for nid, inst in drop_lines:
     name = names[nid]
+    total_inst += int(inst)
 
     try:
         drops[name] += 1
+        cycles[name] += int(inst)
     except:
         drops[name] = 1
-
+        cycles[name] = int(inst)
 
 # ----
 
@@ -95,9 +99,13 @@ for name, nid in node_names.items():
     color = 'color="red",' if spawn_drop != "" else ""
 
     cancelled = int(drops.get(name,0))- int(returns.get(name,0)) 
-    cancel_drop = f" d-r:{cancelled}" if cancelled > 0 else ""
+    cancel_drop = f" cancel:{cancelled}" if cancelled > 0 else ""
 
-    node_str += f'{nid} [{color}label="{name}{spawn_drop}{cancel_drop}{num_str}", shape=box, href="{urls[name]}"];\n'
+    cpu_pc = cycles.get(name,0)/total_inst
+    cpu = f" cpu:{cpu_pc:.2%}" if cpu_pc > 0.005 else ""
+    fill= ',style=filled, fillcolor="cornsilk"' if cpu_pc > 0.005 else ""
+
+    node_str += f'{nid} [{color}label="{name}{spawn_drop}{cancel_drop}{num_str}{cpu}", shape=box, href="{urls[name]}"{fill}];\n'
 
 style = {
     "spawn" : "bold",
