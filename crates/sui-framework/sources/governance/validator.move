@@ -18,7 +18,7 @@ module sui::validator {
     use sui::url;
     use sui::event;
     friend sui::genesis;
-    friend sui::sui_system;
+    friend sui::sui_system_state_inner;
     friend sui::validator_set;
     friend sui::voting_power;
 
@@ -31,7 +31,7 @@ module sui::validator {
     #[test_only]
     friend sui::governance_test_utils;
 
-    /// Invalid proof_of_possesion field in ValidatorMetadata
+    /// Invalid proof_of_possession field in ValidatorMetadata
     const EInvalidProofOfPossession: u64 = 0;
 
     /// Invalid pubkey_bytes field in ValidatorMetadata
