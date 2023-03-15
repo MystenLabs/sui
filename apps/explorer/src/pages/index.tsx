@@ -38,7 +38,7 @@ export const router = sentryCreateBrowserRouter([
             { path: '/', element: <Home /> },
             { path: 'transactions', element: <Transactions /> },
             { path: 'object/:id', element: <ObjectResult /> },
-            { path: 'checkpoint/:digest', element: <CheckpointDetail /> },
+            { path: 'checkpoint/:id', element: <CheckpointDetail /> },
             { path: 'epoch/current', element: <EpochDetail /> },
             { path: 'transaction/:id', element: <TransactionResult /> },
             { path: 'address/:id', element: <AddressResult /> },
