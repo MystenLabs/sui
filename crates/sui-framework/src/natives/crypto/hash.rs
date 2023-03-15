@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{legacy_empty_cost, natives::NativesCostTable};
+use crate::natives::NativesCostTable;
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -24,8 +24,6 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = legacy_empty_cost();
     let msg = pop_arg!(args, VectorRef);
     let msg_ref = msg.as_bytes_ref();
 
@@ -36,7 +34,7 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     );
 
     Ok(NativeResult::ok(
-        cost,
+        context.gas_used(),
         smallvec![Value::vector_u8(
             H::digest(msg.as_bytes_ref().as_slice()).digest
         )],
