@@ -700,14 +700,17 @@ impl IndexerStore for PgIndexerStore {
             .run(|conn| {
                 diesel::insert_into(checkpoints::table)
                     .values(checkpoint)
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
 
                 diesel::insert_into(transactions::table)
                     .values(transactions)
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
 
                 diesel::insert_into(events::table)
                     .values(events)
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
 
                 // Object need to bulk insert by transaction to prevent same object mutated twice in the same sql call,
@@ -758,17 +761,38 @@ impl IndexerStore for PgIndexerStore {
 
                 diesel::insert_into(move_calls::table)
                     .values(move_calls)
+                    .on_conflict_do_nothing()
                     .execute(conn)?;
 
-                diesel::insert_into(recipients::table)
-                    .values(recipients)
+        // Commit indexed recipients
+        for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(recipients::table)
+                        .values(recipients_chunk)
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing recipients to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Commit indexed checkpoint last, so that if the checkpoint is committed,
+        // all related data have been committed as well.
+        pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| {
+                diesel::insert_into(checkpoints::table)
+                    .values(checkpoint)
                     .execute(conn)
-            })
-            .map_err(|e| {
-                IndexerError::PostgresWriteError(format!(
-                    "Failed writing checkpoint to PostgresDB with transactions {:?} and error: {:?}",
-                    transactions, e
-                ))
             })
     }
 
