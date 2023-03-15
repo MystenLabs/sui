@@ -24,6 +24,7 @@ use sui_adapter::execution_mode::{DevInspect, Normal};
 
 use crate::api::cap_page_objects_limit;
 use crate::error::Error;
+use anyhow::anyhow;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
 
@@ -58,8 +59,12 @@ impl DataReader for AuthorityStateDataReader {
         options: Option<SuiObjectDataOptions>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
-        _checkpoint: Option<CheckpointId>,
+        at_checkpoint: Option<CheckpointId>,
     ) -> Result<ObjectsPage, anyhow::Error> {
+        if at_checkpoint.is_some() {
+            return Err(anyhow!("at_checkpoint param currently not supported"));
+        }
+
         let limit = cap_page_objects_limit(limit)?;
         let options = options.unwrap_or_default();
 

@@ -51,10 +51,10 @@ export class TestToolbox {
   }
 
   async getGasObjectsOwnedByAddress() {
-    const objects = await this.provider.getObjectsOwnedByAddress({
+    const objects = await this.provider.getOwnedObjects({
       owner: this.address(),
+      options: { showType: true, showContent: true, showOwner: true },
     });
-
     return objects.filter((obj) => Coin.isSUI(obj));
   }
 

@@ -31,9 +31,9 @@ pub trait ReadApi {
         options: Option<SuiObjectDataOptions>,
         /// Optional paging cursor
         cursor: Option<ObjectID>,
-        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
+        /// Max number of items returned per page, default to [MAX_GET_OWNED_OBJECT_SIZE] if not specified.
         limit: Option<usize>,
-        /// Checkpoint used on indexer side to support proper pagination
+        /// If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.
         at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage>;
 

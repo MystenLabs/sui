@@ -218,10 +218,10 @@ where
         options: Option<SuiObjectDataOptions>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
-        checkpoint: Option<CheckpointId>,
+        at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
         self.fullnode
-            .get_owned_objects(address, options, cursor, limit, checkpoint)
+            .get_owned_objects(address, options, cursor, limit, at_checkpoint)
             .await
     }
 

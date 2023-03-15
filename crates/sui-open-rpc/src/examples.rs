@@ -319,14 +319,21 @@ impl RpcExampleProvider {
             .collect::<Vec<_>>();
 
         Examples::new(
-            "sui_getObjectsOwnedByAddress",
+            "sui_getOwnedObjects",
             vec![ExamplePairing::new(
                 "Get objects owned by an address",
                 vec![
                     ("address", json!(owner)),
-                    ("options", json!(SuiObjectDataOptions::full_content())),
+                    (
+                        "options",
+                        json!(SuiObjectDataOptions::new()
+                            .with_type()
+                            .with_owner()
+                            .with_previous_transaction()),
+                    ),
                     ("cursor", json!(ObjectID::new(self.rng.gen()))),
                     ("limit", json!(100)),
+                    ("at_checkpoint", json!(None::<CheckpointId>)),
                 ],
                 json!(result),
             )],

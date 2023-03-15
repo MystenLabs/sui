@@ -37,7 +37,6 @@ import {
   CoinMetadataStruct,
   PaginatedCoins,
   SuiObjectResponse,
-  GetOwnedObjectsResponse,
   DelegatedStake,
   CoinBalance,
   CoinSupply,
@@ -50,6 +49,9 @@ import {
   CoinStruct,
   SuiTransactionResponseOptions,
   SuiEvent,
+  PaginatedObjectsResponse,
+  SuiObjectData,
+  ObjectOwner,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -459,12 +461,16 @@ export class JsonRpcProvider {
   /**
    * Get all objects owned by an address
    */
-  async getObjectsOwnedByAddress(input: {
-    owner: SuiAddress;
-    /** a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
-     * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>) */
-    typeFilter?: string;
-  }): Promise<SuiObjectInfo[]> {
+  async getOwnedObjects(
+    input: {
+      owner: SuiAddress;
+      /** a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
+       * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>) */
+      typeFilter?: string;
+      options?: SuiObjectDataOptions;
+      checkpointId?: CheckpointDigest;
+    } & PaginationArguments,
+  ): Promise<SuiObjectInfo[]> {
     try {
       if (
         !input.owner ||
@@ -473,20 +479,40 @@ export class JsonRpcProvider {
         throw new Error('Invalid Sui address');
       }
       const objects = await this.client.requestWithType(
-        'sui_getObjectsOwnedByAddress',
-        [input.owner],
-        GetOwnedObjectsResponse,
+        'sui_getOwnedObjects',
+        [
+          input.owner,
+          input.options,
+          input.cursor,
+          input.limit,
+          input.checkpointId,
+        ],
+        PaginatedObjectsResponse,
         this.options.skipDataValidation,
       );
+      const obj_infos = objects.data.map((object: SuiObjectResponse) => {
+        const details = object.details as SuiObjectData;
+        const obj_info: SuiObjectInfo = {
+          objectId: details.objectId,
+          version: details.version,
+          digest: details.digest,
+          owner: details.owner as ObjectOwner,
+          type: details.type as string,
+          previousTransaction: details.previousTransaction as TransactionDigest,
+        };
+        return obj_info;
+      });
+
       // TODO: remove this once we migrated to the new queryObject API
       if (input.typeFilter) {
-        return objects.filter(
+        return obj_infos.filter(
           (obj: SuiObjectInfo) =>
             obj.type === input.typeFilter ||
             obj.type.startsWith(input.typeFilter + '<'),
         );
       }
-      return objects;
+
+      return obj_infos;
     } catch (err) {
       throw new Error(
         `Error fetching owned object: ${err} for address ${input.owner}`,

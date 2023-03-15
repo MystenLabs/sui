@@ -415,7 +415,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address1,
-            Some(SuiObjectDataOptions::new()),
+            Some(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            ),
             None,
             None,
             None,

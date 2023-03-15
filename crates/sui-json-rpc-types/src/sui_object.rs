@@ -29,7 +29,7 @@ use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRea
 
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
 pub enum SuiObjectResponse {
     Exists(SuiObjectData),
@@ -51,7 +51,7 @@ pub struct SuiObjectData {
     #[serde_as(as = "Option<DisplayFromStr>")]
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub type_: Option<ObjectType>,
-    // Default to be None because otherwise it will be repeated for the getObjectsOwnedByAddress endpoint
+    // Default to be None because otherwise it will be repeated for the getOwnedObjects endpoint
     /// The owner of this object. Default to be None unless SuiObjectDataOptions.showOwner is set to true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<Owner>,
@@ -91,9 +91,7 @@ impl SuiObjectData {
 
     pub fn is_gas_coin(&self) -> bool {
         match self.type_.as_ref() {
-            Some(ObjectType::Struct(move_object_type)) => {
-                matches!(move_object_type, MoveObjectType::GasCoin)
-            }
+            Some(ObjectType::Struct(MoveObjectType::GasCoin)) => true,
             Some(_) => false,
             None => false,
         }
@@ -264,6 +262,11 @@ impl SuiObjectDataOptions {
 
     pub fn with_bcs(mut self) -> Self {
         self.show_bcs = true;
+        self
+    }
+
+    pub fn with_previous_transaction(mut self) -> Self {
+        self.show_previous_transaction = true;
         self
     }
 }

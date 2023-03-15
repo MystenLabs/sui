@@ -1020,7 +1020,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "description": "Max number of items returned per page, default to [MAX_GET_OWNED_OBJECT_SIZE] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -1029,7 +1029,7 @@
         },
         {
           "name": "at_checkpoint",
-          "description": "Checkpoint used on indexer side to support proper pagination",
+          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
           "schema": {
             "$ref": "#/components/schemas/CheckpointId"
           }
@@ -1041,7 +1041,87 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_ObjectRead_and_ObjectID"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get objects owned by an address",
+          "params": [
+            {
+              "name": "address",
+              "value": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
+            },
+            {
+              "name": "options",
+              "value": {
+                "showType": true,
+                "showOwner": true,
+                "showPreviousTransaction": true,
+                "showDisplay": false,
+                "showContent": false,
+                "showBcs": false,
+                "showStorageRebate": false
+              }
+            },
+            {
+              "name": "cursor",
+              "value": "0x9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3"
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "at_checkpoint",
+              "value": null
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "objectId": "0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062",
+                "version": 0,
+                "digest": "p3mh2EkKPG2jckE87LnVpRF5uE3R7WWfaFZELQhqYMk",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "owner": {
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
+                },
+                "previousTransaction": "Bv28BS3v5AuiQHY9SHfwo8PNM48mzR6LLBkbxsaoQFLd"
+              },
+              {
+                "objectId": "0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427",
+                "version": 0,
+                "digest": "3LEKanp51C6hgnso1mkCBJZXTrxBtairWGstiozCYRoi",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "owner": {
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
+                },
+                "previousTransaction": "FNgSG6ujbQ57wZaY4d8Jf6xAGJdqQvhRrSD9jTUHfVg6"
+              },
+              {
+                "objectId": "0x1bc44cdfce3574e7f7f0b2de2323a06ebc356bad614726b313d811012d4be723",
+                "version": 0,
+                "digest": "8u3E7cQUSuo96NwJ9mYS4hMGCs48CEjreQPGrKGsVTMV",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "owner": {
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
+                },
+                "previousTransaction": "6otjiis1Y5t2FFGcQjhof1wA2JSo4zhLEdQkH6GSXHHT"
+              },
+              {
+                "objectId": "0x5d1123f2b8a0ac606b940a66e42efd782af5203112331adc2ed6f402dca396bf",
+                "version": 0,
+                "digest": "GYEZNzUU2HeTTUTFr8bmPQ4mCY9gpPiTHdim9GgAxxwb",
+                "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                "owner": {
+                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
+                },
+                "previousTransaction": "53FQJhUHQqRektpSXPdyn55rjqh3K142iR8jtdPiRZ54"
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getReferenceGasPrice",

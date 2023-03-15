@@ -121,12 +121,15 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
-        _checkpoint: Option<CheckpointId>,
+        at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
+        if at_checkpoint.is_some() {
+            return Err(anyhow!("at_checkpoint param currently not supported").into());
+        }
         let limit = cap_page_objects_limit(limit)?;
         let options = options.unwrap_or_default();
 
-        // TODO: multi-get-object for content/storage rebate if opt.show_content is true
+        // MUSTFIXD(jian): multi-get-object for content/storage rebate if opt.show_content is true
         let mut objects = self
             .state
             .get_owner_objects(address, cursor, limit + 1)

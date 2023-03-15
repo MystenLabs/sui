@@ -38,7 +38,7 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
         setIsFail(false);
         setIsLoaded(false);
         const req = byAddress
-            ? rpc.getObjectsOwnedByAddress({ owner: id })
+            ? rpc.getOwnedObjects({ owner: id })
             : rpc.getDynamicFields({ parentId: id });
 
         req.then((objects) => {

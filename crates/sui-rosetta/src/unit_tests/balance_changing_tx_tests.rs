@@ -674,9 +674,9 @@ async fn get_random_sui(
         .get_owned_objects(
             sender,
             Some(SuiObjectDataOptions::full_content()),
-            None,
-            None,
-            None,
+            /* cursor */ None,
+            /* limit */ None,
+            /* at_checkpoint */ None,
         )
         .await
         .unwrap()
@@ -709,9 +709,9 @@ async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
         .get_owned_objects(
             address,
             Some(SuiObjectDataOptions::full_content()),
-            None,
-            None,
-            None,
+            /* cursor */ None,
+            /* limit */ None,
+            /* at_checkpoint */ None,
         )
         .await
         .unwrap()
