@@ -6,7 +6,7 @@ use sui_types::messages::TransactionData;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
-use crate::types::{ConstructionMetadata, TransactionMetadata};
+use crate::types::ConstructionMetadata;
 
 #[tokio::test]
 async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
@@ -29,15 +29,14 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
 
     let ops: Operations = data.clone().try_into()?;
     let metadata = ConstructionMetadata {
-        tx_metadata: TransactionMetadata::PaySui,
         sender,
-        gas: vec![gas],
+        coins: vec![gas],
+        objects: vec![],
+        total_coin_value: 0,
         gas_price: 1,
         budget: 1000,
     };
-    let parsed_data = ops
-        .into_internal(Some(metadata.tx_metadata.clone().into()))?
-        .try_into_data(metadata)?;
+    let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
     assert_eq!(data, parsed_data);
 
     Ok(())
