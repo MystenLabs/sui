@@ -121,11 +121,10 @@ impl Token for CommandToken {
             return Ok(Some((Self::CommandStart, 3)));
         }
         // comments
-        if s.starts_with("//") {
-            let mut chars = s.chars().peekable();
-            let mut n = 0;
+        if let Some(after) = s.strip_prefix("//") {
+            let mut n = "//".len();
             let mut in_whitespace_from_start = true;
-            while let Some(c) = chars.next() {
+            for c in after.chars() {
                 n += 1;
                 if c == '\n' {
                     break;
