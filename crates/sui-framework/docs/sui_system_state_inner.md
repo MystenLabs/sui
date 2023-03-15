@@ -436,7 +436,7 @@ We do not allow the number of validators in any epoch to go above this.
 Lower-bound on the amount of stake required to become a validator.
 
 
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>: u64 = 30000000000000000;
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>: u64 = 30000;
 </code></pre>
 
 
@@ -459,7 +459,7 @@ And validators with stake below <code><a href="sui_system_state_inner.md#0x2_sui
 immediately at epoch change, no grace period.
 
 
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>: u64 = 25000000000000000;
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>: u64 = 25000;
 </code></pre>
 
 
@@ -468,7 +468,7 @@ immediately at epoch change, no grace period.
 
 
 
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>: u64 = 20000000000000000;
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>: u64 = 20000;
 </code></pre>
 
 
