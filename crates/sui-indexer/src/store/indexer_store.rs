@@ -142,6 +142,7 @@ pub struct TemporaryCheckpointStore {
     pub recipients: Vec<Recipient>,
 }
 
+#[derive(Debug)]
 pub struct TransactionObjectChanges {
     pub mutated_objects: Vec<Object>,
     pub deleted_objects: Vec<DeletedObject>,
