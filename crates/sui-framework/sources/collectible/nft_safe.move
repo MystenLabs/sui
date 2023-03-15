@@ -211,6 +211,9 @@ module sui::nft_safe {
         object::delete(id);
     }
 
+    /// `TransferRequest<T>` collects signatures from `TransferCap<T>` holders
+    /// until the number of unique signatures is at least
+    /// `TransferPolicy::required_signatures`.
     public fun sign_transfer<T: key + store>(
         cap: &TransferCap<T>, req: &mut TransferRequest<T>,
     ) {
