@@ -304,6 +304,31 @@ module sui::validator {
         );
     }
 
+    /// Request to add stake to the validator's staking pool at genesis
+    public(friend) fun request_add_stake_at_genesis(
+        self: &mut Validator,
+        stake: Balance<SUI>,
+        staker_address: address,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::epoch(ctx) == 0, 0);
+        let stake_amount = balance::value(&stake);
+        assert!(stake_amount > 0, 0);
+
+        staking_pool::request_add_stake(
+            &mut self.staking_pool,
+            stake, 
+            self.metadata.sui_address, 
+            staker_address, 
+            0, // epoch 0 -- genesis
+            ctx
+        );
+
+        // Process stake right away 
+        staking_pool::process_pending_stake(&mut self.staking_pool);
+        self.next_epoch_stake = self.next_epoch_stake + stake_amount;
+    }
+
     /// Request to withdraw stake from the validator's staking pool, processed at the end of the epoch.
     public(friend) fun request_withdraw_stake(
         self: &mut Validator,

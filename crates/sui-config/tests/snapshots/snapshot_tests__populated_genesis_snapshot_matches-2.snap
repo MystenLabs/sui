@@ -243,7 +243,7 @@ validators:
             id: "0x4d3f360db730ab473ac315c7d5c96840698e1bf49b8e5bb3d49047c8d131519b"
           size: 0
       voting_power: 10000
-      operation_cap_id: "0xeca89a922a8cc4f984973ba697f4a4c4c1f37f41bddaa96e29de0d1e924ad550"
+      operation_cap_id: "0x21b9800ce7318a8f51d3672e177e67635cbcec39fc0f36ea64e620967b4a63dd"
       gas_price: 1
       staking_pool:
         id: "0x573252ac8bfd8475152372841be3a290ded6e1b090000670f0f656e8417e3863"
@@ -269,7 +269,7 @@ validators:
       next_epoch_commission_rate: 0
       extra_fields:
         id:
-          id: "0x3461b4ad7e16e4f2e9477d40f0c47ab4c7019fb761e3b4e312ba2ce69c84a3cc"
+          id: "0xeca89a922a8cc4f984973ba697f4a4c4c1f37f41bddaa96e29de0d1e924ad550"
         size: 0
   pending_active_validators:
     contents:
@@ -306,7 +306,7 @@ validator_report_records:
 stake_subsidy:
   epoch_counter: 0
   balance:
-    value: 100000000000000000
+    value: 9975000000000000000
   current_epoch_amount: 1000000000000000
   extra_fields:
     id:
