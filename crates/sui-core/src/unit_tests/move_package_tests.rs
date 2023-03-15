@@ -17,15 +17,11 @@ use std::{collections::BTreeMap, path::PathBuf};
 macro_rules! type_origin_table {
     {} => { Vec::new() };
     {$($module:ident :: $type:ident => $pkg:expr),* $(,)?} => {{
-        let mut table = Vec::new();
-        $(
-            table.push(TypeOrigin {
-                module_name: stringify!($module).to_string(),
-                struct_name: stringify!($type).to_string(),
-                package: $pkg,
-            });
-        )*
-        table
+        vec![$(TypeOrigin {
+            module_name: stringify!($module).to_string(),
+            struct_name: stringify!($type).to_string(),
+            package: $pkg,
+        },)*]
     }}
 }
 
