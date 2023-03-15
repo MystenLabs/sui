@@ -23,7 +23,7 @@ use sui_types::base_types::{
 };
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
-use sui_types::move_package::{ModuleStruct, MovePackage, UpgradeInfo};
+use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
 
 use crate::{SuiMoveStruct, SuiMoveValue};
@@ -316,7 +316,8 @@ impl
                     })?;
                     SuiRawData::try_from_object(m, layout)?
                 }
-                Data::Package(p) => SuiRawData::try_from_package(p)?,
+                Data::Package(p) => SuiRawData::try_from_package(p)
+                    .map_err(|e| anyhow!("Error getting raw data from package: {e:#?}"))?,
             };
             Some(data)
         } else {
@@ -746,7 +747,7 @@ pub struct SuiRawMovePackage {
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
     pub module_map: BTreeMap<String, Vec<u8>>,
-    pub type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+    pub type_origin_table: Vec<TypeOrigin>,
     pub linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 

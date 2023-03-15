@@ -7,24 +7,22 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::{
     base_types::ObjectID,
     error::ExecutionErrorKind,
-    move_package::{ModuleStruct, MovePackage, UpgradeInfo},
+    move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::OBJECT_START_VERSION,
 };
 
 use std::{collections::BTreeMap, path::PathBuf};
 
 macro_rules! type_origin_table {
-    {} => { BTreeMap::new() };
+    {} => { Vec::new() };
     {$($module:ident :: $type:ident => $pkg:expr),* $(,)?} => {{
-        let mut table = BTreeMap::new();
+        let mut table = Vec::new();
         $(
-            table.insert(
-                ModuleStruct {
-                    module_name: stringify!($module).to_string(),
-                    struct_name: stringify!($type).to_string(),
-                },
-                $pkg,
-            );
+            table.push(TypeOrigin {
+                module_name: stringify!($module).to_string(),
+                struct_name: stringify!($type).to_string(),
+                package: $pkg,
+            });
         )*
         table
     }}

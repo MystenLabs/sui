@@ -1288,7 +1288,7 @@ mod tests {
                         BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
                         100_000,
                         // no modules so empty type_origin_table as no types are defined in this package
-                        BTreeMap::new(),
+                        Vec::new(),
                         // no modules so empty linkage_table as no dependencies of this package exist
                         BTreeMap::new(),
                     )

@@ -57,9 +57,10 @@ pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 #[derive(
     Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize, Hash, JsonSchema,
 )]
-pub struct ModuleStruct {
+pub struct TypeOrigin {
     pub module_name: String,
     pub struct_name: String,
+    pub package: ObjectID,
 }
 
 /// Upgraded package info for the linkage table
@@ -91,8 +92,9 @@ pub struct MovePackage {
     #[serde_as(as = "BTreeMap<_, Bytes>")]
     module_map: BTreeMap<String, Vec<u8>>,
 
-    /// Maps struct/module to a package version where it was first defined
-    type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+    /// Maps struct/module to a package version where it was first defined, stored as a vector for
+    /// simple serialization and deserialization.
+    type_origin_table: Vec<TypeOrigin>,
 
     // For each dependency, maps original package ID to the info about the (upgraded) dependency
     // version that this package is using
@@ -140,7 +142,7 @@ impl MovePackage {
         version: SequenceNumber,
         module_map: BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
-        type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+        type_origin_table: Vec<TypeOrigin>,
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
     ) -> Result<Self, ExecutionError> {
         let pkg = Self {
@@ -219,7 +221,7 @@ impl MovePackage {
         version: SequenceNumber,
         modules: impl IntoIterator<Item = CompiledModule>,
         max_move_package_size: u64,
-        type_origin_table: BTreeMap<ModuleStruct, ObjectID>,
+        type_origin_table: Vec<TypeOrigin>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let mut module_map = BTreeMap::new();
@@ -263,13 +265,11 @@ impl MovePackage {
             .type_origin_table
             .iter()
             .map(
-                |(
-                    ModuleStruct {
-                        module_name,
-                        struct_name,
-                    },
-                    _,
-                )| module_name.len() + struct_name.len() + ObjectID::LENGTH,
+                |TypeOrigin {
+                     module_name,
+                     struct_name,
+                     ..
+                 }| module_name.len() + struct_name.len() + ObjectID::LENGTH,
             )
             .sum::<usize>();
         let linkage_table_size = self
@@ -278,7 +278,7 @@ impl MovePackage {
             .map(|_| ObjectID::LENGTH + (ObjectID::LENGTH + 8/* SequenceNumber */))
             .sum::<usize>();
 
-        ObjectID::LENGTH + 8 /* SequenceNumber */ + module_map_size + type_origin_table_size + linkage_table_size
+        8 /* SequenceNumber */ + module_map_size + type_origin_table_size + linkage_table_size
     }
 
     pub fn id(&self) -> ObjectID {
@@ -302,8 +302,21 @@ impl MovePackage {
         &self.module_map
     }
 
-    pub fn type_origin_table(&self) -> &BTreeMap<ModuleStruct, ObjectID> {
+    pub fn type_origin_table(&self) -> &Vec<TypeOrigin> {
         &self.type_origin_table
+    }
+
+    pub fn type_origin_map(&self) -> BTreeMap<(String, String), ObjectID> {
+        self.type_origin_table
+            .iter()
+            .map(
+                |TypeOrigin {
+                     module_name,
+                     struct_name,
+                     package,
+                 }| { ((module_name.clone(), struct_name.clone()), *package) },
+            )
+            .collect()
     }
 
     pub fn linkage_table(&self) -> &BTreeMap<ObjectID, UpgradeInfo> {
@@ -494,44 +507,46 @@ fn build_linkage_table<'p>(
     Ok(linkage_table)
 }
 
-fn build_initial_type_origin_table(modules: &[CompiledModule]) -> BTreeMap<ModuleStruct, ObjectID> {
-    BTreeMap::from_iter(modules.iter().flat_map(|m| {
-        m.struct_defs().iter().map(|struct_def| {
-            let struct_handle = m.struct_handle_at(struct_def.struct_handle);
-            let module_name = m.name().to_string();
-            let struct_name = m.identifier_at(struct_handle.name).to_string();
-            let id: ObjectID = (*m.self_id().address()).into();
-            (
-                ModuleStruct {
+fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin> {
+    modules
+        .iter()
+        .flat_map(|m| {
+            m.struct_defs().iter().map(|struct_def| {
+                let struct_handle = m.struct_handle_at(struct_def.struct_handle);
+                let module_name = m.name().to_string();
+                let struct_name = m.identifier_at(struct_handle.name).to_string();
+                let package: ObjectID = (*m.self_id().address()).into();
+                TypeOrigin {
                     module_name,
                     struct_name,
-                },
-                id,
-            )
+                    package,
+                }
+            })
         })
-    }))
+        .collect()
 }
 
 fn build_upgraded_type_origin_table(
     predecessor: &MovePackage,
     modules: &[CompiledModule],
     storage_id: ObjectID,
-) -> Result<BTreeMap<ModuleStruct, ObjectID>, ExecutionError> {
-    let mut new_table = BTreeMap::new();
-    let mut existing_table = predecessor.type_origin_table.clone();
+) -> Result<Vec<TypeOrigin>, ExecutionError> {
+    let mut new_table = vec![];
+    let mut existing_table = predecessor.type_origin_map();
     for m in modules {
         for struct_def in m.struct_defs() {
             let struct_handle = m.struct_handle_at(struct_def.struct_handle);
             let module_name = m.name().to_string();
             let struct_name = m.identifier_at(struct_handle.name).to_string();
-            let mod_struct = ModuleStruct {
-                module_name,
-                struct_name,
-            };
+            let mod_key = (module_name.clone(), struct_name.clone());
             // if id exists in the predecessor's table, use it, otherwise use the id of the upgraded
             // module
-            let id = existing_table.remove(&mod_struct).unwrap_or(storage_id);
-            new_table.insert(mod_struct, id);
+            let package = existing_table.remove(&mod_key).unwrap_or(storage_id);
+            new_table.push(TypeOrigin {
+                module_name,
+                struct_name,
+                package,
+            });
         }
     }
 

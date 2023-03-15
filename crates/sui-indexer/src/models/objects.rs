@@ -208,7 +208,7 @@ impl TryFrom<Object> for sui_types::object::Object {
                     // long as this MovePackage does not find its way to the Move adapter (which is
                     // the assumption here) they can remain uninitialized though we could consider
                     // storing them in the database and properly initializing here for completeness
-                    BTreeMap::new(),
+                    Vec::new(),
                     BTreeMap::new(),
                 )
                 .unwrap();

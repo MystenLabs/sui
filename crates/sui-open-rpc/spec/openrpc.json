@@ -4811,7 +4811,9 @@
             "required": [
               "dataType",
               "id",
+              "linkageTable",
               "moduleMap",
+              "typeOriginTable",
               "version"
             ],
             "properties": {
@@ -4824,10 +4826,22 @@
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
               },
+              "linkageTable": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/UpgradeInfo"
+                }
+              },
               "moduleMap": {
                 "type": "object",
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Base64"
+                }
+              },
+              "typeOriginTable": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TypeOrigin"
                 }
               },
               "version": {
@@ -6771,8 +6785,54 @@
           }
         }
       },
+      "TypeOrigin": {
+        "description": "Identifies a struct and the module it was defined in",
+        "type": "object",
+        "required": [
+          "module_name",
+          "package",
+          "struct_name"
+        ],
+        "properties": {
+          "module_name": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "struct_name": {
+            "type": "string"
+          }
+        }
+      },
       "TypeTag": {
         "type": "string"
+      },
+      "UpgradeInfo": {
+        "description": "Upgraded package info for the linkage table",
+        "type": "object",
+        "required": [
+          "upgraded_id",
+          "upgraded_version"
+        ],
+        "properties": {
+          "upgraded_id": {
+            "description": "ID of the upgraded packages",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "upgraded_version": {
+            "description": "Version of the upgraded package",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
       }
     }
   }
