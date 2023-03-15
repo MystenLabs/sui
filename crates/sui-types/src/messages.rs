@@ -267,6 +267,48 @@ impl CallArg {
     }
 }
 
+impl From<bool> for CallArg {
+    fn from(b: bool) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&b).unwrap())
+    }
+}
+
+impl From<u8> for CallArg {
+    fn from(n: u8) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u16> for CallArg {
+    fn from(n: u16) -> Self {
+        // unwrap safe because every u16 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u32> for CallArg {
+    fn from(n: u32) -> Self {
+        // unwrap safe because every u32 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u64> for CallArg {
+    fn from(n: u64) -> Self {
+        // unwrap safe because every u64 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u128> for CallArg {
+    fn from(n: u128) -> Self {
+        // unwrap safe because every u128 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
 impl ObjectArg {
     pub fn id(&self) -> ObjectID {
         match self {

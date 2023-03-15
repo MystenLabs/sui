@@ -3,37 +3,49 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
-    messages::{TransactionData, TransactionDataAPI, VerifiedTransaction},
+    messages::{CallArg, TransactionData, TransactionDataAPI, VerifiedTransaction},
     object::Owner,
     utils::to_sender_signed_transaction,
 };
 
-use crate::ExecutionEffects;
+use crate::{workloads::Gas, ExecutionEffects};
 
 /// A Sui account and all of the objects it owns
 #[derive(Debug)]
 pub struct SuiAccount {
     key: Arc<AccountKeyPair>,
+    /// object this account uses to pay for gas
+    pub gas: ObjectRef,
+    /// objects owned by this account. does not include `gas`
     owned: BTreeMap<ObjectID, ObjectRef>,
     // TODO: optional type info
 }
 
 impl SuiAccount {
-    pub fn new(key: Arc<AccountKeyPair>, objs: Vec<ObjectRef>) -> Self {
+    pub fn new(key: Arc<AccountKeyPair>, gas: ObjectRef, objs: Vec<ObjectRef>) -> Self {
         let owned = objs.into_iter().map(|obj| (obj.0, obj)).collect();
-        SuiAccount { key, owned }
+        SuiAccount { key, gas, owned }
     }
 
     /// Update the state associated with `obj`, adding it if it doesn't exist
     pub fn add_or_update(&mut self, obj: ObjectRef) -> Option<ObjectRef> {
-        self.owned.insert(obj.0, obj)
+        if self.gas.0 == obj.0 {
+            let old_gas = self.gas;
+            self.gas = obj;
+            Some(old_gas)
+        } else {
+            self.owned.insert(obj.0, obj)
+        }
     }
 
     /// Delete `id` and return the old value
     pub fn delete(&mut self, id: &ObjectID) -> Option<ObjectRef> {
+        debug_assert!(self.gas.0 != *id, "Deleting gas object");
+
         self.owned.remove(id)
     }
 }
@@ -45,13 +57,22 @@ pub struct InMemoryWallet {
 }
 
 impl InMemoryWallet {
+    pub fn new(gas: &Gas) -> Self {
+        let mut wallet = InMemoryWallet {
+            accounts: BTreeMap::new(),
+        };
+        wallet.add_account(gas.1, gas.2.clone(), gas.0, Vec::new());
+        wallet
+    }
+
     pub fn add_account(
         &mut self,
         addr: SuiAddress,
         key: Arc<AccountKeyPair>,
+        gas: ObjectRef,
         objs: Vec<ObjectRef>,
     ) {
-        self.accounts.insert(addr, SuiAccount::new(key, objs));
+        self.accounts.insert(addr, SuiAccount::new(key, gas, objs));
     }
 
     /// Apply updates from `effects` to `self`
@@ -76,6 +97,18 @@ impl InMemoryWallet {
         } // else, tx sender is not an account we can spend from, we don't care
     }
 
+    pub fn account_mut(&mut self, addr: &SuiAddress) -> Option<&mut SuiAccount> {
+        self.accounts.get_mut(addr)
+    }
+
+    pub fn account(&self, addr: &SuiAddress) -> Option<&SuiAccount> {
+        self.accounts.get(addr)
+    }
+
+    pub fn gas(&self, addr: &SuiAddress) -> Option<&ObjectRef> {
+        self.accounts.get(addr).map(|a| &a.gas)
+    }
+
     pub fn owned_object(&self, addr: &SuiAddress, id: &ObjectID) -> Option<&ObjectRef> {
         self.accounts.get(addr).and_then(|a| a.owned.get(id))
     }
@@ -87,6 +120,33 @@ impl InMemoryWallet {
     pub fn create_tx(&self, data: TransactionData) -> VerifiedTransaction {
         let sender = data.sender();
         to_sender_signed_transaction(data, self.accounts.get(&sender).unwrap().key.as_ref())
+    }
+
+    pub fn move_call(
+        &self,
+        sender: SuiAddress,
+        package: ObjectID,
+        module: &str,
+        function: &str,
+        type_arguments: Vec<TypeTag>,
+        arguments: Vec<CallArg>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> VerifiedTransaction {
+        let account = self.account(&sender).unwrap();
+        let data = TransactionData::new_move_call(
+            sender,
+            package,
+            Identifier::new(module).unwrap(),
+            Identifier::new(function).unwrap(),
+            type_arguments,
+            account.gas,
+            arguments,
+            gas_budget,
+            gas_price,
+        )
+        .unwrap();
+        to_sender_signed_transaction(data, account.key.as_ref())
     }
 
     pub fn keypair(&self, addr: &SuiAddress) -> Option<Arc<AccountKeyPair>> {
