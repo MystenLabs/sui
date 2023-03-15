@@ -147,10 +147,10 @@ export function LatestTxCard({
             }
 
             // If pageIndex is greater than maxTxPage, set to maxTxPage
-            const maxTxPage = Math.ceil(count / txPerPage);
+            const maxTxPage = Math.ceil(Number(count) / txPerPage);
             const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
 
-            return getRecentTransactions(rpc, count, txPerPage, pg);
+            return getRecentTransactions(rpc, Number(count), txPerPage, pg);
         },
         {
             enabled: countQuery.isFetched,
@@ -167,7 +167,7 @@ export function LatestTxCard({
     );
 
     const stats = {
-        count: countQuery?.data || 0,
+        count: Number(countQuery?.data) || 0,
         stats_text: 'Total Transactions',
         loadState: statusToLoadState[countQuery.status],
     };
@@ -190,7 +190,7 @@ export function LatestTxCard({
     const PaginationWithStatsOrStatsWithLink =
         paginationtype === 'pagination' ? (
             <Pagination
-                totalItems={countQuery?.data || 0}
+                totalItems={Number(countQuery?.data) || 0}
                 itemsPerPage={txPerPage}
                 updateItemsPerPage={setTxPerPage}
                 onPagiChangeFn={handlePageChange}
