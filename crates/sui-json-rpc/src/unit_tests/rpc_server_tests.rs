@@ -136,7 +136,12 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules,
+            Some(gas.object_id),
+            10000.into(),
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -195,7 +200,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             vec![GAS::type_tag().into()],
             json_args,
             Some(gas.object_id),
-            10_000,
+            10_000.into(),
             None,
         )
         .await?;
@@ -331,7 +336,12 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules,
+            Some(gas.object_id),
+            10000.into(),
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -401,7 +411,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
+        .publish(
+            *address,
+            compiled_modules,
+            Some(gas.object_id),
+            10000.into(),
+        )
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -476,7 +491,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_str(&address.to_string()).unwrap(),
             ],
             Some(gas.object_id),
-            10_000,
+            10_000.into(),
             None,
         )
         .await?;
@@ -783,7 +798,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
             ],
             None,
-            1000,
+            1000.into(),
             None,
         )
         .await?;
@@ -846,7 +861,14 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let coin = objects.data[0].object()?.object_id;
     // Delegate some SUI
     let transaction_bytes: TransactionBytes = http_client
-        .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
+        .request_add_stake(
+            *address,
+            vec![coin],
+            Some(1000000),
+            validator,
+            None,
+            10000.into(),
+        )
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -914,7 +936,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
             Some(1000000),
             validator,
             None,
-            10000,
+            10000.into(),
         )
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
