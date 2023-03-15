@@ -3,7 +3,7 @@
 
 # Module `0x2::royalty`
 
-This module implements a set of basic primitives for Kiosk's
+This module implements a set of basic primitives for NftSave's
 Transfer Policies to improve discoverability and serve as a
 base for building on top.
 
@@ -11,13 +11,11 @@ base for building on top.
 -  [Resource `RoyaltyPolicy`](#0x2_royalty_RoyaltyPolicy)
 -  [Resource `RoyaltyCollectorCap`](#0x2_royalty_RoyaltyCollectorCap)
 -  [Struct `PolicyCreated`](#0x2_royalty_PolicyCreated)
--  [Struct `ZeroPolicyCreated`](#0x2_royalty_ZeroPolicyCreated)
 -  [Constants](#@Constants_0)
+-  [Function `pay_and_sign`](#0x2_royalty_pay_and_sign)
 -  [Function `pay`](#0x2_royalty_pay)
--  [Function `set_zero_policy`](#0x2_royalty_set_zero_policy)
 -  [Function `new_royalty_policy`](#0x2_royalty_new_royalty_policy)
 -  [Function `set_amount`](#0x2_royalty_set_amount)
--  [Function `set_owner`](#0x2_royalty_set_owner)
 -  [Function `withdraw`](#0x2_royalty_withdraw)
 -  [Function `destroy_and_withdraw`](#0x2_royalty_destroy_and_withdraw)
 -  [Function `amount`](#0x2_royalty_amount)
@@ -28,10 +26,9 @@ base for building on top.
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
-<b>use</b> <a href="kiosk.md#0x2_kiosk">0x2::kiosk</a>;
+<b>use</b> <a href="nft_safe.md#0x2_nft_safe">0x2::nft_safe</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
-<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
@@ -42,7 +39,7 @@ base for building on top.
 ## Resource `RoyaltyPolicy`
 
 A transfer policy for a single type <code>T</code> which collects a certain
-fee from the <code><a href="kiosk.md#0x2_kiosk">kiosk</a></code> deals and stores them for the policy issuer.
+fee from the <code><a href="nft_safe.md#0x2_nft_safe">nft_safe</a></code> deals and stores them for the policy issuer.
 
 
 <pre><code><b>struct</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T: store, key&gt; <b>has</b> store, key
@@ -62,11 +59,11 @@ fee from the <code><a href="kiosk.md#0x2_kiosk">kiosk</a></code> deals and store
 
 </dd>
 <dt>
-<code>cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;</code>
+<code>cap: <a href="nft_safe.md#0x2_nft_safe_TransferCap">nft_safe::TransferCap</a>&lt;T&gt;</code>
 </dt>
 <dd>
- The <code>TransferPolicyCap</code> for the <code>T</code> which is used to call
- the <code><a href="kiosk.md#0x2_kiosk_allow_transfer">kiosk::allow_transfer</a></code> and allow the trade.
+ The <code>TransferCap</code> for the <code>T</code> which is used to call
+ the <code><a href="nft_safe.md#0x2_nft_safe_allow_transfer">nft_safe::allow_transfer</a></code> and allow the trade.
 </dd>
 <dt>
 <code>amount_bp: u16</code>
@@ -86,10 +83,10 @@ fee from the <code><a href="kiosk.md#0x2_kiosk">kiosk</a></code> deals and store
  at any time.
 </dd>
 <dt>
-<code>owner: <b>address</b></code>
+<code>royalty_collector_cap: <a href="object.md#0x2_object_ID">object::ID</a></code>
 </dt>
 <dd>
- Store creator address for visibility and discoverability purposes
+ Store cap ID for visibility and discoverability purposes
 </dd>
 </dl>
 
@@ -163,36 +160,6 @@ can be used in the <code>sui::royalty::pay</code> function.
 
 </details>
 
-<a name="0x2_royalty_ZeroPolicyCreated"></a>
-
-## Struct `ZeroPolicyCreated`
-
-Event: fired when a free-for-all policy was issued for <code>T</code>. Since the object
-is immutably shared, everyone in the ecosystem can discover and use this
-object to allow <code>TransferRequest&lt;T&gt;</code>.
-
-
-<pre><code><b>struct</b> <a href="royalty.md#0x2_royalty_ZeroPolicyCreated">ZeroPolicyCreated</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -219,17 +186,56 @@ Utility constant to calculate the percentage of price to require.
 
 
 
+<a name="0x2_royalty_pay_and_sign"></a>
+
+## Function `pay_and_sign`
+
+Perform a Royalty payment and signs the transfer.
+
+The hot potato transfer request object now has an extra signature.
+Its <code>TransferPolicy&lt;T&gt;</code> defines how many signatures are necessary to
+finalize the trade.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_pay_and_sign">pay_and_sign</a>&lt;T: store, key&gt;(policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, transfer_request: <a href="nft_safe.md#0x2_nft_safe_TransferRequest">nft_safe::TransferRequest</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;): <a href="nft_safe.md#0x2_nft_safe_TransferRequest">nft_safe::TransferRequest</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_pay_and_sign">pay_and_sign</a>&lt;T: key + store&gt;(
+    policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;,
+    transfer_request: TransferRequest&lt;T&gt;,
+    <a href="coin.md#0x2_coin">coin</a>: &<b>mut</b> Coin&lt;SUI&gt;
+): TransferRequest&lt;T&gt; {
+    <b>let</b> paid = <a href="nft_safe.md#0x2_nft_safe_transfer_request_paid">nft_safe::transfer_request_paid</a>(&transfer_request);
+    <a href="nft_safe.md#0x2_nft_safe_sign_transfer">nft_safe::sign_transfer</a>(&policy.cap, &<b>mut</b> transfer_request);
+    <b>let</b> amount = (((paid <b>as</b> u128) * (policy.amount_bp <b>as</b> u128) / (<a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> <b>as</b> u128)) <b>as</b> u64);
+
+    <b>let</b> royalty_payment = <a href="balance.md#0x2_balance_split">balance::split</a>(<a href="coin.md#0x2_coin_balance_mut">coin::balance_mut</a>(<a href="coin.md#0x2_coin">coin</a>), amount);
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> policy.<a href="balance.md#0x2_balance">balance</a>, royalty_payment);
+
+    transfer_request
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_royalty_pay"></a>
 
 ## Function `pay`
 
-Perform a Royalty payment and unblock the transfer by consuming
-the <code>TransferRequest</code> "hot potato". The <code>T</code> here type-locks the
-RoyaltyPolicy and TransferRequest making it impossible to call this
-function on a wrong type.
+Perform a Royalty payment and tries to destroy the hot potato.
+
+Aborts if there are not enough signatures on the transfer cap.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay">pay</a>&lt;T: store, key&gt;(policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, transfer_request: <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay">pay</a>&lt;T: store, key&gt;(transfer_policy: &<a href="nft_safe.md#0x2_nft_safe_TransferPolicy">nft_safe::TransferPolicy</a>&lt;T&gt;, royalty_policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, transfer_request: <a href="nft_safe.md#0x2_nft_safe_TransferRequest">nft_safe::TransferRequest</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
 </code></pre>
 
 
@@ -239,43 +245,13 @@ function on a wrong type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay">pay</a>&lt;T: key + store&gt;(
-    policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;,
+    transfer_policy: &TransferPolicy&lt;T&gt;,
+    royalty_policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;,
     transfer_request: TransferRequest&lt;T&gt;,
     <a href="coin.md#0x2_coin">coin</a>: &<b>mut</b> Coin&lt;SUI&gt;
 ) {
-    <b>let</b> (paid, _from) = <a href="kiosk.md#0x2_kiosk_allow_transfer">kiosk::allow_transfer</a>(&policy.cap, transfer_request);
-    <b>let</b> amount = (((paid <b>as</b> u128) * (policy.amount_bp <b>as</b> u128) / (<a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> <b>as</b> u128)) <b>as</b> u64);
-
-    <b>let</b> royalty_payment = <a href="balance.md#0x2_balance_split">balance::split</a>(<a href="coin.md#0x2_coin_balance_mut">coin::balance_mut</a>(<a href="coin.md#0x2_coin">coin</a>), amount);
-    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> policy.<a href="balance.md#0x2_balance">balance</a>, royalty_payment);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_royalty_set_zero_policy"></a>
-
-## Function `set_zero_policy`
-
-A special function used to explicitly indicate that all of the
-trades can be performed freely. To achieve that, the <code>TransferPolicyCap</code>
-is immutably shared making it available for free use by anyone on the network.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="royalty.md#0x2_royalty_set_zero_policy">set_zero_policy</a>&lt;T: store, key&gt;(cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code>entry <b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_set_zero_policy">set_zero_policy</a>&lt;T: key + store&gt;(cap: TransferPolicyCap&lt;T&gt;) {
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="royalty.md#0x2_royalty_ZeroPolicyCreated">ZeroPolicyCreated</a>&lt;T&gt; { id: <a href="object.md#0x2_object_id">object::id</a>(&cap) });
-    <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(cap)
+    <b>let</b> transfer_request = <a href="royalty.md#0x2_royalty_pay_and_sign">pay_and_sign</a>(royalty_policy, transfer_request, <a href="coin.md#0x2_coin">coin</a>);
+    <a href="nft_safe.md#0x2_nft_safe_allow_transfer">nft_safe::allow_transfer</a>(transfer_policy, transfer_request);
 }
 </code></pre>
 
@@ -291,7 +267,7 @@ Create new <code><a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a
 percentage of the trade amount for the transfer to be approved.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_new_royalty_policy">new_royalty_policy</a>&lt;T: store, key&gt;(cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;, amount_bp: u16, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_new_royalty_policy">new_royalty_policy</a>&lt;T: store, key&gt;(cap: <a href="nft_safe.md#0x2_nft_safe_TransferCap">nft_safe::TransferCap</a>&lt;T&gt;, amount_bp: u16, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -301,21 +277,22 @@ percentage of the trade amount for the transfer to be approved.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_new_royalty_policy">new_royalty_policy</a>&lt;T: key + store&gt;(
-    cap: TransferPolicyCap&lt;T&gt;,
+    cap: TransferCap&lt;T&gt;,
     amount_bp: u16,
     ctx: &<b>mut</b> TxContext
 ): (<a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;, <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a>&lt;T&gt;) {
     <b>assert</b>!(amount_bp &lt;= <a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a> && amount_bp != 0, <a href="royalty.md#0x2_royalty_EIncorrectAmount">EIncorrectAmount</a>);
 
+    <b>let</b> royalty_collector_cap_uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
     <b>let</b> policy = <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a> {
         cap, amount_bp,
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        owner: sender(ctx),
         <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
+        royalty_collector_cap: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&royalty_collector_cap_uid)
     };
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&policy);
     <b>let</b> cap = <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a> {
-        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        id: royalty_collector_cap_uid,
         policy_id: id
     };
 
@@ -352,35 +329,6 @@ Change the amount in the <code><a href="royalty.md#0x2_royalty_RoyaltyPolicy">Ro
 ) {
     <b>assert</b>!(amount &gt; 0 && <a href="royalty.md#0x2_royalty_amount">amount</a> &lt;= <a href="royalty.md#0x2_royalty_MAX_AMOUNT">MAX_AMOUNT</a>, <a href="royalty.md#0x2_royalty_EIncorrectAmount">EIncorrectAmount</a>);
     policy.amount_bp = amount
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_royalty_set_owner"></a>
-
-## Function `set_owner`
-
-Change the <code>owner</code> field to the tx sender.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_set_owner">set_owner</a>&lt;T: store, key&gt;(policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, _cap: &<a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_set_owner">set_owner</a>&lt;T: key + store&gt;(
-    policy: &<b>mut</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;,
-    _cap: &<a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a>&lt;T&gt;,
-    ctx: &TxContext
-) {
-    policy.owner = sender(ctx)
 }
 </code></pre>
 
@@ -431,10 +379,10 @@ Withdraw <code>amount</code> of SUI from the <code>policy.<a href="balance.md#0x
 ## Function `destroy_and_withdraw`
 
 Unpack a RoyaltyPolicy object if it is not shared (!!!) and
-return the <code>TransferPolicyCap</code> and the remaining balance.
+return the <code>TransferCap</code> and the remaining balance.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_destroy_and_withdraw">destroy_and_withdraw</a>&lt;T: store, key&gt;(policy: <a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, cap: <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="royalty.md#0x2_royalty_destroy_and_withdraw">destroy_and_withdraw</a>&lt;T: store, key&gt;(policy: <a href="royalty.md#0x2_royalty_RoyaltyPolicy">royalty::RoyaltyPolicy</a>&lt;T&gt;, cap: <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">royalty::RoyaltyCollectorCap</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="nft_safe.md#0x2_nft_safe_TransferCap">nft_safe::TransferCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
 </code></pre>
 
 
@@ -447,8 +395,10 @@ return the <code>TransferPolicyCap</code> and the remaining balance.
     policy: <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a>&lt;T&gt;,
     cap: <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext
-): (TransferPolicyCap&lt;T&gt;, Coin&lt;SUI&gt;) {
-    <b>let</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a> { id, amount_bp: _, owner: _, cap: transfer_cap, <a href="balance.md#0x2_balance">balance</a> } = policy;
+): (TransferCap&lt;T&gt;, Coin&lt;SUI&gt;) {
+    <b>let</b> <a href="royalty.md#0x2_royalty_RoyaltyPolicy">RoyaltyPolicy</a> {
+        id, amount_bp: _, royalty_collector_cap: _, cap: transfer_cap, <a href="balance.md#0x2_balance">balance</a>
+    } = policy;
     <b>let</b> <a href="royalty.md#0x2_royalty_RoyaltyCollectorCap">RoyaltyCollectorCap</a> { id: cap_id, policy_id: _ } = cap;
 
     <a href="object.md#0x2_object_delete">object::delete</a>(cap_id);
