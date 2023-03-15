@@ -41,7 +41,7 @@ const CUTOFF_VALUE: f64 = 2.4;
 /// state then in the interest of making debugging and investigation easier, disabling the scoring
 /// mechanism will likely be helpful.
 pub fn update_low_scoring_authorities(
-    low_scoring_authorities: &ArcSwap<HashMap<AuthorityName, u64>>,
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     committee: Arc<Committee>,
     reputation_scores: ReputationScores,
     metrics: &Arc<AuthorityMetrics>,
@@ -49,8 +49,6 @@ pub fn update_low_scoring_authorities(
     if !reputation_scores.final_of_schedule {
         return;
     }
-
-    info!("calculating low scoring authorities");
 
     let mut new_inner = HashMap::new();
 
@@ -81,14 +79,10 @@ pub fn update_low_scoring_authorities(
     }
 
     // report new scores
+    let len_low_scoring = low_scoring.len();
     metrics
         .consensus_handler_num_low_scoring_authorities
-        .set(low_scoring_authorities.load().len() as i64);
-
-    low_scoring_authorities
-        .load()
-        .iter()
-        .for_each(|(key, val)| debug!("low scoring authority {} has score {}", key, val));
+        .set(len_low_scoring as i64);
 
     reputation_scores
         .scores_per_authority
@@ -99,26 +93,28 @@ pub fn update_low_scoring_authorities(
             metrics.consensus_handler_scores.observe(*s as f64);
         });
 
+    info!("{:?} low scoring authorities calculated", len_low_scoring);
+
+    for authority in low_scoring {
+        let name = AuthorityName::from(authority);
+        let score = *reputation_scores
+            .scores_per_authority
+            .get(authority)
+            .unwrap();
+        new_inner.insert(name, score);
+        debug!("low scoring authority {} has score {}", name, score);
+    }
+
     // make sure the rest have at least quorum
     let remaining_stake = rest.iter().map(|a| committee.weight(a)).sum::<u64>();
     let quorum_threshold = committee.threshold::<true>();
     if remaining_stake < quorum_threshold {
         warn!(
-            "Too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
+            "too many low reputation-scoring authorities, temporarily disabling scoring mechanism"
         );
 
-        low_scoring_authorities.swap(Arc::new(new_inner));
+        low_scoring_authorities.swap(Arc::new(HashMap::new()));
         return;
-    }
-
-    for authority in low_scoring {
-        new_inner.insert(
-            AuthorityName::from(authority),
-            *reputation_scores
-                .scores_per_authority
-                .get(authority)
-                .unwrap(),
-        );
     }
 
     low_scoring_authorities.swap(Arc::new(new_inner));
@@ -149,7 +145,7 @@ pub fn test_update_low_scoring_authorities() {
     authorities.insert(a4, 1);
     let committee = Arc::new(Committee::new(0, authorities));
 
-    let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
+    let low_scoring = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
 
     let mut inner = HashMap::new();
     inner.insert(a1, 50);
@@ -164,7 +160,7 @@ pub fn test_update_low_scoring_authorities() {
     // when final of schedule is false, calling update_low_scoring_authorities will not change the
     // low_scoring_authorities map
     update_low_scoring_authorities(
-        &low_scoring,
+        low_scoring.clone(),
         committee.clone(),
         reputation_scores_1,
         &metrics,
@@ -183,7 +179,12 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, &metrics);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee.clone(),
+        reputation_scores,
+        &metrics,
+    );
     assert_eq!(*low_scoring.load().get(&a4).unwrap(), 25_u64);
     assert_eq!(low_scoring.load().len(), 1);
 
@@ -198,7 +199,12 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, &metrics);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee.clone(),
+        reputation_scores,
+        &metrics,
+    );
     assert_eq!(low_scoring.load().len(), 0);
 
     // this set of scores has a high performing outlier, we don't exclude it
@@ -212,7 +218,12 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, &metrics);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee.clone(),
+        reputation_scores,
+        &metrics,
+    );
     assert_eq!(low_scoring.load().len(), 0);
 
     // if more than the quorum is a low outlier, we don't exclude any authority
@@ -226,7 +237,12 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, &metrics);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee.clone(),
+        reputation_scores,
+        &metrics,
+    );
     assert_eq!(low_scoring.load().len(), 0);
 
     // the computation can handle score values at larger scale
@@ -240,7 +256,12 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee.clone(), reputation_scores, &metrics);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee.clone(),
+        reputation_scores,
+        &metrics,
+    );
     assert_eq!(low_scoring.load().len(), 0);
 
     // the computation can handle score values scaled up
@@ -254,7 +275,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee, reputation_scores, &metrics);
+    update_low_scoring_authorities(low_scoring.clone(), committee, reputation_scores, &metrics);
     assert_eq!(*low_scoring.load().get(&a3).unwrap(), 210_u64);
     assert_eq!(low_scoring.load().len(), 1);
 
@@ -274,7 +295,7 @@ pub fn test_update_low_scoring_authorities() {
     }
 
     let committee = Arc::new(Committee::new(0, authorities));
-    let low_scoring = ArcSwap::new(Arc::new(HashMap::new()));
+    let low_scoring = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
     let mut scores = HashMap::new();
     // scores clustered between 100 - 110
     for i in 0..num_nodes - 1 {
@@ -292,7 +313,7 @@ pub fn test_update_low_scoring_authorities() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(&low_scoring, committee, reputation_scores, &metrics);
+    update_low_scoring_authorities(low_scoring.clone(), committee, reputation_scores, &metrics);
     assert_eq!(
         *low_scoring.load().get(&authority_names[final_idx]).unwrap(),
         70_u64

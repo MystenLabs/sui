@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
+use arc_swap::access::Access;
+use arc_swap::{ArcSwap, ArcSwapAny};
 use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
@@ -19,13 +20,8 @@ use prometheus::{
 use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
-<<<<<<< HEAD
-use rand::SeedableRng;
-use std::collections::{HashMap, VecDeque};
-=======
 use rand::{random, SeedableRng};
-use std::collections::HashMap;
->>>>>>> 451f26e0e9 (add histogram of scores, additional metric tags)
+use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
@@ -209,7 +205,7 @@ pub struct ConsensusAdapter {
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
-    low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
@@ -241,11 +237,11 @@ impl ConsensusAdapter {
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         metrics: ConsensusAdapterMetrics,
-    ) -> Arc<Self> {
+    ) -> Self {
         let num_inflight_transactions = Default::default();
-        let low_scoring_authorities = ArcSwap::new(Arc::new(HashMap::new()));
-        Arc::new(Self {
+        Self {
             consensus_client,
             authority,
             num_inflight_transactions,
@@ -254,14 +250,7 @@ impl ConsensusAdapter {
             metrics,
             submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
             latency_observer: LatencyObserver::new(),
-        })
-    }
-
-    pub fn swap_low_scoring_authorities(
-        &self,
-        low_scoring_authorities: Arc<HashMap<AuthorityName, u64>>,
-    ) {
-        self.low_scoring_authorities.swap(low_scoring_authorities);
+        }
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
@@ -307,8 +296,8 @@ impl ConsensusAdapter {
         let (duration, position, mapped_to_low_scoring) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
-<<<<<<< HEAD
-                let position = self.submission_position(committee, tx_digest);
+                let (position, mapped_to_low_scoring) =
+                    self.submission_position(committee, tx_digest);
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 let latency = std::cmp::max(latency, DEFAULT_LATENCY);
@@ -316,18 +305,7 @@ impl ConsensusAdapter {
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
                 let delay_step = latency * 3 / 2;
-=======
-                let (position, mapped_to_low_scoring) =
-                    self.submission_position(committee, tx_digest);
-                // DELAY_STEP is chosen as 1.5 * mean consensus delay
-                const DELAY_STEP: Duration = Duration::from_secs(7);
->>>>>>> 451f26e0e9 (add histogram of scores, additional metric tags)
-                const MAX_DELAY_MUL: usize = 10;
-                (
-                    DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
-                    position,
-                    mapped_to_low_scoring,
-                )
+                (delay_step, position, mapped_to_low_scoring)
             }
             _ => (Duration::ZERO, 0, false),
         };
@@ -426,7 +404,9 @@ impl ConsensusAdapter {
     }
 
     fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
-        self.low_scoring_authorities.load().get(authority).is_some()
+        <Arc<ArcSwapAny<Arc<HashMap<AuthorityName, u64>>>> as Access<HashMap<AuthorityName, u64>>>::load(
+                &self.low_scoring_authorities,
+            ).get(authority).is_some()
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -817,8 +797,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
         self.adapter
             .metrics
             .sequencing_certificate_latency
-<<<<<<< HEAD
-            .with_label_values(&[&position])
+            .with_label_values(&[&position, &format!("{:?}", self.mapped_to_low_scoring)])
             .observe(latency.as_secs_f64());
     }
 }
@@ -863,10 +842,6 @@ impl LatencyObserver {
         } else {
             Some(Duration::from_millis(latency))
         }
-=======
-            .with_label_values(&[&position, &format!("{:?}", self.mapped_to_low_scoring)])
-            .observe(self.start.elapsed().as_secs_f64());
->>>>>>> 451f26e0e9 (add histogram of scores, additional metric tags)
     }
 }
 

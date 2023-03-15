@@ -122,12 +122,13 @@ async fn submit_transaction_to_consensus_adapter() {
         }
     }
     // Make a new consensus adapter instance.
-    let adapter = ConsensusAdapter::new(
+    let adapter = Arc::new(ConsensusAdapter::new(
         Box::new(SubmitDirectly(state.clone())),
         state.name,
         Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+        Arc::new(ArcSwap::new(Arc::new(HashMap::new()))),
         metrics,
-    );
+    ));
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
