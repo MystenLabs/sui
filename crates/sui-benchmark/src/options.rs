@@ -152,6 +152,9 @@ pub enum RunSpec {
         // relative weight of batch payment transactions in the benchmark workload
         #[clap(long, default_value = "0")]
         batch_payment: u32,
+        // batch size use for batch payment workload
+        #[clap(long, default_value = "15")]
+        batch_payment_size: u32,
         // Target qps
         #[clap(long, default_value = "1000", global = true)]
         target_qps: u64,

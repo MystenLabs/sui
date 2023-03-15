@@ -32,10 +32,6 @@ const PRIMARY_COIN_VALUE: u64 = 10_000_000;
 /// Number of mist sent to each address on each batch transfer
 const TRANSFER_AMOUNT: u64 = 1;
 
-// TODO: make this configurable via CLI
-/// Number of payments in each batch
-const BATCH_SIZE: u64 = 15;
-
 #[derive(Debug)]
 pub struct BatchPaymentTestPayload {
     state: InMemoryWallet,
@@ -109,6 +105,7 @@ impl Payload for BatchPaymentTestPayload {
 #[derive(Debug)]
 pub struct BatchPaymentWorkloadBuilder {
     num_payloads: u64,
+    batch_size: u32,
 }
 
 impl BatchPaymentWorkloadBuilder {
@@ -117,6 +114,7 @@ impl BatchPaymentWorkloadBuilder {
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
+        batch_size: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -132,6 +130,7 @@ impl BatchPaymentWorkloadBuilder {
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 BatchPaymentWorkloadBuilder {
                     num_payloads: max_ops,
+                    batch_size,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -165,13 +164,17 @@ impl WorkloadBuilder<dyn Payload> for BatchPaymentWorkloadBuilder {
         _init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
-        Box::<dyn Workload<dyn Payload>>::from(Box::new(BatchPaymentWorkload { payload_gas }))
+        Box::<dyn Workload<dyn Payload>>::from(Box::new(BatchPaymentWorkload {
+            payload_gas,
+            batch_size: self.batch_size,
+        }))
     }
 }
 
 #[derive(Debug, Default)]
 pub struct BatchPaymentWorkload {
     payload_gas: Vec<Gas>,
+    batch_size: u32,
 }
 
 #[async_trait]
@@ -211,7 +214,7 @@ impl Workload<dyn Payload> for BatchPaymentWorkload {
             let mut primary_coins = BTreeMap::new();
             primary_coins.insert(addr, primary_coin);
             // add empty accounts for `addr` to transfer to
-            for _ in 0..BATCH_SIZE - 1 {
+            for _ in 0..self.batch_size - 1 {
                 let (a, key) = get_key_pair();
                 state.add_account(a, Arc::new(key), Vec::new());
             }
