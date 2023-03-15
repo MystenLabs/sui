@@ -83,8 +83,8 @@ impl Env {
         num_server_threads: u64,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in local mode..");
-        let (owner, _keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
-        let generated_gas = generate_test_gas_objects_with_owner(2, owner);
+        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
+        let generated_gas = generate_test_gas_objects_with_owner(2, address);
         let (mut network_config, generated_gas) =
             test_and_configure_authority_configs_with_objects(committee_size, generated_gas);
         let mut metric_port = server_metric_port;
@@ -102,7 +102,7 @@ impl Env {
         }
         let config = Arc::new(network_config);
         // bring up servers ..
-        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
+        //let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
         let primary_gas = generated_gas
             .get(0)
             .context("No gas found at index 0")?

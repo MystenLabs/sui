@@ -70,12 +70,15 @@ async fn main() -> Result<()> {
         );
     }
 
+    telemetry_subscribers::init_for_testing();
+    /*
     let mut config = telemetry_subscribers::TelemetryConfig::new();
     config.log_string = Some("warn".to_string());
     if !opts.log_path.is_empty() {
         config.log_file = Some(opts.log_path.clone());
     }
     let _guard = config.with_env().init();
+    */
 
     let registry_service = metrics::start_prometheus_server(
         format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
