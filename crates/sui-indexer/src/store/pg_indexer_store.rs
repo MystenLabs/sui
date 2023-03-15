@@ -699,6 +699,7 @@ impl IndexerStore for PgIndexerStore {
                 .run(|conn| {
                     diesel::insert_into(transactions::table)
                         .values(transaction_chunk)
+                        .on_conflict_do_nothing()
                         .execute(conn)
                 })
                 .map_err(|e| {
@@ -718,6 +719,7 @@ impl IndexerStore for PgIndexerStore {
                 .run(|conn| {
                     diesel::insert_into(events::table)
                         .values(event_chunk)
+                        .on_conflict_do_nothing()
                         .execute(conn)
                 })
                 .map_err(|e| {
@@ -755,14 +757,18 @@ impl IndexerStore for PgIndexerStore {
                     })
                     .map_err(|e| {
                         IndexerError::PostgresWriteError(format!(
-                            "Failed writing objects to PostgresDB with error: {:?}",
-                            e
+                            "Failed writing updated objects to PostgresDB with chunk: {:?} error: {:?}",
+                            mutated_object_change_chunk, e
                         ))
                     })?;
             }
 
-            for deleted_object_change_chunk in changes.deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE)
-            {
+            let deleted_objects: Vec<Object> = changes
+                .deleted_objects
+                .iter()
+                .map(|deleted_object| deleted_object.clone().into())
+                .collect();
+            for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
                 pg_pool_conn
                     .build_transaction()
                     .serializable()
@@ -784,8 +790,8 @@ impl IndexerStore for PgIndexerStore {
                     })
                     .map_err(|e| {
                         IndexerError::PostgresWriteError(format!(
-                            "Failed writing objects to PostgresDB with error: {:?}",
-                            e
+                            "Failed writing deleted objects to PostgresDB with chunk: {:?} error: {:?}",
+                            deleted_object_change_chunk, e
                         ))
                     })?;
             }
@@ -821,6 +827,7 @@ impl IndexerStore for PgIndexerStore {
                 .run(|conn| {
                     diesel::insert_into(packages::table)
                         .values(packages_chunk)
+                        .on_conflict_do_nothing()
                         .execute(conn)
                 })
                 .map_err(|e| {
@@ -840,6 +847,7 @@ impl IndexerStore for PgIndexerStore {
                 .run(|conn| {
                     diesel::insert_into(move_calls::table)
                         .values(move_calls_chunk)
+                        .on_conflict_do_nothing()
                         .execute(conn)
                 })
                 .map_err(|e| {
@@ -859,6 +867,7 @@ impl IndexerStore for PgIndexerStore {
                 .run(|conn| {
                     diesel::insert_into(recipients::table)
                         .values(recipients_chunk)
+                        .on_conflict_do_nothing()
                         .execute(conn)
                 })
                 .map_err(|e| {
@@ -878,6 +887,7 @@ impl IndexerStore for PgIndexerStore {
             .run(|conn| {
                 diesel::insert_into(checkpoints::table)
                     .values(checkpoint)
+                    .on_conflict_do_nothing()
                     .execute(conn)
             })
             .map_err(|e| {
