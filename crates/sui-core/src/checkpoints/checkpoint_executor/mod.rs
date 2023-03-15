@@ -294,11 +294,6 @@ impl CheckpointExecutor {
             epoch_store.epoch(),
         );
 
-        // Record checkpoint participation for tallying rule.
-        epoch_store
-            .record_certified_checkpoint_signatures(checkpoint.inner())
-            .unwrap();
-
         let metrics = self.metrics.clone();
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
         let authority_store = self.authority_store.clone();
@@ -530,9 +525,15 @@ fn extract_tx_data(
         .multi_get_transactions(&all_tx_digests)
         .expect("Failed to get checkpoint txes from store")
         .into_iter()
-        .map(|tx| {
+        .enumerate()
+        .map(|(i, tx)| {
             VerifiedExecutableTransaction::new_from_checkpoint(
-                tx.expect("state-sync should have ensured that the transaction exists"),
+                tx.unwrap_or_else(||
+                    panic!(
+                        "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
+                        all_tx_digests[i]
+                    )
+                ),
                 epoch_store.epoch(),
                 *checkpoint_sequence,
             )

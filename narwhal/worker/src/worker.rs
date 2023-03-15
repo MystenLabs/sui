@@ -28,7 +28,7 @@ use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
-use store::Store;
+use store::rocks::DBMap;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -63,7 +63,7 @@ pub struct Worker {
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
-    store: Store<BatchDigest, Batch>,
+    store: DBMap<BatchDigest, Batch>,
 }
 
 impl Worker {
@@ -75,7 +75,7 @@ impl Worker {
         worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
-        store: Store<BatchDigest, Batch>,
+        store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {

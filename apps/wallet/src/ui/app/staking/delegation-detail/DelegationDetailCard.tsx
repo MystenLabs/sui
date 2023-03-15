@@ -4,13 +4,13 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { Heading } from '../../shared/heading';
 import { calculateAPY } from '../calculateAPY';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
-import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';

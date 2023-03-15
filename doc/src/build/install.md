@@ -8,10 +8,10 @@ Before you install Sui, you need to install some prerequisite tools and configur
 
 The steps to install Sui include:
 
-1. Install [prerequisites](#prerequisites) for your operating system.
-1. Install [Sui binaries](#install-sui-binaries).
-1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-1. Request [SUI test tokens](#sui-tokens) to use on a Sui network.
+ 1. Install [prerequisites](#prerequisites) for your operating system.
+ 1. Install [Sui binaries](#install-sui-binaries).
+ 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+ 1. Request [SUI test tokens](#sui-tokens) to use on a Sui network.
 
 You can also download the [source code](#source-code) to have local access to files.
 
@@ -24,16 +24,16 @@ The Sui repository includes two primary branches, `devnet` and `main`.
 
 ## Documentation in the Sui repository
 
-The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use Sui Testnet, use the **Testnet** version of the documentation. 
+The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the latest Sui updates, use the **Latest build** version of the documentation.
 
 
 ## Supported operating systems
 
 Sui supports the following operating systems:
 
-* Linux - Ubuntu version 20.04 (Bionic Beaver)
-* macOS - macOS Monterey
-* Microsoft Windows - Windows 11
+ * Linux - Ubuntu version 20.04 (Bionic Beaver)
+ * macOS - macOS Monterey
+ * Microsoft Windows - Windows 11
 
 ## Prerequisites
 
@@ -300,10 +300,10 @@ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 The following primary directories offer a good starting point for exploring Sui's source code:
-* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui, including the Sui CLI Client
-* [sui_framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources) - Sui Move core smart contracts (e.g., coin.move, object.move, test_scenario.move, ...)
-* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
-* [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components
-* [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - Sui object types, such as coins and gas
-* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - browser-based object explorer for the Sui network
-* [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
+ * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui, including the Sui CLI Client
+ * [sui_framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources) - Sui Move core smart contracts (e.g., coin.move, object.move, test_scenario.move, ...)
+ * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
+ * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components
+ * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - Sui object types, such as coins and gas
+ * [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - browser-based object explorer for the Sui network
+ * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces

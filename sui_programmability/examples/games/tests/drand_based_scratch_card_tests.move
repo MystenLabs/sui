@@ -33,7 +33,7 @@ module games::drand_based_scratch_card_tests {
         let drand_final_round = drand_based_scratch_card::end_of_game_round(drand_based_scratch_card::get_game_base_drand_round(&game));
         assert!(drand_final_round == 5890, 1);
 
-        // Since everything here is deterministic, we know that the 4th ticket will be a winner.
+        // Since everything here is deterministic, we know that the 49th ticket will be a winner.
         let i = 0;
         loop {
             // User2 buys a ticket.
@@ -62,7 +62,8 @@ module games::drand_based_scratch_card_tests {
             };
             i = i + 1;
         };
-        assert!(i == 2, 1);
+        // This value may change if the object ID is changed.
+        assert!(i == 49, 1);
 
         // Claim the reward.
         let winner = test_scenario::take_from_sender<drand_based_scratch_card::Winner>(scenario);

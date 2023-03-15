@@ -3,12 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { RawSigner, Transaction } from '../../src';
-import {
-  DEFAULT_GAS_BUDGET,
-  publishPackage,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test dev inspect', () => {
   let toolbox: TestToolbox;
@@ -20,10 +15,8 @@ describe('Test dev inspect', () => {
     ({ packageId } = await publishPackage(packagePath));
   });
 
-  // TODO: This is skipped because this fails currently.
-  it.skip('Dev inspect split + transfer', async () => {
+  it('Dev inspect split + transfer', async () => {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const coin = tx.splitCoin(tx.gas, tx.pure(10));
     tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
@@ -33,7 +26,6 @@ describe('Test dev inspect', () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const obj = tx.moveCall({
       target: `${packageId}::serializer_tests::return_struct`,
       typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
@@ -48,7 +40,6 @@ describe('Test dev inspect', () => {
 
   it('Move Call that aborts', async () => {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     tx.moveCall({
       target: `${packageId}::serializer_tests::test_abort`,
       typeArguments: [],

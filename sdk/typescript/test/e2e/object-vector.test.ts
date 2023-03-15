@@ -10,20 +10,14 @@ import {
   SUI_FRAMEWORK_ADDRESS,
   Transaction,
 } from '../../src';
-import {
-  DEFAULT_GAS_BUDGET,
-  publishPackage,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { publishPackage, setup, TestToolbox } from './utils/setup';
 
-describe('Test Move call with a vector of objects as input (skipped due to move vector requirement)', () => {
+describe('Test Move call with a vector of objects as input', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
 
   async function mintObject(val: number) {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     tx.moveCall({
       target: `${packageId}::entry_point_vector::mint`,
       arguments: [tx.pure(String(val))],
@@ -40,7 +34,6 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
 
   async function destroyObjects(objects: ObjectId[]) {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const vec = tx.makeMoveVec({ objects: objects.map((id) => tx.object(id)) });
     tx.moveCall({
       target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
@@ -71,7 +64,6 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coinIDs = coins.map((coin) => Coin.getID(coin));
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const vec = tx.makeMoveVec({
       objects: [tx.object(coinIDs[1]), tx.object(coinIDs[2])],
     });

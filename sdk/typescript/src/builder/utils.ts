@@ -17,3 +17,7 @@ export type WellKnownEncoding =
     };
 
 export const COMMAND_TYPE = Symbol('command-argument-type');
+
+export type DeepReadonly<T> = {
+  readonly [P in keyof T]: DeepReadonly<T[P]>;
+};

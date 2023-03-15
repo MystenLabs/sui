@@ -5,7 +5,7 @@ use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
@@ -21,11 +21,11 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::clock::Clock;
-use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     SuiAuthoritySignature, ToFromBytes,
 };
+use sui_types::crypto::{DefaultHash, PublicKey as AccountsPublicKey};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -224,10 +224,10 @@ impl Genesis {
         bcs::to_bytes(self).expect("failed to serialize genesis")
     }
 
-    pub fn sha3(&self) -> [u8; 32] {
+    pub fn hash(&self) -> [u8; 32] {
         use std::io::Write;
 
-        let mut digest = Sha3_256::default();
+        let mut digest = DefaultHash::default();
         digest.write_all(&self.to_bytes()).unwrap();
         let hash = digest.finalize();
         hash.into()
@@ -411,7 +411,7 @@ pub struct GenesisChainParameters {
     pub governance_start_epoch: u64,
 
     /// The duration of an epoch, in milliseconds.
-    #[serde(default = "GenesisChainParameters::test_epoch_duration_ms")]
+    #[serde(default = "GenesisChainParameters::default_epoch_duration_ms")]
     pub epoch_duration_ms: u64,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
@@ -425,7 +425,7 @@ impl GenesisChainParameters {
             initial_sui_custody_account_address: SuiAddress::default(),
             initial_validator_stake_mist: Self::test_initial_validator_stake_mist(),
             governance_start_epoch: 0,
-            epoch_duration_ms: Self::test_epoch_duration_ms(),
+            epoch_duration_ms: Self::default_epoch_duration_ms(),
         }
     }
 
@@ -444,8 +444,9 @@ impl GenesisChainParameters {
         sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI
     }
 
-    fn test_epoch_duration_ms() -> u64 {
-        10000
+    fn default_epoch_duration_ms() -> u64 {
+        // 24 hrs
+        24 * 60 * 60 * 1000
     }
 }
 

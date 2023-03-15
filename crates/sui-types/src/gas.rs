@@ -239,9 +239,6 @@ pub struct SuiCostTable {
     /// Unit cost of a byte in the storage. This will be used both for charging for
     /// new storage as well as rebating for deleting storage. That is, we expect users to
     /// get full refund on the object storage when it's deleted.
-    /// TODO: We should introduce a flat fee on storage that does not get refunded even
-    /// when objects are deleted. This cost covers the cost of storing transaction metadata
-    /// which will always be there even after the objects are deleted.
     pub storage_per_byte_cost: StorageCostPerByte,
 }
 
@@ -380,12 +377,6 @@ impl<'a> SuiGasStatus<'a> {
         self.deduct_computation_cost(&charge.into())
     }
 
-    pub fn charge_vm_gas(&mut self) -> Result<(), ExecutionError> {
-        // Disable flat fee for now
-        // self.deduct_computation_cost(&VM_FLAT_FEE.to_unit())
-        Ok(())
-    }
-
     pub fn reset_storage_cost_and_rebate(&mut self) {
         self.storage_gas_units = GasQuantity::zero();
         self.storage_rebate = GasQuantity::zero();
@@ -454,7 +445,7 @@ impl<'a> SuiGasStatus<'a> {
     pub fn summary(&self) -> GasCostSummary {
         let remaining_gas = self.gas_status.remaining_gas();
         let storage_cost = self.storage_gas_units;
-        // TODO: handle underflow how?
+        // MUSTFIX: handle underflow how?
         let computation_cost = self
             .init_budget
             .checked_sub(remaining_gas)

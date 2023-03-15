@@ -14,12 +14,7 @@ import {
   Transaction,
 } from '../../src';
 import { TransactionDataBuilder } from '../../src/builder/TransactionData';
-import {
-  DEFAULT_GAS_BUDGET,
-  publishPackage,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
@@ -39,7 +34,6 @@ describe('Transaction Serialization and deserialization', () => {
 
   async function serializeAndDeserialize(tx: Transaction, mutable: boolean[]) {
     tx.setSender(await toolbox.address());
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     const transactionBytes = await tx.build({ provider: toolbox.provider });
     const deserializedTxnBuilder =
       TransactionDataBuilder.fromBytes(transactionBytes);

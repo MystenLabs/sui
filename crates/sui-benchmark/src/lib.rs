@@ -53,15 +53,18 @@ use sui_types::{
 use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
+pub mod bank;
 pub mod benchmark_setup;
 pub mod drivers;
 pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
+pub mod in_memory_wallet;
 pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
 
+#[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
 /// responses from LocalValidatorAggregatorProxy and FullNodeProxy
 #[allow(clippy::large_enum_variant)]
@@ -97,6 +100,19 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn deleted(&self) -> Vec<ObjectRef> {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
+                certified_effects.data().deleted().to_vec()
+            }
+            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+                .deleted()
+                .iter()
+                .map(|refe| refe.to_object_ref())
+                .collect(),
+        }
+    }
+
     pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
         match self {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
@@ -115,6 +131,13 @@ impl ExecutionEffects {
                 let refe = &sui_tx_effects.gas_object();
                 (refe.reference.to_object_ref(), refe.owner)
             }
+        }
+    }
+
+    pub fn sender(&self) -> SuiAddress {
+        match self.gas_object().1 {
+            Owner::AddressOwner(a) => a,
+            Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => unreachable!(), // owner of gas object is always an address
         }
     }
 }
@@ -162,7 +185,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = genesis.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info));
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -190,7 +213,7 @@ impl LocalValidatorAggregatorProxy {
             .unwrap();
 
         let validator_info = configs.validator_set();
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info)).unwrap();
+        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info));
         let clients = make_authority_clients(
             &validator_info,
             DEFAULT_CONNECT_TIMEOUT_SEC,
@@ -506,7 +529,7 @@ impl FullNodeProxy {
         let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, committee_map)?;
+        let committee = Committee::new(epoch, committee_map);
 
         Ok(Self {
             sui_client,

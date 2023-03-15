@@ -357,8 +357,7 @@ impl InMemoryStore {
                 .iter()
                 .cloned()
                 .collect();
-            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
-                .expect("new committee from consensus should be constructable");
+            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee);
             self.insert_committee(committee);
         }
 

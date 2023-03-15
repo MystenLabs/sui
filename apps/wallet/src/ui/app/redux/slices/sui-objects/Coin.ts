@@ -101,7 +101,6 @@ export class Coin {
 
         try {
             const tx = new Transaction();
-            tx.setGasBudget(DEFAULT_GAS_BUDGET_FOR_STAKE);
             const stakeCoin = tx.splitCoin(tx.gas, tx.pure(amount));
             tx.moveCall({
                 target: '0x2::sui_system::request_add_stake',
@@ -132,7 +131,6 @@ export class Coin {
         const transaction = Sentry.startTransaction({ name: 'unstake' });
         try {
             const tx = new Transaction();
-            tx.setGasBudget(DEFAULT_GAS_BUDGET_FOR_STAKE);
             tx.moveCall({
                 target: '0x2::sui_system::request_withdraw_stake',
                 arguments: [

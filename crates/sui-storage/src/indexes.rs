@@ -24,12 +24,10 @@ use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
 use typed_store::rocks::DBOptions;
-use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocks::{default_db_options, point_lookup_db_options, DBMap, MetricConf};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
-
-use crate::default_db_options;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
@@ -118,37 +116,37 @@ pub struct IndexStore {
 
 // These functions are used to initialize the DB tables
 fn transactions_order_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_seq_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_from_addr_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_to_addr_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_by_input_object_id_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_by_mutated_object_id_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn transactions_by_move_function_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn timestamps_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).1
+    point_lookup_db_options()
 }
 fn owner_index_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn dynamic_field_index_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 fn index_table_default_config() -> DBOptions {
-    default_db_options(None, Some(1_000_000)).0
+    default_db_options()
 }
 
 impl IndexStore {

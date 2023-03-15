@@ -73,20 +73,21 @@ const ONE_DAY = ONE_HOUR * 24;
 export function useTimeAgo(
     timeFrom?: number | null,
     shortedTimeLabel?: boolean,
-    shouldEnd?: boolean
+    shouldEnd?: boolean,
+    endLabel?: string
 ) {
     const [now, setNow] = useState(() => Date.now());
 
     // end interval when the difference between now and timeFrom is less than or equal to 0
-    const endInterval = !(shouldEnd && now - (timeFrom || now) >= 0);
+    const endInterval = shouldEnd && (timeFrom || now) - now >= 1000;
     const intervalEnabled =
         !!timeFrom &&
         Math.abs(now - (timeFrom || now)) < ONE_HOUR &&
         endInterval;
 
     const formattedTime = useMemo(
-        () => timeAgo(timeFrom, now, shortedTimeLabel),
-        [now, timeFrom, shortedTimeLabel]
+        () => timeAgo(timeFrom, now, shortedTimeLabel, endLabel),
+        [now, timeFrom, shortedTimeLabel, endLabel]
     );
 
     useEffect(() => {
@@ -102,7 +103,8 @@ export function useTimeAgo(
 export const timeAgo = (
     epochMilliSecs: number | null | undefined,
     timeNow?: number | null,
-    shortenTimeLabel?: boolean
+    shortenTimeLabel?: boolean,
+    endLabel = `< 1 sec`
 ): string => {
     if (!epochMilliSecs) return '';
 
@@ -145,7 +147,7 @@ export const timeAgo = (
 
     const result = resultArr.join(' ').trim();
 
-    return result ? result : `< 1 sec`;
+    return result ? result : endLabel;
 };
 
 // TODO - Merge with related functions

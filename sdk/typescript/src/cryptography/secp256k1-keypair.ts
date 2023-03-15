@@ -12,6 +12,8 @@ import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
+import { bytesToHex } from '@noble/hashes/utils';
+import { blake2b } from '@noble/hashes/blake2b';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
@@ -90,7 +92,7 @@ export class Secp256k1Keypair implements Keypair {
     if (!options || !options.skipValidation) {
       const encoder = new TextEncoder();
       const signData = encoder.encode('sui validation');
-      const msgHash = sha256(signData);
+      const msgHash = bytesToHex(blake2b(signData, { dkLen: 32 }));
       const signature = secp.signSync(msgHash, secretKey);
       if (!secp.verify(signature, msgHash, publicKey, { strict: true })) {
         throw new Error('Provided secretKey is invalid');

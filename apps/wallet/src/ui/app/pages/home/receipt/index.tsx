@@ -12,12 +12,12 @@ import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
-import { useAppSelector } from '_hooks';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 function ReceiptPage() {
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useActiveAddress();
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');

@@ -57,7 +57,7 @@ async fn reject_invalid_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+    let batch_store = rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
@@ -65,7 +65,6 @@ async fn reject_invalid_clients_transactions() {
         &ReadWriteOptions::default(),
     )
     .unwrap();
-    let store = Store::new(db);
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
@@ -81,7 +80,7 @@ async fn reject_invalid_clients_transactions() {
         worker_cache.clone(),
         parameters,
         NilTxValidator,
-        store,
+        batch_store,
         metrics,
         &mut tx_shutdown,
     );
@@ -147,7 +146,7 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+    let batch_store = rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
@@ -155,7 +154,6 @@ async fn handle_clients_transactions() {
         &ReadWriteOptions::default(),
     )
     .unwrap();
-    let store = Store::new(db);
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
@@ -171,7 +169,7 @@ async fn handle_clients_transactions() {
         worker_cache.clone(),
         parameters,
         TrivialTransactionValidator::default(),
-        store,
+        batch_store,
         metrics,
         &mut tx_shutdown,
     );

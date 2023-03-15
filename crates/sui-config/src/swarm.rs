@@ -65,19 +65,6 @@ impl NetworkConfig {
             .build()
     }
 
-    pub fn generate_with_rng_and_epoch_duration<R: rand::CryptoRng + rand::RngCore>(
-        config_dir: &Path,
-        quorum_size: usize,
-        epoch_duration_ms: u64,
-        rng: R,
-    ) -> Self {
-        builder::ConfigBuilder::new(config_dir)
-            .committee_size(NonZeroUsize::new(quorum_size).unwrap())
-            .with_epoch_duration(epoch_duration_ms)
-            .rng(rng)
-            .build()
-    }
-
     pub fn generate(config_dir: &Path, quorum_size: usize) -> Self {
         Self::generate_with_rng(config_dir, quorum_size, OsRng)
     }

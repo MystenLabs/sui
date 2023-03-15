@@ -62,7 +62,7 @@ describe('Keyring', () => {
             it('returns as active account the first derived from mnemonic', async () => {
                 const account = (await k.getActiveAccount()) as DerivedAccount;
                 expect(account.address).toBe(
-                    '0x9c08076187d961f1ed809a9d803fa49037a92039d04f539255072713a180dd5c'
+                    '0xf29e2bbf4e0ca0f707b8a4e5213b629f22b1f0e2a1a7056a5b0a7359ac31b97a'
                 );
                 expect(account.derivationPath).toBe("m/44'/784'/0'/0'/0'");
             });

@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import sha3 from 'js-sha3';
+import { blake2b } from '@noble/hashes/blake2b';
 import { fromB64, toB64 } from '@mysten/bcs';
 import { bytesEqual, PublicKeyInitData } from './publickey';
 import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
 import { SUI_ADDRESS_LENGTH } from '../types';
+import { bytesToHex } from '@noble/hashes/utils';
 
 const PUBLIC_KEY_SIZE = 32;
 
@@ -72,6 +73,9 @@ export class Ed25519PublicKey {
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['ED25519']]);
     tmp.set(this.toBytes(), 1);
     // Each hex char represents half a byte, hence hex address doubles the length
-    return sha3.sha3_256(tmp).slice(0, SUI_ADDRESS_LENGTH * 2);
+    return bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(
+      0,
+      SUI_ADDRESS_LENGTH * 2,
+    );
   }
 }

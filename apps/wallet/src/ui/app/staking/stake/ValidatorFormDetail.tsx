@@ -4,6 +4,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { calculateAPY } from '../calculateAPY';
 import { calculateStakeShare } from '../calculateStakeShare';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
@@ -15,7 +16,6 @@ import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
@@ -28,7 +28,7 @@ export function ValidatorFormDetail({
     validatorAddress,
     unstake,
 }: ValidatorFormDetailProps) {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const [searchParams] = useSearchParams();
     const stakeIdParams = searchParams.get('staked');

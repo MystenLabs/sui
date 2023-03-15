@@ -3,12 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { getExecutionStatusType, ObjectId, Transaction } from '../../src';
-import {
-  DEFAULT_GAS_BUDGET,
-  publishPackage,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with strings', () => {
   let toolbox: TestToolbox;
@@ -20,7 +15,6 @@ describe('Test Move call with strings', () => {
     funcName: string,
   ) {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
     tx.moveCall({
       target: `${packageId}::entry_point_string::${funcName}`,
       arguments: [tx.pure(str), tx.pure(len)],
