@@ -560,7 +560,7 @@ async fn test_dev_inspect_dynamic_field() {
         }))],
     };
     let kind = TransactionKind::programmable(pt);
-    let DevInspectResults { results, error, .. } = fullnode
+    let DevInspectResults { error, .. } = fullnode
         .dev_inspect_transaction(sender, kind, Some(1))
         .await
         .unwrap();
