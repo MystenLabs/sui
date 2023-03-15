@@ -15,8 +15,10 @@ import {
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
-import { isGenesisLibAddress } from '~/utils/api/searchUtil';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
+
+const isGenesisLibAddress = (value: string): boolean =>
+    /^(0x|0X)0{0,39}[12]$/.test(value);
 
 type Result = {
     label: string;

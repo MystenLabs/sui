@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress, SUI_ADDRESS_LENGTH } from '@mysten/sui.js';
-
 const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
 
 export function hexToAscii(hex: string) {
@@ -69,33 +67,3 @@ export async function genFileTypeMsg(
             return `1 Image File`;
         });
 }
-
-// TODO: Use version of this function from the SDK when it is exposed.
-export function normalizeSuiAddress(
-    value: string,
-    forceAdd0x: boolean = false
-): SuiAddress {
-    let address = value.toLowerCase();
-    if (!forceAdd0x && address.startsWith('0x')) {
-        address = address.slice(2);
-    }
-    const numMissingZeros =
-        (SUI_ADDRESS_LENGTH - getHexByteLength(address)) * 2;
-    if (numMissingZeros <= 0) {
-        return '0x' + address;
-    }
-    return '0x' + '0'.repeat(numMissingZeros) + address;
-}
-
-function getHexByteLength(value: string): number {
-    return /^(0x|0X)/.test(value) ? (value.length - 2) / 2 : value.length / 2;
-}
-
-/* Currently unused but potentially useful:
- *
- * export const isValidHttpUrl = (url: string) => {
- *     try { new URL(url) }
- *         catch (e) { return false }
- *             return /^https?/.test(url);
- *             };
- */

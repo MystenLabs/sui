@@ -79,5 +79,3 @@ export const ButtonOrLink = forwardRef<
         );
     }
 );
-
-ButtonOrLink.displayName = 'ButtonOrLink';

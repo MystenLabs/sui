@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { calculateAPY } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { calculateAPY } from '_app/staking/calculateAPY';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { Text } from '_src/ui/app/shared/text';

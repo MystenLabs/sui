@@ -12,6 +12,7 @@ module.exports = {
         'prettier',
     ],
     rules: {
+        'react/display-name': 'off',
         'import/order': [
             'warn',
             {

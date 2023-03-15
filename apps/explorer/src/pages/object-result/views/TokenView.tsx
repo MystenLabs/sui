@@ -1,30 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { normalizeSuiAddress } from '@mysten/sui.js';
 import { useState, useEffect, useCallback } from 'react';
 
 import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
-import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../../components/transaction-card/TxForID';
 import {
-    getOwnerStr,
     parseImageURL,
     checkIsPropertyType,
     extractName,
 } from '../../../utils/objectUtils';
-import {
-    trimStdLibPrefix,
-    genFileTypeMsg,
-    normalizeSuiAddress,
-} from '../../../utils/stringUtils';
+import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import { ObjectLink, TransactionLink } from '~/ui/InternalLink';
+import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 
 function TokenView({ data }: { data: DataType }) {
@@ -32,7 +27,6 @@ function TokenView({ data }: { data: DataType }) {
         ...data,
         objType: data.objType,
         tx_digest: data.data.tx_digest,
-        owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
     };
 
@@ -127,18 +121,19 @@ function TokenView({ data }: { data: DataType }) {
                             <tr>
                                 <td>Owner</td>
                                 <td data-testid="owner">
-                                    <Longtext
-                                        text={
-                                            typeof viewedData.owner === 'string'
-                                                ? viewedData.owner
-                                                : typeof viewedData.owner
-                                        }
-                                        category="unknown"
-                                        isLink={
-                                            viewedData.owner !== 'Immutable' &&
-                                            viewedData.owner !== 'Shared'
-                                        }
-                                    />
+                                    {data.owner === 'Immutable' ? (
+                                        'Immutable'
+                                    ) : 'Shared' in data.owner ? (
+                                        'Shared'
+                                    ) : 'ObjectOwner' in data.owner ? (
+                                        <ObjectLink
+                                            objectId={data.owner.ObjectOwner}
+                                        />
+                                    ) : (
+                                        <AddressLink
+                                            address={data.owner.AddressOwner}
+                                        />
+                                    )}
                                 </td>
                             </tr>
                             {viewedData.contract_id && (

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { calculateAPY } from '@mysten/core';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
-import { calculateAPY } from '../calculateAPY';
 import { calculateStakeShare } from '../calculateStakeShare';
 import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';

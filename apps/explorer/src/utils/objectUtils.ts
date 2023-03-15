@@ -8,11 +8,7 @@ import { findIPFSvalue } from './stringUtils';
 import type { SuiObjectResponse } from '@mysten/sui.js';
 
 export function parseImageURL(data: any): string {
-    const url =
-        data?.url ||
-        // TODO: Remove Legacy format
-        data?.display ||
-        data?.contents?.display;
+    const url = data?.url;
 
     if (!url) return '';
 

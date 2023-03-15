@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { calculateAPY } from '@mysten/core';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { Heading } from '../../shared/heading';
-import { calculateAPY } from '../calculateAPY';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';

@@ -6,7 +6,6 @@ import {
     getTransactionKindName,
     getTransactionKind,
     getTransactionSender,
-    getTransactionSignature,
     SUI_TYPE_ARG,
     getExecutionStatusType,
     getTotalGasUsed,
@@ -14,10 +13,6 @@ import {
     type SuiTransactionResponse,
     getGasData,
     getTransactionDigest,
-    fromSerializedSignature,
-    toB64,
-    type SignaturePubkeyPair,
-    type SuiAddress,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -26,18 +21,10 @@ import { useMemo, useState } from 'react';
 //     eventToDisplay,
 //     getAddressesLinks,
 // } from '../../components/events/eventDisplay';
-import Longtext from '../../components/longtext/Longtext';
-// TODO: (Jibz) Create a new pagination component
 import Pagination from '../../components/pagination/Pagination';
-import {
-    type LinkObj,
-    TxAddresses,
-} from '../../components/transaction-card/TxCardUtils';
 import { getAmount } from '../../utils/getAmount';
+import { Signatures } from './Signatures';
 import TxLinks from './TxLinks';
-
-import type { Category } from './TransactionResultType';
-import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
@@ -57,7 +44,6 @@ import {
     SponsorTransactionAddress,
 } from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 const MAX_RECIPIENTS_PER_PAGE = 10;
 
@@ -80,111 +66,6 @@ function generateMutatedCreated(tx: SuiTransactionResponse) {
               ]
             : []),
     ];
-}
-
-// TODO: Support programmable tx:
-// function formatByTransactionKind(
-//     kind: TransactionKindName | undefined,
-//     _data: SuiTransactionKind,
-//     _sender: string
-// ) {
-//     switch (kind) {
-//         default:
-//             return {};
-//     }
-// }
-
-function getSignatureFromAddress(
-    signatures: SignaturePubkeyPair[],
-    suiAddress: SuiAddress
-) {
-    return signatures.find(
-        (signature) => `0x${signature.pubKey.toSuiAddress()}` === suiAddress
-    );
-}
-
-type TxItemView = {
-    title: string;
-    titleStyle?: string;
-    content: {
-        label?: string | number | any;
-        value: ReactNode;
-        link?: boolean;
-        category?: string;
-        monotypeClass?: boolean;
-        href?: string;
-    }[];
-};
-
-function ItemView({ data }: { data: TxItemView }) {
-    return (
-        <div className={styles.itemView}>
-            <div
-                className={
-                    data.titleStyle
-                        ? styles[data.titleStyle]
-                        : styles.itemviewtitle
-                }
-            >
-                {data.title}
-            </div>
-            <div className={styles.itemviewcontent}>
-                {data.content.map((item, index) => {
-                    // handle sender -> recipient display in one line
-                    let links: LinkObj[] = [];
-                    let label = item.label;
-                    // MUSTFIX(chris): uncomment
-                    // if (Array.isArray(item)) {
-                    //     links = getAddressesLinks(item);
-                    //     label = 'Sender, Recipient';
-                    // }
-
-                    return (
-                        <div
-                            key={index}
-                            className={clsx(
-                                styles.itemviewcontentitem,
-                                label && styles.singleitem
-                            )}
-                        >
-                            {label && (
-                                <div className={styles.itemviewcontentlabel}>
-                                    {label}
-                                </div>
-                            )}
-                            <div
-                                className={clsx(
-                                    styles.itemviewcontentvalue,
-                                    item.monotypeClass && styles.mono
-                                )}
-                            >
-                                {links.length > 1 && (
-                                    <TxAddresses content={links} />
-                                )}
-                                {item.link ? (
-                                    <Longtext
-                                        text={item.value as string}
-                                        category={item.category as Category}
-                                        isLink
-                                        copyButton="16"
-                                    />
-                                ) : item.href ? (
-                                    <LinkWithQuery
-                                        to={item.href}
-                                        className={styles.customhreflink}
-                                    >
-                                        {item.value}
-                                    </LinkWithQuery>
-                                ) : (
-                                    item.value
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
 }
 
 function GasAmount({
@@ -231,13 +112,11 @@ function GasAmount({
     );
 }
 
-function TransactionView({
+export function TransactionView({
     transaction,
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const txnDetails = getTransactionKind(transaction)!;
-    const txKindName = getTransactionKindName(txnDetails);
     const sender = getTransactionSender(transaction)!;
     const gasUsed = transaction?.effects!.gasUsed;
 
@@ -297,57 +176,6 @@ function TransactionView({
 
     const createdMutateData = generateMutatedCreated(transaction);
 
-    // TODO: Support programmable transactions:
-    // const typearguments =
-    //     txKindData.title === 'Call' && txKindData.package
-    //         ? {
-    //               title: 'Package Details',
-    //               content: [
-    //                   {
-    //                       label: 'Package ID',
-    //                       monotypeClass: true,
-    //                       link: true,
-    //                       category: 'object',
-    //                       value: txKindData.package.value,
-    //                   },
-    //                   {
-    //                       label: 'Module',
-    //                       monotypeClass: true,
-    //                       value: txKindData.module.value,
-    //                       href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
-    //                   },
-    //                   {
-    //                       label: 'Function',
-    //                       monotypeClass: true,
-    //                       value: txKindData.function.value,
-    //                   },
-    //                   {
-    //                       label: 'Argument',
-    //                       monotypeClass: true,
-    //                       value: JSON.stringify(
-    //                           txKindData.arguments.value ?? []
-    //                       ),
-    //                   },
-    //               ],
-    //           }
-    //         : false;
-
-    // if (typearguments && txKindData.typeArguments?.value) {
-    //     typearguments.content.push({
-    //         label: 'Type Arguments',
-    //         monotypeClass: true,
-    //         value: JSON.stringify(txKindData.typeArguments.value),
-    //     });
-    // }
-
-    // const modules =
-    //     txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
-    //         ? {
-    //               title: 'Modules',
-    //               content: txKindData?.module?.value,
-    //           }
-    //         : false;
-
     // MUSTFIX(chris): re-enable event display
     // const hasEvents = txEventData && txEventData.length > 0;
     const hasEvents = false;
@@ -361,26 +189,17 @@ function TransactionView({
     const gasOwner = gasData.owner;
     const isSponsoredTransaction = gasOwner !== sender;
 
-    const transactionSignatures = getTransactionSignature(transaction)!;
-    const deserializedTransactionSignatures = transactionSignatures.map(
-        (signature) => fromSerializedSignature(signature)
-    );
-    const accountSignature = getSignatureFromAddress(
-        deserializedTransactionSignatures,
-        sender!
-    );
-    const sponsorSignature = isSponsoredTransaction
-        ? getSignatureFromAddress(deserializedTransactionSignatures, gasOwner)
-        : null;
-
     const timestamp = transaction.timestampMs;
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
-                    type={txKindName}
+                    type="Transaction"
                     title={getTransactionDigest(transaction)}
+                    subtitle={getTransactionKindName(
+                        getTransactionKind(transaction)!
+                    )}
                     status={getExecutionStatusType(transaction)}
                 />
                 {txError && (
@@ -402,18 +221,6 @@ function TransactionView({
                             // TODO: Change to test ID
                             id={getTransactionDigest(transaction)}
                         >
-                            {/* TODO: Support programmable transactions: */}
-                            {/* {typearguments && (
-                                <section
-                                    className={clsx([
-                                        styles.txcomponent,
-                                        styles.txgridcolspan2,
-                                        styles.packagedetails,
-                                    ])}
-                                >
-                                    <ItemView data={typearguments} />
-                                </section>
-                            )} */}
                             <section
                                 className={clsx([
                                     styles.txcomponent,
@@ -485,23 +292,6 @@ function TransactionView({
                                     ))}
                                 </div>
                             </section>
-
-                            {/* TODO: Support programmable transactions: */}
-                            {/* {modules && (
-                                <section
-                                    className={clsx([
-                                        styles.txcomponent,
-                                        styles.txgridcolspan3,
-                                    ])}
-                                >
-                                    <ErrorBoundary>
-                                        <ModulesWrapper
-                                            id={txKindData.objectId?.value}
-                                            data={modules}
-                                        />
-                                    </ErrorBoundary>
-                                </section>
-                            )} */}
                         </div>
                         <div data-testid="gas-breakdown" className="mt-8">
                             <TableHeader
@@ -517,7 +307,6 @@ function TransactionView({
                             <DescriptionList>
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
-                                        noTruncate
                                         // TODO: support multiple gas coins
                                         objectId={gasPayment[0].objectId}
                                     />
@@ -608,61 +397,10 @@ function TransactionView({
                         </TabPanel>
                     )} */}
                     <TabPanel>
-                        <div className={styles.txgridcomponent}>
-                            {accountSignature && (
-                                <ItemView
-                                    data={{
-                                        title: 'Account Signature',
-                                        content: [
-                                            {
-                                                label: 'Scheme',
-                                                value: accountSignature.signatureScheme,
-                                            },
-                                            {
-                                                label: 'PubKey',
-                                                value: `0x${accountSignature.pubKey.toSuiAddress()}`,
-                                                monotypeClass: true,
-                                            },
-                                            {
-                                                label: 'Signature',
-                                                value: toB64(
-                                                    accountSignature.signature
-                                                ),
-                                            },
-                                        ],
-                                    }}
-                                />
-                            )}
-                            {sponsorSignature && (
-                                <ItemView
-                                    data={{
-                                        title: 'Sponsor Signature',
-                                        content: [
-                                            {
-                                                label: 'Scheme',
-                                                value: sponsorSignature.signatureScheme,
-                                            },
-                                            {
-                                                label: 'PubKey',
-                                                value: `0x${sponsorSignature.pubKey.toSuiAddress()}`,
-                                                monotypeClass: true,
-                                            },
-                                            {
-                                                label: 'Signature',
-                                                value: toB64(
-                                                    sponsorSignature.signature
-                                                ),
-                                            },
-                                        ],
-                                    }}
-                                />
-                            )}
-                        </div>
+                        <Signatures transaction={transaction} />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
         </div>
     );
 }
-
-export default TransactionView;

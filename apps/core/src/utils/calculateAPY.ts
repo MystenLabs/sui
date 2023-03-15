@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiValidatorSummary } from '@mysten/sui.js';
+import { SuiValidatorSummary } from '@mysten/sui.js';
+import { roundFloat } from './roundFloat';
 
-import { roundFloat } from '_helpers';
+const DEFAULT_APY_DECIMALS = 4;
 
-const APY_DECIMALS = 4;
-
-export function calculateAPY(validator: SuiValidatorSummary, epoch: number) {
+export function calculateAPY(
+    validator: SuiValidatorSummary,
+    epoch: number,
+    roundDecimals = DEFAULT_APY_DECIMALS
+) {
     let apy;
     const {
         stakingPoolSuiBalance,
@@ -30,7 +33,7 @@ export function calculateAPY(validator: SuiValidatorSummary, epoch: number) {
     }
 
     //guard against NaN
-    const apyReturn = apy ? roundFloat(apy, APY_DECIMALS) : 0;
+    const apyReturn = apy ? roundFloat(apy, roundDecimals) : 0;
 
     // guard against very large numbers (e.g. 1e+100)
     return apyReturn > 100_000 ? 0 : apyReturn;
