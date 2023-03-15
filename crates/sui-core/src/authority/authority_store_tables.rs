@@ -12,7 +12,8 @@ use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
-    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+    default_db_options, point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf,
+    ReadWriteOptions,
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
@@ -51,13 +52,13 @@ pub struct AuthorityPerpetualTables {
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetailsWrapper>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
     /// state-sync but hasn't been executed yet.
-    #[default_options_override_fn = "transactions_table_default_config"]
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
@@ -65,6 +66,7 @@ pub struct AuthorityPerpetualTables {
     ///
     /// When an object is deleted we include an entry into this table for its next version and
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
@@ -74,33 +76,39 @@ pub struct AuthorityPerpetualTables {
     /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
     /// it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
     /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
-    #[default_options_override_fn = "effects_table_default_config"]
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
 
     /// Transactions that have been executed locally on this node. We need this table since the `effects` table
     /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Currently this is needed in the validator for returning events during process certificates.
     // We could potentially remove this if we decided not to provide events in the execution path.
     // TODO: Figure out what to do with this table in the long run. Also we need a pruning policy for this table.
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     /// When transaction is executed via checkpoint executor, we store association here
+    #[default_options_override_fn = "point_lookup_db_options"]
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
     // Finalized root state accumulator for epoch, to be included in CheckpointSummary
     // of last checkpoint of epoch. These values should only ever be written once
     // and never changed
+    #[default_options_override_fn = "default_db_options"]
     pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
     /// Parameters of the system fixed at the epoch start
+    #[default_options_override_fn = "default_db_options"]
     pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
 
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
+    #[default_options_override_fn = "default_db_options"]
     pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 }
 
@@ -299,9 +307,6 @@ impl Iterator for LiveSetIter<'_> {
 }
 
 // These functions are used to initialize the DB tables
-fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    point_lookup_db_options()
-}
 
 fn objects_table_default_config() -> DBOptions {
     let db_options = point_lookup_db_options();
@@ -311,14 +316,6 @@ fn objects_table_default_config() -> DBOptions {
             ignore_range_deletions: true,
         },
     }
-}
-
-fn transactions_table_default_config() -> DBOptions {
-    point_lookup_db_options()
-}
-
-fn effects_table_default_config() -> DBOptions {
-    point_lookup_db_options()
 }
 
 fn indirect_move_objects_table_default_config() -> DBOptions {
