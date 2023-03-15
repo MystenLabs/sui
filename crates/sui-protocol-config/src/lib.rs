@@ -10,11 +10,12 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 2;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
+// Version 2: Add FeatureFlags::darios_flag
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -114,6 +115,8 @@ struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
     package_upgrades: bool,
+
+    pub darios_flag: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -382,6 +385,10 @@ impl ProtocolConfig {
     //         )))
     //     }
     // }
+
+    pub fn get_darios_flag(&self) -> bool {
+        self.feature_flags.darios_flag
+    }
 
     pub fn check_package_upgrades_supported(&self) -> Result<(), Error> {
         if self.feature_flags.package_upgrades {
@@ -807,6 +814,17 @@ impl ProtocolConfig {
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
+            },
+
+            2 => Self {
+                feature_flags: FeatureFlags {
+                    darios_flag: true,
+                    package_upgrades: false,
+                },
+
+                // Pull in everything else from the previous version to avoid unintentional
+                // changes.
+                ..Self::get_for_version_impl(version - 1)
             },
 
             // Use this template when making changes:

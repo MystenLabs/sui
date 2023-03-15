@@ -960,6 +960,12 @@ impl AuthorityState {
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
 
+        if epoch_store.protocol_config().get_darios_flag() {
+            // new stuff
+        } else {
+            // old stuff
+        }
+
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store = TemporaryStore::new(
