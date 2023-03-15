@@ -4,9 +4,9 @@
 import { is } from 'superstruct';
 import {
   SuiEventFilter,
-  SuiEventEnvelope,
   SubscriptionId,
   SubscriptionEvent,
+  SuiEvent,
 } from '../types';
 import { Client as WsRpcClient } from 'rpc-websockets';
 
@@ -33,13 +33,13 @@ type JsonRpcMethodMessage<T> = {
 
 type FilterSubHandler = {
   id: SubscriptionId;
-  onMessage: (event: SuiEventEnvelope) => void;
+  onMessage: (event: SuiEvent) => void;
   filter: SuiEventFilter;
 };
 
 type SubscriptionData = {
   filter: SuiEventFilter;
-  onMessage: (event: SuiEventEnvelope) => void;
+  onMessage: (event: SuiEvent) => void;
 };
 
 type MinimumSubscriptionMessage = {
@@ -238,7 +238,7 @@ export class WebsocketClient {
 
   async subscribeEvent(
     filter: SuiEventFilter,
-    onMessage: (event: SuiEventEnvelope) => void,
+    onMessage: (event: SuiEvent) => void,
   ): Promise<SubscriptionId> {
     try {
       // lazily connect to websocket to avoid spamming node with connections

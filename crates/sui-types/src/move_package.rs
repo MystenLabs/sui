@@ -225,7 +225,7 @@ impl UpgradeCap {
     pub fn new(uid: ObjectID, package_id: ObjectID) -> Self {
         UpgradeCap {
             id: UID::new(uid),
-            package: ID { bytes: package_id },
+            package: ID::new(package_id),
             version: 1,
             policy: UPGRADE_POLICY_COMPATIBLE,
         }
@@ -258,9 +258,7 @@ impl UpgradeReceipt {
     pub fn new(upgrade_ticket: UpgradeTicket, upgraded_package_id: ObjectID) -> Self {
         UpgradeReceipt {
             cap: upgrade_ticket.cap,
-            package: ID {
-                bytes: upgraded_package_id,
-            },
+            package: ID::new(upgraded_package_id),
         }
     }
 }

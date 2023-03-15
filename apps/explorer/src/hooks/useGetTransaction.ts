@@ -9,10 +9,13 @@ export function useGetTransaction(transactionId: string) {
     return useQuery(
         ['transactions-by-id', transactionId],
         async () =>
-            rpc.getTransactionResponse(transactionId, {
-                showInput: true,
-                showEffects: true,
-                showEvents: true,
+            rpc.getTransaction({
+                digest: transactionId,
+                options: {
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
             }),
         { enabled: !!transactionId }
     );

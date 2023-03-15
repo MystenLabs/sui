@@ -7,19 +7,21 @@ use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
+use move_core_types::parser::parse_struct_tag;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
+
 use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, EventPage, MoveCallParams, OwnedObjectRef,
-    RPCTransactionRequestParams, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef,
-    SuiObjectResponse, SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
-    SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionEvents, SuiTransactionResponse,
+    Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
+    RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
+    SuiObjectData, SuiObjectDataOptions, SuiObjectInfo, SuiObjectRef, SuiObjectResponse,
+    SuiParsedData, SuiPastObjectResponse, SuiTransaction, SuiTransactionData,
+    SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionResponse,
     SuiTransactionResponseOptions, TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
@@ -37,8 +39,7 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::query::EventQuery;
-use sui_types::query::TransactionQuery;
+use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -76,7 +77,7 @@ impl RpcExampleProvider {
             self.get_objects_owned_by_address(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transactions(),
+            self.query_transactions(),
             self.get_events(),
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
@@ -167,7 +168,7 @@ impl RpcExampleProvider {
     }
 
     fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
+        let (data, signatures, _, _, result) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
@@ -335,7 +336,7 @@ impl RpcExampleProvider {
     }
 
     fn get_transaction(&mut self) -> Examples {
-        let (_, _, _, _, result, _) = self.get_transfer_data_response();
+        let (_, _, _, _, result) = self.get_transfer_data_response();
         Examples::new(
             "sui_getTransaction",
             vec![ExamplePairing::new(
@@ -355,11 +356,12 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transactions(&mut self) -> Examples {
+    fn query_transactions(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
         let has_next_page = data.len() > (9 - 5);
         data.truncate(9 - 5);
         let next_cursor = data.last().cloned();
+        let data = data.into_iter().map(SuiTransactionResponse::new).collect();
 
         let result = TransactionsPage {
             data,
@@ -367,13 +369,15 @@ impl RpcExampleProvider {
             has_next_page,
         };
         Examples::new(
-            "sui_getTransactions",
+            "sui_queryTransactions",
             vec![ExamplePairing::new(
                 "Return the transaction digest for specified query criteria",
                 vec![
                     (
                         "query",
-                        json!(TransactionQuery::InputObject(ObjectID::new(self.rng.gen()))),
+                        json!(TransactionFilter::InputObject(ObjectID::new(
+                            self.rng.gen()
+                        ))),
                     ),
                     ("cursor", json!(TransactionDigest::new(self.rng.gen()))),
                     ("limit", json!(100)),
@@ -399,7 +403,6 @@ impl RpcExampleProvider {
         SuiAddress,
         ObjectID,
         SuiTransactionResponse,
-        Vec<SuiEventEnvelope>,
     ) {
         let (signer, kp): (_, AccountKeyPair) = get_key_pair_from_rng(&mut self.rng);
         let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
@@ -423,24 +426,17 @@ impl RpcExampleProvider {
 
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
-        let signatures = tx.into_inner().tx_signatures.clone();
+        let signatures = tx.into_inner().tx_signatures().to_vec();
 
         let tx_digest = tx1.digest();
-        let sui_event = SuiEvent::TransferObject {
-            package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-            transaction_module: String::from("native"),
+        let object_change = ObjectChange::Transferred {
             sender: signer,
             recipient: Owner::AddressOwner(recipient),
-            object_type: "0x2::example::Object".to_string(),
+            object_type: parse_struct_tag("0x2::example::Object").unwrap(),
             object_id: object_ref.0,
             version: object_ref.1,
+            digest: ObjectDigest::new(self.rng.gen()),
         };
-        let events = vec![SuiEventEnvelope {
-            timestamp: std::time::Instant::now().elapsed().as_secs(),
-            tx_digest: *tx_digest,
-            id: EventID::from((*tx_digest, 0)),
-            event: sui_event.clone(),
-        }];
         let result = SuiTransactionResponse {
             digest: *tx_digest,
             effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
@@ -475,9 +471,9 @@ impl RpcExampleProvider {
                 events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
                 dependencies: vec![],
             })),
-            events: Some(SuiTransactionEvents {
-                data: vec![sui_event],
-            }),
+            events: None,
+            object_changes: Some(vec![object_change]),
+            balance_changes: None,
             timestamp_ms: None,
             transaction: Some(SuiTransaction {
                 data: SuiTransactionData::try_from(data1).unwrap(),
@@ -488,15 +484,29 @@ impl RpcExampleProvider {
             errors: vec![],
         };
 
-        (data2, signatures, recipient, obj_id, result, events)
+        (data2, signatures, recipient, obj_id, result)
     }
 
     fn get_events(&mut self) -> Examples {
-        let (_, _, _, _, result, events) = self.get_transfer_data_response();
+        let (_, _, _, _, result) = self.get_transfer_data_response();
         let tx_dig =
             TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
+        let event = SuiEvent {
+            id: EventID {
+                tx_digest: tx_dig,
+                event_seq: 0,
+            },
+            package_id: ObjectID::new(self.rng.gen()),
+            transaction_module: Identifier::from_str("test_module").unwrap(),
+            sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
+            type_: parse_struct_tag("0x9::test::TestEvent").unwrap(),
+            parsed_json: json! ({"test": "example value"}),
+            bcs: vec![],
+            timestamp_ms: None,
+        };
+
         let page = EventPage {
-            data: events.clone(),
+            data: vec![event],
             next_cursor: Some((tx_dig, 5).into()),
             has_next_page: false,
         };
@@ -504,18 +514,7 @@ impl RpcExampleProvider {
             "sui_getEvents",
             vec![ExamplePairing::new(
                 "Return the Events emitted by a transaction",
-                vec![
-                    ("query", json!(EventQuery::Transaction(result.digest))),
-                    (
-                        "cursor",
-                        json!(EventID {
-                            event_seq: 10,
-                            tx_digest: result.digest
-                        }),
-                    ),
-                    ("limit", json!(events.len())),
-                    ("descending_order", json!(false)),
-                ],
+                vec![("transaction_digest", json!(result.digest))],
                 json!(page),
             )],
         )

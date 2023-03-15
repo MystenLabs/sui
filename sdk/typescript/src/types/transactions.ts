@@ -11,17 +11,22 @@ import {
   optional,
   string,
   union,
-  unknown,
   boolean,
   tuple,
   assign,
   nullable,
 } from 'superstruct';
 import { SuiEvent } from './events';
-import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects';
+import {
+  ObjectDigest,
+  SuiGasData,
+  SuiMovePackage,
+  SuiObjectRef,
+} from './objects';
 import {
   ObjectId,
   ObjectOwner,
+  SequenceNumber,
   SuiAddress,
   SuiJsonValue,
   TransactionDigest,
@@ -54,7 +59,12 @@ export const Genesis = object({
 });
 export type Genesis = Infer<typeof Genesis>;
 
-export const SuiArgument = unknown();
+export const SuiArgument = union([
+  literal('GasCoin'),
+  object({ Input: number() }),
+  object({ Result: number() }),
+  object({ NestedResult: tuple([number(), number()]) }),
+]);
 
 export const SuiCommand = union([
   object({
@@ -212,7 +222,11 @@ export const DryRunTransactionResponse = object({
 export type DryRunTransactionResponse = Infer<typeof DryRunTransactionResponse>;
 
 const ReturnValueType = tuple([array(number()), string()]);
-const MutableReferenceOutputType = tuple([number(), array(number()), string()]);
+const MutableReferenceOutputType = tuple([
+  SuiArgument,
+  array(number()),
+  string(),
+]);
 const ExecutionResultType = object({
   mutableReferenceOutputs: optional(array(MutableReferenceOutputType)),
   returnValues: optional(array(ReturnValueType)),
@@ -235,17 +249,12 @@ export type GatewayTxSeqNumber = number;
 export const GetTxnDigestsResponse = array(TransactionDigest);
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 
-export const PaginatedTransactionDigests = object({
-  data: array(TransactionDigest),
-  nextCursor: union([TransactionDigest, literal(null)]),
-  hasNextPage: boolean(),
-});
-export type PaginatedTransactionDigests = Infer<
-  typeof PaginatedTransactionDigests
->;
+export type SuiTransactionResponseQuery = {
+  filter?: TransactionFilter;
+  options?: SuiTransactionResponseOptions;
+};
 
-export type TransactionQuery =
-  | 'All'
+export type TransactionFilter =
   | {
       MoveFunction: {
         package: ObjectId;
@@ -268,6 +277,78 @@ export const SuiTransaction = object({
 });
 export type SuiTransaction = Infer<typeof SuiTransaction>;
 
+export const SuiObjectChangePublished = object({
+  type: literal('published'),
+  packageId: ObjectId,
+  version: SequenceNumber,
+  digest: ObjectDigest,
+  modules: array(string()),
+});
+export type SuiObjectChangePublished = Infer<typeof SuiObjectChangePublished>;
+
+export const SuiObjectChangeTransferred = object({
+  type: literal('transferred'),
+  sender: SuiAddress,
+  recipient: ObjectOwner,
+  objectType: string(),
+  objectId: ObjectId,
+  version: SequenceNumber,
+  digest: ObjectDigest,
+});
+export type SuiObjectChangeTransferred = Infer<
+  typeof SuiObjectChangeTransferred
+>;
+
+export const SuiObjectChangeMutated = object({
+  type: literal('mutated'),
+  sender: SuiAddress,
+  owner: ObjectOwner,
+  objectType: string(),
+  objectId: ObjectId,
+  version: SequenceNumber,
+  digest: ObjectDigest,
+});
+export type SuiObjectChangeMutated = Infer<typeof SuiObjectChangeMutated>;
+
+export const SuiObjectChangeDeleted = object({
+  type: literal('deleted'),
+  sender: SuiAddress,
+  objectType: string(),
+  objectId: ObjectId,
+  version: SequenceNumber,
+});
+export type SuiObjectChangeDeleted = Infer<typeof SuiObjectChangeDeleted>;
+
+export const SuiObjectChangeWrapped = object({
+  type: literal('wrapped'),
+  sender: SuiAddress,
+  objectType: string(),
+  objectId: ObjectId,
+  version: SequenceNumber,
+});
+export type SuiObjectChangeWrapped = Infer<typeof SuiObjectChangeWrapped>;
+
+export const SuiObjectChangeCreated = object({
+  type: literal('created'),
+  sender: SuiAddress,
+  owner: ObjectOwner,
+  objectType: string(),
+  objectId: ObjectId,
+  version: SequenceNumber,
+  digest: ObjectDigest,
+});
+export type SuiObjectChangeCreated = Infer<typeof SuiObjectChangeCreated>;
+
+export const SuiObjectChange = union([
+  SuiObjectChangePublished,
+  SuiObjectChangeTransferred,
+  SuiObjectChangeMutated,
+  SuiObjectChangeDeleted,
+  SuiObjectChangeWrapped,
+  SuiObjectChangeCreated,
+]);
+export type SuiObjectChange = Infer<typeof SuiObjectChange>;
+
 export const SuiTransactionResponse = object({
   digest: TransactionDigest,
   transaction: optional(SuiTransaction),
@@ -276,6 +357,7 @@ export const SuiTransactionResponse = object({
   timestampMs: optional(number()),
   checkpoint: optional(number()),
   confirmedLocalExecution: optional(boolean()),
+  objectChanges: optional(array(SuiObjectChange)),
   /* Errors that occurred in fetching/serializing the transaction. */
   errors: optional(array(string())),
 });
@@ -288,10 +370,22 @@ export const SuiTransactionResponseOptions = object({
   showEffects: optional(boolean()),
   /* Whether to show transaction events. Default to be false. */
   showEvents: optional(boolean()),
+  /* Whether to show transaction events. Default to be false. */
+  showObjectChanges: optional(boolean()),
+  // MUSTFIX(chris): add showBalanceChanges
 });
 
 export type SuiTransactionResponseOptions = Infer<
   typeof SuiTransactionResponseOptions
+>;
+
+export const PaginatedTransactionResponse = object({
+  data: array(SuiTransactionResponse),
+  nextCursor: union([TransactionDigest, literal(null)]),
+  hasNextPage: boolean(),
+});
+export type PaginatedTransactionResponse = Infer<
+  typeof PaginatedTransactionResponse
 >;
 
 /* -------------------------------------------------------------------------- */
@@ -456,4 +550,20 @@ export function getNewlyCreatedCoinRefsAfterSplit(
   data: SuiTransactionResponse,
 ): SuiObjectRef[] | undefined {
   return getTransactionEffects(data)?.created?.map((c) => c.reference);
+}
+
+export function getObjectChanges(
+  data: SuiTransactionResponse,
+): SuiObjectChange[] | undefined {
+  return data.objectChanges;
+}
+
+export function getPublishedObjectChanges(
+  data: SuiTransactionResponse,
+): SuiObjectChangePublished[] {
+  return (
+    (data.objectChanges?.filter((a) =>
+      is(a, SuiObjectChangePublished),
+    ) as SuiObjectChangePublished[]) ?? []
+  );
 }

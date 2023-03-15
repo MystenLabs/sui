@@ -4,6 +4,7 @@
 use super::*;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use bytes::Bytes;
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{
     encoding::{Encoding, Hex},
@@ -56,7 +57,7 @@ async fn reject_invalid_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+    let batch_store = rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
@@ -64,7 +65,6 @@ async fn reject_invalid_clients_transactions() {
         &ReadWriteOptions::default(),
     )
     .unwrap();
-    let store = Store::new(db);
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
@@ -80,7 +80,7 @@ async fn reject_invalid_clients_transactions() {
         worker_cache.clone(),
         parameters,
         NilTxValidator,
-        store,
+        batch_store,
         metrics,
         &mut tx_shutdown,
     );
@@ -146,7 +146,7 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+    let batch_store = rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
@@ -154,7 +154,6 @@ async fn handle_clients_transactions() {
         &ReadWriteOptions::default(),
     )
     .unwrap();
-    let store = Store::new(db);
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
@@ -170,7 +169,7 @@ async fn handle_clients_transactions() {
         worker_cache.clone(),
         parameters,
         TrivialTransactionValidator::default(),
-        store,
+        batch_store,
         metrics,
         &mut tx_shutdown,
     );
@@ -265,7 +264,8 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -386,7 +386,8 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));

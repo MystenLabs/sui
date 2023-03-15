@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import { is } from 'superstruct';
-import { Provider } from '../providers/provider';
+import { is, mask } from 'superstruct';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import {
   extractMutableReference,
   extractStructTag,
@@ -85,7 +85,9 @@ function createTransactionResult(index: number): TransactionResult {
   }) as TransactionResult;
 }
 
-function expectProvider(provider: Provider | undefined): Provider {
+function expectProvider(
+  provider: JsonRpcProvider | undefined,
+): JsonRpcProvider {
   if (!provider) {
     throw new Error(
       `No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
@@ -97,9 +99,22 @@ function expectProvider(provider: Provider | undefined): Provider {
 
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
 
+// The maximum number of gas objects that can be selected for one transaction.
+const MAX_GAS_OBJECTS = 256;
+
+// The maximum gas that is allowed.
+const MAX_GAS = 1000000000;
+
+// A guess about how much overhead each coin provides for gas calculations.
+const GAS_OVERHEAD_PER_COIN = 10n;
+
+interface BuildOptions {
+  provider?: JsonRpcProvider;
+  onlyTransactionKind?: boolean;
+}
+
 /**
  * Transaction Builder
- * @experimental
  */
 export class Transaction {
   /** Returns `true` if the object is an instance of the Transaction builder class. */
@@ -156,8 +171,15 @@ export class Transaction {
   setGasBudget(budget: number | bigint) {
     this.#transactionData.gasConfig.budget = String(budget);
   }
-  setGasPayment(payment: SuiObjectRef[]) {
-    this.#transactionData.gasConfig.payment = payment;
+  setGasPayment(payments: SuiObjectRef[]) {
+    if (payments.length > MAX_GAS_OBJECTS) {
+      throw new Error(
+        `Payment objects exceed maximum amount ${MAX_GAS_OBJECTS}`,
+      );
+    }
+    this.#transactionData.gasConfig.payment = payments.map((payment) =>
+      mask(payment, SuiObjectRef),
+    );
   }
 
   #transactionData: TransactionDataBuilder;
@@ -216,25 +238,45 @@ export class Transaction {
 
   /**
    * Add a new non-object input to the transaction.
-   *
-   * TODO: take an optional second type parameter here and do the BCS encoding into the
-   * fully-resolved type if folks happen to know the pure type encoding.
    */
-  pure(value: unknown) {
+  pure(
+    value: unknown,
+    /**
+     * The BCS type to serialize the value into. If not provided, the type will automatically be determined
+     * based on how the input is used.
+     */
+    type?: string,
+  ) {
     // TODO: we can also do some deduplication here
-    return this.#input('pure', value);
+    return this.#input('pure', type ? Inputs.Pure(type, value) : value);
   }
-
-  // TODO: Currently, tx.input() takes in both fully-resolved input values, and partially-resolved input values.
-  // We could also simplify the transaction building quite a bit if we force folks to use fully-resolved pure types
-  // always, and just offer object building through some API like `tx.object()`, which we can just track slightly
-  // different internally.
 
   /** Add a command to the transaction. */
   add(command: TransactionCommand) {
     // TODO: This should also look at the command arguments and add any referenced commands that are not present in this transaction.
     const index = this.#transactionData.commands.push(command);
     return createTransactionResult(index - 1);
+  }
+
+  // Method shorthands:
+
+  splitCoin(...args: Parameters<(typeof Commands)['SplitCoin']>) {
+    return this.add(Commands.SplitCoin(...args));
+  }
+  mergeCoins(...args: Parameters<(typeof Commands)['MergeCoins']>) {
+    return this.add(Commands.MergeCoins(...args));
+  }
+  publish(...args: Parameters<(typeof Commands)['Publish']>) {
+    return this.add(Commands.Publish(...args));
+  }
+  moveCall(...args: Parameters<(typeof Commands)['MoveCall']>) {
+    return this.add(Commands.MoveCall(...args));
+  }
+  transferObjects(...args: Parameters<(typeof Commands)['TransferObjects']>) {
+    return this.add(Commands.TransferObjects(...args));
+  }
+  makeMoveVec(...args: Parameters<(typeof Commands)['MakeMoveVec']>) {
+    return this.add(Commands.MakeMoveVec(...args));
   }
 
   /**
@@ -257,11 +299,8 @@ export class Transaction {
   async build({
     provider,
     onlyTransactionKind,
-  }: {
-    provider?: Provider;
-    onlyTransactionKind?: boolean;
-  } = {}): Promise<Uint8Array> {
-    await this.#prepare(provider);
+  }: BuildOptions = {}): Promise<Uint8Array> {
+    await this.#prepare({ provider, onlyTransactionKind });
     return this.#transactionData.build({ onlyTransactionKind });
   }
 
@@ -269,29 +308,57 @@ export class Transaction {
   async getDigest({
     provider,
   }: {
-    provider?: Provider;
+    provider?: JsonRpcProvider;
   } = {}): Promise<string> {
-    await this.#prepare(provider);
+    await this.#prepare({ provider });
     return this.#transactionData.getDigest();
+  }
+
+  // The current default is just picking _all_ coins we can which may not be ideal.
+  async #selectGasPayment(provider?: JsonRpcProvider) {
+    const coins = await expectProvider(provider).getCoins({
+      owner: this.#transactionData.sender!,
+      coinType: SUI_TYPE_ARG,
+    });
+
+    const paymentCoins = coins.data
+      // Filter out coins that are also used as input:
+      .filter((coin) => {
+        const matchingInput = this.#transactionData.inputs.find((input) => {
+          if (
+            is(input.value, BuilderCallArg) &&
+            'Object' in input.value &&
+            'ImmOrOwned' in input.value.Object
+          ) {
+            return coin.coinObjectId === input.value.Object.ImmOrOwned.objectId;
+          }
+
+          return false;
+        });
+
+        return !matchingInput;
+      })
+      .slice(0, MAX_GAS_OBJECTS)
+      .map((coin) => ({
+        objectId: coin.coinObjectId,
+        digest: coin.digest,
+        version: coin.version,
+      }));
+
+    if (!paymentCoins.length) {
+      throw new Error('No valid gas coins found for the transaction.');
+    }
+
+    return paymentCoins;
   }
 
   /**
    * Prepare the transaction by valdiating the transaction data and resolving all inputs
    * so that it can be built into bytes.
    */
-  async #prepare(provider?: Provider) {
+  async #prepare({ provider, onlyTransactionKind }: BuildOptions) {
     if (!this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
-    }
-
-    if (!this.#transactionData.gasConfig.budget) {
-      throw new Error('Missing gas budget');
-    }
-
-    if (!this.#transactionData.gasConfig.price) {
-      this.#transactionData.gasConfig.price = String(
-        await expectProvider(provider).getReferenceGasPrice(),
-      );
     }
 
     const { inputs, commands } = this.#transactionData;
@@ -383,11 +450,11 @@ export class Transaction {
 
           const normalized = await expectProvider(
             provider,
-          ).getNormalizedMoveFunction(
-            normalizeSuiObjectId(packageId),
-            moduleName,
-            functionName,
-          );
+          ).getNormalizedMoveFunction({
+            package: normalizeSuiObjectId(packageId),
+            module: moduleName,
+            function: functionName,
+          });
 
           // Entry functions can have a mutable reference to an instance of the TxContext
           // struct defined in the TxContext module as the last parameter. The caller of
@@ -456,10 +523,10 @@ export class Transaction {
 
     if (objectsToResolve.length) {
       const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
-      const objects = await expectProvider(provider).getObjectBatch(
-        dedupedIds,
-        { showOwner: true },
-      );
+      const objects = await expectProvider(provider).multiGetObjects({
+        ids: dedupedIds,
+        options: { showOwner: true },
+      });
       let objectsById = new Map(
         dedupedIds.map((id, index) => {
           return [id, objects[index]];
@@ -501,41 +568,34 @@ export class Transaction {
       });
     }
 
-    if (!this.#transactionData.gasConfig.payment) {
-      const coins = await expectProvider(provider).getCoins({
-        owner: this.#transactionData.sender,
-        coinType: SUI_TYPE_ARG,
-      });
+    if (!onlyTransactionKind) {
+      if (!this.#transactionData.gasConfig.price) {
+        this.setGasPrice(await expectProvider(provider).getReferenceGasPrice());
+      }
 
-      // TODO: Allow consumers to define coin selection logic, and refine the default behavior.
-      // The current default is just picking _all_ coins which may not be ideal.
-      this.#transactionData.gasConfig.payment = coins.data
-        // Filter out coins that are also used as input:
-        .filter((coin) => {
-          const matchingInput = this.#transactionData.inputs.find((input) => {
-            if (
-              is(input.value, BuilderCallArg) &&
-              'Object' in input.value &&
-              'ImmOrOwned' in input.value.Object
-            ) {
-              return (
-                coin.coinObjectId === input.value.Object.ImmOrOwned.objectId
-              );
-            }
+      if (!this.#transactionData.gasConfig.payment) {
+        this.#transactionData.gasConfig.payment = await this.#selectGasPayment(
+          provider,
+        );
+      }
 
-            return false;
-          });
+      if (!this.transactionData.gasConfig.budget) {
+        const dryRunResult = await expectProvider(provider).dryRunTransaction({
+          transaction: this.#transactionData.build({
+            overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
+          }),
+        });
 
-          return !matchingInput;
-        })
-        .map((coin) => ({
-          objectId: coin.coinObjectId,
-          digest: coin.digest,
-          version: coin.version,
-        }));
+        const coinOverhead =
+          GAS_OVERHEAD_PER_COIN *
+          BigInt(this.transactionData.gasConfig.payment?.length || 0n) *
+          BigInt(this.transactionData.gasConfig.price || 1n);
 
-      if (!this.#transactionData.gasConfig.payment.length) {
-        throw new Error('No valid gas coins found for the transaction.');
+        this.setGasBudget(
+          BigInt(dryRunResult.effects.gasUsed.computationCost) +
+            BigInt(dryRunResult.effects.gasUsed.storageCost) +
+            coinOverhead,
+        );
       }
     }
   }

@@ -17,7 +17,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
-use crate::crypto::{deterministic_random_account_key, sha3_hash};
+use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
@@ -643,7 +643,7 @@ impl Object {
     }
 
     pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(sha3_hash(self))
+        ObjectDigest::new(default_hash(self))
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
@@ -694,20 +694,6 @@ impl Object {
         // Index access safe due to checks above.
         let type_tag = move_struct.type_params[0].clone();
         Ok(type_tag)
-    }
-
-    pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
-        if !matches!(self.owner, Owner::AddressOwner(_)) {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
-        let has_public_transfer = match &self.data {
-            Data::Move(m) => m.has_public_transfer(),
-            Data::Package(_) => false,
-        };
-        if !has_public_transfer {
-            return Err(ExecutionErrorKind::InvalidTransferObject.into());
-        }
-        Ok(())
     }
 }
 

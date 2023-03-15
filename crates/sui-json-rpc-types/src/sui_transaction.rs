@@ -16,7 +16,7 @@ use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, SuiError};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     Argument, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
@@ -28,8 +28,11 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
+use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 
+use crate::balance_changes::BalanceChange;
+use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 #[serde_as]
@@ -58,8 +61,32 @@ impl Display for BigInt {
         write!(f, "{}", self.0)
     }
 }
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase", rename = "TransactionResponseQuery", default)]
+pub struct SuiTransactionResponseQuery {
+    /// If None, no filter will be applied
+    pub filter: Option<TransactionFilter>,
+    /// config which fields to include in the response, by default only digest is included
+    pub options: Option<SuiTransactionResponseOptions>,
+}
 
-pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
+impl SuiTransactionResponseQuery {
+    pub fn new(
+        filter: Option<TransactionFilter>,
+        options: Option<SuiTransactionResponseOptions>,
+    ) -> Self {
+        Self { filter, options }
+    }
+
+    pub fn new_with_filter(filter: TransactionFilter) -> Self {
+        Self {
+            filter: Some(filter),
+            options: None,
+        }
+    }
+}
+
+pub type TransactionsPage = Page<SuiTransactionResponse, TransactionDigest>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
 #[serde(
@@ -74,6 +101,10 @@ pub struct SuiTransactionResponseOptions {
     pub show_effects: bool,
     /// Whether to show transaction events. Default to be False
     pub show_events: bool,
+    /// Whether to show object_changes. Default to be False
+    pub show_object_changes: bool,
+    /// Whether to show balance_changes. Default to be False
+    pub show_balance_changes: bool,
 }
 
 impl SuiTransactionResponseOptions {
@@ -86,6 +117,8 @@ impl SuiTransactionResponseOptions {
             show_effects: true,
             show_input: true,
             show_events: true,
+            show_object_changes: true,
+            show_balance_changes: true,
         }
     }
 
@@ -104,6 +137,16 @@ impl SuiTransactionResponseOptions {
         self
     }
 
+    pub fn with_balance_changes(mut self) -> Self {
+        self.show_balance_changes = true;
+        self
+    }
+
+    pub fn with_object_changes(mut self) -> Self {
+        self.show_object_changes = true;
+        self
+    }
+
     /// default to return `WaitForEffectsCert` unless some options require
     /// local execution
     pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
@@ -116,12 +159,18 @@ impl SuiTransactionResponseOptions {
     }
 
     pub fn require_local_execution(&self) -> bool {
-        // TODO: change this if we add new options that require local execution
-        false
+        self.show_balance_changes || self.show_object_changes
     }
 
     pub fn require_effects(&self) -> bool {
-        self.show_effects || self.show_events
+        self.show_effects
+            || self.show_events
+            || self.show_balance_changes
+            || self.show_object_changes
+    }
+
+    pub fn only_digest(&self) -> bool {
+        self == &Self::default()
     }
 }
 
@@ -136,6 +185,10 @@ pub struct SuiTransactionResponse {
     pub effects: Option<SuiTransactionEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<SuiTransactionEvents>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_changes: Option<Vec<ObjectChange>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance_changes: Option<Vec<BalanceChange>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -326,6 +379,7 @@ pub struct SuiTransactionEffectsV1 {
     pub gas_object: OwnedObjectRef,
     /// The digest of the events emitted during execution,
     /// can be None if the transaction does not emit any event.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -394,7 +448,7 @@ impl SuiTransactionEffectsAPI for SuiTransactionEffectsV1 {
 impl SuiTransactionEffects {}
 
 impl TryFrom<TransactionEffects> for SuiTransactionEffects {
-    type Error = anyhow::Error;
+    type Error = SuiError;
 
     fn try_from(effect: TransactionEffects) -> Result<Self, Self::Error> {
         let message_version = effect
@@ -422,10 +476,10 @@ impl TryFrom<TransactionEffects> for SuiTransactionEffects {
                 dependencies: effect.dependencies().to_vec(),
             })),
 
-            _ => Err(anyhow::anyhow!(
+            _ => Err(SuiError::UnexpectedVersion(format!(
                 "Support for TransactionEffects version {} not implemented",
                 message_version
-            )),
+            ))),
         }
     }
 }
@@ -495,13 +549,18 @@ pub struct SuiTransactionEvents {
 impl SuiTransactionEvents {
     pub fn try_from(
         events: TransactionEvents,
+        tx_digest: TransactionDigest,
+        timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, SuiError> {
         Ok(Self {
             data: events
                 .data
                 .into_iter()
-                .map(|event| SuiEvent::try_from(event, resolver))
+                .enumerate()
+                .map(|(seq, event)| {
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, resolver)
+                })
                 .collect::<Result<_, _>>()?,
         })
     }
@@ -545,6 +604,7 @@ impl DevInspectResults {
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
+        let tx_digest = *effects.transaction_digest();
         let results = match return_values {
             Err(e) => Err(format!("{}", e)),
             Ok(srvs) => Ok(srvs
@@ -568,7 +628,7 @@ impl DevInspectResults {
         };
         Ok(Self {
             effects: effects.try_into()?,
-            events: SuiTransactionEvents::try_from(events, resolver)?,
+            events: SuiTransactionEvents::try_from(events, tx_digest, None, resolver)?,
             results,
         })
     }
@@ -782,8 +842,8 @@ impl TryFrom<SenderSignedData> for SuiTransaction {
 
     fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
         Ok(Self {
-            data: data.intent_message.value.try_into()?,
-            tx_signatures: data.tx_signatures,
+            data: data.intent_message().value.clone().try_into()?,
+            tx_signatures: data.tx_signatures().to_vec(),
         })
     }
 }
@@ -896,7 +956,7 @@ pub enum SuiCommand {
     /// Publishes a Move package
     Publish(SuiMovePackage),
     /// Upgrades a Move package
-    Upgrade(SuiArgument, Vec<ObjectID>, SuiMovePackage),
+    Upgrade(SuiMovePackage, Vec<ObjectID>, ObjectID, SuiArgument),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -932,9 +992,10 @@ impl Display for SuiCommand {
                 write!(f, ")")
             }
             Self::Publish(_bytes) => write!(f, "Publish(_)"),
-            Self::Upgrade(ticket, deps, _bytes) => {
+            Self::Upgrade(_bytes, deps, current_package_id, ticket) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
+                write!(f, ", {current_package_id}")?;
                 write!(f, ", _)")?;
                 write!(f, ")")
             }
@@ -962,12 +1023,13 @@ impl From<Command> for SuiCommand {
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Upgrade(ticket, dep_ids, modules) => SuiCommand::Upgrade(
-                SuiArgument::from(ticket),
-                dep_ids,
+            Command::Upgrade(modules, dep_ids, current_package_id, ticket) => SuiCommand::Upgrade(
                 SuiMovePackage {
                     disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
                 },
+                dep_ids,
+                current_package_id,
+                SuiArgument::from(ticket),
             ),
         }
     }

@@ -114,7 +114,7 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, Self::Error> {
-        self.authority_store.perpetual_tables.events.get(digest)
+        self.authority_store.get_events(digest)
     }
 }
 
@@ -126,8 +126,7 @@ impl WriteStore for RocksDbStore {
         }) = checkpoint.end_of_epoch_data.as_ref()
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
-            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
-                .expect("new committee from consensus should be constructable");
+            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee);
             self.insert_committee(committee)?;
         }
 

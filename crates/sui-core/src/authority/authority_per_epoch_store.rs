@@ -3,7 +3,6 @@
 
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
-use lru::LruCache;
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::Round;
 use parking_lot::RwLock;
@@ -13,16 +12,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::iter;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::default_db_options;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
-use sui_types::digests::CertificateDigest;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
@@ -32,12 +28,15 @@ use sui_types::messages::{
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
-use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
+use typed_store::rocks::{
+    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
+};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper, MAX_TX_RECOVERY_RETRY};
+use crate::batch_bls_verifier::*;
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
     PendingCheckpointInfo,
@@ -56,15 +55,15 @@ use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use mysten_common::notify_once::NotifyOnce;
 use mysten_metrics::monitored_scope;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::MutexGuard;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
-    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+    CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -117,9 +116,10 @@ pub struct AuthorityPerEpochStore {
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
 
-    // Cache of certificates that are known to have valid signatures.
-    // Lives in per-epoch store because the caching is only valid within an epoch.
-    verified_cert_cache: VerifiedCertificateCache,
+    /// Batch verifier for certificates - also caches certificates that are known to have
+    /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
+    /// within for certs within the current epoch.
+    pub(crate) batch_verifier: BatchCertificateVerifier,
 
     pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
 
@@ -270,12 +270,6 @@ pub struct AuthorityEpochTables {
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
 
-    /// Stores the sequence number of the last certified checkpoint we have recorded for idempotency and
-    /// the number of checkpoint each validator participated in certifying during the current
-    /// epoch, used for tallying rule scores.
-    num_certified_checkpoint_signatures:
-        DBMap<AuthorityName, (Option<CheckpointSequenceNumber>, u64)>,
-
     // Maps checkpoint sequence number to an accumulator with accumulated state
     // only for the checkpoint that the key references. Append-only, i.e.,
     // the accumulator is complete wrt the checkpoint
@@ -334,7 +328,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
-        verified_cert_cache_metrics: Arc<VerifiedCertificateCacheMetrics>,
+        batch_verifier_metrics: Arc<BatchCertificateVerifierMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -373,6 +367,8 @@ impl AuthorityPerEpochStore {
             .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
+        let batch_verifier =
+            BatchCertificateVerifier::new(committee.clone(), batch_verifier_metrics);
         Arc::new(Self {
             committee,
             protocol_config,
@@ -383,7 +379,7 @@ impl AuthorityPerEpochStore {
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
-            verified_cert_cache: VerifiedCertificateCache::new(verified_cert_cache_metrics),
+            batch_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -429,7 +425,7 @@ impl AuthorityPerEpochStore {
             epoch_start_configuration,
             store,
             self.execution_component.metrics(),
-            self.verified_cert_cache.metrics.clone(),
+            self.batch_verifier.metrics.clone(),
         )
     }
 
@@ -451,10 +447,6 @@ impl AuthorityPerEpochStore {
 
     pub fn epoch(&self) -> EpochId {
         self.committee.epoch
-    }
-
-    pub fn verified_cert_cache(&self) -> &VerifiedCertificateCache {
-        &self.verified_cert_cache
     }
 
     pub fn get_state_hash_for_checkpoint(
@@ -1173,71 +1165,6 @@ impl AuthorityPerEpochStore {
         self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
 
-    /// Called when a ceritified checkpoint is inserted into the checkpoint store.
-    /// This function records the validators' participation in the certified checkpoint by
-    /// incrementing the counters stored in the epoch tables. Tallying score metrics are
-    /// also updated at this point to send the most up-to-date scores.
-    pub fn record_certified_checkpoint_signatures(
-        &self,
-        certified_checkpoint: &CertifiedCheckpointSummary,
-    ) -> Result<(), TypedStoreError> {
-        let signed_authorities = certified_checkpoint
-            .auth_sig()
-            .authorities(&self.committee)
-            .collect::<Result<Vec<&AuthorityName>, _>>()
-            // using `expect` here is fine because this error would be caught much earlier
-            .expect("Certified checkpoint should be valid");
-
-        debug!(
-            "Recording certified checkpoint signatures from {:?}",
-            signed_authorities
-        );
-
-        let seq_num = *certified_checkpoint.sequence_number();
-
-        let old_values = self
-            .tables
-            .num_certified_checkpoint_signatures
-            .multi_get(signed_authorities.clone())?;
-
-        let new_key_values = signed_authorities
-            .into_iter()
-            .zip(old_values.into_iter().map(|v| v.unwrap_or((None, 0))))
-            // Only keep the entries whose values we haven't recorded for this checkpoint for idempotency.
-            .filter(|(_, (last_processed_seq_num, _))| {
-                last_processed_seq_num.is_none() || last_processed_seq_num.unwrap() < seq_num
-            })
-            // Increment counter and update the last processed ckpt sequence num
-            .map(|(name, (_, counter))| (name, (Some(seq_num), counter + 1)))
-            .collect::<Vec<_>>();
-
-        // Send tallying rule score through prometheus.
-        new_key_values
-            .iter()
-            .for_each(|(authority_name, (_, score))| {
-                self.metrics
-                    .tallying_rule_scores
-                    .with_label_values(&[
-                        &format!("{:?}", authority_name.concise()),
-                        &self.epoch().to_string(),
-                    ])
-                    .set(*score as i64)
-            });
-
-        // Batch update the counters to new values.
-        let batch = self
-            .tables
-            .num_certified_checkpoint_signatures
-            .batch()
-            .insert_batch(
-                &self.tables.num_certified_checkpoint_signatures,
-                new_key_values,
-            )?;
-        batch.write()?;
-
-        Ok(())
-    }
-
     pub fn finish_consensus_certificate_process(
         &self,
         key: SequencedConsensusTransactionKey,
@@ -1352,7 +1279,7 @@ impl AuthorityPerEpochStore {
             .contains_key(certificate.digest())?);
         let batch = batch.insert_batch(
             &self.tables.user_signatures_for_checkpoints,
-            [(*certificate.digest(), certificate.tx_signatures.clone())],
+            [(*certificate.digest(), certificate.tx_signatures().to_vec())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
     }
@@ -1877,13 +1804,6 @@ impl AuthorityPerEpochStore {
             .unwrap_or_default()
     }
 
-    pub fn get_num_certified_checkpoint_sigs_by(
-        &self,
-        name: &AuthorityName,
-    ) -> SuiResult<Option<(Option<CheckpointSequenceNumber>, u64)>> {
-        Ok(self.tables.num_certified_checkpoint_signatures.get(name)?)
-    }
-
     pub fn insert_checkpoint_signature(
         &self,
         checkpoint_seq: CheckpointSequenceNumber,
@@ -1964,7 +1884,7 @@ impl AuthorityPerEpochStore {
 }
 
 fn transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
 
 impl ExecutionComponents {
@@ -1993,80 +1913,5 @@ impl ExecutionComponents {
 
     pub(crate) fn metrics(&self) -> Arc<ResolverMetrics> {
         self.metrics.clone()
-    }
-}
-
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
-// guess to start with is that it should be 10-20 times larger than peak transactions per second,
-// on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
-
-pub struct VerifiedCertificateCacheMetrics {
-    certificate_signatures_cache_hits: IntCounter,
-    certificate_signatures_cache_evictions: IntCounter,
-}
-
-impl VerifiedCertificateCacheMetrics {
-    pub fn new(registry: &Registry) -> Arc<Self> {
-        Arc::new(Self {
-            certificate_signatures_cache_hits: register_int_counter_with_registry!(
-                "certificate_signatures_cache_hits",
-                "Number of certificates which were known to be verified because of signature cache.",
-                registry
-            )
-            .unwrap(),
-            certificate_signatures_cache_evictions: register_int_counter_with_registry!(
-                "certificate_signatures_cache_evictions",
-                "Number of times we evict a pre-existing key were known to be verified because of signature cache.",
-                registry
-            )
-            .unwrap(),
-        })
-    }
-}
-
-pub struct VerifiedCertificateCache {
-    inner: RwLock<LruCache<CertificateDigest, ()>>,
-    metrics: Arc<VerifiedCertificateCacheMetrics>,
-}
-
-impl VerifiedCertificateCache {
-    pub fn new(metrics: Arc<VerifiedCertificateCacheMetrics>) -> Self {
-        Self {
-            inner: RwLock::new(LruCache::new(
-                NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
-            )),
-            metrics,
-        }
-    }
-
-    pub fn is_cert_verified(&self, digest: &CertificateDigest) -> bool {
-        let inner = self.inner.read();
-        if inner.contains(digest) {
-            self.metrics.certificate_signatures_cache_hits.inc();
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn cache_cert_verified(&self, digest: CertificateDigest) {
-        let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, ()) {
-            if old.0 != digest {
-                self.metrics.certificate_signatures_cache_evictions.inc();
-            }
-        }
-    }
-
-    pub fn cache_certs_verified(&self, digests: Vec<CertificateDigest>) {
-        let mut inner = self.inner.write();
-        digests.into_iter().for_each(|d| {
-            if let Some(old) = inner.push(d, ()) {
-                if old.0 != d {
-                    self.metrics.certificate_signatures_cache_evictions.inc();
-                }
-            }
-        });
     }
 }

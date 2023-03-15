@@ -28,7 +28,7 @@ use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
-use store::Store;
+use store::rocks::DBMap;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -63,7 +63,7 @@ pub struct Worker {
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
-    store: Store<BatchDigest, Batch>,
+    store: DBMap<BatchDigest, Batch>,
 }
 
 impl Worker {
@@ -75,7 +75,7 @@ impl Worker {
         worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
-        store: Store<BatchDigest, Batch>,
+        store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
@@ -223,6 +223,13 @@ impl Worker {
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
+            // Increase send and receive buffer sizes on the worker, since the worker is
+            // responsible for broadcasting and fetching payloads.
+            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB.
+            quic_config.stream_receive_window = Some(100 << 20);
+            quic_config.receive_window = Some(200 << 20);
+            quic_config.send_window = Some(200 << 20);
+            quic_config.crypto_buffer_size = Some(1 << 20);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();

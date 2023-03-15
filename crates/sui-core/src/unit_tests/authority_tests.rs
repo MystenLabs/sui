@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use crate::{
-    authority::move_integration_tests::build_and_publish_test_package,
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
@@ -41,8 +41,7 @@ use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::{
-    make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
-    to_sender_signed_transaction_with_multi_signers,
+    to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
@@ -238,7 +237,7 @@ async fn test_dry_run_transaction() {
 
     let response = fullnode
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await
@@ -262,7 +261,7 @@ async fn test_dry_run_transaction() {
         .version();
     assert_eq!(shared_object_version, initial_shared_object_version);
 
-    let txn_data = &transaction.data().intent_message.value;
+    let txn_data = &transaction.data().intent_message().value;
     let txn_data = TransactionData::new_with_gas_coins(
         txn_data.kind().clone(),
         txn_data.sender(),
@@ -900,7 +899,7 @@ async fn test_dry_run_on_validator() {
     let transaction_digest = *transaction.digest();
     let response = validator
         .dry_exec_transaction(
-            transaction.data().intent_message.value.clone(),
+            transaction.data().intent_message().value.clone(),
             transaction_digest,
         )
         .await;
@@ -950,11 +949,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone().into_inner();
-    bad_signature_transfer_transaction
+    *bad_signature_transfer_transaction
         .data_mut_for_testing()
-        .tx_signatures =
+        .tx_signatures_mut_for_testing() =
         vec![
-            Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into(),
+            Signature::new_secure(transfer_transaction.data().intent_message(), &unknown_key)
+                .into(),
         ];
 
     assert!(client
@@ -1104,7 +1104,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 async fn test_upgrade_module_is_feature_gated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 10000);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 100000);
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
 
@@ -1112,7 +1112,8 @@ async fn test_upgrade_module_is_feature_gated() {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Data doesn't matter here. We hit the feature flag before checking it.
         let arg = builder.pure(1).unwrap();
-        builder.upgrade(arg, vec![], vec![vec![]]);
+        let stdlib_pkg_id = ObjectID::from_hex_literal("0x1").unwrap();
+        builder.upgrade(stdlib_pkg_id, arg, vec![], vec![vec![]]);
         builder.finish()
     };
 
@@ -1240,8 +1241,8 @@ async fn test_handle_transfer_transaction_ok() {
     };
 
     assert_eq!(
-        envelope.data().intent_message.value,
-        transfer_transaction.data().intent_message.value
+        envelope.data().intent_message().value,
+        transfer_transaction.data().intent_message().value
     );
 }
 
@@ -1927,10 +1928,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         panic!("expected transaction to fail")
     };
     assert_eq!(command, &Some(0));
-    assert_eq!(
-        error,
-        &ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance
-    )
+    assert_eq!(error, &ExecutionFailureStatus::InsufficientCoinBalance)
 }
 
 #[tokio::test]
@@ -2545,7 +2543,6 @@ async fn test_move_call_mutable_object_not_mutated() {
 }
 
 // skipped because it violates SUI conservation checks
-#[ignore]
 #[tokio::test]
 async fn test_move_call_insufficient_gas() {
     // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
@@ -2872,7 +2869,8 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
+        let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(committee),
@@ -2882,7 +2880,7 @@ async fn test_authority_persist() {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            verified_cert_cache_metrics,
+            async_batch_verifier_metrics,
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -2897,12 +2895,10 @@ async fn test_authority_persist() {
             epoch_store,
             committee_store,
             None,
-            None,
             checkpoint_store,
             &registry,
             AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
-            10000,
             &DBCheckpointConfig::default(),
         )
         .await
@@ -3359,7 +3355,9 @@ async fn test_store_revert_transfer_sui() {
         db.get_latest_parent_entry(gas_object_id).unwrap().unwrap(),
         (gas_object_ref, TransactionDigest::genesis()),
     );
-    assert!(db.get_transaction(&tx_digest).unwrap().is_none());
+    // Transaction should not be deleted on revert in case it's needed
+    // to execute a future state sync checkpoint.
+    assert!(db.get_transaction(&tx_digest).unwrap().is_some());
     assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
@@ -3917,9 +3915,15 @@ async fn test_iter_live_object_set() {
         .await
         .unwrap();
 
-    let package =
-        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_wrapping")
-            .await;
+    let (package, upgrade_cap) = build_and_publish_test_package_with_upgrade_cap(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_wrapping",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
 
     // Create a Child object.
     let effects = call_move(
@@ -4047,6 +4051,7 @@ async fn test_iter_live_object_set() {
             (package.0, package.1),
             (gas, SequenceNumber::from_u64(8)),
             (obj_id, SequenceNumber::from_u64(2)),
+            (upgrade_cap.0, upgrade_cap.1),
         ],
     );
 }
@@ -4926,137 +4931,6 @@ async fn test_consensus_message_processed() {
     );
 }
 
-#[tokio::test]
-async fn test_tallying_rule_score_updates() {
-    let seed = [1u8; 32];
-    let mut rng = StdRng::from_seed(seed);
-    let (authorities, committee) = make_committee_key(&mut rng);
-    let auth_0_name = authorities[0].public().into();
-    let auth_1_name = authorities[1].public().into();
-    let auth_2_name = authorities[2].public().into();
-    let auth_3_name = authorities[3].public().into();
-    let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
-    let registry = Registry::new();
-    let metrics = EpochMetrics::new(&registry);
-
-    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        .rng(rng)
-        .build();
-    let genesis = network_config.genesis;
-    let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis, 0)
-            .await
-            .unwrap(),
-    );
-
-    let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-    let verified_cert_cache_metrics = VerifiedCertificateCacheMetrics::new(&registry);
-    let epoch_store = AuthorityPerEpochStore::new(
-        auth_0_name,
-        Arc::new(committee.clone()),
-        &path,
-        None,
-        metrics.clone(),
-        EpochStartConfiguration::new_for_testing(),
-        store,
-        cache_metrics,
-        verified_cert_cache_metrics,
-    );
-
-    let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {
-        epoch_store
-            .get_num_certified_checkpoint_sigs_by(auth_name)
-            .unwrap()
-    };
-
-    // Only include auth_[0..3] in this certified checkpoint.
-    let ckpt_1 = mock_certified_checkpoint(authorities[0..3].iter(), committee.clone(), 1);
-
-    assert!(epoch_store
-        .record_certified_checkpoint_signatures(&ckpt_1)
-        .is_ok());
-
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_0_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_1_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_2_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(get_stored_seq_num_and_counter(&auth_3_name), None);
-
-    // Only include auth_1, auth_2 and auth_3 in this certified checkpoint.
-    let ckpt_2 = mock_certified_checkpoint(authorities[1..].iter(), committee.clone(), 2);
-
-    assert!(epoch_store
-        .record_certified_checkpoint_signatures(&ckpt_2)
-        .is_ok());
-
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_0_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_1_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_2_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_3_name),
-        Some((Some(2), 1))
-    );
-
-    // Check idempotency.
-    // Call the record function again with the same checkpoint and the stored
-    // values shouldn't change.
-    assert!(epoch_store
-        .record_certified_checkpoint_signatures(&ckpt_2)
-        .is_ok());
-
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_0_name),
-        Some((Some(1), 1))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_1_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_2_name),
-        Some((Some(2), 2))
-    );
-    assert_eq!(
-        get_stored_seq_num_and_counter(&auth_3_name),
-        Some((Some(2), 1))
-    );
-
-    // Check that the metrics are correctly set.
-    let get_auth_score_metric = |auth_name: &AuthorityName| {
-        metrics
-            .tallying_rule_scores
-            .get_metric_with_label_values(&[
-                &format!("{:?}", auth_name.concise()),
-                &committee.epoch().to_string(),
-            ])
-            .unwrap()
-            .get()
-    };
-    assert_eq!(get_auth_score_metric(&auth_0_name), 1);
-    assert_eq!(get_auth_score_metric(&auth_1_name), 2);
-    assert_eq!(get_auth_score_metric(&auth_2_name), 2);
-    assert_eq!(get_auth_score_metric(&auth_3_name), 1);
-}
-
 #[test]
 fn test_choose_next_system_packages() {
     telemetry_subscribers::init_for_testing();
@@ -5211,7 +5085,6 @@ fn test_choose_next_system_packages() {
 }
 
 // skipped because it violates SUI conservation checks
-#[ignore]
 #[tokio::test]
 async fn test_gas_smashing() {
     // run a create move object transaction with a given set o gas coins and a budget
@@ -5303,7 +5176,7 @@ async fn test_gas_smashing() {
         gas_used
     }
 
-    // 1. get the cost of the transaction so we can play with multiple gas coins
+    // get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
     let gas_used = run_and_check(100_000, 1, 100_000, true).await;
 
@@ -5313,7 +5186,7 @@ async fn test_gas_smashing() {
     run_and_check(reference_gas_used, 10, reference_gas_used - 100, true).await;
 
     // make less then required to succeed
-    let reference_gas_used = gas_used - 10;
+    let reference_gas_used = gas_used - 1;
     run_and_check(reference_gas_used, 2, reference_gas_used - 10, false).await;
     run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
     // use a small amount less than what 3 coins above reported (with success)

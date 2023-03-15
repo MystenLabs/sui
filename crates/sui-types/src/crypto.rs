@@ -42,7 +42,7 @@ use crate::sui_serde::{Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::error::FastCryptoError;
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::{Blake2b256, HashFunction};
 pub use fastcrypto::traits::Signer;
 use std::fmt::Debug;
 
@@ -76,7 +76,8 @@ pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
-/// Default epoch used to sign PoP with.
+pub type DefaultHash = Blake2b256;
+
 pub const DEFAULT_EPOCH_ID: EpochId = 0;
 
 /// Creates a proof of that the authority account address is owned by the
@@ -546,10 +547,15 @@ where
 }
 
 pub const TEST_COMMITTEE_SIZE: usize = 4;
-/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+
 pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
+    random_committee_key_pairs_of_size(TEST_COMMITTEE_SIZE)
+}
+
+/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
-    (0..TEST_COMMITTEE_SIZE)
+    (0..size)
         .map(|_| {
             // TODO: We are generating the keys 4 times to match exactly as how we generate
             // keys in ConfigBuilder::build (sui-config/src/builder.rs). This is because
@@ -1527,11 +1533,17 @@ where
     }
 }
 
-pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
-    let mut digest = Sha3_256::default();
+fn hash<S: Signable<H>, H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
+    signable: &S,
+) -> [u8; DIGEST_SIZE] {
+    let mut digest = H::default();
     signable.write(&mut digest);
     let hash = digest.finalize();
     hash.into()
+}
+
+pub fn default_hash<S: Signable<DefaultHash>>(signable: &S) -> [u8; 32] {
+    hash::<S, DefaultHash, 32>(signable)
 }
 
 #[derive(Default)]

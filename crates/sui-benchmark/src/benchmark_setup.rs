@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, bail, Context, Result};
-use move_core_types::language_storage::TypeTag;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
@@ -15,11 +14,11 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use tokio::time::sleep;
 
+use crate::bank::BenchmarkBank;
 use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
-use crate::workloads::Gas;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
-use sui_types::object::{generate_max_test_gas_objects_with_owner, Owner};
+use sui_types::object::generate_max_test_gas_objects_with_owner;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
@@ -33,19 +32,11 @@ pub enum Env {
     Remote,
 }
 
-pub struct ProxyGasAndCoin {
-    pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
-    // Gas to use for execution of gas generation transaction
-    pub primary_gas: Gas,
-    // Coin to use for splitting and generating small gas coins
-    pub pay_coin: Gas,
-    pub pay_coin_type_tag: TypeTag,
-}
-
 pub struct BenchmarkSetup {
     pub server_handle: JoinHandle<()>,
     pub shutdown_notifier: oneshot::Sender<()>,
-    pub proxy_and_coins: Vec<ProxyGasAndCoin>,
+    pub bank: BenchmarkBank,
+    pub proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
 }
 
 impl Env {
@@ -108,8 +99,8 @@ impl Env {
         }
         let config = Arc::new(network_config);
         // bring up servers ..
-        let (owner, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
-        let generated_gas = generate_max_test_gas_objects_with_owner(2, owner);
+        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
+        let generated_gas = generate_max_test_gas_objects_with_owner(2, address);
         let primary_gas = generated_gas
             .get(0)
             .context("No gas found at index 0")?
@@ -151,32 +142,20 @@ impl Env {
         info!("Fullnode rpc url: {fullnode_rpc_url}");
         fullnode_barrier.wait().await;
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_network_config(
-                &config,
-                registry,
-                Some(&fullnode_rpc_url),
-            )
-            .await,
+            LocalValidatorAggregatorProxy::from_network_config(&config, registry, None).await,
         );
         let keypair = Arc::new(keypair);
-        let ttag = pay_coin.get_move_template_type()?;
+        let primary_gas = (
+            primary_gas.compute_object_reference(),
+            address,
+            keypair.clone(),
+        );
+        let pay_coin = (pay_coin.compute_object_reference(), address, keypair);
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
-            proxy_and_coins: vec![ProxyGasAndCoin {
-                primary_gas: (
-                    primary_gas.compute_object_reference(),
-                    Owner::AddressOwner(owner),
-                    keypair.clone(),
-                ),
-                pay_coin: (
-                    pay_coin.compute_object_reference(),
-                    Owner::AddressOwner(owner),
-                    keypair,
-                ),
-                pay_coin_type_tag: ttag,
-                proxy,
-            }],
+            bank: BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin),
+            proxies: vec![proxy],
         })
     }
 
@@ -236,70 +215,66 @@ impl Env {
                 .await,
             )]
         };
+        let proxy = proxies
+            .choose(&mut rand::thread_rng())
+            .context("Failed to get proxy for reconfiguration")?;
         info!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
-            proxies
-                .choose(&mut rand::thread_rng())
-                .context("Failed to get proxy for reconfiguration")?
-                .get_current_epoch(),
+            proxy.get_current_epoch(),
         );
 
-        let mut proxy_gas_and_coins = vec![];
         let mut used_ids = vec![];
-
-        for proxy in proxies.iter() {
-            let offset = ObjectID::from_hex_literal(primary_gas_id)?;
-            let ids = ObjectID::in_range(offset, primary_gas_objects)?;
-            let mut primary_gas_id = ids
+        let offset = ObjectID::from_hex_literal(primary_gas_id)?;
+        let ids = ObjectID::in_range(offset, primary_gas_objects)?;
+        let mut primary_gas_id = ids
+            .choose(&mut rand::thread_rng())
+            .context("Failed to choose a random primary gas id")?;
+        while used_ids.contains(primary_gas_id) {
+            primary_gas_id = ids
                 .choose(&mut rand::thread_rng())
                 .context("Failed to choose a random primary gas id")?;
-            while used_ids.contains(primary_gas_id) {
-                primary_gas_id = ids
-                    .choose(&mut rand::thread_rng())
-                    .context("Failed to choose a random primary gas id")?;
-            }
-            used_ids.push(*primary_gas_id);
-            let primary_gas = proxy.get_object(*primary_gas_id).await?;
-            let mut pay_coin_id = ids
-                .choose(&mut rand::thread_rng())
-                .context("Failed to choose a random pay coin")?;
-            while used_ids.contains(pay_coin_id) {
-                pay_coin_id = ids
-                    .choose(&mut rand::thread_rng())
-                    .context("Failed to choose a random primary gas id")?;
-            }
-            used_ids.push(*pay_coin_id);
-            let pay_coin = proxy.get_object(*pay_coin_id).await?;
-            let primary_gas_account = primary_gas.owner.get_owner_address()?;
-            let keystore_path = Some(&keystore_path)
-                .filter(|s| !s.is_empty())
-                .map(PathBuf::from)
-                .ok_or_else(|| {
-                    anyhow!(format!(
-                        "Failed to find keypair at path: {}",
-                        &keystore_path
-                    ))
-                })?;
-            let keypair = Arc::new(get_ed25519_keypair_from_keystore(
-                keystore_path,
-                &primary_gas_account,
-            )?);
-            let ttag = pay_coin.get_move_template_type()?;
-            proxy_gas_and_coins.push(ProxyGasAndCoin {
-                primary_gas: (
-                    primary_gas.compute_object_reference(),
-                    Owner::AddressOwner(primary_gas_account),
-                    keypair.clone(),
-                ),
-                pay_coin: (pay_coin.compute_object_reference(), pay_coin.owner, keypair),
-                pay_coin_type_tag: ttag,
-                proxy: proxy.clone(),
-            })
         }
+        used_ids.push(*primary_gas_id);
+        let primary_gas = proxy.get_object(*primary_gas_id).await?;
+        let mut pay_coin_id = ids
+            .choose(&mut rand::thread_rng())
+            .context("Failed to choose a random pay coin")?;
+        while used_ids.contains(pay_coin_id) {
+            pay_coin_id = ids
+                .choose(&mut rand::thread_rng())
+                .context("Failed to choose a random primary gas id")?;
+        }
+        used_ids.push(*pay_coin_id);
+        let pay_coin = proxy.get_object(*pay_coin_id).await?;
+        let primary_gas_account = primary_gas.owner.get_owner_address()?;
+        let keystore_path = Some(&keystore_path)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                anyhow!(format!(
+                    "Failed to find keypair at path: {}",
+                    &keystore_path
+                ))
+            })?;
+        let keypair = Arc::new(get_ed25519_keypair_from_keystore(
+            keystore_path,
+            &primary_gas_account,
+        )?);
+        let primary_gas = (
+            primary_gas.compute_object_reference(),
+            primary_gas_account,
+            keypair.clone(),
+        );
+        let pay_coin = (
+            pay_coin.compute_object_reference(),
+            pay_coin.owner.get_owner_address()?,
+            keypair,
+        );
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
-            proxy_and_coins: proxy_gas_and_coins,
+            bank: BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin),
+            proxies,
         })
     }
 }

@@ -11,6 +11,6 @@ export function useGetDelegatedStake(
 ): UseQueryResult<DelegatedStake[], Error> {
     const rpc = useRpcClient();
     return useQuery(['validator', address], () =>
-        rpc.getDelegatedStakes(address)
+        rpc.getDelegatedStakes({ owner: address })
     );
 }

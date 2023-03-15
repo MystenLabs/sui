@@ -27,7 +27,7 @@ Sui provides the following tools to interact with Sui Devnet:
 
 ## Environment set up
 
-First, [Install Sui](../build/install.md#install-or-update-sui-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
+First, [Install Sui](../build/install.md#install-sui-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 
 To check whether Sui is already installed, run the following command:
 
@@ -81,7 +81,7 @@ To switch the active network, run the following command:
 sui client switch --env <ALIAS>
 ```
 
-If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](../build/install.md#install-or-update-sui-binaries).
+If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](../build/install.md#install-sui-binaries).
 
 ## Validating
 

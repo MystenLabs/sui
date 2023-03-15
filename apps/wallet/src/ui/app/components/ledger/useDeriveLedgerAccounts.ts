@@ -1,30 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519PublicKey } from '@mysten/sui.js';
+import { Ed25519PublicKey, normalizeSuiAddress } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
-import { type LedgerAccount } from './LedgerAccountItem';
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
+import { AccountType } from '_src/background/keyring/Account';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
+
+export type SelectableLedgerAccount = SerializedLedgerAccount & {
+    isSelected: boolean;
+};
 
 type UseDeriveLedgerAccountOptions = {
     numAccountsToDerive: number;
     onError: (error: unknown) => void;
 };
 
-type UseDeriveLedgerAccountResult = [
-    LedgerAccount[],
-    React.Dispatch<React.SetStateAction<LedgerAccount[]>>,
-    boolean
-];
-
 export function useDeriveLedgerAccounts(
     options: UseDeriveLedgerAccountOptions
-): UseDeriveLedgerAccountResult {
+) {
     const { numAccountsToDerive, onError } = options;
-    const [ledgerAccounts, setLedgerAccounts] = useState<LedgerAccount[]>([]);
+    const [ledgerAccounts, setLedgerAccounts] = useState<
+        SelectableLedgerAccount[]
+    >([]);
     const [suiLedgerClient] = useSuiLedgerClient();
     const [isLoading, setLoading] = useState(false);
 
@@ -57,14 +58,14 @@ export function useDeriveLedgerAccounts(
         generateLedgerAccounts();
     }, [numAccountsToDerive, onError, suiLedgerClient]);
 
-    return [ledgerAccounts, setLedgerAccounts, isLoading];
+    return [ledgerAccounts, setLedgerAccounts, isLoading] as const;
 }
 
 async function deriveAccountsFromLedger(
     suiLedgerClient: SuiLedgerClient,
     numAccountsToDerive: number
 ) {
-    const ledgerAccounts: LedgerAccount[] = [];
+    const ledgerAccounts: SelectableLedgerAccount[] = [];
     const derivationPaths = getDerivationPathsForLedger(numAccountsToDerive);
 
     for (const derivationPath of derivationPaths) {
@@ -72,9 +73,12 @@ async function deriveAccountsFromLedger(
             derivationPath
         );
         const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
+        const suiAddress = normalizeSuiAddress(publicKey.toSuiAddress());
         ledgerAccounts.push({
+            type: AccountType.LEDGER,
+            address: suiAddress,
+            derivationPath,
             isSelected: false,
-            address: publicKey.toSuiAddress(),
         });
     }
 

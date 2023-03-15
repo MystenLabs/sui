@@ -41,6 +41,9 @@ pub struct SuiSystemStateSummary {
     /// The starting epoch in which various on-chain governance features take effect.
     pub governance_start_epoch: u64,
 
+    /// The duration of an epoch, in milliseconds.
+    pub epoch_duration_ms: u64,
+
     // Stake subsidy information
     /// This counter may be different from the current epoch number if
     /// in some epochs we decide to skip the subsidy.
@@ -96,7 +99,7 @@ impl SuiSystemStateSummary {
             );
         }
         CommitteeWithNetworkMetadata {
-            committee: Committee::new(self.epoch, voting_rights).unwrap(),
+            committee: Committee::new(self.epoch, voting_rights),
             network_metadata,
         }
     }

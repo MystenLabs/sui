@@ -38,8 +38,7 @@ impl CommitteeFixture {
                 .iter()
                 .map(|(name, (_, stake))| (*name, *stake))
                 .collect(),
-        )
-        .unwrap();
+        );
 
         Self {
             epoch,
@@ -58,7 +57,7 @@ impl CommitteeFixture {
             epoch: 0,
             sequence_number: 0,
             network_total_transactions: 0,
-            content_digest: empty_contents()
+            content_digest: *empty_contents()
                 .into_inner()
                 .into_checkpoint_contents()
                 .digest(),
@@ -117,7 +116,7 @@ impl CommitteeFixture {
                 epoch: self.epoch,
                 sequence_number: prev.sequence_number + 1,
                 network_total_transactions: 0,
-                content_digest: empty_contents()
+                content_digest: *empty_contents()
                     .into_inner()
                     .into_checkpoint_contents()
                     .digest(),
@@ -162,7 +161,7 @@ impl CommitteeFixture {
             epoch: self.epoch,
             sequence_number: previous_checkpoint.sequence_number + 1,
             network_total_transactions: 0,
-            content_digest: empty_contents()
+            content_digest: *empty_contents()
                 .into_inner()
                 .into_checkpoint_contents()
                 .digest(),

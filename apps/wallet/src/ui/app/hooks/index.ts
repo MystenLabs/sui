@@ -16,7 +16,7 @@ export { useGetNFTMeta } from './useGetNFTMeta';
 export { useTransactionDryRun } from './useTransactionDryRun';
 export { useGetObject } from './useGetObject';
 export { useGetTxnRecipientAddress } from './useGetTxnRecipientAddress';
-export { useGetTransactionsByAddress } from './useGetTransactionsByAddress';
+export { useQueryTransactionsByAddress } from './useQueryTransactionsByAddress';
 export { useGetTransferAmount } from './useGetTransferAmount';
 export { useGetCoinBalance } from './useGetCoinBalance';
 export { useGetAllBalances } from './useGetAllBalances';

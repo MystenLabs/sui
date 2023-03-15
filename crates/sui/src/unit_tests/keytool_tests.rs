@@ -155,7 +155,7 @@ fn test_sui_operations_config() {
     assert!(res.is_ok());
     let kp_read = read_keypair_from_file(path1);
     assert_eq!(
-        SuiAddress::from_str("849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3")
+        SuiAddress::from_str("7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e")
             .unwrap(),
         SuiAddress::from(&kp_read.unwrap().public())
     );
@@ -170,7 +170,7 @@ fn test_sui_operations_config() {
     assert!(res.is_ok());
     let kp_read = read_keypair_from_file(path3);
     assert_eq!(
-        SuiAddress::from_str("b9e0a0d97f83b5cd84a2df2f83c9d72af19a6952ed637a36dfacf884a2d6e27f")
+        SuiAddress::from_str("160ef6ce4f395208a12119c5011bf8d8ceb760e3159307c819bd0197d154d384")
             .unwrap(),
         SuiAddress::from(&kp_read.unwrap().public())
     );
@@ -195,9 +195,9 @@ fn test_load_keystore_err() {
 #[test]
 fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
-    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AN0JMHpDum3BhrVwnkylH0/HGRHBQ/fO/8+MYOawO8j6", "8867068daf9111ee013450eea1b1e10ffd62fc874329f0eadadd62b5617011e4"],
-    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "AJrA997C1eVz6wYIp7bO8dpITSRBXpvg1m70/P3gusu2", "29bb131378438b6c7f50526e6a853a72ed97f10b75fc8127ca3faaf7e78add30"],
-    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AAEMSIQeqyz09StSwuOW4MElQcZ+4jHW4/QcWlJEf5Yk", "6e5387db7249f6b0dc5b68eb095109157dc192a0392343d67688835fecdf14e4"]];
+    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AN0JMHpDum3BhrVwnkylH0/HGRHBQ/fO/8+MYOawO8j6", "a2d14fad60c56049ecf75246a481934691214ce413e6a8ae2fe6834c173a6133"],
+    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "AJrA997C1eVz6wYIp7bO8dpITSRBXpvg1m70/P3gusu2", "1ada6e6f3f3e4055096f606c746690f1108fcc2ca479055cc434a3e1d3f758aa"],
+    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AAEMSIQeqyz09StSwuOW4MElQcZ+4jHW4/QcWlJEf5Yk", "e69e896ca10f5a77732769803cc2b5707f0ab9d4407afb5e4b4464b89769af14"]];
 
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new(0));
@@ -218,9 +218,9 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
 #[test]
 fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/secp256k1-keypair.test.ts
-    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AQA9EYZoLXirIahsXHQMDfdi5DPQ72wLA79zke4EY6CP", "88ea264013bd399f3cc69037aca2d6a0ce6adebb1accd679ab1cad80191894ca"],
-    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "Ae+TTptXI6WaJfzplSrphnrbTD5qgftfMX5kTyca7unQ", "fce7538e74e5df59529107d29f24991266e7165961932c205d85e04b00bc8a79"],
-    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AY2iJpGSDMhvGILPjjpyeM1bV4Jky979nUenB5kvQeSj", "d6929233d383bc8fa8df95b69feb04d7c7b4fd154d9d59a2564e4d50d14a569d"]];
+    const TEST_CASES: [[&str; 3]; 3] = [["film crazy soon outside stand loop subway crumble thrive popular green nuclear struggle pistol arm wife phrase warfare march wheat nephew ask sunny firm", "AQA9EYZoLXirIahsXHQMDfdi5DPQ72wLA79zke4EY6CP", "9e8f732575cc5386f8df3c784cd3ed1b53ce538da79926b2ad54dcc1197d2532"],
+    ["require decline left thought grid priority false tiny gasp angle royal system attack beef setup reward aunt skill wasp tray vital bounce inflict level", "Ae+TTptXI6WaJfzplSrphnrbTD5qgftfMX5kTyca7unQ", "9fd5a804ed6b46d36949ff7434247f0fd594673973ece24aede6b86a7b5dae01"],
+    ["organ crash swim stick traffic remember army arctic mesh slice swear summer police vast chaos cradle squirrel hood useless evidence pet hub soap lake", "AY2iJpGSDMhvGILPjjpyeM1bV4Jky979nUenB5kvQeSj", "60287d7c38dee783c2ab1077216124011774be6b0764d62bd05f32c88979d5c5"]];
 
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new(0));

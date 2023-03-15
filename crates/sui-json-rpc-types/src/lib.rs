@@ -11,6 +11,8 @@ pub use sui_event::*;
 pub use sui_object::*;
 pub use sui_transaction::*;
 
+pub use balance_changes::*;
+pub use object_changes::*;
 pub use sui_checkpoint::*;
 pub use sui_coin::*;
 pub use sui_governance::*;
@@ -20,6 +22,8 @@ pub use sui_move::*;
 #[path = "unit_tests/rpc_types_tests.rs"]
 mod rpc_types_tests;
 
+mod balance_changes;
+mod object_changes;
 mod sui_checkpoint;
 mod sui_coin;
 mod sui_event;
@@ -30,8 +34,8 @@ mod sui_transaction;
 
 pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
 /// `next_cursor` points to the last item in the page;
-/// Reading with `next_cursor` will start from the next item after `next_cursor`,
-/// if `next_cursor` is `Some`, otherwise it will start from the first item.
+/// Reading with `next_cursor` will start from the next item after `next_cursor` if
+/// `next_cursor` is `Some`, otherwise it will start from the first item.
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Page<T, C> {

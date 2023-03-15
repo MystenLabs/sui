@@ -56,15 +56,9 @@ function TransferCoinPage() {
                 });
 
                 const tx = new Transaction();
-                tx.setGasBudget(formData.gasBudget);
 
                 if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
-                    tx.add(
-                        Transaction.Commands.TransferObjects(
-                            [tx.gas],
-                            tx.pure(formData.to)
-                        )
-                    );
+                    tx.transferObjects([tx.gas], tx.pure(formData.to));
                     tx.setGasPayment(
                         formData.coins
                             .filter((coin) => coin.coinType === coinType)
@@ -75,10 +69,13 @@ function TransferCoinPage() {
                             }))
                     );
 
-                    return signer.signAndExecuteTransaction(tx, {
-                        showInput: true,
-                        showEffects: true,
-                        showEvents: true,
+                    return signer.signAndExecuteTransaction({
+                        transaction: tx,
+                        options: {
+                            showInput: true,
+                            showEffects: true,
+                            showEvents: true,
+                        },
                     });
                 }
 
@@ -88,51 +85,33 @@ function TransferCoinPage() {
                 );
 
                 if (coinType === SUI_TYPE_ARG) {
-                    const coin = tx.add(
-                        Transaction.Commands.SplitCoin(
-                            tx.gas,
-                            tx.pure(bigIntAmount)
-                        )
-                    );
-                    tx.add(
-                        Transaction.Commands.TransferObjects(
-                            [coin],
-                            tx.pure(formData.to)
-                        )
-                    );
+                    const coin = tx.splitCoin(tx.gas, tx.pure(bigIntAmount));
+                    tx.transferObjects([coin], tx.pure(formData.to));
                 } else {
                     const primaryCoinInput = tx.object(
                         primaryCoin.coinObjectId
                     );
                     if (coins.length) {
                         // TODO: This could just merge a subset of coins that meet the balance requirements instead of all of them.
-                        tx.add(
-                            Transaction.Commands.MergeCoins(
-                                primaryCoinInput,
-                                coins.map((coin) =>
-                                    tx.object(coin.coinObjectId)
-                                )
-                            )
+                        tx.mergeCoins(
+                            primaryCoinInput,
+                            coins.map((coin) => tx.object(coin.coinObjectId))
                         );
                     }
-                    const coin = tx.add(
-                        Transaction.Commands.SplitCoin(
-                            primaryCoinInput,
-                            tx.pure(bigIntAmount)
-                        )
+                    const coin = tx.splitCoin(
+                        primaryCoinInput,
+                        tx.pure(bigIntAmount)
                     );
-                    tx.add(
-                        Transaction.Commands.TransferObjects(
-                            [coin],
-                            tx.pure(formData.to)
-                        )
-                    );
+                    tx.transferObjects([coin], tx.pure(formData.to));
                 }
 
-                return signer.signAndExecuteTransaction(tx, {
-                    showInput: true,
-                    showEffects: true,
-                    showEvents: true,
+                return signer.signAndExecuteTransaction({
+                    transaction: tx,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
                 });
             } catch (error) {
                 transaction.setTag('failure', true);
@@ -178,8 +157,9 @@ function TransferCoinPage() {
                                 coinType={coinType}
                                 amount={formData.amount}
                                 to={formData.to}
-                                gasCostEstimation={formData.gasBudget}
                                 approximation={formData.isPayAllSui}
+                                gasCostEstimation={0}
+                                // gasCostEstimation={formData.gasBudget}
                             />
                         </Content>
                         <Menu
@@ -220,7 +200,8 @@ function TransferCoinPage() {
                             coinType={coinType}
                             initialAmount={formData?.amount || ''}
                             initialTo={formData?.to || ''}
-                            initialGasEstimation={formData?.gasBudget || 0}
+                            initialGasEstimation={0}
+                            // initialGasEstimation={formData?.gasBudget || 0}
                         />
                     </>
                 )}

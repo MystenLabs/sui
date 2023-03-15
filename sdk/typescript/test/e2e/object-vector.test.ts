@@ -4,35 +4,29 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   Coin,
-  Commands,
   getCreatedObjects,
   getExecutionStatusType,
   ObjectId,
   SUI_FRAMEWORK_ADDRESS,
   Transaction,
 } from '../../src';
-import {
-  DEFAULT_GAS_BUDGET,
-  publishPackage,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { publishPackage, setup, TestToolbox } from './utils/setup';
 
-describe('Test Move call with a vector of objects as input (skipped due to move vector requirement)', () => {
+describe('Test Move call with a vector of objects as input', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
 
   async function mintObject(val: number) {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::entry_point_vector::mint`,
-        arguments: [tx.pure(String(val))],
-      }),
-    );
-    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
-      showEffects: true,
+    tx.moveCall({
+      target: `${packageId}::entry_point_vector::mint`,
+      arguments: [tx.pure(String(val))],
+    });
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
     return getCreatedObjects(result)![0].reference.objectId;
@@ -40,18 +34,16 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
 
   async function destroyObjects(objects: ObjectId[]) {
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const vec = tx.add(
-      Commands.MakeMoveVec({ objects: objects.map((id) => tx.object(id)) }),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
-        arguments: [vec],
-      }),
-    );
-    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
-      showEffects: true,
+    const vec = tx.makeMoveVec({ objects: objects.map((id) => tx.object(id)) });
+    tx.moveCall({
+      target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
+      arguments: [vec],
+    });
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
   }
@@ -72,22 +64,20 @@ describe('Test Move call with a vector of objects as input (skipped due to move 
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coinIDs = coins.map((coin) => Coin.getID(coin));
     const tx = new Transaction();
-    tx.setGasBudget(DEFAULT_GAS_BUDGET);
-    const vec = tx.add(
-      Commands.MakeMoveVec({
-        objects: [tx.object(coinIDs[1]), tx.object(coinIDs[2])],
-      }),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: `${SUI_FRAMEWORK_ADDRESS}::pay::join_vec`,
-        typeArguments: ['0x2::sui::SUI'],
-        arguments: [tx.object(coinIDs[0]), vec],
-      }),
-    );
+    const vec = tx.makeMoveVec({
+      objects: [tx.object(coinIDs[1]), tx.object(coinIDs[2])],
+    });
+    tx.moveCall({
+      target: `${SUI_FRAMEWORK_ADDRESS}::pay::join_vec`,
+      typeArguments: ['0x2::sui::SUI'],
+      arguments: [tx.object(coinIDs[0]), vec],
+    });
     tx.setGasPayment([coins[3]]);
-    const result = await toolbox.signer.signAndExecuteTransaction(tx, {
-      showEffects: true,
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
   });

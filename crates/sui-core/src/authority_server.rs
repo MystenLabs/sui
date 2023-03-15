@@ -35,10 +35,6 @@ use crate::{
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
 
-// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
-// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
-const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
-
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
     local_addr: Multiaddr,
@@ -253,11 +249,11 @@ impl ValidatorService {
         // Enforce overall transaction size limit.
         let tx_size = bcs::serialized_size(&transaction)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
-        let max_tx_size = epoch_store.protocol_config().max_tx_size();
+        let max_tx_size_bytes = epoch_store.protocol_config().max_tx_size_bytes();
         fp_ensure!(
-            tx_size <= max_tx_size,
+            tx_size as u64 <= max_tx_size_bytes,
             tonic::Status::resource_exhausted(format!(
-                "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size}"
+                "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size_bytes}"
             ))
         );
 
@@ -314,7 +310,7 @@ impl ValidatorService {
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             let events = if let Some(digest) = signed_effects.events_digest() {
-                state.get_transaction_events(*digest).await?
+                state.get_transaction_events(digest)?
             } else {
                 TransactionEvents::default()
             };
@@ -340,7 +336,7 @@ impl ValidatorService {
         for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
             certificate
                 .data()
-                .intent_message
+                .intent_message()
                 .value
                 .kind()
                 .input_objects()
@@ -361,42 +357,26 @@ impl ValidatorService {
         }
         // code block within reconfiguration lock
         let certificate = {
+            let certificate = {
+                let _timer = metrics.cert_verification_latency.start_timer();
+                epoch_store.batch_verifier.verify_cert(certificate).await?
+            };
+
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
                 metrics.num_rejected_cert_in_epoch_boundary.inc();
                 return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
             }
 
-            let certificate = {
-                let cert_digest = certificate.certificate_digest();
-                if epoch_store
-                    .verified_cert_cache()
-                    .is_cert_verified(&cert_digest)
-                {
-                    VerifiedCertificate::new_unchecked(certificate)
-                } else {
-                    let _timer = metrics.cert_verification_latency.start_timer();
-                    // Note: verify verifies user sigs as well before caching cert.
-                    certificate.verify(epoch_store.committee()).tap_ok(|_| {
-                        epoch_store
-                            .verified_cert_cache()
-                            .cache_cert_verified(cert_digest)
-                    })?
-                }
-            };
-
             // 3) All certificates are sent to consensus (at least by some authorities)
             // For shared objects this will wait until either timeout or we have heard back from consensus.
             // For owned objects this will return without waiting for certificate to be sequenced
             // First do quick dirty non-async check
             if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
-                if consensus_adapter.num_inflight_transactions()
-                    > MAX_PENDING_CONSENSUS_TRANSACTIONS
-                {
-                    return Err(tonic::Status::resource_exhausted(format!(
-                        "Reached {} transactions pending in consensus. Consensus is overloaded.",
-                        MAX_PENDING_CONSENSUS_TRANSACTIONS
-                    )));
+                if !consensus_adapter.check_limits() {
+                    return Err(tonic::Status::resource_exhausted(
+                        "Reached maximum transactions pending in consensus. Consensus is overloaded.".to_string()
+                    ));
                 }
                 let _metrics_guard = if shared_object_tx {
                     Some(metrics.consensus_latency.start_timer())
@@ -421,7 +401,7 @@ impl ValidatorService {
         match res {
             Ok(effects) => {
                 let events = if let Some(event_digest) = effects.events_digest() {
-                    state.get_transaction_events(*event_digest).await?
+                    state.get_transaction_events(event_digest)?
                 } else {
                     TransactionEvents::default()
                 };

@@ -82,12 +82,6 @@ pub struct Opts {
     /// Whether or no to download TXes during follow
     #[clap(long, global = true)]
     pub download_txes: bool,
-    /// Run in disjoint_mode when we don't want different workloads
-    /// to interfere with each other. This mode is useful when
-    /// we don't want backoff to penalize all workloads even if only
-    /// one (or some) is slow.
-    #[clap(long, parse(try_from_str), default_value = "true", global = true)]
-    pub disjoint_mode: bool,
     /// Number of transactions or duration to
     /// run the benchmark for. Default set to
     /// "unbounded" i.e. benchmark runs forever
@@ -155,6 +149,9 @@ pub enum RunSpec {
         // relative weight of delegation transactions in the benchmark workload
         #[clap(long, default_value = "0")]
         delegation: u32,
+        // relative weight of batch payment transactions in the benchmark workload
+        #[clap(long, default_value = "0")]
+        batch_payment: u32,
         // Target qps
         #[clap(long, default_value = "1000", global = true)]
         target_qps: u64,

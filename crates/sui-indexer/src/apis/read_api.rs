@@ -14,14 +14,15 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionsPage,
+    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+    TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::query::TransactionQuery;
+use sui_types::query::TransactionFilter;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -39,11 +40,11 @@ impl<S: IndexerStore> ReadApi<S> {
         }
     }
 
-    fn get_total_transaction_number(&self) -> Result<u64, IndexerError> {
+    fn get_total_transaction_number_internal(&self) -> Result<u64, IndexerError> {
         self.state.get_total_transaction_number().map(|n| n as u64)
     }
 
-    fn get_transaction_with_options(
+    fn get_transaction_with_options_internal(
         &self,
         digest: &TransactionDigest,
         _options: Option<SuiTransactionResponseOptions>,
@@ -56,9 +57,26 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok(txn_resp)
     }
 
-    fn get_transactions(
+    fn multi_get_transactions_with_options_internal(
         &self,
-        query: TransactionQuery,
+        digests: &[TransactionDigest],
+        _options: Option<SuiTransactionResponseOptions>,
+    ) -> Result<Vec<SuiTransactionResponse>, IndexerError> {
+        let digest_strs = digests
+            .iter()
+            .map(|digest| digest.base58_encode())
+            .collect::<Vec<_>>();
+        let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
+        let tx_resp_vec = tx_vec
+            .into_iter()
+            .map(|txn| txn.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(tx_resp_vec)
+    }
+
+    fn query_transactions_internal(
+        &self,
+        query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -67,19 +85,27 @@ impl<S: IndexerStore> ReadApi<S> {
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
 
-        let digests_from_db = match query {
-            TransactionQuery::All => {
+        let opts = query.options.unwrap_or_default();
+        if !opts.only_digest() {
+            // TODO(chris): implement this as a separate PR
+            return Err(IndexerError::NotImplementedError(
+                "options has not been implemented on indexer for queryTransactions".to_string(),
+            ));
+        }
+
+        let digests_from_db = match query.filter {
+            None => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
                 self.state
                     .get_all_transaction_digest_page(indexer_seq_number, limit, is_descending)
             }
-            TransactionQuery::MoveFunction {
+            Some(TransactionFilter::MoveFunction {
                 package,
                 module,
                 function,
-            } => {
+            }) => {
                 let move_call_seq_number = self
                     .state
                     .get_move_call_sequence_by_digest(cursor_str, is_descending)?;
@@ -96,8 +122,8 @@ impl<S: IndexerStore> ReadApi<S> {
             // SuiTransactionResponse, instead we should store the BCS
             // serialized transaction and retrive from there.
             // This is now blocked by the endpoint on FN side.
-            TransactionQuery::InputObject(_input_obj_id) => Ok(vec![]),
-            TransactionQuery::MutatedObject(mutated_obj_id) => {
+            Some(TransactionFilter::InputObject(_input_obj_id)) => Ok(vec![]),
+            Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
@@ -108,7 +134,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     is_descending,
                 )
             }
-            TransactionQuery::FromAddress(sender_address) => {
+            Some(TransactionFilter::FromAddress(sender_address)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
@@ -119,7 +145,7 @@ impl<S: IndexerStore> ReadApi<S> {
                     is_descending,
                 )
             }
-            TransactionQuery::ToAddress(recipient_address) => {
+            Some(TransactionFilter::ToAddress(recipient_address)) => {
                 let recipient_seq_number = self
                     .state
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
@@ -151,13 +177,16 @@ impl<S: IndexerStore> ReadApi<S> {
         let next_cursor = txn_digests.last().cloned().map_or(cursor, Some);
 
         Ok(Page {
-            data: txn_digests,
+            data: txn_digests
+                .into_iter()
+                .map(SuiTransactionResponse::new)
+                .collect(),
             next_cursor,
             has_next_page,
         })
     }
 
-    fn get_object_with_options(
+    fn get_object_with_options_internal(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
@@ -166,13 +195,13 @@ impl<S: IndexerStore> ReadApi<S> {
         Ok((read, options.unwrap_or_default()).try_into()?)
     }
 
-    fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, IndexerError> {
+    fn get_latest_checkpoint_sequence_number_internal(&self) -> Result<u64, IndexerError> {
         self.state
             .get_latest_checkpoint_sequence_number()
             .map(|n| n as u64)
     }
 
-    fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
+    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
         let checkpoint = self.state.get_checkpoint(id)?;
         checkpoint.try_into()
     }
@@ -205,7 +234,7 @@ where
                 .await;
         }
 
-        Ok(self.get_object_with_options(object_id, options)?)
+        Ok(self.get_object_with_options_internal(object_id, options)?)
     }
 
     async fn multi_get_object_with_options(
@@ -247,26 +276,26 @@ where
         {
             return self.fullnode.get_total_transaction_number().await;
         }
-        Ok(self.get_total_transaction_number()?)
+        Ok(self.get_total_transaction_number_internal()?)
     }
 
-    async fn get_transactions(
+    async fn query_transactions(
         &self,
-        query: TransactionQuery,
+        query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
         if self
             .method_to_be_forwarded
-            .contains(&"get_transactions".to_string())
+            .contains(&"query_transactions".to_string())
         {
             return self
                 .fullnode
-                .get_transactions(query, cursor, limit, descending_order)
+                .query_transactions(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.get_transactions(query, cursor, limit, descending_order)?)
+        Ok(self.query_transactions_internal(query, cursor, limit, descending_order)?)
     }
 
     async fn get_transactions_in_range_deprecated(
@@ -293,7 +322,7 @@ where
                 .get_transaction_with_options(digest, options)
                 .await;
         }
-        Ok(self.get_transaction_with_options(&digest, options)?)
+        Ok(self.get_transaction_with_options_internal(&digest, options)?)
     }
 
     async fn multi_get_transactions_with_options(
@@ -310,8 +339,7 @@ where
                 .multi_get_transactions_with_options(digests, options)
                 .await;
         }
-        self.multi_get_transactions_with_options(digests, options)
-            .await
+        Ok(self.multi_get_transactions_with_options_internal(&digests, options)?)
     }
 
     async fn get_normalized_move_modules_by_package(
@@ -394,7 +422,7 @@ where
         {
             return self.fullnode.get_latest_checkpoint_sequence_number().await;
         }
-        Ok(self.get_latest_checkpoint_sequence_number()?)
+        Ok(self.get_latest_checkpoint_sequence_number_internal()?)
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
@@ -404,7 +432,7 @@ where
         {
             return self.fullnode.get_checkpoint(id).await;
         }
-        Ok(self.get_checkpoint(id)?)
+        Ok(self.get_checkpoint_internal(id)?)
     }
 }
 

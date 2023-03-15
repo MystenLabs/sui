@@ -6,9 +6,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponseOptions};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{
-    ExecuteTransactionRequestType, Transaction, TransactionData, TransactionDataAPI,
-};
+use sui_types::messages::{Transaction, TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
 use crate::errors::Error;
@@ -128,8 +126,11 @@ pub async fn submit(
         .quorum_driver()
         .execute_transaction(
             signed_tx,
-            SuiTransactionResponseOptions::new().with_effects(),
-            Some(ExecuteTransactionRequestType::WaitForEffectsCert),
+            SuiTransactionResponseOptions::new()
+                .with_input()
+                .with_effects()
+                .with_balance_changes(),
+            None,
         )
         .await?;
 
@@ -299,7 +300,7 @@ pub async fn parse(
 
     let data = if request.signed {
         let tx: Transaction = bcs::from_bytes(&request.transaction.to_vec()?)?;
-        tx.into_data().intent_message.value
+        tx.into_data().intent_message().value.clone()
     } else {
         let intent: IntentMessage<TransactionData> =
             bcs::from_bytes(&request.transaction.to_vec()?)?;

@@ -3,8 +3,8 @@
 
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadType, MAX_GAS_FOR_TESTING};
-use crate::workloads::{GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
+use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING};
+use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
@@ -25,11 +25,26 @@ pub struct DelegationTestPayload {
     system_state_observer: Arc<SystemStateObserver>,
 }
 
+impl std::fmt::Display for DelegationTestPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "delegation")
+    }
+}
+
 impl Payload for DelegationTestPayload {
+    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        let coin = match self.coin {
+            None => Some(effects.created().get(0).unwrap().0),
+            Some(_) => None,
+        };
+        self.coin = coin;
+        self.gas = effects.gas_object().0;
+    }
+
     /// delegation flow is split into two phases
     /// first `make_transaction` call creates separate coin object for future delegation
     /// followup call creates delegation transaction itself
-    fn make_transaction(&self) -> VerifiedTransaction {
+    fn make_transaction(&mut self) -> VerifiedTransaction {
         match self.coin {
             Some(coin) => make_staking_transaction(
                 self.gas,
@@ -49,36 +64,50 @@ impl Payload for DelegationTestPayload {
             ),
         }
     }
+}
 
-    fn make_new_payload(self: Box<Self>, effects: &ExecutionEffects) -> Box<dyn Payload> {
-        let coin = match self.coin {
-            None => Some(effects.created().get(0).unwrap().0),
-            Some(_) => None,
-        };
-        Box::new(DelegationTestPayload {
-            coin,
-            gas: effects.gas_object().0,
-            validator: self.validator,
-            sender: self.sender,
-            keypair: self.keypair,
-            system_state_observer: self.system_state_observer,
-        })
-    }
+#[derive(Debug)]
+pub struct DelegationWorkloadBuilder {
+    count: u64,
+}
 
-    fn get_workload_type(&self) -> WorkloadType {
-        WorkloadType::Delegation
+impl DelegationWorkloadBuilder {
+    pub fn from(
+        workload_weight: f32,
+        target_qps: u64,
+        num_workers: u64,
+        in_flight_ratio: u64,
+    ) -> Option<WorkloadBuilderInfo> {
+        let target_qps = (workload_weight * target_qps as f32) as u64;
+        let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
+        let max_ops = target_qps * in_flight_ratio;
+        if max_ops == 0 || num_workers == 0 {
+            None
+        } else {
+            let workload_params = WorkloadParams {
+                target_qps,
+                num_workers,
+                max_ops,
+            };
+            let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
+                DelegationWorkloadBuilder { count: max_ops },
+            ));
+            let builder_info = WorkloadBuilderInfo {
+                workload_params,
+                workload_builder,
+            };
+            Some(builder_info)
+        }
     }
 }
 
-pub struct DelegationWorkload;
-
-impl DelegationWorkload {
-    pub fn new_boxed() -> Box<dyn Workload<dyn Payload>> {
-        Box::<dyn Workload<dyn Payload>>::from(Box::new(DelegationWorkload))
+#[async_trait]
+impl WorkloadBuilder<dyn Payload> for DelegationWorkloadBuilder {
+    async fn generate_coin_config_for_init(&self) -> Vec<GasCoinConfig> {
+        vec![]
     }
-
-    pub fn generate_gas_config_for_payloads(count: u64) -> Vec<GasCoinConfig> {
-        (0..count)
+    async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
+        (0..self.count)
             .map(|_| {
                 let (address, keypair) = get_key_pair();
                 GasCoinConfig {
@@ -89,13 +118,24 @@ impl DelegationWorkload {
             })
             .collect()
     }
+    async fn build(
+        &self,
+        _init_gas: Vec<Gas>,
+        payload_gas: Vec<Gas>,
+    ) -> Box<dyn Workload<dyn Payload>> {
+        Box::<dyn Workload<dyn Payload>>::from(Box::new(DelegationWorkload { payload_gas }))
+    }
+}
+
+#[derive(Debug)]
+pub struct DelegationWorkload {
+    payload_gas: Vec<Gas>,
 }
 
 #[async_trait]
 impl Workload<dyn Payload> for DelegationWorkload {
     async fn init(
         &mut self,
-        _: WorkloadInitGas,
         _: Arc<dyn ValidatorProxy + Sync + Send>,
         _system_state_observer: Arc<SystemStateObserver>,
     ) {
@@ -103,8 +143,6 @@ impl Workload<dyn Payload> for DelegationWorkload {
 
     async fn make_test_payloads(
         &self,
-        _num_payloads: u64,
-        gas_config: WorkloadPayloadGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
@@ -113,29 +151,20 @@ impl Workload<dyn Payload> for DelegationWorkload {
             .await
             .expect("failed to fetch validators");
 
-        gas_config
-            .delegation_payload_gas
-            .into_iter()
+        self.payload_gas
+            .iter()
             .map(|(gas, owner, keypair)| {
                 let validator = *validators.iter().choose(&mut rand::thread_rng()).unwrap();
                 Box::new(DelegationTestPayload {
                     coin: None,
-                    gas,
+                    gas: *gas,
                     validator,
-                    sender: owner.get_owner_address().unwrap(),
-                    keypair,
+                    sender: *owner,
+                    keypair: keypair.clone(),
                     system_state_observer: system_state_observer.clone(),
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))
             .collect()
-    }
-
-    fn get_workload_type(&self) -> WorkloadType {
-        WorkloadType::Delegation
-    }
-
-    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DelegationWorkload")
     }
 }

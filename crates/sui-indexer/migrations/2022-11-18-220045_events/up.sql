@@ -1,18 +1,19 @@
 -- Only user generated events are stored in this table;
 -- all other events, including system events and coin balance changes,
 -- are handled elsewhere.
-CREATE TABLE events (
-    id BIGSERIAL PRIMARY KEY,
+CREATE TABLE events
+(
+    id                 BIGSERIAL PRIMARY KEY,
     transaction_digest base58digest NOT NULL,
-    event_sequence BIGINT NOT NULL,
-    sender address NOT NULL,
-    package address NOT NULL,
-    module TEXT NOT NULL,
+    event_sequence     BIGINT       NOT NULL,
+    sender             address      NOT NULL,
+    package            address      NOT NULL,
+    module             TEXT         NOT NULL,
     -- type_ in SuiEvent::MoveEvent
-    event_type TEXT NOT NULL,
-    event_time_ms BIGINT,
-    move_struct_bcs TEXT NOT NULL,
-    event_bcs BYTEA NOT NULL
+    event_type         TEXT         NOT NULL,
+    event_time_ms      BIGINT,
+    parsed_json        jsonb        NOT NULL,
+    event_bcs          BYTEA        NOT NULL
 );
 
 CREATE INDEX events_transaction_digest ON events (transaction_digest);

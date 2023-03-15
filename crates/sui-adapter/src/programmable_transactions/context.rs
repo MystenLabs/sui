@@ -9,7 +9,7 @@ use std::{
 
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::{CodeOffset, FunctionDefinitionIndex},
+    file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -23,7 +23,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
-    storage::{ObjectChange, SingleTxContext, Storage, WriteKind},
+    storage::{ObjectChange, Storage, WriteKind},
 };
 
 use crate::{
@@ -397,7 +397,6 @@ where
             ..
         } = self;
         let tx_digest = tx_context.digest();
-        let sender = tx_context.sender();
         let mut additional_writes = BTreeMap::new();
         let mut input_object_metadata = BTreeMap::new();
         // Any object value that has not been taken (still has `Some` for it's value) needs to
@@ -506,12 +505,10 @@ where
             "Events should be taken after every Move call"
         );
         // todo remove this when system events are removed
-        let dummy_event_ctx = SingleTxContext::unused_input(sender);
         let mut object_changes = BTreeMap::new();
         for package in new_packages {
             let id = package.id();
-            let change =
-                ObjectChange::Write(SingleTxContext::publish(sender), package, WriteKind::Create);
+            let change = ObjectChange::Write(package, WriteKind::Create);
             object_changes.insert(id, change);
         }
         for (id, additional_write) in additional_writes {
@@ -548,7 +545,7 @@ where
                 )?
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
-            let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
+            let change = ObjectChange::Write(object, write_kind);
             object_changes.insert(id, change);
         }
 
@@ -583,7 +580,7 @@ where
                 )?
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
-            let change = ObjectChange::Write(dummy_event_ctx.clone(), object, write_kind);
+            let change = ObjectChange::Write(object, write_kind);
             object_changes.insert(id, change);
         }
         for (id, delete_kind) in deletions {
@@ -597,10 +594,7 @@ where
                     Err(_) => invariant_violation!(missing_unwrapped_msg(&id)),
                 },
             };
-            object_changes.insert(
-                id,
-                ObjectChange::Delete(dummy_event_ctx.clone(), version, delete_kind),
-            );
+            object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
         }
         let (change_set, move_events) = tmp_session
             .finish()
@@ -619,6 +613,28 @@ where
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
         sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+    }
+
+    /// Special case errors for type arguments to Move functions
+    pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+        use move_core_types::vm_status::StatusCode;
+        use sui_types::messages::TypeArgumentError;
+        match error.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => self.convert_vm_error(error),
+        }
     }
 
     /// Returns true if the value at the argument's location is borrowed, mutably or immutably
@@ -800,7 +816,7 @@ fn refund_max_gas_budget(
         .value()
         .checked_add(gas_status.max_gax_budget_in_balance()) else {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::TotalCoinBalanceOverflow,
+                ExecutionErrorKind::CoinBalanceOverflow,
                 "Gas coin too large after returning the max gas budget",
             ));
         };

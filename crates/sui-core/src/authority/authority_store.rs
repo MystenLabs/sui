@@ -1,24 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::authority_notify_read::NotifyRead;
-use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_types::{
-    get_store_object_pair, ObjectContentDigest, StoreObjectPair,
-};
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
+use std::iter;
+use std::ops::Not;
+use std::path::Path;
+use std::sync::Arc;
+
 use either::Either;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
-use std::iter;
-use std::path::Path;
-use std::sync::Arc;
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tracing::{debug, info, trace};
+
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
@@ -30,10 +28,17 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tracing::{debug, info, trace};
 use typed_store::rocks::{DBBatch, TypedStoreError};
 use typed_store::traits::Map;
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_types::{
+    get_store_object_pair, ObjectContentDigest, StoreObjectPair,
+};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+
+use super::authority_notify_read::NotifyRead;
+use super::{authority_store_tables::AuthorityPerpetualTables, *};
 
 const NUM_SHARDS: usize = 4096;
 const SHARD_SIZE: usize = 128;
@@ -167,11 +172,14 @@ impl AuthorityStore {
             // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
             // This is important for fullnodes to be able to generate indexing data right now.
 
-            store
-                .perpetual_tables
-                .events
-                .insert(&genesis.events().digest(), genesis.events())
-                .unwrap();
+            let event_digests = genesis.events().digest();
+            let events = genesis
+                .events()
+                .data
+                .iter()
+                .enumerate()
+                .map(|(i, e)| ((event_digests, i), e));
+            store.perpetual_tables.events.multi_insert(events).unwrap();
         }
 
         Ok(store)
@@ -199,20 +207,26 @@ impl AuthorityStore {
     pub(crate) fn get_events(
         &self,
         event_digest: &TransactionEventsDigest,
-    ) -> SuiResult<TransactionEvents> {
-        self.perpetual_tables
+    ) -> Result<Option<TransactionEvents>, TypedStoreError> {
+        let data = self
+            .perpetual_tables
             .events
-            .get(event_digest)?
-            .ok_or(SuiError::TransactionEventsNotFound {
-                digest: *event_digest,
-            })
+            .iter()
+            .skip_to(&(*event_digest, 0))?
+            .take_while(|((digest, _), _)| digest == event_digest)
+            .map(|(_, e)| e)
+            .collect::<Vec<_>>();
+        Ok(data.is_empty().not().then_some(TransactionEvents { data }))
     }
 
     pub fn multi_get_events(
         &self,
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        Ok(self.perpetual_tables.events.multi_get(event_digests)?)
+        Ok(event_digests
+            .iter()
+            .map(|digest| self.get_events(digest))
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn multi_get_effects<'a>(
@@ -354,11 +368,6 @@ impl AuthorityStore {
             .transpose()
     }
 
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.perpetual_tables.as_ref().get_object(object_id)
-    }
-
     /// Get many objects
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
@@ -371,8 +380,19 @@ impl AuthorityStore {
     pub fn check_input_objects(
         &self,
         objects: &[InputObjectKind],
+        protocol_config: &ProtocolConfig,
     ) -> Result<Vec<Object>, SuiError> {
         let mut result = Vec::new();
+
+        fp_ensure!(
+            objects.len() <= protocol_config.max_input_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum input objects in a transaction".to_string(),
+                value: protocol_config.max_input_objects().to_string()
+            }
+            .into()
+        );
+
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } => {
@@ -847,8 +867,14 @@ impl AuthorityStore {
             )?;
         }
 
-        write_batch =
-            write_batch.insert_batch(&self.perpetual_tables.events, [(events.digest(), events)])?;
+        let event_digest = events.digest();
+        let events = events
+            .data
+            .into_iter()
+            .enumerate()
+            .map(|(i, e)| ((event_digest, i), e));
+
+        write_batch = write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
         let new_locks_to_init: Vec<_> = written
             .iter()
@@ -1143,10 +1169,16 @@ impl AuthorityStore {
     /// executed locally on the validator but didn't make to the last checkpoint.
     /// The effects of the execution is reverted here.
     /// The following things are reverted:
-    /// 1. Certificate and effects are deleted.
-    /// 2. Latest parent_sync entries for each mutated object are deleted.
-    /// 3. All new object states are deleted.
-    /// 4. owner_index table change is reverted.
+    /// 1. Latest parent_sync entries for each mutated object are deleted.
+    /// 2. All new object states are deleted.
+    /// 3. owner_index table change is reverted.
+    ///
+    /// NOTE: transaction and effects are intentionally not deleted. It's
+    /// possible that if this node is behind, the network will execute the
+    /// transaction in a later epoch. In that case, we need to keep it saved
+    /// so that when we receive the checkpoint that includes it from state
+    /// sync, we are able to execute the checkpoint.
+    /// TODO: implement GC for transactions that are no longer needed.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
@@ -1157,13 +1189,17 @@ impl AuthorityStore {
         assert!(effects.shared_objects().is_empty());
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
-        write_batch = write_batch
-            .delete_batch(&self.perpetual_tables.transactions, iter::once(tx_digest))?
-            .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
-            .delete_batch(
-                &self.perpetual_tables.executed_effects,
-                iter::once(tx_digest),
+        write_batch = write_batch.delete_batch(
+            &self.perpetual_tables.executed_effects,
+            iter::once(tx_digest),
+        )?;
+        if let Some(events_digest) = effects.events_digest() {
+            write_batch = write_batch.delete_range(
+                &self.perpetual_tables.events,
+                &(*events_digest, usize::MIN),
+                &(*events_digest, usize::MAX),
             )?;
+        }
 
         let all_new_refs = effects
             .mutated()
@@ -1372,6 +1408,13 @@ impl BackingPackageStore for AuthorityStore {
     }
 }
 
+impl ObjectStore for AuthorityStore {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.perpetual_tables.as_ref().get_object(object_id)
+    }
+}
+
 impl ChildObjectResolver for AuthorityStore {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         let child_object = match self.get_object(child)? {
@@ -1429,12 +1472,6 @@ impl GetModule for AuthorityStore {
         Ok(self
             .get_module(id)?
             .map(|bytes| CompiledModule::deserialize(&bytes).unwrap()))
-    }
-}
-
-impl ObjectStore for AuthorityStore {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.get_object(object_id)
     }
 }
 

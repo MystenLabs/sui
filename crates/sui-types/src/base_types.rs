@@ -9,8 +9,8 @@ use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
 use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey, SuiSignature,
+    AuthorityPublicKey, AuthorityPublicKeyBytes, DefaultHash, KeypairTraits, PublicKey,
+    SignatureScheme, SuiPublicKey, SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
@@ -39,7 +39,7 @@ use crate::SUI_FRAMEWORK_ADDRESS;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::HashFunction;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -50,6 +50,7 @@ use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shared_crypto::intent::HashingIntentScope;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -434,13 +435,13 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 
 impl From<&AuthorityPublicKeyBytes> for SuiAddress {
     fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
         hasher.update(pkb);
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
+        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
         SuiAddress(res)
     }
@@ -448,13 +449,13 @@ impl From<&AuthorityPublicKeyBytes> for SuiAddress {
 
 impl<T: SuiPublicKey> From<&T> for SuiAddress {
     fn from(pk: &T) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([T::SIGNATURE_SCHEME.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
+        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
         SuiAddress(res)
     }
@@ -462,13 +463,13 @@ impl<T: SuiPublicKey> From<&T> for SuiAddress {
 
 impl From<&PublicKey> for SuiAddress {
     fn from(pk: &PublicKey) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([pk.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
+        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
         SuiAddress(res)
     }
@@ -479,7 +480,7 @@ impl From<&PublicKey> for SuiAddress {
 /// of all participating public keys and its weight.
 impl From<MultiSigPublicKey> for SuiAddress {
     fn from(multisig_pk: MultiSigPublicKey) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::MultiSig.flag()]);
         hasher.update(multisig_pk.threshold().to_le_bytes());
         multisig_pk.pubkeys().iter().for_each(|(pk, w)| {
@@ -490,7 +491,7 @@ impl From<MultiSigPublicKey> for SuiAddress {
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
+        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
         SuiAddress(res)
     }
@@ -680,7 +681,10 @@ impl TxContext {
             || self.digest != other.digest
             || other.ids_created < self.ids_created
         {
-            return Err(ExecutionErrorKind::InvalidTransactionUpdate.into());
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InvariantViolation,
+                "Immutable fields for TxContext changed",
+            ));
         }
         self.ids_created = other.ids_created;
         Ok(())
@@ -887,15 +891,14 @@ impl ObjectID {
     /// Create an ObjectID from `TransactionDigest` and `creation_num`.
     /// Caller is responsible for ensuring that `creation_num` is fresh
     pub fn derive_id(digest: TransactionDigest, creation_num: u64) -> Self {
-        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
-
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
+        hasher.update([HashingIntentScope::RegularObjectId as u8]);
         hasher.update(digest);
         hasher.update(creation_num.to_le_bytes());
         let hash = hasher.finalize();
 
         // truncate into an ObjectID.
-        // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
+        // OK to access slice because digest should never be shorter than ObjectID::LENGTH.
         ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
@@ -963,6 +966,12 @@ impl ObjectID {
             ret.push(prev);
         }
         Ok(ret)
+    }
+
+    /// Returns the full hex string with 0x prefix without removing trailing 0s. Prefer this
+    /// over [fn to_hex_literal] if the string needs to be fully preserved.
+    pub fn to_hex_uncompressed(&self) -> String {
+        format!("0x{:x}", self)
     }
 }
 

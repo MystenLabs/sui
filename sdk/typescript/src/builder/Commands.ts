@@ -17,7 +17,7 @@ import {
   Struct,
   define,
 } from 'superstruct';
-import { COMMAND_TYPE, WellKnownEncoding } from './utils';
+import { COMMAND_TYPE, WellKnownEncoding, create } from './utils';
 
 const option = <T extends Struct<any, any>>(some: T) =>
   union([object({ None: literal(null) }), object({ Some: some })]);
@@ -133,31 +133,39 @@ export const Commands = {
       typeArguments?: string[];
     },
   ): MoveCallCommand {
-    return {
-      kind: 'MoveCall',
-      target: input.target,
-      arguments: input.arguments ?? [],
-      typeArguments: input.typeArguments ?? [],
-    };
+    return create(
+      {
+        kind: 'MoveCall',
+        target: input.target,
+        arguments: input.arguments ?? [],
+        typeArguments: input.typeArguments ?? [],
+      },
+      MoveCallCommand,
+    );
   },
   TransferObjects(
-    // TODO: Do validation of objects being an Array.
     objects: CommandArgument[],
     address: CommandArgument,
   ): TransferObjectsCommand {
-    return { kind: 'TransferObjects', objects, address };
+    return create(
+      { kind: 'TransferObjects', objects, address },
+      TransferObjectsCommand,
+    );
   },
   SplitCoin(coin: CommandArgument, amount: CommandArgument): SplitCoinCommand {
-    return { kind: 'SplitCoin', coin, amount };
+    return create({ kind: 'SplitCoin', coin, amount }, SplitCoinCommand);
   },
   MergeCoins(
     destination: CommandArgument,
     sources: CommandArgument[],
   ): MergeCoinsCommand {
-    return { kind: 'MergeCoins', destination, sources };
+    return create(
+      { kind: 'MergeCoins', destination, sources },
+      MergeCoinsCommand,
+    );
   },
   Publish(modules: number[][]): PublishCommand {
-    return { kind: 'Publish', modules };
+    return create({ kind: 'Publish', modules }, PublishCommand);
   },
   MakeMoveVec({
     type,
@@ -165,10 +173,13 @@ export const Commands = {
   }: Omit<MakeMoveVecCommand, 'kind' | 'type'> & {
     type?: string;
   }): MakeMoveVecCommand {
-    return {
-      kind: 'MakeMoveVec',
-      type: type ? { Some: type } : { None: null },
-      objects,
-    };
+    return create(
+      {
+        kind: 'MakeMoveVec',
+        type: type ? { Some: type } : { None: null },
+        objects,
+      },
+      MakeMoveVecCommand,
+    );
   },
 };

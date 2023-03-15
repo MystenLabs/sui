@@ -46,8 +46,12 @@ export function AccountsSettings() {
     return (
         <MenuLayout title="Accounts" back={backUrl}>
             <div className="flex flex-col gap-3">
-                {accounts.map(({ address }) => (
-                    <Account address={address} key={address} />
+                {accounts.map(({ address, type }) => (
+                    <Account
+                        key={address}
+                        address={address}
+                        accountType={type}
+                    />
                 ))}
                 {isMultiAccountsEnabled ? (
                     <>

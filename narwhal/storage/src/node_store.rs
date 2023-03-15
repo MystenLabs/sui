@@ -24,7 +24,7 @@ pub struct NodeStorage {
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    pub batch_store: Store<BatchDigest, Batch>,
+    pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
 }
 
@@ -95,7 +95,7 @@ impl NodeStorage {
             certificate_digest_by_origin_map,
         );
         let payload_store = Store::new(payload_map);
-        let batch_store = Store::new(batch_map);
+        let batch_store = batch_map;
         let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sub_dag_index_map));
 
         Self {
