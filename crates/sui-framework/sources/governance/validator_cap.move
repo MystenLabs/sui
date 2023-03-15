@@ -5,7 +5,7 @@ module sui::validator_cap {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
-    friend sui::sui_system;
+    friend sui::sui_system_state_inner;
     friend sui::validator;
     friend sui::validator_set;
 

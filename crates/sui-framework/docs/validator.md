@@ -471,7 +471,7 @@ Capability code is not valid
 
 <a name="0x2_validator_EInvalidProofOfPossession"></a>
 
-Invalid proof_of_possesion field in ValidatorMetadata
+Invalid proof_of_possession field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EInvalidProofOfPossession">EInvalidProofOfPossession</a>: u64 = 0;

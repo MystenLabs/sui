@@ -140,10 +140,10 @@ Advance the epoch counter and draw down the subsidy for the epoch.
     // Take the minimum of the reward amount and the remaining <a href="balance.md#0x2_balance">balance</a> in
     // order <b>to</b> ensure we don't overdraft the remaining stake subsidy
     // <a href="balance.md#0x2_balance">balance</a>
-    <b>let</b> to_withdrawl = <a href="math.md#0x2_math_min">math::min</a>(subsidy.current_epoch_amount, <a href="balance.md#0x2_balance_value">balance::value</a>(&subsidy.<a href="balance.md#0x2_balance">balance</a>));
+    <b>let</b> to_withdraw = <a href="math.md#0x2_math_min">math::min</a>(subsidy.current_epoch_amount, <a href="balance.md#0x2_balance_value">balance::value</a>(&subsidy.<a href="balance.md#0x2_balance">balance</a>));
 
     // Drawn down the subsidy for this epoch.
-    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> subsidy.<a href="balance.md#0x2_balance">balance</a>, to_withdrawl);
+    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> subsidy.<a href="balance.md#0x2_balance">balance</a>, to_withdraw);
 
     subsidy.epoch_counter = subsidy.epoch_counter + 1;
 

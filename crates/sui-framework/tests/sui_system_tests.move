@@ -11,6 +11,7 @@ module sui::sui_system_tests {
     use sui::sui::SUI;
     use sui::governance_test_utils::{add_validator_full_flow, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing};
     use sui::sui_system::{Self, SuiSystemState};
+    use sui::sui_system_state_inner;
     use sui::validator::{Self, Validator};
     use sui::validator_set;
     use sui::validator_cap::UnverifiedValidatorOperationCap;
@@ -183,7 +184,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui_system::ENotValidator)]
+    #[expected_failure(abort_code = sui_system_state_inner::ENotValidator)]
     fun test_report_non_validator_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -194,7 +195,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui_system::ECannotReportOneself)]
+    #[expected_failure(abort_code = sui_system_state_inner::ECannotReportOneself)]
     fun test_report_self_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -205,7 +206,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui_system::EReportRecordNotFound)]
+    #[expected_failure(abort_code = sui_system_state_inner::EReportRecordNotFound)]
     fun test_undo_report_failure() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
