@@ -180,6 +180,7 @@ impl SimpleFaucet {
                 }
                 // here perhaps we could log the invalid coin, but otherwise just skip it and get a valid one
                 Ok(None) => {
+                    warn!(?uuid, ?coin_id, "Invalid, removing from pool");
                     self.metrics.total_discarded_coins.inc();
                 }
 
