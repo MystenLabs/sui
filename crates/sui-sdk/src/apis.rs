@@ -232,6 +232,7 @@ impl ReadApi {
             .await?)
     }
 
+    // TODO(devx): we can probably cache this given an epoch
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
         Ok(self.api.http.get_reference_gas_price().await?)
     }
