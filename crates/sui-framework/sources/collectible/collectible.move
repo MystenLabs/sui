@@ -8,29 +8,28 @@
 /// Custom metadata can be created and passed into the `Collectible` but that would
 /// require additional work on the creator side to set up metadata creation methods.
 module sui::collectible {
-    use std::vector as vec;
-    use std::string::String;
-    use std::option::{Self, Option};
     use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::display::{Self, Display};
     use sui::package::{Self, Publisher};
-    use sui::nft_safe::{Self, TransferCap, TransferPolicy};
-    use sui::borrow::{Self, Borrow, Referent};
+    use sui::tx_context::{TxContext};
+    use sui::display::{Self, Display};
+    use sui::nft_safe;
+    use std::option::{Self, Option};
+    use std::string::String;
+    use std::vector as vec;
 
-    /// A witness type passed is not an OTW.
+    /// For when a witness type passed is not an OTW.
     const ENotOneTimeWitness: u64 = 0;
-    /// The type `T` is not from the same module as the OTW.
+    /// For when the type `T` is not from the same module as the OTW.
     const EModuleDoesNotContainT: u64 = 1;
-    /// Maximum size of the Collection is reached - minting forbidden.
+    /// For when maximum size of the Collection is reached - minting forbidden.
     const ECapReached: u64 = 2;
-    /// Names length does not match `img_urls` length
+    /// For when Names length does not match `img_urls` length
     const EWrongNamesLength: u64 = 3;
-    /// Descriptions length does not match `img_urls` length
+    /// For when Descriptions length does not match `img_urls` length
     const EWrongDescriptionsLength: u64 = 4;
-    /// Creators length does not match `img_urls` length
+    /// For when Creators length does not match `img_urls` length
     const EWrongCreatorsLength: u64 = 5;
-    /// Metadatas length does not match `img_urls` length
+    /// For when Metadatas length does not match `img_urls` length
     const EWrongMetadatasLength: u64 = 6;
 
     /// Basic collectible - should contain only unique information (eg
@@ -52,10 +51,9 @@ module sui::collectible {
     /// Capability granted to the collection creator. Is guaranteed to be one
     /// per `T` in the `create_collection` function.
     /// Contains the cap - maximum amount of Collectibles minted.
-    struct CollectionCreatorCap<T: store> has key, store {
+    struct CollectionCreatorCap<phantom T: store> has key, store {
         id: UID,
         max_supply: Option<u64>,
-        display: Referent<Display<Collectible<T>>>,
         minted: u64
     }
 
@@ -71,33 +69,33 @@ module sui::collectible {
         otw: OTW, max_supply: Option<u64>, ctx: &mut TxContext
     ): (
         Publisher,
-        TransferPolicy<Collectible<T>>,
-        TransferCap<Collectible<T>>,
-        CollectionCreatorCap<T>,
+        nft_safe::TransferPolicy<Collectible<T>>,
+        nft_safe::TransferCap<Collectible<T>>,
+        Display<Collectible<T>>,
+        CollectionCreatorCap<T>
     ) {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-        let publisher = package::claim(otw, ctx);
-        let display = display::new_protected<Collectible<T>>(ctx);
+        let pub = package::claim(otw, ctx);
+        assert!(package::from_module<T>(&pub), EModuleDoesNotContainT);
 
-        assert!(package::from_module<T>(&publisher), EModuleDoesNotContainT);
-
-        let transfer_cap = nft_safe::new_transfer_cap<Collectible<T>>(&publisher, ctx);
+        let transfer_cap = nft_safe::new_transfer_cap<Collectible<T>>(&pub, ctx);
         let transfer_cap_count = 1;
         let transfer_policy = nft_safe::new_transfer_policy<Collectible<T>>(
-            &publisher,
+            &pub,
             transfer_cap_count,
             ctx,
         );
+
         (
-            publisher,
+            pub,
             transfer_policy,
             transfer_cap,
+            display::new_protected<Collectible<T>>(ctx),
             CollectionCreatorCap<T> {
                 id: object::new(ctx),
                 minted: 0,
                 max_supply,
-                display: borrow::new(display, ctx)
             }
         )
     }
@@ -171,20 +169,6 @@ module sui::collectible {
         };
 
         res
-    }
-
-    // === Borrows ===
-
-    /// Take the Display object.
-    public fun borrow_display<T: store>(self: &mut CollectionCreatorCap<T>): (Display<Collectible<T>>, Borrow) {
-        borrow::borrow(&mut self.display)
-    }
-
-    /// Return the Display object.
-    public fun return_display<T: store>(
-        self: &mut CollectionCreatorCap<T>, display: Display<Collectible<T>>, borrow: Borrow
-    ) {
-        borrow::put_back(&mut self.display, display, borrow)
     }
 
     // === Reads ===
