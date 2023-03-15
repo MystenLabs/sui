@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This module implements a set of basic primitives for Kiosk's
+/// This module implements a set of basic primitives for NftSave's
 /// Transfer Policies to improve discoverability and serve as a
 /// base for building on top.
 module sui::royalty {
     use std::option::{Self, Option};
-    use sui::kiosk::{Self, TransferRequest, TransferPolicyCap};
+    use sui::nft_safe::{Self, TransferRequest, TransferPolicy, TransferCap};
     use sui::tx_context::{sender, TxContext};
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
@@ -23,12 +23,12 @@ module sui::royalty {
     const EIncorrectAmount: u64 = 0;
 
     /// A transfer policy for a single type `T` which collects a certain
-    /// fee from the `kiosk` deals and stores them for the policy issuer.
+    /// fee from the `nft_safe` deals and stores them for the policy issuer.
     struct RoyaltyPolicy<phantom T: key + store> has key, store {
         id: UID,
-        /// The `TransferPolicyCap` for the `T` which is used to call
-        /// the `kiosk::allow_transfer` and allow the trade.
-        cap: TransferPolicyCap<T>,
+        /// The `TransferCap` for the `T` which is used to call
+        /// the `nft_safe::allow_transfer` and allow the trade.
+        cap: TransferCap<T>,
         /// Percentage of the trade amount which is required for the
         /// transfer approval. Denominated in basis points.
         /// - 10_000 = 100%
@@ -70,28 +70,45 @@ module sui::royalty {
 
     // === Public / Everyone ===
 
-    /// Perform a Royalty payment and unblock the transfer by consuming
-    /// the `TransferRequest` "hot potato". The `T` here type-locks the
-    /// RoyaltyPolicy and TransferRequest making it impossible to call this
-    /// function on a wrong type.
-    public fun pay<T: key + store>(
+    /// Perform a Royalty payment and signs the transfer.
+    /// 
+    /// The hot potato transfer request object now has an extra signature.
+    /// Its policy defines how many signatures are necessary to finalize the 
+    /// trade.
+    public fun pay_and_sign<T: key + store>(
         policy: &mut RoyaltyPolicy<T>,
         transfer_request: TransferRequest<T>,
         coin: &mut Coin<SUI>
-    ) {
-        let (paid, _from) = kiosk::allow_transfer(&policy.cap, transfer_request);
+    ): TransferRequest<T> {
+        let paid = nft_safe::transfer_request_paid(&transfer_request);
+        nft_safe::sign_transfer(&policy.cap, &mut transfer_request);
         let amount = (((paid as u128) * (policy.amount_bp as u128) / (MAX_AMOUNT as u128)) as u64);
 
         let royalty_payment = balance::split(coin::balance_mut(coin), amount);
         balance::join(&mut policy.balance, royalty_payment);
+
+        transfer_request
+    }
+
+    /// Perform a Royalty payment and tries to destroy the hot potato.
+    /// 
+    /// Aborts if there are not enough signatures on the transfer cap.
+    public fun pay<T: key + store>(
+        transfer_policy: &TransferPolicy<T>,
+        royalty_policy: &mut RoyaltyPolicy<T>,
+        transfer_request: TransferRequest<T>,
+        coin: &mut Coin<SUI>
+    ) {
+        let transfer_request = pay_and_sign(royalty_policy, transfer_request, coin);
+        nft_safe::allow_transfer(transfer_policy, transfer_request);
     }
 
     // === Creator only ===
 
     /// A special function used to explicitly indicate that all of the
-    /// trades can be performed freely. To achieve that, the `TransferPolicyCap`
+    /// trades can be performed freely. To achieve that, the `TransferCap`
     /// is immutably shared making it available for free use by anyone on the network.
-    entry public fun set_zero_policy<T: key + store>(cap: TransferPolicyCap<T>) {
+    entry public fun set_zero_policy<T: key + store>(cap: TransferCap<T>) {
         event::emit(ZeroPolicyCreated<T> { id: object::id(&cap) });
         transfer::freeze_object(cap)
     }
@@ -99,7 +116,7 @@ module sui::royalty {
     /// Create new `RoyaltyPolicy` for the `T` and require an `amount`
     /// percentage of the trade amount for the transfer to be approved.
     public fun new_royalty_policy<T: key + store>(
-        cap: TransferPolicyCap<T>,
+        cap: TransferCap<T>,
         amount_bp: u16,
         ctx: &mut TxContext
     ): (RoyaltyPolicy<T>, RoyaltyCollectorCap<T>) {
@@ -160,12 +177,12 @@ module sui::royalty {
     }
 
     /// Unpack a RoyaltyPolicy object if it is not shared (!!!) and
-    /// return the `TransferPolicyCap` and the remaining balance.
+    /// return the `TransferCap` and the remaining balance.
     public fun destroy_and_withdraw<T: key + store>(
         policy: RoyaltyPolicy<T>,
         cap: RoyaltyCollectorCap<T>,
         ctx: &mut TxContext
-    ): (TransferPolicyCap<T>, Coin<SUI>) {
+    ): (TransferCap<T>, Coin<SUI>) {
         let RoyaltyPolicy { id, amount_bp: _, owner: _, cap: transfer_cap, balance } = policy;
         let RoyaltyCollectorCap { id: cap_id, policy_id: _ } = cap;
 
