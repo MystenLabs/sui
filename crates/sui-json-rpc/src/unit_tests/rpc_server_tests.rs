@@ -87,7 +87,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let gas = objects.clone().last().unwrap().object().unwrap().object_id;
 
     let transaction_bytes: TransactionBytes = http_client
-        .transfer_object(*address, obj, Some(gas), 1000, *address)
+        .transfer_object(*address, obj, Some(gas), 1000.into(), *address)
         .await?;
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -543,7 +543,13 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     for obj in &objects[..objects.len() - 1] {
         let oref = obj.object().unwrap();
         let transaction_bytes: TransactionBytes = http_client
-            .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+            .transfer_object(
+                *address,
+                oref.object_id,
+                Some(gas_id),
+                1000.into(),
+                *address,
+            )
             .await?;
         let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);

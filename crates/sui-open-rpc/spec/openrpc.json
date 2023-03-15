@@ -2574,9 +2574,7 @@
           "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         },
         {
@@ -2626,9 +2624,7 @@
           "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         },
         {

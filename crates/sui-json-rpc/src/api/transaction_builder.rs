@@ -28,7 +28,7 @@ pub trait TransactionBuilder {
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: u64,
+        gas_budget: BigInt,
         /// the recipient's Sui address
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
@@ -42,7 +42,7 @@ pub trait TransactionBuilder {
         /// the Sui coin object to be used in this transaction
         sui_object_id: ObjectID,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
-        gas_budget: u64,
+        gas_budget: BigInt,
         /// the recipient's Sui address
         recipient: SuiAddress,
         /// the amount to be split out and transferred

@@ -34,7 +34,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         object_id: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: u64,
+        gas_budget: BigInt,
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
@@ -46,7 +46,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         sui_object_id: ObjectID,
-        gas_budget: u64,
+        gas_budget: BigInt,
         recipient: SuiAddress,
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes> {
