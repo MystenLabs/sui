@@ -3,9 +3,12 @@
 
 import { fromB64 } from '@mysten/sui.js';
 import { useMemo } from 'react';
+import toast from 'react-hot-toast';
 
+import { useSuiLedgerClient } from '../../components/ledger/SuiLedgerClientProvider';
 import { UserApproveContainer } from '../../components/user-approve-container';
 import { useAppDispatch } from '../../hooks';
+import { useAccounts } from '../../hooks/useAccounts';
 import { respondToTransactionRequest } from '../../redux/slices/transaction-requests';
 import { Heading } from '../../shared/heading';
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
@@ -34,22 +37,36 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
             type,
         };
     }, [request.tx.message]);
+
+    const accounts = useAccounts();
+    const accountForTransaction = accounts.find(
+        (account) => account.address === request.tx.accountAddress
+    );
     const dispatch = useAppDispatch();
+    const { initializeLedgerSignerInstance } = useSuiLedgerClient();
+
     return (
         <UserApproveContainer
             origin={request.origin}
             originFavIcon={request.originFavIcon}
             approveTitle="Sign"
             rejectTitle="Reject"
-            onSubmit={(approved) =>
-                dispatch(
-                    respondToTransactionRequest({
-                        txRequestID: request.id,
-                        approved,
-                        addressForTransaction: request.tx.accountAddress,
-                    })
-                )
-            }
+            onSubmit={(approved) => {
+                if (accountForTransaction) {
+                    dispatch(
+                        respondToTransactionRequest({
+                            txRequestID: request.id,
+                            approved,
+                            accountForTransaction,
+                            initializeLedgerSignerInstance,
+                        })
+                    );
+                } else {
+                    toast.error(
+                        `Account for address ${request.tx.accountAddress} not found`
+                    );
+                }
+            }}
             address={request.tx.accountAddress}
             scrollable
         >
