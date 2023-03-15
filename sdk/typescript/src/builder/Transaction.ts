@@ -172,7 +172,7 @@ export class Transaction {
     this.#transactionData.gasConfig.budget = String(budget);
   }
   setGasPayment(payments: SuiObjectRef[]) {
-    if (payments.length > MAX_GAS_OBJECTS) {
+    if (payments.length >= MAX_GAS_OBJECTS) {
       throw new Error(
         `Payment objects exceed maximum amount ${MAX_GAS_OBJECTS}`,
       );
@@ -344,7 +344,7 @@ export class Transaction {
 
         return !matchingInput;
       })
-      .slice(0, MAX_GAS_OBJECTS)
+      .slice(0, MAX_GAS_OBJECTS - 1)
       .map((coin) => ({
         objectId: coin.coinObjectId,
         digest: coin.digest,
