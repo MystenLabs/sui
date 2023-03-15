@@ -50,7 +50,7 @@ impl WriteApiServer for WriteApi {
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
-            .dev_inspect_transaction(sender_address, tx_bytes, gas_price.map(|x| x.into()), epoch)
+            .dev_inspect_transaction(sender_address, tx_bytes, gas_price, epoch)
             .await
     }
 

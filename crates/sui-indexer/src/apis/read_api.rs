@@ -274,7 +274,7 @@ where
             .method_to_be_forwarded
             .contains(&"get_total_transaction_number".to_string())
         {
-            return self.fullnode.get_total_transaction_number().await.into();
+            return self.fullnode.get_total_transaction_number().await;
         }
         Ok(self.get_total_transaction_number_internal()?.into())
     }

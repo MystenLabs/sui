@@ -46,7 +46,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
-        self.fullnode.get_reference_gas_price().await.into()
+        self.fullnode.get_reference_gas_price().await
     }
 }
 

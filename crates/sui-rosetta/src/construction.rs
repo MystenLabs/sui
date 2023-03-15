@@ -216,7 +216,7 @@ pub async fn metadata(
                 .select_coins(
                     *sender,
                     None,
-                    amount + (1000 * u64::from(gas_price) as u128),
+                    amount + (1000 * gas_price as u128),
                     None,
                     vec![],
                 )
@@ -281,7 +281,7 @@ pub async fn metadata(
             tx_metadata,
             sender,
             gas,
-            gas_price: gas_price.into(),
+            gas_price,
             budget,
         },
         suggested_fee: vec![Amount::new(budget as i128)],

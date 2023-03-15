@@ -524,7 +524,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         },
         sender,
         gas: vec![gas],
-        gas_price: client.read_api().get_reference_gas_price().await?.into(),
+        gas_price: client.read_api().get_reference_gas_price().await?,
         budget: 10000,
     };
     let parsed_data = ops
