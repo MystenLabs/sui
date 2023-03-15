@@ -112,13 +112,13 @@ async fn submit_transaction_to_consensus_adapter() {
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
             epoch_store
-                .handle_consensus_transaction(
+                .process_consensus_transaction(
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.transaction_manager(),
                     self.0.db(),
                 )
-                .await
+                .await?;
+            Ok(())
         }
     }
     // Make a new consensus adapter instance.

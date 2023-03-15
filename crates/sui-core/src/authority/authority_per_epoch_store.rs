@@ -49,7 +49,6 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::transaction_manager::TransactionManager;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
@@ -1475,27 +1474,6 @@ impl AuthorityPerEpochStore {
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
-    }
-
-    /// The transaction passed here went through verification in verify_consensus_transaction.
-    /// This method is called in the exact sequence message are ordered in consensus.
-    /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
-        &self,
-        transaction: VerifiedSequencedConsensusTransaction,
-        checkpoint_service: &Arc<C>,
-        transaction_manager: &Arc<TransactionManager>,
-        parent_sync_store: impl ParentSync,
-    ) -> SuiResult {
-        if let Some(certificate) = self
-            .process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
-            .await?
-        {
-            // The certificate has already been inserted into the pending_certificates table by
-            // process_consensus_transaction() above.
-            transaction_manager.enqueue(vec![certificate], self)?;
-        }
-        Ok(())
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
