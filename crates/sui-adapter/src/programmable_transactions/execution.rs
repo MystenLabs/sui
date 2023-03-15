@@ -13,7 +13,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    u256::U256_NUM_BYTES,
+    u256::U256,
 };
 use move_vm_runtime::{
     move_vm::MoveVM,
@@ -937,8 +937,14 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 ) -> Result<(), ExecutionError> {
     let obj_ty;
     let ty = match value {
+        // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
+        // be violated (like for string or Option)
+        Value::Raw(RawValueType::Any, _) if Mode::allow_arbitrary_values() => return Ok(()),
+        // Any means this was just some bytes passed in as an argument (as opposed to being
+        // generated from a Move function). Meaning we only allow "primitive" values
+        // and might need to run validation in addition to the BCS layout
         Value::Raw(RawValueType::Any, bytes) => {
-            if !Mode::allow_arbitrary_values() && !is_entry_primitive_type(context, param_ty)? {
+            let Some(layout) = primitive_serialization_layout(context, param_ty)? else {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
                     populated by an object",
@@ -951,13 +957,8 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     ),
                     msg,
                 ));
-            }
-
-            // Any means this was just some bytes passed in as an argument (as opposed to being
-            // generated from a Move function). Meaning we will need to run validation
-            if let Some(layout) = additional_validation_layout(context, param_ty)? {
-                special_argument_validate(bytes, idx as u16, layout)?;
-            }
+            };
+            special_argument_validate(bytes, idx as u16, layout)?;
             return Ok(());
         }
         Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
@@ -1026,51 +1027,58 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
     })
 }
 
-/// Returns true iff it is a primitive, an ID, a String, or an option/vector of a valid type
-fn is_entry_primitive_type<E: fmt::Debug, S: StorageView<E>>(
+/// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
+fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
-) -> Result<bool, ExecutionError> {
-    let mut stack = vec![param_ty];
-    while let Some(cur) = stack.pop() {
-        match cur {
-            Type::Signer => return Ok(false),
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => return Ok(false),
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address => (),
-            Type::Vector(inner) => stack.push(&**inner),
-            Type::Struct(idx) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                if ![RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
-                    .contains(&resolved_struct)
-                {
-                    return Ok(false);
-                }
-            }
-            Type::StructInstantiation(idx, targs) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                // is option of a primitive
-                let is_valid = resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1;
-                if !is_valid {
-                    return Ok(false);
-                }
-                stack.extend(targs)
+) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
+    Ok(match param_ty {
+        Type::Signer => return Ok(None),
+        Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            invariant_violation!("references and type parameters should be checked elsewhere")
+        }
+        Type::Bool => Some(SpecialArgumentLayout::Bool),
+        Type::U8 => Some(SpecialArgumentLayout::U8),
+        Type::U16 => Some(SpecialArgumentLayout::U16),
+        Type::U32 => Some(SpecialArgumentLayout::U32),
+        Type::U64 => Some(SpecialArgumentLayout::U64),
+        Type::U128 => Some(SpecialArgumentLayout::U128),
+        Type::U256 => Some(SpecialArgumentLayout::U256),
+        Type::Address => Some(SpecialArgumentLayout::Address),
+
+        Type::Vector(inner) => {
+            let info_opt = primitive_serialization_layout(context, inner)?;
+            info_opt.map(|layout| SpecialArgumentLayout::Vector(Box::new(layout)))
+        }
+        Type::StructInstantiation(idx, targs) => {
+            let Some(s) = context.session.get_struct_type(*idx) else {
+                invariant_violation!("Loaded struct not found")
+            };
+            let resolved_struct = get_struct_ident(&s);
+            // is option of a string
+            if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
+                let info_opt = primitive_serialization_layout(context, &targs[0])?;
+                info_opt.map(|layout| SpecialArgumentLayout::Option(Box::new(layout)))
+            } else {
+                None
             }
         }
-    }
-    Ok(true)
+        Type::Struct(idx) => {
+            let Some(s) = context.session.get_struct_type(*idx) else {
+                invariant_violation!("Loaded struct not found")
+            };
+            let resolved_struct = get_struct_ident(&s);
+            if resolved_struct == RESOLVED_SUI_ID {
+                Some(SpecialArgumentLayout::Address)
+            } else if resolved_struct == RESOLVED_ASCII_STR {
+                Some(SpecialArgumentLayout::Ascii)
+            } else if resolved_struct == RESOLVED_UTF8_STR {
+                Some(SpecialArgumentLayout::UTF8)
+            } else {
+                None
+            }
+        }
+    })
 }
 
 /***************************************************************************************************
@@ -1125,73 +1133,6 @@ impl SpecialArgumentLayout {
     }
 }
 
-/// If the type is a string, returns the name of the string type and the layout
-/// Otherwise, returns None
-fn additional_validation_layout<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
-    param_ty: &Type,
-) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
-    fn layout_for_type<E: fmt::Debug, S: StorageView<E>>(
-        context: &mut ExecutionContext<E, S>,
-        param_ty: &Type,
-    ) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
-        Ok(match param_ty {
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                invariant_violation!("references and type parameters should be checked elsewhere")
-            }
-
-            Type::Bool => Some(SpecialArgumentLayout::Bool),
-            Type::U8 => Some(SpecialArgumentLayout::U8),
-            Type::U16 => Some(SpecialArgumentLayout::U16),
-            Type::U32 => Some(SpecialArgumentLayout::U32),
-            Type::U64 => Some(SpecialArgumentLayout::U64),
-            Type::U128 => Some(SpecialArgumentLayout::U128),
-            Type::U256 => Some(SpecialArgumentLayout::U256),
-            Type::Address | Type::Signer => Some(SpecialArgumentLayout::Address),
-
-            Type::Vector(inner) => {
-                let info_opt = layout_for_type(context, inner)?;
-                info_opt.map(|layout| SpecialArgumentLayout::Vector(Box::new(layout)))
-            }
-            Type::StructInstantiation(idx, targs) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                // is option of a string
-                if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
-                    let info_opt = layout_for_type(context, &targs[0])?;
-                    info_opt.map(|layout| SpecialArgumentLayout::Option(Box::new(layout)))
-                } else {
-                    None
-                }
-            }
-            Type::Struct(idx) => {
-                let Some(s) = context.session.get_struct_type(*idx) else {
-                    invariant_violation!("Loaded struct not found")
-                };
-                let resolved_struct = get_struct_ident(&s);
-                if resolved_struct == RESOLVED_ASCII_STR {
-                    Some(SpecialArgumentLayout::Ascii)
-                } else if resolved_struct == RESOLVED_UTF8_STR {
-                    Some(SpecialArgumentLayout::UTF8)
-                } else {
-                    None
-                }
-            }
-        })
-    }
-
-    let layout_opt = layout_for_type(context, param_ty)?;
-    Ok(layout_opt.and_then(|layout| {
-        if layout.bcs_only() {
-            None
-        } else {
-            Some(layout)
-        }
-    }))
-}
-
 /// Checks the bytes against the `SpecialArgumentLayout` using `bcs`. It does not actually generate
 /// the deserialized value, only walks the bytes
 pub fn special_argument_validate(
@@ -1199,6 +1140,10 @@ pub fn special_argument_validate(
     idx: u16,
     layout: SpecialArgumentLayout,
 ) -> Result<(), ExecutionError> {
+    if layout.bcs_only() {
+        // will be covered in the value is deserialized by the VM
+        return Ok(());
+    }
     bcs::from_bytes_seed(&layout, bytes).map_err(|_| {
         ExecutionError::new_with_source(
             ExecutionErrorKind::command_argument_error(CommandArgumentError::InvalidBCSBytes, idx),
@@ -1260,7 +1205,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
                 Ok(())
             }
             SpecialArgumentLayout::U256 => {
-                <[u8; U256_NUM_BYTES]>::deserialize(deserializer)?;
+                U256::deserialize(deserializer)?;
                 Ok(())
             }
             SpecialArgumentLayout::Address => {

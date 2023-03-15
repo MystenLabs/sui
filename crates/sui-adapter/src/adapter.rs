@@ -43,7 +43,8 @@ use sui_types::{
     storage::ChildObjectResolver,
 };
 use sui_verifier::entry_points_verifier::{
-    self, is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
+    self, is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
+    RESOLVED_UTF8_STR,
 };
 
 pub fn new_move_vm(
@@ -334,28 +335,25 @@ fn additional_validation_layout(
     param_type: &SignatureToken,
 ) -> Option<SpecialArgumentLayout> {
     match param_type {
-        SignatureToken::Bool
-        | SignatureToken::U8
-        | SignatureToken::U16
-        | SignatureToken::U32
-        | SignatureToken::U64
-        | SignatureToken::U128
-        | SignatureToken::U256
-        | SignatureToken::Address
+        // should be ruled out above
+        SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_)
         | SignatureToken::Signer => None,
-        // optimistically assume not a string
+        // optimistically assume does not need validation (but it might)
+        // actually checking this requires a VM instance to load the type arguments
         SignatureToken::TypeParameter(_) => None,
+        // primitives
+        SignatureToken::Bool => Some(SpecialArgumentLayout::Bool),
+        SignatureToken::U8 => Some(SpecialArgumentLayout::U8),
+        SignatureToken::U16 => Some(SpecialArgumentLayout::U16),
+        SignatureToken::U32 => Some(SpecialArgumentLayout::U32),
+        SignatureToken::U64 => Some(SpecialArgumentLayout::U64),
+        SignatureToken::U128 => Some(SpecialArgumentLayout::U128),
+        SignatureToken::U256 => Some(SpecialArgumentLayout::U256),
+        SignatureToken::Address => Some(SpecialArgumentLayout::Address),
 
-        SignatureToken::Struct(idx) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
-            if resolved_struct == RESOLVED_ASCII_STR {
-                Some(SpecialArgumentLayout::Ascii)
-            } else if resolved_struct == RESOLVED_UTF8_STR {
-                Some(SpecialArgumentLayout::UTF8)
-            } else {
-                None
-            }
-        }
+        SignatureToken::Vector(inner) => additional_validation_layout(view, inner)
+            .map(|layout| SpecialArgumentLayout::Vector(Box::new(layout))),
         SignatureToken::StructInstantiation(idx, targs) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
@@ -365,11 +363,17 @@ fn additional_validation_layout(
                 None
             }
         }
-        SignatureToken::Vector(inner) => additional_validation_layout(view, inner)
-            .map(|layout| SpecialArgumentLayout::Vector(Box::new(layout))),
-
-        SignatureToken::Reference(inner) | SignatureToken::MutableReference(inner) => {
-            additional_validation_layout(view, inner)
+        SignatureToken::Struct(idx) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            if resolved_struct == RESOLVED_SUI_ID {
+                Some(SpecialArgumentLayout::Address)
+            } else if resolved_struct == RESOLVED_ASCII_STR {
+                Some(SpecialArgumentLayout::Ascii)
+            } else if resolved_struct == RESOLVED_UTF8_STR {
+                Some(SpecialArgumentLayout::UTF8)
+            } else {
+                None
+            }
         }
     }
 }
