@@ -613,24 +613,27 @@ impl DevInspectResults {
         let mut results = None;
         match return_values {
             Err(e) => error = Some(e.to_string()),
-            Ok(srvs) => results = Some(srvs
-                .into_iter()
-                .map(|srv| {
-                    let (mutable_reference_outputs, return_values) = srv;
-                    let mutable_reference_outputs = mutable_reference_outputs
-                        .into_iter()
-                        .map(|(a, bytes, tag)| (a.into(), bytes, SuiTypeTag::from(tag)))
-                        .collect();
-                    let return_values = return_values
-                        .into_iter()
-                        .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
-                        .collect();
-                    SuiExecutionResult {
-                        mutable_reference_outputs,
-                        return_values,
-                    }
-                })
-                .collect()),
+            Ok(srvs) => {
+                results = Some(
+                    srvs.into_iter()
+                        .map(|srv| {
+                            let (mutable_reference_outputs, return_values) = srv;
+                            let mutable_reference_outputs = mutable_reference_outputs
+                                .into_iter()
+                                .map(|(a, bytes, tag)| (a.into(), bytes, SuiTypeTag::from(tag)))
+                                .collect();
+                            let return_values = return_values
+                                .into_iter()
+                                .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
+                                .collect();
+                            SuiExecutionResult {
+                                mutable_reference_outputs,
+                                return_values,
+                            }
+                        })
+                        .collect(),
+                )
+            }
         };
         Ok(Self {
             effects: effects.try_into()?,
