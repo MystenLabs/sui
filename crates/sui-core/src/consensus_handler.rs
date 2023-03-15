@@ -8,13 +8,16 @@ use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointService;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
+use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::num::NonZeroUsize;
+use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
@@ -36,7 +39,11 @@ pub struct ConsensusHandler<T> {
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
+    /// Lru cache to quickly discard transactions processed by consensus
+    processed_cache: Mutex<LruCache<SequencedConsensusTransactionKey, ()>>,
 }
+
+const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
 impl<T> ConsensusHandler<T> {
     pub fn new(
@@ -54,6 +61,9 @@ impl<T> ConsensusHandler<T> {
             transaction_manager,
             parent_sync_store,
             metrics,
+            processed_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
+            )),
         }
     }
 }
@@ -175,6 +185,17 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .inc_by(bytes as u64);
 
         for sequenced_transaction in sequenced_transactions {
+            // todo if we can make handle_consensus_transaction into sync function,
+            // we could acquire mutex once for entire loop
+            if self
+                .processed_cache
+                .lock()
+                .put(sequenced_transaction.key(), ())
+                .is_some()
+            {
+                self.metrics.skipped_consensus_txns_cache_hit.inc();
+                continue;
+            }
             let verified_transaction = match self.epoch_store.verify_consensus_transaction(
                 sequenced_transaction,
                 &self.metrics.skipped_consensus_txns,

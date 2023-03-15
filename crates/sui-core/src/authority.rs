@@ -195,6 +195,7 @@ pub struct AuthorityMetrics {
     pub(crate) execution_driver_executed_transactions: IntCounter,
 
     pub(crate) skipped_consensus_txns: IntCounter,
+    pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
 
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
@@ -368,6 +369,12 @@ impl AuthorityMetrics {
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
+                registry,
+            )
+            .unwrap(),
+            skipped_consensus_txns_cache_hit: register_int_counter_with_registry!(
+                "skipped_consensus_txns_cache_hit",
+                "Total number of consensus transactions skipped because of local cache hit",
                 registry,
             )
             .unwrap(),
