@@ -12,7 +12,7 @@ module sui::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::Validator;
     use sui::validator_cap::UnverifiedValidatorOperationCap;
-    use sui::sui_system_state_inner::SuiSystemStateInner;
+    use sui::sui_system_state_inner::SuiSystemStateInnerV2;
     use sui::vec_set::VecSet;
     use std::option;
     use sui::table::Table;
@@ -499,7 +499,7 @@ module sui::sui_system {
             // If we are upgrading the system state, we need to make sure that the protocol version
             // is also upgraded.
             assert!(old_protocol_version != next_protocol_version, 0);
-            let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
+            let cur_state: SuiSystemStateInnerV2 = dynamic_field::remove(&mut wrapper.id, wrapper.version);
             let new_state = sui_system_state_inner::upgrade_system_state(cur_state, new_system_state_version, ctx);
             wrapper.version = new_system_state_version;
             dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
@@ -574,16 +574,16 @@ module sui::sui_system {
         sui_system_state_inner::get_reporters_of(self, addr)
     }
 
-    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
+    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInnerV2 {
         let version = self.version;
-        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, version);
+        let inner: &SuiSystemStateInnerV2 = dynamic_field::borrow(&self.id, version);
         assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
         inner
     }
 
-    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         let version = self.version;
-        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
+        let inner: &mut SuiSystemStateInnerV2 = dynamic_field::borrow_mut(&mut self.id, version);
         assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
         inner
     }

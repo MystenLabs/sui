@@ -1238,7 +1238,7 @@ gas coins.
         // If we are upgrading the system state, we need <b>to</b> make sure that the protocol version
         // is also upgraded.
         <b>assert</b>!(old_protocol_version != next_protocol_version, 0);
-        <b>let</b> cur_state: SuiSystemStateInner = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
+        <b>let</b> cur_state: SuiSystemStateInnerV2 = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
         <b>let</b> new_state = <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_upgrade_system_state">sui_system_state_inner::upgrade_system_state</a>(cur_state, new_system_state_version, ctx);
         wrapper.version = new_system_state_version;
         <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> wrapper.id, wrapper.version, new_state);
@@ -1484,7 +1484,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1493,9 +1493,9 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInner {
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
     <b>let</b> version = self.version;
-    <b>let</b> inner: &SuiSystemStateInner = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, version);
+    <b>let</b> inner: &SuiSystemStateInnerV2 = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, version);
     <b>assert</b>!(<a href="sui_system_state_inner.md#0x2_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == version, 0);
     inner
 }
@@ -1511,7 +1511,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1520,9 +1520,9 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInner {
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
     <b>let</b> version = self.version;
-    <b>let</b> inner: &<b>mut</b> SuiSystemStateInner = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
+    <b>let</b> inner: &<b>mut</b> SuiSystemStateInnerV2 = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
     <b>assert</b>!(<a href="sui_system_state_inner.md#0x2_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == version, 0);
     inner
 }
