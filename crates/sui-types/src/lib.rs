@@ -51,6 +51,7 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod temporary_store;
+pub mod versioned;
 
 pub mod epoch_data;
 #[path = "./unit_tests/utils.rs"]

@@ -14,7 +14,7 @@
 
 <pre><code><b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
-<b>use</b> <a href="versioned_type.md#0x2_versioned_type">0x2::versioned_type</a>;
+<b>use</b> <a href="versioned.md#0x2_versioned">0x2::versioned</a>;
 </code></pre>
 
 
@@ -36,7 +36,7 @@
 
 <dl>
 <dt>
-<code>inner: <a href="versioned_type.md#0x2_versioned_type_Versioned">versioned_type::Versioned</a></code>
+<code>inner: <a href="versioned.md#0x2_versioned_Versioned">versioned::Versioned</a></code>
 </dt>
 <dd>
 
@@ -77,7 +77,7 @@
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_create_v1">create_v1</a>(<a href="validator.md#0x2_validator">validator</a>: Validator, ctx: &<b>mut</b> TxContext): <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
     <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
-        inner: <a href="versioned_type.md#0x2_versioned_type_create">versioned_type::create</a>(1, <a href="validator.md#0x2_validator">validator</a>, ctx)
+        inner: <a href="versioned.md#0x2_versioned_create">versioned::create</a>(1, <a href="validator.md#0x2_validator">validator</a>, ctx)
     }
 }
 </code></pre>
@@ -107,7 +107,7 @@ If the inner version is old, we upgrade it lazily in-place.
     <b>let</b> version = <a href="validator_wrapper.md#0x2_validator_wrapper_version">version</a>(self);
     // TODO: When new versions are added, we need <b>to</b> explicitly upgrade here.
     <b>assert</b>!(version == 1, <a href="validator_wrapper.md#0x2_validator_wrapper_EInvalidVersion">EInvalidVersion</a>);
-    <a href="versioned_type.md#0x2_versioned_type_load_value_mut">versioned_type::load_value_mut</a>&lt;Validator&gt;(&<b>mut</b> self.inner)
+    <a href="versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>&lt;Validator&gt;(&<b>mut</b> self.inner)
 }
 </code></pre>
 
@@ -131,7 +131,7 @@ If the inner version is old, we upgrade it lazily in-place.
 
 
 <pre><code><b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_version">version</a>(self: &<a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): u64 {
-    <a href="versioned_type.md#0x2_versioned_type_version">versioned_type::version</a>(&self.inner)
+    <a href="versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner)
 }
 </code></pre>
 

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::validator_wrapper {
-    use sui::versioned_type::Versioned;
+    use sui::versioned::Versioned;
     use sui::validator::Validator;
-    use sui::versioned_type;
+    use sui::versioned;
     use sui::tx_context::TxContext;
 
     friend sui::validator_set;
@@ -18,7 +18,7 @@ module sui::validator_wrapper {
     // Validator corresponds to version 1.
     public(friend) fun create_v1(validator: Validator, ctx: &mut TxContext): ValidatorWrapper {
         ValidatorWrapper {
-            inner: versioned_type::create(1, validator, ctx)
+            inner: versioned::create(1, validator, ctx)
         }
     }
 
@@ -28,10 +28,10 @@ module sui::validator_wrapper {
         let version = version(self);
         // TODO: When new versions are added, we need to explicitly upgrade here.
         assert!(version == 1, EInvalidVersion);
-        versioned_type::load_value_mut<Validator>(&mut self.inner)
+        versioned::load_value_mut<Validator>(&mut self.inner)
     }
 
     fun version(self: &ValidatorWrapper): u64 {
-        versioned_type::version(&self.inner)
+        versioned::version(&self.inner)
     }
 }
