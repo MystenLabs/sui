@@ -385,11 +385,15 @@ module sui::kiosk {
 
     // === Kiosk fields access ===
 
+    /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
+    public fun is_owner(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
+        object::id(self) == cap.for
+    }
+
     /// Get the UID to for dynamic field access. Requires a `KioskOwnerCap`
     /// to prevent third party attachements without owner's approval in the
     /// shared storage scenario.
-    public fun uid_mut(self: &mut Kiosk, cap: &KioskOwnerCap): &mut UID {
-        assert!(object::id(self) == cap.for, ENotOwner);
+    public fun uid_mut(self: &mut Kiosk): &mut UID {
         &mut self.id
     }
 
