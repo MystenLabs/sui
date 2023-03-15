@@ -790,15 +790,15 @@ export class JsonRpcProvider {
   /**
    * Get total number of transactions
    */
-  async getTotalTransactionNumber(): Promise<number> {
+  async getTotalTransactionNumber(): Promise<bigint> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getTotalTransactionNumber',
         [],
-        number(),
+        string(),
         this.options.skipDataValidation,
       );
-      return resp;
+      return BigInt(resp);
     } catch (err) {
       throw new Error(`Error fetching total transaction number: ${err}`);
     }

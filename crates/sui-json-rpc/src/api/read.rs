@@ -5,11 +5,11 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, SuiGetPastObjectRequest,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    BigInt, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType,
+    SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{
@@ -43,7 +43,7 @@ pub trait ReadApi {
 
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionNumber")]
-    async fn get_total_transaction_number(&self) -> RpcResult<u64>;
+    async fn get_total_transaction_number(&self) -> RpcResult<BigInt>;
 
     /// Return list of transaction digests within the queried range.
     /// This method will be removed before April 2023, please use `queryTransactions` instead

@@ -14,7 +14,7 @@ describe('Transaction Reading API', () => {
 
   it('Get Total Transactions', async () => {
     const numTransactions = await toolbox.provider.getTotalTransactionNumber();
-    expect(numTransactions).to.greaterThan(0);
+    expect(numTransactions).toBeGreaterThan(0);
   });
 
   it('Get Transaction', async () => {

@@ -11,11 +11,11 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page, SuiGetPastObjectRequest,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    BigInt, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, Page,
+    SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -269,14 +269,14 @@ where
             .await
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<u64> {
+    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
         if self
             .method_to_be_forwarded
             .contains(&"get_total_transaction_number".to_string())
         {
-            return self.fullnode.get_total_transaction_number().await;
+            return self.fullnode.get_total_transaction_number().await.into();
         }
-        Ok(self.get_total_transaction_number_internal()?)
+        Ok(self.get_total_transaction_number_internal()?.into())
     }
 
     async fn query_transactions(
