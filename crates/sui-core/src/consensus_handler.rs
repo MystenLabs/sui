@@ -11,11 +11,10 @@ use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use dashmap::DashMap;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{ConsensusOutput, ReputationScores};
+use narwhal_types::ConsensusOutput;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -42,7 +41,7 @@ pub struct ConsensusHandler<T> {
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
-    low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The committee used to do stake computations for deciding set of low scoring authorities
     committee: Arc<Committee>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
@@ -61,7 +60,7 @@ impl<T> ConsensusHandler<T> {
         checkpoint_service: Arc<CheckpointService>,
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
-        low_scoring_authorities: ArcSwap<HashMap<AuthorityName, u64>>,
+        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: Arc<Committee>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
@@ -138,7 +137,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
-            &self.low_scoring_authorities,
+            self.low_scoring_authorities.clone(),
             self.committee.clone(),
             consensus_output.sub_dag.reputation_score.clone(),
             &self.metrics,
