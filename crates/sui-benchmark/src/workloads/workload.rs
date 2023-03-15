@@ -2,17 +2,65 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::{Gas, GasCoinConfig};
 
+use crate::workloads::batch_payment::batch_payment_initializer;
+use crate::workloads::delegation::delegation_initializer;
 use crate::workloads::payload::Payload;
+use crate::workloads::shared_counter::shared_counter_initializer;
+use crate::workloads::transfer_object::transfer_object_initializer;
 use crate::ValidatorProxy;
+use once_cell::sync::Lazy;
+use strum_macros::{Display, EnumString};
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
 pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
+
+#[derive(Display, Copy, Clone, Hash, PartialEq, Eq, Debug, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum WorkloadType {
+    SharedCounter,
+    TransferObject,
+    Delegation,
+    BatchPayment,
+}
+
+#[derive(Display, Copy, Clone, Hash, PartialEq, Eq, Debug, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum WorkloadInitParameter {
+    NumTransferAccounts,
+    SharedCounterHotnessFactor,
+    BatchPaymentSize,
+}
+
+type Initializer =
+    fn(u64, &HashMap<WorkloadInitParameter, u32>) -> Box<dyn WorkloadBuilder<dyn Payload>>;
+
+pub(crate) static WORKLOAD_REGISTRY: Lazy<HashMap<WorkloadType, Initializer>> = Lazy::new(|| {
+    HashMap::from([
+        (
+            WorkloadType::Delegation,
+            delegation_initializer as Initializer,
+        ),
+        (
+            WorkloadType::BatchPayment,
+            batch_payment_initializer as Initializer,
+        ),
+        (
+            WorkloadType::TransferObject,
+            transfer_object_initializer as Initializer,
+        ),
+        (
+            WorkloadType::SharedCounter,
+            shared_counter_initializer as Initializer,
+        ),
+    ])
+});
 
 #[async_trait]
 pub trait WorkloadBuilder<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {

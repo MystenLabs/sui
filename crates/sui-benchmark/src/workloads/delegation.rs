@@ -3,11 +3,14 @@
 
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING};
-use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
+use crate::workloads::workload::{
+    Workload, WorkloadBuilder, WorkloadInitParameter, WorkloadType, MAX_GAS_FOR_TESTING,
+};
+use crate::workloads::{Gas, GasCoinConfig};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
+use std::collections::HashMap;
 use std::sync::Arc;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::base_types::{ObjectRef, SuiAddress};
@@ -23,12 +26,6 @@ pub struct DelegationTestPayload {
     sender: SuiAddress,
     keypair: Arc<AccountKeyPair>,
     system_state_observer: Arc<SystemStateObserver>,
-}
-
-impl std::fmt::Display for DelegationTestPayload {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "delegation")
-    }
 }
 
 impl Payload for DelegationTestPayload {
@@ -64,6 +61,10 @@ impl Payload for DelegationTestPayload {
             ),
         }
     }
+
+    fn workload_type(&self) -> WorkloadType {
+        WorkloadType::Delegation
+    }
 }
 
 #[derive(Debug)]
@@ -71,34 +72,11 @@ pub struct DelegationWorkloadBuilder {
     count: u64,
 }
 
-impl DelegationWorkloadBuilder {
-    pub fn from(
-        workload_weight: f32,
-        target_qps: u64,
-        num_workers: u64,
-        in_flight_ratio: u64,
-    ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
-        let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
-        let max_ops = target_qps * in_flight_ratio;
-        if max_ops == 0 || num_workers == 0 {
-            None
-        } else {
-            let workload_params = WorkloadParams {
-                target_qps,
-                num_workers,
-                max_ops,
-            };
-            let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
-                DelegationWorkloadBuilder { count: max_ops },
-            ));
-            let builder_info = WorkloadBuilderInfo {
-                workload_params,
-                workload_builder,
-            };
-            Some(builder_info)
-        }
-    }
+pub fn delegation_initializer(
+    max_ops: u64,
+    _: &HashMap<WorkloadInitParameter, u32>,
+) -> Box<dyn WorkloadBuilder<dyn Payload>> {
+    Box::new(DelegationWorkloadBuilder { count: max_ops })
 }
 
 #[async_trait]

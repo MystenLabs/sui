@@ -121,7 +121,7 @@ async fn main() -> Result<()> {
         client_runtime.block_on(async move {
             let workloads = WorkloadConfiguration::configure(
                 bench_setup.bank,
-                &opts,
+                opts.clone(),
                 system_state_observer.clone(),
             )
             .await?;

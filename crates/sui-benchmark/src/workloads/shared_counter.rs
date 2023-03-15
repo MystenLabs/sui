@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::workload::Workload;
-use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
+use crate::workloads::Gas;
+use std::collections::HashMap;
 
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{WorkloadBuilder, MAX_GAS_FOR_TESTING};
+use crate::workloads::workload::{
+    WorkloadBuilder, WorkloadInitParameter, WorkloadType, MAX_GAS_FOR_TESTING,
+};
 use crate::workloads::GasCoinConfig;
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
@@ -32,12 +35,6 @@ pub struct SharedCounterTestPayload {
     system_state_observer: Arc<SystemStateObserver>,
 }
 
-impl std::fmt::Display for SharedCounterTestPayload {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "shared_counter")
-    }
-}
-
 impl Payload for SharedCounterTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         self.gas.0 = effects.gas_object().0;
@@ -53,6 +50,9 @@ impl Payload for SharedCounterTestPayload {
             Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
+    fn workload_type(&self) -> WorkloadType {
+        WorkloadType::SharedCounter
+    }
 }
 
 #[derive(Debug)]
@@ -61,41 +61,21 @@ pub struct SharedCounterWorkloadBuilder {
     num_payloads: u64,
 }
 
-impl SharedCounterWorkloadBuilder {
-    pub fn from(
-        workload_weight: f32,
-        target_qps: u64,
-        num_workers: u64,
-        in_flight_ratio: u64,
-        shared_counter_hotness_factor: u32,
-    ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
-        let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
-        let max_ops = target_qps * in_flight_ratio;
-        let shared_counter_ratio =
-            1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
-        let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
-        if num_shared_counters == 0 || num_workers == 0 {
-            None
-        } else {
-            let workload_params = WorkloadParams {
-                target_qps,
-                num_workers,
-                max_ops,
-            };
-            let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
-                SharedCounterWorkloadBuilder {
-                    num_counters: num_shared_counters,
-                    num_payloads: max_ops,
-                },
-            ));
-            let builder_info = WorkloadBuilderInfo {
-                workload_params,
-                workload_builder,
-            };
-            Some(builder_info)
-        }
-    }
+pub fn shared_counter_initializer(
+    max_ops: u64,
+    parameters: &HashMap<WorkloadInitParameter, u32>,
+) -> Box<dyn WorkloadBuilder<dyn Payload>> {
+    let shared_counter_hotness_factor = parameters
+        .get(&WorkloadInitParameter::SharedCounterHotnessFactor)
+        .unwrap_or(&50);
+    let shared_counter_ratio =
+        1.0 - (std::cmp::min(*shared_counter_hotness_factor, 100) as f32 / 100.0);
+    let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
+
+    Box::new(SharedCounterWorkloadBuilder {
+        num_counters: num_shared_counters,
+        num_payloads: max_ops,
+    })
 }
 
 #[async_trait]

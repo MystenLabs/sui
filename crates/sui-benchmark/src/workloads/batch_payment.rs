@@ -17,8 +17,8 @@ use sui_types::{
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::WorkloadBuilder;
-use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
+use crate::workloads::workload::{WorkloadBuilder, WorkloadInitParameter, WorkloadType};
+use crate::workloads::{Gas, GasCoinConfig};
 use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_pay_sui_transaction;
 
@@ -43,12 +43,6 @@ pub struct BatchPaymentTestPayload {
     /// after the first tx, any address can send
     first_sender: SuiAddress,
     system_state_observer: Arc<SystemStateObserver>,
-}
-
-impl std::fmt::Display for BatchPaymentTestPayload {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "batch_payment")
-    }
 }
 
 impl Payload for BatchPaymentTestPayload {
@@ -100,6 +94,10 @@ impl Payload for BatchPaymentTestPayload {
             Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
+
+    fn workload_type(&self) -> WorkloadType {
+        WorkloadType::BatchPayment
+    }
 }
 
 #[derive(Debug)]
@@ -108,38 +106,17 @@ pub struct BatchPaymentWorkloadBuilder {
     batch_size: u32,
 }
 
-impl BatchPaymentWorkloadBuilder {
-    pub fn from(
-        workload_weight: f32,
-        target_qps: u64,
-        num_workers: u64,
-        in_flight_ratio: u64,
-        batch_size: u32,
-    ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
-        let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
-        let max_ops = target_qps * in_flight_ratio;
-        if max_ops == 0 || num_workers == 0 {
-            None
-        } else {
-            let workload_params = WorkloadParams {
-                target_qps,
-                num_workers,
-                max_ops,
-            };
-            let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
-                BatchPaymentWorkloadBuilder {
-                    num_payloads: max_ops,
-                    batch_size,
-                },
-            ));
-            let builder_info = WorkloadBuilderInfo {
-                workload_params,
-                workload_builder,
-            };
-            Some(builder_info)
-        }
-    }
+pub fn batch_payment_initializer(
+    max_ops: u64,
+    parameters: &HashMap<WorkloadInitParameter, u32>,
+) -> Box<dyn WorkloadBuilder<dyn Payload>> {
+    let batch_size = *parameters
+        .get(&WorkloadInitParameter::BatchPaymentSize)
+        .unwrap_or(&15);
+    Box::new(BatchPaymentWorkloadBuilder {
+        num_payloads: max_ops,
+        batch_size,
+    })
 }
 
 #[async_trait]

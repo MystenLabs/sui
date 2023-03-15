@@ -3,13 +3,13 @@
 
 #[cfg(msim)]
 mod test {
-
     use rand::{thread_rng, Rng};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
+    use sui_benchmark::workloads::workload::{WorkloadInitParameter, WorkloadType};
     use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -247,28 +247,31 @@ mod test {
         let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
         let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
-        let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
-        let shared_counter_weight = 1;
-        let transfer_object_weight = 1;
-        let num_transfer_accounts = 2;
-        let delegation_weight = 1;
-        let batch_payment_weight = 1;
-        let shared_counter_hotness_factor = 50;
+
+        let weights = vec![
+            (WorkloadType::TransferObject, 1),
+            (WorkloadType::SharedCounter, 1),
+            (WorkloadType::Delegation, 1),
+            (WorkloadType::BatchPayment, 1),
+        ];
+        let init_parameters = vec![
+            (WorkloadInitParameter::SharedCounterHotnessFactor, 50),
+            (WorkloadInitParameter::NumTransferAccounts, 2),
+            (
+                WorkloadInitParameter::BatchPaymentSize,
+                get_var("SIM_BATCH_PAYMENT_SIZE", 15),
+            ),
+        ];
 
         let workloads = WorkloadConfiguration::build_workloads(
             num_workers,
-            num_transfer_accounts,
-            shared_counter_weight,
-            transfer_object_weight,
-            delegation_weight,
-            batch_payment_weight,
-            batch_payment_size,
-            shared_counter_hotness_factor,
             target_qps,
             in_flight_ratio,
             bank,
             system_state_observer.clone(),
             100,
+            weights,
+            init_parameters,
         )
         .await
         .unwrap();

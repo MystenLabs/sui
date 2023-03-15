@@ -15,8 +15,8 @@ use sui_types::{
 
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::WorkloadBuilder;
-use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
+use crate::workloads::workload::{WorkloadBuilder, WorkloadInitParameter, WorkloadType};
+use crate::workloads::{Gas, GasCoinConfig};
 use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_transfer_object_transaction;
 
@@ -66,11 +66,8 @@ impl Payload for TransferObjectTestPayload {
             Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
-}
-
-impl std::fmt::Display for TransferObjectTestPayload {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "transfer_object")
+    fn workload_type(&self) -> WorkloadType {
+        WorkloadType::TransferObject
     }
 }
 
@@ -80,38 +77,17 @@ pub struct TransferObjectWorkloadBuilder {
     num_payloads: u64,
 }
 
-impl TransferObjectWorkloadBuilder {
-    pub fn from(
-        workload_weight: f32,
-        target_qps: u64,
-        num_workers: u64,
-        in_flight_ratio: u64,
-        num_transfer_accounts: u64,
-    ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32) as u64;
-        let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
-        let max_ops = target_qps * in_flight_ratio;
-        if max_ops == 0 || num_workers == 0 {
-            None
-        } else {
-            let workload_params = WorkloadParams {
-                target_qps,
-                num_workers,
-                max_ops,
-            };
-            let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
-                TransferObjectWorkloadBuilder {
-                    num_transfer_accounts,
-                    num_payloads: max_ops,
-                },
-            ));
-            let builder_info = WorkloadBuilderInfo {
-                workload_params,
-                workload_builder,
-            };
-            Some(builder_info)
-        }
-    }
+pub fn transfer_object_initializer(
+    max_ops: u64,
+    parameters: &HashMap<WorkloadInitParameter, u32>,
+) -> Box<dyn WorkloadBuilder<dyn Payload>> {
+    let num_transfer_accounts = *parameters
+        .get(&WorkloadInitParameter::NumTransferAccounts)
+        .unwrap_or(&2);
+    Box::new(TransferObjectWorkloadBuilder {
+        num_transfer_accounts: num_transfer_accounts.into(),
+        num_payloads: max_ops,
+    })
 }
 
 #[async_trait]

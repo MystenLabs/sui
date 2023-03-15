@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use clap::*;
 
 use strum_macros::EnumString;
 
 use crate::drivers::Interval;
+use crate::workloads::workload::{WorkloadInitParameter, WorkloadType};
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[clap(name = "Stress Testing Framework")]
 pub struct Opts {
     /// Si&ze of the Sui committee.
@@ -144,7 +146,7 @@ pub enum RunSpec {
         shared_counter_hotness_factor: u32,
         // relative weight of transfer object
         // transactions in the benchmark workload
-        #[clap(long, default_value = "1")]
+        #[clap(long, default_value = "0")]
         transfer_object: u32,
         // relative weight of delegation transactions in the benchmark workload
         #[clap(long, default_value = "0")]
@@ -164,5 +166,23 @@ pub enum RunSpec {
         // Max in-flight ratio
         #[clap(long, default_value = "5", global = true)]
         in_flight_ratio: u64,
+        #[clap(long, short='w', value_parser = parse_weight_pair, value_delimiter=',')]
+        weights: Vec<(WorkloadType, u32)>,
+        #[clap(long, short='p', value_parser = parse_parameter_pair, value_delimiter=',')]
+        workload_parameters: Vec<(WorkloadInitParameter, u32)>,
     },
+}
+
+fn parse_weight_pair(input: &str) -> Result<(WorkloadType, u32), anyhow::Error> {
+    let pos = input
+        .find('=')
+        .ok_or_else(|| anyhow!("invalid input `{input}`"))?;
+    Ok((input[..pos].parse()?, input[pos + 1..].parse()?))
+}
+
+fn parse_parameter_pair(input: &str) -> Result<(WorkloadInitParameter, u32), anyhow::Error> {
+    let pos = input
+        .find('=')
+        .ok_or_else(|| anyhow!("invalid input `{input}`"))?;
+    Ok((input[..pos].parse()?, input[pos + 1..].parse()?))
 }
