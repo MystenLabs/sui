@@ -217,7 +217,13 @@ export class Transaction {
   #input(type: 'object' | 'pure', value?: unknown) {
     const index = this.#transactionData.inputs.length;
     const input = create(
-      { kind: 'Input', value, index, type },
+      {
+        kind: 'Input',
+        // bigints can't be serialized to JSON, so just string-convert them here:
+        value: typeof value === 'bigint' ? String(value) : value,
+        index,
+        type,
+      },
       TransactionInput,
     );
     this.#transactionData.inputs.push(input);

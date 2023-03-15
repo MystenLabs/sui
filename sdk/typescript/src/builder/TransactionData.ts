@@ -223,12 +223,6 @@ export class TransactionDataBuilder {
   }
 
   snapshot(): DeepReadonly<SerializedTransactionDataBuilder> {
-    const allInputsProvided = this.inputs.every((input) => !!input.value);
-
-    if (!allInputsProvided) {
-      throw new Error('All input values must be provided before serializing.');
-    }
-
     return create(this, SerializedTransactionDataBuilder);
   }
 }
