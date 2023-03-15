@@ -6,7 +6,7 @@ module sui::stake_subsidy {
     use sui::math;
     use sui::sui::SUI;
 
-    friend sui::sui_system;
+    friend sui::sui_system_state_inner;
 
     struct StakeSubsidy has store {
         /// This counter may be different from the current epoch number if
@@ -38,10 +38,10 @@ module sui::stake_subsidy {
         // Take the minimum of the reward amount and the remaining balance in
         // order to ensure we don't overdraft the remaining stake subsidy
         // balance
-        let to_withdrawl = math::min(subsidy.current_epoch_amount, balance::value(&subsidy.balance));
+        let to_withdraw = math::min(subsidy.current_epoch_amount, balance::value(&subsidy.balance));
 
         // Drawn down the subsidy for this epoch.
-        let stake_subsidy = balance::split(&mut subsidy.balance, to_withdrawl);
+        let stake_subsidy = balance::split(&mut subsidy.balance, to_withdraw);
 
         subsidy.epoch_counter = subsidy.epoch_counter + 1;
 

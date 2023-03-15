@@ -5,7 +5,7 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
-    friend sui::sui_system;
+    friend sui::sui_system_state_inner;
     friend sui::sui;
 
     /// For when trying to destroy a non-zero balance.

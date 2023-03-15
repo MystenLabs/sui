@@ -20,7 +20,7 @@ module sui::validator_set {
     use sui::table_vec::{Self, TableVec};
     use sui::voting_power;
 
-    friend sui::sui_system;
+    friend sui::sui_system_state_inner;
 
     #[test_only]
     friend sui::validator_set_tests;
