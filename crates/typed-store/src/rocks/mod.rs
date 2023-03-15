@@ -13,11 +13,7 @@ use crate::{
 use bincode::Options;
 use collectable::TryExtend;
 use rocksdb::checkpoint::Checkpoint;
-use rocksdb::{
-    properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
-    ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
-    WriteBatch, WriteBatchWithTransaction, WriteOptions,
-};
+use rocksdb::{properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error, ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction, WriteBatch, WriteBatchWithTransaction, WriteOptions, BlockBasedOptions};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     borrow::Borrow,
@@ -28,6 +24,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use std::ops::Deref;
 use tap::TapFallible;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, instrument};
@@ -1802,6 +1799,8 @@ pub fn default_db_options() -> DBOptions {
         opt.set_max_open_files((limit / 8) as i32);
     }
 
+    opt.set_block_based_table_factory(&block_cache_options());
+
     let row_cache = rocksdb::Cache::new_lru_cache(300_000).expect("Cache is ok");
     opt.set_row_cache(&row_cache);
 
@@ -1838,12 +1837,26 @@ pub fn default_db_options() -> DBOptions {
     }
 }
 
+thread_local! {
+    static LRU_BLOCK_CACHE: std::cell::RefCell<rocksdb::Cache>  = std::cell::RefCell::new(rocksdb::Cache::new_lru_cache(5 * 1024 * 1024 * 1024).expect("Cache is ok"));
+}
+
+pub fn block_cache_options() -> BlockBasedOptions {
+    let mut block_base_opts = BlockBasedOptions::default();
+    LRU_BLOCK_CACHE.with(|cache| {
+        block_base_opts.set_block_cache(cache.borrow().deref());
+    });
+    block_base_opts.set_cache_index_and_filter_blocks(true);
+    block_base_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
+    block_base_opts
+}
+
 /// Creates a default RocksDB option, optimized for point lookup.
 pub fn point_lookup_db_options() -> DBOptions {
     let mut db_options = default_db_options();
-    db_options
-        .options
-        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
+    // db_options
+    //     .options
+    //     .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
     db_options.options.set_memtable_whole_key_filtering(true);
     db_options
 }
