@@ -39,7 +39,7 @@ use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::gas::SuiCostTable;
+use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -88,6 +88,7 @@ struct TxnSummary {
     written: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
     events: Vec<Event>,
+    gas_summary: GasCostSummary,
 }
 
 static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
@@ -303,6 +304,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiPublishArgs {
             sender,
             upgradeable,
+            view_gas_used,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -357,7 +359,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }
         }
         let view_events = false;
-        let output = self.object_summary_output(&summary, view_events);
+        let output = self.object_summary_output(&summary, view_events, view_gas_used);
         let published_module_bytes = self
             .storage
             .get_object(&created_package)
@@ -387,6 +389,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiRunArgs {
             sender,
             view_events,
+            view_gas_used,
         } = extra;
         let mut builder = ProgrammableTransactionBuilder::new();
         let arguments = args
@@ -414,7 +417,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
-        let output = self.object_summary_output(&summary, view_events);
+        let output = self.object_summary_output(&summary, view_events, view_gas_used);
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
             return_values: vec![],
@@ -514,6 +517,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 recipient,
                 sender,
                 gas_budget,
+                view_gas_used,
             }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id).into_call_args(&mut builder, self)?;
@@ -537,7 +541,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
-                let output = self.object_summary_output(&summary, false);
+                let output = self.object_summary_output(&summary, false, view_gas_used);
                 Ok(output)
             }
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
@@ -546,7 +550,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let transaction =
                     VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
                 let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
-                let output = self.object_summary_output(&summary, false);
+                let output = self.object_summary_output(&summary, false, false);
                 Ok(output)
             }
         }
@@ -687,6 +691,7 @@ impl<'a> SuiTestAdapter<'a> {
             .map(|(id, _, _)| *id)
             .collect();
 
+        let gas_summary = effects.gas_cost_summary();
         // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
@@ -720,6 +725,7 @@ impl<'a> SuiTestAdapter<'a> {
                 written: written_ids,
                 deleted: deleted_ids,
                 events: inner.events.data,
+                gas_summary: gas_summary.clone(),
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
@@ -772,8 +778,10 @@ impl<'a> SuiTestAdapter<'a> {
             written,
             deleted,
             events,
+            gas_summary,
         }: &TxnSummary,
         view_events: bool,
+        view_gas_summary: bool,
     ) -> Option<String> {
         let mut out = String::new();
         if view_events {
@@ -800,6 +808,10 @@ impl<'a> SuiTestAdapter<'a> {
                 out.push('\n')
             }
             write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
+        }
+        if view_gas_summary {
+            out.push('\n');
+            write!(out, "gas summary: {}", gas_summary).unwrap();
         }
 
         if out.is_empty() {

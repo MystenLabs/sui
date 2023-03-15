@@ -38,7 +38,7 @@ module Test::M1 {
 //# run Test::M1::create_n_ids --args 256
 
 // create at create count limit should succeed
-//# run Test::M1::create_n_ids --args 2048
+//# run Test::M1::create_n_ids --args 2048 --view-gas-used
 
 // create above create count limit should fail
 //# run Test::M1::create_n_ids --args 2049
