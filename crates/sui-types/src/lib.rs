@@ -8,6 +8,7 @@
 )]
 
 use base_types::SequenceNumber;
+use messages::{CallArg, ObjectArg};
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{StructTag, TypeTag},
@@ -70,6 +71,12 @@ pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(2);
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
+
+pub const SUI_SYSTEM_OBJ_CALL_ARG: CallArg = CallArg::Object(ObjectArg::SharedObject {
+    id: SUI_SYSTEM_STATE_OBJECT_ID,
+    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    mutable: true,
+});
 
 /// 0x6: hardcoded object ID for the singleton clock object.
 pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(6);
