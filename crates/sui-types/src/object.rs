@@ -439,6 +439,9 @@ pub enum Owner {
 }
 
 impl Owner {
+    // Max element size + 8 bytes for enum discriminant
+    pub const SIZE_FOR_GAS_METERING: usize = SuiAddress::LENGTH + 8;
+
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
@@ -651,7 +654,8 @@ impl Object {
     /// we also don't want to serialize the object just to get the size.
     /// This approximation should be good enough for gas metering.
     pub fn object_size_for_gas_metering(&self) -> usize {
-        let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>() + size_of::<u64>();
+        let meta_data_size =
+            Owner::SIZE_FOR_GAS_METERING + TransactionDigest::LENGTH + size_of::<u64>();
         let data_size = match &self.data {
             Data::Move(m) => m.object_size_for_gas_metering(),
             Data::Package(p) => p.object_size_for_gas_metering(),

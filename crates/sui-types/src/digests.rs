@@ -9,6 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 
+const DIGEST_LENGTH: usize = 32;
 /// A representation of a 32 byte digest
 #[serde_as]
 #[derive(
@@ -17,18 +18,19 @@ use serde_with::{serde_as, Bytes};
 pub struct Digest(
     #[schemars(with = "Base58")]
     #[serde_as(as = "Readable<Base58, Bytes>")]
-    [u8; 32],
+    [u8; DIGEST_LENGTH],
 );
 
 impl Digest {
-    pub const ZERO: Self = Digest([0; 32]);
+    pub const LENGTH: usize = DIGEST_LENGTH;
+    pub const ZERO: Self = Digest([0; DIGEST_LENGTH]);
 
-    pub const fn new(digest: [u8; 32]) -> Self {
+    pub const fn new(digest: [u8; DIGEST_LENGTH]) -> Self {
         Self(digest)
     }
 
     pub fn generate<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> Self {
-        let mut bytes = [0; 32];
+        let mut bytes = [0; Self::LENGTH];
         rng.fill_bytes(&mut bytes);
         Self(bytes)
     }
@@ -37,11 +39,11 @@ impl Digest {
         Self::generate(rand::thread_rng())
     }
 
-    pub const fn inner(&self) -> &[u8; 32] {
+    pub const fn inner(&self) -> &[u8; DIGEST_LENGTH] {
         &self.0
     }
 
-    pub const fn into_inner(self) -> [u8; 32] {
+    pub const fn into_inner(self) -> [u8; DIGEST_LENGTH] {
         self.0
     }
 }
@@ -52,20 +54,20 @@ impl AsRef<[u8]> for Digest {
     }
 }
 
-impl AsRef<[u8; 32]> for Digest {
-    fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<[u8; DIGEST_LENGTH]> for Digest {
+    fn as_ref(&self) -> &[u8; DIGEST_LENGTH] {
         &self.0
     }
 }
 
-impl From<Digest> for [u8; 32] {
+impl From<Digest> for [u8; DIGEST_LENGTH] {
     fn from(digest: Digest) -> Self {
         digest.into_inner()
     }
 }
 
-impl From<[u8; 32]> for Digest {
-    fn from(digest: [u8; 32]) -> Self {
+impl From<[u8; DIGEST_LENGTH]> for Digest {
+    fn from(digest: [u8; DIGEST_LENGTH]) -> Self {
         Self::new(digest)
     }
 }
@@ -311,6 +313,7 @@ impl Default for TransactionDigest {
 }
 
 impl TransactionDigest {
+    pub const LENGTH: usize = Digest::LENGTH;
     pub const ZERO: Self = Self(Digest::ZERO);
 
     pub const fn new(digest: [u8; 32]) -> Self {

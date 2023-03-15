@@ -373,6 +373,7 @@ pub struct SuiAddress(
 );
 
 impl SuiAddress {
+    pub const LENGTH: usize = SUI_ADDRESS_LENGTH;
     pub const ZERO: Self = Self([0u8; SUI_ADDRESS_LENGTH]);
 
     pub fn to_vec(&self) -> Vec<u8> {
