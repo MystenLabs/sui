@@ -486,8 +486,6 @@ Effective with release .28, the function names are:
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// Delegation object ID
-        delegation: ObjectID,
         /// StakedSui object ID
         staked_sui: ObjectID,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
