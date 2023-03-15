@@ -72,7 +72,7 @@ Publish event attributes:
 
 ## Transfer object event
 
-Transfer object events occur you transfer an object from one address to another.
+Transfer object events occur when you transfer an object from one address to another.
 
 ### Attributes
 
@@ -129,7 +129,7 @@ Delete object events occur when you delete an object.
 
 ## New object event
 
-New object events occur for you create an object on the network.
+New object events occur when you create an object on the network.
 
 ### Attributes
 
