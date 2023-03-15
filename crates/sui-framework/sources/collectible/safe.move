@@ -2,6 +2,7 @@
 /// Based on this token the safe owner grants redeem rights for specific NFT.
 /// An entity that has been granted redeem rights can call `get_nft`.
 module sui::nft_safe {
+    use std::ascii;
     use std::option::{Self, Option};
 
     use sui::balance::{Self, Balance};
@@ -32,37 +33,6 @@ module sui::nft_safe {
 
     // === Structs ===
 
-    /// Whoever owns this object can perform some admin actions against the
-    /// `NftSafe` shared object with the corresponding id.
-    struct OwnerCap has key, store {
-        id: UID,
-        safe: ID,
-    }
-
-    struct NftSafe has key, store {
-        id: UID,
-        /// Accounting for deposited NFTs.
-        /// Each dynamic object field NFT is represented in this map.
-        refs: VecMap<ID, NftRef>,
-        /// TBD: This could be a dynamic field and hence allow for generic
-        /// tokens to be stored.
-        profits: Balance<SUI>,
-    }
-
-    /// Holds info about NFT listing which is used to determine if an entity
-    /// is allowed to redeem the NFT.
-    struct NftRef has store, drop {
-        /// Entities which can use their `&UID` to redeem the NFT.
-        /// 
-        /// We also configure min listing price.
-        /// The item must be bought by the entity by _at least_ this many SUI.
-        listed_with: VecMap<ID, u64>,
-        /// If set to true, then `listed_with` must have length of 1
-        is_exclusively_listed: bool,
-        /// Cannot be `Some` if exclusively listed.
-        listed_for: Option<u64>,
-    }
-
     /// A "Hot Potato" forcing the buyer to get a transfer permission
     /// from the item type (`NFT`) owner on purchase attempt.
     struct TransferRequest<phantom NFT: key + store> {
@@ -79,14 +49,66 @@ module sui::nft_safe {
         entity: Option<ID>,
     }
 
-    /// A unique capability that allows owner of the `NFT` to authorize
+    /// A unique capability that allows owner of the `NFT` type to authorize
     /// transfers.
     /// Can only be created with the `Publisher` object.
     struct TransferPolicyCap<phantom T: key + store> has key, store {
         id: UID
     }
 
+    /// Whoever owns this object can perform some admin actions against the
+    /// `NftSafe` object with the corresponding id.
+    struct OwnerCap has key, store {
+        id: UID,
+        safe: ID,
+    }
+
+    struct NftSafe has key, store {
+        id: UID,
+        /// Accounting for deposited NFTs.
+        /// Each dynamic object field NFT is represented in this map.
+        refs: VecMap<ID, NftRef>,
+        /// TBD: This could be a dynamic field and hence allow for generic
+        /// tokens to be stored.
+        profits: Balance<SUI>,
+        /// We can ensure that the safe went through creation procedure in given 
+        /// contract by assigning its package ID to the safe's property
+        /// `ecosystem`.
+        /// The package ID is gotten from `package::published_package`.
+        /// 
+        /// This enables assertions for use cases where the owner cap should be 
+        /// wrapped to amend certain actions.
+        ecosystem: Option<ascii::String>,
+    }
+
+    /// Inner accounting type.
+    /// 
+    /// Holds info about NFT listing which is used to determine if an entity
+    /// is allowed to redeem the NFT.
+    struct NftRef has store, drop {
+        /// Entities which can use their `&UID` to redeem the NFT.
+        /// 
+        /// We also configure min listing price.
+        /// The item must be bought by the entity by _at least_ this many SUI.
+        listed_with: VecMap<ID, u64>,
+        /// If set to true, then `listed_with` must have length of 1 and 
+        /// listed_for must be "none".
+        is_exclusively_listed: bool,
+        /// How much is the NFT _publicly_ listed for.
+        /// 
+        /// Anyone can come to the safe and buy the NFT for this price.
+        listed_for: Option<u64>,
+    }
+
     // === Events ===
+
+    struct NftListedEvent has copy, drop {
+        safe: ID,
+        nft: ID,
+        entity: Option<ID>,
+        price: u64,
+        nft_type: ascii::String,
+    }
 
     // === Royalty interface ===
 
@@ -94,17 +116,17 @@ module sui::nft_safe {
     /// which is required to confirm `NftSafe` deals for the `NFT`.
     /// If there's no `TransferPolicyCap` available for use, the type can not be 
     /// traded in `NftSafe`s.
-    public fun new_transfer_policy_cap<T: key + store>(
-        pub: &Publisher, ctx: &mut TxContext,
-    ): TransferPolicyCap<T> {
-        assert!(package::from_package<T>(pub), EPublisherMismatch);
+    public fun new_transfer_policy_cap<NFT: key + store>(
+        publisher: &Publisher, ctx: &mut TxContext,
+    ): TransferPolicyCap<NFT> {
+        assert!(package::from_package<NFT>(publisher), EPublisherMismatch);
         let id = object::new(ctx);
         TransferPolicyCap { id }
     }
 
     /// Destroy a `TransferPolicyCap`.
-    public fun destroy_transfer_policy_cap<T: key + store>(
-        cap: TransferPolicyCap<T>
+    public fun destroy_transfer_policy_cap<NFT: key + store>(
+        cap: TransferPolicyCap<NFT>
     ) {
         let TransferPolicyCap { id } = cap;
         object::delete(id);
@@ -129,6 +151,29 @@ module sui::nft_safe {
             id: object::new(ctx),
             refs: vec_map::empty(),
             profits: balance::zero(),
+            ecosystem: option::none(),
+        };
+        let cap = OwnerCap {
+            id: object::new(ctx),
+            safe: object::id(&safe),
+        };
+        (safe, cap)
+    }
+
+    /// We can ensure that the safe went through creation procedure in given 
+    /// contract by assigning its typename to the safe's property 
+    /// `ecosystem`.
+    /// 
+    /// This enables assertions for use cases where the owner cap should be 
+    /// wrapped to amend certain actions.
+    public fun new_in_ecosystem(
+        publisher: &Publisher, ctx: &mut TxContext,
+    ): (NftSafe, OwnerCap) {
+        let safe = NftSafe {
+            id: object::new(ctx),
+            refs: vec_map::empty(),
+            profits: balance::zero(),
+            ecosystem: option::some(*package::published_package(publisher)),
         };
         let cap = OwnerCap {
             id: object::new(ctx),
@@ -251,7 +296,7 @@ module sui::nft_safe {
         assert_not_listed(ref);
 
         vec_map::insert(
-            &mut ref.listed_with, object::uid_to_inner(entity_id), min_price
+            &mut ref.listed_with, object::uid_to_inner(entity_id), min_price,
         );
         ref.is_exclusively_listed = true;
     }
@@ -375,7 +420,7 @@ module sui::nft_safe {
         assert_owner_cap(&self, &owner_cap);
         assert!(vec_map::is_empty(&self.refs), EMustBeEmpty);
 
-        let NftSafe { id, refs, profits } = self;
+        let NftSafe { id, refs, profits, ecosystem: _ } = self;
         let OwnerCap { id: cap_id, safe: _ } = owner_cap;
         vec_map::destroy_empty(refs);
         object::delete(id);
@@ -388,7 +433,7 @@ module sui::nft_safe {
     /// If `amount` is `none`, withdraws all profits.
     /// Otherwise attempts to withdraw the specified amount.
     /// Fails if there are not enough token.
-    public fun withdraw(
+    public fun withdraw_profits(
         self: &mut NftSafe,
         owner_cap: &OwnerCap, 
         amount: Option<u64>,
@@ -408,6 +453,10 @@ module sui::nft_safe {
     }
 
     // === Getters ===
+
+    public fun ecosystem(self: &NftSafe): &Option<ascii::String> {
+        &self.ecosystem
+    }
 
     public fun nfts_count(self: &NftSafe): u64 {
         vec_map::size(&self.refs)
