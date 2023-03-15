@@ -5,7 +5,7 @@ import { Dialog, Transition } from '@headlessui/react';
 import { X12 } from '@mysten/icons';
 import { Fragment, type ReactNode } from 'react';
 
-import { Heading } from './Heading';
+import { Heading } from '../Heading';
 
 export interface ModalProps {
     open: boolean;
@@ -18,7 +18,7 @@ export function CloseButton({ onClick }: { onClick: () => void }) {
         <button
             onClick={onClick}
             type="button"
-            className="absolute top-0 right-0 p-4 text-steel hover:text-steel-darker"
+            className="absolute right-0 top-0 p-4 text-steel hover:text-steel-darker"
         >
             <X12 />
         </button>

@@ -47,18 +47,18 @@ export interface ImageProps
     blur?: boolean;
 }
 
-export function Image({
+function BaseImage({
+    status,
+    size,
+    rounded,
     alt,
     src,
     srcSet,
-    moderate = false,
-    onClick,
-    rounded,
     fit,
-    size,
+    blur,
+    onClick,
     ...imgProps
-}: ImageProps) {
-    const { status, nsfw } = useImage(src, moderate);
+}: ImageProps & { status: string }) {
     return (
         <div
             className={cx(
@@ -66,7 +66,7 @@ export function Image({
                 'relative flex items-center justify-center bg-gray-45 text-gray-65'
             )}
         >
-            {nsfw && status === 'loaded' ? (
+            {blur && status === 'loaded' ? (
                 <div className="pointer-events-none absolute z-20 flex h-full w-full items-center justify-center rounded-md bg-gray-100/30 text-center backdrop-blur-md">
                     <EyeClose16 className="text-white" />
                 </div>
@@ -89,4 +89,9 @@ export function Image({
             )}
         </div>
     );
+}
+
+export function Image({ src, ...props }: ImageProps) {
+    const { status, url, nsfw } = useImage({ src });
+    return <BaseImage blur={nsfw} status={status} src={url} {...props} />;
 }

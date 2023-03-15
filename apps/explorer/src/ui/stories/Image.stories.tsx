@@ -1,12 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RpcClientContext } from '@mysten/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+
 import { Image, type ImageProps } from '../image/Image';
 
 import type { Meta, StoryObj } from '@storybook/react';
 
+import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
+
 export default {
     component: Image,
+    decorators: [
+        (Story) => (
+            <MemoryRouter>
+                <QueryClientProvider client={new QueryClient()}>
+                    <RpcClientContext.Provider
+                        value={DefaultRpcClient(Network.LOCAL)}
+                    >
+                        <Story />
+                    </RpcClientContext.Provider>
+                </QueryClientProvider>
+            </MemoryRouter>
+        ),
+    ],
 } as Meta;
 
 export const Default: StoryObj<ImageProps> = {
@@ -46,11 +65,11 @@ export const FallbackImage: StoryObj<ImageProps> = {
     },
 };
 
-export const Blurred: StoryObj<ImageProps> = {
+export const Moderated: StoryObj<ImageProps> = {
     args: {
-        blur: true,
-        src: 'https://images.unsplash.com/photo-1439130490301-25e322d88054?auto=format&fit=crop&w=1632&q=80',
+        src: 'https://upload.wikimedia.org/wikipedia/commons/4/4f/SIG_Pro_by_Augustas_Didzgalvis.jpg',
         size: 'lg',
         rounded: 'lg',
+        blur: true,
     },
 };

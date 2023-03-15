@@ -7,7 +7,7 @@ import {
     getObjectDisplay,
 } from '@mysten/sui.js';
 
-import useMedia from '~/hooks/useMedia';
+import useImage from '~/hooks/useImage';
 import { ObjectDetails } from '~/ui/ObjectDetails';
 import { extractName, parseObjectType } from '~/utils/objectUtils';
 
@@ -17,7 +17,7 @@ type OwnedObjectTypes = {
 
 function OwnedObject({ obj }: OwnedObjectTypes): JSX.Element {
     const displayMeta = getObjectDisplay(obj).data;
-    const { url } = useMedia(displayMeta?.image_url ?? '');
+    const { url } = useImage({ src: displayMeta?.image_url });
     return (
         <ObjectDetails
             id={getObjectId(obj)}

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { Link } from '../Link';
+import { ImageModal, type ImageModalProps } from '../modal/ImageModal';
 import {
     CloseButton,
     Modal,
@@ -13,7 +14,7 @@ import {
     ModalContent,
     ModalHeading,
     type ModalProps,
-} from '../Modal';
+} from '../modal/Modal';
 
 export default {
     component: () => {
@@ -44,4 +45,25 @@ export default {
 
 export const Default: StoryObj<ModalProps> = {
     args: {},
+};
+
+export const Image: StoryObj<ImageModalProps> = {
+    name: 'Image Modal',
+    render: () => {
+        const [open, setOpen] = useState(true);
+        return (
+            <div>
+                <ImageModal
+                    title="Sui"
+                    open={open}
+                    src="https://images.unsplash.com/photo-1562016600-ece13e8ba570?auto=format&fit=crop&w=738&q=80"
+                    alt="Sui"
+                    onClose={() => setOpen(false)}
+                    subtitle="Still water runs deep."
+                />
+
+                <Link onClick={() => setOpen(true)}>Click to open</Link>
+            </div>
+        );
+    },
 };
