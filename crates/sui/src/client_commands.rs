@@ -1545,7 +1545,7 @@ fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
     }
 }
 
-fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
+pub fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
     if let Some(t) = &response.transaction {

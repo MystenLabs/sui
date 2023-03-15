@@ -26,6 +26,7 @@ git-version = "0.3.5"
 const-str = "0.5.3"
 rand = "0.8.5"
 inquire = "0.6.0"
+tap = "1.0.1"
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
