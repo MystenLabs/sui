@@ -276,9 +276,9 @@ impl TryFrom<TransactionKind> for SuiTransactionKind {
         Ok(match tx {
             TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
                 epoch: e.epoch,
-                storage_charge: e.storage_charge,
-                computation_charge: e.computation_charge,
-                storage_rebate: e.storage_rebate,
+                storage_charge: e.storage_charge.into(),
+                computation_charge: e.computation_charge.into(),
+                storage_rebate: e.storage_rebate.into(),
                 epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
             }),
             TransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
@@ -301,9 +301,9 @@ impl TryFrom<TransactionKind> for SuiTransactionKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiChangeEpoch {
     pub epoch: EpochId,
-    pub storage_charge: u64,
-    pub computation_charge: u64,
-    pub storage_rebate: u64,
+    pub storage_charge: BigInt,
+    pub computation_charge: BigInt,
+    pub storage_rebate: BigInt,
     pub epoch_start_timestamp_ms: u64,
 }
 
@@ -718,8 +718,8 @@ impl From<GasCostSummary> for SuiGasCostSummary {
 pub struct SuiGasData {
     pub payment: Vec<SuiObjectRef>,
     pub owner: SuiAddress,
-    pub price: u64,
-    pub budget: u64,
+    pub price: BigInt,
+    pub budget: BigInt,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
@@ -812,8 +812,8 @@ impl TryFrom<TransactionData> for SuiTransactionData {
                 .map(|obj_ref| SuiObjectRef::from(*obj_ref))
                 .collect(),
             owner: data.gas_owner(),
-            price: data.gas_price(),
-            budget: data.gas_budget(),
+            price: data.gas_price().into(),
+            budget: data.gas_budget().into(),
         };
         let transaction = data.into_kind().try_into()?;
         match message_version {

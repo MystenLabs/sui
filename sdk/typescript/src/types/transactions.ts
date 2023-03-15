@@ -15,6 +15,7 @@ import {
   tuple,
   assign,
   nullable,
+  bigint,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import {
@@ -38,9 +39,9 @@ export const EpochId = number();
 
 export const SuiChangeEpoch = object({
   epoch: EpochId,
-  storage_charge: number(),
-  computation_charge: number(),
-  storage_rebate: number(),
+  storage_charge: bigint(),
+  computation_charge: bigint(),
+  storage_rebate: bigint(),
   epoch_start_timestamp_ms: optional(number()),
 });
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;

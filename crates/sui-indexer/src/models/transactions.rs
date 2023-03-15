@@ -201,8 +201,8 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             gas_object_digest,
             // NOTE: cast u64 to i64 here is safe because
             // max value of i64 is 9223372036854775807 MISTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
-            gas_budget: gas_budget as i64,
-            gas_price: gas_price as i64,
+            gas_budget: <u64>::from(gas_budget) as i64,
+            gas_price: <u64>::from(gas_price) as i64,
             total_gas_cost: (computation_cost + storage_cost) as i64 - (storage_rebate as i64),
             computation_cost: computation_cost as i64,
             storage_cost: storage_cost as i64,

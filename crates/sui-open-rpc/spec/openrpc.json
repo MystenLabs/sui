@@ -206,8 +206,8 @@
                       }
                     ],
                     "owner": "0x61fbb5b4f342a40bdbf87fe4a946b9e38d18cf8ffc7b0000b975175c7b6a9576",
-                    "price": 1,
-                    "budget": 1000
+                    "price": "1",
+                    "budget": "1000"
                   }
                 },
                 "txSignatures": [
@@ -1339,8 +1339,8 @@
                       }
                     ],
                     "owner": "0x82179c57d5895babfb655cd62e8e886a53334b5e7be9be658eb759cc35e3fc66",
-                    "price": 1,
-                    "budget": 1000
+                    "price": "1",
+                    "budget": "1000"
                   }
                 },
                 "txSignatures": [
@@ -3609,9 +3609,7 @@
         ],
         "properties": {
           "budget": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "owner": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -3623,9 +3621,7 @@
             }
           },
           "price": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         }
       },
@@ -6422,9 +6418,7 @@
             ],
             "properties": {
               "computation_charge": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+                "$ref": "#/components/schemas/BigInt"
               },
               "epoch": {
                 "type": "integer",
@@ -6443,14 +6437,10 @@
                 ]
               },
               "storage_charge": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+                "$ref": "#/components/schemas/BigInt"
               },
               "storage_rebate": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+                "$ref": "#/components/schemas/BigInt"
               }
             }
           },

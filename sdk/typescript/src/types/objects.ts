@@ -41,9 +41,9 @@ export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 export const SuiGasData = object({
   payment: array(SuiObjectRef),
   /** Gas Object's owner */
-  owner: string(),
-  price: number(),
-  budget: number(),
+  owner: union([string(), number()]),
+  price: union([string(), number()]),
+  budget: union([string(), number()]),
 });
 export type SuiGasData = Infer<typeof SuiGasData>;
 
@@ -143,7 +143,7 @@ export const SuiObjectData = object({
    * the present storage gas price.
    * Default to be undefined unless SuiObjectDataOptions.showStorageRebate is set to true
    */
-  storageRebate: optional(number()),
+  storageRebate: optional(string()),
   /**
    * Display metadata for this object, default to be undefined unless SuiObjectDataOptions.showDisplay is set to true
    * This can also be None if the struct type does not have Display defined
