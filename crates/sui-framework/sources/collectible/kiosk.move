@@ -79,8 +79,8 @@ module sui::kiosk {
         item_count: u32
     }
 
-    /// A capability that is issued for Kiosks that don't have owner
-    /// specified.
+    /// A Capability granting the bearer a right to `place` and `take` items
+    /// from the `Kiosk` as well as to `list` them and `list_with_purchase_cap`.
     struct KioskOwnerCap has key, store {
         id: UID,
         for: ID
