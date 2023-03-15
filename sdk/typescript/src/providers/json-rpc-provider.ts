@@ -826,14 +826,15 @@ export class JsonRpcProvider {
   /**
    * Getting the reference gas price for the network
    */
-  async getReferenceGasPrice(): Promise<string> {
+  async getReferenceGasPrice(): Promise<bigint> {
     try {
-      return await this.client.requestWithType(
+      const res = await this.client.requestWithType(
         'sui_getReferenceGasPrice',
         [],
         string(),
         this.options.skipDataValidation,
       );
+      return BigInt(res);
     } catch (err) {
       throw new Error(`Error getting the reference gas price ${err}`);
     }
