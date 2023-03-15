@@ -60,8 +60,7 @@ impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
     }
 }
 
-#[derive(Insertable, Debug, Identifiable, Clone)]
-#[diesel(table_name = objects, primary_key(object_id))]
+#[derive(Debug, Clone)]
 pub struct DeletedObject {
     // epoch id in which this object got deleted.
     pub epoch: i64,
@@ -75,6 +74,27 @@ pub struct DeletedObject {
     pub object_type: String,
     pub object_status: ObjectStatus,
     pub has_public_transfer: bool,
+}
+
+impl From<DeletedObject> for Object {
+    fn from(o: DeletedObject) -> Self {
+        Object {
+            epoch: o.epoch,
+            checkpoint: o.checkpoint,
+            object_id: o.object_id,
+            version: o.version,
+            object_digest: o.object_digest,
+            owner_type: o.owner_type,
+            owner_address: None,
+            initial_shared_version: None,
+            previous_transaction: o.previous_transaction,
+            object_type: o.object_type,
+            object_status: o.object_status,
+            has_public_transfer: o.has_public_transfer,
+            storage_rebate: 0,
+            bcs: vec![],
+        }
+    }
 }
 
 #[derive(DbEnum, Debug, Clone, Copy)]
