@@ -583,7 +583,8 @@ impl AuthorityStore {
     // Methods to mutate the store
 
     /// Insert a genesis object.
-    pub async fn insert_genesis_object(&self, object: Object) -> SuiResult {
+    /// TODO: delete this method entirely (still used by authority_tests.rs)
+    pub(crate) async fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
         let object_ref = object.compute_object_reference();
