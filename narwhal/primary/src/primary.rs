@@ -36,8 +36,8 @@ use fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
 };
 use futures::{stream::FuturesUnordered, StreamExt};
-use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_monitored_task;
+use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use prometheus::Registry;
@@ -273,7 +273,7 @@ impl Primary {
             our_workers,
         });
 
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
 
         let epoch_string: String = committee.epoch.to_string();
 
@@ -627,7 +627,7 @@ impl Primary {
         address: &Multiaddr,
     ) -> (PeerId, Address) {
         let peer_id = PeerId(peer_name.0.to_bytes());
-        let address = network::multiaddr_to_address(address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_info = PeerInfo {
             peer_id,
             affinity: anemo::types::PeerAffinity::High,

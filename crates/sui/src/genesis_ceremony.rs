@@ -5,12 +5,12 @@ use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
-use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use sui_config::{
     genesis::{Builder, UnsignedGenesis},
     SUI_GENESIS_FILENAME,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     committee::ProtocolVersion,

@@ -75,7 +75,7 @@ pub fn create_test_vote_store() -> Store<PublicKey, VoteInfo> {
 pub fn worker_listener(
     // -1 means receive unlimited messages until timeout expires
     num_of_expected_responses: i32,
-    address: multiaddr::Multiaddr,
+    address: mysten_network::Multiaddr,
     keypair: NetworkKeyPair,
 ) -> JoinHandle<Vec<WorkerSynchronizeMessage>> {
     tokio::spawn(async move {

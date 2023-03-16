@@ -24,7 +24,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.37"
 futures = "0.3.24"
-multiaddr = "0.17.0"
 tap = "1.0.1"
 rand = "0.8.5"
 anyhow = "1.0.65"

@@ -7,9 +7,9 @@ use std::{
 };
 
 use anyhow::Result;
-use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sui_types::multiaddr::Multiaddr;
 use tracing::info;
 
 use sui_types::base_types::{ObjectID, SuiAddress};

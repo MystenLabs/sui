@@ -29,10 +29,10 @@ module sui::validator_tests {
     const PROOF_OF_POSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     /// These are equivalent to /ip4/127.0.0.1
-    const VALID_NET_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
-    const VALID_P2P_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
-    const VALID_CONSENSUS_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
-    const VALID_WORKER_ADDR: vector<u8> = vector[4, 127, 0, 0, 1];
+    const VALID_NET_ADDR: vector<u8> = b"/ip4/127.0.0.1";
+    const VALID_P2P_ADDR: vector<u8> = b"/ip4/127.0.0.1";
+    const VALID_CONSENSUS_ADDR: vector<u8> = b"/ip4/127.0.0.1";
+    const VALID_WORKER_ADDR: vector<u8> = b"/ip4/127.0.0.1";
 
     #[test_only]
     fun get_test_validator(ctx: &mut TxContext, init_stake: Balance<SUI>): Validator {
@@ -148,10 +148,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -170,10 +170,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -192,10 +192,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -214,10 +214,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -236,10 +236,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            vector[42],
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(b"42")),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -258,10 +258,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            vector[42],
-            VALID_P2P_ADDR,
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(b"42")),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -280,10 +280,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            vector[42],
-            VALID_WORKER_ADDR,
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(b"42")),
+            string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
         );
 
         validator::validate_metadata(&metadata);
@@ -302,10 +302,10 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
             url::new_unsafe_from_bytes(b"project_url1"),
-            VALID_NET_ADDR,
-            VALID_P2P_ADDR,
-            VALID_CONSENSUS_ADDR,
-            vector[42],
+            string::from_ascii(ascii::string(VALID_NET_ADDR)),
+            string::from_ascii(ascii::string(VALID_P2P_ADDR)),
+            string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
+            string::from_ascii(ascii::string(b"42")),
         );
 
         validator::validate_metadata(&metadata);
@@ -327,10 +327,10 @@ module sui::validator_tests {
 
         test_scenario::next_tx(scenario, sender);
         {
-            validator::update_next_epoch_network_address(&mut validator, vector[4, 192, 168, 1, 1]);
-            validator::update_next_epoch_p2p_address(&mut validator, vector[4, 192, 168, 1, 1]);
-            validator::update_next_epoch_primary_address(&mut validator, vector[4, 192, 168, 1, 1]);
-            validator::update_next_epoch_worker_address(&mut validator, vector[4, 192, 168, 1, 1]);
+            validator::update_next_epoch_network_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
+            validator::update_next_epoch_p2p_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
+            validator::update_next_epoch_primary_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
+            validator::update_next_epoch_worker_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
             validator::update_next_epoch_protocol_pubkey(
                 &mut validator,
                 new_protocol_pub_key,
@@ -358,20 +358,20 @@ module sui::validator_tests {
             assert!(validator::description(&mut validator) == &string::from_ascii(ascii::string(b"new_desc")), 0);
             assert!(validator::image_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_image_url"), 0);
             assert!(validator::project_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
-            assert!(validator::network_address(&validator) == &VALID_NET_ADDR, 0);
-            assert!(validator::p2p_address(&validator) == &VALID_P2P_ADDR, 0);
-            assert!(validator::primary_address(&validator) == &VALID_CONSENSUS_ADDR, 0);
-            assert!(validator::worker_address(&validator) == &VALID_WORKER_ADDR, 0);
+            assert!(validator::network_address(&validator) == &string::from_ascii(ascii::string(VALID_NET_ADDR)), 0);
+            assert!(validator::p2p_address(&validator) == &string::from_ascii(ascii::string(VALID_P2P_ADDR)), 0);
+            assert!(validator::primary_address(&validator) == &string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)), 0);
+            assert!(validator::worker_address(&validator) == &string::from_ascii(ascii::string(VALID_WORKER_ADDR)), 0);
             assert!(validator::protocol_pubkey_bytes(&validator) == &VALID_PUBKEY, 0);
             assert!(validator::proof_of_possession(&validator) == &PROOF_OF_POSESSION, 0);
             assert!(validator::network_pubkey_bytes(&validator) == &VALID_NET_PUBKEY, 0);
             assert!(validator::worker_pubkey_bytes(&validator) == &VALID_WORKER_PUBKEY, 0);
 
             // Next epoch
-            assert!(validator::next_epoch_network_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
-            assert!(validator::next_epoch_p2p_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
-            assert!(validator::next_epoch_primary_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
-            assert!(validator::next_epoch_worker_address(&validator) == &option::some(vector[4, 192, 168, 1, 1]), 0);
+            assert!(validator::next_epoch_network_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
+            assert!(validator::next_epoch_p2p_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
+            assert!(validator::next_epoch_primary_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
+            assert!(validator::next_epoch_worker_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
             assert!(
                 validator::next_epoch_protocol_pubkey_bytes(&validator) == &option::some(new_protocol_pub_key),
                 0
@@ -480,7 +480,7 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_network_address(
                 &mut validator,
-                x"beef",
+                string::from_ascii(ascii::string(b"beef")),
             );
         };
 
@@ -503,7 +503,7 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_primary_address(
                 &mut validator,
-                x"beef",
+                string::from_ascii(ascii::string(b"beef")),
             );
         };
 
@@ -526,7 +526,7 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_worker_address(
                 &mut validator,
-                x"beef",
+                string::from_ascii(ascii::string(b"beef")),
             );
         };
 
@@ -549,7 +549,7 @@ module sui::validator_tests {
         {
             validator::update_next_epoch_p2p_address(
                 &mut validator,
-                x"beef",
+                string::from_ascii(ascii::string(b"beef")),
             );
         };
 

@@ -5936,7 +5936,6 @@
             "minimum": 0.0
           },
           "nextEpochNetAddress": {
-            "default": null,
             "type": [
               "string",
               "null"
@@ -5954,14 +5953,12 @@
             ]
           },
           "nextEpochP2pAddress": {
-            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
           "nextEpochPrimaryAddress": {
-            "default": null,
             "type": [
               "string",
               "null"
@@ -5995,7 +5992,6 @@
             "minimum": 0.0
           },
           "nextEpochWorkerAddress": {
-            "default": null,
             "type": [
               "string",
               "null"

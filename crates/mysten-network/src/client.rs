@@ -3,10 +3,9 @@
 
 use crate::{
     config::Config,
-    multiaddr::{parse_dns, parse_ip4, parse_ip6},
+    multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
 };
 use eyre::{eyre, Context, Result};
-use multiaddr::{Multiaddr, Protocol};
 use tonic::transport::{Channel, Endpoint, Uri};
 
 pub async fn connect(address: &Multiaddr) -> Result<Channel> {

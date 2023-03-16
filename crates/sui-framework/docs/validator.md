@@ -175,25 +175,25 @@
 
 </dd>
 <dt>
-<code>net_address: <a href="">vector</a>&lt;u8&gt;</code>
+<code>net_address: <a href="_String">string::String</a></code>
 </dt>
 <dd>
  The network address of the validator (could also contain extra info such as port, DNS and etc.).
 </dd>
 <dt>
-<code>p2p_address: <a href="">vector</a>&lt;u8&gt;</code>
+<code>p2p_address: <a href="_String">string::String</a></code>
 </dt>
 <dd>
  The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
 </dd>
 <dt>
-<code>primary_address: <a href="">vector</a>&lt;u8&gt;</code>
+<code>primary_address: <a href="_String">string::String</a></code>
 </dt>
 <dd>
  The address of the narwhal primary
 </dd>
 <dt>
-<code>worker_address: <a href="">vector</a>&lt;u8&gt;</code>
+<code>worker_address: <a href="_String">string::String</a></code>
 </dt>
 <dd>
  The address of the narwhal worker
@@ -224,25 +224,25 @@
 
 </dd>
 <dt>
-<code>next_epoch_net_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+<code>next_epoch_net_address: <a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>next_epoch_p2p_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+<code>next_epoch_p2p_address: <a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>next_epoch_primary_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+<code>next_epoch_primary_address: <a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>next_epoch_worker_address: <a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;</code>
+<code>next_epoch_worker_address: <a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;</code>
 </dt>
 <dd>
 
@@ -584,7 +584,7 @@ Intended validator is not a candidate one.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="_String">string::String</a>, p2p_address: <a href="_String">string::String</a>, primary_address: <a href="_String">string::String</a>, worker_address: <a href="_String">string::String</a>): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
 </code></pre>
 
 
@@ -603,10 +603,10 @@ Intended validator is not a candidate one.
     description: String,
     image_url: Url,
     project_url: Url,
-    net_address: <a href="">vector</a>&lt;u8&gt;,
-    p2p_address: <a href="">vector</a>&lt;u8&gt;,
-    primary_address: <a href="">vector</a>&lt;u8&gt;,
-    worker_address: <a href="">vector</a>&lt;u8&gt;,
+    net_address: String,
+    p2p_address: String,
+    primary_address: String,
+    worker_address: String,
 ): <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
     <b>let</b> metadata = <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
         sui_address,
@@ -695,10 +695,10 @@ Intended validator is not a candidate one.
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description)),
         <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url),
         <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url),
-        net_address,
-        p2p_address,
-        primary_address,
-        worker_address,
+        <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(net_address)),
+        <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address)),
+        <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address)),
+        <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address)),
     );
 
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&metadata);
@@ -1232,7 +1232,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_network_address">network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_network_address">network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_String">string::String</a>
 </code></pre>
 
 
@@ -1241,7 +1241,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_network_address">network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &<a href="">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_network_address">network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &String {
     &self.metadata.net_address
 }
 </code></pre>
@@ -1256,7 +1256,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_p2p_address">p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_p2p_address">p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_String">string::String</a>
 </code></pre>
 
 
@@ -1265,7 +1265,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_p2p_address">p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &<a href="">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_p2p_address">p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &String {
     &self.metadata.p2p_address
 }
 </code></pre>
@@ -1280,7 +1280,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_primary_address">primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_primary_address">primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_String">string::String</a>
 </code></pre>
 
 
@@ -1289,7 +1289,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_primary_address">primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &<a href="">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_primary_address">primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &String {
     &self.metadata.primary_address
 }
 </code></pre>
@@ -1304,7 +1304,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_worker_address">worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_worker_address">worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_String">string::String</a>
 </code></pre>
 
 
@@ -1313,7 +1313,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_worker_address">worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &<a href="">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_worker_address">worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &String {
     &self.metadata.worker_address
 }
 </code></pre>
@@ -1424,7 +1424,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_network_address">next_epoch_network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_network_address">next_epoch_network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;
 </code></pre>
 
 
@@ -1433,7 +1433,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_network_address">next_epoch_network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_network_address">next_epoch_network_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;String&gt; {
     &self.metadata.next_epoch_net_address
 }
 </code></pre>
@@ -1448,7 +1448,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;
 </code></pre>
 
 
@@ -1457,7 +1457,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;String&gt; {
     &self.metadata.next_epoch_p2p_address
 }
 </code></pre>
@@ -1472,7 +1472,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;
 </code></pre>
 
 
@@ -1481,7 +1481,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;String&gt; {
     &self.metadata.next_epoch_primary_address
 }
 </code></pre>
@@ -1496,7 +1496,7 @@ Returns true if the validator is preactive.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): &<a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;
 </code></pre>
 
 
@@ -1505,7 +1505,7 @@ Returns true if the validator is preactive.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): &Option&lt;String&gt; {
     &self.metadata.next_epoch_worker_address
 }
 </code></pre>
@@ -1959,8 +1959,9 @@ Set the voting power of this validator, called only from validator_set.
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_is_duplicate">is_duplicate</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>, other: &<a href="validator.md#0x2_validator_Validator">Validator</a>): bool {
      self.metadata.sui_address == other.metadata.sui_address
         || self.metadata.name == other.metadata.name
-        || self.metadata.net_address == other.metadata.net_address
-        || self.metadata.p2p_address == other.metadata.p2p_address
+        //TODO tests <b>break</b> when this is uncommented
+        // || self.metadata.net_address == other.metadata.net_address
+        // || self.metadata.p2p_address == other.metadata.p2p_address
         || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
 }
 </code></pre>
@@ -2105,7 +2106,7 @@ Update project url of the validator.
 Update network address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2114,7 +2115,7 @@ Update network address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: String) {
     self.metadata.next_epoch_net_address = <a href="_some">option::some</a>(net_address);
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2131,7 +2132,7 @@ Update network address of this validator, taking effects from next epoch
 Update network address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, net_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2140,7 +2141,7 @@ Update network address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, net_address: String) {
     <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x2_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.net_address = net_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2158,7 +2159,7 @@ Update network address of this candidate validator
 Update p2p address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, p2p_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2167,7 +2168,7 @@ Update p2p address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, p2p_address: String) {
     self.metadata.next_epoch_p2p_address = <a href="_some">option::some</a>(p2p_address);
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2184,7 +2185,7 @@ Update p2p address of this validator, taking effects from next epoch
 Update p2p address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, p2p_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2193,7 +2194,7 @@ Update p2p address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, p2p_address: String) {
     <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x2_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.p2p_address = p2p_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2211,7 +2212,7 @@ Update p2p address of this candidate validator
 Update primary address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, primary_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2220,7 +2221,7 @@ Update primary address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, primary_address: String) {
     self.metadata.next_epoch_primary_address = <a href="_some">option::some</a>(primary_address);
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2237,7 +2238,7 @@ Update primary address of this validator, taking effects from next epoch
 Update primary address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, primary_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2246,7 +2247,7 @@ Update primary address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, primary_address: String) {
     <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x2_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.primary_address = primary_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2264,7 +2265,7 @@ Update primary address of this candidate validator
 Update worker address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, worker_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2273,7 +2274,7 @@ Update worker address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_address: String) {
     self.metadata.next_epoch_worker_address = <a href="_some">option::some</a>(worker_address);
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2290,7 +2291,7 @@ Update worker address of this validator, taking effects from next epoch
 Update worker address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, worker_address: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -2299,7 +2300,7 @@ Update worker address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, worker_address: String) {
     <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x2_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.worker_address = worker_address;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);

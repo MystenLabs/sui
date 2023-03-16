@@ -34,7 +34,6 @@ sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
 mysten-metrics = { path = "../mysten-metrics"}
 once_cell = "1.16"
-multiaddr = "0.17.0"
 shared-crypto = { path = "../shared-crypto" }
 
 mysten-network.workspace = true

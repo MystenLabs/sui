@@ -132,7 +132,7 @@ async fn test_successful_blocks_delete() {
         let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
         worker_networks.push(worker.new_network(routes));
 
-        let address = network::multiaddr_to_address(address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -311,7 +311,7 @@ async fn test_failed_blocks_delete() {
         let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
         worker_networks.push(worker.new_network(routes));
 
-        let address = network::multiaddr_to_address(address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)

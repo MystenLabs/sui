@@ -14,7 +14,6 @@ use crate::{
     CONSENSUS_DB_NAME,
 };
 use fastcrypto::encoding::{Encoding, Hex};
-use multiaddr::Multiaddr;
 use narwhal_config::{
     NetworkAdminServerParameters, Parameters as ConsensusParameters, PrometheusMetricsParameters,
 };
@@ -32,6 +31,7 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
     SuiKeyPair,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 
 pub enum CommitteeConfig {
@@ -438,10 +438,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let p2p_config = P2pConfig {
                     listen_address: validator.genesis_info.p2p_listen_address.unwrap_or_else(
                         || {
-                            utils::udp_multiaddr_to_listen_address(
-                                &validator.genesis_info.p2p_address,
-                            )
-                            .unwrap()
+                            validator
+                                .genesis_info
+                                .p2p_address
+                                .udp_multiaddr_to_listen_address()
+                                .unwrap()
                         },
                     ),
                     external_address: Some(validator.genesis_info.p2p_address),

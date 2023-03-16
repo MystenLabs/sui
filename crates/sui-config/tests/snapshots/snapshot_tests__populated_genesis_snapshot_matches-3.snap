@@ -226,10 +226,10 @@ validators:
         description: ""
         image_url: ""
         project_url: ""
-        net_address: []
-        p2p_address: []
-        primary_address: []
-        worker_address: []
+        net_address: ""
+        p2p_address: ""
+        primary_address: ""
+        worker_address: ""
         next_epoch_protocol_pubkey_bytes: ~
         next_epoch_proof_of_possession: ~
         next_epoch_network_pubkey_bytes: ~

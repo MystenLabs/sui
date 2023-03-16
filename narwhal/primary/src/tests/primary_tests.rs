@@ -673,7 +673,7 @@ async fn test_request_vote_missing_batches() {
         .return_once(|_| Ok(anemo::Response::new(())));
     let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -780,7 +780,7 @@ async fn test_request_vote_already_voted() {
         .returning(|_| Ok(anemo::Response::new(())));
     let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -1357,7 +1357,7 @@ async fn test_request_vote_created_at_in_future() {
         .returning(|_| Ok(anemo::Response::new(())));
     let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)

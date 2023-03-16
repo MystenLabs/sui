@@ -17,6 +17,8 @@ use object::OBJECT_START_VERSION;
 
 use base_types::ObjectID;
 
+pub use mysten_network::multiaddr;
+
 #[macro_use]
 pub mod error;
 

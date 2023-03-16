@@ -30,10 +30,10 @@ module sui::governance_test_utils {
             b"description",
             b"image_url",
             b"project_url",
-            x"FFFF",
-            x"FFFF",
-            x"FFFF",
-            x"FFFF",
+            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1",
             option::some(balance::create_for_testing<SUI>(init_stake_amount)),
             1,
             0,
@@ -164,7 +164,7 @@ module sui::governance_test_utils {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         // This is  equivalent to /ip4/127.0.0.1
-        let addr = vector[4, 127, 0, 0, 1];
+        let addr = b"/ip4/127.0.0.1";
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator_candidate(
@@ -194,7 +194,7 @@ module sui::governance_test_utils {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         // This is  equivalent to /ip4/127.0.0.1
-        let addr = vector[4, 127, 0, 0, 1];
+        let addr = b"/ip4/127.0.0.1";
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator_candidate(

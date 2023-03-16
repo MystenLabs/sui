@@ -8,7 +8,6 @@ use std::{
 };
 
 use move_core_types::account_address::AccountAddress;
-use multiaddr::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use sui_config::{
     genesis::GenesisChainParameters,
@@ -17,6 +16,7 @@ use sui_config::{
     },
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_types::multiaddr::Multiaddr;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair},
@@ -140,24 +140,9 @@ impl Config {
         if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
             for validator_info in validator_configs {
                 let address = &validator_info.genesis_info.network_address;
-                addresses.push(Self::zero_ip_multi_address(address));
+                addresses.push(address.zero_ip_multi_address());
             }
         }
         addresses
-    }
-
-    /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
-    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
-    fn zero_ip_multi_address(address: &Multiaddr) -> Multiaddr {
-        let mut new_address = Multiaddr::empty();
-        for component in address {
-            match component {
-                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
-                    std::net::Ipv4Addr::new(0, 0, 0, 0),
-                )),
-                c => new_address.push(c),
-            }
-        }
-        new_address
     }
 }

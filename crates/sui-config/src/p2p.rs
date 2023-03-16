@@ -3,8 +3,8 @@
 
 use std::{net::SocketAddr, num::NonZeroU32, time::Duration};
 
-use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
+use sui_types::multiaddr::Multiaddr;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]

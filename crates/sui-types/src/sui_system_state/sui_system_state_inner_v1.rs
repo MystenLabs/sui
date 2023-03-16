@@ -8,10 +8,10 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata,
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
+use crate::multiaddr::Multiaddr;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
-use multiaddr::Multiaddr;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -47,18 +47,18 @@ pub struct ValidatorMetadataV1 {
     pub description: String,
     pub image_url: String,
     pub project_url: String,
-    pub net_address: Vec<u8>,
-    pub p2p_address: Vec<u8>,
-    pub primary_address: Vec<u8>,
-    pub worker_address: Vec<u8>,
+    pub net_address: String,
+    pub p2p_address: String,
+    pub primary_address: String,
+    pub worker_address: String,
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
-    pub next_epoch_net_address: Option<Vec<u8>>,
-    pub next_epoch_p2p_address: Option<Vec<u8>>,
-    pub next_epoch_primary_address: Option<Vec<u8>>,
-    pub next_epoch_worker_address: Option<Vec<u8>>,
+    pub next_epoch_net_address: Option<String>,
+    pub next_epoch_p2p_address: Option<String>,
+    pub next_epoch_primary_address: Option<String>,
+    pub next_epoch_worker_address: Option<String>,
 }
 
 #[derive(derivative::Derivative, Clone, Eq, PartialEq)]
