@@ -2005,7 +2005,7 @@ async fn test_transaction_expiration() {
     let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let mut expired_data = data.clone();
 
-    *expired_data.expiration_mut() = TransactionExpiration::Epoch(0);
+    *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
     let expired_transaction = to_sender_signed_transaction(expired_data, &sender_key);
     let result = authority_state
         .handle_transaction(&epoch_store, expired_transaction)
@@ -2014,7 +2014,7 @@ async fn test_transaction_expiration() {
     assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
 
     // Non expired transaction signed without issue
-    *data.expiration_mut() = TransactionExpiration::Epoch(10);
+    *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
     let transaction = to_sender_signed_transaction(data, &sender_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
