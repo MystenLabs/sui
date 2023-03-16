@@ -183,7 +183,7 @@ impl<S> TemporaryStore<S> {
     }
 
     /// Return the dynamic field objects that are written or deleted by this transaction
-    pub fn dynamic_fields_touched(&self) -> Vec<ObjectID> {
+    pub fn dynamic_fields_touched_do_not_call_before_fixing(&self) -> Vec<ObjectID> {
         let mut dynamic_fields = Vec::new();
         for (id, (_, kind)) in &self.written {
             match kind {
@@ -195,10 +195,10 @@ impl<S> TemporaryStore<S> {
                 WriteKind::Create | WriteKind::Unwrap => (),
             }
         }
+        // TODO: The following logic is incorrect.
         for (id, (_, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Normal => {
-                    // TODO: is this how a deleted dynamic field will show up?
                     if !self.input_objects.contains_key(id) {
                         dynamic_fields.push(*id)
                     }
@@ -550,7 +550,7 @@ impl<S> TemporaryStore<S> {
                 .charge_gas_for_storage_changes(gas_status, gas_object_id)
                 .is_err()
             {
-                // TODO: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
+                // MUSTFIX: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
                 // perhaps that check isn't there?
                 trace!("out of gas while charging for gas smashing")
             }
@@ -570,6 +570,7 @@ impl<S> TemporaryStore<S> {
         gas::deduct_gas(
             &mut gas_object,
             gas_used,
+            // MUSTFIX: This is incorrect. Storage rebate in cost summary need to be consistent with balance change.
             cost_summary.sender_rebate(self.storage_rebate_rate),
         );
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
@@ -695,7 +696,10 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
     /// This intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
     /// but *before* we have updated object versions
     pub fn check_sui_conserved(&self) {
-        if !self.dynamic_fields_touched().is_empty() {
+        if !self
+            .dynamic_fields_touched_do_not_call_before_fixing()
+            .is_empty()
+        {
             // TODO: check conservation in the presence of dynamic fields
             return;
         }
@@ -713,15 +717,18 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                 .unwrap()
         });
         // if a dynamic field object O is written by this tx, count get_total_sui(pre_tx_value(O)) as part of input_sui
-        let dynamic_field_input_sui = self.dynamic_fields_touched().iter().fold(0, |acc, id| {
-            acc + self
-                .store
-                .get_object(id)
-                .unwrap()
-                .unwrap()
-                .get_total_sui(&self)
-                .unwrap()
-        });
+        let dynamic_field_input_sui = self
+            .dynamic_fields_touched_do_not_call_before_fixing()
+            .iter()
+            .fold(0, |acc, id| {
+                acc + self
+                    .store
+                    .get_object(id)
+                    .unwrap()
+                    .unwrap()
+                    .get_total_sui(&self)
+                    .unwrap()
+            });
         // sum of the storage rebate fields of all objects written by this tx
         let mut output_rebate_amount = 0;
         // total SUI in output objects
