@@ -9128,6 +9128,7 @@ dependencies = [
  "sui-swarm",
  "sui-tool",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "test-utils",
