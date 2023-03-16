@@ -53,29 +53,15 @@ export function SelectValidatorCard() {
         if (!data) return [];
 
         const sortedAsc = data.activeValidators
-            .map((validator) => {
-                const stakingPoolActivationEpoch =
-                    validator.stakingPoolActivationEpoch || 0;
-
-                return {
-                    name: validator.name,
-                    address: validator.suiAddress,
-                    apy: calculateAPY(validator, +data.epoch),
-                    stakeShare: calculateStakeShare(
-                        BigInt(validator.stakingPoolSuiBalance),
-                        BigInt(totalStake)
-                    ),
-                    // flag for if the validator is at risk of being removed from the active set
-                    atRiskValidator: data.atRiskValidators.some(
-                        (item) => item[0] === validator.suiAddress
-                    ),
-                    // flag new validators that have been activated in the current epoch
-                    // for genesis validators, this will be false
-                    newValidator:
-                        data.epoch - stakingPoolActivationEpoch <= 1 &&
-                        data.epoch !== 0,
-                };
-            })
+            .map((validator) => ({
+                name: validator.name,
+                address: validator.suiAddress,
+                apy: calculateAPY(validator, +data.epoch),
+                stakeShare: calculateStakeShare(
+                    BigInt(validator.stakingPoolSuiBalance),
+                    BigInt(totalStake)
+                ),
+            }))
             .sort((a, b) => {
                 if (sortKey === 'name') {
                     return a[sortKey].localeCompare(b[sortKey], 'en', {
@@ -187,8 +173,6 @@ export function SelectValidatorCard() {
                                             ? '-'
                                             : `${validator[sortKey]}%`
                                     }
-                                    newValidator={validator.newValidator}
-                                    atRisk={validator.atRiskValidator}
                                 />
                             </div>
                         ))}
