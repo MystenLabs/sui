@@ -7,6 +7,7 @@ use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::builder::ConfigBuilder;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
@@ -253,6 +254,47 @@ async fn test_passive_reconfig() {
         .build()
         .await
         .unwrap();
+
+    let mut epoch_rx = test_cluster
+        .fullnode_handle
+        .sui_node
+        .subscribe_to_epoch_change();
+
+    let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
+        .ok()
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(4);
+
+    timeout(Duration::from_secs(60), async move {
+        while let Ok((committee, _)) = epoch_rx.recv().await {
+            info!("received epoch {}", committee.epoch());
+            if committee.epoch() >= target_epoch {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("Timed out waiting for cluster to target epoch");
+}
+
+#[sim_test]
+async fn test_reconfig_with_failing_validator() {
+    telemetry_subscribers::init_for_testing();
+    sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+    let test_cluster = Arc::new(
+        TestClusterBuilder::new()
+            .with_epoch_duration_ms(5000)
+            .build()
+            .await
+            .unwrap(),
+    );
+
+    let _restarter_handle = test_cluster
+        .random_node_restarter()
+        .with_kill_interval_secs(2, 4)
+        .with_restart_delay_secs(2, 4)
+        .run();
 
     let mut epoch_rx = test_cluster
         .fullnode_handle
