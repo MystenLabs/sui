@@ -40,15 +40,12 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     }, [validatorData, system]);
 
     // Reward will be available after 2 epochs
-    const startEarningRewardsEpoch =
-        Number(event.parsedJson?.epoch || 0) + NUM_OF_EPOCH_BEFORE_EARNING;
+    // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING
+    const startEarningRewardsEpoch = stakedEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
 
     const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
         startEarningRewardsEpoch
     );
-
-    // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING
-    const stakeingStartDate = stakedEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
 
     return (
         <>
@@ -112,7 +109,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                             weight="medium"
                             color="steel-darker"
                         >
-                            Epoch #{stakeingStartDate}
+                            Epoch #{startEarningRewardsEpoch}
                         </Text>
                     )}
                 </div>
