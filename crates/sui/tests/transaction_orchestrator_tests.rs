@@ -172,8 +172,8 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
-    let authorities = spawn_test_authorities([].into_iter(), &config).await;
-    let fullnode = spawn_fullnode(&config, None).await;
+    let authorities = spawn_test_authorities([], &config).await;
+    let fullnode = spawn_fullnode([], &config, None).await;
     let epoch = fullnode.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
@@ -218,7 +218,7 @@ async fn test_tx_across_epoch_boundaries() {
 
     let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
     let authorities = spawn_test_authorities([], &config).await;
-    let fullnode = spawn_fullnode(&config, None).await;
+    let fullnode = spawn_fullnode([], &config, None).await;
     let gas_object = gas_objects.swap_remove(0);
     let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
         get_key_pair::<AccountKeyPair>().0,

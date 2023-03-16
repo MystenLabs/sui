@@ -129,8 +129,9 @@ impl Env {
             server_runtime.block_on(async move {
                 // Setup the network
                 let _validators: Vec<_> =
-                    spawn_test_authorities(generated_gas, &cloned_config).await;
-                let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
+                    spawn_test_authorities(generated_gas.clone(), &cloned_config).await;
+                let _fullnode =
+                    spawn_fullnode(generated_gas, &cloned_config, Some(fullnode_rpc_port)).await;
                 fullnode_barrier_clone.wait().await;
                 barrier.wait().await;
                 recv.await.expect("Unable to wait for terminate signal");
