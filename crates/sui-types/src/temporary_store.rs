@@ -220,10 +220,21 @@ impl<S> TemporaryStore<S> {
         let mut deleted = BTreeMap::new();
 
         for (id, (mut obj, kind)) in self.written {
-            // Update the version for the written object, as long as it is a move object and not a
-            // package (whose versions are handled separately).
-            if let Some(obj) = obj.data.try_as_move_mut() {
-                obj.increment_version_to(self.lamport_timestamp);
+            // Update the version for the written object.
+            match &mut obj.data {
+                Data::Move(obj) => {
+                    // Move objects all get the transaction's lamport timestamp
+                    obj.increment_version_to(self.lamport_timestamp);
+                }
+
+                Data::Package(pkg) => {
+                    // Modified packages get their version incremented (this is a special case that
+                    // only applies to system packages).  All other packages can only be created,
+                    // and they are left alone.
+                    if kind == WriteKind::Mutate {
+                        pkg.increment_version();
+                    }
+                }
             }
 
             // Record the version that the shared object was created at in its owner field.  Note,
