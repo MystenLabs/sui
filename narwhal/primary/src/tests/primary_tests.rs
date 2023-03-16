@@ -309,7 +309,7 @@ async fn test_request_vote_has_missing_parents() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
-        parent_digests: Default::default(),
+        ancestor_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -368,6 +368,7 @@ async fn test_request_vote_has_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -387,6 +388,7 @@ async fn test_request_vote_has_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -406,6 +408,7 @@ async fn test_request_vote_has_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -476,7 +479,7 @@ async fn test_request_vote_accept_missing_parents() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
-        parent_digests: Default::default(),
+        ancestor_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -546,6 +549,7 @@ async fn test_request_vote_accept_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -566,6 +570,7 @@ async fn test_request_vote_accept_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
         parents: round_2_missing.clone(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -631,7 +636,7 @@ async fn test_request_vote_missing_batches() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
-        parent_digests: Default::default(),
+        ancestor_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -713,6 +718,7 @@ async fn test_request_vote_missing_batches() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -777,7 +783,7 @@ async fn test_request_vote_already_voted() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
-        parent_digests: Default::default(),
+        ancestor_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -848,6 +854,7 @@ async fn test_request_vote_already_voted() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -866,6 +873,7 @@ async fn test_request_vote_already_voted() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -900,6 +908,7 @@ async fn test_request_vote_already_voted() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -964,7 +973,7 @@ async fn test_fetch_certificates_handler() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
-        parent_digests: Default::default(),
+        ancestor_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -1135,7 +1144,7 @@ async fn test_request_vote_created_at_in_future() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
-        parent_digests: Default::default(),
+        ancestor_digests: Default::default(),
         metrics: metrics.clone(),
     };
 
@@ -1212,6 +1221,7 @@ async fn test_request_vote_created_at_in_future() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -1246,6 +1256,7 @@ async fn test_request_vote_created_at_in_future() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: Header::V1(test_header.clone()),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
