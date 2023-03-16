@@ -43,7 +43,7 @@ pub async fn get_object_change_from_effect<P: ObjectProvider<Error = E>, E>(
                     object_type,
                     object_id: *id,
                     version: *version,
-                    // modify_at_version should be always available for mutated object
+                    // modify_at_version should always be available for mutated object
                     previous_version: modify_at_version.get(id).cloned().unwrap_or_default(),
                     digest: *digest,
                 }),

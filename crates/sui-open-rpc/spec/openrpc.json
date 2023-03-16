@@ -4154,6 +4154,7 @@
               "objectId",
               "objectType",
               "owner",
+              "previousVersion",
               "sender",
               "type",
               "version"
@@ -4170,6 +4171,9 @@
               },
               "owner": {
                 "$ref": "#/components/schemas/Owner"
+              },
+              "previousVersion": {
+                "$ref": "#/components/schemas/SequenceNumber"
               },
               "sender": {
                 "$ref": "#/components/schemas/SuiAddress"
