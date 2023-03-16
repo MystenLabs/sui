@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ValidatorLogo } from './ValidatorLogo';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
-import { BadgeUI } from '_src/ui/app/shared/BadgeUI';
+import { Badge } from '_src/ui/app/shared/Badge';
 
 type ValidatorListItemProp = {
     selected?: boolean;
@@ -54,13 +54,10 @@ export function ValidatorListItem({
                             </div>
                             <div className="-ml-4 flex gap-1">
                                 {newValidator && (
-                                    <BadgeUI label="New" variant="success" />
+                                    <Badge label="New" variant="success" />
                                 )}
                                 {atRisk && (
-                                    <BadgeUI
-                                        label="At Risk"
-                                        variant="warning"
-                                    />
+                                    <Badge label="At Risk" variant="warning" />
                                 )}
                             </div>
                         </div>
