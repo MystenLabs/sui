@@ -9,6 +9,7 @@ import {
     type SuiAddress,
     toSerializedSignature,
     type JsonRpcProvider,
+    toB64,
 } from '@mysten/sui.js';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
@@ -49,6 +50,14 @@ export class LedgerSigner extends SignerWithProvider {
             data
         );
         const pubKey = await this.getPublicKey();
+
+        console.log('Deriv path for account', this.#derivationPath);
+
+        console.log(data);
+        console.log('Signature', toB64(signature));
+        console.log('Public key', pubKey.toBase64());
+        console.log('Public key to SUI', pubKey.toSuiAddress());
+
         return toSerializedSignature({
             signature,
             signatureScheme: this.#signatureScheme,

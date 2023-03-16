@@ -124,6 +124,7 @@ async function requestConnectionToLedger() {
             return await TransportWebUSB.request();
         }
     } catch (error) {
+        console.log(error);
         throw new LedgerConnectionFailedError(
             "Unable to connect to the user's Ledger device"
         );

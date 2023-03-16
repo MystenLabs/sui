@@ -128,6 +128,10 @@ export abstract class SignerWithProvider implements Signer {
       transaction: input.transaction,
     });
 
+    console.log("SIGNED TRANSACTION, NOW EXECUTING")
+    console.log(input.transaction);
+    console.log(transactionBytes);
+
     return await this.provider.executeTransaction({
       transaction: transactionBytes,
       signature,
