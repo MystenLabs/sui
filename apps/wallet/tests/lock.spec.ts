@@ -14,6 +14,10 @@ test('wallet unlock', async ({ page, context, extensionUrl }) => {
 });
 
 test('wallet auto-lock', async ({ page, extensionUrl }) => {
+    test.skip(
+        process.env.CI !== 'true',
+        'Runs only on CI since it takes at least 1 minute to complete'
+    );
     test.setTimeout(65 * 1000);
     await createWallet(page, extensionUrl);
     await page.getByTestId('menu').click();
