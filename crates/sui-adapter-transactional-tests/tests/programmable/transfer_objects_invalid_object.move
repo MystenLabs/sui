@@ -19,16 +19,15 @@ module test::m1 {
 
     struct Cup<T> has key, store {
         id: UID,
-        p: Phantom<T>,
+        value: T,
     }
-    struct Phantom<phantom T> has copy, drop, store {}
 
     public fun new(ctx: &mut TxContext): Pub {
         Pub { id: object::new(ctx), value: 112 }
     }
 
-    public fun cup<T>(ctx: &mut TxContext): Cup<T> {
-        Cup { id: object::new(ctx), p: Phantom {} }
+    public fun cup<T>(value: T, ctx: &mut TxContext): Cup<T> {
+        Cup { id: object::new(ctx), value }
     }
 
     public fun cap(): Cap {
@@ -47,8 +46,9 @@ module test::m1 {
 
 // not an object (but sneaky)
 //# programmable --sender A --inputs @A
-//> 0: test::m1::cup<signer>(); // not an object since signer does not have store
-//> TransferObjects([Result(0)], Input(0));
+//> 0: test::m1::cap();
+//> 1: test::m1::cup<test::m1::Cap>(Result(0)); // not an object since Cap does not have store
+//> TransferObjects([Result(1)], Input(0));
 
 // one object, one not
 //# programmable --sender A --inputs @A
@@ -59,5 +59,6 @@ module test::m1 {
 // one object, one not (but sneaky)
 //# programmable --sender A --inputs @A
 //> 0: test::m1::new();
-//> 1: test::m1::cup<signer>(); // not an object since signer does not have store
-//> TransferObjects([Result(0), Result(1)], Input(0));
+//> 1: test::m1::cap();
+//> 2: test::m1::cup<test::m1::Cap>(Result(0)); // not an object since Cap does not have store
+//> TransferObjects([Result(0), Result(2)], Input(0));

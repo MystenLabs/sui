@@ -3,31 +3,25 @@ processed 7 tasks
 init:
 A: object(100), B: object(101)
 
-task 1 'publish'. lines 8-39:
-warning[W02014]: invalid non-phantom type parameter usage
-   ┌─ /var/folders/0_/j3dn9z3j3213833kj0q00hrc0000gp/T/.tmpYFhLoG:17:16
-   │
-17 │     struct Cup<T> has key, store {
-   │                ^ The parameter 'T' is only used as an argument to phantom parameters. Consider adding a phantom declaration here
-
+task 1 'publish'. lines 8-38:
 created: object(106)
 written: object(105)
 
-task 2 'programmable'. lines 40-43:
+task 2 'programmable'. lines 39-42:
 Error: TransferObjects, MergeCoin, and Publish cannot have empty arguments. If MakeMoveVec has empty arguments, it must have a type specified
 
-task 3 'programmable'. lines 44-48:
+task 3 'programmable'. lines 43-47:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 4 'programmable'. lines 49-53:
+task 4 'programmable'. lines 48-53:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
 
 task 5 'programmable'. lines 54-59:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
 
-task 6 'programmable'. lines 60-63:
-Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
+task 6 'programmable'. lines 60-64:
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
