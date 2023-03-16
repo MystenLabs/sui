@@ -122,7 +122,7 @@ impl ReadApi {
     }
 
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_total_transaction_number().await?)
+        Ok(self.api.http.get_total_transaction_number().await?.into())
     }
 
     pub async fn get_transactions_in_range_deprecated(

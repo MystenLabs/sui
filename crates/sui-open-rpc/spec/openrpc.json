@@ -1298,12 +1298,10 @@
       "description": "Return the total number of transactions known to the server.",
       "params": [],
       "result": {
-        "name": "u64",
+        "name": "BigInt",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/BigInt"
         }
       },
       "examples": [
