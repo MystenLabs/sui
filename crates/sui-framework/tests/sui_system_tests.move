@@ -337,8 +337,8 @@ module sui::sui_system_tests {
         sui_system::update_validator_project_url(system_state, b"new_project_url", ctx);
         sui_system::update_candidate_validator_network_address(system_state, network_address, ctx);
         sui_system::update_candidate_validator_p2p_address(system_state, p2p_address, ctx);
-        sui_system::update_candidate_validator_primary_address(system_state, b"/ip4/127.0.0.1", ctx);
-        sui_system::update_candidate_validator_worker_address(system_state, b"/ip4/127.0.0.1", ctx);
+        sui_system::update_candidate_validator_primary_address(system_state, b"/ip4/127.0.0.1/udp/80", ctx);
+        sui_system::update_candidate_validator_worker_address(system_state, b"/ip4/127.0.0.1/udp/80", ctx);
         sui_system::update_candidate_validator_protocol_pubkey(
             system_state,
             protocol_pub_key,
@@ -371,8 +371,8 @@ module sui::sui_system_tests {
             name,
             protocol_pub_key,
             pop,
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             network_address,
             p2p_address,
             vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -401,8 +401,8 @@ module sui::sui_system_tests {
         sui_system::update_validator_project_url(system_state, b"new_project_url", ctx);
         sui_system::update_validator_next_epoch_network_address(system_state, network_address, ctx);
         sui_system::update_validator_next_epoch_p2p_address(system_state, p2p_address, ctx);
-        sui_system::update_validator_next_epoch_primary_address(system_state, b"/ip4/168.168.168.168", ctx);
-        sui_system::update_validator_next_epoch_worker_address(system_state, b"/ip4/168.168.168.168", ctx);
+        sui_system::update_validator_next_epoch_primary_address(system_state, b"/ip4/168.168.168.168/udp/80", ctx);
+        sui_system::update_validator_next_epoch_worker_address(system_state, b"/ip4/168.168.168.168/udp/80", ctx);
         sui_system::update_validator_next_epoch_protocol_pubkey(
             system_state,
             protocol_pub_key,
@@ -431,8 +431,8 @@ module sui::sui_system_tests {
             name,
             protocol_pub_key,
             pop,
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             network_address,
             p2p_address,
             vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -442,8 +442,8 @@ module sui::sui_system_tests {
         // Next epoch
         assert!(validator::next_epoch_network_address(validator) == &option::some(string::from_ascii(ascii::string(new_network_address))), 0);
         assert!(validator::next_epoch_p2p_address(validator) == &option::some(string::from_ascii(ascii::string(new_p2p_address))), 0);
-        assert!(validator::next_epoch_primary_address(validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/168.168.168.168"))), 0);
-        assert!(validator::next_epoch_worker_address(validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/168.168.168.168"))), 0);
+        assert!(validator::next_epoch_primary_address(validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/168.168.168.168/udp/80"))), 0);
+        assert!(validator::next_epoch_worker_address(validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/168.168.168.168/udp/80"))), 0);
         assert!(
             validator::next_epoch_protocol_pubkey_bytes(validator) == &option::some(new_protocol_pub_key),
             0
@@ -504,8 +504,8 @@ module sui::sui_system_tests {
             name,
             protocol_pub_key,
             pop,
-            b"/ip4/168.168.168.168",
-            b"/ip4/168.168.168.168",
+            b"/ip4/168.168.168.168/udp/80",
+            b"/ip4/168.168.168.168/udp/80",
             network_address,
             p2p_address,
             vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
@@ -560,10 +560,10 @@ module sui::sui_system_tests {
             b"description",
             b"image_url",
             b"project_url",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1/tcp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             option::some(balance::create_for_testing<SUI>(100)),
             1,
             0,
@@ -586,8 +586,8 @@ module sui::sui_system_tests {
                 b"validator_new_name",
                 pubkey1,
                 pop1,
-                b"/ip4/42.42.42.42",
-                b"/ip4/43.43.43.43",
+                b"/ip4/42.42.42.42/tcp/80",
+                b"/ip4/43.43.43.43/udp/80",
             );
         };
 
@@ -598,12 +598,12 @@ module sui::sui_system_tests {
             b"validator_new_name",
             pubkey,
             pop,
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1/tcp/80",
+            b"/ip4/127.0.0.1/udp/80",
             pubkey1,
             pop1,
-            b"/ip4/42.42.42.42",
-            b"/ip4/43.43.43.43",
+            b"/ip4/42.42.42.42/tcp/80",
+            b"/ip4/43.43.43.43/udp/80",
         );
 
         test_scenario::return_shared(system_state);
@@ -626,10 +626,10 @@ module sui::sui_system_tests {
                 b"description2",
                 b"image_url2",
                 b"project_url2",
-                b"/ip4/127.0.0.2",
-                b"/ip4/127.0.0.2",
-                b"/ip4/127.0.0.1",
-                b"/ip4/127.0.0.1",
+                b"/ip4/127.0.0.2/tcp/80",
+                b"/ip4/127.0.0.2/udp/80",
+                b"/ip4/127.0.0.1/udp/80",
+                b"/ip4/127.0.0.1/udp/80",
                 1,
                 0,
                 ctx,
@@ -645,8 +645,8 @@ module sui::sui_system_tests {
                 b"new_validator_new_name",
                 new_pubkey1,
                 new_pop1,
-                b"/ip4/66.66.66.66",
-                b"/ip4/77.77.77.77",
+                b"/ip4/66.66.66.66/tcp/80",
+                b"/ip4/77.77.77.77/udp/80",
             );
         };
 
@@ -657,12 +657,12 @@ module sui::sui_system_tests {
             b"new_validator_new_name",
             new_pubkey,
             new_pop,
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.2",
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
             new_pubkey1,
             new_pop1,
-            b"/ip4/66.66.66.66",
-            b"/ip4/77.77.77.77",
+            b"/ip4/66.66.66.66/tcp/80",
+            b"/ip4/77.77.77.77/udp/80",
         );
 
         test_scenario::return_shared(system_state);
@@ -680,8 +680,8 @@ module sui::sui_system_tests {
             b"validator_new_name",
             pubkey1,
             pop1,
-            b"/ip4/42.42.42.42",
-            b"/ip4/43.43.43.43",
+            b"/ip4/42.42.42.42/tcp/80",
+            b"/ip4/43.43.43.43/udp/80",
         );
 
         let validator = sui_system::active_validator_by_address(&system_state, new_validator_addr);
@@ -690,8 +690,8 @@ module sui::sui_system_tests {
             b"new_validator_new_name",
             new_pubkey1,
             new_pop1,
-            b"/ip4/66.66.66.66",
-            b"/ip4/77.77.77.77",
+            b"/ip4/66.66.66.66/tcp/80",
+            b"/ip4/77.77.77.77/udp/80",
         );
 
         test_scenario::return_shared(system_state);
@@ -729,10 +729,10 @@ module sui::sui_system_tests {
                 b"description2",
                 b"image_url2",
                 b"project_url2",
-                b"/ip4/127.0.0.2",
-                b"/ip4/127.0.0.2",
-                b"/ip4/168.168.168.168",
-                b"/ip4/168.168.168.168",
+                b"/ip4/127.0.0.2/tcp/80",
+                b"/ip4/127.0.0.2/udp/80",
+                b"/ip4/168.168.168.168/udp/80",
+                b"/ip4/168.168.168.168/udp/80",
                 1,
                 0,
                 test_scenario::ctx(scenario),
@@ -746,8 +746,8 @@ module sui::sui_system_tests {
             b"validator_new_name",
             pubkey1,
             pop1,
-            b"/ip4/42.42.42.42",
-            b"/ip4/43.43.43.43",
+            b"/ip4/42.42.42.42/tcp/80",
+            b"/ip4/43.43.43.43/udp/80",
             42,
             7,
         );
@@ -760,8 +760,8 @@ module sui::sui_system_tests {
             b"validator_new_name",
             pubkey1,
             pop1,
-            b"/ip4/42.42.42.42",
-            b"/ip4/43.43.43.43",
+            b"/ip4/42.42.42.42/tcp/80",
+            b"/ip4/43.43.43.43/udp/80",
             42,
             7,
         );
@@ -796,10 +796,10 @@ module sui::sui_system_tests {
             b"description2",
             b"image_url2",
             b"project_url2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             1,
             0,
             test_scenario::ctx(scenario),
@@ -830,10 +830,10 @@ module sui::sui_system_tests {
             b"description2",
             b"image_url2",
             b"project_url2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             1,
             0,
             test_scenario::ctx(scenario),
@@ -850,10 +850,10 @@ module sui::sui_system_tests {
             b"description2",
             b"image_url2",
             b"project_url2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             1,
             0,
             test_scenario::ctx(scenario),
@@ -890,10 +890,10 @@ module sui::sui_system_tests {
             b"description",
             b"image_url",
             b"project_url",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1/tcp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             option::some(balance::create_for_testing<SUI>(100)),
             1,
             0,
@@ -918,10 +918,10 @@ module sui::sui_system_tests {
             b"description2",
             b"image_url2",
             b"project_url2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.2",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             1,
             0,
             test_scenario::ctx(scenario),

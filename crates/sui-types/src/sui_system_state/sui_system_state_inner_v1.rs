@@ -115,15 +115,24 @@ impl ValidatorMetadataV1 {
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
         let net_address = Multiaddr::try_from(self.net_address.clone())
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
+
+        // Ensure p2p, primary, and worker addresses are both Multiaddr's and valid anemo addresses
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
             .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
-        // Also make sure that the p2p address is a valid anemo address.
-        // MUSTFIX: This will trigger a bunch of Move test failures today since we did not give proper
-        // value for p2p address.
-        // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
+        p2p_address
+            .to_anemo_address()
+            .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+
         let primary_address = Multiaddr::try_from(self.primary_address.clone())
             .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+        primary_address
+            .to_anemo_address()
+            .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+
         let worker_address = Multiaddr::try_from(self.worker_address.clone())
+            .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+        worker_address
+            .to_anemo_address()
             .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
 
         let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
@@ -184,23 +193,41 @@ impl ValidatorMetadataV1 {
 
         let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
-            )),
+            Some(address) => {
+                let address =
+                    Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+                address
+                    .to_anemo_address()
+                    .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+
+                Ok(Some(address))
+            }
         }?;
 
         let next_epoch_primary_address = match self.next_epoch_primary_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?,
-            )),
+            Some(address) => {
+                let address =
+                    Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+                address
+                    .to_anemo_address()
+                    .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+
+                Ok(Some(address))
+            }
         }?;
 
         let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
-            )),
+            Some(address) => {
+                let address =
+                    Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+                address
+                    .to_anemo_address()
+                    .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+
+                Ok(Some(address))
+            }
         }?;
 
         Ok(VerifiedValidatorMetadataV1 {

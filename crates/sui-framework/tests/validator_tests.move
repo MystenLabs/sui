@@ -28,11 +28,10 @@ module sui::validator_tests {
     const VALID_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
     const PROOF_OF_POSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
-    /// These are equivalent to /ip4/127.0.0.1
-    const VALID_NET_ADDR: vector<u8> = b"/ip4/127.0.0.1";
-    const VALID_P2P_ADDR: vector<u8> = b"/ip4/127.0.0.1";
-    const VALID_CONSENSUS_ADDR: vector<u8> = b"/ip4/127.0.0.1";
-    const VALID_WORKER_ADDR: vector<u8> = b"/ip4/127.0.0.1";
+    const VALID_NET_ADDR: vector<u8> = b"/ip4/127.0.0.1/tcp/80";
+    const VALID_P2P_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
+    const VALID_CONSENSUS_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
+    const VALID_WORKER_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
 
     #[test_only]
     fun get_test_validator(ctx: &mut TxContext, init_stake: Balance<SUI>): Validator {
@@ -327,10 +326,10 @@ module sui::validator_tests {
 
         test_scenario::next_tx(scenario, sender);
         {
-            validator::update_next_epoch_network_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
-            validator::update_next_epoch_p2p_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
-            validator::update_next_epoch_primary_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
-            validator::update_next_epoch_worker_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1")));
+            validator::update_next_epoch_network_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1/tcp/80")));
+            validator::update_next_epoch_p2p_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1/udp/80")));
+            validator::update_next_epoch_primary_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1/udp/80")));
+            validator::update_next_epoch_worker_address(&mut validator, string::from_ascii(ascii::string(b"/ip4/192.168.1.1/udp/80")));
             validator::update_next_epoch_protocol_pubkey(
                 &mut validator,
                 new_protocol_pub_key,
@@ -368,10 +367,10 @@ module sui::validator_tests {
             assert!(validator::worker_pubkey_bytes(&validator) == &VALID_WORKER_PUBKEY, 0);
 
             // Next epoch
-            assert!(validator::next_epoch_network_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
-            assert!(validator::next_epoch_p2p_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
-            assert!(validator::next_epoch_primary_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
-            assert!(validator::next_epoch_worker_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1"))), 0);
+            assert!(validator::next_epoch_network_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1/tcp/80"))), 0);
+            assert!(validator::next_epoch_p2p_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1/udp/80"))), 0);
+            assert!(validator::next_epoch_primary_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1/udp/80"))), 0);
+            assert!(validator::next_epoch_worker_address(&validator) == &option::some(string::from_ascii(ascii::string(b"/ip4/192.168.1.1/udp/80"))), 0);
             assert!(
                 validator::next_epoch_protocol_pubkey_bytes(&validator) == &option::some(new_protocol_pub_key),
                 0
