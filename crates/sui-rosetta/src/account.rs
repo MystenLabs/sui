@@ -63,10 +63,7 @@ async fn get_sub_account_balances(
 ) -> Result<Vec<Amount>, Error> {
     let balances: HashMap<_, u128> = match account_type {
         SubAccountType::DelegatedSui => {
-            let delegations = client
-                .governance_api()
-                .get_delegated_stakes(address)
-                .await?;
+            let delegations = client.governance_api().get_stakes(address).await?;
             delegations
                 .into_iter()
                 .fold(HashMap::new(), |mut balances, stakes| {
@@ -79,10 +76,7 @@ async fn get_sub_account_balances(
                 })
         }
         SubAccountType::PendingDelegation => {
-            let delegations = client
-                .governance_api()
-                .get_delegated_stakes(address)
-                .await?;
+            let delegations = client.governance_api().get_stakes(address).await?;
             delegations
                 .into_iter()
                 .fold(HashMap::new(), |mut balances, stakes| {
