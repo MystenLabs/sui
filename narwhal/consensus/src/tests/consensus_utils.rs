@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::{PublicKey, PublicKeyBytes};
+use crypto::PublicKeyBytes;
 use std::sync::Arc;
 use storage::CertificateStore;
 use store::rocks::MetricConf;
@@ -22,7 +22,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     .expect("Failed to create database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<PublicKey, Round>,
+        LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 

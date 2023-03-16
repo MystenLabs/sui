@@ -12,6 +12,7 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
+use crypto::PublicKeyBytes;
 use crate::bullshark::Bullshark;
 use crate::consensus::ConsensusRound;
 use crate::metrics::ConsensusMetrics;
@@ -131,7 +132,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let last_committed = consensus_store.read_last_committed();
 
     for key in keys.clone() {
-        let last_round = *last_committed.get(&key).unwrap();
+        let last_round = *last_committed.get(&PublicKeyBytes::from(&key)).unwrap();
 
         // For the leader of round 6 we expect to have last committed round of 6.
         if key == Bullshark::leader_authority(&committee, 6) {

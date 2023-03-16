@@ -5,6 +5,7 @@ use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
 use std::collections::HashSet;
 use tracing::debug;
+use crypto::PublicKeyBytes;
 use types::{Certificate, CertificateDigest, Round};
 
 /// Order the past leaders that we didn't already commit.
@@ -87,7 +88,7 @@ pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificat
             let mut skip = already_ordered.contains(&digest);
             skip |= state
                 .last_committed
-                .get(&certificate.origin())
+                .get(&PublicKeyBytes::from(&certificate.origin()))
                 .map_or_else(|| false, |r| &certificate.round() <= r);
             if !skip {
                 buffer.push(certificate);

@@ -8,6 +8,7 @@ malloc_size_of_is_0!(ed25519_consensus::Signature);
 
 // fastcrypto
 malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381PublicKey);
+malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381PublicKeyAsBytes);
 malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381Signature);
 malloc_size_of_is_0!(fastcrypto::bls12381::min_sig::BLS12381AggregateSignature);
 malloc_size_of_is_0!(fastcrypto::bls12381::min_pk::BLS12381PublicKey);
