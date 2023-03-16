@@ -30,10 +30,10 @@ module sui::governance_test_utils {
             b"description",
             b"image_url",
             b"project_url",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
-            b"/ip4/127.0.0.1",
+            b"/ip4/127.0.0.1/tcp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
+            b"/ip4/127.0.0.1/udp/80",
             option::some(balance::create_for_testing<SUI>(init_stake_amount)),
             1,
             0,
@@ -163,8 +163,7 @@ module sui::governance_test_utils {
     public fun add_validator_full_flow(validator: address, init_stake_amount: u64, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        // This is  equivalent to /ip4/127.0.0.1
-        let addr = b"/ip4/127.0.0.1";
+        let addr = b"/ip4/127.0.0.1/udp/80";
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator_candidate(
@@ -193,8 +192,7 @@ module sui::governance_test_utils {
     public fun add_validator_candidate(validator: address, pubkey: vector<u8>, pop: vector<u8>, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        // This is  equivalent to /ip4/127.0.0.1
-        let addr = b"/ip4/127.0.0.1";
+        let addr = b"/ip4/127.0.0.1/udp/80";
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::request_add_validator_candidate(
