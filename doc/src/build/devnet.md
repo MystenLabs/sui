@@ -57,7 +57,7 @@ Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you wan
 Press **y** and then press **Enter**. It then asks for the RPC server URL: 
 
 ```
-Sui full node server url (Default to Sui Devnet if not specified) :
+Sui Full node server URL (default to Sui Devnet if not specified) :
 ```
 
 Press **Enter** to connect to Sui Devnet. To use a custom RPC server, enter the URL to the custom RPC endpoint and then press **Enter**.
