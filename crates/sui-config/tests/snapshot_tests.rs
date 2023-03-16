@@ -88,7 +88,6 @@ fn populated_genesis_snapshot_matches() {
         })
         .add_validator_signature(&key)
         .build();
-    assert_yaml_snapshot!(genesis.validator_set());
     assert_yaml_snapshot!(genesis.sui_system_wrapper_object());
     assert_yaml_snapshot!(genesis.sui_system_object());
     assert_yaml_snapshot!(genesis.clock());

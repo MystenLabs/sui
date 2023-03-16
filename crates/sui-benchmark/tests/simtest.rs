@@ -229,7 +229,7 @@ mod test {
 
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_network_config(swarm.config(), &registry, None)
+            LocalValidatorAggregatorProxy::from_genesis(&swarm.config().genesis, &registry, None)
                 .await,
         );
 
