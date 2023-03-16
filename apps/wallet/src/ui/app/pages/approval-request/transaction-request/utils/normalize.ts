@@ -17,17 +17,11 @@ export function unwrapTypeReference(
     type: SuiMoveNormalizedType
 ): null | TypeReference {
     if (typeof type === 'object') {
-        if ('Struct' in type) {
-            return type.Struct;
+        if ('Struct' === type.type) {
+            return type.content;
         }
-        if ('Reference' in type) {
-            return unwrapTypeReference(type.Reference);
-        }
-        if ('MutableReference' in type) {
-            return unwrapTypeReference(type.MutableReference);
-        }
-        if ('Vector' in type) {
-            return unwrapTypeReference(type.Vector);
+        if (type.type === "Reference" || type.type === "MutableReference" || type.type === "Vector") {
+            return unwrapTypeReference(type.content);
         }
     }
     return null;

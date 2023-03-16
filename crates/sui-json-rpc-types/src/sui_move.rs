@@ -67,6 +67,7 @@ pub struct SuiMoveNormalizedStruct {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(tag = "type", content = "content")]
 pub enum SuiMoveNormalizedType {
     Bool,
     U8,

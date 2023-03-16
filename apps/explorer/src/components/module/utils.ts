@@ -18,36 +18,34 @@ export function normalizedFunctionParameterTypeToString(
     functionTypeArgNames?: string[],
     str = ''
 ): string {
-    if (typeof param === 'string') {
-        return str + param;
+    if (["Bool", "U8", "U16", "U32", "U64", "U128", "U256", "Address", "Signer"].indexOf(param.type) !== -1) {
+        return str + param.content;
     }
-    if ('TypeParameter' in param) {
+    if ('TypeParameter' === param.type) {
         return (
             str +
-            (functionTypeArgNames?.[param.TypeParameter] ??
-                `T${param.TypeParameter}`)
+            (functionTypeArgNames?.[param.content] ??
+                `T${param.content}`)
         );
     }
-    if ('Reference' in param || 'MutableReference' in param) {
-        const p =
-            'Reference' in param ? param.Reference : param.MutableReference;
+    if ('Reference' === param.type || 'MutableReference' === param.type) {
         return normalizedFunctionParameterTypeToString(
-            p,
+            param.content,
             functionTypeArgNames,
             str
         );
     }
-    if ('Vector' in param) {
+    if ('Vector' === param.type) {
         return (
             normalizedFunctionParameterTypeToString(
-                param.Vector,
+                param.content,
                 functionTypeArgNames,
                 `${str}Vector<`
             ) + '>'
         );
     }
-    if ('Struct' in param) {
-        const theType = param.Struct;
+    if ('Struct' === param.type) {
+        const theType = param.content;
         const theTypeArgs = theType.typeArguments;
         const theTypeArgsStr = theTypeArgs
             .map((aTypeArg) =>

@@ -84,30 +84,30 @@ export function getPureSerializationType(
   argVal: SuiJsonValue | undefined,
 ): string | undefined {
   if (
-    typeof normalizedType === 'string' &&
-    allowedTypes.includes(normalizedType)
+    typeof normalizedType.content === 'string' &&
+    allowedTypes.includes(normalizedType.type)
   ) {
-    if (normalizedType in ['U8', 'U16', 'U32', 'U64', 'U128', 'U256']) {
+    if (['U8', 'U16', 'U32', 'U64', 'U128', 'U256'].indexOf(normalizedType.type) !== -1) {
       expectType('number', argVal);
-    } else if (normalizedType === 'Bool') {
+    } else if (normalizedType.type === 'Bool') {
       expectType('boolean', argVal);
-    } else if (normalizedType === 'Address') {
+    } else if (normalizedType.type === 'Address') {
       expectType('string', argVal);
       if (argVal && !isValidSuiAddress(argVal as string)) {
         throw new Error('Invalid Sui Address');
       }
     }
-    return normalizedType.toLowerCase();
-  } else if (typeof normalizedType === 'string') {
+    return normalizedType.content.toLowerCase();
+  } else if (typeof normalizedType.content === 'string') {
     throw new Error(
       `Unknown pure normalized type ${JSON.stringify(normalizedType, null, 2)}`,
     );
   }
 
-  if ('Vector' in normalizedType) {
+  if (normalizedType.type === "Vector") {
     if (
       (argVal === undefined || typeof argVal === 'string') &&
-      normalizedType.Vector === 'U8'
+      normalizedType.content.type === 'U8'
     ) {
       return 'string';
     }
@@ -119,7 +119,7 @@ export function getPureSerializationType(
     }
 
     const innerType = getPureSerializationType(
-      normalizedType.Vector,
+      normalizedType.content,
       // undefined when argVal is empty
       argVal ? argVal[0] : undefined,
     );
@@ -131,16 +131,16 @@ export function getPureSerializationType(
     return `vector<${innerType}>`;
   }
 
-  if ('Struct' in normalizedType) {
-    if (isSameStruct(normalizedType.Struct, RESOLVED_ASCII_STR)) {
+  if (normalizedType.type === "Struct") {
+    if (isSameStruct(normalizedType.content, RESOLVED_ASCII_STR)) {
       return 'string';
-    } else if (isSameStruct(normalizedType.Struct, RESOLVED_UTF8_STR)) {
+    } else if (isSameStruct(normalizedType.content, RESOLVED_UTF8_STR)) {
       return 'utf8string';
-    } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
+    } else if (isSameStruct(normalizedType.content, RESOLVED_SUI_ID)) {
       return 'address';
-    } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
+    } else if (isSameStruct(normalizedType.content, RESOLVED_STD_OPTION)) {
       const optionToVec: SuiMoveNormalizedType = {
-        Vector: normalizedType.Struct.typeArguments[0],
+        type: "Vector", content: normalizedType.content.typeArguments[0],
       };
       return getPureSerializationType(optionToVec, argVal);
     }

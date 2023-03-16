@@ -60,13 +60,21 @@ export type SuiMoveNormalizedTypeParameterType = Infer<
   typeof SuiMoveNormalizedTypeParameterType
 >;
 
-export type SuiMoveNormalizedType =
-  | string
-  | SuiMoveNormalizedTypeParameterType
-  | { Reference: SuiMoveNormalizedType }
-  | { MutableReference: SuiMoveNormalizedType }
-  | { Vector: SuiMoveNormalizedType }
-  | SuiMoveNormalizedStructType;
+export type SuiMoveNormalizedType = 
+ | {type: "Bool", content: string}
+ | {type: "U8", content: string}
+ | {type: "U16", content: string}
+ | {type: "U32", content: string}
+ | {type: "U64", content: string}
+ | {type: "U128", content: string}
+ | {type: "U256", content: string}
+ | {type: "Address", content: string}
+ | {type: "Signer", content: string}
+ | {type: "Struct", content: {address: string, module: string, name: string, typeArguments: SuiMoveNormalizedType[]}}
+ | {type: "Vector", content: SuiMoveNormalizedType}
+ | {type: "TypeParameter", content: number}
+ | {type: "Reference", content: SuiMoveNormalizedType}
+ | {type: "MutableReference", content: SuiMoveNormalizedType}
 
 function isSuiMoveNormalizedType(
   value: unknown,
@@ -171,35 +179,35 @@ export function extractMutableReference(
   normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' &&
-    'MutableReference' in normalizedType
-    ? normalizedType.MutableReference
+    'MutableReference' === normalizedType.type
+    ? normalizedType.content
     : undefined;
 }
 
 export function extractReference(
   normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedType | undefined {
-  return typeof normalizedType === 'object' && 'Reference' in normalizedType
-    ? normalizedType.Reference
+  return typeof normalizedType === 'object' && 'Reference' === normalizedType.type
+    ? normalizedType.content
     : undefined;
 }
 
 export function extractStructTag(
   normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedStructType | undefined {
-  if (typeof normalizedType === 'object' && 'Struct' in normalizedType) {
-    return normalizedType;
+  if (typeof normalizedType === 'object' && 'Struct' === normalizedType.type) {
+    return {Struct: normalizedType.content};
   }
 
   const ref = extractReference(normalizedType);
   const mutRef = extractMutableReference(normalizedType);
 
-  if (typeof ref === 'object' && 'Struct' in ref) {
-    return ref;
+  if (typeof ref === 'object' && ref.type === "Struct") {
+    return {Struct: ref.content};
   }
 
-  if (typeof mutRef === 'object' && 'Struct' in mutRef) {
-    return mutRef;
+  if (typeof mutRef === 'object' && mutRef.type === "Struct") {
+    return {Struct: mutRef.content};
   }
   return undefined;
 }

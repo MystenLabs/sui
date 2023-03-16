@@ -5598,26 +5598,139 @@
       "SuiMoveNormalizedType": {
         "oneOf": [
           {
-            "type": "string",
-            "enum": [
-              "Bool",
-              "U8",
-              "U16",
-              "U32",
-              "U64",
-              "U128",
-              "U256",
-              "Address",
-              "Signer"
-            ]
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Bool"
+                ]
+              }
+            }
           },
           {
             "type": "object",
             "required": [
-              "Struct"
+              "type"
             ],
             "properties": {
-              "Struct": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "U8"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "U16"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "U32"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "U64"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "U128"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "U256"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Address"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Signer"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "content",
+              "type"
+            ],
+            "properties": {
+              "content": {
                 "type": "object",
                 "required": [
                   "address",
@@ -5642,59 +5755,88 @@
                     }
                   }
                 }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Struct"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "type": "object",
             "required": [
-              "Vector"
+              "content",
+              "type"
             ],
             "properties": {
-              "Vector": {
+              "content": {
                 "$ref": "#/components/schemas/SuiMoveNormalizedType"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Vector"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "type": "object",
             "required": [
-              "TypeParameter"
+              "content",
+              "type"
             ],
             "properties": {
-              "TypeParameter": {
+              "content": {
                 "type": "integer",
                 "format": "uint16",
                 "minimum": 0.0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TypeParameter"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "type": "object",
             "required": [
-              "Reference"
+              "content",
+              "type"
             ],
             "properties": {
-              "Reference": {
+              "content": {
                 "$ref": "#/components/schemas/SuiMoveNormalizedType"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Reference"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "type": "object",
             "required": [
-              "MutableReference"
+              "content",
+              "type"
             ],
             "properties": {
-              "MutableReference": {
+              "content": {
                 "$ref": "#/components/schemas/SuiMoveNormalizedType"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MutableReference"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
