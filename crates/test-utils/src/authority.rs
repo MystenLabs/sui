@@ -134,10 +134,7 @@ pub async fn spawn_test_authorities(config: &NetworkConfig) -> Vec<SuiNodeHandle
 
 /// This function can be called after `spawn_test_authorities` to
 /// start a fullnode.
-pub async fn spawn_fullnode<I>(config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle
-where
-    I: IntoIterator<Item = Object> + Clone,
-{
+pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle {
     let registry_service = RegistryService::new(Registry::new());
 
     let mut builder = config.fullnode_config_builder();
@@ -155,9 +152,7 @@ where
     }
 
     let fullnode_config = builder.build().unwrap();
-    let node = start_node(&fullnode_config, registry_service).await;
-
-    node
+    start_node(&fullnode_config, registry_service).await
 }
 
 /// Get a network client to communicate with the consensus.
