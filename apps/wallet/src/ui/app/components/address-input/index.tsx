@@ -55,7 +55,7 @@ export function AddressInput({
                         : 'border-gray-45'
                 )}
             >
-                <div className="min-h-[42px] w-full flex items-center px-3 py-1 pr-0 ">
+                <div className="min-h-[42px] w-full flex items-center pl-3 py-1 pr-0 ">
                     <TextareaAutosize
                         maxRows={3}
                         minRows={1}
