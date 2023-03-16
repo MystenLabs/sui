@@ -66,10 +66,12 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_types::{
+        base_types::SequenceNumber,
         digests::TransactionDigest,
-        messages::TransactionKind,
+        messages::{TransactionEffectsAPI, TransactionKind},
         object::{Object, OBJECT_START_VERSION},
         programmable_transaction_builder::ProgrammableTransactionBuilder,
+        storage::ObjectStore,
         SUI_FRAMEWORK_OBJECT_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
@@ -171,6 +173,10 @@ mod sim_only_tests {
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_succeeded(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 43);
+
+        let (modified_at, mutated_to) = get_framework_upgrade_effects(&cluster).await;
+        assert_eq!(Some(SequenceNumber::from(1)), modified_at);
+        assert_eq!(Some(SequenceNumber::from(2)), mutated_to);
     }
 
     #[sim_test]
@@ -274,6 +280,40 @@ mod sim_only_tests {
 
     async fn expect_upgrade_succeeded(cluster: &TestCluster) {
         monitor_version_change(&cluster, FINISH /* expected proto version */).await;
+    }
+
+    async fn get_framework_upgrade_effects(
+        cluster: &TestCluster,
+    ) -> (Option<SequenceNumber>, Option<SequenceNumber>) {
+        let node_handle = cluster
+            .swarm
+            .validators()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap();
+
+        let effects = node_handle
+            .with_async(|node| async {
+                let db = node.state().db();
+                let framework = db.get_object(&SUI_FRAMEWORK_OBJECT_ID);
+                let digest = framework.unwrap().unwrap().previous_transaction;
+                let effects = db.get_executed_effects(&digest);
+                effects.unwrap().unwrap()
+            })
+            .await;
+
+        let modified_at = effects
+            .modified_at_versions()
+            .iter()
+            .find_map(|(id, v)| (id == &SUI_FRAMEWORK_OBJECT_ID).then_some(*v));
+
+        let mutated_to = effects
+            .mutated()
+            .iter()
+            .find_map(|((id, v, _), _)| (id == &SUI_FRAMEWORK_OBJECT_ID).then_some(*v));
+
+        (modified_at, mutated_to)
     }
 
     #[sim_test]
