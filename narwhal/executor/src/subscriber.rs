@@ -17,6 +17,7 @@ use tokio::sync::mpsc;
 use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
+use snarkos_metrics::histogram;
 use tokio::time::Instant;
 use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
@@ -251,7 +252,12 @@ impl Subscriber {
             let output_cert = cert.clone();
 
             // TODO(metrics): Set `subscriber_current_round` to `cert.round() as i64`.
-            // TODO(metrics): Set `subscriber_certificate_latency` to `cert.metadata.created_at.elapsed().as_secs_f64()`.
+            histogram!(
+                snarkos_metrics::subscribers::CERTIFICATE_LATENCY,
+                cert.metadata.created_at.elapsed().as_secs_f64(),
+                "certificate_round" => cert.round().to_string(),
+                "certificate_epoch" => cert.epoch().to_string(),
+            );
 
             for (digest, (worker_id, _)) in cert.header.payload.iter() {
                 // TODO(metrics): Increment `subscriber_processed_batches` by 1.

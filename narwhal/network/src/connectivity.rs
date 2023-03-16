@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::PeerId;
-use metrics::gauge;
+use snarkos_metrics::gauge;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;

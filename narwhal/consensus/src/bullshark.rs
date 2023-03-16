@@ -8,7 +8,7 @@ use crate::{
 use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
-use snarkos_metrics::{gauge, increment_counter};
+use snarkos_metrics::{gauge, histogram, increment_counter};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, error_span};
@@ -194,9 +194,12 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // record the last time we got a successful leader election
-        let _elapsed = self.last_successful_leader_election_timestamp.elapsed();
+        let elapsed = self.last_successful_leader_election_timestamp.elapsed();
 
-        // TODO(metrics): Set commit_rounds_latency to `elapsed.as_secs_f64()`
+        histogram!(
+            snarkos_metrics::consensus::COMMIT_ROUNDS_LATENCY,
+            elapsed.as_secs_f64()
+        );
 
         self.last_successful_leader_election_timestamp = Instant::now();
 
@@ -225,7 +228,6 @@ impl ConsensusProtocol for Bullshark {
             total_committed_certificates
         );
 
-        // TODO(metrics): Set committed_certificates to `total_committed_certificates as f64`
         gauge!(
             snarkos_metrics::consensus::COMMITTED_CERTIFICATES,
             total_committed_certificates as f64

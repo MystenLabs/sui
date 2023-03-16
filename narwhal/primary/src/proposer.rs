@@ -5,6 +5,7 @@ use crate::NetworkModel;
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
+use snarkos_metrics::gauge;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use storage::ProposerStore;
@@ -438,6 +439,7 @@ impl Proposer {
                 self.round += 1;
                 let _ = self.tx_narwhal_round_updates.send(self.round);
                 // TODO(metrics): Set `current_round` to `self.round as i64`
+                gauge!(snarkos_metrics::primary::CURRENT_ROUND, self.round as f64);
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.

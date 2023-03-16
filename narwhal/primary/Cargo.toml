@@ -7,6 +7,9 @@ publish = false
 edition = "2021"
 
 [dependencies]
+metrics.workspace = true
+snarkos-metrics.workspace = true
+
 anyhow = "1.0.65"
 arc-swap = "1.5.1"
 async-trait = "0.1.61"
