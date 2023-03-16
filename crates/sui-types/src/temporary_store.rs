@@ -85,12 +85,12 @@ impl InnerTemporaryStore {
             .collect()
     }
 
-    pub fn get_sui_system_state_wrapper_object(&self) -> Option<SuiSystemStateWrapper> {
-        get_sui_system_state_wrapper(&self.written).ok()
+    pub fn get_sui_system_state_wrapper_object(&self) -> SuiResult<SuiSystemStateWrapper> {
+        get_sui_system_state_wrapper(&self.written)
     }
 
-    pub fn get_sui_system_state_object(&self) -> Option<SuiSystemState> {
-        get_sui_system_state(&self.written).ok()
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+        get_sui_system_state(&self.written)
     }
 }
 

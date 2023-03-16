@@ -1,0 +1,9 @@
+[package]
+name = "SuiSystemStateUpgradeBase"
+version = "0.0.1"
+
+[dependencies]
+MoveStdlib = { local = "../../../../sui-framework/deps/move-stdlib" }
+
+[addresses]
+sui = "0x2"

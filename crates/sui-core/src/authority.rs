@@ -3030,6 +3030,7 @@ impl AuthorityState {
 
         for (name, cur_module) in cur_normalized {
             let Some(new_module) = new_normalized.remove(&name) else {
+                error!("Compatibility check failed due to cur module not exist: {:?}", name);
                 return None;
             };
 

@@ -79,7 +79,7 @@ mod sim_only_tests {
     use tracing::info;
 
     const START: u64 = ProtocolVersion::MAX.as_u64();
-    const FINISH: u64 = ProtocolVersion::MAX_ALLOWED.as_u64();
+    const FINISH: u64 = START + 1;
 
     #[sim_test]
     async fn test_protocol_version_upgrade() {
@@ -552,7 +552,47 @@ mod sim_only_tests {
             }
         }));
 
-        expect_upgrade_failed(&test_cluster).await;
+        expect_upgrade_succeeded(&test_cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_sui_system_state_upgrade_simple() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let mut test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .with_fullnode_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START,
+                // Fullnode doesn't participate in protocol change, and hence can support full range
+                // from the beginning.
+                FINISH + 1,
+            ))
+            .with_objects([sui_framework_object("sui_system_upgrade_base")])
+            .build()
+            .await
+            .unwrap();
+        sui_framework_injection::set_override(sui_framework("sui_system_upgrade_simple/step1"));
+        expect_upgrade_succeeded(&test_cluster).await;
+
+        for name in test_cluster.get_validator_addresses() {
+            test_cluster.stop_validator(name);
+            test_cluster
+                .get_node_config_mut(&name)
+                .unwrap()
+                .supported_protocol_versions = Some(SupportedProtocolVersions::new_for_testing(
+                START,
+                FINISH + 1,
+            ));
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        sui_framework_injection::set_override(sui_framework("sui_system_upgrade_simple/step2"));
+        for name in test_cluster.get_validator_addresses() {
+            test_cluster.start_validator(name).await;
+        }
+        wait_for_protocol_version(&test_cluster, FINISH + 1).await;
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
@@ -573,6 +613,28 @@ mod sim_only_tests {
                     1 => assert_eq!(protocol_version, ProtocolVersion::new(final_version)),
                     2 => break,
                     _ => unreachable!(),
+                }
+            }
+        })
+        .await
+        .expect("Timed out waiting for cluster to target epoch");
+    }
+
+    async fn wait_for_protocol_version(test_cluster: &TestCluster, version: u64) {
+        let mut epoch_rx = test_cluster
+            .fullnode_handle
+            .sui_node
+            .subscribe_to_epoch_change();
+
+        timeout(Duration::from_secs(60), async move {
+            while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
+                info!(
+                    "received epoch {} {:?}",
+                    committee.epoch(),
+                    protocol_version
+                );
+                if protocol_version.as_u64() == version {
+                    break;
                 }
             }
         })

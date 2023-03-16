@@ -326,6 +326,11 @@ impl Swarm {
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
         self.fullnodes.values()
     }
+
+    #[cfg(msim)]
+    pub fn validator_mut(&mut self, name: &AuthorityName) -> Option<&mut Node> {
+        self.validators.get_mut(name)
+    }
 }
 
 #[derive(Debug)]

@@ -33,9 +33,9 @@ impl ProtocolVersion {
     #[cfg(not(msim))]
     const MAX_ALLOWED: Self = Self::MAX;
 
-    // We create one additional "fake" version in simulator builds so that we can test upgrades.
+    // We create two additional "fake" versions in simulator builds so that we can test upgrades.
     #[cfg(msim)]
-    pub const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+    pub const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 2);
 
     pub fn new(v: u64) -> Self {
         Self(v)
@@ -757,10 +757,14 @@ impl ProtocolConfig {
         #[cfg(msim)]
         {
             // populate the fake simulator version # with a different base tx cost.
-            if version == ProtocolVersion::MAX_ALLOWED {
+            if version.as_u64() == ProtocolVersion::MAX.as_u64() + 1 {
                 let mut config = Self::get_for_version_impl(version - 1);
                 config.base_tx_cost_fixed = Some(config.base_tx_cost_fixed() + 1000);
                 return config;
+            }
+            // This is for framework upgrade only.
+            if version.as_u64() == ProtocolVersion::MAX.as_u64() + 2 {
+                return Self::get_for_version_impl(version - 1);
             }
         }
 
