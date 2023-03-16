@@ -22,7 +22,7 @@ use sui_json_rpc_types::{
     SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiParsedData,
     SuiPastObjectResponse, SuiTransaction, SuiTransactionData, SuiTransactionEffects,
     SuiTransactionEffectsV1, SuiTransactionResponse, SuiTransactionResponseOptions,
-    TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiTransactionResponseQuery, TransactionBytes, TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -391,9 +391,12 @@ impl RpcExampleProvider {
                 vec![
                     (
                         "query",
-                        json!(TransactionFilter::InputObject(ObjectID::new(
-                            self.rng.gen()
-                        ))),
+                        json!(SuiTransactionResponseQuery {
+                            filter: Some(TransactionFilter::InputObject(ObjectID::new(
+                                self.rng.gen()
+                            ))),
+                            options: None,
+                        }),
                     ),
                     ("cursor", json!(TransactionDigest::new(self.rng.gen()))),
                     ("limit", json!(100)),

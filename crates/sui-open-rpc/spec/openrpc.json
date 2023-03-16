@@ -1641,7 +1641,10 @@
             {
               "name": "query",
               "value": {
-                "InputObject": "0x93633829fcba6d6e0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8"
+                "filter": {
+                  "InputObject": "0x93633829fcba6d6e0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8"
+                },
+                "options": null
               }
             },
             {
