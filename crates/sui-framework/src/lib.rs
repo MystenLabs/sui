@@ -12,115 +12,93 @@ use sui_types::{
     error::SuiResult,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_OBJECT_ID,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 pub mod natives;
 
-static SUI_FRAMEWORK_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sui-framework"));
-static SUI_FRAMEWORK: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    get_sui_framework_bytes()
-        .into_iter()
-        .map(|module| CompiledModule::deserialize(&module).unwrap())
-        .collect()
-});
+macro_rules! system_package {
+    ($address:expr, $Package:ident, $path:literal, [$($Dep:ident),* $(,)?]) => {
+        pub struct $Package;
 
-static SUI_FRAMEWORK_TEST: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    const SUI_FRAMEWORK_TEST_BYTES: &[u8] =
-        include_bytes!(concat!(env!("OUT_DIR"), "/sui-framework-test"));
+        impl SystemPackage for $Package {
+            const ID: ObjectID = ObjectID::from_address($address);
+            const BCS_BYTES: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/", $path));
 
-    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(SUI_FRAMEWORK_TEST_BYTES).unwrap();
+            fn transitive_dependencies() -> Vec<ObjectID> {
+                vec![$($Dep::ID,)*]
+            }
 
-    serialized_modules
-        .into_iter()
-        .map(|module| CompiledModule::deserialize(&module).unwrap())
-        .collect()
-});
+            fn as_bytes() -> Vec<Vec<u8>> {
+                bcs::from_bytes($Package::BCS_BYTES).unwrap()
+            }
 
-static MOVE_STDLIB_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib"));
-static MOVE_STDLIB: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    get_move_stdlib_bytes()
-        .into_iter()
-        .map(|module| CompiledModule::deserialize(&module).unwrap())
-        .collect()
-});
+            fn as_modules() -> Vec<CompiledModule> {
+                static MODULES: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
+                    $Package::as_bytes().into_iter().map(|m| CompiledModule::deserialize(&m).unwrap()).collect()
+                });
+                Lazy::force(&MODULES).to_owned()
+            }
 
-static MOVE_STDLIB_TEST: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
-    const MOVE_STDLIB_TEST_BYTES: &[u8] =
-        include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib-test"));
+            fn as_package() -> MovePackage {
+                MovePackage::new_system(
+                    OBJECT_START_VERSION,
+                    $Package::as_modules(),
+                    $Package::transitive_dependencies(),
+                )
+            }
 
-    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(MOVE_STDLIB_TEST_BYTES).unwrap();
-
-    serialized_modules
-        .into_iter()
-        .map(|module| CompiledModule::deserialize(&module).unwrap())
-        .collect()
-});
-
-pub fn get_sui_framework() -> Vec<CompiledModule> {
-    Lazy::force(&SUI_FRAMEWORK).to_owned()
+            fn as_object() -> Object {
+                Object::new_system_package(
+                    $Package::as_modules(),
+                    OBJECT_START_VERSION,
+                    $Package::transitive_dependencies(),
+                    TransactionDigest::genesis(),
+                )
+            }
+        }
+    };
 }
 
-pub fn get_sui_framework_bytes() -> Vec<Vec<u8>> {
-    bcs::from_bytes(SUI_FRAMEWORK_BYTES).unwrap()
+system_package!(MOVE_STDLIB_ADDRESS, MoveStdlib, "move-stdlib", []);
+system_package!(MOVE_STDLIB_ADDRESS, MoveStdlibTest, "move-stdlib-test", []);
+
+system_package!(
+    SUI_FRAMEWORK_ADDRESS,
+    SuiFramework,
+    "sui-framework",
+    [MoveStdlib]
+);
+
+system_package!(
+    SUI_FRAMEWORK_ADDRESS,
+    SuiFrameworkTest,
+    "sui-framework-test",
+    [MoveStdlib]
+);
+
+/// Trait exposing all the various properties of a system package in a variety of different forms,
+/// of increasing levels of abstraction
+pub trait SystemPackage {
+    const ID: ObjectID;
+    const BCS_BYTES: &'static [u8];
+    fn transitive_dependencies() -> Vec<ObjectID>;
+    fn as_bytes() -> Vec<Vec<u8>>;
+    fn as_modules() -> Vec<CompiledModule>;
+    fn as_package() -> MovePackage;
+    fn as_object() -> Object;
 }
 
-pub fn get_sui_framework_transitive_dependencies() -> Vec<ObjectID> {
-    vec![MOVE_STDLIB_OBJECT_ID]
+pub fn make_system_modules() -> Vec<Vec<CompiledModule>> {
+    vec![MoveStdlib::as_modules(), SuiFramework::as_modules()]
 }
 
-pub fn get_sui_framework_package() -> MovePackage {
-    MovePackage::new_system(
-        OBJECT_START_VERSION,
-        get_sui_framework(),
-        get_sui_framework_transitive_dependencies(),
-    )
+pub fn make_system_packages() -> Vec<MovePackage> {
+    vec![MoveStdlib::as_package(), SuiFramework::as_package()]
 }
 
-pub fn get_sui_framework_object() -> Object {
-    Object::new_system_package(
-        get_sui_framework(),
-        OBJECT_START_VERSION,
-        get_sui_framework_transitive_dependencies(),
-        TransactionDigest::genesis(),
-    )
-}
-
-pub fn get_sui_framework_test() -> Vec<CompiledModule> {
-    Lazy::force(&SUI_FRAMEWORK_TEST).to_owned()
-}
-
-pub fn get_move_stdlib() -> Vec<CompiledModule> {
-    Lazy::force(&MOVE_STDLIB).to_owned()
-}
-
-pub fn get_move_stdlib_bytes() -> Vec<Vec<u8>> {
-    bcs::from_bytes(MOVE_STDLIB_BYTES).unwrap()
-}
-
-pub fn get_move_stdlib_transitive_dependencies() -> Vec<ObjectID> {
-    vec![]
-}
-
-pub fn get_move_stdlib_package() -> MovePackage {
-    MovePackage::new_system(
-        OBJECT_START_VERSION,
-        get_move_stdlib(),
-        get_move_stdlib_transitive_dependencies(),
-    )
-}
-
-pub fn get_move_stdlib_object() -> Object {
-    Object::new_system_package(
-        get_move_stdlib(),
-        OBJECT_START_VERSION,
-        get_move_stdlib_transitive_dependencies(),
-        TransactionDigest::genesis(),
-    )
-}
-
-pub fn get_move_stdlib_test() -> Vec<CompiledModule> {
-    Lazy::force(&MOVE_STDLIB_TEST).to_owned()
+pub fn make_system_objects() -> Vec<Object> {
+    vec![MoveStdlib::as_object(), SuiFramework::as_object()]
 }
 
 pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
@@ -157,16 +135,4 @@ pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<Compile
         pkg.verify_framework_version(get_sui_framework(), get_move_stdlib())?;
     }*/
     Ok(pkg)
-}
-
-pub fn make_system_modules() -> Vec<Vec<CompiledModule>> {
-    vec![get_move_stdlib(), get_sui_framework()]
-}
-
-pub fn make_system_packages() -> Vec<MovePackage> {
-    vec![get_move_stdlib_package(), get_sui_framework_package()]
-}
-
-pub fn make_system_objects() -> Vec<Object> {
-    vec![get_move_stdlib_object(), get_sui_framework_object()]
 }

@@ -845,6 +845,11 @@ impl ObjectID {
         Self(AccountAddress::new(obj_id))
     }
 
+    /// Const fn variant of <ObjectID as From<AccountAddress>>::from
+    pub const fn from_address(addr: AccountAddress) -> Self {
+        Self(addr)
+    }
+
     /// Random ObjectID
     pub fn random() -> Self {
         Self::from(AccountAddress::random())

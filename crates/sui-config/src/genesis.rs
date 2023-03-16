@@ -17,6 +17,7 @@ use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode, programmable_transactions};
+use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -888,12 +889,12 @@ fn build_unsigned_genesis_data(
     // Get Move and Sui Framework
     let modules = [
         (
-            sui_framework::get_move_stdlib(),
-            sui_framework::get_move_stdlib_transitive_dependencies(),
+            MoveStdlib::as_modules(),
+            MoveStdlib::transitive_dependencies(),
         ),
         (
-            sui_framework::get_sui_framework(),
-            sui_framework::get_sui_framework_transitive_dependencies(),
+            SuiFramework::as_modules(),
+            SuiFramework::transitive_dependencies(),
         ),
     ];
 

@@ -61,7 +61,7 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
-    use sui_framework::get_move_stdlib_package;
+    use sui_framework::{MoveStdlib, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
@@ -601,7 +601,7 @@ mod sim_only_tests {
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
-            &[get_move_stdlib_package()],
+            &[MoveStdlib::as_package()],
         )
         .unwrap()
     }
