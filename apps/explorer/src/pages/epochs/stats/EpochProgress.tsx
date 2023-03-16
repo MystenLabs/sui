@@ -11,19 +11,15 @@ import { ProgressBar } from '~/ui/ProgressBar';
 import { Text } from '~/ui/Text';
 
 export interface EpochProgressProps {
-    epoch?: number;
     start: number;
-    end: number;
     inProgress?: boolean;
 }
 
 export function EpochProgress({
-    epoch,
-    start,
-    end,
     inProgress = true,
+    start,
 }: EpochProgressProps) {
-    const { progress, label } = useEpochProgress(start, end);
+    const { epoch, progress, label } = useEpochProgress();
 
     return (
         <Card bg={inProgress ? 'highlight' : 'default'} spacing="lg">

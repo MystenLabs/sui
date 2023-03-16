@@ -11,7 +11,6 @@ import { EpochStats } from './stats/EpochStats';
 
 import { SuiAmount } from '~/components/transaction-card/TxCardUtils';
 import { useGetSystemObject } from '~/hooks/useGetObject';
-import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { EpochProgress } from '~/pages/epochs/stats/EpochProgress';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -23,20 +22,10 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 function EpochDetail() {
-    const { endTimestamp, gasCostSummary, totalRewards, storageFundEarnings } =
+    const { gasCostSummary, totalRewards, storageFundEarnings } =
         getMockEpochData();
 
     const { data, isError, isLoading } = useGetSystemObject();
-
-    const active = data?.activeValidators.length;
-    const pending = 0; // data?.pending_active_validators.contents.size;
-    const atRisk = 0; // data?.pending_removals.length;
-
-    const { data: validatorEvents, isLoading: validatorsEventsLoading } =
-        useGetValidatorsEvents({
-            limit: data?.activeValidators.length || 0,
-            order: 'descending',
-        });
 
     if (isError)
         return (
@@ -45,23 +34,21 @@ function EpochDetail() {
             </Banner>
         );
 
-    if (isLoading || validatorsEventsLoading) return <LoadingSpinner />;
-    if (!data || !validatorEvents) return null;
+    if (isLoading) return <LoadingSpinner />;
+    if (!data) return null;
 
     const validatorsTable = validatorsTableData(
         data.activeValidators,
         data.epoch,
-        validatorEvents?.data
+        []
     );
 
     return (
         <div className="flex flex-col space-y-16">
             <div className="grid grid-flow-row gap-4 sm:gap-2 md:flex md:gap-6">
                 <EpochProgress
-                    epoch={data.epoch}
                     inProgress
                     start={data.epochStartTimestampMs ?? 0}
-                    end={endTimestamp}
                 />
                 <EpochStats label="Activity">
                     <Stats label="Gas Revenue" tooltip="Gas Revenue">
@@ -97,17 +84,17 @@ function EpochDetail() {
                         suffix="validators"
                         data={[
                             {
-                                value: active ?? 0,
+                                value: data.activeValidators.length ?? 0,
                                 label: 'Active',
                                 color: '#589AEA',
                             },
                             {
-                                value: pending ?? 0,
+                                value: data.pendingActiveValidatorsSize ?? 0,
                                 label: 'New',
                                 color: '#6FBCF0',
                             },
                             {
-                                value: atRisk ?? 0,
+                                value: data.atRiskValidators.length ?? 0,
                                 label: 'At Risk',
                                 color: '#FF794B',
                             },
@@ -123,15 +110,15 @@ function EpochDetail() {
                 </TabList>
                 <TabPanels className="mt-4">
                     <TabPanel>
-                        <CheckpointsTable epoch={data.epoch} />
+                        <CheckpointsTable />
                     </TabPanel>
                     <TabPanel>
                         {validatorsTable ? (
                             <TableCard
-                                data={validatorsTable?.data!}
+                                data={validatorsTable.data}
                                 sortTable
                                 defaultSorting={[{ id: 'stake', desc: false }]}
-                                columns={validatorsTable?.columns!}
+                                columns={validatorsTable.columns!}
                             />
                         ) : null}
                     </TabPanel>

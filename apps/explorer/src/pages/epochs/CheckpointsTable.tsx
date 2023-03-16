@@ -9,8 +9,8 @@ import { TxTimeType } from '~/components/tx-time/TxTimeType';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 
-export function CheckpointsTable({ epoch }: { epoch: number }) {
-    const { data } = useQuery(['checkpoints', epoch], () => getCheckpoints());
+export function CheckpointsTable() {
+    const { data } = useQuery(['checkpoints'], () => getCheckpoints());
 
     const checkpointsTable = useMemo(
         () =>
