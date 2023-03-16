@@ -20,7 +20,7 @@ use prometheus::{
 use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
-use rand::{random, SeedableRng};
+use rand::SeedableRng;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::ops::Deref;
@@ -330,7 +330,7 @@ impl ConsensusAdapter {
     ) -> (usize, bool) {
         let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity_and_scores(positions, tx_digest)
+        self.check_submission_wrt_connectivity_and_scores(positions)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -357,7 +357,6 @@ impl ConsensusAdapter {
     fn check_submission_wrt_connectivity_and_scores(
         &self,
         positions: Vec<AuthorityName>,
-        tx_digest: &TransactionDigest,
     ) -> (usize, bool) {
         let mut mapped_to_low_scoring = false;
         let filtered_positions = positions
@@ -386,14 +385,6 @@ impl ConsensusAdapter {
                 ourself_is_low_scoring || !authority_is_low_scoring
             })
             .collect();
-
-        // TODO remove this later, for a subset of digests print the list
-        if random::<usize>() % 10 <= 1 {
-            debug!(
-                "Transaction digest {:?} has the following authority position list {:?}",
-                tx_digest, filtered_positions
-            );
-        }
 
         let position = get_position_in_list(self.authority, filtered_positions);
         (
