@@ -1,11 +1,15 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::num::NonZeroUsize;
+
 use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use consensus::consensus::LeaderSwapTable;
 use indexmap::IndexMap;
 use prometheus::Registry;
+use storage::CertificateStoreCache;
 use test_utils::{fixture_payload, latest_protocol_version, CommitteeFixture};
 use types::PreSubscribedBroadcastSender;
 
@@ -31,6 +35,10 @@ async fn propose_empty() {
         name,
         committee.clone(),
         ProposerStore::new_for_tests(),
+        CertificateStore::new_for_tests(CertificateStoreCache::new(
+            NonZeroUsize::new(1).unwrap(),
+            None,
+        )),
         /* header_num_of_batches_threshold */ 32,
         /* max_header_num_of_batches */ 100,
         /* max_header_delay */ Duration::from_millis(20),
@@ -78,6 +86,10 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         name,
         committee.clone(),
         ProposerStore::new_for_tests(),
+        CertificateStore::new_for_tests(CertificateStoreCache::new(
+            NonZeroUsize::new(1).unwrap(),
+            None,
+        )),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ max_num_of_batches,
         /* max_header_delay */
@@ -200,6 +212,10 @@ async fn equivocation_protection() {
         authority_id,
         committee.clone(),
         proposer_store.clone(),
+        CertificateStore::new_for_tests(CertificateStoreCache::new(
+            NonZeroUsize::new(1).unwrap(),
+            None,
+        )),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
         /* max_header_delay */
@@ -272,6 +288,10 @@ async fn equivocation_protection() {
         authority_id,
         committee.clone(),
         proposer_store,
+        CertificateStore::new_for_tests(CertificateStoreCache::new(
+            NonZeroUsize::new(1).unwrap(),
+            None,
+        )),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
         /* max_header_delay */

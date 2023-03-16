@@ -15,7 +15,8 @@ use crate::StoreResult;
 use config::AuthorityIdentifier;
 use mysten_common::sync::notify_read::NotifyRead;
 use store::{
-    rocks::{DBMap, TypedStoreError::RocksDBError},
+    reopen,
+    rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions, TypedStoreError::RocksDBError},
     Map,
 };
 use types::{Certificate, CertificateDigest, Round};
@@ -179,7 +180,7 @@ impl Cache for CertificateStoreCache {
 
 /// An implementation that basically disables the caching functionality when used for CertificateStore.
 #[derive(Clone)]
-struct NoCache {}
+pub struct NoCache {}
 
 impl Cache for NoCache {
     fn write(&self, _certificate: Certificate) {
@@ -262,6 +263,34 @@ impl<T: Cache> CertificateStore<T> {
             notify_subscribers: Arc::new(NotifyRead::new()),
             cache: Arc::new(certificate_store_cache),
         }
+    }
+
+    pub fn new_for_tests(cache: T) -> Self {
+        const CERTIFICATES_CF: &str = "certificates";
+        const CERTIFICATE_DIGEST_BY_ROUND_CF: &str = "certificate_digest_by_round";
+        const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &str = "certificate_digest_by_origin";
+        let rocksdb = open_cf(
+            tempfile::tempdir().unwrap(),
+            None,
+            MetricConf::default(),
+            &[
+                CERTIFICATES_CF,
+                CERTIFICATE_DIGEST_BY_ROUND_CF,
+                CERTIFICATE_DIGEST_BY_ORIGIN_CF,
+            ],
+        )
+        .expect("Cannot open database");
+        let (certificate_map, certificate_digest_by_round_map, certificate_digest_by_origin_map) = reopen!(&rocksdb,
+            CERTIFICATES_CF;<CertificateDigest, Certificate>,
+            CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
+            CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>
+        );
+        Self::new(
+            certificate_map,
+            certificate_digest_by_round_map,
+            certificate_digest_by_origin_map,
+            cache,
+        )
     }
 
     /// Inserts a certificate to the store
@@ -695,6 +724,30 @@ impl<T: Cache> CertificateStore<T> {
         {
             if name == origin {
                 return Ok(Some(round));
+            }
+        }
+        Ok(None)
+    }
+
+    // Retrieves the last round number and certificate digest,
+    // smaller than the given round for the origin.
+    pub fn prev_round_and_digest(
+        &self,
+        origin: AuthorityIdentifier,
+        round: Round,
+    ) -> StoreResult<Option<(Round, CertificateDigest)>> {
+        if round <= 1 {
+            return Ok(None);
+        }
+        let key = (origin, round - 1);
+        if let Some(((name, round), digest)) = self
+            .certificate_id_by_origin
+            .unbounded_iter()
+            .skip_prior_to(&key)?
+            .next()
+        {
+            if name == origin {
+                return Ok(Some((round, digest)));
             }
         }
         Ok(None)
