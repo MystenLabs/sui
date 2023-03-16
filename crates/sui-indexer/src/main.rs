@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_indexer::errors::IndexerError;
-use sui_indexer::{new_pg_connection_pool, Indexer};
-use sui_node::metrics::start_prometheus_server;
-
 use clap::Parser;
-
+use sui_indexer::errors::IndexerError;
 use sui_indexer::store::PgIndexerStore;
+use sui_indexer::{new_pg_connection_pool, Indexer, IndexerConfig};
+use sui_node::metrics::start_prometheus_server;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
@@ -31,22 +29,5 @@ async fn main() -> Result<(), IndexerError> {
     let pg_connection_pool = new_pg_connection_pool(&indexer_config.db_url).await?;
     let store = PgIndexerStore::new(pg_connection_pool);
 
-    Indexer::start(&indexer_config.rpc_client_url, &registry, store).await
-}
-
-#[derive(Parser)]
-#[clap(
-    name = "Sui indexer",
-    about = "An off-fullnode service serving data from Sui protocol",
-    rename_all = "kebab-case"
-)]
-pub struct IndexerConfig {
-    #[clap(long)]
-    pub db_url: String,
-    #[clap(long)]
-    pub rpc_client_url: String,
-    #[clap(long, default_value = "0.0.0.0", global = true)]
-    pub client_metric_host: String,
-    #[clap(long, default_value = "9184", global = true)]
-    pub client_metric_port: u16,
+    Indexer::start(&indexer_config, &registry, store).await
 }
