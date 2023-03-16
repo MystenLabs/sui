@@ -21,6 +21,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::clock::Clock;
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     SuiAuthoritySignature, ToFromBytes,
@@ -171,11 +172,13 @@ impl Genesis {
             .collect()
     }
 
+    pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
+        self.sui_system_object().get_current_epoch_committee()
+    }
+
+    // TODO: No need to return SuiResult.
     pub fn committee(&self) -> SuiResult<Committee> {
-        Ok(self
-            .sui_system_object()
-            .get_current_epoch_committee()
-            .committee)
+        Ok(self.committee_with_network().committee)
     }
 
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
