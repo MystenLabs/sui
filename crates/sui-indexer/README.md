@@ -12,6 +12,8 @@ export LDFLAGS="-L/opt/homebrew/opt/postgresql@15/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@15/include"
 export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"
 ```
+- make sure you have libpq installed: `brew install libpq`, and in your profile, add `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. If this doesn't work, try `brew link --force libpq`.
+
 - install Diesel CLI, you can follow the [Diesel Getting Started guide](https://diesel.rs/guides/getting-started) up to the *Write Rust* section
 - [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.
 
