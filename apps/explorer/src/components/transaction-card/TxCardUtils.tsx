@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
+import { X12 } from '@mysten/icons';
 import {
+    type ExecutionStatusType,
+    formatAddress,
+    formatDigest,
     getExecutionStatusType,
     getTotalGasUsed,
-    getTransactionKind,
     getTransactionDigest,
+    getTransactionKind,
     getTransactionKindName,
-    SUI_TYPE_ARG,
-    type GetTxnDigestsResponse,
-    type ExecutionStatusType,
-    type TransactionKindName,
-    type JsonRpcProvider,
     getTransactionSender,
-    formatDigest,
-    formatAddress,
+    type GetTxnDigestsResponse,
+    type JsonRpcProvider,
+    SUI_TYPE_ARG,
+    type TransactionKindName,
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
@@ -91,78 +92,85 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (results: TxnData[]) => ({
-    data: results.map((txn) => ({
-        date: <TxTimeType timestamp={txn.timestamp_ms} />,
-        transactionId: (
-            <TxAddresses
-                content={[
-                    {
-                        url: txn.txId,
-                        name: formatDigest(txn.txId),
-                        category: 'transaction',
-                    },
-                ]}
-            />
-        ),
-        addresses: (
-            <TxAddresses
-                content={[
-                    {
-                        url: txn.From,
-                        name: formatAddress(txn.From),
-                        category: 'address',
-                    },
-                    ...(txn.To
-                        ? [
-                              {
-                                  url: txn.To,
-                                  name: formatAddress(txn.To),
-                                  category: 'address',
-                              } as const,
-                          ]
-                        : []),
-                ]}
-            />
-        ),
-        txTypes: (
-            <TransactionType
-                isSuccess={txn.status === 'success'}
-                type={txn.kind}
-            />
-        ),
-        amounts: <SuiAmount amount={txn.suiAmount} />,
-        gas: <SuiAmount amount={txn.txGas} />,
-    })),
-    columns: [
-        {
-            header: 'Type',
-            accessorKey: 'txTypes',
-        },
-        {
-            header: () => (
-                <div className={styles.addresses}>Transaction ID</div>
+export const genTableDataFromTxData = (results: TxnData[]) => {
+    console.log('results', results);
+    return {
+        data: results.map((txn) => ({
+            date: <TxTimeType timestamp={txn.timestamp_ms} />,
+            transactionId: (
+                <div className="flex items-center pl-2">
+                    {txn.status === 'success' ? (
+                        <div className="h-2 w-2 rounded-full bg-success" />
+                    ) : (
+                        <X12 className="text-issue-dark" />
+                    )}
+                    <TxAddresses
+                        content={[
+                            {
+                                url: txn.txId,
+                                name: formatDigest(txn.txId),
+                                category: 'transaction',
+                            },
+                        ]}
+                    />
+                </div>
             ),
-            accessorKey: 'transactionId',
-        },
-        {
-            header: () => <div className={styles.addresses}>Addresses</div>,
-            accessorKey: 'addresses',
-        },
-        {
-            header: 'Amount',
-            accessorKey: 'amounts',
-        },
-        {
-            header: 'Gas',
-            accessorKey: 'gas',
-        },
-        {
-            header: 'Time',
-            accessorKey: 'date',
-        },
-    ],
-});
+            addresses: (
+                <TxAddresses
+                    content={[
+                        {
+                            url: txn.From,
+                            name: formatAddress(txn.From),
+                            category: 'address',
+                        },
+                        ...(txn.To
+                            ? [
+                                  {
+                                      url: txn.To,
+                                      name: formatAddress(txn.To),
+                                      category: 'address',
+                                  } as const,
+                              ]
+                            : []),
+                    ]}
+                />
+            ),
+            txTypes: (
+                <TransactionType
+                    isSuccess={txn.status === 'success'}
+                    type={txn.kind}
+                />
+            ),
+            amounts: <SuiAmount amount={txn.suiAmount} />,
+            gas: <SuiAmount amount={txn.txGas} />,
+            sender: <AddressLink address={txn.From} />,
+        })),
+        columns: [
+            {
+                header: () => (
+                    <div className={styles.addresses}>Transaction ID</div>
+                ),
+                accessorKey: 'transactionId',
+            },
+            {
+                header: 'Sender',
+                accessorKey: 'sender',
+            },
+            {
+                header: 'Amount',
+                accessorKey: 'amounts',
+            },
+            {
+                header: 'Gas',
+                accessorKey: 'gas',
+            },
+            {
+                header: 'Time',
+                accessorKey: 'date',
+            },
+        ],
+    };
+};
 
 const dedupe = (arr: string[]) => Array.from(new Set(arr));
 

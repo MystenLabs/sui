@@ -3,12 +3,12 @@
 
 import { ArrowRight12 } from '@mysten/icons';
 import {
+    type ColumnDef,
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
-    useReactTable,
-    type ColumnDef,
     type SortingState,
+    useReactTable,
 } from '@tanstack/react-table';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -41,6 +41,7 @@ export function TableCard<DataType extends object>({
     defaultSorting,
 }: TableCardProps<DataType>) {
     const [sorting, setSorting] = useState<SortingState>(defaultSorting || []);
+    console.log('data', data);
 
     // Use Columns to create a table
     const processedcol = useMemo<ColumnDef<DataType>[]>(
@@ -80,57 +81,61 @@ export function TableCard<DataType extends object>({
         >
             <table className="w-full min-w-max border-collapse text-left">
                 <thead>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                        <tr key={headerGroup.id}>
-                            {headerGroup.headers.map(
-                                ({
-                                    id,
-                                    colSpan,
-                                    column,
-                                    isPlaceholder,
-                                    getContext,
-                                }) => (
-                                    <th
-                                        key={id}
-                                        colSpan={colSpan}
-                                        scope="col"
-                                        className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
-                                        onClick={
-                                            column.columnDef.enableSorting
-                                                ? column.getToggleSortingHandler()
-                                                : undefined
-                                        }
-                                    >
-                                        <div
-                                            className={clsx(
-                                                'flex items-center gap-1',
-                                                column.columnDef
-                                                    .enableSorting &&
-                                                    'cursor-pointer text-steel-darker'
-                                            )}
+                    {table.getHeaderGroups().map((headerGroup) => {
+                        console.log('headerGroup', headerGroup);
+                        return (
+                            <tr key={headerGroup.id}>
+                                {headerGroup.headers.map(
+                                    ({
+                                        id,
+                                        colSpan,
+                                        column,
+                                        isPlaceholder,
+                                        getContext,
+                                    }) => (
+                                        <th
+                                            key={id}
+                                            colSpan={colSpan}
+                                            scope="col"
+                                            className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                            onClick={
+                                                column.columnDef.enableSorting
+                                                    ? column.getToggleSortingHandler()
+                                                    : undefined
+                                            }
                                         >
-                                            {isPlaceholder
-                                                ? null
-                                                : flexRender(
-                                                      column.columnDef.header,
-                                                      getContext()
-                                                  )}
+                                            <div
+                                                className={clsx(
+                                                    'flex items-center gap-1',
+                                                    column.columnDef
+                                                        .enableSorting &&
+                                                        'cursor-pointer text-steel-darker'
+                                                )}
+                                            >
+                                                {isPlaceholder
+                                                    ? null
+                                                    : flexRender(
+                                                          column.columnDef
+                                                              .header,
+                                                          getContext()
+                                                      )}
 
-                                            {column.getIsSorted() && (
-                                                <AscDescIcon
-                                                    sorting={
-                                                        column.getIsSorted() as
-                                                            | 'asc'
-                                                            | 'desc'
-                                                    }
-                                                />
-                                            )}
-                                        </div>
-                                    </th>
-                                )
-                            )}
-                        </tr>
-                    ))}
+                                                {column.getIsSorted() && (
+                                                    <AscDescIcon
+                                                        sorting={
+                                                            column.getIsSorted() as
+                                                                | 'asc'
+                                                                | 'desc'
+                                                        }
+                                                    />
+                                                )}
+                                            </div>
+                                        </th>
+                                    )
+                                )}
+                            </tr>
+                        );
+                    })}
                 </thead>
                 <tbody>
                     {table.getRowModel().rows.map((row) => (
