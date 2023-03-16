@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
+use crypto::PublicKeyBytes;
 use std::collections::HashSet;
 use tracing::debug;
-use crypto::PublicKeyBytes;
 use types::{Certificate, CertificateDigest, Round};
 
 /// Order the past leaders that we didn't already commit.

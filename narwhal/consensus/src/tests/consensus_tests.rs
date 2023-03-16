@@ -12,12 +12,12 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
-use crypto::PublicKeyBytes;
 use crate::bullshark::Bullshark;
 use crate::consensus::ConsensusRound;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
+use crypto::PublicKeyBytes;
 use types::{Certificate, PreSubscribedBroadcastSender, ReputationScores};
 
 /// This test is trying to compare the output of the Consensus algorithm when:

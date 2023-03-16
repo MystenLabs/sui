@@ -9,7 +9,7 @@ use config::{
 };
 use crypto::{
     to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
-    PublicKey, Signature, PublicKeyBytes,
+    PublicKey, PublicKeyBytes, Signature,
 };
 use fastcrypto::{
     hash::Hash as _,
