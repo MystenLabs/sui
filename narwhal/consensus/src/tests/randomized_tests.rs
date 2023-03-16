@@ -482,7 +482,7 @@ pub fn make_certificates_with_parameters(
             .flat_map(|c| c.header().parents())
             .for_each(|digest| {
                 assert!(
-                    certificate_digests.contains(digest),
+                    certificate_digests.contains(&digest),
                     "Failed on seed {}. Certificate with digest {} should be found in processed certificates.",
                     seed,
                     digest
@@ -550,7 +550,7 @@ fn generate_and_run_execution_plans(
             // whose parents have already been inserted.
             if c.round() > 1 {
                 for parent in c.header().parents() {
-                    assert!(inserted_certificates.contains(parent));
+                    assert!(inserted_certificates.contains(&parent));
                 }
             }
             inserted_certificates.insert(c.digest());
@@ -626,7 +626,7 @@ fn create_execution_plan(
         if certificate.round() > 1 {
             for parent in certificate.header().parents() {
                 adjacency_parent_to_children
-                    .entry(*parent)
+                    .entry(parent)
                     .or_default()
                     .push(certificate.digest());
             }

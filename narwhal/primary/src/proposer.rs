@@ -9,7 +9,7 @@ use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
-use storage::ProposerStore;
+use storage::{CertificateStore, ProposerStore};
 use sui_protocol_config::ProtocolConfig;
 use tokio::time::{sleep_until, Instant};
 use tokio::{
@@ -22,7 +22,9 @@ use types::{
     error::{DagError, DagResult},
     BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
-use types::{now, ConditionalBroadcastReceiver, HeaderV1, HeaderV2, SystemMessage};
+use types::{
+    now, CertificateDigest, ConditionalBroadcastReceiver, HeaderV1, HeaderV2, SystemMessage,
+};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -75,6 +77,9 @@ pub struct Proposer {
 
     /// The proposer store for persisting the last header.
     proposer_store: ProposerStore,
+    /// Store for locally available certificates.
+    certificate_store: CertificateStore,
+
     /// The current round of the dag.
     round: Round,
     /// Last time the round has been updated
@@ -117,6 +122,7 @@ impl Proposer {
         committee: Committee,
         protocol_config: &ProtocolConfig,
         proposer_store: ProposerStore,
+        certificate_store: CertificateStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
@@ -152,6 +158,7 @@ impl Proposer {
                     tx_headers,
                     tx_narwhal_round_updates,
                     proposer_store,
+                    certificate_store,
                     round: 0,
                     last_round_timestamp: None,
                     last_parents: genesis,
@@ -240,6 +247,29 @@ impl Proposer {
             sleep(Duration::from_millis(drift_ms)).await;
         }
 
+        let mut ancestors: BTreeMap<AuthorityIdentifier, Option<(Round, CertificateDigest)>> =
+            parents
+                .iter()
+                .map(|cert| (cert.origin(), Some((cert.round(), cert.digest()))))
+                .collect();
+        for authority in self.committee.authorities() {
+            let id = authority.id();
+            let entry = ancestors.entry(id).or_default();
+            if entry.is_some() {
+                continue;
+            }
+            let Some((round, digest)) = self
+                .certificate_store
+                .prev_round_and_digest(id, this_round)?
+            else {
+                continue;
+            };
+            // TODO: pass in GC depth.
+            if round + 50 > this_round {
+                *entry = Some((round, digest));
+            }
+        }
+
         let header: Header = if self.use_header_v2 {
             HeaderV2::new(
                 self.authority_id,
@@ -264,6 +294,7 @@ impl Proposer {
                     .map(|m| (m.digest, (m.worker_id, m.timestamp)))
                     .collect(),
                 parents.iter().map(|x| x.digest()).collect(),
+                ancestors.into_values().collect(),
             )
             .await
             .into()

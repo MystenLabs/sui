@@ -161,10 +161,15 @@ impl Inner {
         if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
             let existence = self
                 .certificate_store
-                .multi_contains(certificate.header().parents().iter())?;
-            for (digest, exists) in certificate.header().parents().iter().zip(existence.iter()) {
+                .multi_contains(certificate.header().ancestor_digests().iter())?;
+            for (ancestor, exists) in certificate
+                .header()
+                .ancestors()
+                .iter()
+                .zip(existence.iter())
+            {
                 if !*exists {
-                    panic!("Parent {digest:?} not found for {certificate:?}!")
+                    panic!("Ancestor {ancestor:?} not found for {certificate:?}!")
                 }
             }
         }
@@ -236,17 +241,17 @@ impl Inner {
         Ok(())
     }
 
-    /// Returns parent digests that do no exist either in storage or among suspended.
-    async fn get_unknown_parent_digests(
+    /// Returns ancestor digests that do no exist either in storage or among suspended.
+    async fn get_unknown_ancestor_digests(
         &self,
         header: &Header,
-    ) -> DagResult<Vec<CertificateDigest>> {
-        let _scope = monitored_scope("Synchronizer::get_unknown_parent_digests");
+    ) -> DagResult<Vec<(Round, CertificateDigest)>> {
+        let _scope = monitored_scope("Synchronizer::get_unknown_ancestor_digests");
 
         if header.round() == 1 {
-            for digest in header.parents() {
-                if !self.genesis.contains_key(digest) {
-                    return Err(DagError::InvalidGenesisParent(*digest));
+            for digest in header.ancestor_digests() {
+                if !self.genesis.contains_key(&digest) {
+                    return Err(DagError::InvalidGenesisParent(digest));
                 }
             }
             return Ok(Vec::new());
@@ -254,32 +259,32 @@ impl Inner {
 
         let existence = self
             .certificate_store
-            .multi_contains(header.parents().iter())?;
+            .multi_contains(header.ancestor_digests().iter())?;
         let mut unknown: Vec<_> = header
-            .parents()
+            .ancestors()
             .iter()
             .zip(existence.iter())
-            .filter_map(|(digest, exists)| if *exists { None } else { Some(*digest) })
+            .filter_map(|(ancestor, exists)| if *exists { None } else { Some(*ancestor) })
             .collect();
         let state = self.state.lock().await;
-        unknown.retain(|digest| !state.suspended.contains_key(digest));
+        unknown.retain(|ancestor| !state.suspended.contains_key(ancestor));
         Ok(unknown)
     }
 
     /// Tries to get all missing parents of the certificate. If there is any, sends the
     /// certificate to `CertificateFetcher` which will trigger range fetching of missing
     /// certificates.
-    async fn get_missing_parents(
+    async fn get_missing_ancestors(
         &self,
         certificate: &Certificate,
-    ) -> DagResult<Vec<CertificateDigest>> {
-        let _scope = monitored_scope("Synchronizer::get_missing_parents");
+    ) -> DagResult<Vec<(Round, CertificateDigest)>> {
+        let _scope = monitored_scope("Synchronizer::get_missing_ancestors");
 
         let mut result = Vec::new();
         if certificate.round() == 1 {
-            for digest in certificate.header().parents() {
-                if !self.genesis.contains_key(digest) {
-                    return Err(DagError::InvalidGenesisParent(*digest));
+            for digest in certificate.header().ancestor_digests() {
+                if !self.genesis.contains_key(&digest) {
+                    return Err(DagError::InvalidGenesisParent(digest));
                 }
             }
             return Ok(result);
@@ -287,10 +292,15 @@ impl Inner {
 
         let existence = self
             .certificate_store
-            .multi_contains(certificate.header().parents().iter())?;
-        for (digest, exists) in certificate.header().parents().iter().zip(existence.iter()) {
+            .multi_contains(certificate.header().ancestor_digests().iter())?;
+        for (ancestor, exists) in certificate
+            .header()
+            .ancestors()
+            .iter()
+            .zip(existence.iter())
+        {
             if !*exists {
-                result.push(*digest);
+                result.push(*ancestor);
             }
         }
         if !result.is_empty() {
@@ -589,8 +599,8 @@ impl Synchronizer {
     }
 
     /// Validates the certificate and accepts it into the DAG, if the certificate can be verified
-    /// and has all parents in the certificate store. Otherwise an error is returned.
-    /// If the certificate has missing parents and cannot be accepted immediately, the error would
+    /// and has all ancestors in the certificate store. Otherwise an error is returned.
+    /// If the certificate has missing ancestors and cannot be accepted immediately, the error would
     /// contain a value that can be awaited on, for signaling when the certificate is accepted.
     pub async fn try_accept_certificate(&self, certificate: Certificate) -> DagResult<()> {
         let _scope = monitored_scope("Synchronizer::try_accept_certificate");
@@ -601,7 +611,7 @@ impl Synchronizer {
 
     /// Tries to accept a certificate from certificate fetcher.
     /// Fetched certificates are already sanitized, so it is unnecessary to duplicate the work.
-    /// Also, this method always checks parents of fetched certificates and uses the result to
+    /// Also, this method always checks ancestors of fetched certificates and uses the result to
     /// validate the suspended certificates state, instead of relying on suspended certificates to
     /// potentially return early. This helps to verify consistency, and has little extra cost
     /// because fetched certificates usually are not suspended.
@@ -709,10 +719,16 @@ impl Synchronizer {
             self.inner.metrics.duplicate_certificates_processed.inc();
             return Ok(certificate);
         }
-        // Ensure parents are checked if !early_suspend.
+        // Ensure ancestors are checked if !early_suspend.
         // See comments above `try_accept_fetched_certificate()` for details.
         if early_suspend {
-            if let Some(notify) = self.inner.state.lock().await.check_suspended(&digest) {
+            if let Some(notify) = self
+                .inner
+                .state
+                .lock()
+                .await
+                .check_suspended((certificate.round(), digest))
+            {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
                 self.inner
                     .metrics
@@ -764,7 +780,7 @@ impl Synchronizer {
             .map_err(|_| DagError::ShuttingDown)?;
 
         // Instruct workers to download any missing batches referenced in this certificate.
-        // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
+        // Since this header got certified, we are sure that all the data it refers to (ie. its batches) are available.
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let header = certificate.header().clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
@@ -800,10 +816,10 @@ impl Synchronizer {
         Ok(certificate)
     }
 
-    /// This function checks if a certificate has all parents and can be accepted into storage.
+    /// This function checks if a certificate has all ancestors and can be accepted into storage.
     /// If yes, writing the certificate to storage and sending it to consensus need to happen
     /// atomically. Otherwise, there will be divergence between certificate storage and consensus
-    /// DAG. A certificate that is sent to consensus must have all of its parents already in
+    /// DAG. A certificate that is sent to consensus must have all of its ancestors already in
     /// the consensu DAG.
     ///
     /// Because of the atomicity requirement, this function cannot be made cancellation safe.
@@ -833,12 +849,14 @@ impl Synchronizer {
         // It is possible to reduce the critical section below, but it seems unnecessary for now.
         let mut state = inner.state.lock().await;
 
-        // Ensure parents are checked if !early_suspend.
+        let digest = certificate.digest();
+
+        // Ensure ancestors are checked if !early_suspend.
         // See comments above `try_accept_fetched_certificate()` for details.
         if early_suspend {
             // Re-check if the certificate has been suspended, which can happen before the lock is
             // acquired.
-            if let Some(notify) = state.check_suspended(&digest) {
+            if let Some(notify) = state.check_suspended((certificate.round(), digest)) {
                 trace!("Certificate {digest:?} is still suspended. Skip processing.");
                 inner
                     .metrics
@@ -849,11 +867,11 @@ impl Synchronizer {
             }
         }
 
-        // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
+        // Ensure either we have all the ancestors of this certificate, or the ancestors have been garbage collected.
         // If we don't, the synchronizer will start fetching missing certificates.
         if certificate.round() > inner.gc_round.load(Ordering::Acquire) + 1 {
-            let missing_parents = inner.get_missing_parents(&certificate).await?;
-            if !missing_parents.is_empty() {
+            let missing_ancestors = inner.get_missing_ancestors(&certificate).await?;
+            if !missing_ancestors.is_empty() {
                 debug!(
                     "Processing certificate {:?} suspended: missing ancestors",
                     certificate
@@ -861,11 +879,11 @@ impl Synchronizer {
                 inner
                     .metrics
                     .certificates_suspended
-                    .with_label_values(&["missing_parents"])
+                    .with_label_values(&["missing_ancestors"])
                     .inc();
                 // There is no upper round limit to suspended certificates. Currently there is no
                 // memory usage issue and this will speed up catching up. But we can revisit later.
-                let notify = state.insert(certificate, missing_parents, !early_suspend);
+                let notify = state.insert(certificate, missing_ancestors, !early_suspend);
                 inner
                     .metrics
                     .certificates_currently_suspended
@@ -1113,48 +1131,50 @@ impl Synchronizer {
     }
 
     /// Returns the parent certificates of the given header, waits for availability if needed.
-    pub async fn notify_read_parent_certificates(
+    pub async fn notify_read_ancestor_certificates(
         &self,
         header: &Header,
     ) -> DagResult<Vec<Certificate>> {
-        let mut parents = Vec::new();
+        let mut ancestors = Vec::new();
         if header.round() == 1 {
-            for digest in header.parents() {
-                match self.inner.genesis.get(digest) {
-                    Some(certificate) => parents.push(certificate.clone()),
-                    None => return Err(DagError::InvalidGenesisParent(*digest)),
+            for (_round, digest) in header.ancestors() {
+                match self.inner.genesis.get(&digest) {
+                    Some(certificate) => ancestors.push(certificate.clone()),
+                    None => return Err(DagError::InvalidGenesisParent(digest)),
                 };
             }
         } else {
             let mut cert_notifications: FuturesOrdered<_> = header
-                .parents()
-                .iter()
-                .map(|digest| async { self.inner.certificate_store.notify_read(*digest).await })
+                .ancestors()
+                .into_iter()
+                .map(|(_round, digest)| async move {
+                    self.inner.certificate_store.notify_read(digest).await
+                })
                 .collect();
             while let Some(result) = cert_notifications.next().await {
-                parents.push(result?);
+                ancestors.push(result?);
             }
         }
-        Ok(parents)
+        Ok(ancestors)
     }
 
     /// Returns parent digests that do no exist either in storage or among suspended.
-    pub async fn get_unknown_parent_digests(
+    pub async fn get_unknown_ancestor_digests(
         &self,
         header: &Header,
-    ) -> DagResult<Vec<CertificateDigest>> {
-        self.inner.get_unknown_parent_digests(header).await
+    ) -> DagResult<Vec<(Round, CertificateDigest)>> {
+        self.inner.get_unknown_ancestor_digests(header).await
     }
 
-    /// Tries to get all missing parents of the certificate. If there is any, sends the
+    /// Tries to get all missing ancestors of the certificate. If there is any, sends the
     /// certificate to `CertificateFetcher` which will trigger range fetching of missing
     /// certificates.
     #[cfg(test)]
-    pub(crate) async fn get_missing_parents(
+    pub async fn get_missing_ancestors(
         &self,
         certificate: &Certificate,
-    ) -> DagResult<Vec<CertificateDigest>> {
-        self.inner.get_missing_parents(certificate).await
+    ) -> DagResult<Vec<(Round, CertificateDigest)>> {
+        self.inner.get_missing_ancestors(certificate).await
     }
 
     /// Returns the number of suspended certificates and missing certificates.
@@ -1165,10 +1185,10 @@ impl Synchronizer {
 }
 
 /// Holds information for a suspended certificate. The certificate can be accepted into the DAG
-/// once `missing_parents` become empty.
+/// once `missing_ancestors` become empty.
 struct SuspendedCertificate {
     certificate: Certificate,
-    missing_parents: HashSet<CertificateDigest>,
+    missing_ancestors: HashSet<(Round, CertificateDigest)>,
     notify: AcceptNotification,
 }
 
@@ -1179,56 +1199,56 @@ impl Drop for SuspendedCertificate {
     }
 }
 
-/// Keeps track of suspended certificates and their missing parents.
+/// Keeps track of suspended certificates and their missing ancestors.
 /// The digest keys in `suspended` and `missing` can overlap, but a digest can exist in one map
 /// but not the other.
 ///
 /// They can be combined into a single map, but it seems more complex to differentiate between
-/// suspended certificates that is not a missing parent of another, from a missing parent without
-/// the actual certificate.
+/// suspended certificates that is not a missing ancestor of another, from a missing ancestor
+/// without the actual certificate.
 ///
 /// Traversal of certificates that can be accepted should start from the missing map, i.e.
 /// 1. If a certificate exists in `missing`, remove its entry.
-/// 2. Find children of the certificate, update their missing parents.
-/// 3. If a child certificate no longer has missing parent, traverse from it with step 1.
+/// 2. Find children of the certificate, update their missing ancestors.
+/// 3. If a child certificate no longer has missing ancestor, traverse from it with step 1.
 ///
 /// Synchronizer should access this struct via its methods, to avoid making inconsistent changes.
 #[derive(Default)]
 struct State {
     // Maps digests of suspended certificates to details including the certificate itself.
-    suspended: HashMap<CertificateDigest, SuspendedCertificate>,
-    // Maps digests of certificates that are not yet in the DAG, to digests of certificates that
-    // include them as parents. Keys are prefixed by round number to allow GC.
-    missing: BTreeMap<(Round, CertificateDigest), HashSet<CertificateDigest>>,
+    suspended: HashMap<(Round, CertificateDigest), SuspendedCertificate>,
+    // Maps certificates that are not yet in the DAG, to certificates that
+    // include them as ancestors.
+    missing: BTreeMap<(Round, CertificateDigest), HashSet<(Round, CertificateDigest)>>,
 }
 
 impl State {
     /// Checks if a digest is suspended. If it is, gets a notification for when it is accepted.
-    fn check_suspended(&self, digest: &CertificateDigest) -> Option<AcceptNotification> {
+    fn check_suspended(&self, key: (Round, CertificateDigest)) -> Option<AcceptNotification> {
         self.suspended
-            .get(digest)
+            .get(&key)
             .map(|suspended_cert| suspended_cert.notify.clone())
     }
 
-    /// Inserts a certificate with its missing parents into the suspended state.
+    /// Inserts a certificate with its missing ancestors into the suspended state.
     /// When `allow_reinsert` is false and the same certificate digest is inserted again,
-    /// this function will panic. Otherwise, this function checks the missing parents of
+    /// this function will panic. Otherwise, this function checks the missing ancestors of
     /// the certificate and verifies the same set is stored, before allowing a reinsertion.
     fn insert(
         &mut self,
         certificate: Certificate,
-        missing_parents: Vec<CertificateDigest>,
+        missing_ancestors: Vec<(Round, CertificateDigest)>,
         allow_reinsert: bool,
     ) -> AcceptNotification {
         let digest = certificate.digest();
-        let missing_round = certificate.round() - 1;
-        let missing_parents_map: HashSet<_> = missing_parents.iter().cloned().collect();
+        let cert_key = (certificate.round(), digest);
+        let missing_ancestors_set: HashSet<_> = missing_ancestors.iter().cloned().collect();
         if allow_reinsert {
-            if let Some(suspended_cert) = self.suspended.get(&digest) {
+            if let Some(suspended_cert) = self.suspended.get(&cert_key) {
                 assert_eq!(
-                    suspended_cert.missing_parents, missing_parents_map,
-                    "Inconsistent missing parents! {:?} vs {:?}",
-                    suspended_cert.missing_parents, missing_parents_map
+                    suspended_cert.missing_ancestors, missing_ancestors_set,
+                    "Inconsistent missing ancestors! {:?} vs {:?}",
+                    suspended_cert.missing_ancestors, missing_ancestors_set
                 );
                 return suspended_cert.notify.clone();
             }
@@ -1237,20 +1257,16 @@ impl State {
         assert!(self
             .suspended
             .insert(
-                digest,
+                cert_key,
                 SuspendedCertificate {
                     certificate,
-                    missing_parents: missing_parents_map,
+                    missing_ancestors: missing_ancestors_set,
                     notify: notify.clone(),
                 }
             )
             .is_none());
-        for d in missing_parents {
-            assert!(self
-                .missing
-                .entry((missing_round, d))
-                .or_default()
-                .insert(digest));
+        for d in missing_ancestors {
+            assert!(self.missing.entry(d).or_default().insert(cert_key));
         }
         notify
     }
@@ -1262,25 +1278,27 @@ impl State {
         round: Round,
         digest: CertificateDigest,
     ) -> Vec<SuspendedCertificate> {
-        // Validate that the parent certificate is no longer suspended.
-        if let Some(suspended_cert) = self.suspended.remove(&digest) {
+        // This validation is only triggered for fetched and own certificates.
+        // Certificates from other sources will find the suspended certificate and wait on its
+        // accept notification, so no ancestor check or validation is done.
+        if let Some(suspended_cert) = self.suspended.remove(&(round, digest)) {
             panic!(
-                "Certificate {:?} should have no missing parent, but is still suspended (missing parents {:?})",
-                suspended_cert.certificate,
-                suspended_cert.missing_parents
+                "Suspended certificate {digest:?} is being accepted, but it has missing ancestors {:?}!",
+                suspended_cert.missing_ancestors
             )
         }
         let mut to_traverse = VecDeque::new();
         let mut to_accept = Vec::new();
         to_traverse.push_back((round, digest));
-        while let Some((round, digest)) = to_traverse.pop_front() {
-            let Some(child_digests) = self.missing.remove(&(round, digest)) else {
+        while let Some(ancestor) = to_traverse.pop_front() {
+            let Some(children) = self.missing.remove(&ancestor) else {
+                // No certificate is missing this ancestor.
                 continue;
             };
-            for child in &child_digests {
+            for child in &children {
                 let suspended_child = self.suspended.get_mut(child).expect("Inconsistency found!");
-                suspended_child.missing_parents.remove(&digest);
-                if suspended_child.missing_parents.is_empty() {
+                suspended_child.missing_ancestors.remove(&ancestor);
+                if suspended_child.missing_ancestors.is_empty() {
                     let suspended_child = self.suspended.remove(child).unwrap();
                     to_traverse.push_back((
                         suspended_child.certificate.round(),
@@ -1318,11 +1336,11 @@ impl State {
             return None;
         }
 
-        let mut suspended = self.suspended.remove(digest);
+        let mut suspended = self.suspended.remove(&(*round, *digest));
         if let Some(suspended) = suspended.as_mut() {
             // Clear the missing_parents field to be consistent with other accepted
             // certificates.
-            suspended.missing_parents.clear();
+            suspended.missing_ancestors.clear();
         }
 
         // The missing children info is needed for and will be cleared in accept_children() later.
@@ -1385,14 +1403,22 @@ mod tests {
         // We report as missing the certificate of validator 1 from round 1.
         let round_1_validator_1 = certificates[0].digest();
         for cert in &certificates[NUM_AUTHORITIES + 1..NUM_AUTHORITIES * 2] {
-            state.insert(cert.clone(), vec![round_1_validator_1], true);
+            state.insert(
+                cert.clone(),
+                vec![(certificates[0].round(), round_1_validator_1)],
+                true,
+            );
         }
 
         // Insert all certificates of round 3. We report as missing the certificate of validator 1
         // from round 2.
         let round_2_validator_1 = certificates[NUM_AUTHORITIES].digest();
         for cert in &certificates[NUM_AUTHORITIES * 2..] {
-            state.insert(cert.clone(), vec![round_2_validator_1], true);
+            state.insert(
+                cert.clone(),
+                vec![(certificates[NUM_AUTHORITIES].round(), round_2_validator_1)],
+                true,
+            );
         }
 
         // AND

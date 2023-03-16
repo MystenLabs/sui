@@ -11,8 +11,8 @@ use futures::StreamExt;
 use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
-use std::sync::Arc;
 use std::time::Duration;
+use std::{collections::BTreeSet, sync::Arc};
 use storage::CertificateStore;
 use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolConfig;
@@ -132,35 +132,37 @@ impl Certifier {
 
         let mut client = PrimaryToPrimaryClient::new(peer);
 
-        let mut missing_parents: Vec<CertificateDigest> = Vec::new();
+        let mut missing_ancestors: Vec<CertificateDigest> = Vec::new();
         let mut attempt: u32 = 0;
         let vote: Vote = loop {
             attempt += 1;
 
-            let parents = if missing_parents.is_empty() {
+            let ancestors = if missing_ancestors.is_empty() {
                 Vec::new()
             } else {
-                let expected_count = missing_parents.len();
-                let parents: Vec<_> = certificate_store
+                let expected_count = missing_ancestors.len();
+                let ancestor_digests: BTreeSet<_> = header.ancestor_digests().into_iter().collect();
+                let ancestors: Vec<_> = certificate_store
                     .read_all(
-                        missing_parents
+                        missing_ancestors
                             .into_iter()
-                            // Only provide certs that are parents for the requested vote.
-                            .filter(|parent| header.parents().contains(parent)),
+                            // Only provide certs that are ancestors for the requested vote.
+                            .filter(|ancestor| ancestor_digests.contains(ancestor)),
                     )?
                     .into_iter()
                     .flatten()
                     .collect();
-                if parents.len() != expected_count {
-                    warn!("tried to read {expected_count} missing certificates requested by remote primary for vote request, but only found {}", parents.len());
+                if ancestors.len() != expected_count {
+                    warn!("tried to read {expected_count} missing certificates requested by remote primary for vote request, but only found {}", ancestors.len());
                     return Err(DagError::ProposedHeaderMissingCertificates);
                 }
-                parents
+                ancestors
             };
 
             let request = anemo::Request::new(RequestVoteRequest {
                 header: header.clone(),
-                parents,
+                parents: Vec::new(),
+                ancestors,
             })
             .with_timeout(Duration::from_secs(30));
             match client.request_vote(request).await {
@@ -169,7 +171,7 @@ impl Certifier {
                     if response.vote.is_some() {
                         break response.vote.unwrap();
                     }
-                    missing_parents = response.missing;
+                    missing_ancestors = response.missing;
                 }
                 Err(status) => {
                     if status.status() == anemo::types::response::StatusCode::BadRequest {
@@ -177,7 +179,7 @@ impl Certifier {
                             "unrecoverable error requesting vote for {header}: {status:?}"
                         )));
                     }
-                    missing_parents = Vec::new();
+                    missing_ancestors = Vec::new();
                 }
             }
 
@@ -317,17 +319,17 @@ impl Certifier {
                 let mut msg = format!(
                     "Failed to form certificate from header {header:?} with parent certificates:\n"
                 );
-                for parent_digest in header.parents().iter() {
-                    let parent_msg = match certificate_store.read(*parent_digest) {
+                for digest in header.ancestor_digests().iter() {
+                    let digest_msg = match certificate_store.read(*digest) {
                         Ok(Some(cert)) => format!("{cert:?}\n"),
                         Ok(None) => {
-                            format!("!!!missing certificate for digest {parent_digest:?}!!!\n")
+                            format!("!!!missing certificate for digest {digest:?}!!!\n")
                         }
                         Err(e) => format!(
-                            "!!!error retrieving certificate for digest {parent_digest:?}: {e:?}\n"
+                            "!!!error retrieving certificate for digest {digest:?}: {e:?}\n"
                         ),
                     };
-                    msg.push_str(&parent_msg);
+                    msg.push_str(&digest_msg);
                 }
                 warn!(msg);
             }

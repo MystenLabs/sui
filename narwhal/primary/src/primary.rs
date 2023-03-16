@@ -218,7 +218,7 @@ impl Primary {
             certificate_store: certificate_store.clone(),
             vote_digest_store,
             rx_narwhal_round_updates,
-            parent_digests: Default::default(),
+            ancestor_digests: Default::default(),
             metrics: node_metrics.clone(),
         })
         // Allow only one inflight RequestVote RPC at a time per peer.
@@ -464,7 +464,7 @@ impl Primary {
             committee.clone(),
             protocol_config.clone(),
             network.clone(),
-            certificate_store,
+            certificate_store.clone(),
             rx_consensus_round_updates,
             tx_shutdown.subscribe(),
             rx_certificate_fetcher,
@@ -479,6 +479,7 @@ impl Primary {
             committee.clone(),
             &protocol_config,
             proposer_store,
+            certificate_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
             parameters.max_header_delay,
@@ -566,7 +567,7 @@ struct PrimaryReceiverHandler {
     /// Values are where the digests are first known from.
     /// TODO: consider limiting maximum number of digests from one authority, allow timeout
     /// and retries from other authorities.
-    parent_digests: Arc<Mutex<BTreeMap<(Round, CertificateDigest), AuthorityIdentifier>>>,
+    ancestor_digests: Arc<Mutex<BTreeMap<(Round, CertificateDigest), AuthorityIdentifier>>>,
     metrics: Arc<PrimaryMetrics>,
 }
 
@@ -601,14 +602,14 @@ impl PrimaryReceiverHandler {
         let committee = self.committee.clone();
         header.validate(&committee, &self.worker_cache)?;
 
-        let num_parents = request.body().parents.len();
+        let num_ancestors = request.body().ancestors.len();
         ensure!(
-            num_parents <= committee.size(),
-            DagError::TooManyParents(num_parents, committee.size())
+            num_ancestors <= committee.size(),
+            DagError::TooManyParents(num_ancestors, committee.size())
         );
         self.metrics
             .certificates_in_votes
-            .inc_by(num_parents as u64);
+            .inc_by(num_ancestors as u64);
 
         // Vote request must come from the Header's author.
         let peer_id = request
@@ -619,7 +620,7 @@ impl PrimaryReceiverHandler {
                 "Unable to interpret remote peer ID {peer_id:?} as a NetworkPublicKey: {e:?}"
             ))
         })?;
-        let peer_authority = committee
+        let peer_authority: &Authority = committee
             .authority_by_network_key(&peer_network_key)
             .ok_or_else(|| {
                 DagError::NetworkError(format!(
@@ -640,14 +641,14 @@ impl PrimaryReceiverHandler {
             header.round()
         );
 
-        // Request missing parent certificates from the header proposer, to reduce voting latency
+        // Request missing ancestor certificates from the header proposer, to reduce voting latency
         // when some certificates are not broadcasted to many primaries.
         // This is only a latency optimization, and not required for liveness.
-        let parents = request.body().parents.clone();
-        if parents.is_empty() {
-            // If any parent is still unknown, ask the header proposer to include them with another
+        let ancestors = request.body().ancestors.clone();
+        if ancestors.is_empty() {
+            // If any ancestor is still unknown, ask the header proposer to include them with another
             // vote request.
-            let unknown_digests = self.get_unknown_parent_digests(header).await?;
+            let unknown_digests = self.get_unknown_ancestor_digests(header).await?;
             if !unknown_digests.is_empty() {
                 debug!(
                     "Received vote request for {:?} with unknown parents {:?}",
@@ -660,52 +661,53 @@ impl PrimaryReceiverHandler {
             }
         } else {
             let mut validated_received_parents = vec![];
-            for parent in parents {
+            for ancestor in ancestors.iter() {
                 validated_received_parents.push(
-                    validate_received_certificate_version(parent, &self.protocol_config).map_err(
-                        |err| {
+                    validate_received_certificate_version(ancestor.clone(), &self.protocol_config)
+                        .map_err(|err| {
                             error!("request vote parents processing error: {err}");
                             DagError::InvalidCertificateVersion
-                        },
-                    )?,
+                        })?,
                 );
             }
-            // If requester has provided parent certificates, try to accept them.
+
+            // If requester has provided ancestor certificates, try to accept them.
             // It is ok to not check for additional unknown digests, because certificates can
             // become available asynchronously from broadcast or certificate fetching.
-            self.try_accept_unknown_parents(header, validated_received_parents)
-                .await?;
+            self.try_accept_unknown_ancestors(header, ancestors).await?;
         }
 
         // Ensure the header has all parents accepted. If some are missing, waits until they become
         // available from broadcast or certificate fetching. If no certificate becomes available
         // for a digest, this request will time out or get cancelled by the requestor eventually.
         // This check is necessary for correctness.
-        let parents = self
+        let ancestors = self
             .synchronizer
-            .notify_read_parent_certificates(header)
+            .notify_read_ancestor_certificates(header)
             .await?;
 
         // Check the parent certificates. Ensure the parents:
         // - form a quorum
         // - are all from the previous round
         // - are from unique authorities
-        let mut parent_authorities = BTreeSet::new();
+        let mut ancestor_authorities = BTreeSet::new();
         let mut stake = 0;
-        for parent in parents.iter() {
+        for ancestor in ancestors {
             ensure!(
-                parent.round() + 1 == header.round(),
+                ancestor.round() < header.round(),
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
-                header.created_at() >= parent.header().created_at(),
+                header.created_at() >= ancestor.header().created_at(),
                 DagError::HeaderHasInvalidParentTimestamp(header.digest())
             );
             ensure!(
-                parent_authorities.insert(parent.header().author()),
+                ancestor_authorities.insert(ancestor.header().author()),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
-            stake += committee.stake_by_id(parent.origin());
+            if ancestor.round() + 1 == header.round() {
+                stake += committee.stake_by_id(ancestor.header().author());
+            }
         }
         ensure!(
             stake >= committee.quorum_threshold(),
@@ -819,44 +821,44 @@ impl PrimaryReceiverHandler {
     // The filtering is to avoid overload from unrequested certificates. It is ok that this
     // filter may result in a certificate never arriving via header proposals, because
     // liveness is guaranteed by certificate fetching.
-    async fn try_accept_unknown_parents(
+    async fn try_accept_unknown_ancestors(
         &self,
         header: &Header,
-        mut parents: Vec<Certificate>,
+        mut ancestors: Vec<Certificate>,
     ) -> DagResult<()> {
         {
-            let parent_digests = self.parent_digests.lock();
-            parents.retain(|cert| {
-                let Some(from) = parent_digests.get(&(cert.round(), cert.digest())) else {
+            let ancestor_digests = self.ancestor_digests.lock();
+            ancestors.retain(|cert| {
+                let Some(from) = ancestor_digests.get(&(cert.round(), cert.digest())) else {
                     return false;
                 };
                 // Only process a certificate from the primary where it is first known.
                 *from == header.author()
             });
         }
-        for parent in parents {
-            self.synchronizer.try_accept_certificate(parent).await?;
+        for ancestor in ancestors {
+            self.synchronizer.try_accept_certificate(ancestor).await?;
         }
         Ok(())
     }
 
     /// Gets parent certificate digests not known before, in storage, among suspended certificates,
     /// or being requested from other header proposers.
-    async fn get_unknown_parent_digests(
+    async fn get_unknown_ancestor_digests(
         &self,
         header: &Header,
     ) -> DagResult<Vec<CertificateDigest>> {
         // Get digests not known by the synchronizer, in storage or among suspended certificates.
-        let mut digests = self.synchronizer.get_unknown_parent_digests(header).await?;
+        let mut digests = self
+            .synchronizer
+            .get_unknown_ancestor_digests(header)
+            .await?;
 
         // Maximum header age is chosen to strike a balance between allowing for slightly older
         // certificates to still have a chance to be included in the DAG while not wasting
         // resources on very old vote requests. This value affects performance but not correctness
         // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 3;
-
-        // Lock to ensure consistency between limit_round and where parent_digests are gc'ed.
-        let mut parent_digests = self.parent_digests.lock();
+        const HEADER_AGE_LIMIT: Round = 10;
 
         // Check that the header is not too old.
         let narwhal_round = *self.rx_narwhal_round_updates.borrow();
@@ -866,11 +868,14 @@ impl PrimaryReceiverHandler {
             DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
         );
 
-        // Drop old entries from parent_digests.
-        while let Some(((round, _digest), _authority)) = parent_digests.first_key_value() {
+        // Lock to ensure consistency between limit_round and where ancestor_digests are gc'ed.
+        let mut ancestor_digests = self.ancestor_digests.lock();
+
+        // Drop old entries from ancestor_digests.
+        while let Some(((round, _digest), _authority)) = ancestor_digests.first_key_value() {
             // Minimum header round is limit_round, so minimum parent round is limit_round - 1.
             if *round < limit_round.saturating_sub(1) {
-                parent_digests.pop_first();
+                ancestor_digests.pop_first();
             } else {
                 break;
             }
@@ -878,7 +883,7 @@ impl PrimaryReceiverHandler {
 
         // Filter out digests that are already requested from other header proposers.
         digests.retain(
-            |digest| match parent_digests.entry((header.round() - 1, *digest)) {
+            |(round, digest)| match ancestor_digests.entry((*round, *digest)) {
                 Entry::Occupied(_) => false,
                 Entry::Vacant(v) => {
                     v.insert(header.author());
@@ -887,7 +892,7 @@ impl PrimaryReceiverHandler {
             },
         );
 
-        Ok(digests)
+        Ok(digests.into_iter().map(|(_, digest)| digest).collect())
     }
 }
 

@@ -25,7 +25,15 @@ async fn test_certificate_singers_are_ordered() {
     // The authority that creates the Header
     let authority = authorities[0];
 
-    let header = HeaderV1::new(authority.id(), 1, 1, IndexMap::new(), BTreeSet::new()).await;
+    let header = HeaderV1::new(
+        authority.id(),
+        1,
+        1,
+        IndexMap::new(),
+        BTreeSet::new(),
+        Vec::new(),
+    )
+    .await;
 
     // WHEN
     let mut votes: Vec<(AuthorityIdentifier, Signature)> = Vec::new();

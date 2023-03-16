@@ -83,10 +83,10 @@ pub(crate) struct CertificateFetcher {
     rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
-    /// Receives certificates with missing parents from the `Synchronizer`.
+    /// Receives certificates with missing ancestors from the `Synchronizer`.
     rx_certificate_fetcher: Receiver<CertificateFetcherCommand>,
     /// Map of validator to target rounds that local store must catch up to.
-    /// The targets are updated with each certificate missing parents sent from the core.
+    /// The targets are updated with each certificate missing ancestors sent from the core.
     /// Each fetch task may satisfy some / all / none of the targets.
     /// TODO: rethink the stopping criteria for fetching, balance simplicity with completeness
     /// of certificates (for avoiding jitters of voting / processing certificates instead of
@@ -174,12 +174,12 @@ impl CertificateFetcher {
                         if header.round() <= *r {
                             // Ignore fetch request when we already need to sync to a later
                             // certificate from the same authority. Although this certificate may
-                            // not be the parent of the later certificate, this should be ok
-                            // because eventually a child of this certificate will miss parents and
+                            // not be the ancestor of the later certificate, this should be ok
+                            // because eventually a child of this certificate will miss ancestors and
                             // get inserted into the targets.
                             //
                             // Basically, it is ok to stop fetching without this certificate.
-                            // If this certificate becomes a parent of other certificates, another
+                            // If this certificate becomes an ancestor of other certificates, another
                             // fetch will be triggered eventually because of missing certificates.
                             continue;
                         }
@@ -239,7 +239,7 @@ impl CertificateFetcher {
     }
 
     // Starts a task to fetch missing certificates from other primaries.
-    // A call to kickstart() can be triggered by a certificate with missing parents or the end of a
+    // A call to kickstart() can be triggered by a certificate with missing ancestors or the end of a
     // fetch task. Each iteration of kickstart() updates the target rounds, and iterations will
     // continue until there are no more target rounds to catch up to.
     #[allow(clippy::mutable_key_type)]
@@ -277,7 +277,7 @@ impl CertificateFetcher {
             //
             // NOTE: even if the store actually does not have target_round for the origin,
             // it is ok to stop fetching without this certificate.
-            // If this certificate becomes a parent of other certificates, another
+            // If this certificate becomes an ancestor of other certificates, another
             // fetch will be triggered eventually because of missing certificates.
             last_written_round < *target_round
         });
@@ -558,8 +558,8 @@ async fn process_certificates_v2_helper(
             )?,
         );
 
-        for parent_digest in cert.header().parents() {
-            all_parents.insert(*parent_digest);
+        for ancestor_digest in cert.header().ancestors() {
+            all_parents.insert(ancestor_digest);
         }
     }
 
@@ -570,7 +570,7 @@ async fn process_certificates_v2_helper(
     // fail verification will cancel processing for all fetched certs.
     let mut leaf_certs = Vec::new();
     for (idx, c) in all_certificates.iter_mut().enumerate() {
-        if !all_parents.contains(&c.digest()) {
+        if !all_parents.contains(&(c.round(), c.digest())) {
             leaf_certs.push((idx, c.clone()));
         } else {
             c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
