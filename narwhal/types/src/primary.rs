@@ -1020,6 +1020,16 @@ pub struct VoteInfo {
     pub vote_digest: VoteDigest,
 }
 
+impl From<&Vote> for VoteInfo {
+    fn from(vote: &Vote) -> Self {
+        VoteInfo {
+            epoch: vote.epoch,
+            round: vote.round,
+            vote_digest: vote.digest(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{Batch, Metadata, Timestamp};

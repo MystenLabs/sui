@@ -50,7 +50,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, PayloadToken, ProposerStore};
+use storage::{CertificateStore, PayloadToken, ProposerStore, VoteDigestStore};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio::{
@@ -68,7 +68,7 @@ use types::{
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfo,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote,
     WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
     WorkerToPrimaryServer,
 };
@@ -108,7 +108,7 @@ impl Primary {
         certificate_store: CertificateStore,
         proposer_store: ProposerStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        vote_digest_store: Store<PublicKey, VoteInfo>,
+        vote_digest_store: VoteDigestStore,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
@@ -653,7 +653,7 @@ struct PrimaryReceiverHandler {
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// The store to persist the last voted round per authority, used to ensure idempotence.
-    vote_digest_store: Store<PublicKey, VoteInfo>,
+    vote_digest_store: VoteDigestStore,
     /// Get a signal when the round changes.
     rx_narwhal_round_updates: watch::Receiver<Round>,
     metrics: Arc<PrimaryMetrics>,
@@ -861,8 +861,7 @@ impl PrimaryReceiverHandler {
         // so we don't.
         let result = self
             .vote_digest_store
-            .read(header.author.clone())
-            .await
+            .read(&header.author)
             .map_err(DagError::StoreError)?;
 
         if let Some(vote_info) = result {
@@ -897,18 +896,8 @@ impl PrimaryReceiverHandler {
             header, header.round
         );
 
-        // Update the vote digest store with the vote we just sent. We don't need to store the
-        // vote itself, since it can be reconstructed using the headers.
-        self.vote_digest_store
-            .sync_write(
-                header.author.clone(),
-                VoteInfo {
-                    epoch: header.epoch,
-                    round: header.round,
-                    vote_digest: vote.digest(),
-                },
-            )
-            .await?;
+        // Update the vote digest store with the vote we just sent.
+        self.vote_digest_store.write(&vote)?;
 
         Ok(RequestVoteResponse {
             vote: Some(vote),

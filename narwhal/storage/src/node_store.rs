@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::proposer_store::ProposerKey;
+use crate::vote_digest_store::VoteDigestStore;
 use crate::{CertificateStore, ProposerStore};
 use config::WorkerId;
 use crypto::{PublicKey, PublicKeyBytes};
@@ -22,7 +23,7 @@ pub type PayloadToken = u8;
 #[derive(Clone)]
 pub struct NodeStorage {
     pub proposer_store: ProposerStore,
-    pub vote_digest_store: Store<PublicKey, VoteInfo>,
+    pub vote_digest_store: VoteDigestStore,
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -32,16 +33,16 @@ pub struct NodeStorage {
 
 impl NodeStorage {
     /// The datastore column family names.
-    const LAST_PROPOSED_CF: &'static str = "last_proposed";
-    const VOTES_CF: &'static str = "votes";
-    const HEADERS_CF: &'static str = "headers";
-    const CERTIFICATES_CF: &'static str = "certificates";
-    const CERTIFICATE_DIGEST_BY_ROUND_CF: &'static str = "certificate_digest_by_round";
-    const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &'static str = "certificate_digest_by_origin";
-    const PAYLOAD_CF: &'static str = "payload";
-    const BATCHES_CF: &'static str = "batches";
-    const LAST_COMMITTED_CF: &'static str = "last_committed";
-    const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
+    pub(crate) const LAST_PROPOSED_CF: &'static str = "last_proposed";
+    pub(crate) const VOTES_CF: &'static str = "votes";
+    pub(crate) const HEADERS_CF: &'static str = "headers";
+    pub(crate) const CERTIFICATES_CF: &'static str = "certificates";
+    pub(crate) const CERTIFICATE_DIGEST_BY_ROUND_CF: &'static str = "certificate_digest_by_round";
+    pub(crate) const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &'static str = "certificate_digest_by_origin";
+    pub(crate) const PAYLOAD_CF: &'static str = "payload";
+    pub(crate) const BATCHES_CF: &'static str = "batches";
+    pub(crate) const LAST_COMMITTED_CF: &'static str = "last_committed";
+    pub(crate) const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
 
     /// Open or reopen all the storage of the node.
     pub fn reopen<Path: AsRef<std::path::Path> + Send>(store_path: Path) -> Self {
@@ -91,7 +92,7 @@ impl NodeStorage {
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
-        let vote_digest_store = Store::new(votes_map);
+        let vote_digest_store = VoteDigestStore::new(votes_map);
         let header_store = Store::new(header_map);
         let certificate_store = CertificateStore::new(
             certificate_map,

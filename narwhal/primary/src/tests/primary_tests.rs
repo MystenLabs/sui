@@ -27,9 +27,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::CertificateStore;
 use storage::NodeStorage;
 use storage::PayloadToken;
+use storage::{CertificateStore, VoteDigestStore};
 use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
 use store::Store;
 use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
@@ -341,7 +341,7 @@ async fn test_request_vote_send_missing_parents() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -485,7 +485,7 @@ async fn test_request_vote_accept_missing_parents() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -621,7 +621,7 @@ async fn test_request_vote_missing_batches() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -746,7 +746,7 @@ async fn test_request_vote_already_voted() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -904,7 +904,7 @@ async fn test_fetch_certificates_handler() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -1073,7 +1073,7 @@ async fn test_process_payload_availability_success() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -1224,7 +1224,7 @@ async fn test_process_payload_availability_when_failures() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -1323,7 +1323,7 @@ async fn test_request_vote_created_at_in_future() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
