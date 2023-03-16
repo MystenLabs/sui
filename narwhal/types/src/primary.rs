@@ -817,6 +817,8 @@ pub struct RequestVoteRequest {
     // Optional parent certificates provided by the requester, in case this primary doesn't yet
     // have them and requires them in order to offer a vote.
     pub parents: Vec<Certificate>,
+
+    pub ancestors: Vec<Certificate>,
 }
 
 /// Used by the primary to reply to RequestVoteRequest.

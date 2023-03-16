@@ -10,7 +10,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
-use std::sync::Arc;
+use std::{sync::Arc, collections::BTreeSet};
 use std::time::Duration;
 use storage::{CertificateStore, HeaderStore};
 use tokio::{
@@ -137,37 +137,39 @@ impl Certifier {
 
         let mut client = PrimaryToPrimaryClient::new(peer);
 
-        let mut missing_parents: Vec<CertificateDigest> = Vec::new();
+        let mut missing_ancestors: Vec<CertificateDigest> = Vec::new();
         let mut attempt: u32 = 0;
         let vote: Vote = loop {
             attempt += 1;
 
-            let parents = if missing_parents.is_empty() {
+            let ancestors = if missing_ancestors.is_empty() {
                 Vec::new()
             } else {
-                let expected_count = missing_parents.len();
-                let parents: Vec<_> = certificate_store
+                let expected_count = missing_ancestors.len();
+                let ancestor_digests: BTreeSet<_> = header.ancestor_digests().into_iter().collect();
+                let ancestors: Vec<_> = certificate_store
                     .read_all(
-                        missing_parents
+                        missing_ancestors
                             .into_iter()
-                            // Only provide certs that are parents for the requested vote.
-                            .filter(|parent| header.parents.contains(parent)),
+                            // Only provide certs that are ancestors for the requested vote.
+                            .filter(|ancestor| ancestor_digests.contains(ancestor)),
                     )?
                     .into_iter()
                     .flatten()
                     .collect();
-                if parents.len() != expected_count {
-                    warn!("tried to read {expected_count} missing certificates requested by remote primary for vote request, but only found {}", parents.len());
+                if ancestors.len() != expected_count {
+                    warn!("tried to read {expected_count} missing certificates requested by remote primary for vote request, but only found {}", ancestors.len());
                     return Err(DagError::ProposedHeaderMissingCertificates);
                 }
-                parents
+                ancestors
             };
 
             // TODO: Remove timeout from this RPC once anemo issue #10 is resolved.
             match client
                 .request_vote(RequestVoteRequest {
                     header: header.clone(),
-                    parents,
+                    parents: Vec::new(),
+                    ancestors,
                 })
                 .await
             {
@@ -176,7 +178,7 @@ impl Certifier {
                     if response.vote.is_some() {
                         break response.vote.unwrap();
                     }
-                    missing_parents = response.missing;
+                    missing_ancestors = response.missing;
                 }
                 Err(status) => {
                     if status.status() == anemo::types::response::StatusCode::BadRequest {
@@ -184,7 +186,7 @@ impl Certifier {
                             "unrecoverable error requesting vote for {header}: {status:?}"
                         )));
                     }
-                    missing_parents = Vec::new();
+                    missing_ancestors = Vec::new();
                 }
             }
 

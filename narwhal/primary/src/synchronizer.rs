@@ -962,22 +962,29 @@ impl Synchronizer {
         }
     }
 
-    /// Returns the parent certificates of the given header, and a list of digests for any
-    /// that are missing.
-    pub fn get_parents(
+    /// Returns the ancestor certificates of the given header, and a list of digests for any
+    /// ancestors that are missing.
+    pub fn check_ancestors_for_header(
         &self,
         header: &Header,
     ) -> DagResult<(Vec<Certificate>, Vec<CertificateDigest>)> {
-        let mut missing = Vec::new();
         let mut parents = Vec::new();
-        for digest in &header.parents {
+        let mut missing = Vec::new();
+        for ancestor in &header.ancestors {
+            let Some((ancestor_round, digest)) = ancestor else {
+                continue;
+            };
             let cert = if header.round == 1 {
                 self.inner.genesis.get(digest).cloned()
             } else {
                 self.inner.certificate_store.read(*digest)?
             };
             match cert {
-                Some(certificate) => parents.push(certificate),
+                Some(certificate) => {
+                    if ancestor_round + 1 == header.round {
+                        parents.push(certificate);
+                    }
+                }
                 None => missing.push(*digest),
             };
         }
