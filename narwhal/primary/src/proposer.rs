@@ -225,6 +225,7 @@ impl Proposer {
                 .map(|m| (m.digest, (m.worker_id, m.timestamp)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
+            vec![],
         )
         .await;
 

@@ -133,6 +133,7 @@ struct BadHeader {
     pub epoch: Epoch,
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
+    pub ancestors: Vec<Option<(Round, CertificateDigest)>>,
     pub id: OnceCell<HeaderDigest>,
     pub metadata: Metadata,
 }

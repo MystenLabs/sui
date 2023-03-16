@@ -162,6 +162,7 @@ pub struct Header {
     #[serde(with = "indexmap::serde_seq")]
     pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
+    pub ancestors: Vec<Option<(Round, CertificateDigest)>>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
 }
@@ -175,6 +176,7 @@ impl HeaderBuilder {
             created_at: self.created_at.unwrap_or(0),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
+            ancestors: self.ancestors.unwrap_or_default(),
             digest: OnceCell::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
@@ -207,6 +209,7 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
         parents: BTreeSet<CertificateDigest>,
+        ancestors: Vec<Option<(Round, CertificateDigest)>>,
     ) -> Self {
         let header = Self {
             author,
@@ -215,6 +218,7 @@ impl Header {
             created_at: now(),
             payload,
             parents,
+            ancestors,
             digest: OnceCell::default(),
         };
         let digest = Hash::digest(&header);
@@ -269,6 +273,7 @@ impl Default for Header {
             created_at: TimestampMs::default(),
             payload: IndexMap::default(),
             parents: BTreeSet::default(),
+            ancestors: Vec::default(),
             digest: OnceCell::default(),
         }
     }
