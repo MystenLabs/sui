@@ -39,13 +39,6 @@ pub fn run(args: Args) -> crate::Result<()> {
                     type_: BannedDepType::Always,
                 },
             ),
-            (
-                "openssl-sys".to_owned(),
-                BannedDepConfig {
-                    message: "use rustls for TLS".to_owned(),
-                    type_: BannedDepType::Always,
-                },
-            ),
         ]
         .into_iter()
         .collect(),
