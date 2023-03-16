@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-#[cfg(feature = "pg_integration")]
+
 mod pg_integration {
     use diesel::migration::MigrationSource;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -14,11 +14,13 @@ mod pg_integration {
     use sui_indexer::errors::IndexerError;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
     use sui_indexer::{new_pg_connection_pool, Indexer, IndexerConfig, PgPoolConnection};
+    use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
         SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
         SuiParsedMoveObject, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
         TransactionBytes,
+        EventFilter,        
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::ObjectID;
@@ -29,6 +31,7 @@ mod pg_integration {
     use sui_types::query::TransactionFilter;
     use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
+    use test_utils::transaction::{create_devnet_nft, delete_devnet_nft};
     use tokio::task::JoinHandle;
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -168,6 +171,25 @@ mod pg_integration {
             tx_response.digest,
             tx_mutation_query_response.data.last().unwrap().digest,
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_event_query_e2e() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        wait_until_next_checkpoint(&store).await;
+
+        let context = &mut test_cluster.wallet;
+        let (_sender, _object_id, digest) = create_devnet_nft(context).await.unwrap();
+        wait_until_transaction_synced(&store, digest.base58_encode().as_str()).await;
+
+        let to_query = EventFilter::Transaction(digest);
+
+        let query_response = indexer_rpc_client
+            .query_events(to_query, None, None, None)
+            .await?;
+
+        assert_eq!(digest, query_response.data.first().unwrap().id.tx_digest);
         Ok(())
     }
 
