@@ -14,7 +14,7 @@ use sui_types::messages::{
 };
 use sui_types::object::{generate_test_gas_objects, Object, Owner, OBJECT_START_VERSION};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::authority::{spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{spawn_test_authorities, test_authority_configs_with_objects};
 use test_utils::messages::move_transaction;
 use test_utils::transaction::{
     publish_package, submit_shared_object_transaction, submit_single_owner_transaction,
@@ -126,9 +126,9 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     async fn new() -> Self {
-        let mut gas_objects = generate_test_gas_objects();
-        let configs = test_authority_configs();
-        let node_handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+        let gas_objects = generate_test_gas_objects();
+        let (configs, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
+        let node_handles = spawn_test_authorities(&configs).await;
 
         let move_package =
             publish_move_package(gas_objects.pop().unwrap(), &configs.validator_set())
