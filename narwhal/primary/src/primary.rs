@@ -494,6 +494,7 @@ impl Primary {
             name.clone(),
             committee.clone(),
             proposer_store,
+            certificate_store.clone(),
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
             parameters.max_header_delay,

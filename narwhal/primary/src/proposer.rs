@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
-use crypto::PublicKey;
+use crypto::{PublicKey, PublicKeyBytes};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
-use storage::ProposerStore;
+use storage::{CertificateStore, ProposerStore};
 use tokio::time::{sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
@@ -21,7 +21,7 @@ use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, Header, Round, TimestampMs,
 };
-use types::{now, ConditionalBroadcastReceiver};
+use types::{now, CertificateDigest, ConditionalBroadcastReceiver};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -74,6 +74,9 @@ pub struct Proposer {
 
     /// The proposer store for persisting the last header.
     proposer_store: ProposerStore,
+    /// Store for locally available certificates.
+    certificate_store: CertificateStore,
+
     /// The current round of the dag.
     round: Round,
     /// Signals a new narwhal round
@@ -104,6 +107,7 @@ impl Proposer {
         name: PublicKey,
         committee: Committee,
         proposer_store: ProposerStore,
+        certificate_store: CertificateStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
@@ -136,6 +140,7 @@ impl Proposer {
                     tx_headers,
                     tx_narwhal_round_updates,
                     proposer_store,
+                    certificate_store,
                     round: 0,
                     last_parents: genesis,
                     last_leader: None,
@@ -216,6 +221,30 @@ impl Proposer {
             );
         }
 
+        let mut ancestors: BTreeMap<PublicKeyBytes, Option<(Round, CertificateDigest)>> = parents
+            .iter()
+            .map(|cert| {
+                (
+                    PublicKeyBytes::from(&cert.origin()),
+                    Some((cert.round(), cert.digest())),
+                )
+            })
+            .collect();
+        for key in self.committee.keys() {
+            let name = PublicKeyBytes::from(key);
+            let entry = ancestors.entry(name.clone()).or_default();
+            if entry.is_some() {
+                continue;
+            }
+            let Some((round, digest)) = self.certificate_store.prev_round_and_digest(&name, this_round)? else {
+                continue;
+            };
+            // TODO: pass in GC depth.
+            if round + 50 > this_round {
+                *entry = Some((round, digest));
+            }
+        }
+
         let header = Header::new(
             self.name.clone(),
             this_round,
@@ -225,7 +254,7 @@ impl Proposer {
                 .map(|m| (m.digest, (m.worker_id, m.timestamp)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
-            vec![],
+            ancestors.into_values().collect(),
         )
         .await;
 
