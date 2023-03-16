@@ -371,12 +371,20 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .map(|m| CompiledModule::deserialize(&m).unwrap())
             .collect();
 
-        let new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
+        let mut new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
 
         info!(
             "upgraded system object {:?}",
             new_package.compute_object_reference()
         );
+
+        // Decrement the version before writing the package so that the store can record the version
+        // growing by one in the effects.
+        new_package
+            .data
+            .try_as_package_mut()
+            .unwrap()
+            .decrement_version();
         temporary_store.write_object(new_package, WriteKind::Mutate);
     }
 
