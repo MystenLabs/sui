@@ -4328,16 +4328,21 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
-        authority
+        if let Some(cert) = authority
             .epoch_store_for_testing()
-            .handle_consensus_transaction(
+            .process_consensus_transaction(
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
-                authority.transaction_manager(),
                 authority.db(),
             )
             .await
-            .unwrap();
+            .unwrap()
+        {
+            authority
+                .transaction_manager()
+                .enqueue(vec![cert], &authority.epoch_store_for_testing())
+                .unwrap();
+        }
     } else {
         warn!("Failed to verify certificate: {:?}", cert);
     }
