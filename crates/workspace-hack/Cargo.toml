@@ -347,6 +347,7 @@ move-stackless-bytecode = { git = "https://github.com/move-language/move", rev =
 move-stdlib = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
@@ -1016,6 +1017,7 @@ move-stackless-bytecode = { git = "https://github.com/move-language/move", rev =
 move-stdlib = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
