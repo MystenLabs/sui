@@ -14,7 +14,7 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
+use sui_storage::write_ahead_log::{DBWriteAheadLog, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
@@ -35,7 +35,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper, MAX_TX_RECOVERY_RETRY};
+use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper};
 use crate::batch_bls_verifier::*;
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
@@ -492,15 +492,6 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
         let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
-
-        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
-            // If the tx has been retried too many times, it could be a poison pill, and we should
-            // prevent the client from continually retrying it.
-            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
-            debug!(?digest, "{}", err);
-            return Err(SuiError::ErrorWhileProcessingCertificate { err });
-        }
-
         Ok(guard)
     }
 

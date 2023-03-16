@@ -22,7 +22,7 @@ mod execution_driver_tests;
 
 // Execution should not encounter permanent failures, so any failure can and needs
 // to be retried.
-const EXECUTION_MAX_ATTEMPTS: usize = 10;
+pub const EXECUTION_MAX_ATTEMPTS: u32 = 10;
 const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 /// When a notification that a new pending transaction is received we activate
