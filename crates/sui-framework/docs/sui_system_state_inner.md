@@ -62,6 +62,7 @@
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
@@ -114,6 +115,12 @@ A list of system config parameters.
 </dt>
 <dd>
  The duration of an epoch, in milliseconds.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -215,6 +222,12 @@ The top-level object containing all information of the Sui system.
 </dt>
 <dd>
  Unix timestamp of the current epoch start
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -513,12 +526,14 @@ This function will be called only once in genesis.
         parameters: <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SystemParameters">SystemParameters</a> {
             governance_start_epoch,
             epoch_duration_ms,
+            extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(stake_subsidy_fund, initial_stake_subsidy_amount),
+        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(stake_subsidy_fund, initial_stake_subsidy_amount, ctx),
         safe_mode: <b>false</b>,
         epoch_start_timestamp_ms,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     };
     system_state
 }
