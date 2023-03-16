@@ -3,6 +3,7 @@
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
+use crate::types::SuiTransactionFullResponse;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -50,11 +51,11 @@ impl<S: IndexerStore> ReadApi<S> {
         _options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
         // TODO(chris): support options in indexer
-        let txn_resp: SuiTransactionResponse = self
+        let txn_full_resp: SuiTransactionFullResponse = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?
             .try_into()?;
-        Ok(txn_resp)
+        Ok(txn_full_resp.into())
     }
 
     fn multi_get_transactions_with_options_internal(
@@ -67,10 +68,12 @@ impl<S: IndexerStore> ReadApi<S> {
             .map(|digest| digest.base58_encode())
             .collect::<Vec<_>>();
         let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
-        let tx_resp_vec = tx_vec
+        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = tx_vec
             .into_iter()
             .map(|txn| txn.try_into())
             .collect::<Result<Vec<_>, _>>()?;
+        let tx_resp_vec: Vec<SuiTransactionResponse> =
+            tx_full_resp_vec.into_iter().map(|txn| txn.into()).collect();
         Ok(tx_resp_vec)
     }
 

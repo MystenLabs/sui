@@ -4,16 +4,16 @@
 use crate::schema::transactions;
 use crate::utils::log_errors_to_pg;
 
-use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::result::Error;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
-    SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiTransactionEffectsAPI,
 };
 
 use crate::errors::IndexerError;
 use crate::schema::transactions::transaction_digest;
+use crate::types::SuiTransactionFullResponse;
 use crate::PgPoolConnection;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
@@ -25,7 +25,7 @@ pub struct Transaction {
     pub sender: String,
     pub recipients: Vec<Option<String>>,
     pub checkpoint_sequence_number: i64,
-    pub transaction_time: Option<NaiveDateTime>,
+    pub timestamp_ms: i64,
     pub transaction_kind: String,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
@@ -49,7 +49,7 @@ pub struct Transaction {
 
 pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
-    tx_resps: Vec<SuiTransactionResponse>,
+    tx_resps: Vec<SuiTransactionFullResponse>,
 ) -> Result<usize, IndexerError> {
     let new_txn_iter = tx_resps.into_iter().map(|tx| tx.try_into());
 
@@ -78,10 +78,10 @@ pub fn commit_transactions(
     })
 }
 
-impl TryFrom<SuiTransactionResponse> for Transaction {
+impl TryFrom<SuiTransactionFullResponse> for Transaction {
     type Error = IndexerError;
 
-    fn try_from(tx_resp: SuiTransactionResponse) -> Result<Self, Self::Error> {
+    fn try_from(tx_resp: SuiTransactionFullResponse) -> Result<Self, Self::Error> {
         let txn_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction {:?} to JSON with error: {:?}",
@@ -96,23 +96,14 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             ))
         })?;
 
-        let effects = tx_resp
-            .effects
-            .as_ref()
-            .expect("effects should not be empty");
-        let transaction_data = tx_resp
-            .transaction
-            .expect("Transaction field should not be empty")
-            .data;
+        let effects = tx_resp.effects;
+        let transaction_data = tx_resp.transaction.data;
         // canonical txn digest string is Base58 encoded
         let tx_digest = effects.transaction_digest().base58_encode();
         let gas_budget = transaction_data.gas_data().budget;
         let gas_price = transaction_data.gas_data().price;
         let sender = transaction_data.sender().to_string();
-        // NOTE: unwrap is safe here because indexer fetches checkpoint first and then transactions
-        // based on the transaction digests in the checkpoint, thus the checkpoint sequence number
-        // is always Some. This is also confirmed by the sui-core team.
-        let checkpoint_seq_number = tx_resp.checkpoint.unwrap() as i64;
+        let checkpoint_seq_number = tx_resp.checkpoint as i64;
         let tx_kind = transaction_data.transaction().to_string();
 
         let recipients: Vec<String> = effects
@@ -159,21 +150,6 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             })
             .collect();
 
-        let timestamp_opt_res = tx_resp.timestamp_ms.map(|time_milis| {
-            let naive_time = NaiveDateTime::from_timestamp_millis(time_milis as i64);
-            naive_time.ok_or_else(|| {
-                IndexerError::InsertableParsingError(format!(
-                    "Failed parsing timestamp in millis {:?} to NaiveDateTime",
-                    time_milis
-                ))
-            })
-        });
-        let timestamp = match timestamp_opt_res {
-            Some(Err(e)) => return Err(e),
-            Some(Ok(n)) => Some(n),
-            None => None,
-        };
-
         let gas_object_ref = effects.gas_object().reference.clone();
         let gas_object_id = gas_object_ref.object_id.to_string();
         let gas_object_seq = gas_object_ref.version;
@@ -192,7 +168,7 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
             transaction_kind: tx_kind,
-            transaction_time: timestamp,
+            timestamp_ms: tx_resp.timestamp_ms as i64,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),
             unwrapped: vec_string_to_vec_opt_string(unwrapped),
@@ -217,43 +193,40 @@ impl TryFrom<SuiTransactionResponse> for Transaction {
     }
 }
 
-impl TryInto<SuiTransactionResponse> for Transaction {
+impl TryInto<SuiTransactionFullResponse> for Transaction {
     type Error = IndexerError;
 
-    fn try_into(self) -> Result<SuiTransactionResponse, Self::Error> {
-        let txn: SuiTransaction =
+    fn try_into(self) -> Result<SuiTransactionFullResponse, Self::Error> {
+        let transaction: SuiTransaction =
             serde_json::from_str(&self.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
                     "Failed converting transaction JSON {:?} to SuiTransaction with error: {:?}",
                     self.transaction_content, err
                 ))
             })?;
-        let txn_effects: SuiTransactionEffects = serde_json::from_str(&self.transaction_effects_content).map_err(|err| {
+        let effects: SuiTransactionEffects = serde_json::from_str(&self.transaction_effects_content).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction effect JSON {:?} to SuiTransactionEffects with error: {:?}",
                 self.transaction_effects_content, err
             ))
         })?;
 
-        Ok(SuiTransactionResponse {
+        Ok(SuiTransactionFullResponse {
             digest: self.transaction_digest.parse().map_err(|e| {
                 IndexerError::InsertableParsingError(format!(
                     "Failed to parse transaction digest {} : {:?}",
                     self.transaction_digest, e
                 ))
             })?,
-            transaction: Some(txn),
-            effects: Some(txn_effects),
+            transaction,
+            effects,
             confirmed_local_execution: self.confirmed_local_execution,
-            timestamp_ms: self
-                .transaction_time
-                .map(|time| time.timestamp_millis() as u64),
-            checkpoint: Some(self.checkpoint_sequence_number as u64),
-            // TODO: Indexer need to persist event properly.
+            timestamp_ms: self.timestamp_ms as u64,
+            checkpoint: self.checkpoint_sequence_number as u64,
+            // TODO: read events, object_changes and balance_changes from db
             events: Default::default(),
-            object_changes: None,
-            errors: vec![],
-            balance_changes: None,
+            object_changes: Some(vec![]),
+            balance_changes: Some(vec![]),
         })
     }
 }

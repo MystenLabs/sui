@@ -11,10 +11,10 @@ use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
 use crate::models::recipients::Recipient;
 use crate::models::transactions::Transaction;
+use crate::types::SuiTransactionFullResponse;
 use async_trait::async_trait;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EventFilter, EventPage, SuiObjectData,
-    SuiTransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::event::EventID;
@@ -124,9 +124,10 @@ pub trait IndexerStore {
     fn module_cache(&self) -> &Self::ModuleCache;
 }
 
+#[derive(Clone, Debug)]
 pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
-    pub transactions: Vec<SuiTransactionResponse>,
+    pub transactions: Vec<SuiTransactionFullResponse>,
     pub changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
 }
 
