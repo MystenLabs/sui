@@ -30,6 +30,7 @@ mysten-network = { path = "../../crates/mysten-network"}
 
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
+mysten-common.workspace = true
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow = "1.0.65"

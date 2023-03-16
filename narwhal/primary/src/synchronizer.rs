@@ -908,6 +908,7 @@ impl Synchronizer {
                     digests: digests.clone(),
                     target: header.author.clone(),
                     is_certified,
+                    fetch_now: true,
                 };
                 let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));
                 let mut client = PrimaryToWorkerClient::new(peer);

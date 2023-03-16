@@ -5848,6 +5848,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "governor",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",

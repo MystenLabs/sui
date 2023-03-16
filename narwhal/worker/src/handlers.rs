@@ -16,8 +16,9 @@ use tokio::time::sleep;
 use tracing::{debug, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
-    RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -77,6 +78,23 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 
         Ok(anemo::Response::new(RequestBatchResponse { batch }))
     }
+
+    async fn request_batches(
+        &self,
+        request: anemo::Request<RequestBatchesRequest>,
+    ) -> Result<anemo::Response<RequestBatchesResponse>, anemo::rpc::Status> {
+        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
+        let batch_digests = request.into_body().batches;
+        let batches = self
+            .store
+            .read_all(batch_digests)
+            .await
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+
+        // TODO: Add a limit to the total size of the response. Requester can
+        // re-request batches that were not able to fit in this response
+        Ok(anemo::Response::new(RequestBatchesResponse { batches }))
+    }
 }
 
 /// Defines how the network receiver handles incoming primary messages.
@@ -124,6 +142,17 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                     )));
                 }
             };
+        }
+
+        // If requester asked to fetch now send to fetch now channel.
+        // Otherwise send to fetch later channel.
+
+        if message.fetch_now {
+            // After sending to message to fetch now channel, we will wait
+            // on the notify returned by the channel.
+        } else {
+            // Dont have to wait for anything here. We can assume the payload
+            // fetcher will handle fetching the missing batches
         }
 
         // Keep attempting to retrieve missing batches until we get them all or the client

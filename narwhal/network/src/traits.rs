@@ -85,4 +85,10 @@ pub trait WorkerRpc {
         peer: NetworkPublicKey,
         batch: BatchDigest,
     ) -> Result<Option<Batch>>;
+
+    async fn request_batches(
+        &self,
+        peer: NetworkPublicKey,
+        digests: Vec<BatchDigest>,
+    ) -> Result<Vec<Option<Batch>>>;
 }

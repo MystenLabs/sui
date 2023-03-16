@@ -939,6 +939,10 @@ pub struct WorkerSynchronizeMessage {
     // the batch it receives because it is part of a certificate. Only digest
     // verification is required.
     pub is_certified: bool,
+    // Set to true if worker should fetch batch immediately or eventually.
+    // If false worker will fetch batch after some delay in the effort to batch
+    // multiple requests together.
+    pub fetch_now: bool,
 }
 
 /// Used by the primary to request that the worker delete the specified batches.

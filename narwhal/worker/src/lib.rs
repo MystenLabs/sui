@@ -11,6 +11,7 @@
 mod batch_maker;
 mod handlers;
 pub mod metrics;
+mod payload_fetcher;
 mod primary_connector;
 mod quorum_waiter;
 mod transactions_server;
