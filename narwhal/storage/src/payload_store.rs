@@ -14,7 +14,7 @@ pub struct PayloadStore {
     store: DBMap<(BatchDigest, WorkerId), PayloadToken>,
 
     /// Senders to notify for a write that happened for the specified batch digest and worker id
-    notify_subscribers: NotifySubscribers<(BatchDigest, WorkerId), PayloadToken>,
+    notify_subscribers: NotifySubscribers<(BatchDigest, WorkerId), ()>,
 }
 
 impl PayloadStore {
@@ -38,12 +38,14 @@ impl PayloadStore {
         PayloadStore::new(map)
     }
 
-    pub fn write(&self, digest: BatchDigest, worker_id: WorkerId) -> Result<(), TypedStoreError> {
-        self.store.insert(&(digest, worker_id), &0u8)?;
-        self.notify_subscribers.notify(&(digest, worker_id), &0u8);
+    pub fn write(&self, digest: &BatchDigest, worker_id: &WorkerId) -> Result<(), TypedStoreError> {
+        self.store.insert(&(*digest, *worker_id), &0u8)?;
+        self.notify_subscribers.notify(&(*digest, *worker_id), &());
         Ok(())
     }
 
+    /// Writes all the provided values atomically in store - either all will succeed or nothing will
+    /// be stored.
     pub fn write_all(
         &self,
         keys: impl IntoIterator<Item = (BatchDigest, WorkerId)> + Clone,
@@ -52,42 +54,48 @@ impl PayloadStore {
             .multi_insert(keys.clone().into_iter().map(|e| (e, 0u8)))?;
 
         keys.into_iter().for_each(|(digest, worker_id)| {
-            self.notify_subscribers.notify(&(digest, worker_id), &0u8);
+            self.notify_subscribers.notify(&(digest, worker_id), &());
         });
         Ok(())
     }
 
-    pub fn read(
+    /// Queries the store whether the batch with provided `digest` and `worker_id` exists. It returns
+    /// `true` if exists, `false` otherwise.
+    pub fn contains(
         &self,
         digest: BatchDigest,
         worker_id: WorkerId,
-    ) -> Result<Option<PayloadToken>, TypedStoreError> {
-        self.store.get(&(digest, worker_id))
+    ) -> Result<bool, TypedStoreError> {
+        self.store
+            .get(&(digest, worker_id))
+            .map(|result| result.is_some())
     }
 
-    pub async fn notify_read(
+    /// When called the method will wait until the entry of batch with `digest` and `worker_id`
+    /// becomes available.
+    pub async fn notify_contains(
         &self,
         digest: BatchDigest,
         worker_id: WorkerId,
-    ) -> Result<PayloadToken, TypedStoreError> {
+    ) -> Result<(), TypedStoreError> {
         let receiver = self.notify_subscribers.subscribe(&(digest, worker_id));
 
         // let's read the value because we might have missed the opportunity
         // to get notified about it
-        if let Ok(Some(token)) = self.read(digest, worker_id) {
+        if self.contains(digest, worker_id)? {
             // notify any obligations - and remove the entries (including ours)
-            self.notify_subscribers.notify(&(digest, worker_id), &token);
+            self.notify_subscribers.notify(&(digest, worker_id), &());
 
             // reply directly
-            return Ok(token);
+            return Ok(());
         }
 
         // now wait to hear back the result
-        let result = receiver
+        receiver
             .await
-            .expect("Irrecoverable error while waiting to receive the notify_read result");
+            .expect("Irrecoverable error while waiting to receive the notify_contains result");
 
-        Ok(result)
+        Ok(())
     }
 
     pub fn read_all(
@@ -102,5 +110,49 @@ impl PayloadStore {
         keys: impl IntoIterator<Item = (BatchDigest, WorkerId)>,
     ) -> Result<(), TypedStoreError> {
         self.store.multi_remove(keys)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::PayloadStore;
+    use fastcrypto::hash::Hash;
+    use futures::future::join_all;
+    use types::Batch;
+
+    #[tokio::test]
+    async fn test_notify_read() {
+        let store = PayloadStore::new_for_tests();
+
+        // run the tests a few times
+        let batch: Batch = test_utils::fixture_batch_with_transactions(10);
+        let id = batch.digest();
+        let worker_id = 0;
+
+        // now populate a batch
+        store.write(&id, &worker_id).unwrap();
+
+        // now spawn a series of tasks before writing anything in store
+        let mut handles = vec![];
+        for _i in 0..5 {
+            let cloned_store = store.clone();
+            let handle =
+                tokio::spawn(async move { cloned_store.notify_contains(id, worker_id).await });
+
+            handles.push(handle)
+        }
+
+        // and populate the rest with a write_all
+        store.write_all(vec![(id, worker_id)]).unwrap();
+
+        // now asset the notify reads return with the result
+        let result = join_all(handles).await;
+
+        assert_eq!(result.len(), 5);
+
+        for r in result {
+            let token = r.unwrap();
+            assert!(token.is_ok());
+        }
     }
 }

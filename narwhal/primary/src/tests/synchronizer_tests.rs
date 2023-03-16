@@ -797,7 +797,7 @@ async fn sync_batches_drops_old() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
+        for (digest, (worker_id, _)) in &certificate.header.payload {
             payload_store.write(digest, worker_id).unwrap();
         }
     }

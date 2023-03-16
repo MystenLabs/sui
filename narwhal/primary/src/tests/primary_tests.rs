@@ -374,7 +374,7 @@ async fn test_request_vote_send_missing_parents() {
     // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
     for cert in round_2_parents {
         for (digest, (worker_id, _)) in &cert.header.payload {
-            payload_store.write(*digest, *worker_id).unwrap();
+            payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
@@ -519,19 +519,19 @@ async fn test_request_vote_accept_missing_parents() {
     // should be able to get accepted.
     for cert in round_1_certs {
         for (digest, (worker_id, _)) in &cert.header.payload {
-            payload_store.write(*digest, *worker_id).unwrap();
+            payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     for cert in round_2_parents {
         for (digest, (worker_id, _)) in &cert.header.payload {
-            payload_store.write(*digest, *worker_id).unwrap();
+            payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     // Populate new header payload so they don't have to be retrieved.
     for (digest, (worker_id, _)) in &test_header.payload {
-        payload_store.write(*digest, *worker_id).unwrap();
+        payload_store.write(digest, worker_id).unwrap();
     }
 
     // TEST PHASE 1: Handler should report missing parent certificates to caller.
@@ -639,7 +639,7 @@ async fn test_request_vote_missing_batches() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
+        for (digest, (worker_id, _)) in &certificate.header.payload {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
@@ -764,7 +764,7 @@ async fn test_request_vote_already_voted() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
+        for (digest, (worker_id, _)) in &certificate.header.payload {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
@@ -1100,7 +1100,7 @@ async fn test_process_payload_availability_success() {
             // write the certificate
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload {
+            for (digest, (worker_id, _)) in &certificate.header.payload {
                 payload_store.write(digest, worker_id).unwrap();
             }
         } else {
@@ -1341,7 +1341,7 @@ async fn test_request_vote_created_at_in_future() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
+        for (digest, (worker_id, _)) in &certificate.header.payload {
             payload_store.write(digest, worker_id).unwrap();
         }
     }

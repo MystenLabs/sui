@@ -861,7 +861,7 @@ impl Synchronizer {
             //      4. The last good node will never be able to sync as it will keep sending its sync requests
             //         to workers #1 (rather than workers #0). Also, clients will never be able to retrieve batch
             //         X as they will be querying worker #1.
-            if inner.payload_store.read(*digest, *worker_id)?.is_none() {
+            if !inner.payload_store.contains(*digest, *worker_id)? {
                 missing
                     .entry(*worker_id)
                     .or_insert_with(Vec::new)
@@ -899,10 +899,10 @@ impl Synchronizer {
                         backoff::Error::transient(DagError::NetworkError(format!("{e:?}")))
                     });
                     if result.is_ok() {
-                        for digest in digests.clone() {
+                        for digest in &digests {
                             inner
                                 .payload_store
-                                .write(digest, worker_id)
+                                .write(digest, &worker_id)
                                 .map_err(|e| backoff::Error::permanent(DagError::StoreError(e)))?
                         }
                     }

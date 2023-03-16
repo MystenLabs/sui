@@ -670,7 +670,7 @@ impl BlockSynchronizer {
             .payload
             .iter()
             .map(|(batch_digest, (worker_id, _))| {
-                payload_store.notify_read(*batch_digest, *worker_id)
+                payload_store.notify_contains(*batch_digest, *worker_id)
             })
             .collect::<Vec<_>>();
 

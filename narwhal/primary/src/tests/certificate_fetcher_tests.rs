@@ -237,7 +237,7 @@ async fn fetch_certificates_basic() {
 
     // Avoid any sort of missing payload by pre-populating the batch
     for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload.iter()) {
-        payload_store.write(*digest, *worker_id).unwrap();
+        payload_store.write(digest, worker_id).unwrap();
     }
 
     let total_certificates = fixture.authorities().count() * rounds as usize;

@@ -1167,7 +1167,7 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.payload_store
-            .write(message.digest, message.worker_id)
+            .write(&message.digest, &message.worker_id)
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(()))
     }

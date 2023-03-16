@@ -159,7 +159,7 @@ async fn test_successful_blocks_delete() {
     for (worker_id, batch_digests) in worker_batches {
         for digest in batch_digests {
             assert!(
-                payload_store.read(digest, worker_id).unwrap().is_none(),
+                !payload_store.contains(digest, worker_id).unwrap(),
                 "Payload shouldn't exist"
             );
         }
@@ -320,7 +320,7 @@ async fn test_failed_blocks_delete() {
     }
     for (worker_id, batch_digests) in worker_batches {
         for digest in batch_digests {
-            assert!(payload_store.read(digest, worker_id).unwrap().is_some());
+            assert!(payload_store.contains(digest, worker_id).unwrap());
         }
     }
     let mut total_deleted = 0;
