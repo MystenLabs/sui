@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on number and sizes of emitted events
+// Test limits on number and sizes of emitted events
 
 //# init --addresses Test=0x0
 
@@ -60,7 +60,7 @@ module Test::M1 {
 //# run Test::M1::emit_n_small_events --args 1 --gas-budget 1000000
 
 // emit at event count limit should succeed
-//# run Test::M1::emit_n_small_events --args 256 --gas-budget 1000000
+//# run Test::M1::emit_n_small_events --args 256 --gas-budget 2000000
 
 // emit above event count limit should fail
 //# run Test::M1::emit_n_small_events --args 257 --gas-budget 1000000
@@ -69,7 +69,7 @@ module Test::M1 {
 //# run Test::M1::emit_n_small_events --args 300 --gas-budget 1000000
 
 // emit below event size limit should succeed
-//# run Test::M1::emit_object_with_approx_size --args 200000 --gas-budget 1000000
+//# run Test::M1::emit_object_with_approx_size --args 200000 --gas-budget 2000000
 
 // emit above event size limit should fail
 //# run Test::M1::emit_object_with_approx_size --args 259000 --gas-budget 1000000

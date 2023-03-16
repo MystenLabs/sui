@@ -783,7 +783,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
                 SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
             ],
             None,
-            1000,
+            2000,
             None,
         )
         .await?;

@@ -91,7 +91,7 @@ mod pg_integration {
                 *address,
                 *gas_objects.first().unwrap(),
                 Some(*gas_objects.last().unwrap()),
-                1000,
+                2000,
                 *recipient_address,
             )
             .await?;

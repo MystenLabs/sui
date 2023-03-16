@@ -383,8 +383,16 @@ impl<'a> SuiGasStatus<'a> {
     pub fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
         let computation_cost: u64 = self.gas_used().into();
         let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, computation_cost);
-        let charge = bucket_cost - computation_cost;
-        self.deduct_computation_cost(&charge.into())
+        // charge extra on top of `computation_cost` to make the total computation
+        // gas cost a bucket value
+        let extra_charge = bucket_cost.saturating_sub(computation_cost);
+        if extra_charge > 0 {
+            self.deduct_computation_cost(&GasUnits::new(extra_charge).to_unit())
+        } else {
+            // we hit the last bucket and the computation is already more then the
+            // max bucket so just charge as much as it is without buckets
+            Ok(())
+        }
     }
 
     pub fn reset_storage_cost_and_rebate(&mut self) {

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on length of vectors
+// Test limits on length of vectors
 
 //# init --addresses Test=0x0
 
@@ -34,7 +34,7 @@ module Test::M1 {
 //# run Test::M1::push_n_items --args 256 --gas-budget 1000000
 
 // run at vec len limit should succeed
-//# run Test::M1::push_n_items --args 262144 --gas-budget 1000000
+//# run Test::M1::push_n_items --args 262144 --gas-budget 2000000
 
 // run above vec len limit should fail
-//# run Test::M1::push_n_items --args 262145 --gas-budget 1000000
+//# run Test::M1::push_n_items --args 262145 --gas-budget 2000000
