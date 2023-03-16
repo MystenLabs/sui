@@ -40,6 +40,7 @@ where
 }
 
 /// Checks if there is a path between two leaders.
+/// NOTE: ok to not use ancestors as long as this is calculated deterministically.
 fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
     let mut parents = vec![leader];
     for r in (prev_leader.round()..leader.round()).rev() {
@@ -68,18 +69,17 @@ pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificat
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
-        if x.round() == gc_round + 1 {
-            // Do not try to order parents of the certificate, since they have been GC'ed.
-            continue;
-        }
-        for parent in &x.header.parents {
+        for (round, ancestor) in x.header.ancestors() {
+            if round <= gc_round {
+                continue;
+            }
             let (digest, certificate) = match state
                 .dag
-                .get(&(x.round() - 1))
-                .and_then(|x| x.values().find(|(x, _)| x == parent))
+                .get(&round)
+                .and_then(|map| map.values().find(|(x, _)| x == &ancestor))
             {
                 Some(x) => x,
-                None => panic!("Parent digest {parent:?} not found for {x:?}!"),
+                None => panic!("Ancestor {ancestor:?} at round  {round} not found for {x:?}!"),
             };
 
             // We skip the certificate if we (1) already processed it or (2) we reached a round that we already

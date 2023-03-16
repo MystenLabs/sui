@@ -162,6 +162,7 @@ pub struct Header {
     #[serde(with = "indexmap::serde_seq")]
     pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
+    pub ancestors: Vec<Option<(Round, CertificateDigest)>>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
 }
@@ -175,6 +176,7 @@ impl HeaderBuilder {
             created_at: self.created_at.unwrap_or(0),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
+            ancestors: self.ancestors.unwrap(),
             digest: OnceCell::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
@@ -207,6 +209,7 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
         parents: BTreeSet<CertificateDigest>,
+        ancestors: Vec<Option<(Round, CertificateDigest)>>,
     ) -> Self {
         let header = Self {
             author,
@@ -215,6 +218,7 @@ impl Header {
             created_at: now(),
             payload,
             parents,
+            ancestors,
             digest: OnceCell::default(),
         };
         let digest = Hash::digest(&header);
@@ -224,6 +228,33 @@ impl Header {
 
     pub fn digest(&self) -> HeaderDigest {
         *self.digest.get_or_init(|| Hash::digest(self))
+    }
+
+    pub fn parents(&self) -> Vec<CertificateDigest> {
+        self.ancestors
+            .iter()
+            .filter_map(|a| match a {
+                Some((round, digest)) => {
+                    if round + 1 == self.round {
+                        Some(*digest)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            })
+            .collect()
+    }
+
+    pub fn ancestor_digests(&self) -> Vec<CertificateDigest> {
+        self.ancestors
+            .iter()
+            .filter_map(|a| a.map(|inner| inner.1))
+            .collect()
+    }
+
+    pub fn ancestors(&self) -> Vec<(Round, CertificateDigest)> {
+        self.ancestors.iter().filter_map(|a| *a).collect()
     }
 
     pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
@@ -269,6 +300,7 @@ impl Default for Header {
             created_at: TimestampMs::default(),
             payload: IndexMap::default(),
             parents: BTreeSet::default(),
+            ancestors: Vec::default(),
             digest: OnceCell::default(),
         }
     }
@@ -810,6 +842,8 @@ pub struct RequestVoteRequest {
     // Optional parent certificates provided by the requester, in case this primary doesn't yet
     // have them and requires them in order to offer a vote.
     pub parents: Vec<Certificate>,
+
+    pub ancestors: Vec<Certificate>,
 }
 
 /// Used by the primary to reply to RequestVoteRequest.

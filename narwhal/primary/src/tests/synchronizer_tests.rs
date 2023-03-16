@@ -610,7 +610,7 @@ async fn deliver_certificate_using_dag() {
 
     // ensure that the certificate parents are found
     let parents_available = synchronizer
-        .get_missing_parents(&test_certificate)
+        .get_missing_ancestors(&test_certificate)
         .await
         .unwrap()
         .is_empty();
@@ -674,7 +674,7 @@ async fn deliver_certificate_using_store() {
 
     // ensure that the certificate parents are found
     let parents_available = synchronizer
-        .get_missing_parents(&test_certificate)
+        .get_missing_ancestors(&test_certificate)
         .await
         .unwrap()
         .is_empty();
@@ -732,14 +732,14 @@ async fn deliver_certificate_not_found_parents() {
     let test_certificate = certificates.pop_back().unwrap();
 
     // we try to find the certificate's parents
-    let parents_available = synchronizer
-        .get_missing_parents(&test_certificate)
+    let ancestors_available = synchronizer
+        .get_missing_ancestors(&test_certificate)
         .await
         .unwrap()
         .is_empty();
 
     // and we should fail
-    assert!(!parents_available);
+    assert!(!ancestors_available);
 
     let certificate = rx_certificate_fetcher.recv().await.unwrap();
 

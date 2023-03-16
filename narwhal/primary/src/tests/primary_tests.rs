@@ -384,6 +384,7 @@ async fn test_request_vote_send_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -412,6 +413,7 @@ async fn test_request_vote_send_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: round_2_missing.clone(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -539,6 +541,7 @@ async fn test_request_vote_accept_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -559,6 +562,7 @@ async fn test_request_vote_accept_missing_parents() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
         parents: round_2_missing.clone(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -684,6 +688,7 @@ async fn test_request_vote_missing_batches() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -798,6 +803,7 @@ async fn test_request_vote_already_voted() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -816,6 +822,7 @@ async fn test_request_vote_already_voted() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -841,6 +848,7 @@ async fn test_request_vote_already_voted() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -1381,6 +1389,7 @@ async fn test_request_vote_created_at_in_future() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()
@@ -1411,6 +1420,7 @@ async fn test_request_vote_created_at_in_future() {
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
+        ancestors: Vec::new(),
     });
     assert!(request
         .extensions_mut()

@@ -11,7 +11,8 @@ use std::{
 };
 
 use store::{
-    rocks::{DBMap, TypedStoreError::RocksDBError},
+    reopen,
+    rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions, TypedStoreError::RocksDBError},
     Map,
 };
 use tokio::sync::{oneshot, oneshot::Sender};
@@ -49,13 +50,40 @@ impl CertificateStore {
         certificates_by_id: DBMap<CertificateDigest, Certificate>,
         certificate_id_by_round: DBMap<(Round, PublicKeyBytes), CertificateDigest>,
         certificate_id_by_origin: DBMap<(PublicKeyBytes, Round), CertificateDigest>,
-    ) -> CertificateStore {
+    ) -> Self {
         Self {
             certificates_by_id,
             certificate_id_by_round,
             certificate_id_by_origin,
             notify_on_write_subscribers: Arc::new(DashMap::new()),
         }
+    }
+
+    pub fn new_for_tests() -> Self {
+        const CERTIFICATES_CF: &str = "certificates";
+        const CERTIFICATE_DIGEST_BY_ROUND_CF: &str = "certificate_digest_by_round";
+        const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &str = "certificate_digest_by_origin";
+        let rocksdb = open_cf(
+            tempfile::tempdir().unwrap(),
+            None,
+            MetricConf::default(),
+            &[
+                CERTIFICATES_CF,
+                CERTIFICATE_DIGEST_BY_ROUND_CF,
+                CERTIFICATE_DIGEST_BY_ORIGIN_CF,
+            ],
+        )
+        .expect("Cannot open database");
+        let (certificate_map, certificate_digest_by_round_map, certificate_digest_by_origin_map) = reopen!(&rocksdb,
+            CERTIFICATES_CF;<CertificateDigest, Certificate>,
+            CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
+            CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>
+        );
+        Self::new(
+            certificate_map,
+            certificate_digest_by_round_map,
+            certificate_digest_by_origin_map,
+        )
     }
 
     /// Inserts a certificate to the store
@@ -455,6 +483,28 @@ impl CertificateStore {
         {
             if &name == origin {
                 return Ok(Some(round));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn prev_round_and_digest(
+        &self,
+        origin: &PublicKeyBytes,
+        round: Round,
+    ) -> StoreResult<Option<(Round, CertificateDigest)>> {
+        if round <= 1 {
+            return Ok(None);
+        }
+        let key = (origin.clone(), round - 1);
+        if let Some(((name, round), digest)) = self
+            .certificate_id_by_origin
+            .iter()
+            .skip_prior_to(&key)?
+            .next()
+        {
+            if &name == origin {
+                return Ok(Some((round, digest)));
             }
         }
         Ok(None)

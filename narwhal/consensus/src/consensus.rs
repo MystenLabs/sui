@@ -12,7 +12,7 @@ use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     cmp::{max, Ordering},
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 use storage::CertificateStore;
@@ -156,7 +156,7 @@ impl ConsensusState {
             );
             return Ok(false);
         }
-        Self::check_parents(certificate, dag, gc_round);
+        Self::check_ancestors(certificate, dag, gc_round);
 
         // Always insert the certificate even if it is below last committed round of its origin,
         // to allow verifying parent existence.
@@ -209,24 +209,22 @@ impl ConsensusState {
         self.dag.retain(|r, _| *r > self.last_round.gc_round);
     }
 
-    // Checks that the provided certificate's parents exist and crashes if not.
-    fn check_parents(certificate: &Certificate, dag: &Dag, gc_round: Round) {
-        let round = certificate.round();
-        // Skip checking parents if they are GC'ed.
-        // Also not checking genesis parents for simplicity.
-        if round <= gc_round + 1 {
-            return;
-        }
-        if let Some(round_table) = dag.get(&(round - 1)) {
-            let store_parents: BTreeSet<&CertificateDigest> =
-                round_table.iter().map(|(_, (digest, _))| digest).collect();
-            for parent_digest in &certificate.header.parents {
-                if !store_parents.contains(parent_digest) {
-                    panic!("Parent digest {parent_digest:?} not found in DAG for {certificate:?}!");
-                }
+    // Checks that the provided certificate's ancestors exist and crashes if not.
+    fn check_ancestors(certificate: &Certificate, dag: &Dag, gc_round: Round) {
+        for (round, ancestor) in certificate.header.ancestors() {
+            // Skip checking ancestors if they are GC'ed.
+            // Also not checking genesis certificates for simplicity.
+            if round <= gc_round {
+                continue;
             }
-        } else {
-            panic!("Parent round not found in DAG for {certificate:?}!");
+            if let Some(round_table) = dag.get(&round) {
+                let found = round_table
+                    .iter()
+                    .any(|(_, (digest, _))| digest == &ancestor);
+                assert!(found, "Ancestor round {round} digest {ancestor:?} not found in DAG for {certificate:?}! gc_round={gc_round}")
+            } else {
+                panic!("Ancestor round {round} not found in DAG for {certificate:?}! gc_round={gc_round}");
+            }
         }
     }
 }

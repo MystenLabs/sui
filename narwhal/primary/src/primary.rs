@@ -494,6 +494,7 @@ impl Primary {
             name.clone(),
             committee.clone(),
             proposer_store,
+            certificate_store.clone(),
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
             parameters.max_header_delay,
@@ -734,17 +735,17 @@ impl PrimaryReceiverHandler {
         // certificates to still have a chance to be included in the DAG while not wasting
         // resources on very old vote requests. This value affects performance but not correctness
         // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 3;
+        const HEADER_AGE_LIMIT: Round = 20;
 
         // If requester has provided us with parent certificates, process them all
         // before proceeding.
         self.metrics
             .certificates_in_votes
-            .inc_by(request.body().parents.len() as u64);
+            .inc_by(request.body().ancestors.len() as u64);
         let wait_network = network.clone();
         let mut wait_notifications: FuturesUnordered<_> = request
             .body()
-            .parents
+            .ancestors
             .clone()
             .into_iter()
             .map(|cert| {
@@ -781,7 +782,7 @@ impl PrimaryReceiverHandler {
         // This check is necessary for correctness, because it is possible that the list of missing
         // parents in the request is incomplete, or wait_notifications get notified on shut down
         // without actually having the parents available.
-        let (parents, missing) = self.synchronizer.get_parents(header)?;
+        let (_ancestors, missing) = self.synchronizer.get_ancestors(header)?;
         if !missing.is_empty() {
             return Ok(RequestVoteResponse {
                 vote: None,
@@ -803,7 +804,9 @@ impl PrimaryReceiverHandler {
         // - are from unique authorities
         let mut parent_authorities = BTreeSet::new();
         let mut stake = 0;
+        let parents = self.certificate_store.read_all(header.parents())?;
         for parent in parents.iter() {
+            let parent = parent.as_ref().unwrap();
             ensure!(
                 parent.round() + 1 == header.round,
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
