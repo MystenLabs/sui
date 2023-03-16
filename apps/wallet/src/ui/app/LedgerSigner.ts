@@ -11,6 +11,7 @@ import {
     type JsonRpcProvider,
     toB64,
 } from '@mysten/sui.js';
+import { toHEX } from '@mysten/bcs';
 
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
@@ -53,10 +54,14 @@ export class LedgerSigner extends SignerWithProvider {
 
         console.log('Deriv path for account', this.#derivationPath);
 
-        console.log(data);
+        console.log(toB64(data));
         console.log('Signature', toB64(signature));
         console.log('Public key', pubKey.toBase64());
         console.log('Public key to SUI', pubKey.toSuiAddress());
+        
+        // make it easier to plug into: https://github.com/MystenLabs/fastcrypto/blob/main/fastcrypto-cli/src/sigs_cli.rs
+        console.log('sig-cli input');
+        console.log('--scheme ed25519 --msg ', toHEX(data), ' ', '--public-key ', toHEX(pubKey.toBytes()),' ', '--signature ', toHEX(signature));
 
         return toSerializedSignature({
             signature,
