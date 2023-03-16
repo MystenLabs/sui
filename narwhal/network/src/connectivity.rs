@@ -93,18 +93,20 @@ impl ConnectionMonitor {
         peer_id: PeerId,
         connection_status: ConnectionStatus,
     ) {
-        let int_status = match connection_status {
-            ConnectionStatus::Connected => {
-                self.connection_metrics.network_peers.inc();
-                1
-            }
-            ConnectionStatus::Disconnected => {
-                self.connection_metrics.network_peers.dec();
-                0
-            }
-        };
+        if let Some(network) = self.network.upgrade() {
+            self.connection_metrics
+                .network_peers
+                .set(network.peers().len() as i64);
+        } else {
+            return;
+        }
 
         if let Some(ty) = self.peer_id_types.get(&peer_id) {
+            let int_status = match connection_status {
+                ConnectionStatus::Connected => 1,
+                ConnectionStatus::Disconnected => 0,
+            };
+
             self.connection_metrics
                 .network_peer_connected
                 .with_label_values(&[&format!("{peer_id}"), ty])
