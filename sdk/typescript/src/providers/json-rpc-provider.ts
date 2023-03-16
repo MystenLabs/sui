@@ -701,7 +701,7 @@ export class JsonRpcProvider {
     transaction: Transaction | string | Uint8Array;
     sender: SuiAddress;
     /** Default to use the network reference gas price stored in the Sui System State object */
-    gasPrice?: number | null;
+    gasPrice?: bigint | number | null;
     /** optional. Default to use the current epoch number stored in the Sui System State object */
     epoch?: number | null;
   }): Promise<DevInspectResults> {
