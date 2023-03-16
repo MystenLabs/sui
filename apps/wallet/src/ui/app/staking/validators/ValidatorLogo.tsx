@@ -53,11 +53,9 @@ export function ValidatorLogo({
     const newValidator =
         currentEpoch - stakingPoolActivationEpoch <= 1 && currentEpoch !== 0;
 
-    // flag for if the validator is at risk of being removed from the active set
-    const isAtRisk = useMemo(
-        () =>
-            data?.atRiskValidators.some((item) => item[0] === validatorAddress),
-        [data, validatorAddress]
+    // flag if the validator is at risk of being removed from the active set
+    const isAtRisk = data?.atRiskValidators.some(
+        (item) => item[0] === validatorAddress
     );
 
     if (isLoading) {
