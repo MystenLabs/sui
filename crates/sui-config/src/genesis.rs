@@ -445,7 +445,8 @@ impl GenesisChainParameters {
     }
 
     fn default_epoch_duration_ms() -> u64 {
-        10000
+        // 24 hrs
+        24 * 60 * 60 * 1000
     }
 }
 

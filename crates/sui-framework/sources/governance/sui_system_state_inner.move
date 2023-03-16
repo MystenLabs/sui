@@ -126,15 +126,15 @@ module sui::sui_system_state_inner {
     const MAX_VALIDATOR_COUNT: u64 = 150;
 
     /// Lower-bound on the amount of stake required to become a validator.
-    const MIN_VALIDATOR_JOINING_STAKE: u64 = 30_000; // 30 million SUI
+    const MIN_VALIDATOR_JOINING_STAKE: u64 = 30_000_000_000_000_000; // 30 million SUI
 
     /// Validators with stake amount below `VALIDATOR_LOW_STAKE_THRESHOLD` are considered to
     /// have low stake and will be escorted out of the validator set after being below this
     /// threshold for more than `VALIDATOR_LOW_STAKE_GRACE_PERIOD` number of epochs.
     /// And validators with stake below `VALIDATOR_VERY_LOW_STAKE_THRESHOLD` will be removed
     /// immediately at epoch change, no grace period.
-    const VALIDATOR_LOW_STAKE_THRESHOLD: u64 = 25_000; // 25 million SUI
-    const VALIDATOR_VERY_LOW_STAKE_THRESHOLD: u64 = 20_000; // 20 million SUI
+    const VALIDATOR_LOW_STAKE_THRESHOLD: u64 = 25_000_000_000_000_000; // 25 million SUI
+    const VALIDATOR_VERY_LOW_STAKE_THRESHOLD: u64 = 20_000_000_000_000_000; // 20 million SUI
     const VALIDATOR_LOW_STAKE_GRACE_PERIOD: u64 = 7; // A validator can have stake below VALIDATOR_LOW_STAKE_THRESHOLD for 7 epochs before being kicked out.
 
     // ==== functions that can only be called by genesis ====
