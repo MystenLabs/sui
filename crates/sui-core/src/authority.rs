@@ -102,7 +102,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
-use crate::execution_driver::execution_process;
+use crate::execution_driver::{execution_process, EXECUTION_MAX_ATTEMPTS};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
@@ -137,8 +137,6 @@ pub mod epoch_start_configuration;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
-
-pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 
 // Reject a transaction if the number of certificates pending execution is above this threshold.
 // 20000 = 10k TPS * 2s resident time in transaction manager.
@@ -1642,7 +1640,7 @@ impl AuthorityState {
         // Process tx recovery log first, so that checkpoint recovery (below)
         // doesn't observe partially-committed txes.
         state
-            .process_tx_recovery_log(None, &epoch_store)
+            .process_tx_recovery_log(&epoch_store)
             .await
             .expect("Could not fully process recovery log at startup!");
 
@@ -1764,41 +1762,26 @@ impl AuthorityState {
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(
         &self,
-        limit: Option<usize>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let mut limit = limit.unwrap_or(usize::MAX);
-        while limit > 0 {
-            limit -= 1;
-            if let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
-                let digest = tx_guard.tx_id();
-                debug!(?digest, "replaying failed cert from log");
+        while let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
+            let digest = tx_guard.tx_id();
+            debug!(?digest, "replaying failed cert from log");
 
-                if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
-                    // This tx will be only partially executed, however the store will be in a safe
-                    // state. We will simply never reach eventual consistency for this TX.
-                    // MUSTFIX: Should we revert the tx entirely? I'm not sure the effort is
-                    // warranted, since the only way this can happen is if we are repeatedly
-                    // failing to write to the db, in which case a revert probably won't succeed
-                    // either.
-                    error!(
-                        ?digest,
-                        "Abandoning in-progress TX after {} retries.", MAX_TX_RECOVERY_RETRY
-                    );
-                    // prevent the tx from going back into the recovery list again.
-                    tx_guard.release();
-                    continue;
-                }
+            if tx_guard.retry_num() >= EXECUTION_MAX_ATTEMPTS {
+                // All in-progress transactions must eventually succeed.
+                panic!(
+                    "Transaction {:?} still failing after {} retries",
+                    digest, EXECUTION_MAX_ATTEMPTS
+                );
+            }
 
-                if let Err(e) = self
-                    .process_certificate(tx_guard, &cert.into(), epoch_store)
-                    .instrument(error_span!("process_tx_recovery_log", tx_digest = ?digest))
-                    .await
-                {
-                    warn!(?digest, "Failed to process in-progress certificate: {e}");
-                }
-            } else {
-                break;
+            if let Err(e) = self
+                .process_certificate(tx_guard, &cert.into(), epoch_store)
+                .instrument(error_span!("process_tx_recovery_log", tx_digest = ?digest))
+                .await
+            {
+                warn!(?digest, "Failed to process in-progress certificate: {e}");
             }
         }
 
