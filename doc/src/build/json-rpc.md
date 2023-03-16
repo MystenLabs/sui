@@ -20,9 +20,9 @@ To configure your own Sui Full node, see [Configure a Sui Full node](fullnode.md
 
 You can sign transactions and interact with the Sui network using any of the following:
 
-* [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
-* [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
-* [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
+ * [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
+ * [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+ * [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
 ## Sui JSON-RPC examples
 
