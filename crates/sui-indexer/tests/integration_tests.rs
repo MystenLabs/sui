@@ -10,19 +10,27 @@ mod pg_integration {
     use prometheus::Registry;
     use std::env;
     use std::str::FromStr;
+    use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
     use sui_indexer::PgPoolConnection;
     use sui_indexer::{new_pg_connection_pool, Indexer};
+    use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
+    use sui_json_rpc_types::{
+        SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiParsedMoveObject,
+        SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes,
+    };
+    use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+    use sui_types::base_types::ObjectID;
     use sui_types::digests::TransactionDigest;
+    use sui_types::gas_coin::GasCoin;
+    use sui_types::messages::ExecuteTransactionRequestType;
+    use sui_types::object::ObjectFormatOptions;
+    use sui_types::query::TransactionFilter;
+    use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::task::JoinHandle;
-
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-    use sui_json_rpc::api::ReadApiClient;
-    use sui_json_rpc_types::{SuiMoveObject, SuiParsedMoveObject, SuiTransactionResponseOptions};
-    use sui_types::gas_coin::GasCoin;
-    use sui_types::object::ObjectFormatOptions;
 
     #[tokio::test]
     async fn test_genesis_sync() {
@@ -53,6 +61,112 @@ mod pg_integration {
         }
         // TODO: more checks to ensure genesis sync data integrity.
         drop(handle);
+    }
+
+    #[tokio::test]
+    async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
+        let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+        let address = test_cluster.accounts.first().unwrap();
+        let recipient_address = test_cluster.accounts.last().unwrap();
+        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+            .get_owned_objects(
+                *address,
+                Some(SuiObjectDataOptions::new().with_type()),
+                None,
+                None,
+                None,
+            )
+            .await?
+            .data
+            .into_iter()
+            .filter_map(|object_resp| match object_resp {
+                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
+                _ => None,
+            })
+            .collect();
+
+        let transaction_bytes: TransactionBytes = indexer_rpc_client
+            .transfer_object(
+                *address,
+                *gas_objects.first().unwrap(),
+                Some(*gas_objects.last().unwrap()),
+                1000,
+                *recipient_address,
+            )
+            .await?;
+
+        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let tx =
+            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+        let tx_response = indexer_rpc_client
+            .execute_transaction(
+                tx_bytes,
+                signatures,
+                Some(SuiTransactionResponseOptions::full_content()),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await?;
+
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let tx_read_response = indexer_rpc_client
+            .get_transaction_with_options(
+                tx_response.digest,
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        assert_eq!(tx_response.digest, tx_read_response.digest);
+        assert_eq!(tx_response.transaction, tx_read_response.transaction);
+        assert_eq!(tx_response.effects, tx_read_response.effects);
+
+        // query txn with sender address
+        let from_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(*address));
+        let tx_from_query_response = indexer_rpc_client
+            .query_transactions(from_query, None, None, None)
+            .await?;
+        assert!(!tx_from_query_response.has_next_page);
+        assert_eq!(tx_from_query_response.data.len(), 1);
+        assert_eq!(
+            tx_response.digest,
+            tx_from_query_response.data.first().unwrap().digest
+        );
+
+        // query txn with recipient address
+        let to_query = SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(
+            *recipient_address,
+        ));
+        let tx_to_query_response = indexer_rpc_client
+            .query_transactions(to_query, None, None, None)
+            .await?;
+        // the address has received 2 transactions, one is genesis
+        assert!(!tx_to_query_response.has_next_page);
+        assert_eq!(tx_to_query_response.data.len(), 2);
+        assert_eq!(
+            tx_response.digest,
+            tx_to_query_response.data.last().unwrap().digest
+        );
+
+        // query txn with mutated object id
+        let mutation_query = SuiTransactionResponseQuery::new_with_filter(
+            TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
+        );
+        let tx_mutation_query_response = indexer_rpc_client
+            .query_transactions(mutation_query, None, None, None)
+            .await?;
+
+        // the coin is first created by genesis txn, then transferred by the above txn
+        assert!(!tx_mutation_query_response.has_next_page);
+        assert_eq!(tx_mutation_query_response.data.len(), 2);
+        assert_eq!(
+            tx_response.digest,
+            tx_mutation_query_response.data.last().unwrap().digest,
+        );
+        Ok(())
     }
 
     #[tokio::test]
@@ -100,7 +214,8 @@ mod pg_integration {
     ) {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32771".into());
-        let db_url = format!("postgres://postgres:postgrespw@{pg_host}:{pg_port}");
+        let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
+        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
         let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
 
         reset_database(&mut pg_connection_pool.get().unwrap());
@@ -129,6 +244,14 @@ mod pg_integration {
         while cp < target {
             tokio::task::yield_now().await;
             cp = store.get_latest_checkpoint_sequence_number().unwrap();
+        }
+    }
+
+    async fn wait_until_transaction_synced(store: &PgIndexerStore, tx_digest: &str) {
+        let mut tx = store.get_transaction_by_digest(tx_digest);
+        while tx.is_err() {
+            tokio::task::yield_now().await;
+            tx = store.get_transaction_by_digest(tx_digest);
         }
     }
 
