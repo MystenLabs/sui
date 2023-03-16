@@ -172,8 +172,8 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
-    let authorities = spawn_test_authorities([].into_iter(), &config).await;
-    let fullnode = spawn_fullnode([].into_iter(), &config, None).await;
+    let authorities = spawn_test_authorities([], &config).await;
+    let fullnode = spawn_fullnode([], &config, None).await;
     let epoch = fullnode.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
