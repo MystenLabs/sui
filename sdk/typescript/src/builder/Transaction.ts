@@ -127,6 +127,20 @@ export class Transaction {
   }
 
   /**
+   * Converts from a serialize transaction kind (built with `build({ onlyTransactionKind: true })`) to a `Transaction` class.
+   * Supports either a byte array, or base64-encoded bytes.
+   */
+  static fromKind(serialized: string | Uint8Array) {
+    const tx = new Transaction();
+
+    tx.#transactionData = TransactionDataBuilder.fromKindBytes(
+      typeof serialized === 'string' ? fromB64(serialized) : serialized,
+    );
+
+    return tx;
+  }
+
+  /**
    * Converts from a serialized transaction format to a `Transaction` class.
    * There are two supported serialized formats:
    * - A string returned from `Transaction#serialize`. The serialized format must be compatible, or it will throw an error.
@@ -162,6 +176,15 @@ export class Transaction {
   setSender(sender: string) {
     this.#transactionData.sender = sender;
   }
+  /**
+   * Sets the sender only if it has not already been set.
+   * This is useful for sponsored transaction flows where the sender may not be the same as the signer address.
+   */
+  setSenderIfNotSet(sender: string) {
+    if (!this.#transactionData.sender) {
+      this.#transactionData.sender = sender;
+    }
+  }
   setExpiration(expiration?: TransactionExpiration) {
     this.#transactionData.expiration = expiration;
   }
@@ -170,6 +193,9 @@ export class Transaction {
   }
   setGasBudget(budget: number | bigint) {
     this.#transactionData.gasConfig.budget = String(budget);
+  }
+  setGasOwner(owner: string) {
+    this.#transactionData.gasConfig.owner = owner;
   }
   setGasPayment(payments: SuiObjectRef[]) {
     if (payments.length >= MAX_GAS_OBJECTS) {
@@ -322,8 +348,11 @@ export class Transaction {
 
   // The current default is just picking _all_ coins we can which may not be ideal.
   async #selectGasPayment(provider?: JsonRpcProvider) {
+    const gasOwner =
+      this.#transactionData.gasConfig.owner ?? this.#transactionData.sender;
+
     const coins = await expectProvider(provider).getCoins({
-      owner: this.#transactionData.sender!,
+      owner: gasOwner!,
       coinType: SUI_TYPE_ARG,
     });
 
@@ -363,7 +392,7 @@ export class Transaction {
    * so that it can be built into bytes.
    */
   async #prepare({ provider, onlyTransactionKind }: BuildOptions) {
-    if (!this.#transactionData.sender) {
+    if (!onlyTransactionKind && !this.#transactionData.sender) {
       throw new Error('Missing transaction sender');
     }
 
