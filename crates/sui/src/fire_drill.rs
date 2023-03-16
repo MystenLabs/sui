@@ -93,7 +93,8 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
     Ok(())
 }
 
-async fn get_gas_obj_ref(
+// TODO move this to a shared lib
+pub async fn get_gas_obj_ref(
     sui_address: SuiAddress,
     sui_client: &SuiClient,
 ) -> anyhow::Result<ObjectRef> {
