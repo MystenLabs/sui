@@ -44,7 +44,7 @@ module test::m1 {
 // call a non-entry function, and transfer the object
 //# programmable --sender A --inputs 100 @A
 
-//> 0: SplitCoin(Gas, Input(0));
+//> 0: SplitCoin(Gas, Input(0)); /* /* nested */*/
 //> 1: test::m1::purchase_(Result(0));
 //> 2: TransferObjects([Result(1)], Input(1));
 

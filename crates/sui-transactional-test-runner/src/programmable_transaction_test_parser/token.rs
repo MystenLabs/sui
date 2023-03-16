@@ -82,39 +82,11 @@ impl Token for CommandToken {
     fn next_token(s: &str) -> anyhow::Result<Option<(Self, usize)>> {
         // parses a string where start matches end.
         // performs simple matching for start/end pairs
-        fn parse_sub_token_string(
-            s: &str,
-            start: char,
-            end: char,
-        ) -> anyhow::Result<Option<usize>> {
-            // the length of the string until the matching end
-            let mut len = 0;
-            // the count of number of active start/end pairs
-            let mut count = 0i32;
-            let mut chars = s.chars().peekable();
-            loop {
-                let Some(c) = chars.next() else {
-                    bail!("Unexpected end of string after '('")
-                };
-                len += 1;
-                if c == start {
-                    // a new start char
-                    count += 1
-                } else if c == end {
-                    // an end char
-                    count -= 1;
-                    if count == 0 {
-                        // end found
-                        break;
-                    }
-                }
-            }
-            Ok(Some(len))
-        }
 
         // type arguments get delegated to a different parser
         if s.starts_with('<') {
-            return Ok(parse_sub_token_string(s, '<', '>')?.map(|len| (Self::TypeArgString, len)));
+            let len = parse_sub_token_string(s, "<", ">")?;
+            return Ok(Some((Self::TypeArgString, len)));
         }
         // start of a command
         if s.starts_with("//>") {
@@ -122,7 +94,7 @@ impl Token for CommandToken {
         }
         // comments
         if let Some(after) = s.strip_prefix("//") {
-            let mut n = "//".len();
+            let mut n = 2;
             let mut in_whitespace_from_start = true;
             for c in after.chars() {
                 n += 1;
@@ -138,12 +110,9 @@ impl Token for CommandToken {
             }
             return Ok(Some((Self::Comment, n)));
         }
-        // TODO support nested comments /* */
         if s.starts_with("/*") {
-            let Some(end) = s.find("*/") else {
-                bail!("Unexpected of string after start of comment '/*'")
-            };
-            return Ok(Some((Self::Comment, end + 2)));
+            let end = parse_sub_token_string(s, "/*", "*/")?;
+            return Ok(Some((Self::Comment, end)));
         }
 
         // other tokens
@@ -183,4 +152,36 @@ impl Token for CommandToken {
             _ => bail!("unrecognized token: {}", s),
         }))
     }
+}
+
+fn parse_sub_token_string(mut s: &str, start: &str, end: &str) -> anyhow::Result<usize> {
+    // the length of the string until the matching end
+    let mut len = 0;
+    let start_len = start.len();
+    let end_len = end.len();
+    // the count of number of active start/end pairs
+    let mut count = 0i32;
+    loop {
+        s = if s.is_empty() {
+            bail!("Unexpected end of string after '{start}'. Expected matching '{end}'")
+        } else if let Some(next) = s.strip_prefix(start) {
+            len += start_len;
+            // new start
+            count += 1;
+            next
+        } else if let Some(next) = s.strip_prefix(end) {
+            len += end_len;
+            // an end
+            count -= 1;
+            if count == 0 {
+                // end found
+                break;
+            }
+            next
+        } else {
+            len += 1;
+            &s[1..]
+        }
+    }
+    Ok(len)
 }
