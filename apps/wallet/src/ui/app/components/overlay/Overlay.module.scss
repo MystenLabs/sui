@@ -5,12 +5,16 @@
 
 .container {
     background: rgba(42 54 69 / 50%);
-    width: val.$sizing-popup-width;
-    height: val.$sizing-popup-height;
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
     backdrop-filter: blur(20px);
+    z-index: 9999;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
 }
 
 .full-screen-container {
