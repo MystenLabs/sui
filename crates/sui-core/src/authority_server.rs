@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use multiaddr::Multiaddr;
 use mysten_metrics::spawn_monitored_task;
 use narwhal_types::TransactionsClient;
 use prometheus::{
@@ -16,6 +15,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::{error::*, messages::*, sui_system_state::SuiSystemStateInnerBenchmark};
 use sui_types::{
     fp_ensure,

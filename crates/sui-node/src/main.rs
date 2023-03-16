@@ -3,13 +3,13 @@
 
 use anyhow::Result;
 use clap::Parser;
-use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
 use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
+use sui_types::multiaddr::Multiaddr;
 use tokio::task;
 use tokio::time::sleep;
 use tracing::info;

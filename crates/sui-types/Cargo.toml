@@ -35,7 +35,6 @@ strum_macros = "^0.24"
 roaring = "0.10.1"
 enum_dispatch = "^0.3"
 eyre = "0.6.8"
-multiaddr = "0.17.0"
 indexmap = "1.9.2"
 derivative = "2.2.0"
 
@@ -53,6 +52,7 @@ narwhal-crypto = { path = "../../narwhal/crypto" }
 sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-config = { path = "../sui-protocol-config" }
 shared-crypto = { path = "../shared-crypto" }
+mysten-network = { path = "../mysten-network" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 

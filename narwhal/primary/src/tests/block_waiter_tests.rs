@@ -62,7 +62,7 @@ async fn test_successfully_retrieve_block() {
     let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
 
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -223,7 +223,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
 
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)

@@ -15,7 +15,6 @@ clap = { version = "4.1.4", features = ["derive"] }
 
 mysten-network.workspace = true
 itertools = { version = "0.10.3", features = ["use_alloc"] }
-multiaddr = "0.17.0"
 textwrap = "0.16"
 futures = "0.3.23"
 rocksdb = "0.20.1"

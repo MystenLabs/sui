@@ -41,7 +41,11 @@ async fn propose_header() {
     let proposed_header = primary.header(&committee);
 
     // Set up network.
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -81,7 +85,7 @@ async fn propose_header() {
         primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
 
-        let address = network::multiaddr_to_address(&address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = anemo::PeerId(primary.network_keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -151,7 +155,11 @@ async fn propose_header_failure() {
     let proposed_header = primary.header(&committee);
 
     // Set up network.
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -174,7 +182,7 @@ async fn propose_header_failure() {
         primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
 
-        let address = network::multiaddr_to_address(&address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = anemo::PeerId(primary.network_keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -262,7 +270,11 @@ async fn shutdown_core() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)

@@ -18,7 +18,6 @@
 
 use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
-use multiaddr::Multiaddr;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_config::genesis::GenesisChainParameters;
@@ -29,6 +28,7 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, NetworkKeyPair,
 };
+use sui_types::multiaddr::Multiaddr;
 
 #[test]
 #[cfg_attr(msim, ignore)]

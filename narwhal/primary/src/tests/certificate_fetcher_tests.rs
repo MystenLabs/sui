@@ -185,7 +185,7 @@ async fn fetch_certificates_basic() {
         metrics.clone(),
     ));
 
-    let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
+    let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
     let fake_route =
         anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(NetworkProxy {
             request: tx_fetch_req,

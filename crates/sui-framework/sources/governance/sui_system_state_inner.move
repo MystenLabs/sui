@@ -479,6 +479,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let network_address = string::from_ascii(ascii::string(network_address));
         validator::update_next_epoch_network_address(validator, network_address);
     }
 
@@ -489,6 +490,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let network_address = string::from_ascii(ascii::string(network_address));
         validator::update_candidate_network_address(candidate, network_address);
     }
 
@@ -500,6 +502,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let p2p_address = string::from_ascii(ascii::string(p2p_address));
         validator::update_next_epoch_p2p_address(validator, p2p_address);
     }
 
@@ -510,6 +513,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let p2p_address = string::from_ascii(ascii::string(p2p_address));
         validator::update_candidate_p2p_address(candidate, p2p_address);
     }
 
@@ -521,6 +525,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let primary_address = string::from_ascii(ascii::string(primary_address));
         validator::update_next_epoch_primary_address(validator, primary_address);
     }
 
@@ -531,6 +536,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let primary_address = string::from_ascii(ascii::string(primary_address));
         validator::update_candidate_primary_address(candidate, primary_address);
     }
 
@@ -542,6 +548,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let worker_address = string::from_ascii(ascii::string(worker_address));
         validator::update_next_epoch_worker_address(validator, worker_address);
     }
 
@@ -552,6 +559,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let worker_address = string::from_ascii(ascii::string(worker_address));
         validator::update_candidate_worker_address(candidate, worker_address);
     }
 

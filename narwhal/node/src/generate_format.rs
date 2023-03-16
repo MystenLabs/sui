@@ -6,7 +6,7 @@ use fastcrypto::{
     hash::Hash,
     traits::{KeyPair as _, Signer},
 };
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};

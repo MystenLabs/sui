@@ -4,7 +4,6 @@
 use anemo::types::PeerInfo;
 use anemo::{types::PeerEvent, Network, Peer, PeerId, Request, Response};
 use futures::StreamExt;
-use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -12,6 +11,7 @@ use std::{
     time::Duration,
 };
 use sui_config::p2p::{DiscoveryConfig, P2pConfig, SeedPeer};
+use sui_types::multiaddr::Multiaddr;
 use tap::{Pipe, TapFallible};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::watch;
@@ -38,7 +38,6 @@ pub use generated::{
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponse;
-use sui_types::sui_system_state::multiaddr_to_anemo_address;
 
 /// The internal discovery state shared between the main event loop and the request handler
 struct State {
@@ -127,7 +126,7 @@ impl DiscoveryEventLoop {
             .config
             .external_address
             .clone()
-            .and_then(|addr| multiaddr_to_anemo_address(&addr).map(|_| addr))
+            .and_then(|addr| addr.to_anemo_address().ok().map(|_| addr))
             .into_iter()
             .collect();
         let our_info = NodeInfo {
@@ -145,7 +144,7 @@ impl DiscoveryEventLoop {
                 continue;
             };
 
-            let Some(address) = multiaddr_to_anemo_address(address) else {
+            let Ok(address) = address.to_anemo_address() else {
                 debug!(p2p_address=?address, "Can't convert p2p address to anemo address");
                 continue;
             };
@@ -288,7 +287,7 @@ impl DiscoveryEventLoop {
 
 async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
     for multiaddr in &info.addresses {
-        if let Some(address) = multiaddr_to_anemo_address(multiaddr) {
+        if let Ok(address) = multiaddr.to_anemo_address() {
             // Ignore the result and just log the error if there is one
             if network
                 .connect_with_peer_id(address, info.peer_id)
@@ -316,7 +315,10 @@ async fn try_to_connect_to_seed_peers(
     let network = &network;
 
     futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
-        multiaddr_to_anemo_address(&seed.address).map(|address| (seed, address))
+        seed.address
+            .to_anemo_address()
+            .ok()
+            .map(|address| (seed, address))
     }))
     .for_each_concurrent(
         config.target_concurrent_connections(),

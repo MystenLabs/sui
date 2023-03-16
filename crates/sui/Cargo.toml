@@ -69,7 +69,6 @@ move-cli.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-multiaddr = "0.17.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"

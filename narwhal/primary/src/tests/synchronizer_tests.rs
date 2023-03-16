@@ -58,7 +58,11 @@ async fn accept_certificates() {
         metrics.clone(),
     ));
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -243,7 +247,11 @@ async fn synchronizer_recover_basic() {
         metrics.clone(),
     ));
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -358,7 +366,11 @@ async fn synchronizer_recover_partial_certs() {
         metrics.clone(),
     ));
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -467,7 +479,11 @@ async fn synchronizer_recover_previous_round() {
         metrics.clone(),
     ));
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)

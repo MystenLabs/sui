@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::ident_str;
-use multiaddr::Multiaddr;
 use std::{
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::PathBuf,
 };
 use sui_config::genesis::GenesisValidatorInfo;
+use sui_types::multiaddr::Multiaddr;
 
 use crate::client_commands::{write_transaction_response, WalletContext};
 use crate::fire_drill::get_gas_obj_ref;
@@ -219,14 +219,10 @@ impl SuiValidatorCommand {
                     CallArg::Pure(
                         bcs::to_bytes(&validator.project_url.clone().into_bytes()).unwrap(),
                     ),
-                    CallArg::Pure(bcs::to_bytes(&validator.network_address().to_vec()).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&validator.p2p_address().to_vec()).unwrap()),
-                    CallArg::Pure(
-                        bcs::to_bytes(&validator.narwhal_primary_address().to_vec()).unwrap(),
-                    ),
-                    CallArg::Pure(
-                        bcs::to_bytes(&validator.narwhal_worker_address().to_vec()).unwrap(),
-                    ),
+                    CallArg::Pure(bcs::to_bytes(validator.network_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(validator.p2p_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(validator.narwhal_primary_address()).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(validator.narwhal_worker_address()).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&validator.gas_price()).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&validator.commission_rate()).unwrap()),
                 ];
