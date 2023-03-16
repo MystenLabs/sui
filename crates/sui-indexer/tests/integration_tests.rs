@@ -13,8 +13,7 @@ mod pg_integration {
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
-    use sui_indexer::PgPoolConnection;
-    use sui_indexer::{new_pg_connection_pool, Indexer};
+    use sui_indexer::{new_pg_connection_pool, Indexer, IndexerConfig, PgPoolConnection};
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
         SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiParsedMoveObject,
@@ -226,14 +225,19 @@ mod pg_integration {
         let store_clone = store.clone();
         let registry = Registry::default();
 
-        let rpc_url = test_cluster.rpc_url().to_string();
+        let mut config = IndexerConfig::default();
+        config.rpc_client_url = test_cluster.rpc_url().to_string();
+        let indexer_config = config.clone();
         let handle =
-            tokio::spawn(async move { Indexer::start(&rpc_url, &registry, store_clone).await });
+            tokio::spawn(
+                async move { Indexer::start(&indexer_config, &registry, store_clone).await },
+            );
 
-        // TODO: make indexer port configurable
-        let http_client = HttpClientBuilder::default()
-            .build("http://0.0.0.0:3030")
-            .unwrap();
+        let http_addr_port = format!(
+            "http://{}:{}",
+            config.rpc_server_url, config.rpc_server_port
+        );
+        let http_client = HttpClientBuilder::default().build(http_addr_port).unwrap();
 
         (test_cluster, http_client, store, handle)
     }
