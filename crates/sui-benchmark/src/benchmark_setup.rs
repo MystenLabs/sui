@@ -130,7 +130,12 @@ impl Env {
                 // Setup the network
                 let _validators: Vec<_> =
                     spawn_test_authorities(generated_gas.clone(), &cloned_config).await;
-                let _fullnode = spawn_fullnode(generated_gas.clone(), &cloned_config, Some(fullnode_rpc_port)).await;
+                let _fullnode = spawn_fullnode(
+                    generated_gas.clone(),
+                    &cloned_config,
+                    Some(fullnode_rpc_port),
+                )
+                .await;
                 fullnode_barrier_clone.wait().await;
                 barrier.wait().await;
                 recv.await.expect("Unable to wait for terminate signal");

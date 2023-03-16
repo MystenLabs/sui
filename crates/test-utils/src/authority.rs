@@ -138,10 +138,14 @@ where
 
 /// This function can be called after `spawn_test_authorities` to
 /// start a fullnode.
-pub async fn spawn_fullnode<I>(objects: I, config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle
+pub async fn spawn_fullnode<I>(
+    objects: I,
+    config: &NetworkConfig,
+    rpc_port: Option<u16>,
+) -> SuiNodeHandle
 where
     I: IntoIterator<Item = Object> + Clone,
- {
+{
     let registry_service = RegistryService::new(Registry::new());
 
     let mut builder = config.fullnode_config_builder();
