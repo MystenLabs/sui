@@ -23,7 +23,7 @@ network-key-pair:
   path: /opt/sui/key-pairs/network.key
 ```
 
-3. Place `genesis.blob` in in the same directory as `docker-compose.yaml`. (available post genesis ceremony)
+3. Place `genesis.blob` in the same directory as `docker-compose.yaml`. (available post genesis ceremony)
 
 ## Connectivity
 
