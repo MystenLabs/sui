@@ -1,21 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crypto::{traits::InsecureDefault, PublicKey, PublicKeyBytes};
-use dashmap::DashMap;
 use fastcrypto::hash::Hash;
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, VecDeque},
-    iter,
-    sync::Arc,
-};
+use std::{cmp::Ordering, collections::BTreeMap, iter};
 
+use crate::NotifySubscribers;
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
 };
-use tokio::sync::{oneshot, oneshot::Sender};
-use tracing::warn;
 use types::{Certificate, CertificateDigest, Round, StoreResult};
 
 /// The main storage when we have to deal with certificates. It maintains
@@ -39,9 +32,8 @@ pub struct CertificateStore {
     /// This helps us to perform range requests based on rounds. We avoid storing again the
     /// certificate here to not waste space. To dereference we use the certificates_by_id storage.
     certificate_id_by_origin: DBMap<(PublicKeyBytes, Round), CertificateDigest>,
-    /// Senders to notify for a write that happened for
-    /// the specified certificate digest id
-    notify_on_write_subscribers: Arc<DashMap<CertificateDigest, VecDeque<Sender<Certificate>>>>,
+    /// The pub/sub to notify for a write that happened for a certificate digest id
+    notify_subscribers: NotifySubscribers<CertificateDigest, Certificate>,
 }
 
 impl CertificateStore {
@@ -54,7 +46,7 @@ impl CertificateStore {
             certificates_by_id,
             certificate_id_by_round,
             certificate_id_by_origin,
-            notify_on_write_subscribers: Arc::new(DashMap::new()),
+            notify_subscribers: NotifySubscribers::new(),
         }
     }
 
@@ -102,7 +94,7 @@ impl CertificateStore {
         let result = batch.write();
 
         if result.is_ok() {
-            self.notify_subscribers(id, certificate);
+            self.notify_subscribers.notify(&id, &certificate);
         }
 
         result
@@ -152,7 +144,8 @@ impl CertificateStore {
 
         if result.is_ok() {
             for (_id, certificate) in certificates {
-                self.notify_subscribers(certificate.digest(), certificate);
+                self.notify_subscribers
+                    .notify(&certificate.digest(), &certificate);
             }
         }
 
@@ -220,17 +213,13 @@ impl CertificateStore {
     /// Waits to get notified until the requested certificate becomes available
     pub async fn notify_read(&self, id: CertificateDigest) -> StoreResult<Certificate> {
         // we register our interest to be notified with the value
-        let (sender, receiver) = oneshot::channel();
-        self.notify_on_write_subscribers
-            .entry(id)
-            .or_insert_with(VecDeque::new)
-            .push_back(sender);
+        let receiver = self.notify_subscribers.subscribe(&id);
 
         // let's read the value because we might have missed the opportunity
         // to get notified about it
         if let Ok(Some(cert)) = self.read(id) {
             // notify any obligations - and remove the entries
-            self.notify_subscribers(id, cert.clone());
+            self.notify_subscribers.notify(&id, &cert);
 
             // reply directly
             return Ok(cert);
@@ -471,21 +460,6 @@ impl CertificateStore {
     /// being used to determine this.
     pub fn is_empty(&self) -> bool {
         self.certificates_by_id.is_empty()
-    }
-
-    /// Notifies the subscribed ones that listen on updates for the
-    /// certificate with the provided id. The obligations are notified
-    /// with the provided value. The obligation entries under the certificate id
-    /// are removed completely. If we fail to notify an obligation we don't
-    /// fail and we rather print a warn message.
-    fn notify_subscribers(&self, id: CertificateDigest, value: Certificate) {
-        if let Some((_, mut senders)) = self.notify_on_write_subscribers.remove(&id) {
-            while let Some(s) = senders.pop_front() {
-                if s.send(value.clone()).is_err() {
-                    warn!("Couldn't notify obligation for certificate with id {id}");
-                }
-            }
-        }
     }
 }
 

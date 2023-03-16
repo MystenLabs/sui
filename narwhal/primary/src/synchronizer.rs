@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{rpc::Status, Network, Request, Response};
-use config::{Committee, Epoch, WorkerCache, WorkerId};
+use config::{Committee, Epoch, WorkerCache};
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
@@ -25,8 +25,7 @@ use std::{
     },
     time::Duration,
 };
-use storage::{CertificateStore, PayloadToken};
-use store::Store;
+use storage::{CertificateStore, PayloadStore};
 use tokio::{
     sync::{broadcast, mpsc, oneshot, watch, MutexGuard},
     task::JoinSet,
@@ -37,9 +36,8 @@ use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
-    BatchDigest, Certificate, CertificateDigest, Header, PrimaryToPrimaryClient,
-    PrimaryToWorkerClient, Round, SendCertificateRequest, SendCertificateResponse,
-    WorkerSynchronizeMessage,
+    Certificate, CertificateDigest, Header, PrimaryToPrimaryClient, PrimaryToWorkerClient, Round,
+    SendCertificateRequest, SendCertificateResponse, WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNEL_CAPACITY};
@@ -65,7 +63,9 @@ struct Inner {
     highest_received_round: AtomicU64,
     /// The persistent storage tables.
     certificate_store: CertificateStore,
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    /// The persistent store of the available batch digests produced either via our own workers
+    /// or others workers.
+    payload_store: PayloadStore,
     /// Send missing certificates to the `CertificateFetcher`.
     tx_certificate_fetcher: Sender<Certificate>,
     /// Send certificates to be accepted into a separate task that runs
@@ -263,7 +263,7 @@ impl Synchronizer {
         worker_cache: WorkerCache,
         gc_depth: Round,
         certificate_store: CertificateStore,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        payload_store: PayloadStore,
         tx_certificate_fetcher: Sender<Certificate>,
         tx_new_certificates: Sender<Certificate>,
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
@@ -861,12 +861,7 @@ impl Synchronizer {
             //      4. The last good node will never be able to sync as it will keep sending its sync requests
             //         to workers #1 (rather than workers #0). Also, clients will never be able to retrieve batch
             //         X as they will be querying worker #1.
-            if inner
-                .payload_store
-                .read((*digest, *worker_id))
-                .await?
-                .is_none()
-            {
+            if !inner.payload_store.contains(*digest, *worker_id)? {
                 missing
                     .entry(*worker_id)
                     .or_insert_with(Vec::new)
@@ -904,11 +899,11 @@ impl Synchronizer {
                         backoff::Error::transient(DagError::NetworkError(format!("{e:?}")))
                     });
                     if result.is_ok() {
-                        for digest in digests.clone() {
+                        for digest in &digests {
                             inner
                                 .payload_store
-                                .async_write((digest, worker_id), 0u8)
-                                .await;
+                                .write(digest, &worker_id)
+                                .map_err(|e| backoff::Error::permanent(DagError::StoreError(e)))?
                         }
                     }
                     result

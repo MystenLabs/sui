@@ -315,7 +315,7 @@ async fn test_successful_payload_synchronization() {
                 // Assume that the request is the correct one and just immediately
                 // store the batch to the payload store.
                 for digest in m.digests {
-                    payload_store.async_write((digest, worker), 1).await;
+                    payload_store.write(&digest, &worker).unwrap();
                 }
             }
         }
@@ -637,8 +637,8 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload {
-                payload_store.async_write((digest, worker_id), 1).await;
+            for (digest, (worker_id, _)) in &certificate.header.payload {
+                payload_store.write(digest, worker_id).unwrap();
             }
         }
     }
