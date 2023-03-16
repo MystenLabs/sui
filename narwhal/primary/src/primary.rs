@@ -741,7 +741,7 @@ impl PrimaryReceiverHandler {
         // before proceeding.
         self.metrics
             .certificates_in_votes
-            .inc_by(request.body().parents.len() as u64);
+            .inc_by(request.body().ancestors.len() as u64);
         let wait_network = network.clone();
         let mut wait_notifications: FuturesUnordered<_> = request
             .body()

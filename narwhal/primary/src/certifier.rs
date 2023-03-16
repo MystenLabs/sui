@@ -10,8 +10,8 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
-use std::{sync::Arc, collections::BTreeSet};
 use std::time::Duration;
+use std::{collections::BTreeSet, sync::Arc};
 use storage::{CertificateStore, HeaderStore};
 use tokio::{
     sync::oneshot,

@@ -402,7 +402,7 @@ impl Proposer {
         let mut no_votes = 0;
         for certificate in &self.last_parents {
             let stake = self.committee.stake(&certificate.origin());
-            if certificate.header.parents.contains(&leader) {
+            if certificate.header.parents().contains(&leader) {
                 votes_for_leader += stake;
             } else {
                 no_votes += stake;

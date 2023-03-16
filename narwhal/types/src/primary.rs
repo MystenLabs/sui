@@ -230,6 +230,22 @@ impl Header {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
+    pub fn parents(&self) -> Vec<CertificateDigest> {
+        self.ancestors
+            .iter()
+            .filter_map(|a| match a {
+                Some((round, digest)) => {
+                    if round + 1 == self.round {
+                        Some(*digest)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            })
+            .collect()
+    }
+
     pub fn ancestor_digests(&self) -> Vec<CertificateDigest> {
         self.ancestors
             .iter()
