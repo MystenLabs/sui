@@ -16,7 +16,7 @@ mod pg_integration {
     use sui_indexer::{new_pg_connection_pool, Indexer, IndexerConfig, PgPoolConnection};
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponse,
+        SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
         SuiParsedMoveObject, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
         TransactionBytes,
     };
