@@ -5,6 +5,8 @@ use crate::{CertificateStore, ProposerStore};
 use config::WorkerId;
 use crypto::{PublicKey, PublicKeyBytes};
 use std::sync::Arc;
+use std::time::Duration;
+use store::metrics::SamplingInterval;
 use store::rocks::DBMap;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{reopen, Store};
@@ -43,10 +45,12 @@ impl NodeStorage {
 
     /// Open or reopen all the storage of the node.
     pub fn reopen<Path: AsRef<std::path::Path> + Send>(store_path: Path) -> Self {
+        let mut metrics_conf = MetricConf::with_db_name("consensus_epoch");
+        metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
         let rocksdb = open_cf(
             store_path,
             None,
-            MetricConf::with_db_name("consensus_epoch"),
+            metrics_conf,
             &[
                 Self::LAST_PROPOSED_CF,
                 Self::VOTES_CF,
