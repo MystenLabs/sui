@@ -184,7 +184,7 @@ describe("BCS: Serde", () => {
     const value = {
       objectId:
         "5443700000000000000000000000000000000000000000000000000000000000",
-      version: 9180n,
+      version: "9180",
       digest: "hahahahahaha",
     };
 

@@ -5,7 +5,6 @@ import {
   any,
   array,
   assign,
-  bigint,
   boolean,
   Infer,
   literal,
@@ -34,7 +33,7 @@ export const SuiObjectRef = object({
   /** Hex code as string representing the object id */
   objectId: string(),
   /** Object version */
-  version: union([bigint(), number()]),
+  version: union([number(), string()]),
 });
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
@@ -249,7 +248,7 @@ export function getObjectId(
 
 export function getObjectVersion(
   data: SuiObjectResponse | SuiObjectRef | SuiObjectData,
-): bigint | number | undefined {
+): string | number | undefined {
   if ('version' in data) {
     return data.version;
   }

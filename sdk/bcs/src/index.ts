@@ -132,34 +132,34 @@ export class BcsReader {
    * Read U64 value from the buffer and shift cursor by 8.
    * @returns
    */
-  read64(): bigint {
+  read64(): string {
     let value1 = this.read32();
     let value2 = this.read32();
 
     let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
 
-    return BigInt("0x" + result);
+    return BigInt("0x" + result).toString(10);
   }
   /**
    * Read U128 value from the buffer and shift cursor by 16.
    */
-  read128(): bigint {
-    let value1 = this.read64();
-    let value2 = this.read64();
+  read128(): string {
+    let value1 = BigInt(this.read64());
+    let value2 = BigInt(this.read64());
     let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
 
-    return BigInt("0x" + result);
+    return BigInt("0x" + result).toString(10);
   }
   /**
    * Read U128 value from the buffer and shift cursor by 32.
    * @returns
    */
-  read256(): bigint {
-    let value1 = this.read128();
-    let value2 = this.read128();
+  read256(): string {
+    let value1 = BigInt(this.read128());
+    let value2 = BigInt(this.read128());
     let result = value2.toString(16) + value1.toString(16).padStart(16, "0");
 
-    return BigInt("0x" + result);
+    return BigInt("0x" + result).toString(10);
   }
   /**
    * Read `num` number of bytes from the buffer and shift cursor by `num`.

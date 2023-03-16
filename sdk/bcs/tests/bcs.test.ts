@@ -16,11 +16,11 @@ describe("BCS: Primitives", () => {
     const bcs = new BCS(getSuiMoveConfig());
 
     const exp = "AO/Nq3hWNBI=";
-    const num = BigInt("1311768467750121216");
+    const num = "1311768467750121216";
     const set = bcs.ser("u64", num).toString("base64");
 
     expect(set).toEqual(exp);
-    expect(bcs.de("u64", exp, "base64")).toEqual(1311768467750121216n);
+    expect(bcs.de("u64", exp, "base64")).toEqual("1311768467750121216");
   });
 
   it("should ser/de u128", () => {
@@ -47,7 +47,7 @@ describe("BCS: Primitives", () => {
     const rustBcs = "gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA";
     const expected = {
       owner: "Big Wallet Guy",
-      value: 412412400000n,
+      value: "412412400000",
       is_locked: false,
     };
 
@@ -139,7 +139,7 @@ describe("BCS: Primitives", () => {
     const rustBcs = "gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA";
     const expected = {
       owner: "Big Wallet Guy",
-      value: 412412400000n,
+      value: "412412400000",
       is_locked: false,
     };
 
