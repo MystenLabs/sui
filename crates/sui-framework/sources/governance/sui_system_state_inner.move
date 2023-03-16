@@ -23,6 +23,8 @@ module sui::sui_system_state_inner {
     use sui::url;
     use std::string;
     use std::ascii;
+    use sui::bag::Bag;
+    use sui::bag;
 
     friend sui::sui_system;
 
@@ -51,6 +53,9 @@ module sui::sui_system_state_inner {
 
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
+
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -91,6 +96,8 @@ module sui::sui_system_state_inner {
         safe_mode: bool,
         /// Unix timestamp of the current epoch start
         epoch_start_timestamp_ms: u64,
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     /// Event containing system-level epoch information, emitted during
@@ -164,12 +171,14 @@ module sui::sui_system_state_inner {
             parameters: SystemParameters {
                 governance_start_epoch,
                 epoch_duration_ms,
+                extra_fields: bag::new(ctx),
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
-            stake_subsidy: stake_subsidy::create(stake_subsidy_fund, initial_stake_subsidy_amount),
+            stake_subsidy: stake_subsidy::create(stake_subsidy_fund, initial_stake_subsidy_amount, ctx),
             safe_mode: false,
             epoch_start_timestamp_ms,
+            extra_fields: bag::new(ctx),
         };
         system_state
     }

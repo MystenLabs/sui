@@ -17,16 +17,17 @@ module sui::validator_tests {
     use sui::staking_pool::{Self, StakedSui};
     use std::vector;
     use sui::test_utils;
+    use sui::bag;
 
     const VALID_NET_PUBKEY: vector<u8> = vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
 
     const VALID_WORKER_PUBKEY: vector<u8> = vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
 
-    // A valid proof of posession must be generated using the same account address and protocol public key. 
+    // A valid proof of possession must be generated using the same account address and protocol public key.
     // If either VALID_ADDRESS or VALID_PUBKEY changed, PoP must be regenerated using [fn test_proof_of_possession].
     const VALID_ADDRESS: address = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     const VALID_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    const PROOF_OF_POSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+    const PROOF_OF_POSSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     const VALID_NET_ADDR: vector<u8> = b"/ip4/127.0.0.1/tcp/80";
     const VALID_P2P_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
@@ -40,7 +41,7 @@ module sui::validator_tests {
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             b"Validator1",
             b"Validator1",
             b"Validator1",
@@ -137,12 +138,14 @@ module sui::validator_tests {
 
     #[test]
     fun test_metadata() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -151,20 +154,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidPubkey)]
     fun test_metadata_invalid_pubkey() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             vector[42],
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -173,20 +181,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidNetPubkey)]
     fun test_metadata_invalid_net_pubkey() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             vector[42],
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -195,20 +208,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
     fun test_metadata_invalid_worker_pubkey() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             vector[42],
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -217,20 +235,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidNetAddr)]
     fun test_metadata_invalid_net_addr() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -239,20 +262,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidP2pAddr)]
     fun test_metadata_invalid_p2p_addr() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -261,20 +289,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(b"42")),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
     fun test_metadata_invalid_consensus_addr() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -283,20 +316,25 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(b"42")),
             string::from_ascii(ascii::string(VALID_WORKER_ADDR)),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = validator::EMetadataInvalidWorkerAddr)]
     fun test_metadata_invalid_worker_addr() {
+        let scenario_val = test_scenario::begin(VALID_ADDRESS);
+        let ctx = test_scenario::ctx(&mut scenario_val);
         let metadata = validator::new_metadata(
             VALID_ADDRESS,
             VALID_PUBKEY,
             VALID_NET_PUBKEY,
             VALID_WORKER_PUBKEY,
-            PROOF_OF_POSESSION,
+            PROOF_OF_POSSESSION,
             string::from_ascii(ascii::string(b"Validator1")),
             string::from_ascii(ascii::string(b"Validator1")),
             url::new_unsafe_from_bytes(b"image_url1"),
@@ -305,14 +343,17 @@ module sui::validator_tests {
             string::from_ascii(ascii::string(VALID_P2P_ADDR)),
             string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)),
             string::from_ascii(ascii::string(b"42")),
+            bag::new(ctx),
         );
 
         validator::validate_metadata(&metadata);
+        test_utils::destroy(metadata);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     fun test_validator_update_metadata_ok() {
-        let sender = VALID_ADDRESS;  
+        let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
@@ -362,7 +403,7 @@ module sui::validator_tests {
             assert!(validator::primary_address(&validator) == &string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)), 0);
             assert!(validator::worker_address(&validator) == &string::from_ascii(ascii::string(VALID_WORKER_ADDR)), 0);
             assert!(validator::protocol_pubkey_bytes(&validator) == &VALID_PUBKEY, 0);
-            assert!(validator::proof_of_possession(&validator) == &PROOF_OF_POSESSION, 0);
+            assert!(validator::proof_of_possession(&validator) == &PROOF_OF_POSSESSION, 0);
             assert!(validator::network_pubkey_bytes(&validator) == &VALID_NET_PUBKEY, 0);
             assert!(validator::worker_pubkey_bytes(&validator) == &VALID_WORKER_PUBKEY, 0);
 

@@ -68,6 +68,7 @@
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -158,6 +159,12 @@
 </dt>
 <dd>
  Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -509,6 +516,7 @@ The epoch value corresponds to the first epoch this change takes place.
         inactive_validators: <a href="table.md#0x2_table_new">table::new</a>(ctx),
         validator_candidates: <a href="table.md#0x2_table_new">table::new</a>(ctx),
         at_risk_validators: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     };
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.active_validators);
     validators

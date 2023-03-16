@@ -89,6 +89,7 @@
 <b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -107,7 +108,7 @@
 
 
 
-<pre><code><b>struct</b> <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> <b>has</b> store
 </code></pre>
 
 
@@ -247,6 +248,12 @@
 <dd>
 
 </dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
+</dd>
 </dl>
 
 
@@ -322,6 +329,12 @@
 </dt>
 <dd>
  The commission rate of the validator starting the next epoch, in basis point.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -584,7 +597,7 @@ Intended validator is not a candidate one.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="_String">string::String</a>, p2p_address: <a href="_String">string::String</a>, primary_address: <a href="_String">string::String</a>, worker_address: <a href="_String">string::String</a>): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="_String">string::String</a>, p2p_address: <a href="_String">string::String</a>, primary_address: <a href="_String">string::String</a>, worker_address: <a href="_String">string::String</a>, extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a>): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
 </code></pre>
 
 
@@ -607,6 +620,7 @@ Intended validator is not a candidate one.
     p2p_address: String,
     primary_address: String,
     worker_address: String,
+    extra_fields: Bag,
 ): <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
     <b>let</b> metadata = <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
         sui_address,
@@ -630,6 +644,7 @@ Intended validator is not a candidate one.
         next_epoch_p2p_address: <a href="_none">option::none</a>(),
         next_epoch_primary_address: <a href="_none">option::none</a>(),
         next_epoch_worker_address: <a href="_none">option::none</a>(),
+        extra_fields,
     };
     metadata
 }
@@ -699,6 +714,7 @@ Intended validator is not a candidate one.
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address)),
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address)),
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address)),
+        <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     );
 
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&metadata);
@@ -2660,6 +2676,7 @@ Create a new validator from the given <code><a href="validator.md#0x2_validator_
         next_epoch_stake: stake_amount,
         next_epoch_gas_price: gas_price,
         next_epoch_commission_rate: commission_rate,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     }
 }
 </code></pre>
