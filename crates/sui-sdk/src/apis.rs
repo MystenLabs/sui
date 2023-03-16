@@ -235,7 +235,7 @@ impl ReadApi {
 
     // TODO(devx): we can probably cache this given an epoch
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 
     pub async fn dry_run_transaction(
@@ -552,6 +552,6 @@ impl GovernanceApi {
 
     /// Return the reference gas price for the network
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 }
