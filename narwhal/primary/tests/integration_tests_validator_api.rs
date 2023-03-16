@@ -16,9 +16,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::CertificateStore;
+use storage::{CertificateStore, HeaderStore};
 use storage::{NodeStorage, PayloadStore};
-use store::{rocks::DBMap, Map, Store};
+use store::{rocks::DBMap, Map};
 use test_utils::{
     fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
     temp_dir, AuthorityFixture, CommitteeFixture,
@@ -27,9 +27,8 @@ use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
-    CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
-    PreSubscribedBroadcastSender, ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult,
-    Transaction, ValidatorClient,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, PreSubscribedBroadcastSender,
+    ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -77,10 +76,7 @@ async fn test_get_collections() {
         store.certificate_store.write(certificate.clone()).unwrap();
 
         // Write the header
-        store
-            .header_store
-            .async_write(header.clone().digest(), header.clone())
-            .await;
+        store.header_store.write(&header).unwrap();
 
         header_digests.push(header.clone().digest());
 
@@ -293,10 +289,7 @@ async fn test_remove_collections() {
         dag.insert(certificate.clone()).await.unwrap();
 
         // Write the header
-        store
-            .header_store
-            .async_write(header.clone().digest(), header.clone())
-            .await;
+        store.header_store.write(&header).unwrap();
 
         header_digests.push(header.clone().digest());
 
@@ -1177,7 +1170,7 @@ async fn fixture_certificate(
     authority: &AuthorityFixture,
     committee: &Committee,
     fixture: &CommitteeFixture,
-    header_store: Store<HeaderDigest, Header>,
+    header_store: HeaderStore,
     certificate_store: CertificateStore,
     payload_store: PayloadStore,
     batch_store: DBMap<BatchDigest, Batch>,
@@ -1202,9 +1195,7 @@ async fn fixture_certificate(
     certificate_store.write(certificate.clone()).unwrap();
 
     // Write the header
-    header_store
-        .async_write(header.clone().digest(), header.clone())
-        .await;
+    header_store.write(&header).unwrap();
 
     // Write the batches to payload store
     payload_store

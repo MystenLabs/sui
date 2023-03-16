@@ -18,14 +18,14 @@ pub struct PayloadStore {
 }
 
 impl PayloadStore {
-    pub fn new(payload_store: DBMap<(BatchDigest, WorkerId), PayloadToken>) -> PayloadStore {
+    pub fn new(payload_store: DBMap<(BatchDigest, WorkerId), PayloadToken>) -> Self {
         Self {
             store: payload_store,
             notify_subscribers: NotifySubscribers::new(),
         }
     }
 
-    pub fn new_for_tests() -> PayloadStore {
+    pub fn new_for_tests() -> Self {
         let rocksdb = open_cf(
             tempfile::tempdir().unwrap(),
             None,

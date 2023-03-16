@@ -50,8 +50,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, PayloadStore, ProposerStore, VoteDigestStore};
-use store::Store;
+use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -65,11 +64,11 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, Header, HeaderDigest,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
-    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
-    SendCertificateRequest, SendCertificateResponse, Vote, WorkerInfoResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    GetCertificatesRequest, GetCertificatesResponse, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimary,
+    PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
+    SendCertificateResponse, Vote, WorkerInfoResponse, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -103,7 +102,7 @@ impl Primary {
         committee: Committee,
         worker_cache: WorkerCache,
         parameters: Parameters,
-        header_store: Store<HeaderDigest, Header>,
+        header_store: HeaderStore,
         certificate_store: CertificateStore,
         proposer_store: ProposerStore,
         payload_store: PayloadStore,
@@ -648,7 +647,7 @@ struct PrimaryReceiverHandler {
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
-    header_store: Store<HeaderDigest, Header>,
+    header_store: HeaderStore,
     certificate_store: CertificateStore,
     payload_store: PayloadStore,
     /// The store to persist the last voted round per authority, used to ensure idempotence.
@@ -846,8 +845,8 @@ impl PrimaryReceiverHandler {
 
         // Store the header.
         self.header_store
-            .async_write(header.digest(), header.clone())
-            .await;
+            .write(header)
+            .map_err(DagError::StoreError)?;
 
         // Check if we can vote for this header.
         // Send the vote when:

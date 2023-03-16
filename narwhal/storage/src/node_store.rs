@@ -3,15 +3,15 @@
 use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
-use crate::{CertificateStore, ProposerStore};
+use crate::{CertificateStore, HeaderStore, ProposerStore};
 use config::WorkerId;
 use crypto::{PublicKey, PublicKeyBytes};
 use std::sync::Arc;
 use std::time::Duration;
 use store::metrics::SamplingInterval;
+use store::reopen;
 use store::rocks::DBMap;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
-use store::{reopen, Store};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
@@ -25,7 +25,7 @@ pub type PayloadToken = u8;
 pub struct NodeStorage {
     pub proposer_store: ProposerStore,
     pub vote_digest_store: VoteDigestStore,
-    pub header_store: Store<HeaderDigest, Header>,
+    pub header_store: HeaderStore,
     pub certificate_store: CertificateStore,
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
@@ -94,7 +94,7 @@ impl NodeStorage {
 
         let proposer_store = ProposerStore::new(last_proposed_map);
         let vote_digest_store = VoteDigestStore::new(votes_map);
-        let header_store = Store::new(header_map);
+        let header_store = HeaderStore::new(header_map);
         let certificate_store = CertificateStore::new(
             certificate_map,
             certificate_digest_by_round_map,
