@@ -18,7 +18,7 @@ async fn test_onsite_reconfig_observer_basic() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
     let authorities = spawn_test_authorities([].into_iter(), &config).await;
-    let fullnode = spawn_fullnode(&config, None).await;
+    let fullnode = spawn_fullnode(&[], &config, None).await;
 
     let _observer_handle = fullnode
         .with_async(|node| async {
