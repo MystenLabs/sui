@@ -1,17 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{NodeStorage, PayloadToken};
+use crate::{NodeStorage, NotifySubscribers, PayloadToken};
 use config::WorkerId;
-use dashmap::DashMap;
-use std::collections::VecDeque;
-use std::sync::Arc;
 use store::reopen;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{rocks::DBMap, Map, TypedStoreError};
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::Sender;
-use tracing::warn;
 use types::BatchDigest;
 
 /// Store of the batch digests for the primary node for the own created batches.
@@ -20,15 +14,14 @@ pub struct PayloadStore {
     store: DBMap<(BatchDigest, WorkerId), PayloadToken>,
 
     /// Senders to notify for a write that happened for the specified batch digest and worker id
-    notify_on_write_subscribers:
-        Arc<DashMap<(BatchDigest, WorkerId), VecDeque<Sender<PayloadToken>>>>,
+    notify_subscribers: NotifySubscribers<(BatchDigest, WorkerId), PayloadToken>,
 }
 
 impl PayloadStore {
     pub fn new(payload_store: DBMap<(BatchDigest, WorkerId), PayloadToken>) -> PayloadStore {
         Self {
             store: payload_store,
-            notify_on_write_subscribers: Arc::new(DashMap::new()),
+            notify_subscribers: NotifySubscribers::new(),
         }
     }
 
@@ -47,7 +40,7 @@ impl PayloadStore {
 
     pub fn write(&self, digest: BatchDigest, worker_id: WorkerId) -> Result<(), TypedStoreError> {
         self.store.insert(&(digest, worker_id), &0u8)?;
-        self.notify_subscribers(digest, worker_id, 0u8);
+        self.notify_subscribers.notify(&(digest, worker_id), &0u8);
         Ok(())
     }
 
@@ -59,7 +52,7 @@ impl PayloadStore {
             .multi_insert(keys.clone().into_iter().map(|e| (e, 0u8)))?;
 
         keys.into_iter().for_each(|(digest, worker_id)| {
-            self.notify_subscribers(digest, worker_id, 0u8);
+            self.notify_subscribers.notify(&(digest, worker_id), &0u8);
         });
         Ok(())
     }
@@ -77,18 +70,13 @@ impl PayloadStore {
         digest: BatchDigest,
         worker_id: WorkerId,
     ) -> Result<PayloadToken, TypedStoreError> {
-        // we register our interest to be notified with the value
-        let (sender, receiver) = oneshot::channel();
-        self.notify_on_write_subscribers
-            .entry((digest, worker_id))
-            .or_insert_with(VecDeque::new)
-            .push_back(sender);
+        let receiver = self.notify_subscribers.subscribe(&(digest, worker_id));
 
         // let's read the value because we might have missed the opportunity
         // to get notified about it
         if let Ok(Some(token)) = self.read(digest, worker_id) {
-            // notify any obligations - and remove the entries
-            self.notify_subscribers(digest, worker_id, token);
+            // notify any obligations - and remove the entries (including ours)
+            self.notify_subscribers.notify(&(digest, worker_id), &token);
 
             // reply directly
             return Ok(token);
@@ -114,18 +102,5 @@ impl PayloadStore {
         keys: impl IntoIterator<Item = (BatchDigest, WorkerId)>,
     ) -> Result<(), TypedStoreError> {
         self.store.multi_remove(keys)
-    }
-
-    fn notify_subscribers(&self, digest: BatchDigest, worker_id: WorkerId, value: PayloadToken) {
-        if let Some((_, mut senders)) = self
-            .notify_on_write_subscribers
-            .remove(&(digest, worker_id))
-        {
-            while let Some(s) = senders.pop_front() {
-                if s.send(value).is_err() {
-                    warn!("Couldn't notify obligation for batch with digest {digest} & worker with id {worker_id}");
-                }
-            }
-        }
     }
 }
