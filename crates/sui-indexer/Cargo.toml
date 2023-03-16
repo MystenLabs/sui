@@ -52,9 +52,10 @@ move-bytecode-utils.workspace = true
 pg_integration = []
 
 [dev-dependencies]
-test-utils = { path = "../test-utils" }
-sui-framework-build = { path = "../sui-framework-build" }
 diesel_migrations = "2.0.0"
+sui-framework-build = { path = "../sui-framework-build" }
+sui-keys = { path = "../sui-keys" }
+test-utils = { path = "../test-utils" }
 
 [[bin]]
 name = "sui-indexer"

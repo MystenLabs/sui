@@ -109,6 +109,9 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
         let recipients: Vec<String> = effects
             .mutated()
             .iter()
+            .cloned()
+            .chain(effects.created().iter().cloned())
+            .chain(effects.unwrapped().iter().cloned())
             .map(|owned_obj_ref| owned_obj_ref.owner.to_string())
             .collect();
         let created: Vec<String> = effects
