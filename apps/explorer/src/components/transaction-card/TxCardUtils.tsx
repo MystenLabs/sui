@@ -5,8 +5,6 @@ import { useFormatCoin } from '@mysten/core';
 import { X12 } from '@mysten/icons';
 import {
     type ExecutionStatusType,
-    formatAddress,
-    formatDigest,
     getExecutionStatusType,
     getTotalGasUsed,
     getTransactionDigest,
@@ -18,15 +16,15 @@ import {
     SUI_TYPE_ARG,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import { Fragment } from 'react';
+import clsx from 'clsx';
+import { type ReactNode } from 'react';
 
-import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import { getAmount } from '../../utils/getAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
 
-import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
+import { AddressLink, TransactionLink } from '~/ui/InternalLink';
 import { TransactionType } from '~/ui/TransactionType';
 
 export type TxnData = {
@@ -39,14 +37,6 @@ export type TxnData = {
     kind: TransactionKindName | undefined;
     From: string;
     timestamp_ms?: number;
-};
-
-type Category = 'object' | 'transaction' | 'address';
-
-export type LinkObj = {
-    url: string;
-    name?: string;
-    category?: Category;
 };
 
 export function SuiAmount({
@@ -72,105 +62,92 @@ export function SuiAmount({
     return <span className={styles.suiamount}>--</span>;
 }
 
-export function TxAddresses({ content }: { content: LinkObj[] }) {
+function TxTableHeader({ label }: { label: string }) {
+    return <div className="pl-3">{label}</div>;
+}
+
+function TxTableCol({
+    isHighlightedOnHover,
+    children,
+}: {
+    isHighlightedOnHover?: boolean;
+    children: ReactNode;
+}) {
     return (
-        <section className={styles.addresses}>
-            {content.map((itm, idx) => (
-                <Fragment key={idx + itm.url}>
-                    {itm.category === 'address' ? (
-                        <AddressLink address={itm.url} />
-                    ) : itm.category === 'object' ? (
-                        <ObjectLink objectId={itm.url} />
-                    ) : (
-                        <TransactionLink digest={itm.url} />
-                    )}
-                    {idx !== content.length - 1 && <ContentArrowRight />}
-                </Fragment>
-            ))}
-        </section>
+        <div
+            className={clsx(
+                'flex h-full items-center rounded px-3',
+                isHighlightedOnHover && 'hover:bg-sui-light'
+            )}
+        >
+            {children}
+        </div>
     );
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (results: TxnData[]) => {
-    console.log('results', results);
-    return {
-        data: results.map((txn) => ({
-            date: <TxTimeType timestamp={txn.timestamp_ms} />,
-            transactionId: (
-                <div className="flex items-center pl-2">
-                    {txn.status === 'success' ? (
-                        <div className="h-2 w-2 rounded-full bg-success" />
-                    ) : (
-                        <X12 className="text-issue-dark" />
-                    )}
-                    <TxAddresses
-                        content={[
-                            {
-                                url: txn.txId,
-                                name: formatDigest(txn.txId),
-                                category: 'transaction',
-                            },
-                        ]}
-                    />
-                </div>
-            ),
-            addresses: (
-                <TxAddresses
-                    content={[
-                        {
-                            url: txn.From,
-                            name: formatAddress(txn.From),
-                            category: 'address',
-                        },
-                        ...(txn.To
-                            ? [
-                                  {
-                                      url: txn.To,
-                                      name: formatAddress(txn.To),
-                                      category: 'address',
-                                  } as const,
-                              ]
-                            : []),
-                    ]}
+export const genTableDataFromTxData = (results: TxnData[]) => ({
+    data: results.map((txn) => ({
+        date: <TxTimeType timestamp={txn.timestamp_ms} />,
+        transactionId: (
+            <TxTableCol isHighlightedOnHover>
+                <TransactionLink
+                    digest={txn.txId}
+                    before={
+                        txn.status === 'success' ? (
+                            <div className="h-2 w-2 rounded-full bg-success" />
+                        ) : (
+                            <X12 className="text-issue-dark" />
+                        )
+                    }
                 />
-            ),
-            txTypes: (
-                <TransactionType
-                    isSuccess={txn.status === 'success'}
-                    type={txn.kind}
-                />
-            ),
-            amounts: <SuiAmount amount={txn.suiAmount} />,
-            gas: <SuiAmount amount={txn.txGas} />,
-            sender: <AddressLink address={txn.From} />,
-        })),
-        columns: [
-            {
-                header: () => (
-                    <div className={styles.addresses}>Transaction ID</div>
-                ),
-                accessorKey: 'transactionId',
-            },
-            {
-                header: 'Sender',
-                accessorKey: 'sender',
-            },
-            {
-                header: 'Amount',
-                accessorKey: 'amounts',
-            },
-            {
-                header: 'Gas',
-                accessorKey: 'gas',
-            },
-            {
-                header: 'Time',
-                accessorKey: 'date',
-            },
-        ],
-    };
-};
+            </TxTableCol>
+        ),
+        txTypes: (
+            <TransactionType
+                isSuccess={txn.status === 'success'}
+                type={txn.kind}
+            />
+        ),
+        amounts: (
+            <TxTableCol>
+                <SuiAmount amount={txn.suiAmount} />
+            </TxTableCol>
+        ),
+        gas: (
+            <TxTableCol>
+                <SuiAmount amount={txn.txGas} />
+            </TxTableCol>
+        ),
+        sender: (
+            <TxTableCol isHighlightedOnHover>
+                <AddressLink address={txn.From} />
+            </TxTableCol>
+        ),
+    })),
+    columns: [
+        {
+            header: () => <TxTableHeader label="Transaction ID" />,
+            accessorKey: 'transactionId',
+        },
+        {
+            header: () => <TxTableHeader label="Sender" />,
+            accessorKey: 'sender',
+        },
+        {
+            header: () => <TxTableHeader label="Amount" />,
+            accessorKey: 'amounts',
+        },
+        {
+            header: () => <TxTableHeader label="Gas" />,
+            accessorKey: 'gas',
+        },
+        {
+            header: () => <TxTableHeader label="Time" />,
+            accessorKey: 'date',
+        },
+    ],
+});
 
 const dedupe = (arr: string[]) => Array.from(new Set(arr));
 

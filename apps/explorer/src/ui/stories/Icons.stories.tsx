@@ -7,7 +7,7 @@ export default {
     title: 'Icons',
 } as Meta;
 
-export const RenderIcons = {
+export const AllIcons = {
     render: () => (
         <div className="flex flex-col items-start gap-2">
             {Object.keys(Icons).map((key) => {
