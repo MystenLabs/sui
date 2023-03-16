@@ -298,7 +298,7 @@ impl SshConnection {
     }
 
     /// Execute a ssh command from a given path.
-    /// TODO: Eventually remove this function and use [`execute`] through the ssh manager instead.
+    /// TODO: Eventually remove this function and use `execute` through the ssh manager instead.
     pub fn execute_from_path<P: AsRef<Path>>(
         &self,
         command: String,
