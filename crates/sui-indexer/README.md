@@ -46,4 +46,15 @@ to run the test locally, start a Postgresql DB and run the test using following 
 ```sh
 POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration
 ```
+
+If you run into an error like `DatabaseError(UniqueViolation, "duplicate key value violates unique constraint \"pg_proc_proname_args_nsp_index\""))'` you can try running each integration test individually with 
+```sh
+POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+```
+
+And to execute a single test such as just `test_simple_transaction_e2e`, you can do
+```sh
+POSTGRES_PORT=5432 cargo test test_event_query_e2e --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+```
+
 Note: all existing data will be wiped during the test.
