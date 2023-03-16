@@ -77,20 +77,20 @@ module Test::M1 {
 }
 
 // create above size limit should fail
-//# run Test::M1::transfer_object_with_size --args 256001 --sender A --gas-budget 1000000
+//# run Test::M1::transfer_object_with_size --args 256001 --sender A --gas-budget 2000000
 
 // create under size limit should succeed
-//# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 1000000
+//# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 2000000
 
 // create at size limit should succeed
-//# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 1000000
+//# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 2000000
 
 // adding 1 byte to an object at the size limit should fail
-//# run Test::M1::add_byte --args object(110) --sender A --gas-budget 1000000
+//# run Test::M1::add_byte --args object(110) --sender A --gas-budget 2000000
 
 // create at size limit, wrap, increase to over size limit while wrapped, then unwrap. should fail
-//# run Test::M1::transfer_object_with_size --args 255968 --sender A --gas-budget 1000000
+//# run Test::M1::transfer_object_with_size --args 255968 --sender A --gas-budget 2000000
 
-//# run Test::M1::wrap --args object(113) --sender A --gas-budget 1000000
+//# run Test::M1::wrap --args object(113) --sender A --gas-budget 2000000
 
-//# run Test::M1::add_bytes_then_unwrap --args object(115) 33 --sender A --gas-budget 1000000
+//# run Test::M1::add_bytes_then_unwrap --args object(115) 33 --sender A --gas-budget 2000000

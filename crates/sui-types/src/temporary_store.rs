@@ -541,22 +541,13 @@ impl<S> TemporaryStore<S> {
             self.reset(gas, gas_status);
         }
 
-        if let Err(err) = self
-            .charge_gas_for_storage_changes(gas_status, gas_object_id)
-            .and_then(|total_bytes_written_deleted| {
-                gas_status.charge_computation_gas_for_storage_mutation(total_bytes_written_deleted)
-            })
-        {
+        if let Err(err) = self.charge_gas_for_storage_changes(gas_status, gas_object_id) {
             // Ran out of gas while charging for storage changes. reset store, now at state just after gas smashing
             self.reset(gas, gas_status);
 
             // charge for storage again. This will now account only for the storage cost of gas coins
             if self
                 .charge_gas_for_storage_changes(gas_status, gas_object_id)
-                .and_then(|total_bytes_written_deleted| {
-                    gas_status
-                        .charge_computation_gas_for_storage_mutation(total_bytes_written_deleted)
-                })
                 .is_err()
             {
                 // TODO: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
