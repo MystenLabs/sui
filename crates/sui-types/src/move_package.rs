@@ -172,7 +172,7 @@ impl MovePackage {
     }
 
     pub fn decrement_version(&mut self) {
-        self.version.increment();
+        self.version.decrement();
     }
 
     pub fn increment_version(&mut self) {
