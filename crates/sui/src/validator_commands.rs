@@ -265,7 +265,7 @@ async fn call_0x5(
         .get_reference_gas_price()
         .await?;
     // 10k is a herustic number for gas unit
-    let gas_budget = 10_000 * rgp;
+    let gas_budget = 10_000;
     let tx_data = TransactionData::new_move_call(
         sender,
         SUI_FRAMEWORK_OBJECT_ID,
