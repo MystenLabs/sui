@@ -51,7 +51,7 @@ sui client
 The first time you start Sui client, it displays the following message:
 
 ```
-Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui full node server [y/n]?
+Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui Full node server [y/n]?
 ```
 
 Press **y** and then press **Enter**. It then asks for the RPC server URL: 
@@ -63,7 +63,7 @@ Sui Full node server URL (default to Sui Devnet if not specified) :
 Press **Enter** to connect to Sui Devnet. To use a custom RPC server, enter the URL to the custom RPC endpoint and then press **Enter**.
 
 ```
-Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:
+Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
 ```
 
 Press **0**, **1**, or **2** to select a key scheme.
