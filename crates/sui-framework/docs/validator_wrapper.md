@@ -9,6 +9,8 @@
 -  [Constants](#@Constants_0)
 -  [Function `create_v1`](#0x2_validator_wrapper_create_v1)
 -  [Function `load_validator_maybe_upgrade`](#0x2_validator_wrapper_load_validator_maybe_upgrade)
+-  [Function `destroy`](#0x2_validator_wrapper_destroy)
+-  [Function `upgrade_to_latest`](#0x2_validator_wrapper_upgrade_to_latest)
 -  [Function `version`](#0x2_validator_wrapper_version)
 
 
@@ -104,10 +106,61 @@ If the inner version is old, we upgrade it lazily in-place.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_load_validator_maybe_upgrade">load_validator_maybe_upgrade</a>(self: &<b>mut</b> <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): &<b>mut</b> Validator {
+    <a href="validator_wrapper.md#0x2_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self);
+    <a href="versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>&lt;Validator&gt;(&<b>mut</b> self.inner)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_wrapper_destroy"></a>
+
+## Function `destroy`
+
+Destroy the wrapper and retrieve the inner validator object.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_destroy">destroy</a>(self: <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_destroy">destroy</a>(self: <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): Validator {
+    <a href="validator_wrapper.md#0x2_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(&<b>mut</b> self);
+    <b>let</b> <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> { inner } = self;
+    <a href="versioned.md#0x2_versioned_destroy">versioned::destroy</a>&lt;Validator&gt;(inner)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_wrapper_upgrade_to_latest"></a>
+
+## Function `upgrade_to_latest`
+
+
+
+<pre><code><b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self: &<b>mut</b> <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_wrapper.md#0x2_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self: &<b>mut</b> <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>) {
     <b>let</b> version = <a href="validator_wrapper.md#0x2_validator_wrapper_version">version</a>(self);
     // TODO: When new versions are added, we need <b>to</b> explicitly upgrade here.
     <b>assert</b>!(version == 1, <a href="validator_wrapper.md#0x2_validator_wrapper_EInvalidVersion">EInvalidVersion</a>);
-    <a href="versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>&lt;Validator&gt;(&<b>mut</b> self.inner)
 }
 </code></pre>
 
