@@ -10,13 +10,13 @@ use move_cli::base::{
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
-use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
 use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 use sui_core::authority::TemporaryStore;
+use sui_cost_tables::bytecode_tables::INITIAL_COST_SCHEDULE;
 use sui_framework::natives::{self, object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -90,10 +90,30 @@ pub fn run_move_unit_tests(
             ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
-        Some(INITIAL_COST_SCHEDULE.clone()),
+        Some(initial_cost_schedule()),
         compute_coverage,
         &mut std::io::stdout(),
     )
+}
+
+// Convert from our representation of gas costs to the type that the MoveVM expects.
+// We don't want our gas depending on the MoveVM test utils and we don't want to fix our
+// representation to whatever is there, so instead we perform this translation from our gas units
+// and cost schedule to the one expected by the Move unit tests.
+fn initial_cost_schedule() -> move_vm_test_utils::gas_schedule::CostTable {
+    move_vm_test_utils::gas_schedule::CostTable {
+        instruction_table: INITIAL_COST_SCHEDULE
+            .clone()
+            .instruction_table
+            .into_iter()
+            .map(|gas_cost| {
+                move_vm_test_utils::gas_schedule::GasCost::new(
+                    gas_cost.instruction_gas,
+                    gas_cost.memory_gas,
+                )
+            })
+            .collect(),
+    }
 }
 
 fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {

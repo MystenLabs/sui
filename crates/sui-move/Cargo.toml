@@ -23,6 +23,7 @@ sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-types = { path = "../sui-types" }
+sui-cost-tables = { path = "../sui-cost-tables" }
 
 
 fastcrypto.workspace = true

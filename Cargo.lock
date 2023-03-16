@@ -9742,6 +9742,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-core",
+ "sui-cost-tables",
  "sui-framework",
  "sui-framework-build",
  "sui-macros",
