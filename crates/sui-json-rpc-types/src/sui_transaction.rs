@@ -299,6 +299,7 @@ impl TryFrom<TransactionKind> for SuiTransactionKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiChangeEpoch {
     pub epoch: EpochId,
     pub storage_charge: u64,
@@ -873,6 +874,7 @@ pub struct SuiGenesisTransaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiConsensusCommitPrologue {
     pub epoch: u64,
     pub round: u64,
@@ -1086,6 +1088,7 @@ impl From<Argument> for SuiArgument {
 /// The command for calling a Move function, either an entry function or a public
 /// function (which cannot return references).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiProgrammableMoveCall {
     /// The package containing the module and function.
     pub package: ObjectID,

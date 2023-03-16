@@ -1231,6 +1231,7 @@ pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
 // external APIs.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SuiAuthorityStrongQuorumSignInfo {
     pub epoch: EpochId,
     pub signature: AggregateAuthoritySignatureAsBytes,

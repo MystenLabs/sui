@@ -40,7 +40,7 @@ export const ObjectOwner = union([
   }),
   object({
     Shared: object({
-      initial_shared_version: number(),
+      initialSharedVersion: number(),
     }),
   }),
   literal('Immutable'),

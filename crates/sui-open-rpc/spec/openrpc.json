@@ -4521,10 +4521,10 @@
               "Shared": {
                 "type": "object",
                 "required": [
-                  "initial_shared_version"
+                  "initialSharedVersion"
                 ],
                 "properties": {
-                  "initial_shared_version": {
+                  "initialSharedVersion": {
                     "description": "The version at which the object became shared",
                     "allOf": [
                       {
@@ -5601,7 +5601,7 @@
               }
             ]
           },
-          "type_arguments": {
+          "typeArguments": {
             "description": "The type arguments to the function.",
             "type": "array",
             "items": {
@@ -6428,15 +6428,15 @@
             "description": "A system transaction that will update epoch information on-chain.",
             "type": "object",
             "required": [
-              "computation_charge",
+              "computationCharge",
               "epoch",
-              "epoch_start_timestamp_ms",
+              "epochStartTimestampMs",
               "kind",
-              "storage_charge",
-              "storage_rebate"
+              "storageCharge",
+              "storageRebate"
             ],
             "properties": {
-              "computation_charge": {
+              "computationCharge": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
@@ -6446,7 +6446,7 @@
                 "format": "uint64",
                 "minimum": 0.0
               },
-              "epoch_start_timestamp_ms": {
+              "epochStartTimestampMs": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
@@ -6457,12 +6457,12 @@
                   "ChangeEpoch"
                 ]
               },
-              "storage_charge": {
+              "storageCharge": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
               },
-              "storage_rebate": {
+              "storageRebate": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
@@ -6495,13 +6495,13 @@
             "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
             "type": "object",
             "required": [
-              "commit_timestamp_ms",
+              "commitTimestampMs",
               "epoch",
               "kind",
               "round"
             ],
             "properties": {
-              "commit_timestamp_ms": {
+              "commitTimestampMs": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
