@@ -551,15 +551,16 @@ pub fn check_gas_balance(
 
     let max_gas_budget = cost_table.max_gas_budget as u128 * gas_price as u128;
     let min_gas_budget = cost_table.min_gas_budget_external() as u128 * gas_price as u128;
+    let required_gas_amount = gas_budget as u128;
 
-    if (gas_budget as u128) > max_gas_budget {
+    if required_gas_amount > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
             max_budget: cost_table.max_gas_budget,
         });
     }
 
-    if (gas_budget as u128) < min_gas_budget {
+    if required_gas_amount < min_gas_budget {
         return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
             min_budget: cost_table.min_gas_budget_external(),
@@ -567,7 +568,6 @@ pub fn check_gas_balance(
     }
 
     let mut gas_balance = get_gas_balance(gas_object)? as u128;
-    let required_gas_amount = (gas_budget as u128) * (gas_price as u128);
     for extra_obj in more_gas_objs {
         gas_balance += get_gas_balance(&extra_obj)? as u128;
     }
