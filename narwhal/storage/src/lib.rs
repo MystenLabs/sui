@@ -14,7 +14,6 @@ pub use header_store::*;
 pub use node_store::*;
 pub use payload_store::*;
 pub use proposer_store::*;
-use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -25,7 +24,7 @@ pub use vote_digest_store::*;
 // A simple pub/sub to notify subscribers when a value becomes available.
 #[derive(Clone)]
 struct NotifySubscribers<K: Eq + Hash + Clone, V: Clone> {
-    notify_subscribers: Arc<DashMap<K, VecDeque<Sender<V>>>>,
+    notify_subscribers: Arc<DashMap<K, Vec<Sender<V>>>>,
 }
 
 impl<K: Eq + Hash + Clone, V: Clone> NotifySubscribers<K, V> {
@@ -40,15 +39,15 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifySubscribers<K, V> {
         let (sender, receiver) = oneshot::channel();
         self.notify_subscribers
             .entry(key.clone())
-            .or_insert_with(VecDeque::new)
-            .push_back(sender);
+            .or_insert_with(Vec::new)
+            .push(sender);
         receiver
     }
 
     // Notify the subscribers that are waiting on the value for the corresponding key.
     fn notify(&self, key: &K, value: &V) {
         if let Some((_, mut senders)) = self.notify_subscribers.remove(key) {
-            while let Some(s) = senders.pop_front() {
+            while let Some(s) = senders.pop() {
                 if s.send(value.clone()).is_err() {
                     warn!("Couldn't notify subscriber");
                 }
