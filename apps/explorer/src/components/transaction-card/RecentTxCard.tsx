@@ -136,7 +136,10 @@ export function LatestTxCard({
     );
 
     const transactionQuery = useQuery(
-        ['transactions', { total: Number(countQuery.data), txPerPage, pageIndex }],
+        [
+            'transactions',
+            { total: Number(countQuery.data), txPerPage, pageIndex },
+        ],
         async () => {
             const { data: count } = countQuery;
 
