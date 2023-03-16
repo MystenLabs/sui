@@ -31,6 +31,7 @@ use sui_json_rpc_types::{
     SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
@@ -739,8 +740,18 @@ impl ReadApiServer for ReadApi {
 
         let normalized = match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
-                Data::Package(p) => normalize_modules(p.serialized_module_map().values())
-                    .map_err(|e| anyhow!("{e}")),
+                Data::Package(p) => {
+                    let max_binary_format_version = self
+                        .state
+                        .load_epoch_store_one_call_per_task()
+                        .protocol_config()
+                        .move_binary_format_version();
+                    normalize_modules(
+                        p.serialized_module_map().values(),
+                        max_binary_format_version,
+                    )
+                    .map_err(|e| anyhow!("{e}"))
+                }
                 _ => Err(anyhow!("Object is not a package with ID {}", package)),
             },
             _ => Err(anyhow!("Package object does not exist with ID {}", package)),
@@ -1011,7 +1022,14 @@ pub async fn get_move_modules_by_package(
     Ok(match object_read {
         ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
             Data::Package(p) => {
-                normalize_modules(p.serialized_module_map().values()).map_err(|e| anyhow!("{e}"))
+                // TODO: is it OK to use it here since it's not on the actual validator?
+                let max_binary_format_version =
+                    ProtocolConfig::get_for_max_version().move_binary_format_version();
+                normalize_modules(
+                    p.serialized_module_map().values(),
+                    max_binary_format_version,
+                )
+                .map_err(|e| anyhow!("{e}"))
             }
             _ => Err(anyhow!("Object is not a package with ID {}", package)),
         },

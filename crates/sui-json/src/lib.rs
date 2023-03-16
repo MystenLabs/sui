@@ -793,9 +793,10 @@ pub fn resolve_move_function_args(
     type_args: &[TypeTag],
     combined_args_json: Vec<SuiJsonValue>,
     allow_arbitrary_function_call: bool,
+    max_binary_format_version: u32,
 ) -> Result<Vec<(ResolvedCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
-    let module = package.deserialize_module(&module_ident)?;
+    let module = package.deserialize_module(&module_ident, max_binary_format_version)?;
     let function_str = function.as_ident_str();
     let fdef = module
         .function_defs

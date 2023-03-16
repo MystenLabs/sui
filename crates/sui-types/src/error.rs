@@ -262,7 +262,7 @@ pub enum SuiError {
     // Move module publishing related errors
     #[error("Failed to verify the Move module, reason: {error:?}.")]
     ModuleVerificationFailure { error: String },
-    #[error("Failed to verify the Move module, reason: {error:?}.")]
+    #[error("Failed to deserialize the Move module, reason: {error:?}.")]
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },

@@ -421,7 +421,11 @@ impl MovePackage {
         (*module.address()).into()
     }
 
-    pub fn deserialize_module(&self, module: &Identifier) -> SuiResult<CompiledModule> {
+    pub fn deserialize_module(
+        &self,
+        module: &Identifier,
+        max_binary_format_version: u32,
+    ) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
             .serialized_module_map()
@@ -429,16 +433,22 @@ impl MovePackage {
             .ok_or_else(|| SuiError::ModuleNotFound {
                 module_name: module.to_string(),
             })?;
-        Ok(CompiledModule::deserialize(bytes)
-            .expect("Unwrap safe because Sui serializes/verifies modules before publishing them"))
+        CompiledModule::deserialize_with_max_version(bytes, max_binary_format_version).map_err(
+            |error| SuiError::ModuleDeserializationFailure {
+                error: error.to_string(),
+            },
+        )
     }
 
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
         disassemble_modules(self.module_map.values())
     }
 
-    pub fn normalize(&self) -> SuiResult<BTreeMap<String, normalized::Module>> {
-        normalize_modules(self.module_map.values())
+    pub fn normalize(
+        &self,
+        max_binary_format_version: u32,
+    ) -> SuiResult<BTreeMap<String, normalized::Module>> {
+        normalize_modules(self.module_map.values(), max_binary_format_version)
     }
 }
 
@@ -501,6 +511,8 @@ where
 {
     let mut disassembled = BTreeMap::new();
     for bytecode in modules {
+        // TODO: this function is only from JSON RPC - is it then OK to deserialize with max Move
+        // binary version?
         let module = CompiledModule::deserialize(bytecode).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),
@@ -522,17 +534,20 @@ where
     Ok(disassembled)
 }
 
-pub fn normalize_modules<'a, I>(modules: I) -> SuiResult<BTreeMap<String, normalized::Module>>
+pub fn normalize_modules<'a, I>(
+    modules: I,
+    max_binary_format_version: u32,
+) -> SuiResult<BTreeMap<String, normalized::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
     let mut normalized_modules = BTreeMap::new();
     for bytecode in modules {
-        let module = CompiledModule::deserialize(bytecode).map_err(|error| {
-            SuiError::ModuleDeserializationFailure {
-                error: error.to_string(),
-            }
-        })?;
+        let module =
+            CompiledModule::deserialize_with_max_version(bytecode, max_binary_format_version)
+                .map_err(|error| SuiError::ModuleDeserializationFailure {
+                    error: error.to_string(),
+                })?;
         let normalized_module = normalized::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
@@ -559,6 +574,9 @@ fn build_linkage_table<'p>(
     let mut dep_linkage_tables = vec![];
 
     for transitive_dep in transitive_dependencies.into_iter() {
+        // TODO: original_package_id will deserialized a module but only for the purpose of
+        // obtaining "original ID" of the package containing it; do we still have to make sure that
+        // deserialization obeys the rules set by the protocol config?
         let original_id = transitive_dep.original_package_id();
 
         if immediate_dependencies.remove(&original_id) {

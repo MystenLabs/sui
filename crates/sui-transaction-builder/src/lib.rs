@@ -408,6 +408,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             package.linkage_table,
         )?;
 
+        // this value of max Move binary format version is used to deserialize a module for the
+        // purpose of obtaining types of for a Move call being constructed - using the max available
+        // format should be OK in this case
+        let max_binary_format_version =
+            ProtocolConfig::get_for_max_version().move_binary_format_version();
         let json_args_and_tokens = resolve_move_function_args(
             &package,
             module.clone(),
@@ -415,6 +420,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             type_args,
             json_args,
             Mode::allow_arbitrary_function_calls(),
+            max_binary_format_version,
         )?;
         let mut check_args = Vec::new();
         let mut objects = BTreeMap::new();
@@ -436,7 +442,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        let compiled_module = package.deserialize_module(module)?;
+        let compiled_module = package.deserialize_module(module, max_binary_format_version)?;
 
         // TODO set the Mode from outside?
         resolve_and_type_check::<Mode>(
