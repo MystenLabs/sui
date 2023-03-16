@@ -230,6 +230,17 @@ impl Header {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
+    pub fn ancestor_digests(&self) -> Vec<CertificateDigest> {
+        self.ancestors
+            .iter()
+            .filter_map(|a| a.map(|inner| inner.1))
+            .collect()
+    }
+
+    pub fn ancestors(&self) -> Vec<(Round, CertificateDigest)> {
+        self.ancestors.iter().filter_map(|a| *a).collect()
+    }
+
     pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
