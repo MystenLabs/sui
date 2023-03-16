@@ -53,9 +53,9 @@ use tracing::{debug, info, warn};
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
-// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
-// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
-pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
+// Assuming 4000 txn tps * 10 sec consensus latency = 40000 inflight consensus txns.
+// Leaving a bit more headroom to cap the max inflight consensus txns to 80000.
+pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 80000;
 
 // Assuming 100 nodes cluster
 const MAX_PENDING_LOCAL_SUBMISSIONS: usize =
@@ -481,6 +481,7 @@ impl ConsensusAdapter {
             let _in_flight_submission_guard =
                 GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
+            let submit_started = Instant::now();
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             let submit_inner = async {
@@ -528,6 +529,7 @@ impl ConsensusAdapter {
                 }
             }
             .expect("Storage error when waiting for consensus message processed");
+            self.latency_observer.report(submit_started.elapsed());
         }
         debug!("{transaction_key:?} processed by consensus");
         epoch_store
@@ -738,9 +740,6 @@ impl<'a> Drop for InflightDropGuard<'a> {
         };
 
         let latency = self.start.elapsed();
-        if self.position == Some(0) {
-            self.adapter.latency_observer.report(latency);
-        }
         self.adapter
             .metrics
             .sequencing_certificate_latency
