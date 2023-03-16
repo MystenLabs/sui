@@ -487,7 +487,7 @@ async fn prompt_if_no_config(
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
-                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1:)");
+                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):");
                 match SignatureScheme::from_flag(read_line()?.trim()) {
                     Ok(s) => s,
                     Err(e) => return Err(anyhow!("{e}")),
