@@ -10,7 +10,7 @@ use futures::future::try_join_all;
 use itertools::Either;
 use network::PrimaryToWorkerRpc;
 use std::{collections::HashMap, sync::Arc};
-use storage::{CertificateStore, PayloadToken};
+use storage::{CertificateStore, PayloadStore};
 use store::{rocks::TypedStoreError, Store};
 
 use tracing::{debug, instrument, warn};
@@ -42,7 +42,7 @@ pub struct BlockRemover {
     header_store: Store<HeaderDigest, Header>,
 
     /// The persistent storage for payload markers from workers.
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
 
     /// The Dag structure for managing the stored certificates
     dag: Option<Arc<Dag>>,
@@ -61,7 +61,7 @@ impl BlockRemover {
         worker_cache: WorkerCache,
         certificate_store: CertificateStore,
         header_store: Store<HeaderDigest, Header>,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        payload_store: PayloadStore,
         dag: Option<Arc<Dag>>,
         worker_network: anemo::Network,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
@@ -145,7 +145,6 @@ impl BlockRemover {
         }
         self.payload_store
             .remove_all(batches_to_cleanup)
-            .await
             .map_err(Either::Left)?;
 
         // NOTE: delete certificates in the end since if we need to repeat the request

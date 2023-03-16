@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{CertificateStore, ProposerStore};
@@ -26,7 +27,7 @@ pub struct NodeStorage {
     pub vote_digest_store: VoteDigestStore,
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
-    pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
 }
@@ -99,7 +100,7 @@ impl NodeStorage {
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
         );
-        let payload_store = Store::new(payload_map);
+        let payload_store = PayloadStore::new(payload_map);
         let batch_store = batch_map;
         let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sub_dag_index_map));
 

@@ -27,11 +27,10 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::NodeStorage;
 use storage::PayloadToken;
 use storage::{CertificateStore, VoteDigestStore};
+use storage::{NodeStorage, PayloadStore};
 use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
-use store::Store;
 use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{oneshot, watch},
@@ -375,7 +374,7 @@ async fn test_request_vote_send_missing_parents() {
     // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
     for cert in round_2_parents {
         for (digest, (worker_id, _)) in &cert.header.payload {
-            payload_store.async_write((*digest, *worker_id), 1).await;
+            payload_store.write(*digest, *worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
@@ -520,19 +519,19 @@ async fn test_request_vote_accept_missing_parents() {
     // should be able to get accepted.
     for cert in round_1_certs {
         for (digest, (worker_id, _)) in &cert.header.payload {
-            payload_store.async_write((*digest, *worker_id), 1).await;
+            payload_store.write(*digest, *worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     for cert in round_2_parents {
         for (digest, (worker_id, _)) in &cert.header.payload {
-            payload_store.async_write((*digest, *worker_id), 1).await;
+            payload_store.write(*digest, *worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     // Populate new header payload so they don't have to be retrieved.
     for (digest, (worker_id, _)) in &test_header.payload {
-        payload_store.async_write((*digest, *worker_id), 1).await;
+        payload_store.write(*digest, *worker_id).unwrap();
     }
 
     // TEST PHASE 1: Handler should report missing parent certificates to caller.
@@ -641,7 +640,7 @@ async fn test_request_vote_missing_batches() {
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
         for (digest, (worker_id, _)) in certificate.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+            payload_store.write(digest, worker_id).unwrap();
         }
     }
     let test_header = author
@@ -766,7 +765,7 @@ async fn test_request_vote_already_voted() {
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
         for (digest, (worker_id, _)) in certificate.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+            payload_store.write(digest, worker_id).unwrap();
         }
     }
 
@@ -1102,7 +1101,7 @@ async fn test_process_payload_availability_success() {
             certificate_store.write(certificate.clone()).unwrap();
 
             for (digest, (worker_id, _)) in certificate.header.payload {
-                payload_store.async_write((digest, worker_id), 1).await;
+                payload_store.write(digest, worker_id).unwrap();
             }
         } else {
             missing_certificates.insert(digest);
@@ -1177,7 +1176,7 @@ async fn test_process_payload_availability_when_failures() {
         certificate_digest_by_round_map,
         certificate_digest_by_origin_map,
     );
-    let payload_store: Store<(BatchDigest, WorkerId), PayloadToken> = Store::new(payload_map);
+    let payload_store = PayloadStore::new(payload_map);
 
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
@@ -1343,7 +1342,7 @@ async fn test_request_vote_created_at_in_future() {
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
         for (digest, (worker_id, _)) in certificate.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+            payload_store.write(digest, worker_id).unwrap();
         }
     }
 

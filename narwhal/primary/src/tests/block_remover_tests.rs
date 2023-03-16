@@ -93,11 +93,10 @@ async fn test_successful_blocks_delete() {
 
         // write the batches to payload store
         payload_store
-            .sync_write_all(vec![
-                ((batch_1.clone().digest(), worker_id_0), 0),
-                ((batch_2.clone().digest(), worker_id_1), 0),
+            .write_all(vec![
+                (batch_1.clone().digest(), worker_id_0),
+                (batch_2.clone().digest(), worker_id_1),
             ])
-            .await
             .expect("couldn't store batches");
 
         digests.push(digest);
@@ -162,11 +161,7 @@ async fn test_successful_blocks_delete() {
     for (worker_id, batch_digests) in worker_batches {
         for digest in batch_digests {
             assert!(
-                payload_store
-                    .read((digest, worker_id))
-                    .await
-                    .unwrap()
-                    .is_none(),
+                payload_store.read(digest, worker_id).unwrap().is_none(),
                 "Payload shouldn't exist"
             );
         }
@@ -266,11 +261,10 @@ async fn test_failed_blocks_delete() {
 
         // write the batches to payload store
         payload_store
-            .sync_write_all(vec![
-                ((batch_1.clone().digest(), worker_id_0), 0),
-                ((batch_2.clone().digest(), worker_id_1), 0),
+            .write_all(vec![
+                (batch_1.clone().digest(), worker_id_0),
+                (batch_2.clone().digest(), worker_id_1),
             ])
-            .await
             .expect("couldn't store batches");
 
         digests.push(digest);
@@ -330,11 +324,7 @@ async fn test_failed_blocks_delete() {
     }
     for (worker_id, batch_digests) in worker_batches {
         for digest in batch_digests {
-            assert!(payload_store
-                .read((digest, worker_id))
-                .await
-                .unwrap()
-                .is_some());
+            assert!(payload_store.read(digest, worker_id).unwrap().is_some());
         }
     }
     let mut total_deleted = 0;

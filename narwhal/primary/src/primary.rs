@@ -50,7 +50,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, PayloadToken, ProposerStore, VoteDigestStore};
+use storage::{CertificateStore, PayloadStore, ProposerStore, VoteDigestStore};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio::{
@@ -64,13 +64,12 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
-    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote,
-    WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    now, Certificate, CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse,
+    GetCertificatesRequest, GetCertificatesResponse, Header, HeaderDigest,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, Vote, WorkerInfoResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -107,7 +106,7 @@ impl Primary {
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
         proposer_store: ProposerStore,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        payload_store: PayloadStore,
         vote_digest_store: VoteDigestStore,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
@@ -651,7 +650,7 @@ struct PrimaryReceiverHandler {
     signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
     /// The store to persist the last voted round per authority, used to ensure idempotence.
     vote_digest_store: VoteDigestStore,
     /// Get a signal when the round changes.
@@ -1090,17 +1089,13 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         for (id, certificate_option) in digests.into_iter().zip(certificates) {
             // Find batches only for certificates that exist.
             if let Some(certificate) = certificate_option {
-                let payload_available = match self
-                    .payload_store
-                    .read_all(
-                        certificate
-                            .header
-                            .payload
-                            .into_iter()
-                            .map(|(batch, (worker_id, _))| (batch, worker_id)),
-                    )
-                    .await
-                {
+                let payload_available = match self.payload_store.read_all(
+                    certificate
+                        .header
+                        .payload
+                        .into_iter()
+                        .map(|(batch, (worker_id, _))| (batch, worker_id)),
+                ) {
                     Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
                     Err(err) => {
                         // Assume that we don't have the payloads available,
@@ -1127,7 +1122,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<OurDigestMessage>,
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
 
@@ -1173,8 +1168,8 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.payload_store
-            .async_write((message.digest, message.worker_id), 0u8)
-            .await;
+            .write(message.digest, message.worker_id)
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(()))
     }
 

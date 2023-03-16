@@ -3,10 +3,12 @@
 
 mod certificate_store;
 mod node_store;
+mod payload_store;
 mod proposer_store;
 mod vote_digest_store;
 
 pub use certificate_store::*;
 pub use node_store::*;
+pub use payload_store::*;
 pub use proposer_store::*;
 pub use vote_digest_store::*;

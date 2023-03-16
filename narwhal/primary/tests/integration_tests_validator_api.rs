@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
+use config::{BlockSynchronizerParameters, Committee, Parameters};
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
@@ -16,8 +16,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::NodeStorage;
-use storage::{CertificateStore, PayloadToken};
+use storage::CertificateStore;
+use storage::{NodeStorage, PayloadStore};
 use store::{rocks::DBMap, Map, Store};
 use test_utils::{
     fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
@@ -87,8 +87,7 @@ async fn test_get_collections() {
         // Write the batches to payload store
         store
             .payload_store
-            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
-            .await
+            .write_all(vec![(batch.clone().digest(), worker_id)])
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
@@ -304,8 +303,7 @@ async fn test_remove_collections() {
         // Write the batches to payload store
         store
             .payload_store
-            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
-            .await
+            .write_all(vec![(batch.clone().digest(), worker_id)])
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
@@ -1181,7 +1179,7 @@ async fn fixture_certificate(
     fixture: &CommitteeFixture,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
     batch_store: DBMap<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
     let batch = fixture_batch_with_transactions(10);
@@ -1210,8 +1208,7 @@ async fn fixture_certificate(
 
     // Write the batches to payload store
     payload_store
-        .sync_write_all(vec![((batch_digest, worker_id), 0)])
-        .await
+        .write_all(vec![(batch_digest, worker_id)])
         .expect("couldn't store batches");
 
     // Add a batch to the workers store

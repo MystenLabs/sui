@@ -3,7 +3,7 @@
 use config::WorkerId;
 use crypto::NetworkKeyPair;
 use std::time::Duration;
-use storage::CertificateStore;
+use storage::{CertificateStore, PayloadStore};
 use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions, Store};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_DIGEST_BY_ORIGIN_CF,
@@ -19,11 +19,7 @@ use storage::PayloadToken;
 use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
 
-pub fn create_db_stores() -> (
-    Store<HeaderDigest, Header>,
-    CertificateStore,
-    Store<(BatchDigest, WorkerId), PayloadToken>,
-) {
+pub fn create_db_stores() -> (Store<HeaderDigest, Header>, CertificateStore, PayloadStore) {
     // Create a new test store.
     let rocksdb = rocks::open_cf(
         temp_dir(),
@@ -59,7 +55,7 @@ pub fn create_db_stores() -> (
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
         ),
-        Store::new(payload_map),
+        PayloadStore::new(payload_map),
     )
 }
 
