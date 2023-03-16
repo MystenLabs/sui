@@ -98,6 +98,73 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    async fn test_protocol_version_upgrade_with_shutdown_validator() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        let validator = test_cluster.get_validator_addresses()[0].clone();
+        test_cluster.stop_validator(validator);
+
+        let mut epoch_rx = test_cluster
+            .fullnode_handle
+            .sui_node
+            .subscribe_to_epoch_change();
+
+        timeout(Duration::from_secs(60), async move {
+            while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
+                info!(
+                    "received epoch {} {:?}",
+                    committee.epoch(),
+                    protocol_version
+                );
+                match committee.epoch() {
+                    0 => assert_eq!(protocol_version, ProtocolVersion::new(START)),
+                    1 => {
+                        assert_eq!(protocol_version, ProtocolVersion::new(FINISH));
+                        test_cluster.start_validator(validator).await;
+                    }
+                    2 => {
+                        let validator_handle = test_cluster
+                            .swarm
+                            .validator(validator.clone())
+                            .unwrap()
+                            .get_node_handle()
+                            .unwrap();
+                        validator_handle
+                            .with_async(|node| async {
+                                // give time for restarted node to catch up, reconfig
+                                // to new protocol, and reconfig again
+                                sleep(Duration::from_secs(5)).await;
+
+                                let epoch_store = node.state().epoch_store_for_testing();
+                                assert_eq!(epoch_store.epoch(), 2);
+                                assert!(node.state().is_validator(&epoch_store));
+                            })
+                            .await;
+                        break;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        })
+        .await
+        .expect("Timed out waiting for cluster to target epoch");
+    }
+
+    #[sim_test]
     async fn test_protocol_version_upgrade_one_laggard() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
