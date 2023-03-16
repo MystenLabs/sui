@@ -141,6 +141,15 @@ module sui::package {
         &self.package
     }
 
+    /// The ID of the package that this cap authorizes upgrades for.
+    /// Can be `0x0` if the cap cannot currently authorize an upgrade
+    /// because there is already a pending upgrade in the transaction.
+    /// Otherwise guaranteed to be the latest version of any given
+    /// package.
+    public fun upgrade_package(cap: &UpgradeCap): ID {
+        cap.package
+    }
+
     /// The most recent version of the package, increments by one for each
     /// successfully applied upgrade.
     public fun version(cap: &UpgradeCap): u64 {
@@ -151,6 +160,44 @@ module sui::package {
     /// `cap`.
     public fun upgrade_policy(cap: &UpgradeCap): u8 {
         cap.policy
+    }
+
+    /// The package that this ticket is authorized to upgrade
+    public fun ticket_package(ticket: &UpgradeTicket): ID {
+        ticket.package
+    }
+
+    /// The kind of upgrade that this ticket authorizes.
+    public fun ticket_policy(ticket: &UpgradeTicket): u8 {
+        ticket.policy
+    }
+
+    /// ID of the `UpgradeCap` that this `receipt` should be used to
+    /// update.
+    public fun receipt_cap(receipt: &UpgradeReceipt): ID {
+        receipt.cap
+    }
+
+    /// ID of the package that was upgraded to: the latest version of
+    /// the package, as of the upgrade represented by this `receipt`.
+    public fun receipt_package(receipt: &UpgradeReceipt): ID {
+        receipt.package
+    }
+
+    /// A hash of the package contents for the new version of the
+    /// package.  This ticket only authorizes an upgrade to a package
+    /// that matches this digest.  A package's contents are identified
+    /// by two things:
+    ///   
+    ///  - modules: [[u8]]       a list of the package's module contents
+    ///  - deps:    [[u8; 32]]   a list of 32 byte ObjectIDs of the
+    ///                          package's transitive dependencies
+    ///
+    /// A package's digest is calculated as:
+    ///
+    ///   sha3_256(sort(modules ++ deps))
+    public fun ticket_digest(ticket: &UpgradeTicket): &vector<u8> {
+        &ticket.digest
     }
 
     /// Expose the constants representing various upgrade policies
