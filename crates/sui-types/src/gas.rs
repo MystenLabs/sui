@@ -60,6 +60,20 @@ fn get_bucket_cost(table: &[ComputationBucket], computation_cost: u64) -> u64 {
     MAX_BUCKET_COST
 }
 
+// computation cost at the end (in `summary`) should always be the max of a bucket
+// or higher than the last bucket limit.
+// We may get a value that is higher than the last bucket limit if the max budget and
+// the highest bucket cost diverge. That should not be possible but it is also
+// not a problem so we may as well let it go...
+fn computation_in_bucket(table: &[ComputationBucket], computation_cost: u64) -> bool {
+    for bucket in table {
+        if bucket.max == computation_cost {
+            return true;
+        }
+    }
+    computation_cost > MAX_BUCKET_COST
+}
+
 // for a RPG of 1000 this amounts to about 1 SUI
 const MAX_BUCKET_COST: u64 = 1_000_000;
 
@@ -381,7 +395,7 @@ impl<'a> SuiGasStatus<'a> {
     }
 
     pub fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
-        let computation_cost: u64 = self.gas_used().into();
+        let computation_cost: u64 = self.computation_cost().into();
         let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, computation_cost);
         let charge = bucket_cost - computation_cost;
         self.deduct_computation_cost(&charge.into())
@@ -453,20 +467,19 @@ impl<'a> SuiGasStatus<'a> {
     /// We use initial budget, combined with remaining gas and storage cost to derive
     /// computation cost.
     pub fn summary(&self) -> GasCostSummary {
-        let remaining_gas = self.gas_status.remaining_gas();
-        let storage_cost = self.storage_gas_units;
-        // MUSTFIX: handle underflow how?
-        let computation_cost = self
-            .init_budget
-            .checked_sub(remaining_gas)
-            .expect("Subtraction overflowed")
-            .checked_sub(storage_cost)
-            .expect("Subtraction overflowed");
-
+        let computation_cost = self.computation_cost();
+        debug_assert!(
+            computation_in_bucket(&COMPUTATION_BUCKETS, computation_cost.into()),
+            "computation cost not in line with bucket cost"
+        );
         let computation_cost_in_sui = computation_cost.mul(self.computation_gas_unit_price).into();
+
         GasCostSummary {
             computation_cost: computation_cost_in_sui,
-            storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
+            storage_cost: self
+                .storage_gas_units
+                .mul(self.storage_gas_unit_price)
+                .into(),
             storage_rebate: self.storage_rebate.into(),
         }
     }
@@ -520,10 +533,14 @@ impl<'a> SuiGasStatus<'a> {
         }
     }
 
-    fn gas_used(&self) -> GasUnits {
+    fn computation_cost(&self) -> GasUnits {
         let remaining_gas = self.gas_status.remaining_gas();
+        let storage_cost = self.storage_gas_units;
+        // MUSTFIX: handle underflow how?
         self.init_budget
             .checked_sub(remaining_gas)
+            .expect("Subtraction overflowed")
+            .checked_sub(storage_cost)
             .expect("Subtraction overflowed")
     }
 }

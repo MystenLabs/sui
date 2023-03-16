@@ -514,7 +514,6 @@ impl<S> TemporaryStore<S> {
         object.previous_transaction = self.tx_digest;
         self.written.insert(object.id(), (object, kind));
     }
-
     /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of mutated objects
     /// 2. Deduct computation gas costs and storage costs to `gas_object_id`, credit storage rebates to `gas_object_id`.
     // The happy path of this function follows (1) + (2) and is fairly simple. Most of the complexity is in the unhappy paths:
@@ -540,6 +539,7 @@ impl<S> TemporaryStore<S> {
             // Tx execution aborted--need to dump writes, deletes, etc before charging storage gas
             self.reset(gas, gas_status);
         }
+        let _computation_cost = gas_status.summary().computation_cost;
 
         if let Err(err) = self
             .charge_gas_for_storage_changes(gas_status, gas_object_id)
@@ -571,6 +571,10 @@ impl<S> TemporaryStore<S> {
             }
         }
         let cost_summary = gas_status.summary();
+        debug_assert!(
+            _computation_cost == cost_summary.computation_cost,
+            "computation cost should not change after storage charges"
+        );
         let gas_used = cost_summary.gas_used();
 
         // Important to fetch the gas object here instead of earlier, as it may have been reset
