@@ -34,6 +34,7 @@ members = [
     "crates/sui-open-rpc-macros",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
+    "crates/sui-proxy",
     "crates/sui-rosetta",
     "crates/sui-sdk",
     "crates/sui-simulator",
