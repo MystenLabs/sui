@@ -9299,8 +9299,10 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
+ "futures",
  "once_cell",
  "sui-proc-macros",
+ "tracing",
  "workspace-hack",
 ]
 
