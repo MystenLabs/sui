@@ -190,6 +190,7 @@ fn execute_transaction<
         };
         execution_result
     });
+    // test comment
     if !gas_status.is_unmetered() {
         temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
     }
