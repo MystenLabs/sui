@@ -13,7 +13,6 @@ import {
   literal,
   record,
   is,
-  unknown,
 } from 'superstruct';
 
 export type SuiMoveFunctionArgTypesResponse = Infer<
@@ -61,48 +60,72 @@ export type SuiMoveNormalizedTypeParameterType = Infer<
   typeof SuiMoveNormalizedTypeParameterType
 >;
 
-export type SuiMoveNormalizedType = 
- | {type: "Bool", content: string}
- | {type: "U8", content: string}
- | {type: "U16", content: string}
- | {type: "U32", content: string}
- | {type: "U64", content: string}
- | {type: "U128", content: string}
- | {type: "U256", content: string}
- | {type: "Address", content: string}
- | {type: "Signer", content: string}
- | {type: "Struct", content: {address: string, module: string, name: string, typeArguments: SuiMoveNormalizedType[]}}
- | {type: "Vector", content: SuiMoveNormalizedType}
- | {type: "TypeParameter", content: number}
- | {type: "Reference", content: SuiMoveNormalizedType}
- | {type: "MutableReference", content: SuiMoveNormalizedType}
+export type SuiMoveNormalizedType =
+  | { type: 'Bool' }
+  | { type: 'U8' }
+  | { type: 'U16' }
+  | { type: 'U32' }
+  | { type: 'U64' }
+  | { type: 'U128' }
+  | { type: 'U256' }
+  | { type: 'Address' }
+  | { type: 'Signer' }
+  | {
+      type: 'Struct';
+      content: {
+        address: string;
+        module: string;
+        name: string;
+        typeArguments: SuiMoveNormalizedType[];
+      };
+    }
+  | { type: 'Vector'; content: SuiMoveNormalizedType }
+  | { type: 'TypeParameter'; content: number }
+  | { type: 'Reference'; content: SuiMoveNormalizedType }
+  | { type: 'MutableReference'; content: SuiMoveNormalizedType };
 
 function isSuiMoveNormalizedType(
   value: unknown,
 ): value is SuiMoveNormalizedType {
   if (!value) return false;
-  // if (typeof value.content === 'string') return true;
-  // if (is(value.content, SuiMoveNormalizedTypeParameterType)) return true;
-  // if (isSuiMoveNormalizedStructType(value)) return true;
-  // if (typeof value !== 'object') return false;
-  const valueProperties = value as {type: string, content: unknown};
+  const valueProperties = value as { type: string; content: unknown };
 
-  if (["Bool", "U8", "U16", "U32", "U64", "U128", "U256", "Address", "Signer"].includes(valueProperties.type) && typeof valueProperties.content === "string")
+  if (
+    [
+      'Bool',
+      'U8',
+      'U16',
+      'U32',
+      'U64',
+      'U128',
+      'U256',
+      'Address',
+      'Signer',
+    ].includes(valueProperties.type)
+  )
     return true;
-  if (["Vector", "Reference", "MutableReference"].includes(valueProperties.type) && is(valueProperties.content, SuiMoveNormalizedType))
+  if (
+    ['Vector', 'Reference', 'MutableReference'].includes(
+      valueProperties.type,
+    ) &&
+    is(valueProperties.content, SuiMoveNormalizedType)
+  )
     return true;
-  if (valueProperties.type === "TypeParameter" && typeof valueProperties.content === "number")
+  if (
+    valueProperties.type === 'TypeParameter' &&
+    typeof valueProperties.content === 'number'
+  )
     return true;
-  if(valueProperties.type === "Struct") {
+  if (valueProperties.type === 'Struct') {
     const contents = valueProperties.content as Record<string, unknown>;
-    return (typeof contents.address === "string" && typeof contents.module === "string" &&
-      typeof name === "string" && Array.isArray(contents.typeArguments) &&
-      contents.typeArguments.every(value => is(value, SuiMoveNormalizedType)))
+    return (
+      typeof contents.address === 'string' &&
+      typeof contents.module === 'string' &&
+      typeof name === 'string' &&
+      Array.isArray(contents.typeArguments) &&
+      contents.typeArguments.every((value) => is(value, SuiMoveNormalizedType))
+    );
   }
-  // const valueProperties = value as Record<string, unknown>;
-  // if (is(valueProperties.Reference, SuiMoveNormalizedType)) return true;
-  // if (is(valueProperties.MutableReference, SuiMoveNormalizedType)) return true;
-  // if (is(valueProperties.Vector, SuiMoveNormalizedType)) return true;
   return false;
 }
 
@@ -193,7 +216,8 @@ export function extractMutableReference(
   normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' &&
-    'MutableReference' === normalizedType.type
+    'MutableReference' === normalizedType.type &&
+    typeof normalizedType.content === 'object'
     ? normalizedType.content
     : undefined;
 }
@@ -201,7 +225,8 @@ export function extractMutableReference(
 export function extractReference(
   normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedType | undefined {
-  return typeof normalizedType === 'object' && 'Reference' === normalizedType.type
+  return typeof normalizedType === 'object' &&
+    'Reference' === normalizedType.type
     ? normalizedType.content
     : undefined;
 }
@@ -210,18 +235,18 @@ export function extractStructTag(
   normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedStructType | undefined {
   if (typeof normalizedType === 'object' && 'Struct' === normalizedType.type) {
-    return {Struct: normalizedType.content};
+    return { Struct: normalizedType.content };
   }
 
   const ref = extractReference(normalizedType);
   const mutRef = extractMutableReference(normalizedType);
 
-  if (typeof ref === 'object' && ref.type === "Struct") {
-    return {Struct: ref.content};
+  if (typeof ref === 'object' && ref.type === 'Struct') {
+    return { Struct: ref.content };
   }
 
-  if (typeof mutRef === 'object' && mutRef.type === "Struct") {
-    return {Struct: mutRef.content};
+  if (typeof mutRef === 'object' && mutRef.type === 'Struct') {
+    return { Struct: mutRef.content };
   }
   return undefined;
 }

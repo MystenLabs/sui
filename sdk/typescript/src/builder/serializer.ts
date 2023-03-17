@@ -83,11 +83,12 @@ export function getPureSerializationType(
   normalizedType: SuiMoveNormalizedType,
   argVal: SuiJsonValue | undefined,
 ): string | undefined {
-  if (
-    typeof normalizedType.content === 'string' &&
-    allowedTypes.includes(normalizedType.type)
-  ) {
-    if (['U8', 'U16', 'U32', 'U64', 'U128', 'U256'].indexOf(normalizedType.type) !== -1) {
+  if (allowedTypes.includes(normalizedType.type)) {
+    if (
+      ['U8', 'U16', 'U32', 'U64', 'U128', 'U256'].indexOf(
+        normalizedType.type,
+      ) !== -1
+    ) {
       expectType('number', argVal);
     } else if (normalizedType.type === 'Bool') {
       expectType('boolean', argVal);
@@ -97,14 +98,10 @@ export function getPureSerializationType(
         throw new Error('Invalid Sui Address');
       }
     }
-    return normalizedType.content.toLowerCase();
-  } else if (typeof normalizedType.content === 'string') {
-    throw new Error(
-      `Unknown pure normalized type ${JSON.stringify(normalizedType, null, 2)}`,
-    );
+    return normalizedType.type.toLowerCase();
   }
 
-  if (normalizedType.type === "Vector") {
+  if (normalizedType.type === 'Vector') {
     if (
       (argVal === undefined || typeof argVal === 'string') &&
       normalizedType.content.type === 'U8'
@@ -131,7 +128,7 @@ export function getPureSerializationType(
     return `vector<${innerType}>`;
   }
 
-  if (normalizedType.type === "Struct") {
+  if (normalizedType.type === 'Struct') {
     if (isSameStruct(normalizedType.content, RESOLVED_ASCII_STR)) {
       return 'string';
     } else if (isSameStruct(normalizedType.content, RESOLVED_UTF8_STR)) {
@@ -140,7 +137,8 @@ export function getPureSerializationType(
       return 'address';
     } else if (isSameStruct(normalizedType.content, RESOLVED_STD_OPTION)) {
       const optionToVec: SuiMoveNormalizedType = {
-        type: "Vector", content: normalizedType.content.typeArguments[0],
+        type: 'Vector',
+        content: normalizedType.content.typeArguments[0],
       };
       return getPureSerializationType(optionToVec, argVal);
     }

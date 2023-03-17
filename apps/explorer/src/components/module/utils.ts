@@ -18,14 +18,24 @@ export function normalizedFunctionParameterTypeToString(
     functionTypeArgNames?: string[],
     str = ''
 ): string {
-    if (["Bool", "U8", "U16", "U32", "U64", "U128", "U256", "Address", "Signer"].indexOf(param.type) !== -1) {
-        return str + param.content;
+    if (
+        [
+            'Bool',
+            'U8',
+            'U16',
+            'U32',
+            'U64',
+            'U128',
+            'U256',
+            'Address',
+            'Signer',
+        ].indexOf(param.type) !== -1
+    ) {
+        return str + param.type;
     }
     if ('TypeParameter' === param.type) {
         return (
-            str +
-            (functionTypeArgNames?.[param.content] ??
-                `T${param.content}`)
+            str + (functionTypeArgNames?.[param.content] ?? `T${param.type}`)
         );
     }
     if ('Reference' === param.type || 'MutableReference' === param.type) {
