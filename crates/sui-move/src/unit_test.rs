@@ -46,6 +46,7 @@ impl Test {
         let with_unpublished_deps = false;
         let dump_bytecode_as_base64 = false;
         let generate_struct_layouts: bool = false;
+        let dump_package_digest = false;
         build::Build::execute_internal(
             &rerooted_path,
             BuildConfig {
@@ -55,6 +56,7 @@ impl Test {
             with_unpublished_deps,
             dump_bytecode_as_base64,
             generate_struct_layouts,
+            dump_package_digest,
         )?;
         run_move_unit_tests(
             &rerooted_path,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use fastcrypto::encoding::{Encoding, Hex};
 use move_cli::base::{self, build};
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
@@ -34,6 +35,9 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
+    /// Compute and display the package digest in hex.
+    #[clap(long, global = true)]
+    pub dump_package_digest: bool,
 }
 
 impl Build {
@@ -50,6 +54,7 @@ impl Build {
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
+            self.dump_package_digest,
         )
     }
 
@@ -59,6 +64,7 @@ impl Build {
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
+        dump_package_digest: bool,
     ) -> anyhow::Result<()> {
         let pkg = sui_framework::build_move_package(
             rerooted_path,
@@ -82,6 +88,13 @@ impl Build {
                     "dependencies": json!(package_dependencies),
                 })
             )
+        }
+
+        if dump_package_digest {
+            println!(
+                "{}",
+                Hex::encode(pkg.get_package_digest(with_unpublished_deps))
+            );
         }
 
         if generate_struct_layouts {

@@ -44,8 +44,8 @@ pub fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let package = sui_framework::build_move_package(&path, build_config).unwrap();
     (
-        package.get_package_digest().to_vec(),
-        package.get_package_bytes(true),
+        package.get_package_digest(false).to_vec(),
+        package.get_package_bytes(false),
     )
 }
 
@@ -64,8 +64,8 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let package = sui_framework::build_move_package(&path, build_config).unwrap();
     (
-        package.get_package_digest().to_vec(),
-        package.get_package_bytes(true),
+        package.get_package_digest(false).to_vec(),
+        package.get_package_bytes(false),
         package.get_dependency_original_package_ids(),
     )
 }
@@ -97,7 +97,7 @@ impl UpgradeStateRunner {
             &sender_key,
             &gas_object_id,
             base_package_name,
-            true,
+            false,
         )
         .await;
 
