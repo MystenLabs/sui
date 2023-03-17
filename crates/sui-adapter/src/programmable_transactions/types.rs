@@ -119,7 +119,7 @@ pub enum CommandKind<'a> {
     },
     MakeMoveVec,
     TransferObjects,
-    SplitCoin,
+    SplitCoins,
     MergeCoins,
     Publish,
     Upgrade,
