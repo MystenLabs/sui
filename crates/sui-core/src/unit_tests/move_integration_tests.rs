@@ -2406,25 +2406,25 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     assert!(effects.unwrapped_then_deleted().is_empty());
 }
 
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_make_move_vec() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender, gas)]).await;
-    let package = build_and_publish_test_package(
-        &authority,
-        &sender,
-        &sender_key,
-        &gas,
-        "entry_point_types",
-        /* with_unpublished_deps */ false,
-    )
-    .await;
-    let package_id = package.0;
-    macro_rules! test {
-        ($T:ty, $tag:expr, $value:expr) => {{
-            test_make_move_vec_for_type::<$T>(
+macro_rules! make_vec_tests_for_type {
+    ($test:ident, $t:ty, $tag:expr, $value:expr) => {
+        #[tokio::test]
+        #[cfg_attr(msim, ignore)]
+        async fn $test() {
+            let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+            let gas = ObjectID::random();
+            let authority = init_state_with_ids(vec![(sender, gas)]).await;
+            let package = build_and_publish_test_package(
+                &authority,
+                &sender,
+                &sender_key,
+                &gas,
+                "entry_point_types",
+                /* with_unpublished_deps */ false,
+            )
+            .await;
+            let package_id = package.0;
+            test_make_move_vec_for_type(
                 &authority,
                 &gas,
                 &sender,
@@ -2434,43 +2434,86 @@ async fn test_make_move_vec() {
                 $value,
             )
             .await;
-        }};
-    }
-    macro_rules! tests_for_type {
-        ($T:ty, $tag:expr, $value:expr) => {{
-            test!($T, $tag, $value);
-            test!(Vec<$T>, TypeTag::Vector(Box::new($tag)), vec![]);
-            test!(
-                Vec<$T>,
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
                 TypeTag::Vector(Box::new($tag)),
-                vec![$value, $value]
-            );
-            test!(Option<$T>, option_tag($tag), None);
-            test!(Option<$T>, option_tag($tag), Some($value));
-            test!(
-                Vec<Option<$T>>,
-                TypeTag::Vector(Box::new(option_tag($tag))),
-                vec![None, Some($value)]
+                Vec::<$t>::new(),
             )
-        }};
-    }
-
-    tests_for_type!(bool, TypeTag::Bool, false);
-    tests_for_type!(u8, TypeTag::U8, 0);
-    tests_for_type!(u16, TypeTag::U16, 0);
-    tests_for_type!(u32, TypeTag::U32, 0);
-    tests_for_type!(u64, TypeTag::U64, 0);
-    tests_for_type!(u128, TypeTag::U128, 0);
-    tests_for_type!(U256, TypeTag::U256, U256::zero());
-    tests_for_type!(SuiAddress, TypeTag::Address, SuiAddress::ZERO);
-    tests_for_type!(
-        ObjectID,
-        TypeTag::Struct(Box::new(sui_types::id::ID::type_())),
-        ObjectID::ZERO
-    );
-    tests_for_type!(&str, utf8_tag(), "❤️🧀");
-    tests_for_type!(&str, ascii_tag(), "love and cheese");
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                TypeTag::Vector(Box::new($tag)),
+                vec![$value, $value],
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                option_tag($tag),
+                None::<$t>,
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                option_tag($tag),
+                Some($value),
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                TypeTag::Vector(Box::new(option_tag($tag))),
+                vec![None, Some($value)],
+            )
+            .await;
+        }
+    };
 }
+
+make_vec_tests_for_type!(test_make_move_vec_bool, bool, TypeTag::Bool, false);
+make_vec_tests_for_type!(test_make_move_vec_u8, u8, TypeTag::U8, 0u8);
+make_vec_tests_for_type!(test_make_move_vec_u16, u16, TypeTag::U16, 0u16);
+make_vec_tests_for_type!(test_make_move_vec_u32, u32, TypeTag::U32, 0u32);
+make_vec_tests_for_type!(test_make_move_vec_u64, u64, TypeTag::U64, 0u64);
+make_vec_tests_for_type!(test_make_move_vec_u128, u128, TypeTag::U128, 0u128);
+make_vec_tests_for_type!(test_make_move_vec_u256, U256, TypeTag::U256, U256::zero());
+make_vec_tests_for_type!(
+    test_make_move_vec_address,
+    SuiAddress,
+    TypeTag::Address,
+    SuiAddress::ZERO
+);
+make_vec_tests_for_type!(
+    test_make_move_vec_address_id,
+    ObjectID,
+    TypeTag::Struct(Box::new(sui_types::id::ID::type_())),
+    ObjectID::ZERO
+);
+make_vec_tests_for_type!(test_make_move_vec_utf8, &str, utf8_tag(), "❤️🧀");
+make_vec_tests_for_type!(
+    test_make_move_vec_ascii,
+    &str,
+    ascii_tag(),
+    "love and cheese"
+);
 
 async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     authority: &AuthorityState,
@@ -2546,60 +2589,96 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     );
 }
 
-#[tokio::test]
-#[cfg_attr(msim, ignore)]
-async fn test_make_move_vec_errors() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender, gas)]).await;
-    macro_rules! test {
-        ($T:ty, $tag:expr, $value:expr) => {{
-            error_test_make_move_vec_for_type::<$T>(
+macro_rules! make_vec_error_tests_for_type {
+    ($test:ident, $t:ty, $tag:expr, $value:expr) => {
+        #[tokio::test]
+        #[cfg_attr(msim, ignore)]
+        async fn $test() {
+            let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+            let gas = ObjectID::random();
+            let authority = init_state_with_ids(vec![(sender, gas)]).await;
+            error_test_make_move_vec_for_type(&authority, &gas, &sender, &sender_key, $tag, $value)
+                .await;
+            error_test_make_move_vec_for_type(
                 &authority,
                 &gas,
                 &sender,
                 &sender_key,
-                $tag,
-                $value,
+                TypeTag::Vector(Box::new($tag)),
+                Vec::<$t>::new(),
             )
             .await;
-        }};
-    }
-    macro_rules! tests_for_type {
-        ($T:ty, $tag:expr, $value:expr) => {{
-            test!($T, $tag, $value);
-            test!(Vec<$T>, TypeTag::Vector(Box::new($tag)), vec![]);
-            test!(
-                Vec<$T>,
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
                 TypeTag::Vector(Box::new($tag)),
-                vec![$value, $value]
-            );
-            test!(Option<$T>, option_tag($tag), None);
-            test!(Option<$T>, option_tag($tag), Some($value));
-            test!(
-                Vec<Option<$T>>,
-                TypeTag::Vector(Box::new(option_tag($tag))),
-                vec![None, Some($value)]
+                vec![$value, $value],
             )
-        }};
-    }
-
-    tests_for_type!(bool, TypeTag::Bool, false);
-    tests_for_type!(u8, TypeTag::U8, 0);
-    tests_for_type!(u16, TypeTag::U16, 0);
-    tests_for_type!(u32, TypeTag::U32, 0);
-    tests_for_type!(u64, TypeTag::U64, 0);
-    tests_for_type!(u128, TypeTag::U128, 0);
-    tests_for_type!(U256, TypeTag::U256, U256::zero());
-    tests_for_type!(SuiAddress, TypeTag::Address, SuiAddress::ZERO);
-    tests_for_type!(
-        ObjectID,
-        TypeTag::Struct(Box::new(sui_types::id::ID::type_())),
-        ObjectID::ZERO
-    );
-    tests_for_type!(&str, utf8_tag(), "❤️🧀");
-    tests_for_type!(&str, ascii_tag(), "love and cheese");
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                option_tag($tag),
+                None::<$t>,
+            )
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                option_tag($tag),
+                Some($value),
+            )
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                TypeTag::Vector(Box::new(option_tag($tag))),
+                vec![None, Some($value)],
+            )
+            .await;
+        }
+    };
 }
+
+make_vec_error_tests_for_type!(test_error_make_move_vec_bool, bool, TypeTag::Bool, false);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u8, u8, TypeTag::U8, 0u8);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u16, u16, TypeTag::U16, 0u16);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u32, u32, TypeTag::U32, 0u32);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u64, u64, TypeTag::U64, 0u64);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u128, u128, TypeTag::U128, 0u128);
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_u256,
+    U256,
+    TypeTag::U256,
+    U256::zero()
+);
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_address,
+    SuiAddress,
+    TypeTag::Address,
+    SuiAddress::ZERO
+);
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_address_id,
+    ObjectID,
+    TypeTag::Struct(Box::new(sui_types::id::ID::type_())),
+    ObjectID::ZERO
+);
+make_vec_error_tests_for_type!(test_error_make_move_vec_utf8, &str, utf8_tag(), "❤️🧀");
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_ascii,
+    &str,
+    ascii_tag(),
+    "love and cheese"
+);
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
