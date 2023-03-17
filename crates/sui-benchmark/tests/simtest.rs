@@ -102,7 +102,7 @@ mod test {
         probability: f64,
     ) {
         let mut dead_validator = dead_validator.lock().unwrap();
-        let cur_node = sui_simulator::runtime::NodeHandle::current().id();
+        let cur_node = sui_simulator::current_simnode_id();
 
         // never kill the client node (which is running the test)
         if cur_node == client_node {
@@ -140,7 +140,7 @@ mod test {
         let test_cluster = build_test_cluster(4, 1000).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
-        let client_node = sui_simulator::runtime::NodeHandle::current().id();
+        let client_node = sui_simulator::current_simnode_id();
         register_fail_points(
             &["batch-write", "transaction-commit", "put-cf"],
             move || {
@@ -156,7 +156,7 @@ mod test {
         let test_cluster = build_test_cluster(4, 10000).await;
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
-        let client_node = sui_simulator::runtime::NodeHandle::current().id();
+        let client_node = sui_simulator::current_simnode_id();
         register_fail_points(&["before-open-new-epoch-store"], move || {
             handle_failpoint(dead_validator.clone(), client_node, 1.0);
         });
