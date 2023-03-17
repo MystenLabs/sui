@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_types::messages::VerifiedExecutableTransaction;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
@@ -79,6 +79,7 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
+            let _scope = monitored_scope("ExecutionDriver");
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(&digest) {
                 return;
