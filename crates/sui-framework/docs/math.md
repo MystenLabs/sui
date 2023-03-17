@@ -15,9 +15,6 @@ Basic math for nicer programmability
 -  [Function `divide_and_round_up`](#0x2_math_divide_and_round_up)
 
 
-<pre><code></code></pre>
-
-
 
 <a name="0x2_math_max"></a>
 
