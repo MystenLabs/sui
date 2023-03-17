@@ -1005,10 +1005,10 @@
           }
         },
         {
-          "name": "options",
-          "description": "options for specifying the content to be returned",
+          "name": "query",
+          "description": "the objects query criteria.",
           "schema": {
-            "$ref": "#/components/schemas/ObjectDataOptions"
+            "$ref": "#/components/schemas/ObjectResponseQuery"
           }
         },
         {
@@ -1051,15 +1051,20 @@
               "value": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
             },
             {
-              "name": "options",
+              "name": "query",
               "value": {
-                "showType": true,
-                "showOwner": true,
-                "showPreviousTransaction": true,
-                "showDisplay": false,
-                "showContent": false,
-                "showBcs": false,
-                "showStorageRebate": false
+                "filter": {
+                  "StructType": "0x2::coin::Coin<0x2::sui::SUI>"
+                },
+                "options": {
+                  "showType": true,
+                  "showOwner": true,
+                  "showPreviousTransaction": true,
+                  "showDisplay": false,
+                  "showContent": false,
+                  "showBcs": false,
+                  "showStorageRebate": false
+                }
               }
             },
             {
@@ -4463,6 +4468,35 @@
           }
         }
       },
+      "ObjectResponseQuery": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "description": "If None, no filter will be applied",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuiObjectDataFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "description": "config which fields to include in the response, by default only digest is included",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectDataOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "ObjectValueKind": {
         "type": "string",
         "enum": [
@@ -5570,6 +5604,67 @@
           "Private",
           "Public",
           "Friend"
+        ]
+      },
+      "SuiObjectDataFilter": {
+        "oneOf": [
+          {
+            "description": "Query by type a specified Package.",
+            "type": "object",
+            "required": [
+              "Package"
+            ],
+            "properties": {
+              "Package": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by type a specified Move module.",
+            "type": "object",
+            "required": [
+              "MoveModule"
+            ],
+            "properties": {
+              "MoveModule": {
+                "type": "object",
+                "required": [
+                  "module",
+                  "package"
+                ],
+                "properties": {
+                  "module": {
+                    "description": "the module name",
+                    "type": "string"
+                  },
+                  "package": {
+                    "description": "the Move package ID",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/ObjectID"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by type",
+            "type": "object",
+            "required": [
+              "StructType"
+            ],
+            "properties": {
+              "StructType": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "SuiProgrammableMoveCall": {

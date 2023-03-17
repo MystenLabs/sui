@@ -13,8 +13,8 @@ use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionDataAPI,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -322,7 +322,9 @@ pub async fn transfer_coin(
         .read_api()
         .get_owned_objects(
             sender,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
             None,
             None,
             None,

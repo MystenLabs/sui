@@ -19,7 +19,7 @@ use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiTypeTag,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
@@ -43,7 +43,7 @@ pub trait DataReader {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectDataOptions>,
+        options: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         checkpoint: Option<CheckpointId>,
@@ -84,7 +84,9 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 .0
                 .get_owned_objects(
                     signer,
-                    Some(SuiObjectDataOptions::full_content()),
+                    Some(SuiObjectResponseQuery::new_with_options(
+                        SuiObjectDataOptions::full_content(),
+                    )),
                     None,
                     None,
                     None,

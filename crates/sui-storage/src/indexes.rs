@@ -14,7 +14,10 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
 
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_json_rpc_types::SuiObjectDataFilter;
+use sui_types::base_types::{
+    ObjectID, ObjectType, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
@@ -851,6 +854,7 @@ impl IndexStore {
         owner: SuiAddress,
         cursor: Option<ObjectID>,
         limit: usize,
+        filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<Vec<ObjectInfo>> {
         let cursor = match cursor {
             Some(cursor) => cursor,
@@ -858,7 +862,7 @@ impl IndexStore {
         };
 
         Ok(self
-            .get_owner_objects_iterator(owner, cursor, limit)?
+            .get_owner_objects_iterator(owner, cursor, limit, filter)?
             .collect())
     }
 
@@ -869,6 +873,7 @@ impl IndexStore {
         owner: SuiAddress,
         starting_object_id: ObjectID,
         count: usize,
+        filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
         // We use +1 to grab the next cursor
         let count = min(count, MAX_GET_OWNED_OBJECT_SIZE + 1);
@@ -879,7 +884,45 @@ impl IndexStore {
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
-            .take_while(move |((object_owner, _), _)| (object_owner == &owner))
+            .filter(move |((object_owner, _), obj_info)| {
+                let to_include: bool = match &filter {
+                    Some(SuiObjectDataFilter::StructType(struct_tag)) => {
+                        let obj_tag: StructTag = match obj_info.type_.clone().try_into() {
+                            Ok(tag) => tag,
+                            Err(_) => {
+                                return false;
+                            }
+                        };
+                        // If people do not provide type_params, we will match all type_params
+                        // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
+                        if !struct_tag.type_params.is_empty()
+                            && struct_tag.type_params != obj_tag.type_params
+                        {
+                            return false;
+                        }
+                        return obj_tag.address == struct_tag.address
+                            && obj_tag.module == struct_tag.module
+                            && obj_tag.name == struct_tag.name;
+                    }
+                    Some(SuiObjectDataFilter::MoveModule { package, module }) => {
+                        if let ObjectType::Struct(o) = obj_info.clone().type_ {
+                            o.address().to_string() == package.to_string()
+                                && o.module().to_string() == module.to_string()
+                        } else {
+                            false
+                        }
+                    }
+                    Some(SuiObjectDataFilter::Package(package_id)) => {
+                        if let ObjectType::Struct(o) = obj_info.clone().type_ {
+                            o.address().to_string() == package_id.to_string()
+                        } else {
+                            false
+                        }
+                    }
+                    None => true,
+                };
+                object_owner == &owner && to_include
+            })
             .take(count)
             .map(|(_, object_info)| object_info))
     }

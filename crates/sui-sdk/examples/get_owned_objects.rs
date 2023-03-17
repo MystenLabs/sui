@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
-use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponseQuery};
 use sui_sdk::types::base_types::SuiAddress;
 use sui_sdk::SuiClientBuilder;
 
@@ -16,7 +16,9 @@ async fn main() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::default()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new(),
+            )),
             None,
             None,
             None,

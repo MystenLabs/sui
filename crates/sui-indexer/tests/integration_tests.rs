@@ -16,8 +16,9 @@ mod pg_integration {
     use sui_indexer::{new_pg_connection_pool, Indexer, IndexerConfig, PgPoolConnection};
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiParsedMoveObject,
-        SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes,
+        SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+        SuiParsedMoveObject, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+        TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::ObjectID;
@@ -72,7 +73,9 @@ mod pg_integration {
         let gas_objects: Vec<ObjectID> = indexer_rpc_client
             .get_owned_objects(
                 *address,
-                Some(SuiObjectDataOptions::new().with_type()),
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::new().with_type(),
+                )),
                 None,
                 None,
                 None,

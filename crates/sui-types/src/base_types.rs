@@ -311,6 +311,17 @@ impl From<&Object> for ObjectType {
     }
 }
 
+impl TryFrom<ObjectType> for StructTag {
+    type Error = anyhow::Error;
+
+    fn try_from(o: ObjectType) -> Result<Self, anyhow::Error> {
+        match o {
+            ObjectType::Package => Err(anyhow!("Cannot create StructTag from Package")),
+            ObjectType::Struct(move_object_type) => Ok(move_object_type.into()),
+        }
+    }
+}
+
 impl FromStr for ObjectType {
     type Err = anyhow::Error;
 

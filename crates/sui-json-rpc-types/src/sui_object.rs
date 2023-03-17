@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout};
 use schemars::JsonSchema;
@@ -889,4 +890,55 @@ pub struct SuiGetPastObjectRequest {
     pub object_id: ObjectID,
     /// the version of the queried object.
     pub version: SequenceNumber,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub enum SuiObjectDataFilter {
+    /// Query by type a specified Package.
+    Package(ObjectID),
+    /// Query by type a specified Move module.
+    MoveModule {
+        /// the Move package ID
+        package: ObjectID,
+        /// the module name
+        #[schemars(with = "String")]
+        #[serde_as(as = "DisplayFromStr")]
+        module: Identifier,
+    },
+    /// Query by type
+    StructType(
+        #[schemars(with = "String")]
+        #[serde_as(as = "DisplayFromStr")]
+        StructTag,
+    ),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]
+pub struct SuiObjectResponseQuery {
+    /// If None, no filter will be applied
+    pub filter: Option<SuiObjectDataFilter>,
+    /// config which fields to include in the response, by default only digest is included
+    pub options: Option<SuiObjectDataOptions>,
+}
+
+impl SuiObjectResponseQuery {
+    pub fn new(filter: Option<SuiObjectDataFilter>, options: Option<SuiObjectDataOptions>) -> Self {
+        Self { filter, options }
+    }
+
+    pub fn new_with_filter(filter: SuiObjectDataFilter) -> Self {
+        Self {
+            filter: Some(filter),
+            options: None,
+        }
+    }
+
+    pub fn new_with_options(options: SuiObjectDataOptions) -> Self {
+        Self {
+            filter: None,
+            options: Some(options),
+        }
+    }
 }
