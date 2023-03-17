@@ -22,7 +22,6 @@ describe('Dynamic Fields Reading API', () => {
         filter: { StructType: `${packageId}::dynamic_fields_test::Test` },
       })
       .then(function (objects) {
-        console.log(objects);
         const data = objects.data[0].details as SuiObjectData;
         parentObjectId = data.objectId;
       });
