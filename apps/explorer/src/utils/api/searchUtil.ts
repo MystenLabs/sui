@@ -36,13 +36,13 @@ export const navigateWithUnknown = async (
         const addrObjPromise = Promise.allSettled([
             rpc(network)
                 .getOwnedObjects({ owner: input })
-                .then((data) => {
-                    if (data.length <= 0)
+                .then((response) => {
+                    if (response.data.length <= 0)
                         throw new Error('No objects for Address');
 
                     return {
                         category: 'address',
-                        data: data,
+                        data: response.data,
                     };
                 }),
             rpc(network)

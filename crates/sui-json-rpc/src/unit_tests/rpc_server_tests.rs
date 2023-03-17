@@ -13,8 +13,8 @@ use sui_json_rpc_types::ObjectsPage;
 use sui_json_rpc_types::SuiTransactionResponseQuery;
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
@@ -44,7 +44,9 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::new()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new(),
+            )),
             None,
             None,
             None,
@@ -75,7 +77,12 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -123,7 +130,12 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -165,7 +177,12 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -226,7 +243,12 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -315,7 +337,12 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -386,7 +413,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -514,7 +546,12 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -603,7 +640,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             .read_api()
             .get_owned_objects(
                 *address,
-                Some(SuiObjectDataOptions::full_content()),
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::new()
+                        .with_type()
+                        .with_owner()
+                        .with_previous_transaction(),
+                )),
                 None,
                 None,
                 None,
@@ -749,7 +791,12 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
     let objects = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -825,7 +872,12 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let objects: ObjectsPage = http_client
         .get_owned_objects(
             *address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,

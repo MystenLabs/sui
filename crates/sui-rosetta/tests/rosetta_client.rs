@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
 use sui_config::utils;
-use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponseQuery};
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_rosetta::operations::Operations;
@@ -187,7 +187,9 @@ pub async fn get_random_sui(
         .read_api()
         .get_owned_objects(
             sender,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
             None,
             None,
             None,
