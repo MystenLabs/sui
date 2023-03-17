@@ -28,7 +28,7 @@ use super::workload::{Workload, MAX_GAS_FOR_TESTING};
 /// Value of each address's "primary coin" in mist. The first transaction gives
 /// each address a coin worth PRIMARY_COIN_VALUE, and all subsequent transfers
 /// send TRANSFER_AMOUNT coins each time
-const PRIMARY_COIN_VALUE: u64 = 10_000_000;
+const PRIMARY_COIN_VALUE: u64 = 100_000_000;
 
 /// Number of mist sent to each address on each batch transfer
 const TRANSFER_AMOUNT: u64 = 1;
