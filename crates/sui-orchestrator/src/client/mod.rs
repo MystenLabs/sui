@@ -81,6 +81,9 @@ pub trait ServerProviderClient: Display {
 
     /// Authorize the provided ssh public key to access machines.
     async fn register_ssh_public_key(&self, public_key: String) -> CloudProviderResult<()>;
+
+    /// Return provider-specific commands to setup the instance.
+    async fn instance_setup_commands(&self) -> CloudProviderResult<Vec<String>>;
 }
 
 #[cfg(test)]
@@ -172,6 +175,10 @@ pub mod test_client {
 
         async fn register_ssh_public_key(&self, _public_key: String) -> CloudProviderResult<()> {
             Ok(())
+        }
+
+        async fn instance_setup_commands(&self) -> CloudProviderResult<Vec<String>> {
+            Ok(Vec::new())
         }
     }
 }

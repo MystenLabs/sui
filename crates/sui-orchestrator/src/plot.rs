@@ -123,7 +123,7 @@ impl Plotter {
 
     /// Load all possible measurements from the results directory specified in the settings.
     pub fn load_measurements(mut self) -> Self {
-        let mut path = self.settings.results_directory.clone();
+        let mut path = self.settings.results_dir.clone();
         path.push("*");
         path.set_extension("json");
 
@@ -164,7 +164,7 @@ impl Plotter {
     ) -> Result<()> {
         // Set the directory to save plots and compute the plot's filename.
         let mut filename = PathBuf::new();
-        filename.push(&self.settings.results_directory);
+        filename.push(&self.settings.results_dir);
         filename.push("plots");
         std::fs::create_dir_all(&filename)?;
         filename.push(format!("latency-{id:?}"));

@@ -8,7 +8,10 @@ use prettytable::{row, Table};
 use tokio::time::{self, Instant};
 
 use crate::{
-    client::ServerProviderClient, display, error::TestbedResult, settings::Settings,
+    client::ServerProviderClient,
+    display,
+    error::{TestbedError, TestbedResult},
+    settings::Settings,
     ssh::SshConnection,
 };
 
@@ -38,6 +41,11 @@ impl<C: ServerProviderClient> Testbed<C> {
         })
     }
 
+    /// Return the username to connect to the instances through ssh.
+    pub fn username(&self) -> &'static str {
+        C::USERNAME
+    }
+
     /// Return the list of instances of the testbed.
     pub fn instances(&self) -> Vec<Instance> {
         self.instances
@@ -47,13 +55,20 @@ impl<C: ServerProviderClient> Testbed<C> {
             .collect()
     }
 
-    /// Return the username to connect to the instances through ssh.
-    pub fn username(&self) -> &'static str {
-        C::USERNAME
+    /// Return the list of provider-specific instance setup commands.
+    pub async fn setup_commands(&self) -> TestbedResult<Vec<String>> {
+        self.client
+            .instance_setup_commands()
+            .await
+            .map_err(TestbedError::from)
     }
 
     /// Print the current status of the testbed.
     pub fn status(&self) {
+        let filtered = self
+            .instances
+            .iter()
+            .filter(|instance| self.settings.filter_instances(instance));
         let sorted: Vec<(_, Vec<_>)> = self
             .settings
             .regions
@@ -61,8 +76,8 @@ impl<C: ServerProviderClient> Testbed<C> {
             .map(|region| {
                 (
                     region,
-                    self.instances
-                        .iter()
+                    filtered
+                        .clone()
                         .filter(|instance| &instance.region == region)
                         .collect(),
                 )
@@ -72,7 +87,7 @@ impl<C: ServerProviderClient> Testbed<C> {
         let mut table = Table::new();
         table.set_format(display::default_table_format());
 
-        let active = self.instances.iter().filter(|x| x.is_active()).count();
+        let active = filtered.filter(|x| x.is_active()).count();
         table.set_titles(row![bH2->format!("Instances ({active})")]);
         for (i, (region, instances)) in sorted.iter().enumerate() {
             table.add_row(row![bH2->region.to_uppercase()]);

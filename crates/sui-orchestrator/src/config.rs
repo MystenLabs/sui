@@ -79,8 +79,14 @@ impl Config {
     }
 
     pub fn genesis_command(&self) -> String {
-        let genesis = format!("~/{}", Self::GENESIS_CONFIG_FILE);
-        format!("cargo run --release --bin sui -- genesis -f --from-config {genesis}")
+        let genesis_file = format!("~/{}", Self::GENESIS_CONFIG_FILE);
+        const WORKING_DIR: &str = "~/working_dir/sui_config";
+        let genesis = [
+            "cargo run --release --bin sui --",
+            &format!("genesis -f --from-config {genesis_file} --working-dir {WORKING_DIR}"),
+        ]
+        .join(" ");
+        [format!("mkdir -p {WORKING_DIR}"), genesis].join(" && ")
     }
 
     // Generate a genesis configuration file suitable for benchmarks.

@@ -268,7 +268,11 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .with_retries(retries);
 
             let instances = testbed.instances();
-            let orchestrator = Orchestrator::new(settings, instances, ssh_manager);
+            let setup_commands = testbed
+                .setup_commands()
+                .await
+                .wrap_err("Failed to load testbed setup commands")?;
+            let orchestrator = Orchestrator::new(settings, instances, setup_commands, ssh_manager);
 
             let shared_objects_ratio = shared_objects_ratio.min(100);
             let load = match load_type {

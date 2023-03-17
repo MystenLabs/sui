@@ -9,8 +9,8 @@ use std::{
 use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_sdk_ec2::{
     model::{
-        block_device_mapping, ebs_block_device, filter, tag, tag_specification, ResourceType,
-        VolumeType,
+        block_device_mapping, ebs_block_device, filter, tag, tag_specification,
+        EphemeralNvmeSupport, ResourceType, VolumeType,
     },
     types::{Blob, SdkError},
 };
@@ -73,7 +73,9 @@ impl AwsClient {
     }
 
     /// Parse an AWS response and ignore errors if they mean a request is a duplicate.
-    fn ignore_duplicates<T, E>(response: Result<T, SdkError<E>>) -> CloudProviderResult<()>
+    fn check_but_ignore_duplicates<T, E>(
+        response: Result<T, SdkError<E>>,
+    ) -> CloudProviderResult<()>
     where
         E: Debug + std::error::Error + Send + Sync + 'static,
     {
@@ -156,7 +158,7 @@ impl AwsClient {
             .description("Allow all traffic (used for benchmarks).");
 
         let response = request.send().await;
-        Self::ignore_duplicates(response)?;
+        Self::check_but_ignore_duplicates(response)?;
 
         // Authorize all traffic on the security group.
         for protocol in ["tcp", "udp"] {
@@ -169,9 +171,53 @@ impl AwsClient {
                 .to_port(65535);
 
             let response = request.send().await;
-            Self::ignore_duplicates(response)?;
+            Self::check_but_ignore_duplicates(response)?;
         }
         Ok(())
+    }
+
+    /// Return the command to mount the first (standard) NVMe drive.
+    fn nvme_mount_command(&self) -> Vec<String> {
+        const DRIVE: &str = "nvme1n1";
+        let directory = self.settings.working_dir.display();
+        vec![
+            format!("(sudo mkfs.ext4 -E nodiscard /dev/{DRIVE} || true)"),
+            format!("(sudo mount /dev/{DRIVE} {directory} || true)"),
+        ]
+    }
+
+    /// Check whether the instance type specified in the settings supports NVMe drives.
+    async fn check_nvme_support(&self) -> CloudProviderResult<bool> {
+        // Get the client for the first region. A given instance type should either have NVMe support
+        // in all regions or in none.
+        let client = match self
+            .settings
+            .regions
+            .first()
+            .map(|x| self.clients.get(x))
+            .flatten()
+        {
+            Some(client) => client,
+            None => return Ok(false),
+        };
+
+        // Request storage details for the instance type specified in the settings.
+        let request = client
+            .describe_instance_types()
+            .instance_types(self.settings.specs.as_str().into());
+
+        // Send the request.
+        let response = request.send().await?;
+
+        // Return true of the response contains references to NVMe drives.
+        if let Some(info) = response.instance_types().map(|x| x.first()).flatten() {
+            if let Some(info) = info.instance_storage_info() {
+                if info.nvme_support() == Some(&EphemeralNvmeSupport::Required) {
+                    return Ok(true);
+                }
+            }
+        }
+        return Ok(false);
     }
 }
 
@@ -330,8 +376,16 @@ impl ServerProviderClient for AwsClient {
                 .public_key_material(Blob::new::<String>(public_key.clone()));
 
             let response = request.send().await;
-            Self::ignore_duplicates(response)?;
+            Self::check_but_ignore_duplicates(response)?;
         }
         Ok(())
+    }
+
+    async fn instance_setup_commands(&self) -> CloudProviderResult<Vec<String>> {
+        if self.check_nvme_support().await? {
+            Ok(self.nvme_mount_command())
+        } else {
+            Ok(Vec::new())
+        }
     }
 }

@@ -292,4 +292,8 @@ impl ServerProviderClient for VultrClient {
         Self::check_response(&json)?;
         Ok(())
     }
+
+    async fn instance_setup_commands(&self) -> CloudProviderResult<Vec<String>> {
+        Ok(vec!["sudo ufw disable".into()])
+    }
 }

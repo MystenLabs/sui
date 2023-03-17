@@ -69,10 +69,27 @@ pub struct Settings {
     pub specs: String,
     /// The details of the git reposit to deploy.
     pub repository: Repository,
-    /// The directory where to save benchmarks measurements.
-    pub results_directory: PathBuf,
-    /// The directory where to download logs files from the instances.
-    pub logs_directory: PathBuf,
+    /// The working directory on the remote instance (containing all configuration files).
+    #[serde(default = "default_working_dir")]
+    pub working_dir: PathBuf,
+    /// The directory (on the local machine) where to save benchmarks measurements.
+    #[serde(default = "default_results_dir")]
+    pub results_dir: PathBuf,
+    /// The directory (on the local machine) where to download logs files from the instances.
+    #[serde(default = "default_logs_dir")]
+    pub logs_dir: PathBuf,
+}
+
+fn default_working_dir() -> PathBuf {
+    ["~/", "working_dir"].iter().collect()
+}
+
+fn default_results_dir() -> PathBuf {
+    ["./", "results"].iter().collect()
+}
+
+fn default_logs_dir() -> PathBuf {
+    ["./", "logs"].iter().collect()
 }
 
 impl Settings {
@@ -85,8 +102,8 @@ impl Settings {
             let data = fs::read(path.clone())?;
             let settings: Settings = serde_json::from_slice(data.as_slice())?;
 
-            fs::create_dir_all(&settings.results_directory)?;
-            fs::create_dir_all(&settings.logs_directory)?;
+            fs::create_dir_all(&settings.results_dir)?;
+            fs::create_dir_all(&settings.logs_dir)?;
 
             Ok(settings)
         };
@@ -169,8 +186,9 @@ impl Settings {
                 url: Url::parse("https://example.net/author/repo").unwrap(),
                 commit: "main".into(),
             },
-            results_directory: "results".into(),
-            logs_directory: "logs".into(),
+            working_dir: "/path/to/working_dir".into(),
+            results_dir: "results".into(),
+            logs_dir: "logs".into(),
         }
     }
 }
@@ -184,7 +202,7 @@ mod test {
     #[test]
     fn repository_name() {
         let mut settings = Settings::new_for_test();
-        settings.repository.url = Url::parse("https://example.com/author/repo").unwrap();
-        assert_eq!(settings.repository_name(), "repo");
+        settings.repository.url = Url::parse("https://example.com/author/name").unwrap();
+        assert_eq!(settings.repository_name(), "name");
     }
 }

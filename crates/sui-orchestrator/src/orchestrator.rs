@@ -29,6 +29,8 @@ pub struct Orchestrator {
     settings: Settings,
     /// The state of the testbed (reflecting accurately the state of the machines).
     instances: Vec<Instance>,
+    /// Provider-specific commands to install on the instance.
+    instance_setup_commands: Vec<String>,
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
     /// Whether to skip testbed updates before running benchmarks.
@@ -49,11 +51,13 @@ impl Orchestrator {
     pub fn new(
         settings: Settings,
         instances: Vec<Instance>,
+        instance_setup_commands: Vec<String>,
         ssh_manager: SshConnectionManager,
     ) -> Self {
         Self {
             settings,
             instances,
+            instance_setup_commands,
             ssh_manager,
             skip_testbed_update: false,
             skip_testbed_configuration: false,
@@ -117,8 +121,9 @@ impl Orchestrator {
     pub async fn install(&self) -> TestbedResult<()> {
         display::action("Installing dependencies on all machines");
 
-        let url = self.settings.repository.url.clone();
-        let command = [
+        let working_dir = self.settings.working_dir.display();
+        let url = &self.settings.repository.url;
+        let basic_commands = [
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y autoremove",
@@ -126,24 +131,41 @@ impl Orchestrator {
             "sudo apt-get -y remove needrestart",
             // The following dependencies prevent the error: [error: linker `cc` not found].
             "sudo apt-get -y install build-essential",
-            // Install typical sui dependencies.
-            "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
-            // This dependency is missing from the Sui docs.
-            "sudo apt-get -y install libpq-dev",
             // Install dependencies to compile 'plotter'.
             "sudo apt-get -y install libfontconfig libfontconfig1-dev",
+            // Install prometheus.
+            "sudo apt-get -y install prometheus",
+            "sudo chmod 777 -R /var/lib/prometheus/",
             // Install rust (non-interactive).
             "curl --proto \"=https\" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
             "source $HOME/.cargo/env",
             "rustup default stable",
-            // Disable UFW.
-            "sudo ufw disable",
-            // Install prometheus.
-            "sudo apt-get -y install prometheus",
-            "sudo chmod 777 -R /var/lib/prometheus/",
+            // Create the working directory.
+            &format!("mkdir -p {working_dir}"),
+            &format!("sudo chmod 777 -R {working_dir}"),
             // Clone the repo.
             &format!("(git clone {url} || true)"),
+        ];
+
+        let cloud_provider_specific_dependencies: Vec<_> = self
+            .instance_setup_commands
+            .iter()
+            .map(|x| x.as_str())
+            .collect();
+
+        let protocol_dependencies = [
+            // Install typical sui dependencies.
+            "sudo apt-get -y install curl git-all clang cmake gcc libssl-dev pkg-config libclang-dev",
+            // This dependency is missing from the Sui docs.
+            "sudo apt-get -y install libpq-dev",
+        ];
+
+        let command = [
+            &basic_commands[..],
+            &cloud_provider_specific_dependencies[..],
+            &protocol_dependencies[..],
         ]
+        .concat()
         .join(" && ");
 
         let instances = self.instances.iter().filter(|x| x.is_active());
@@ -238,12 +260,14 @@ impl Orchestrator {
         display::action("Cleaning up testbed");
 
         // Kill all tmux servers and delete the nodes dbs. Optionally clear logs.
+        let mut path = self.settings.working_dir.clone();
+        path.push("*_db");
         let mut command = vec![
-            "(tmux kill-server || true)",
-            "(rm -rf ~/.sui/sui_config/*_db || true)",
+            "(tmux kill-server || true)".into(),
+            format!("(rm -rf {} || true)", path.display()),
         ];
         if cleanup {
-            command.push("(rm -rf ~/*log* || true)");
+            command.push("(rm -rf ~/*log* || true)".into());
         }
         let command = command.join(" ; ");
 
@@ -265,11 +289,15 @@ impl Orchestrator {
 
         // Deploy the committee.
         let listen_addresses = Config::new(&instances).listen_addresses;
+        let working_dir = self.settings.working_dir.clone();
         let command = move |i: usize| -> String {
-            let path = format!("~/.sui/sui_config/validator-config-{i}.yaml");
+            let mut config_path = working_dir.clone();
+            config_path.push("sui_config");
+            config_path.push(format!("validator-config-{i}.yaml"));
             let address = listen_addresses[i].clone();
             let run = format!(
-                "cargo run --release --bin sui-node -- --config-path {path} --listen-address {address}"
+                "cargo run --release --bin sui-node -- --config-path {} --listen-address {address}",
+                config_path.display()
             );
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
@@ -300,19 +328,25 @@ impl Orchestrator {
         let instances = self.select_instances(parameters)?;
 
         // Deploy the load generators.
+        let working_dir = self.settings.working_dir.clone();
         let committee_size = instances.len();
         let load_share = parameters.load / committee_size;
         let shared_counter = parameters.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let command = move |i: usize| -> String {
+            let mut genesis = working_dir.clone();
+            genesis.push("sui_config");
+            genesis.push("genesis.blob");
             let gas_id = Config::gas_object_id_offsets(committee_size)[i].clone();
-            let genesis = "~/.sui/sui_config/genesis.blob";
             let keystore = format!("~/{}", Config::GAS_KEYSTORE_FILE);
 
             let run = [
                 "cargo run --release --bin stress --",
                 "--local false --num-client-threads 100 --num-transfer-accounts 2 ",
-                &format!("--genesis-blob-path {genesis} --keystore-path {keystore}"),
+                &format!(
+                    "--genesis-blob-path {} --keystore-path {keystore}",
+                    genesis.display()
+                ),
                 &format!("--primary-gas-id {gas_id}"),
                 "bench",
                 &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
@@ -377,7 +411,7 @@ impl Orchestrator {
             }
         }
 
-        let results_directory = &self.settings.results_directory;
+        let results_directory = &self.settings.results_dir;
         let commit = &self.settings.repository.commit;
         let path: PathBuf = [results_directory, &format!("results-{commit}").into()]
             .iter()
@@ -410,7 +444,7 @@ impl Orchestrator {
             // Create a log sub-directory for this run.
             let commit = &self.settings.repository.commit;
             let path: PathBuf = [
-                &self.settings.logs_directory,
+                &self.settings.logs_dir,
                 &format!("logs-{commit}").into(),
                 &format!("logs-{parameters:?}").into(),
             ]
