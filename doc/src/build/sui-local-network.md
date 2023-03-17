@@ -37,6 +37,8 @@ To run a local network with validators and a faucet, open a Terminal or Console 
 RUST_LOG="consensus=off" cargo run --bin sui-test-validator
 ```
 
+**Note** The state for `sui-test-validator` is currently not persistent, i.e., it will always start from a fresh state upon restart.
+
 You can customize your local Sui network by passing values to the following flags for the `sui-test-validator` command:
 
 ```bash
