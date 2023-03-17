@@ -26,7 +26,7 @@ cargo build sui-test-validator sui
 To use remote code, `cargo install` Sui directly from the remote repository. The following example uses the `main` branch, but you can set other branches as needed (e.g., `--branch devnet`, `--branch testnet`, and so on) to target different network versions.
 
 ```bash
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch main sui-test-validator sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch main --bin sui-test-validator --bin sui
 ```
 
 ## Running local network
