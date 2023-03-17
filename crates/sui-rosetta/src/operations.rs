@@ -240,7 +240,7 @@ impl Operations {
                 .get(i as usize)
                 .and_then(|inner| inner.get(j as usize))
         }
-        fn split_coin(
+        fn split_coins(
             inputs: &[SuiCallArg],
             known_results: &[Vec<KnownValue>],
             coin: SuiArgument,
@@ -365,7 +365,7 @@ impl Operations {
         for command in commands {
             let result = match command {
                 SuiCommand::SplitCoins(coin, amounts) => {
-                    split_coin(inputs, &known_results, *coin, amounts)
+                    split_coins(inputs, &known_results, *coin, amounts)
                 }
                 SuiCommand::TransferObjects(objs, addr) => transfer_object(
                     &mut aggregated_recipients,

@@ -1085,7 +1085,7 @@ impl Display for SuiCommand {
                 write!(f, "],{addr})")
             }
             Self::SplitCoins(coin, amounts) => {
-                write!(f, "MergeCoins({coin},")?;
+                write!(f, "SplitCoins({coin},")?;
                 write_sep(f, amounts, ",")?;
                 write!(f, ")")
             }
