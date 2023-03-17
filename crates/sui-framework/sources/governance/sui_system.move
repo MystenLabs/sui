@@ -92,6 +92,21 @@ module sui::sui_system {
         epoch_start_timestamp_ms: u64,
     }
 
+    struct SuiSystemStateInnerV2 has store {
+        new_dummy_field: u64,
+        epoch: u64,
+        protocol_version: u64,
+        system_state_version: u64,
+        validators: ValidatorSet,
+        storage_fund: Balance<SUI>,
+        parameters: SystemParameters,
+        reference_gas_price: u64,
+        validator_report_records: VecMap<address, VecSet<address>>,
+        stake_subsidy: StakeSubsidy,
+        safe_mode: bool,
+        epoch_start_timestamp_ms: u64,
+    }
+
     struct SuiSystemState has key {
         id: UID,
         version: u64,
@@ -799,8 +814,7 @@ module sui::sui_system {
             // is also upgraded.
             assert!(old_protocol_version != next_protocol_version, 0);
             let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
-            let new_state = upgrade_system_state(cur_state);
-            new_state.system_state_version = new_system_state_version;
+            let new_state = upgrade_system_state(cur_state, new_system_state_version);
             wrapper.version = new_system_state_version;
             dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
         };
@@ -895,11 +909,37 @@ module sui::sui_system {
         inner
     }
 
-    fun upgrade_system_state(cur_state: SuiSystemStateInner): SuiSystemStateInner {
+    fun upgrade_system_state(self: SuiSystemStateInner, new_system_state_version: u64): SuiSystemStateInnerV2 {
         // Whenever we upgrade the system state version, we will have to first
         // ship a framework upgrade that introduces a new system state type, and make this
         // function generate such type from the old state.
-        cur_state
+        let SuiSystemStateInner {
+            epoch: u64,
+            protocol_version,
+            system_state_version: _,
+            validators,
+            storage_fund,
+            parameters,
+            reference_gas_price,
+            validator_report_records,
+            stake_subsidy,
+            safe_mode,
+            epoch_start_timestamp_ms,
+        } = self;
+        SuiSystemStateInnerV2 {
+            new_dummy_field: 100,
+            epoch: u64,
+            protocol_version,
+            system_state_version: new_system_state_version,
+            validators,
+            storage_fund,
+            parameters,
+            reference_gas_price,
+            validator_report_records,
+            stake_subsidy,
+            safe_mode,
+            epoch_start_timestamp_ms,
+        }
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
