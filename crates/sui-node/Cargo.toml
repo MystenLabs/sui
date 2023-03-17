@@ -28,6 +28,7 @@ tap = "1.0.1"
 serde = { version = "1.0.144", features = ["derive"] }
 
 sui-tls = { path = "../sui-tls" }
+sui-macros = { path = "../sui-macros" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
