@@ -47,7 +47,8 @@ module test::m1 {
 // not an object (but sneaky)
 //# programmable --sender A --inputs @A
 //> 0: test::m1::cap();
-//> 1: test::m1::cup<test::m1::Cap>(Result(0)); // not an object since Cap does not have store
+// Cup<Cap> is not an object since Cap does not have store
+//> 1: test::m1::cup<test::m1::Cap>(Result(0));
 //> TransferObjects([Result(1)], Input(0));
 
 // one object, one not
@@ -60,5 +61,6 @@ module test::m1 {
 //# programmable --sender A --inputs @A
 //> 0: test::m1::new();
 //> 1: test::m1::cap();
-//> 2: test::m1::cup<test::m1::Cap>(Result(0)); // not an object since Cap does not have store
+// Cup<Cap> is not an object since Cap does not have store
+//> 2: test::m1::cup<test::m1::Cap>(Result(0));
 //> TransferObjects([Result(0), Result(2)], Input(0));
