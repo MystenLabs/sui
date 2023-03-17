@@ -68,7 +68,10 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         let mut build_config: Self = Default::default();
-        build_config.config.install_dir = Some(tempfile::TempDir::new().unwrap().into_path());
+        let install_dir = tempfile::tempdir().unwrap().into_path();
+        let lock_file = install_dir.join("Move.lock");
+        build_config.config.install_dir = Some(install_dir);
+        build_config.config.lock_file = Some(lock_file);
         build_config
     }
 
