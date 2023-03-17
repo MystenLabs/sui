@@ -295,9 +295,6 @@ mod pg_integration {
             .query_events(filter_on_module, None, None, None)
             .await?;
         assert_eq!(query_response.data.len(), 5);
-        for item in query_response.data {
-            println!("{}", item.type_);
-        }
 
         let mint_nft_event = "0x2::devnet_nft::MintNFTEvent";
         let filter = get_filter_on_event_type(mint_nft_event);
@@ -315,21 +312,14 @@ mod pg_integration {
         assert!(!query_response.has_next_page);
         assert_eq!(query_response.data.len(), 3);
 
+        // This move module does not explicitly emit an event
         let burn_nft_event = "0x2::devnet_nft::BurnNFTEvent";
         let filter = get_filter_on_event_type(burn_nft_event);
         let query_response = indexer_rpc_client
             .query_events(filter, None, Some(4), None)
             .await?;
-        assert!(query_response.has_next_page);
-        assert_eq!(query_response.data.len(), 4);
-
-        let filter = get_filter_on_event_type(burn_nft_event);
-        let cursor = query_response.next_cursor;
-        let query_response = indexer_rpc_client
-            .query_events(filter, cursor, Some(4), None)
-            .await?;
         assert!(!query_response.has_next_page);
-        assert_eq!(query_response.data.len(), 1);
+        assert_eq!(query_response.data.len(), 0);
         Ok(())
     }
 
