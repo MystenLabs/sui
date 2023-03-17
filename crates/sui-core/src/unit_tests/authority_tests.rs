@@ -5297,3 +5297,137 @@ async fn test_for_inc_201_dry_run() {
     );
     assert_eq!(json!({"foo":"bar"}), events.data[0].parsed_json);
 }
+
+#[tokio::test]
+async fn test_publish_missing_dependency() {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (sender, key): (_, AccountKeyPair) = get_key_pair();
+    let gas_id = ObjectID::random();
+    let state = init_state_with_ids(vec![(sender, gas_id)]).await;
+
+    // Get gas object
+    let gas_object = state.get_object(&gas_id).await.unwrap().unwrap();
+    let gas_ref = gas_object.compute_object_reference();
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", "object_basics"]);
+
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_OBJECT_ID]);
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    let (failure, _) = send_and_confirm_transaction(&state, signed)
+        .await
+        .unwrap()
+        .1
+        .into_data()
+        .into_status()
+        .unwrap_err();
+
+    assert_eq!(
+        ExecutionFailureStatus::PublishUpgradeMissingDependency,
+        failure,
+    );
+}
+
+#[tokio::test]
+async fn test_publish_missing_transitive_dependency() {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (sender, key): (_, AccountKeyPair) = get_key_pair();
+    let gas_id = ObjectID::random();
+    let state = init_state_with_ids(vec![(sender, gas_id)]).await;
+
+    // Get gas object
+    let gas_object = state.get_object(&gas_id).await.unwrap().unwrap();
+    let gas_ref = gas_object.compute_object_reference();
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", "object_basics"]);
+
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(modules, vec![MOVE_STDLIB_OBJECT_ID]);
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    let (failure, _) = send_and_confirm_transaction(&state, signed)
+        .await
+        .unwrap()
+        .1
+        .into_data()
+        .into_status()
+        .unwrap_err();
+
+    assert_eq!(
+        ExecutionFailureStatus::PublishUpgradeMissingDependency,
+        failure,
+    );
+}
+
+#[tokio::test]
+async fn test_publish_not_a_package_dependency() {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (sender, key): (_, AccountKeyPair) = get_key_pair();
+    let gas_id = ObjectID::random();
+    let state = init_state_with_ids(vec![(sender, gas_id)]).await;
+
+    // Get gas object
+    let gas_object = state.get_object(&gas_id).await.unwrap().unwrap();
+    let gas_ref = gas_object.compute_object_reference();
+
+    // Module bytes
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", "object_basics"]);
+
+    let modules = BuildConfig::new_for_testing()
+        .build(path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(
+        modules,
+        // One of these things is not like the others
+        vec![
+            MOVE_STDLIB_OBJECT_ID,
+            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_SYSTEM_STATE_OBJECT_ID,
+        ],
+    );
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    let failure = send_and_confirm_transaction(&state, signed)
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        SuiError::UserInputError {
+            error: UserInputError::MoveObjectAsPackage {
+                object_id: SUI_SYSTEM_STATE_OBJECT_ID
+            }
+        },
+        failure,
+    )
+}
