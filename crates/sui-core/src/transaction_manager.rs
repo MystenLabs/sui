@@ -31,7 +31,7 @@ use crate::authority::{AuthorityMetrics, AuthorityStore};
 /// storage, committed objects are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
+    tx_ready_certificates: UnboundedSender<Box<VerifiedExecutableTransaction>>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -82,7 +82,7 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
+        tx_ready_certificates: UnboundedSender<Box<VerifiedExecutableTransaction>>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
@@ -375,7 +375,7 @@ impl TransactionManager {
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
         self.metrics.transaction_manager_num_ready.inc();
-        let _ = self.tx_ready_certificates.send(certificate);
+        let _ = self.tx_ready_certificates.send(Box::new(certificate));
     }
 
     /// Gets the missing input object keys for the given transaction.

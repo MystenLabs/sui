@@ -29,7 +29,7 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<VerifiedExecutableTransaction>,
+    mut rx_ready_certificates: UnboundedReceiver<Box<VerifiedExecutableTransaction>>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
