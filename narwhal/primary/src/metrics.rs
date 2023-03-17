@@ -306,8 +306,7 @@ pub struct PrimaryMetrics {
     /// The latency of a batch between the time it has been
     /// created and until it has been included to a header proposal.
     pub proposer_batch_latency: Histogram,
-    /// The latency of a batch between the time it has been
-    /// created and until it has been included to a header proposal.
+    /// The number of headers being resent because they will not get committed.
     pub proposer_resend_headers: IntCounter,
     /// The latency of a batch between the time it has been
     /// created and until it has been included to a header proposal.
