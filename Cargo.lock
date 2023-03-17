@@ -9505,6 +9505,7 @@ dependencies = [
  "itertools",
  "mime",
  "multiaddr",
+ "mysten-metrics",
  "prometheus",
  "prost",
  "prost-build",
