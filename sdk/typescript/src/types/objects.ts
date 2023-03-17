@@ -369,3 +369,14 @@ export const PaginatedObjectsResponse = object({
   hasNextPage: boolean(),
 });
 export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;
+
+// mirrors sui_json_rpc_types:: SuiObjectDataFilter
+export type SuiObjectDataFilter =
+  | { Package: ObjectId }
+  | { MoveModule: { package: ObjectId; module: string } }
+  | { StructType: string };
+
+export type SuiObjectResponseQuery = {
+  filter?: SuiObjectDataFilter;
+  options?: SuiObjectDataOptions;
+};

@@ -37,8 +37,8 @@ use sui_framework_build::compiled_package::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiObjectData, SuiObjectResponse, SuiRawData, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    DynamicFieldPage, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -814,7 +814,9 @@ impl SuiClientCommands {
                     // TODO: (jian) fill in later
                     .get_owned_objects(
                         address,
-                        Some(SuiObjectDataOptions::full_content()),
+                        Some(SuiObjectResponseQuery::new_with_options(
+                            SuiObjectDataOptions::full_content(),
+                        )),
                         None,
                         None,
                         None,
@@ -1179,12 +1181,13 @@ impl WalletContext {
         let client = self.get_client().await?;
         let objects = client
             .read_api()
-            // TODO: (jian) fill in later
             .get_owned_objects(
                 address,
-                Some(SuiObjectDataOptions::full_content()),
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
                 None,
-                Some(256),
+                None,
                 None,
             )
             .await?

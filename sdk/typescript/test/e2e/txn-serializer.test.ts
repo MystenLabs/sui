@@ -9,6 +9,7 @@ import {
   isMutableSharedObjectInput,
   isSharedObjectInput,
   ObjectId,
+  SuiObjectData,
   SuiTransactionResponse,
   SUI_SYSTEM_STATE_OBJECT_ID,
   Transaction,
@@ -53,11 +54,12 @@ describe('Transaction Serialization and deserialization', () => {
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
+    const coin = coins[2].details as SuiObjectData;
     tx.moveCall({
       target: '0x2::sui_system::request_add_stake',
       arguments: [
         tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
-        tx.object(coins[2].objectId),
+        tx.object(coin.objectId),
         tx.pure(validatorAddress),
       ],
     });

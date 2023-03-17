@@ -23,7 +23,7 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiTransactionEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
@@ -145,7 +145,18 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let _object_refs = client
         .read_api()
-        .get_owned_objects(address, Some(SuiObjectDataOptions::new()), None, None, None)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+            None,
+        )
         .await?;
 
     Ok(())
@@ -270,7 +281,15 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
     let object_refs = client
         .read_api()
-        .get_owned_objects(address, Some(SuiObjectDataOptions::new()), None, None, None)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new(),
+            )),
+            None,
+            None,
+            None,
+        )
         .await?
         .data;
 
@@ -305,7 +324,15 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_owned_objects(address, Some(SuiObjectDataOptions::new()), None, None, None)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+            None,
+        )
         .await?;
 
     let object_id = object_refs
@@ -361,7 +388,9 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address1,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
             None,
             None,
             None,
@@ -415,12 +444,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address1,
-            Some(
+            Some(SuiObjectResponseQuery::new_with_options(
                 SuiObjectDataOptions::new()
                     .with_type()
                     .with_owner()
                     .with_previous_transaction(),
-            ),
+            )),
             None,
             None,
             None,
@@ -558,7 +587,12 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -622,7 +656,12 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -684,7 +723,12 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -732,7 +776,12 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -779,7 +828,12 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -867,7 +921,12 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -954,7 +1013,12 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             addr1,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -1139,7 +1203,12 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -1190,7 +1259,12 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -1248,7 +1322,12 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -1305,7 +1384,12 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -1369,7 +1453,12 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,
@@ -1475,7 +1564,12 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         .read_api()
         .get_owned_objects(
             address,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
             None,
             None,
             None,

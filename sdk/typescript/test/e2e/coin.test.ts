@@ -6,9 +6,9 @@ import {
   Coin,
   normalizeSuiObjectId,
   ObjectId,
-  SuiObjectInfo,
   SUI_TYPE_ARG,
   Transaction,
+  SuiObjectData,
 } from '../../src';
 
 import { setup, TestToolbox } from './utils/setup';
@@ -18,12 +18,13 @@ const SPLIT_AMOUNTS = [BigInt(1), BigInt(2), BigInt(3)];
 describe('Coin related API', () => {
   let toolbox: TestToolbox;
   let coinToSplit: ObjectId;
-  let coinsAfterSplit: SuiObjectInfo[];
+  let coinsAfterSplit: SuiObjectData[];
 
   beforeAll(async () => {
     toolbox = await setup();
     const coins = await toolbox.getGasObjectsOwnedByAddress();
-    coinToSplit = coins[0].objectId;
+    const coin_0 = coins[0].details as SuiObjectData;
+    coinToSplit = coin_0.objectId;
     const tx = new Transaction();
     const recieverInput = tx.pure(toolbox.address());
     SPLIT_AMOUNTS.forEach((amount) => {
@@ -36,7 +37,12 @@ describe('Coin related API', () => {
       transaction: tx,
       requestType: 'WaitForLocalExecution',
     });
-    coinsAfterSplit = await toolbox.getGasObjectsOwnedByAddress();
+    const coins_after_split_response =
+      await toolbox.getGasObjectsOwnedByAddress();
+    coinsAfterSplit = coins_after_split_response.map((coin) => {
+      const coin_details = coin.details as SuiObjectData;
+      return coin_details;
+    });
   });
 
   it('test Coin utility functions', async () => {
