@@ -10,112 +10,134 @@ on:
 
 jobs:
   simtest:
-    name: simtest
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    permissions:
+      # The "id-token: write" permission is required or Machine ID will not be
+      # able to authenticate with the cluster.
+      id-token: write
+      contents: read
+    runs-on: [ self-hosted, self-hosted-arc ]
 
     steps:
-      - name: Configure SSH for simtest-01
-        env:
-          SSH_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          RUST_LOG: off
-          # Runs tests much faster - disables signing and verification
-          USE_MOCK_CRYPTO: 1
-          CARGO_TERM_COLOR: always
-          NUM_CPUS: 12
-
-        run: |
-          mkdir -p ~/.ssh/
-          echo "$SSH_KEY" > ~/.ssh/vultr
-          chmod 600 ~/.ssh/vultr
-          cat >>~/.ssh/config <<END
-          Host simtest-01.sui.io
-            User ubuntu
-            IdentityFile ~/.ssh/vultr
-            StrictHostKeyChecking no
-          END
-
-      - name: Cargo clean
-        uses: appleboy/ssh-action@v0.1.8
+      - name: Install Teleport
+        uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
         with:
-          host: "simtest-01.sui.io"
-          username: "ubuntu"
-          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/sui
-            cargo clean
-            git restore Cargo.lock
-
-      - name: Tmpfs clean
-        uses: appleboy/ssh-action@v0.1.8
+          version: 11.3.1
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@6e73aa03a98e781ca6692817fbb6e554640a56b3 # pin@v1
         with:
-          host: "simtest-01.sui.io"
-          username: "ubuntu"
-          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          script: |
-            sudo rm -rf /tmp/*.*
-
-      - name: Checkout sui repo
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-          host: "simtest-01.sui.io"
-          username: "ubuntu"
-          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/sui
-            git fetch origin
-            git rebase origin/main
-
-      - name: Install simtest
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-          host: "simtest-01.sui.io"
-          username: "ubuntu"
-          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          command_timeout: "10m"
-          script: |
-            cd ~/sui
-            ./scripts/simtest/install.sh
-
-      - name: Build simtest
-        uses: appleboy/ssh-action@v0.1.8
-        env: 
-          CARGO_TERM_COLOR: always
-          CARGO_INCREMENTAL: 0
-          CARGO_NET_RETRY: 10
-          RUSTUP_MAX_RETRIES: 10
-          RUST_BACKTRACE: short
-          RUST_LOG: off
-        with:
-          host: "simtest-01.sui.io"
-          username: "ubuntu"
-          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          command_timeout: "20m"
-          script: |
-            cd ~/sui
-            ./scripts/simtest/cargo-simtest simtest build
-      
+          # Specify the publically accessible address of your Teleport proxy.
+          proxy: proxy.mysten-int.com:443
+          # Specify the name of the join token for your bot.
+          token: sui-simtest-token
+          # Specify the length of time that the generated credentials should be
+          # valid for. This is optional and defaults to "1h"
+          certificate-ttl: 2h
       - name: Run simtest
-        uses: appleboy/ssh-action@v0.1.8
-        env: 
-          CARGO_TERM_COLOR: always
-          CARGO_INCREMENTAL: 0
-          CARGO_NET_RETRY: 10
-          RUSTUP_MAX_RETRIES: 10
-          RUST_BACKTRACE: short
-          RUST_LOG: off
-          USE_MOCK_CRYPTO: 1
-          MSIM_TEST_NUM: 30
-          SIM_STRESS_TEST_DURATION_SECS: 300
-          NUM_CPUS: 24
-        with:
-          host: "simtest-01.sui.io"
-          username: "ubuntu"
-          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          command_timeout: "120m"
-          script: |
-            cd ~/sui
-            ./scripts/simtest/simtest-run.sh
+        run: tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01.sui.io "ls -al" # running a test command
+
+      
+      # - name: Configure SSH for simtest-01
+      #   env:
+      #     SSH_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     RUST_LOG: off
+      #     # Runs tests much faster - disables signing and verification
+      #     USE_MOCK_CRYPTO: 1
+      #     CARGO_TERM_COLOR: always
+      #     NUM_CPUS: 12
+
+      #   run: |
+      #     mkdir -p ~/.ssh/
+      #     echo "$SSH_KEY" > ~/.ssh/vultr
+      #     chmod 600 ~/.ssh/vultr
+      #     cat >>~/.ssh/config <<END
+      #     Host simtest-01.sui.io
+      #       User ubuntu
+      #       IdentityFile ~/.ssh/vultr
+      #       StrictHostKeyChecking no
+      #     END
+
+      # - name: Cargo clean
+      #   uses: appleboy/ssh-action@v0.1.8
+      #   with:
+      #     host: "simtest-01.sui.io"
+      #     username: "ubuntu"
+      #     key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     script: |
+      #       cd ~/sui
+      #       cargo clean
+      #       git restore Cargo.lock
+
+      # - name: Tmpfs clean
+      #   uses: appleboy/ssh-action@v0.1.8
+      #   with:
+      #     host: "simtest-01.sui.io"
+      #     username: "ubuntu"
+      #     key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     script: |
+      #       sudo rm -rf /tmp/*.*
+
+      # - name: Checkout sui repo
+      #   uses: appleboy/ssh-action@v0.1.8
+      #   with:
+      #     host: "simtest-01.sui.io"
+      #     username: "ubuntu"
+      #     key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     script: |
+      #       cd ~/sui
+      #       git fetch origin
+      #       git rebase origin/main
+
+      # - name: Install simtest
+      #   uses: appleboy/ssh-action@v0.1.8
+      #   with:
+      #     host: "simtest-01.sui.io"
+      #     username: "ubuntu"
+      #     key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     command_timeout: "10m"
+      #     script: |
+      #       cd ~/sui
+      #       ./scripts/simtest/install.sh
+
+      # - name: Build simtest
+      #   uses: appleboy/ssh-action@v0.1.8
+      #   env: 
+      #     CARGO_TERM_COLOR: always
+      #     CARGO_INCREMENTAL: 0
+      #     CARGO_NET_RETRY: 10
+      #     RUSTUP_MAX_RETRIES: 10
+      #     RUST_BACKTRACE: short
+      #     RUST_LOG: off
+      #   with:
+      #     host: "simtest-01.sui.io"
+      #     username: "ubuntu"
+      #     key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     command_timeout: "20m"
+      #     script: |
+      #       cd ~/sui
+      #       ./scripts/simtest/cargo-simtest simtest build
+      
+      # - name: Run simtest
+      #   uses: appleboy/ssh-action@v0.1.8
+      #   env: 
+      #     CARGO_TERM_COLOR: always
+      #     CARGO_INCREMENTAL: 0
+      #     CARGO_NET_RETRY: 10
+      #     RUSTUP_MAX_RETRIES: 10
+      #     RUST_BACKTRACE: short
+      #     RUST_LOG: off
+      #     USE_MOCK_CRYPTO: 1
+      #     MSIM_TEST_NUM: 30
+      #     SIM_STRESS_TEST_DURATION_SECS: 300
+      #     NUM_CPUS: 24
+      #   with:
+      #     host: "simtest-01.sui.io"
+      #     username: "ubuntu"
+      #     key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+      #     command_timeout: "120m"
+      #     script: |
+      #       cd ~/sui
+      #       ./scripts/simtest/simtest-run.sh
 
   # notify:
   #   name: Notify
