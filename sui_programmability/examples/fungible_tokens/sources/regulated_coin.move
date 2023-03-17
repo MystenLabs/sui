@@ -138,8 +138,8 @@ module abc::abc {
             supply: balance::create_supply(Abc {})
         };
 
-        transfer::transfer(zero(sender, ctx), sender);
-        transfer::transfer(treasury_cap, sender);
+        transfer::public_transfer(zero(sender, ctx), sender);
+        transfer::public_transfer(treasury_cap, sender);
 
         transfer::share_object(Registry {
             id: object::new(ctx),
@@ -165,7 +165,7 @@ module abc::abc {
     /// Create an empty `RCoin<Abc>` instance for account `for`. AbcTreasuryCap is passed for
     /// authentication purposes - only admin can create new accounts.
     public entry fun create(_: &AbcTreasuryCap, for: address, ctx: &mut TxContext) {
-        transfer::transfer(zero(for, ctx), for)
+        transfer::public_transfer(zero(for, ctx), for)
     }
 
     /// Mint more Abc. Requires AbcTreasuryCap for authorization, so can only be done by admins.
@@ -241,7 +241,7 @@ module abc::abc {
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        transfer::transfer(coin::take(borrow_mut(coin), value, ctx), sender);
+        transfer::public_transfer(coin::take(borrow_mut(coin), value, ctx), sender);
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
@@ -497,7 +497,7 @@ module abc::tests {
         next_tx(test, user1);
         {
             let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            sui::transfer::transfer(coin, user2);
+            sui::transfer::public_transfer(coin, user2);
         };
     }
 
@@ -511,7 +511,7 @@ module abc::tests {
         next_tx(test, user2);
         {
             let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            sui::transfer::transfer(coin, admin);
+            sui::transfer::public_transfer(coin, admin);
         };
 
         next_tx(test, admin);
@@ -595,7 +595,7 @@ module abc::tests {
         next_tx(test, user1);
         {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
-            sui::transfer::transfer(coin, user2);
+            sui::transfer::public_transfer(coin, user2);
         };
 
         next_tx(test, user2);

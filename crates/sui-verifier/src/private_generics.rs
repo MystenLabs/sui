@@ -5,8 +5,8 @@ use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     file_format::{
-        AbilitySet, Bytecode, FunctionDefinition, FunctionHandle, FunctionInstantiation,
-        ModuleHandle, SignatureToken,
+        Bytecode, FunctionDefinition, FunctionHandle, FunctionInstantiation, ModuleHandle,
+        SignatureToken,
     },
     CompiledModule,
 };
@@ -17,12 +17,22 @@ use crate::{format_signature_token, verification_failure, TEST_SCENARIO_MODULE_N
 
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
-pub const TRANSFER_FUNCTIONS: &[&IdentStr] = &[
+pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
+pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
+    ident_str!("public_transfer"),
+    ident_str!("public_freeze_object"),
+    ident_str!("public_share_object"),
+];
+pub const PRIVATE_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer"),
     ident_str!("freeze_object"),
     ident_str!("share_object"),
 ];
-pub const INTERNAL_TRANFER_FUNCTION: &IdentStr = ident_str!("transfer_internal");
+pub const TRANSFER_IMPL_FUNCTIONS: &[&IdentStr] = &[
+    ident_str!("transfer_impl"),
+    ident_str!("freeze_object_impl"),
+    ident_str!("share_object_impl"),
+];
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
 /// restricted to the module.
@@ -62,7 +72,6 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
         None => return Ok(()),
         Some(code) => code,
     };
-    let function_type_parameters = &view.function_handle_at(fdef.function).type_parameters;
     for instr in &code.code {
         if let Bytecode::CallGeneric(finst_idx) = instr {
             let FunctionInstantiation {
@@ -76,7 +85,7 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
             let type_arguments = &view.signature_at(*type_parameters).0;
             let ident = addr_module(view, mhandle);
             if ident == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
-                verify_private_transfer(view, function_type_parameters, fhandle, type_arguments)?
+                verify_private_transfer(view, fhandle, type_arguments)?
             } else if ident == (SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
                 verify_private_event_emit(view, fhandle, type_arguments)?
             }
@@ -87,7 +96,6 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
 
 fn verify_private_transfer(
     view: &BinaryIndexedView,
-    function_type_parameters: &[AbilitySet],
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
@@ -96,33 +104,34 @@ fn verify_private_transfer(
         return Ok(());
     }
     let fident = view.identifier_at(fhandle.name);
-    if !TRANSFER_FUNCTIONS.contains(&fident) {
-        // should be unreachable
-        // these are private and the module itself is skipped
-        debug_assert!(
-            fident != INTERNAL_TRANFER_FUNCTION,
-            "internal error. Unexpected private function"
-        );
+    // public transfer functions require `store` and have no additional rules
+    if PUBLIC_TRANSFER_FUNCTIONS.contains(&fident) {
+        return Ok(());
+    }
+    if !PRIVATE_TRANSFER_FUNCTIONS.contains(&fident) {
         // unknown function, so a bug in the implementation here
         debug_assert!(false, "unknown transfer function {}", fident);
-        return Ok(());
+        return Err(format!("Calling unknown transfer function, {}", fident));
     };
-    for type_arg in type_arguments {
-        let has_store = view
-            .abilities(type_arg, function_type_parameters)
-            .map_err(|vm_err| vm_err.to_string())?
-            .has_store();
-        if !has_store && !is_defined_in_current_module(view, type_arg) {
-            return Err(format!(
-                "Invalid call to '{}::transfer::{}' on an object of type '{}'. \
-                The transferred object's type must be defined in the current module, \
-                or must have the 'store' type ability",
-                SUI_FRAMEWORK_ADDRESS,
-                fident,
-                format_signature_token(view, type_arg),
-            ));
-        }
+
+    if type_arguments.len() != 1 {
+        debug_assert!(false, "Expected 1 type argument for {}", fident);
+        return Err(format!("Expected 1 type argument for {}", fident));
     }
+
+    let type_arg = &type_arguments[0];
+    if !is_defined_in_current_module(view, type_arg) {
+        return Err(format!(
+            "Invalid call to '{sui}::transfer::{f}' on an object of type '{t}'. \
+            The transferred object's type must be defined in the current module. \
+            If the object has the 'store' type ability, you can use the non-internal variant \
+            instead, i.e. '{sui}::transfer::public_{f}'",
+            sui = SUI_FRAMEWORK_ADDRESS,
+            f = fident,
+            t = format_signature_token(view, type_arg),
+        ));
+    }
+
     Ok(())
 }
 
@@ -132,26 +141,27 @@ fn verify_private_event_emit(
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
     let fident = view.identifier_at(fhandle.name);
-    match fident.as_str() {
-        // transfer functions
-        "emit" => (),
-        // unknown function, so a bug in the implementation here
-        s => {
-            debug_assert!(false, "unknown transfer function {}", s);
-            return Ok(());
-        }
+    if fident != EVENT_FUNCTION {
+        debug_assert!(false, "unknown transfer function {}", fident);
+        return Err(format!("Calling unknown event function, {}", fident));
     };
-    for type_arg in type_arguments {
-        if !is_defined_in_current_module(view, type_arg) {
-            return Err(format!(
-                "Invalid call to '{}::event::{}' with an event type '{}'. \
-                The event's type must be defined in the current module",
-                SUI_FRAMEWORK_ADDRESS,
-                fident,
-                format_signature_token(view, type_arg),
-            ));
-        }
+
+    if type_arguments.len() != 1 {
+        debug_assert!(false, "Expected 1 type argument for {}", fident);
+        return Err(format!("Expected 1 type argument for {}", fident));
     }
+
+    let type_arg = &type_arguments[0];
+    if !is_defined_in_current_module(view, type_arg) {
+        return Err(format!(
+            "Invalid call to '{}::event::{}' with an event type '{}'. \
+                The event's type must be defined in the current module",
+            SUI_FRAMEWORK_ADDRESS,
+            fident,
+            format_signature_token(view, type_arg),
+        ));
+    }
+
     Ok(())
 }
 

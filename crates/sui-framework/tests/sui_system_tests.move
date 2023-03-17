@@ -81,7 +81,7 @@ module sui::sui_system_tests {
         let stakee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, stakee_address);
+        transfer::public_transfer(cap, stakee_address);
 
         // With the cap object in hand, stakee could report validators on behalf of @0x1.
         report_helper(stakee_address, @0x2, false, scenario);
@@ -94,7 +94,7 @@ module sui::sui_system_tests {
         test_scenario::next_tx(scenario, stakee_address);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
         let new_stakee_address = @0xcafe;
-        transfer::transfer(cap, new_stakee_address);
+        transfer::public_transfer(cap, new_stakee_address);
 
         // New stakee could report validators on behalf of @0x1.
         report_helper(new_stakee_address, @0x2, false, scenario);
@@ -136,7 +136,7 @@ module sui::sui_system_tests {
         let stakee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, stakee_address);
+        transfer::public_transfer(cap, stakee_address);
 
         report_helper(stakee_address, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
@@ -162,7 +162,7 @@ module sui::sui_system_tests {
         let stakee_address = @0xbeef;
         test_scenario::next_tx(scenario, @0x1);
         let cap = test_scenario::take_from_sender<UnverifiedValidatorOperationCap>(scenario);
-        transfer::transfer(cap, stakee_address);
+        transfer::public_transfer(cap, stakee_address);
 
         // With the cap object in hand, stakee could report validators on behalf of @0x1.
         set_gas_price_helper(stakee_address, 888, scenario);

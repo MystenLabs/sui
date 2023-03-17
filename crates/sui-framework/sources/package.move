@@ -106,7 +106,7 @@ module sui::package {
     /// Since this function can only be called in the module initializer,
     /// the sender is the publisher.
     public fun claim_and_keep<OTW: drop>(otw: OTW, ctx: &mut TxContext) {
-        sui::transfer::transfer(claim(otw, ctx), sender(ctx))
+        sui::transfer::public_transfer(claim(otw, ctx), sender(ctx))
     }
 
     /// Destroy a Publisher object effectively removing all privileges

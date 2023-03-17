@@ -20,7 +20,7 @@ module Test::M1 {
     fun init(ctx: &mut TxContext): u64 {
         let value = 42;
         let singleton = Object { id: object::new(ctx), value };
-        transfer::transfer(singleton, tx_context::sender(ctx));
+        transfer::public_transfer(singleton, tx_context::sender(ctx));
         value
     }
 }

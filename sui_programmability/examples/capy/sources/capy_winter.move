@@ -14,7 +14,7 @@ module capy::capy_winter {
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
     use sui::balance::{Self, Balance};
-    use sui::transfer::{transfer, share_object};
+    use sui::transfer;
     use sui::tx_context::{TxContext, sender};
     use std::hash::sha3_256 as hash;
     use sui::dynamic_field as df;
@@ -100,7 +100,7 @@ module capy::capy_winter {
 
     /// Build a CapyPost office and offer gifts to send and buy.
     fun init(ctx: &mut TxContext) {
-        share_object(CapyPost { id: object::new(ctx), balance: balance::zero() });
+        transfer::share_object(CapyPost { id: object::new(ctx), balance: balance::zero() });
     }
 
     /// Buy a single `GiftBox` and keep it at the sender's address.
@@ -114,8 +114,8 @@ module capy::capy_winter {
         let link = get_link_url(&id, type);
 
         emit(GiftPurchased { id: object::uid_to_inner(&id), type });
-        transfer(GiftBox { id, type, url, link }, sender(ctx));
-        transfer(remainder, sender(ctx))
+        transfer::transfer(GiftBox { id, type, url, link }, sender(ctx));
+        transfer::public_transfer(remainder, sender(ctx))
     }
 
     /// Send a GiftBox to a friend or a stranger through CapyPost.
@@ -133,7 +133,7 @@ module capy::capy_winter {
             if (sent == 1) {
                 let id = object::new(ctx);
                 emit(PremiumTicketReceived { id: object::uid_to_inner(&id) });
-                transfer(PremiumTicket { id }, sender(ctx));
+                transfer::transfer(PremiumTicket { id }, sender(ctx));
                 0
             } else { sent + 1 }
         } else { 0 };
@@ -142,7 +142,7 @@ module capy::capy_winter {
         df::add<SentKey, u8>(&mut post.id, SentKey { sender }, sent);
 
         emit(GiftSent { id: object::id(&box) });
-        transfer(box, receiver)
+        transfer::transfer(box, receiver)
     }
 
     /// Open a box and expect a surprise!
@@ -152,7 +152,7 @@ module capy::capy_winter {
         let attribute = get_attribute(&sequence);
 
         emit(GiftOpened { id: object::uid_to_inner(&id) });
-        transfer(capy::create_capy(reg, sequence, vector[ attribute ], ctx), sender(ctx));
+        transfer::public_transfer(capy::create_capy(reg, sequence, vector[ attribute ], ctx), sender(ctx));
         object::delete(id)
     }
 
@@ -166,8 +166,8 @@ module capy::capy_winter {
         let id = object::new(ctx);
 
         emit(PremiumPurchased { id: object::uid_to_inner(&id) });
-        transfer(PremiumBox { id, url: get_img_url(99) }, sender(ctx));
-        transfer(remainder, sender(ctx));
+        transfer::transfer(PremiumBox { id, url: get_img_url(99) }, sender(ctx));
+        transfer::public_transfer(remainder, sender(ctx));
         object::delete(ticket_id)
     }
 
@@ -178,7 +178,7 @@ module capy::capy_winter {
         let premium = capy::create_attribute(ATTRIBUTE_NAME, PREMIUM_ATTRIBUTE);
 
         emit(PremiumOpened { id: object::uid_to_inner(&id) });
-        transfer(capy::create_capy(reg, sequence, vector[ premium ], ctx), sender(ctx));
+        transfer::public_transfer(capy::create_capy(reg, sequence, vector[ premium ], ctx), sender(ctx));
         object::delete(id)
     }
 

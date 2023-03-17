@@ -290,17 +290,17 @@ pub fn all_natives(
         ),
         (
             "transfer",
-            "transfer_internal",
+            "transfer_impl",
             make_native!(transfer::transfer_internal),
         ),
         (
             "transfer",
-            "freeze_object",
+            "freeze_object_impl",
             make_native!(transfer::freeze_object),
         ),
         (
             "transfer",
-            "share_object",
+            "share_object_impl",
             make_native!(transfer::share_object),
         ),
         (

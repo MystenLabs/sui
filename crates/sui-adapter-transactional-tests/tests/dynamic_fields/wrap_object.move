@@ -20,7 +20,7 @@ struct Obj has key, store {
 entry fun mint(ctx: &mut TxContext) {
     let parent = object::new(ctx);
     dynamic_object_field::add(&mut parent, 0, Obj { id: object::new(ctx) });
-    sui::transfer::transfer(Obj { id: parent }, sender(ctx))
+    sui::transfer::public_transfer(Obj { id: parent }, sender(ctx))
 }
 
 entry fun take_and_wrap(obj: &mut Obj) {
@@ -35,7 +35,7 @@ entry fun take_and_destroy(obj: &mut Obj) {
 
 entry fun take_and_take(obj: &mut Obj, ctx: &mut TxContext) {
     let v = dynamic_object_field::remove<u64, Obj>(&mut obj.id, 0);
-    sui::transfer::transfer(v, sender(ctx))
+    sui::transfer::public_transfer(v, sender(ctx))
 }
 
 }

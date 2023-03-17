@@ -43,7 +43,7 @@ module sui::sui {
             option::none(),
             ctx
         );
-        transfer::freeze_object(metadata);
+        transfer::public_freeze_object(metadata);
         let supply = coin::treasury_into_supply(treasury);
         let total_sui = balance::increase_supply(&mut supply, TOTAL_SUPPLY_MIST);
         balance::destroy_supply(supply);
@@ -51,6 +51,6 @@ module sui::sui {
     }
 
     public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
-        transfer::transfer(c, recipient)
+        transfer::public_transfer(c, recipient)
     }
 }

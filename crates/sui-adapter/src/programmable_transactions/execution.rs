@@ -50,7 +50,7 @@ use sui_verifier::{
     entry_points_verifier::{
         TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
     },
-    private_generics::{EVENT_MODULE, TRANSFER_MODULE},
+    private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
 
@@ -1025,14 +1025,17 @@ fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
     function: &IdentStr,
     type_arguments: &[Type],
 ) -> Result<(), ExecutionError> {
-    let ident = (module_id.address(), module_id.name());
-    if ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+    let module_ident = (module_id.address(), module_id.name());
+    if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::NonEntryFunctionInvoked,
             format!("Cannot directly call functions in sui::{}", EVENT_MODULE),
         ));
     }
-    if ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
+
+    if module_ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE)
+        && PRIVATE_TRANSFER_FUNCTIONS.contains(&function)
+    {
         for ty in type_arguments {
             let abilities = context
                 .session

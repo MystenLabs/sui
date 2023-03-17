@@ -30,7 +30,7 @@ module entry_point_vector::entry_point_vector {
     struct Any {}
 
     public entry fun mint(v: u64, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             Obj {
                 id: object::new(ctx),
                 value: v,
@@ -60,7 +60,7 @@ module entry_point_vector::entry_point_vector {
     }
 
     public entry fun mint_shared(v: u64, ctx: &mut TxContext) {
-        transfer::share_object(
+        transfer::public_share_object(
             Obj {
                 id: object::new(ctx),
                 value: v,

@@ -24,7 +24,7 @@ module test::m {
 
     public entry fun mint(ctx: &mut TxContext) {
         let id = sui::object::new(ctx);
-        sui::transfer::transfer(S { id }, tx_context::sender(ctx))
+        sui::transfer::public_transfer(S { id }, tx_context::sender(ctx))
     }
 
     public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
@@ -54,7 +54,7 @@ module test::m {
 
     public entry fun wrap(s: S, ctx: &mut TxContext) {
         let r = R { id: sui::object::new(ctx), s };
-        sui::transfer::transfer(r, tx_context::sender(ctx))
+        sui::transfer::public_transfer(r, tx_context::sender(ctx))
     }
 
     public entry fun remove_and_delete(s: S, idx: u64) {

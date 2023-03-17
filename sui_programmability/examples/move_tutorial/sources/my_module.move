@@ -51,7 +51,7 @@ module my_first_package::my_module {
             strength: strength,
         };
         // transfer the sword
-        transfer::transfer(sword, recipient);
+        transfer::public_transfer(sword, recipient);
         forge.swords_created = forge.swords_created + 1;
     }
 
@@ -112,7 +112,7 @@ module my_first_package::my_module {
             // extract the sword owned by the initial owner
             let sword = test_scenario::take_from_sender<Sword>(scenario);
             // transfer the sword to the final owner
-            transfer::transfer(sword, final_owner);
+            transfer::public_transfer(sword, final_owner);
         };
         // fourth transaction executed by the final sword owner
         test_scenario::next_tx(scenario, final_owner);
@@ -146,6 +146,6 @@ module my_first_package::my_module {
 
         // create a dummy address and transfer the sword
         let dummy_address = @0xCAFE;
-        transfer::transfer(sword, dummy_address);
+        transfer::public_transfer(sword, dummy_address);
     }
 }
