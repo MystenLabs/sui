@@ -10,8 +10,8 @@ use roaring::RoaringBitmap;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
+use std::time::Duration;
 use sui_config::NetworkConfig;
 use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_core::{
@@ -49,8 +49,10 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use tokio::{task::JoinSet, time::timeout};
+use tokio::task::JoinSet;
+use tokio::time::timeout;
 use tracing::{error, info};
+use sui_core::safe_client::SafeClient;
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -152,17 +154,24 @@ impl ExecutionEffects {
     }
 }
 
+#[derive(Debug)]
+pub struct CertificateAndEffects {
+    pub certificate: Option<CertifiedTransaction>,
+    pub effects: ExecutionEffects,
+}
+
 #[async_trait]
 pub trait ValidatorProxy {
+    async fn get_validator_clients(&self) -> BTreeMap<AuthorityName, SafeClient<NetworkAuthorityClient>>;
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<CertificateAndEffects>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
-    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<CertificateAndEffects>;
 
     fn clone_committee(&self) -> Committee;
 
@@ -295,6 +304,10 @@ impl LocalValidatorAggregatorProxy {
 
 #[async_trait]
 impl ValidatorProxy for LocalValidatorAggregatorProxy {
+    async fn get_validator_clients(&self) -> BTreeMap<AuthorityName, SafeClient<NetworkAuthorityClient>> {
+        let auth_agg = self.qd.authority_aggregator().load();
+        auth_agg.authority_clients.clone()
+    }
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
         Ok(auth_agg
@@ -310,7 +323,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .into_sui_system_state_summary())
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<CertificateAndEffects> {
         if std::env::var("BENCH_MODE").is_ok() {
             return self.execute_bench_transaction(tx).await;
         }
@@ -326,10 +339,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         effects_cert,
                         events,
                     } = resp;
-                    return Ok(ExecutionEffects::CertifiedTransactionEffects(
-                        effects_cert.into(),
-                        events,
-                    ));
+                    return Ok(CertificateAndEffects {
+                        certificate: None,
+                        effects: ExecutionEffects::CertifiedTransactionEffects(
+                            effects_cert.into(),
+                            events,
+                        )
+                    });
                 }
                 Err(err) => {
                     error!(
@@ -343,7 +359,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
-    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<CertificateAndEffects> {
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let mut epoch = 0;
 
@@ -488,7 +504,11 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
             transaction_events.unwrap(),
         );
-        Ok(effects)
+        let cert_and_effects = CertificateAndEffects {
+            certificate: Some(certified_transaction),
+            effects
+        };
+        Ok(cert_and_effects)
     }
 
     fn clone_committee(&self) -> Committee {
@@ -550,6 +570,9 @@ impl FullNodeProxy {
 
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
+    async fn get_validator_clients(&self) -> BTreeMap<AuthorityName, SafeClient<NetworkAuthorityClient>> {
+        BTreeMap::new()
+    }
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         match self
             .sui_client
@@ -570,7 +593,7 @@ impl ValidatorProxy for FullNodeProxy {
             .await?)
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<CertificateAndEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -591,7 +614,11 @@ impl ValidatorProxy for FullNodeProxy {
                     let effects = ExecutionEffects::SuiTransactionEffects(
                         resp.effects.expect("effects field should not be None"),
                     );
-                    return Ok(effects);
+                    let cert_and_effects = CertificateAndEffects {
+                        certificate: None,
+                        effects
+                    };
+                    return Ok(cert_and_effects);
                 }
                 Err(err) => {
                     error!(
@@ -605,7 +632,7 @@ impl ValidatorProxy for FullNodeProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
-    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<CertificateAndEffects> {
         self.execute_transaction(tx).await
     }
 

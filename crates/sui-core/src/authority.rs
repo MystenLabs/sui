@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
 
 use anyhow::anyhow;
@@ -144,7 +144,7 @@ pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
-pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
+pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 100_000;
 
 type CertTxGuard<'a> =
     DBTxGuard<'a, TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>;
@@ -184,12 +184,18 @@ pub struct AuthorityMetrics {
     commit_certificate_latency: Histogram,
     db_checkpoint_latency: Histogram,
 
+    pub(crate) tx_pending_latency: Histogram,
+    pub(crate) tx_waiting_for_permit_latency: Histogram,
+    pub(crate) tx_notify_read_effects_latency: Histogram,
+    pub(crate) num_execution_attempts: Histogram,
+
     pub(crate) transaction_manager_num_enqueued_certificates: IntCounterVec,
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
     pub(crate) transaction_manager_num_executing_certificates: IntGauge,
     pub(crate) transaction_manager_num_ready: IntGauge,
-
+    pub(crate) transaction_manager_unlocked_wait: Histogram,
+    pub(crate) transaction_manager_unlocked_degree: Histogram,
     pub(crate) execution_driver_executed_transactions: IntCounter,
 
     pub(crate) skipped_consensus_txns: IntCounter,
@@ -215,6 +221,11 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
+const RATIO_BUCKETS: &[f64] = &[
+    0.01, 1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0,
+    20000.0, 30000.0, 60000.0,
 ];
 
 impl AuthorityMetrics {
@@ -307,6 +318,20 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            transaction_manager_unlocked_wait: register_histogram_with_registry!(
+                "transaction_manager_unlocked_wait",
+                "Latency of actual certificate executions",
+                RATIO_BUCKETS.to_vec(),
+                registry,
+            )
+                .unwrap(),
+            transaction_manager_unlocked_degree: register_histogram_with_registry!(
+                "transaction_manager_unlocked_degree",
+                "Latency of actual certificate executions",
+                RATIO_BUCKETS.to_vec(),
+                registry,
+            )
+                .unwrap(),
             prepare_certificate_latency: register_histogram_with_registry!(
                 "authority_state_prepare_certificate_latency",
                 "Latency of executing certificates, before committing the results",
@@ -323,6 +348,30 @@ impl AuthorityMetrics {
             .unwrap(),
             db_checkpoint_latency: register_histogram_with_registry!(
                 "db_checkpoint_latency",
+                "Latency of checkpointing dbs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            tx_pending_latency: register_histogram_with_registry!(
+                "tx_pending_latency",
+                "Latency of checkpointing dbs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            tx_waiting_for_permit_latency: register_histogram_with_registry!(
+                "tx_waiting_for_permit_latency",
+                "Latency of checkpointing dbs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            tx_notify_read_effects_latency: register_histogram_with_registry!(
+                "tx_notify_read_effects_latency",
+                "Latency of checkpointing dbs",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            num_execution_attempts: register_histogram_with_registry!(
+                "tx_num_execution_attempts",
                 "Latency of checkpointing dbs",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -687,9 +736,39 @@ impl AuthorityState {
             // For owned object transactions, we can enqueue the certificate for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
-
+        let now = Instant::now();
         let effects = self.notify_read_effects(certificate).await?;
+        self.metrics
+            .tx_notify_read_effects_latency
+            .observe((Instant::now() - now).as_secs_f64());
         self.sign_effects(effects, epoch_store)
+    }
+
+    pub async fn try_execute_immediately_metrics(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        wait_interval: Duration,
+    ) -> SuiResult<TransactionEffects> {
+        let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
+        let tx_digest = *certificate.digest();
+        debug!("execute_certificate_internal");
+
+        // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
+        // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
+        // very common to receive the same tx multiple times simultaneously due to gossip, so we
+        // may as well hold the lock and save the cpu time for other requests.
+        //
+        // Note that this lock has some false contention (since it uses a MutexTable), so you can't
+        // assume that different txes can execute concurrently. This is probably the fastest way
+        // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
+        // epsilon of txes) while solutions without false contention have slightly higher cost
+        // for every tx.
+        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
+
+        self.process_certificate_and_wait(tx_guard, certificate, epoch_store, wait_interval)
+            .await
+            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
 
     /// Internal logic to execute a certificate.
@@ -762,6 +841,109 @@ impl AuthorityState {
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         self.database
             .check_owned_object_locks_exist(owned_object_refs)
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub(crate) async fn process_certificate_and_wait(
+        &self,
+        tx_guard: CertTxGuard<'_>,
+        certificate: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        wait_interval: Duration,
+    ) -> SuiResult<TransactionEffects> {
+        let digest = *certificate.digest();
+        // The cert could have been processed by a concurrent attempt of the same cert, so check if
+        // the effects have already been written.
+        if let Some(effects) = self.database.get_executed_effects(&digest)? {
+            tx_guard.release();
+            return Ok(effects);
+        }
+        let execution_guard = self
+            .database
+            .execution_lock_for_executable_transaction(certificate)
+            .await;
+        // Any caller that verifies the signatures on the certificate will have already checked the
+        // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
+        // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
+        // epoch, then it's invalid.
+        let execution_guard = match execution_guard {
+            Ok(execution_guard) => execution_guard,
+            Err(err) => {
+                tx_guard.release();
+                return Err(err);
+            }
+        };
+        // Since we obtain a reference to the epoch store before taking the execution lock, it's
+        // possible that reconfiguration has happened and they no longer match.
+        if *execution_guard != epoch_store.epoch() {
+            tx_guard.release();
+            debug!("The epoch of the execution_guard doesn't match the epoch store");
+            return Err(SuiError::WrongEpoch {
+                expected_epoch: epoch_store.epoch(),
+                actual_epoch: *execution_guard,
+            });
+        }
+
+        // first check to see if we have already executed and committed the tx
+        // to the WAL
+        if let Some((inner_temporary_storage, effects)) =
+            epoch_store.wal().get_execution_output(&digest)?
+        {
+            self.commit_cert_and_notify_wait(
+                certificate,
+                inner_temporary_storage,
+                &effects,
+                tx_guard,
+                execution_guard,
+                epoch_store,
+                wait_interval,
+            )
+            .await?;
+            return Ok(effects);
+        }
+
+        // Errors originating from prepare_certificate may be transient (failure to read locks) or
+        // non-transient (transaction input is invalid, move vm errors). However, all errors from
+        // this function occur before we have written anything to the db, so we commit the tx
+        // guard and rely on the client to retry the tx (if it was transient).
+        let (inner_temporary_store, effects) = match self
+            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .await
+        {
+            Err(e) => {
+                debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
+                tx_guard.release();
+                return Err(e);
+            }
+            Ok(res) => res,
+        };
+
+        // Write tx output to WAL as first commit phase. In second phase
+        // we write from WAL to permanent storage. The purpose of this scheme
+        // is to allow for retrying phase 2 from phase 1 in the case where we
+        // fail mid-write. We prefer this over making the write to permanent
+        // storage atomic as this allows for sharding storage across nodes, which
+        // would be more difficult in the alternative.
+        epoch_store
+            .wal()
+            .write_execution_output(&digest, (inner_temporary_store.clone(), effects.clone()))?;
+
+        // Insert an await in between write_execution_output and commit so that tests can observe
+        // and test the interruption.
+        #[cfg(any(test, msim))]
+        tokio::task::yield_now().await;
+
+        self.commit_cert_and_notify_wait(
+            certificate,
+            inner_temporary_store,
+            &effects,
+            tx_guard,
+            execution_guard,
+            epoch_store,
+            wait_interval,
+        )
+        .await?;
+        Ok(effects)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -862,6 +1044,82 @@ impl AuthorityState {
         )
         .await?;
         Ok(effects)
+    }
+
+    async fn commit_cert_and_notify_wait(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        inner_temporary_store: InnerTemporaryStore,
+        effects: &TransactionEffects,
+        tx_guard: CertTxGuard<'_>,
+        _execution_guard: ExecutionLockReadGuard<'_>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        wait_interval: Duration,
+    ) -> SuiResult {
+        let input_object_count = inner_temporary_store.objects.len();
+        let shared_object_count = effects.shared_objects().len();
+
+        // If commit_certificate returns an error, tx_guard will be dropped and the certificate
+        // will be persisted in the log for later recovery.
+        let output_keys: Vec<_> = inner_temporary_store
+            .written
+            .iter()
+            .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
+            .collect();
+
+        let events = inner_temporary_store.events.clone();
+
+        self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
+            .await?;
+
+        // Notifies transaction manager about available input objects. This allows the transaction
+        // manager to schedule ready transactions.
+        //
+        // REQUIRED: this must be called after commit_certificate() (above), to ensure
+        // TransactionManager can receive the notifications for objects that it did not find
+        // in the objects table.
+        //
+        // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
+        // TransactionManager can get the notifications after the node crashes and restarts.
+        self.transaction_manager.objects_available_wait_interval(
+            output_keys,
+            epoch_store,
+            wait_interval,
+        );
+
+        // commit_certificate finished, the tx is fully committed to the store.
+        tx_guard.commit_tx();
+
+        // index certificate
+        let _ = self
+            .post_process_one_tx(certificate, effects, &events, epoch_store)
+            .await
+            .tap_err(|e| error!("tx post processing failed: {e}"));
+
+        // Update metrics.
+        self.metrics.total_effects.inc();
+        self.metrics.total_certs.inc();
+
+        if shared_object_count > 0 {
+            self.metrics.shared_obj_tx.inc();
+        }
+
+        self.metrics
+            .num_input_objs
+            .observe(input_object_count as f64);
+        self.metrics
+            .num_shared_objects
+            .observe(shared_object_count as f64);
+        self.metrics.batch_size.observe(
+            certificate
+                .data()
+                .intent_message()
+                .value
+                .kind()
+                .num_commands() as f64,
+        );
+
+        Ok(())
     }
 
     async fn commit_cert_and_notify(
@@ -1637,6 +1895,12 @@ impl AuthorityState {
             db_checkpoint_config: db_checkpoint_config.clone(),
         });
 
+        // Start a task to execute ready certificates.
+        let authority_state = Arc::downgrade(&state);
+        state
+            .transaction_manager
+            .update_authority_state(authority_state.clone());
+
         // Process tx recovery log first, so that checkpoint recovery (below)
         // doesn't observe partially-committed txes.
         state
@@ -1644,8 +1908,6 @@ impl AuthorityState {
             .await
             .expect("Could not fully process recovery log at startup!");
 
-        // Start a task to execute ready certificates.
-        let authority_state = Arc::downgrade(&state);
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,

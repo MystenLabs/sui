@@ -76,6 +76,15 @@ fn main() -> Result<()> {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            Method::builder()
+                .name("pending_heartbeat")
+                .route_name("PendingHeartbeat")
+                .input_type("sui_types::messages::PendingHeartbeatRequest")
+                .output_type("sui_types::messages::PendingHeartbeatResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     Builder::new()

@@ -535,9 +535,9 @@ impl MetricConf {
     pub fn with_sampling(read_interval: SamplingInterval) -> Self {
         Self {
             db_name_override: None,
-            read_sample_interval: read_interval,
-            write_sample_interval: SamplingInterval::default(),
-            iter_latency_sample_interval: SamplingInterval::default(),
+            read_sample_interval: read_interval.clone(),
+            write_sample_interval: read_interval.clone(),
+            iter_latency_sample_interval: read_interval,
             iter_bytes_sample_interval: SamplingInterval::default(),
         }
     }
@@ -1021,9 +1021,9 @@ impl DBBatch {
                 .rocksdb_batch_commit_bytes
                 .with_label_values(&[&db_name])
                 .observe(batch_size as f64);
-            self.db_metrics
-                .write_perf_ctx_metrics
-                .report_metrics(&db_name);
+            // self.db_metrics
+            //     .write_perf_ctx_metrics
+            //     .report_metrics(&db_name);
         }
         Ok(())
     }
@@ -1324,7 +1324,7 @@ impl<'a> DBTransaction<'a> {
             RocksDBRawIter::OptimisticTransaction(db_iter),
             db.cf.clone(),
             &db.db_metrics,
-            &db.iter_latency_sample_interval,
+            &db.iter_bytes_sample_interval,
         )
     }
 
@@ -1484,9 +1484,9 @@ where
                 .rocksdb_get_bytes
                 .with_label_values(&[&self.cf])
                 .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
+            // self.db_metrics
+            //     .read_perf_ctx_metrics
+            //     .report_metrics(&self.cf);
         }
         match res {
             Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
@@ -1517,9 +1517,9 @@ where
                 .rocksdb_get_bytes
                 .with_label_values(&[&self.cf])
                 .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
+            // self.db_metrics
+            //     .read_perf_ctx_metrics
+            //     .report_metrics(&self.cf);
         }
         match res {
             Some(data) => Ok(Some(data.to_vec())),
@@ -1548,9 +1548,9 @@ where
                 .rocksdb_put_bytes
                 .with_label_values(&[&self.cf])
                 .observe((key_buf.len() + value_buf.len()) as f64);
-            self.db_metrics
-                .write_perf_ctx_metrics
-                .report_metrics(&self.cf);
+            // self.db_metrics
+            //     .write_perf_ctx_metrics
+            //     .report_metrics(&self.cf);
         }
         self.rocksdb
             .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())?;
@@ -1579,9 +1579,9 @@ where
                 .rocksdb_deletes
                 .with_label_values(&[&self.cf])
                 .inc();
-            self.db_metrics
-                .write_perf_ctx_metrics
-                .report_metrics(&self.cf);
+            // self.db_metrics
+            //     .write_perf_ctx_metrics
+            //     .report_metrics(&self.cf);
         }
         Ok(())
     }
@@ -1616,9 +1616,9 @@ where
         db_iter.seek_to_first();
         if let Some((timer, _perf_ctx)) = report_metrics {
             timer.stop_and_record();
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
+            // self.db_metrics
+            //     .read_perf_ctx_metrics
+            //     .report_metrics(&self.cf);
         }
         Iter::new(
             db_iter,
@@ -1676,21 +1676,21 @@ where
         let results = self
             .rocksdb
             .multi_get_cf(keys_bytes?, &self.opts.readopts());
-        let entry_size = |entry: &Result<Option<Vec<u8>>, rocksdb::Error>| -> f64 {
-            entry
-                .as_ref()
-                .map_or(0.0, |e| e.as_ref().map_or(0.0, |v| v.len() as f64))
-        };
-        if report_metrics.is_some() {
-            self.db_metrics
-                .op_metrics
-                .rocksdb_multiget_bytes
-                .with_label_values(&[&self.cf])
-                .observe(results.iter().map(entry_size).sum());
-            self.db_metrics
-                .read_perf_ctx_metrics
-                .report_metrics(&self.cf);
-        }
+        // let entry_size = |entry: &Result<Option<Vec<u8>>, rocksdb::Error>| -> f64 {
+        //     entry
+        //         .as_ref()
+        //         .map_or(0.0, |e| e.as_ref().map_or(0.0, |v| v.len() as f64))
+        // };
+        // if report_metrics.is_some() {
+        //     self.db_metrics
+        //         .op_metrics
+        //         .rocksdb_multiget_bytes
+        //         .with_label_values(&[&self.cf])
+        //         .observe(results.iter().map(entry_size).sum());
+        //     self.db_metrics
+        //         .read_perf_ctx_metrics
+        //         .report_metrics(&self.cf);
+        // }
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {
@@ -1831,7 +1831,8 @@ pub fn base_db_options() -> DBOptions {
     );
     // According to docs, we almost certainly want to set this to number of cores to not be bottlenecked
     // by rocksdb
-    opt.increase_parallelism((num_cpus::get() as i32) / 8);
+    opt.increase_parallelism(1);
+    //opt.set_disable_auto_compactions(true);
     DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),

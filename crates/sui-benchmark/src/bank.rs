@@ -135,16 +135,18 @@ impl BenchmarkBank {
         // transferring it to recipients
         let verified_tx =
             self.make_split_coin_tx(split_amounts.clone(), Some(gas_price), &self.primary_gas.2)?;
-        let effects = self.proxy.execute_transaction(verified_tx.into()).await?;
-        let updated_gas = effects
+        let cert_and_effects = self.proxy.execute_transaction(verified_tx.into()).await?;
+        let updated_gas = cert_and_effects
+            .effects
             .mutated()
             .into_iter()
             .find(|(k, _)| k.0 == self.primary_gas.0 .0)
             .ok_or("Input gas missing in the effects")
             .map_err(Error::msg)?;
-        let created_coins: Vec<ObjectRef> = effects.created().into_iter().map(|c| c.0).collect();
+        let created_coins: Vec<ObjectRef> = cert_and_effects.effects.created().into_iter().map(|c| c.0).collect();
         assert_eq!(created_coins.len(), split_amounts.len());
-        let updated_coin = effects
+        let updated_coin = cert_and_effects
+            .effects
             .mutated()
             .into_iter()
             .find(|(k, _)| k.0 == self.pay_coin.0 .0)
@@ -160,12 +162,13 @@ impl BenchmarkBank {
             &self.primary_gas.2,
             Some(gas_price),
         )?;
-        let effects = self.proxy.execute_transaction(verified_tx.into()).await?;
+        let cert_and_effects = self.proxy.execute_transaction(verified_tx.into()).await?;
         let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
             .iter()
             .map(|c| (c.address, c.keypair.clone()))
             .collect();
-        let transferred_coins: Result<Vec<Gas>> = effects
+        let transferred_coins: Result<Vec<Gas>> = cert_and_effects
+            .effects
             .created()
             .into_iter()
             .map(|c| {
@@ -177,7 +180,8 @@ impl BenchmarkBank {
                 Ok((c.0, address, keypair.clone()))
             })
             .collect();
-        let updated_gas = effects
+        let updated_gas = cert_and_effects
+            .effects
             .mutated()
             .into_iter()
             .find(|(k, _)| k.0 == self.primary_gas.0 .0)

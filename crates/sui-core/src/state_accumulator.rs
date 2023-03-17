@@ -35,6 +35,7 @@ impl StateAccumulator {
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
+        return Ok(Accumulator::default());
         let _scope = monitored_scope("AccumulateCheckpoint");
         if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
             return Ok(acc);
@@ -80,6 +81,7 @@ impl StateAccumulator {
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> Result<Accumulator, TypedStoreError> {
+        return Ok(Accumulator::default());
         if let Some((_checkpoint, acc)) = self
             .authority_store
             .perpetual_tables

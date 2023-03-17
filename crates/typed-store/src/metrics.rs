@@ -342,10 +342,10 @@ pub struct RocksDBPerfContext;
 
 impl Default for RocksDBPerfContext {
     fn default() -> Self {
-        set_perf_stats(PerfStatsLevel::EnableTime);
-        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
-            perf_context.borrow_mut().reset();
-        });
+        // set_perf_stats(PerfStatsLevel::EnableTime);
+        // PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
+        //     perf_context.borrow_mut().reset();
+        // });
         RocksDBPerfContext {}
     }
 }

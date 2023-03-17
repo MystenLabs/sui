@@ -22,6 +22,7 @@ use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_pay_sui_transaction;
+use sui_types::messages::CertifiedTransaction;
 
 use super::workload::{Workload, MAX_GAS_FOR_TESTING};
 
@@ -44,6 +45,7 @@ pub struct BatchPaymentTestPayload {
     /// after the first tx, any address can send
     first_sender: SuiAddress,
     system_state_observer: Arc<SystemStateObserver>,
+    parent_certificate: Option<CertifiedTransaction>,
 }
 
 impl std::fmt::Display for BatchPaymentTestPayload {
@@ -53,7 +55,10 @@ impl std::fmt::Display for BatchPaymentTestPayload {
 }
 
 impl Payload for BatchPaymentTestPayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+    fn get_parent_certificate(&self) -> Option<CertifiedTransaction> {
+        self.parent_certificate.clone()
+    }
+    fn make_new_payload(&mut self, effects: &ExecutionEffects, certificate: Option<CertifiedTransaction>) {
         self.state.update(effects);
         if self.num_payments == 0 {
             for (coin_obj, owner) in effects.created().into_iter().chain(effects.mutated()) {
@@ -65,6 +70,7 @@ impl Payload for BatchPaymentTestPayload {
             }
         }
         self.num_payments += self.state.num_addresses();
+        self.parent_certificate = certificate;
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
@@ -221,6 +227,7 @@ impl Workload<dyn Payload> for BatchPaymentWorkload {
                 num_payments: 0,
                 first_sender: addr,
                 system_state_observer: system_state_observer.clone(),
+                parent_certificate: None,
             }));
         }
         payloads

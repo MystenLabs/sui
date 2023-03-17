@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
 use std::{
     sync::{Arc, Weak},
     time::Duration,
@@ -24,6 +25,52 @@ mod execution_driver_tests;
 // to be retried.
 pub const EXECUTION_MAX_ATTEMPTS: u32 = 10;
 const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+
+pub fn execute_directly(
+    authority: Arc<AuthorityState>,
+    certificate: VerifiedExecutableTransaction,
+    wait_interval: Duration,
+) {
+    // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let digest = *certificate.digest();
+    debug!(?digest, "Pending certificate execution activated.");
+    spawn_monitored_task!(async move {
+        if let Ok(true) = authority.is_tx_already_executed(&digest) {
+            return;
+        }
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            let res = authority
+                .try_execute_immediately_metrics(&certificate, &epoch_store, wait_interval)
+                .await;
+            if let Err(e) = res {
+                if attempts == EXECUTION_MAX_ATTEMPTS {
+                    panic!("Failed to execute certified transaction {digest:?} after {attempts} attempts! error={e} certificate={certificate:?}");
+                }
+                // Assume only transient failure can happen. Permanent failure is probably
+                // a bug. There is nothing that can be done to recover from permanent failures.
+                error!(tx_digest=?digest, "Failed to execute certified transaction {digest:?}! attempt {attempts}, {e}");
+                sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+            } else {
+                authority
+                    .metrics
+                    .num_execution_attempts
+                    .observe(attempts as f64);
+                break;
+            }
+        }
+
+        // Remove the certificate that finished execution from the pending_certificates table.
+        authority.certificate_executed(&digest, &epoch_store);
+
+        authority
+            .metrics
+            .execution_driver_executed_transactions
+            .inc();
+    });
+}
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
@@ -73,10 +120,14 @@ pub async fn execution_process(
         debug!(?digest, "Pending certificate execution activated.");
 
         let limit = limit.clone();
+        let now = Instant::now();
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
         let permit = limit.acquire_owned().await.unwrap();
-
+        authority
+            .metrics
+            .tx_waiting_for_permit_latency
+            .observe((Instant::now() - now).as_secs_f64());
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
             let _guard = permit;

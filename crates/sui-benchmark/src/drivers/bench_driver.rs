@@ -28,14 +28,18 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::WorkloadInfo;
 use crate::ValidatorProxy;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::messages::{TransactionDataAPI, VerifiedTransaction};
+use parking_lot::Mutex;
+use sui_types::messages::{CertifiedTransaction, PendingHeartbeatRequest, TransactionDataAPI, VerifiedTransaction};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
 use tokio::{time, time::Instant};
 use tracing::{debug, error, info};
+use sui_core::authority_client::AuthorityAPI;
+use sui_types::base_types::AuthorityName;
+use sui_types::digests::TransactionDigest;
 
 use super::Interval;
 use super::{BenchmarkStats, StressStats};
@@ -175,6 +179,7 @@ pub struct BenchDriver {
     pub stress_stat_collection: bool,
     pub start_time: Instant,
     pub token: CancellationToken,
+    pub cert_and_parents: Arc<Mutex<HashMap<TransactionDigest, Option<CertifiedTransaction>>>>,
 }
 
 impl BenchDriver {
@@ -184,6 +189,7 @@ impl BenchDriver {
             stress_stat_collection,
             start_time: Instant::now(),
             token: CancellationToken::new(),
+            cert_and_parents: Arc::new(Mutex::new(HashMap::new())),
         }
     }
     pub fn terminate(&self) {
@@ -312,6 +318,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
+            let cert_parent_cloned = self.cert_and_parents.clone();
 
             let runner = tokio::spawn(async move {
                 cloned_barrier.wait().await;
@@ -373,14 +380,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 num_submitted += 1;
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
+                                let cert_parent_cloned = cert_parent_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
-                                let res = worker.proxy
-                                    .execute_transaction(b.0.clone().into())
+                                let res = tokio::time::timeout(Duration::from_secs(10), worker.proxy
+                                    .execute_transaction(b.0.clone().into()))
                                     .then(|res| async move  {
                                         match res {
-                                            Ok(effects) => {
+                                            Ok(Ok(cert_and_effects)) => {
                                                 let latency = start.elapsed();
                                                 let time_from_start = start_time.elapsed();
 
@@ -396,12 +404,22 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.to_string()]).dec();
                                                 // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                                 // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                                if let Some(sig_info) = effects.quorum_sig() {
+                                                if let Some(sig_info) = cert_and_effects.effects.quorum_sig() {
                                                     sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
                                                 }
                                                 let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
-                                                b.1.make_new_payload(&effects);
+                                                let current_parent = b.1.get_parent_certificate();
+                                                if let Some(certificate) = cert_and_effects.certificate.clone() {
+                                                    let mut locked = cert_parent_cloned.lock();
+                                                    locked.insert(*certificate.digest(), current_parent.clone());
+                                                }
+                                                b.1.make_new_payload(&cert_and_effects.effects, cert_and_effects.certificate);
                                                 NextOp::Response { latency, num_commands, payload: b.1 }
+                                            }
+                                            Ok(Err(err)) => {
+                                                error!("{}", err);
+                                                metrics_cloned.num_error.with_label_values(&[&b.1.to_string()]).inc();
+                                                NextOp::Retry(b)
                                             }
                                             Err(err) => {
                                                 error!("{}", err);
@@ -411,11 +429,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                         }
                                     });
                                 futures.push(Box::pin(res));
-                                continue
-                            }
-
-                            // Otherwise send a fresh request
-                            if free_pool.is_empty() {
+                            } else if free_pool.is_empty() {
                                 num_no_gas += 1;
                             } else {
                                 let mut payload = free_pool.pop().unwrap();
@@ -426,13 +440,14 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let tx = payload.make_transaction();
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
+                                let cert_parent_cloned = cert_parent_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
-                                let res = worker.proxy
-                                    .execute_transaction(tx.clone().into())
+                                let res = tokio::time::timeout(Duration::from_secs(10), worker.proxy
+                                    .execute_transaction(tx.clone().into()))
                                 .then(|res| async move {
                                     match res {
-                                        Ok(effects) => {
+                                        Ok(Ok(cert_and_effects)) => {
                                             let latency = start.elapsed();
                                             let time_from_start = start_time.elapsed();
 
@@ -448,13 +463,23 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).dec();
                                             // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                             // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                            if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
-                                            payload.make_new_payload(&effects);
+                                            if let Some(sig_info) = cert_and_effects.effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
+                                            let current_parent = payload.get_parent_certificate();
+                                            if let Some(certificate) = cert_and_effects.certificate.clone() {
+                                                let mut locked = cert_parent_cloned.lock();
+                                                locked.insert(certificate.digest().clone(), current_parent.clone());
+                                            }
+                                            payload.make_new_payload(&cert_and_effects.effects, cert_and_effects.certificate);
                                             let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
                                             NextOp::Response { latency, num_commands, payload }
                                         }
-                                        Err(err) => {
+                                        Ok(Err(err)) => {
                                             error!("Retry due to error: {}", err);
+                                            metrics_cloned.num_error.with_label_values(&[&payload.to_string()]).inc();
+                                            NextOp::Retry(Box::new((tx, payload)))
+                                        }
+                                        Err(err) => {
+                                            error!("Timeout due to error: {}", err);
                                             metrics_cloned.num_error.with_label_values(&[&payload.to_string()]).inc();
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
@@ -511,7 +536,55 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             });
             tasks.push(runner);
         }
-
+        let proxy = proxies
+            .choose(&mut rand::thread_rng())
+            .context("Failed to get proxy for bench driver")?
+            .clone();
+        let cloned_cert_and_parents = self.cert_and_parents.clone();
+        let _heartbeat_task = tokio::spawn(async move {
+            let mut heartbeat_interval = time::interval(Duration::from_millis(500));
+            let mut pending: BTreeMap<AuthorityName, HashSet<TransactionDigest>> = BTreeMap::new();
+            let mut counter = 0;
+            loop {
+                tokio::select! {
+                    _ = heartbeat_interval.tick() => {
+                        counter += 1;
+                        for (name, client) in proxy.get_validator_clients().await.iter() {
+                            // Get parent certificates of the validators pending certificates
+                            let certificates: Vec<CertifiedTransaction> = if let Some(digests) = pending.get(&name) {
+                                let parents = cloned_cert_and_parents.lock();
+                                let mut parent_certificates: HashMap<TransactionDigest, CertifiedTransaction> = digests.iter().map(|k| parents.get(k)).flatten().flatten().map(|k| {
+                                    (*k.digest(), k.clone())
+                                }).collect();
+                                for digest in digests.iter() {
+                                    parent_certificates.remove(&digest);
+                                }
+                                parent_certificates.values().cloned().collect()
+                            } else {
+                                vec![]
+                            };
+                            let request = PendingHeartbeatRequest {
+                                certificates,
+                            };
+                            if request.certificates.len() > 0 {
+                                if counter % 10 == 0 {
+                                    eprintln!("Helping {:?} with {:?} certificates", &name, request.certificates.len());
+                                }
+                            }
+                            if let Ok(resp) = client.authority_client().handle_pending_heartbeat(request).await {
+                                if resp.digests.len() > 0 {
+                                    if counter % 10 == 0 {
+                                        eprintln!("Node {:?} has {:?} pending", &name, resp.digests.len());
+                                    }
+                                }
+                                //eprintln!("Found {:?} digests from {:?}", resp.digests.len(), &name);
+                                pending.insert(name.clone(), resp.digests.iter().cloned().collect());
+                            }
+                        }
+                    }
+                }
+            }
+        });
         let benchmark_stat_task = tokio::spawn(async move {
             let mut benchmark_stat = BenchmarkStats {
                 duration: Duration::ZERO,

@@ -902,7 +902,8 @@ impl AuthorityStore {
         }
 
         write_batch = self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
-        self.delete_locks(write_batch, &owned_inputs)
+        //self.delete_locks(write_batch, &owned_inputs)
+        Ok(write_batch)
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously

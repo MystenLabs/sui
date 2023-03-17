@@ -24,6 +24,7 @@ use sui_types::{
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
+use sui_network::tonic::{Request, Response, Status};
 
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
@@ -296,13 +297,13 @@ impl ValidatorService {
 
         let shared_object_tx = certificate.contains_shared_object();
 
-        let _metrics_guard = if shared_object_tx {
-            metrics.handle_certificate_consensus_latency.start_timer()
-        } else {
-            metrics
-                .handle_certificate_non_consensus_latency
-                .start_timer()
-        };
+        // let _metrics_guard = if shared_object_tx {
+        //     metrics.handle_certificate_consensus_latency.start_timer()
+        // } else {
+        //     metrics
+        //         .handle_certificate_non_consensus_latency
+        //         .start_timer()
+        // };
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
@@ -395,6 +396,14 @@ impl ValidatorService {
             certificate
         };
 
+        let _metrics_guard = if shared_object_tx {
+            metrics.handle_certificate_consensus_latency.start_timer()
+        } else {
+            metrics
+                .handle_certificate_non_consensus_latency
+                .start_timer()
+        };
+
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
         let res = state.execute_certificate(&certificate, &epoch_store).await;
@@ -417,6 +426,22 @@ impl ValidatorService {
 
 #[async_trait]
 impl Validator for ValidatorService {
+    async fn pending_heartbeat(&self, request: Request<PendingHeartbeatRequest>) -> std::result::Result<Response<PendingHeartbeatResponse>, Status> {
+        let request = request.into_inner();
+        for certificate in request.certificates {
+            let state = self.state.clone();
+            let consensus_adapter = self.consensus_adapter.clone();
+            let metrics = self.metrics.clone();
+            let _ = spawn_monitored_task!(async move {
+                Self::handle_certificate(state, consensus_adapter, tonic::Request::new(certificate.clone()), metrics)
+                .await
+            });
+        }
+        let locked = self.state.transaction_manager().inner.read();
+        Ok(tonic::Response::new(PendingHeartbeatResponse {
+            digests: locked.pending_certificates.keys().cloned().collect(),
+        }))
+    }
     async fn transaction(
         &self,
         request: tonic::Request<Transaction>,

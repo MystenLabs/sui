@@ -19,6 +19,7 @@ use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_transfer_object_transaction;
+use sui_types::messages::CertifiedTransaction;
 
 use super::workload::{Workload, MAX_GAS_FOR_TESTING};
 
@@ -32,7 +33,10 @@ pub struct TransferObjectTestPayload {
 }
 
 impl Payload for TransferObjectTestPayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+    fn get_parent_certificate(&self) -> Option<CertifiedTransaction> {
+        None
+    }
+    fn make_new_payload(&mut self, effects: &ExecutionEffects, _certificate: Option<CertifiedTransaction>) {
         let recipient = self.gas.iter().find(|x| x.1 != self.transfer_to).unwrap().1;
         let updated_gas: Vec<Gas> = self
             .gas

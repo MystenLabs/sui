@@ -12,7 +12,7 @@ use std::sync::Arc;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{CertifiedTransaction, VerifiedTransaction};
 use test_utils::messages::make_staking_transaction;
 
 #[derive(Debug)]
@@ -32,7 +32,10 @@ impl std::fmt::Display for DelegationTestPayload {
 }
 
 impl Payload for DelegationTestPayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+    fn get_parent_certificate(&self) -> Option<CertifiedTransaction> {
+        None
+    }
+    fn make_new_payload(&mut self, effects: &ExecutionEffects, _certificate: Option<CertifiedTransaction>) {
         let coin = match self.coin {
             None => Some(effects.created().get(0).unwrap().0),
             Some(_) => None,

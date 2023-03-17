@@ -975,12 +975,18 @@ impl VersionedProtocolMessage for TransactionData {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransactionDataV1 {
     pub kind: TransactionKind,
     pub sender: SuiAddress,
     pub gas_data: GasData,
     pub expiration: TransactionExpiration,
+}
+
+impl Debug for TransactionDataV1 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "tx_data")
+    }
 }
 
 impl TransactionData {
@@ -3337,3 +3343,17 @@ pub struct SystemStateRequest {
     // This is needed to make gRPC happy.
     pub _unused: bool,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PendingHeartbeatRequest {
+    // This is needed to make gRPC happy.
+    pub certificates: Vec<CertifiedTransaction>,
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PendingHeartbeatResponse {
+    // This is needed to make gRPC happy.
+    pub digests: Vec<TransactionDigest>,
+}
+

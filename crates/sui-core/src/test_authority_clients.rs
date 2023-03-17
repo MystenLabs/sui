@@ -24,6 +24,7 @@ use sui_types::{
 };
 use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
 use sui_types::{messages::TransactionEvents, sui_system_state::SuiSystemStateInnerBenchmark};
+use sui_types::messages::{PendingHeartbeatRequest, PendingHeartbeatResponse};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
@@ -112,6 +113,15 @@ impl AuthorityAPI for LocalAuthorityClient {
             .database
             .get_sui_system_state_object()?
             .into_benchmark_version())
+    }
+
+    async fn handle_pending_heartbeat(
+        &self,
+        _request: PendingHeartbeatRequest,
+    ) -> Result<PendingHeartbeatResponse, SuiError> {
+        Ok(PendingHeartbeatResponse {
+            digests: vec![],
+        })
     }
 }
 
@@ -254,6 +264,13 @@ impl AuthorityAPI for MockAuthorityApi {
     ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         unimplemented!();
     }
+
+    async fn handle_pending_heartbeat(
+        &self,
+        _request: PendingHeartbeatRequest,
+    ) -> Result<PendingHeartbeatResponse, SuiError>  {
+        unimplemented!();
+    }
 }
 
 #[derive(Clone)]
@@ -303,6 +320,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         _request: SystemStateRequest,
     ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         unimplemented!()
+    }
+
+    async fn handle_pending_heartbeat(
+        &self,
+        _request: PendingHeartbeatRequest,
+    ) -> Result<PendingHeartbeatResponse, SuiError>  {
+        unimplemented!();
     }
 }
 

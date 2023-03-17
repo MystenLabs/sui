@@ -57,11 +57,18 @@ pub trait AuthorityAPI {
         &self,
         request: SystemStateRequest,
     ) -> Result<SuiSystemStateInnerBenchmark, SuiError>;
+
+    // This API is exclusively used by the benchmark code.
+    // Hence it's OK to return a fixed system state type.
+    async fn handle_pending_heartbeat(
+        &self,
+        request: PendingHeartbeatRequest,
+    ) -> Result<PendingHeartbeatResponse, SuiError>;
 }
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
-    client: ValidatorClient<Channel>,
+    pub client: ValidatorClient<Channel>,
 }
 
 impl NetworkAuthorityClient {
@@ -156,6 +163,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
         self.client()
             .get_system_state_object(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
+    async fn handle_pending_heartbeat(
+        &self,
+        request: PendingHeartbeatRequest,
+    ) -> Result<PendingHeartbeatResponse, SuiError> {
+        self.client()
+            .pending_heartbeat(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

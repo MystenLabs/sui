@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
+use sui_types::messages::CertifiedTransaction;
 
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
@@ -57,7 +58,10 @@ impl std::fmt::Display for AdversarialTestPayload {
 }
 
 impl Payload for AdversarialTestPayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+    fn get_parent_certificate(&self) -> Option<CertifiedTransaction> {
+        None
+    }
+    fn make_new_payload(&mut self, effects: &ExecutionEffects, _certificate: Option<CertifiedTransaction>) {
         // important to keep this as a sanity check that we don't hit protocol limits or run out of gas as things change elsewhere.
         // adversarial tests aren't much use if they don't have effects :)
         debug_assert!(
@@ -182,8 +186,8 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let gas_price = *system_state_observer.reference_gas_price.borrow();
         let transaction =
             create_publish_move_package_transaction(gas.0, path, gas.1, &gas.2, Some(gas_price));
-        let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
-        let created = effects.created();
+        let cert_and_effects = proxy.execute_transaction(transaction.into()).await.unwrap();
+        let created = cert_and_effects.effects.created();
         // should only create the package object + upgrade cap. otherwise, there are some object initializers running and we will need to disambiguate
         assert_eq!(created.len(), 2);
         let package_obj = created

@@ -473,4 +473,13 @@ where
             .handle_system_state_object(SystemStateRequest { _unused: false })
             .await
     }
+
+    pub async fn handle_pending_heartbeat(
+        &self,
+        request: PendingHeartbeatRequest,
+    ) -> Result<PendingHeartbeatResponse, SuiError> {
+        self.authority_client
+            .handle_pending_heartbeat(request.clone())
+            .await
+    }
 }

@@ -12,7 +12,7 @@ use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
 use tokio::task;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{info, Level};
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -66,6 +66,8 @@ async fn main() -> Result<()> {
     // Initialize logging
     let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
+        .with_span_level(Level::INFO)
+        .with_log_level("info")
         .with_prom_registry(&prometheus_registry)
         .init();
 

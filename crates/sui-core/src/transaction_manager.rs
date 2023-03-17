@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Weak;
+use std::time::{Duration, Instant};
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
@@ -17,9 +19,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, warn};
 
 use crate::authority::{
-    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::InputKey,
+    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::InputKey, AuthorityState,
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
+use crate::execution_driver::execute_directly;
 
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
@@ -32,16 +35,17 @@ pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
     tx_ready_certificates: UnboundedSender<VerifiedExecutableTransaction>,
     metrics: Arc<AuthorityMetrics>,
-    inner: RwLock<Inner>,
+    pub inner: RwLock<Inner>,
 }
 
-struct PendingCertificate {
+pub struct PendingCertificate {
     certificate: VerifiedExecutableTransaction,
     missing: BTreeSet<InputKey>,
+    instant: Instant,
 }
 
 #[derive(Default)]
-struct Inner {
+pub struct Inner {
     // Current epoch of TransactionManager.
     epoch: EpochId,
 
@@ -60,15 +64,17 @@ struct Inner {
     // executing_certificates.
 
     // Maps transaction digests to their content and missing input objects.
-    pending_certificates: HashMap<TransactionDigest, PendingCertificate>,
+    pub pending_certificates: HashMap<TransactionDigest, PendingCertificate>,
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
+    pub authority_state: Weak<AuthorityState>,
 }
 
 impl Inner {
-    fn new(epoch: EpochId) -> Inner {
+    fn new(epoch: EpochId, authority_state: Weak<AuthorityState>) -> Inner {
         Inner {
             epoch,
+            authority_state,
             ..Default::default()
         }
     }
@@ -87,13 +93,18 @@ impl TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
             metrics,
-            inner: RwLock::new(Inner::new(epoch_store.epoch())),
+            inner: RwLock::new(Inner::new(epoch_store.epoch(), Weak::new())),
             tx_ready_certificates,
         };
         transaction_manager
             .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
+    }
+
+    pub(crate) fn update_authority_state(&self, authority_state: Weak<AuthorityState>) {
+        let mut inner = self.inner.write();
+        inner.authority_state = authority_state;
     }
 
     /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available
@@ -152,6 +163,7 @@ impl TransactionManager {
                             .expect("Checking object existence cannot fail!")
                     })
                     .collect(),
+                instant: Instant::now(),
             });
         }
 
@@ -217,7 +229,10 @@ impl TransactionManager {
                 // Record as an executing certificate.
                 assert!(inner.executing_certificates.insert(digest));
                 // Send to execution driver for execution.
-                self.certificate_ready(pending_cert.certificate);
+                self.metrics
+                    .tx_pending_latency
+                    .observe((Instant::now() - pending_cert.instant).as_secs_f64());
+                self.certificate_ready_wait(pending_cert.certificate, &inner, Duration::ZERO);
                 continue;
             }
 
@@ -283,10 +298,92 @@ impl TransactionManager {
                         .expect("Checking object existence cannot fail!")
                 })
                 .collect();
-            self.objects_available(available_objects, epoch_store);
+            self.objects_available_wait_interval(available_objects, epoch_store, Duration::ZERO);
         }
 
         Ok(())
+    }
+
+    /// Notifies TransactionManager that the given objects are available in the objects table.
+    pub(crate) fn objects_available_wait_interval(
+        &self,
+        input_keys: Vec<InputKey>,
+        epoch_store: &AuthorityPerEpochStore,
+        wait_interval: Duration,
+    ) {
+        let mut ready_digests = Vec::new();
+
+        let inner = &mut self.inner.write();
+        if inner.epoch != epoch_store.epoch() {
+            warn!(
+                "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
+                 Objects={:?}",
+                inner.epoch,
+                epoch_store.epoch(),
+                input_keys,
+            );
+            return;
+        }
+        let mut max_unlocked_wait_interval = 0.0;
+        let mut num_unlocked = 0.0;
+        for input_key in input_keys {
+            let Some(digests) = inner.missing_inputs.remove(&input_key) else {
+                continue;
+            };
+
+            // Clean up object ID count table.
+            let input_count = inner.input_objects.get_mut(&input_key.0).unwrap();
+            *input_count -= digests.len();
+            if *input_count == 0 {
+                inner.input_objects.remove(&input_key.0);
+            }
+
+            for digest in digests {
+                // Pending certificate must exist.
+                let pending_cert = inner.pending_certificates.get_mut(&digest).unwrap();
+                assert!(pending_cert.missing.remove(&input_key));
+                // When a certificate has no missing input, it is ready to execute.
+                if pending_cert.missing.is_empty() {
+                    debug!(tx_digest = ?digest, "certificate ready");
+                    let waiting_secs = (Instant::now() - pending_cert.instant).as_secs_f64();
+                    if waiting_secs > max_unlocked_wait_interval {
+                        max_unlocked_wait_interval = waiting_secs;
+                    }
+                    num_unlocked += 1.0;
+                    let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
+                    self.metrics
+                        .tx_pending_latency
+                        .observe((Instant::now() - pending_cert.instant).as_secs_f64());
+                    assert!(inner.executing_certificates.insert(digest));
+                    ready_digests.push(digest);
+                    self.certificate_ready_wait(
+                        pending_cert.certificate,
+                        inner,
+                        Duration::from_secs_f64(
+                            (Instant::now() - pending_cert.instant).as_secs_f64(),
+                        ),
+                    );
+                } else {
+                    debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
+                }
+            }
+        }
+
+        self.metrics
+            .transaction_manager_unlocked_wait
+            .observe(max_unlocked_wait_interval / wait_interval.as_secs_f64());
+        self.metrics
+            .transaction_manager_unlocked_degree
+            .observe(num_unlocked);
+        self.metrics
+            .transaction_manager_num_missing_objects
+            .set(inner.missing_inputs.len() as i64);
+        self.metrics
+            .transaction_manager_num_pending_certificates
+            .set(inner.pending_certificates.len() as i64);
+        self.metrics
+            .transaction_manager_num_executing_certificates
+            .set(inner.executing_certificates.len() as i64);
     }
 
     /// Notifies TransactionManager that the given objects are available in the objects table.
@@ -328,9 +425,12 @@ impl TransactionManager {
                 if pending_cert.missing.is_empty() {
                     debug!(tx_digest = ?digest, "certificate ready");
                     let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
+                    self.metrics
+                        .tx_pending_latency
+                        .observe((Instant::now() - pending_cert.instant).as_secs_f64());
                     assert!(inner.executing_certificates.insert(digest));
                     ready_digests.push(digest);
-                    self.certificate_ready(pending_cert.certificate);
+                    self.certificate_ready(pending_cert.certificate, inner);
                 } else {
                     debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
                 }
@@ -369,9 +469,30 @@ impl TransactionManager {
     }
 
     /// Sends the ready certificate for execution.
-    fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
+    fn certificate_ready(&self, certificate: VerifiedExecutableTransaction, inner: &Inner) {
         self.metrics.transaction_manager_num_ready.inc();
-        let _ = self.tx_ready_certificates.send(certificate);
+        let authority_state = inner.authority_state.clone();
+        if let Some(authority) = authority_state.upgrade() {
+            execute_directly(authority, certificate, Duration::ZERO);
+        } else {
+            let _ = self.tx_ready_certificates.send(certificate);
+        };
+    }
+
+    /// Sends the ready certificate for execution.
+    fn certificate_ready_wait(
+        &self,
+        certificate: VerifiedExecutableTransaction,
+        inner: &Inner,
+        wait_interval: Duration,
+    ) {
+        self.metrics.transaction_manager_num_ready.inc();
+        let authority_state = inner.authority_state.clone();
+        if let Some(authority) = authority_state.upgrade() {
+            execute_directly(authority, certificate, wait_interval);
+        } else {
+            let _ = self.tx_ready_certificates.send(certificate);
+        };
     }
 
     /// Gets the missing input object keys for the given transaction.
@@ -406,6 +527,6 @@ impl TransactionManager {
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
         let mut inner = self.inner.write();
-        *inner = Inner::new(new_epoch);
+        *inner = Inner::new(new_epoch, inner.authority_state.clone());
     }
 }

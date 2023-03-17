@@ -170,7 +170,7 @@ pub enum RunSpec {
         #[clap(long, default_value = "12", global = true)]
         num_workers: u64,
         // Max in-flight ratio
-        #[clap(long, default_value = "5", global = true)]
+        #[clap(long, default_value = "50", global = true)]
         in_flight_ratio: u64,
     },
 }

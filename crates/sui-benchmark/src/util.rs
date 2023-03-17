@@ -66,6 +66,6 @@ pub async fn publish_basics_package(
     path.push("../../sui_programmability/examples/basics");
     let transaction =
         create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
-    let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
-    parse_package_ref(&effects.created()).unwrap()
+    let cert_and_effects = proxy.execute_transaction(transaction.into()).await.unwrap();
+    parse_package_ref(&cert_and_effects.effects.created()).unwrap()
 }

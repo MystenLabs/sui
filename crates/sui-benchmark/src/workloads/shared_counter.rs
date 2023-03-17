@@ -22,6 +22,7 @@ use test_utils::messages::{make_counter_create_transaction, make_counter_increme
 
 use crate::util::publish_basics_package;
 use tracing::info;
+use sui_types::messages::CertifiedTransaction;
 
 #[derive(Debug)]
 pub struct SharedCounterTestPayload {
@@ -39,7 +40,10 @@ impl std::fmt::Display for SharedCounterTestPayload {
 }
 
 impl Payload for SharedCounterTestPayload {
-    fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+    fn get_parent_certificate(&self) -> Option<CertifiedTransaction> {
+        None
+    }
+    fn make_new_payload(&mut self, effects: &ExecutionEffects, _certificate: Option<CertifiedTransaction>) {
         self.gas.0 = effects.gas_object().0;
     }
     fn make_transaction(&mut self) -> VerifiedTransaction {
@@ -195,8 +199,8 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref.execute_transaction(transaction.into()).await {
-                    effects.created()[0].0
+                if let Ok(cert_and_effects) = proxy_ref.execute_transaction(transaction.into()).await {
+                    cert_and_effects.effects.created()[0].0
                 } else {
                     panic!("Failed to create shared counter!");
                 }

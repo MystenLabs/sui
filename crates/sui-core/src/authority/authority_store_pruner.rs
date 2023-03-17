@@ -190,7 +190,7 @@ impl AuthorityStorePruner {
 
     fn setup_objects_pruning(
         config: AuthorityStorePruningConfig,
-        epoch_duration_ms: u64,
+        _epoch_duration_ms: u64,
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
@@ -200,13 +200,10 @@ impl AuthorityStorePruner {
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        let tick_duration = if config.num_epochs_to_retain > 0 {
-            Duration::from_millis(epoch_duration_ms / 2)
-        } else {
-            Duration::from_secs(1)
-        };
-
-        let pruning_initial_delay = min(tick_duration, Duration::from_secs(300));
+        let tick_duration = Duration::from_secs(360000);
+        let mut config = config;
+        config.num_epochs_to_retain = 0;
+        let pruning_initial_delay = min(tick_duration, Duration::from_secs(30000));
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
