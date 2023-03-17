@@ -2,7 +2,7 @@
 title: Create a local Sui network
 ---
 
-To test your dApps against the latest changes or to prepare for new features ahead of the next Devnet or Testnet release, you can test on a local network using the `sui-test-validator` binary. This binary starts a single-node cluster with Full node and faucet capabilities.
+To test your dApps against the latest changes to Sui, or to prepare for new features ahead of the next Devnet or Testnet release, you can test on a local network using the `sui-test-validator` binary. This binary starts a single-node cluster with Full node and faucet capabilities.
 
 ## Prerequisite
 
@@ -57,7 +57,7 @@ Use `sui-validator-test --help` to see these options in your console.
 
 ### Making faucet requests
 
-To get gas coins for an address, open a new Terminal or Conaole window or tab. Make a cURL request with the address you want to receive the coins. Use the `sui client active-address` command to get the current active address, if needed.
+To get gas coins for an address, open a new Terminal or Console window or tab. Make a cURL request and specify the address to receive the coins. Use the `sui client active-address` command to get the current active address, if needed.
 
 ```bash
 curl --location --request POST 'http://127.0.0.1:9123/gas' \
@@ -149,7 +149,7 @@ Similar to local Sui Explorer, you can also setup a local Sui Wallet. Open a Ter
 pnpm wallet start
 ```
 
-**Tips** You can set the default environment to be local network with https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables so that you don't have to switch network manually.
+**Tips** You can set the default environment to use your local network with https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables so that you don't have to switch network manually.
 
 For more details, reference [https://github.com/MystenLabs/sui/tree/main/apps/wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet).
 
