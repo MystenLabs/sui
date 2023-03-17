@@ -11,10 +11,11 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
 use move_core_types::u256::U256;
+pub use move_core_types::value::MoveTypeLayout;
 use move_core_types::{
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue},
+    value::{MoveStruct, MoveStructLayout, MoveValue},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -790,3 +791,77 @@ fn convert_string_to_u256(s: &str) -> Result<U256, anyhow::Error> {
     }
     U256::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
 }
+
+#[macro_export]
+macro_rules! call_args {
+        ($($value:expr),*) => {
+        Ok::<_, anyhow::Error>(vec![$(sui_json::call_arg!($value)?,)*])
+    };
+    }
+
+#[macro_export]
+macro_rules! call_arg {
+    ($value:expr) => {{
+        use sui_json::SuiJsonValue;
+        trait SuiJsonArg {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue>;
+        }
+        // TODO: anyway to condense this?
+        impl SuiJsonArg for &str {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_str(self)
+            }
+        }
+        impl SuiJsonArg for String {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_str(&self)
+            }
+        }
+        impl SuiJsonArg for sui_types::base_types::ObjectID {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_str(&self.to_string())
+            }
+        }
+        impl SuiJsonArg for sui_types::base_types::SuiAddress {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_str(&self.to_string())
+            }
+        }
+        impl SuiJsonArg for u64 {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_bcs_bytes(
+                    Some(&sui_json::MoveTypeLayout::U64),
+                    &bcs::to_bytes(self)?,
+                )
+            }
+        }
+        impl SuiJsonArg for Vec<u8> {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_bcs_bytes(None, &self)
+            }
+        }
+        impl SuiJsonArg for &[u8] {
+            fn to_sui_json(&self) -> anyhow::Result<SuiJsonValue> {
+                SuiJsonValue::from_bcs_bytes(None, self)
+            }
+        }
+        $value.to_sui_json()
+    }};
+}
+
+#[macro_export]
+macro_rules! type_args {
+    ($($value:expr), *) => {{
+        use sui_json_rpc_types::SuiTypeTag;
+        use sui_types::TypeTag;
+        trait SuiJsonTypeArg {
+            fn to_sui_json(&self) -> anyhow::Result<SuiTypeTag>;
+        }
+        impl <T: core::fmt::Display> SuiJsonTypeArg for T {
+            fn to_sui_json(&self) -> anyhow::Result<SuiTypeTag> {
+                Ok(sui_types::parse_sui_type_tag(&self.to_string())?.into())
+            }
+        }
+        Ok::<_, anyhow::Error>(vec![$($value.to_sui_json()?,)*])
+    }};
+    }

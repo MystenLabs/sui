@@ -181,8 +181,12 @@
                   "transaction": {
                     "kind": "ProgrammableTransaction",
                     "inputs": [
-                      "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
-                      "4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc"
+                      {
+                        "Pure": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80"
+                      },
+                      {
+                        "Object": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc"
+                      }
                     ],
                     "commands": [
                       {
@@ -1368,8 +1372,12 @@
                   "transaction": {
                     "kind": "ProgrammableTransaction",
                     "inputs": [
-                      "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb",
-                      "5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc"
+                      {
+                        "Pure": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
+                      },
+                      {
+                        "Object": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc"
+                      }
                     ],
                     "commands": [
                       {
@@ -5434,6 +5442,49 @@
           }
         }
       },
+      "SuiJsonCallArg": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Object"
+            ],
+            "properties": {
+              "Object": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Pure"
+            ],
+            "properties": {
+              "Pure": {
+                "$ref": "#/components/schemas/SuiJsonValue"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ObjVec"
+            ],
+            "properties": {
+              "ObjVec": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectID"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "SuiJsonValue": {},
       "SuiMoveAbility": {
         "type": "string",
@@ -6749,7 +6800,7 @@
                 "description": "Input objects or primitive values",
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/SuiJsonValue"
+                  "$ref": "#/components/schemas/SuiJsonCallArg"
                 }
               },
               "kind": {
