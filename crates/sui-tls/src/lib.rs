@@ -126,7 +126,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "It seems no-one knows how to make this test less flaky"]
     async fn axum_acceptor() {
         use fastcrypto::ed25519::Ed25519KeyPair;
         use fastcrypto::traits::KeyPair;
