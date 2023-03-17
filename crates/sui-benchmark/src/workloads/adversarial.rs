@@ -2,13 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use sui_types::{base_types::ObjectID, object::Owner};
-use test_utils::messages::create_publish_move_package_transaction;
-
+use rand::distributions::{Distribution, Standard};
+use rand::Rng;
 use std::path::PathBuf;
 use std::sync::Arc;
-
+use strum::{EnumCount, IntoEnumIterator};
+use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
+use sui_protocol_config::ProtocolConfig;
+use sui_types::messages::CallArg;
+use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
+use test_utils::messages::create_publish_move_package_transaction;
 
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
@@ -21,24 +25,28 @@ use super::{
     WorkloadBuilderInfo, WorkloadParams,
 };
 
-// TODO: copied from protocol_config, but maybe we can put this in SystemStateObserver
-const MAX_TX_GAS: u64 = 10_000_000_000;
-
-// TODO: copied from protocol_config, but maybe we can put this in SystemStateObserver
 /// Number of max size objects to create in the max object payload
-const NUM_OBJECTS: u64 = 32;
-// TODO: make this big once https://github.com/MystenLabs/sui/pull/9394 lands
-//const NUM_OBJECTS: u64 = 2048;
+const NUM_OBJECTS: u64 = 2048;
 
-/*enum PayloadType {
-    /// create NUM_OBJECTS objects with the max object size. This will write out a lot of object data
-    MaxObjects,
+#[derive(Debug, EnumCountMacro, EnumIter)]
+enum AdversarialPayloadType {
+    ObjectsSize = 1,
+    EventSize,
+    EventCount,
+    DynamicFieldsCount,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
-    // - MaxDynamicFields (by reading a bunch of dynamic fields at runtime)
-    // - MaxEffects (by creating a bunch of small objects)
-    // - MaxEvents (max out VM's event size limit)
-}*/
+    // - MaxEffects (by creating a bunch of small objects) and mutating lots of objects
+    // - MaxCommands (by created the maximum number of PT commands)
+    // ...
+}
+
+impl Distribution<AdversarialPayloadType> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AdversarialPayloadType {
+        let n = rng.gen_range(0..AdversarialPayloadType::COUNT);
+        AdversarialPayloadType::iter().nth(n).unwrap()
+    }
+}
 
 #[derive(Debug)]
 pub struct AdversarialTestPayload {
@@ -58,6 +66,13 @@ impl std::fmt::Display for AdversarialTestPayload {
 
 impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        // Sometimes useful when figuring out why things failed
+        // let stat = match effects {
+        //     ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
+        //     ExecutionEffects::SuiTransactionEffects(_) => unimplemented!("Not impl"),
+        // };
+        // println!("ERRR: {:?}", stat);
+
         // important to keep this as a sanity check that we don't hit protocol limits or run out of gas as things change elsewhere.
         // adversarial tests aren't much use if they don't have effects :)
         debug_assert!(
@@ -69,16 +84,21 @@ impl Payload for AdversarialTestPayload {
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        // TODO: default benchmarking gas coins are too small to use MAX_TX_GAS. But we will want to be able to use that much to hit some limits
-        let gas_budget = MAX_TX_GAS / 100;
-        // TODO: generate random number, convert it to a PayloadType, call the appropriate function
+        let num_payload_types: AdversarialPayloadType = rand::random();
+
+        let gas_budget = self.system_state_observer.protocol_config.max_tx_gas();
+        let payload_args = get_payload_args(
+            num_payload_types,
+            &self.system_state_observer.protocol_config,
+        );
+
         self.state.move_call(
             self.sender,
             self.package_id,
             "adversarial",
-            "create_max_size_owned_objects",
+            &payload_args.fn_name,
             vec![],
-            vec![NUM_OBJECTS.into()],
+            payload_args.args,
             gas_budget,
             *self.system_state_observer.reference_gas_price.borrow(),
         )
@@ -212,5 +232,55 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .into_iter()
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))
             .collect()
+    }
+}
+
+struct AdversarialPayloadArgs {
+    pub fn_name: String,
+    pub args: Vec<CallArg>,
+}
+
+fn get_payload_args(
+    payload_type: AdversarialPayloadType,
+    protocol_config: &ProtocolConfig,
+) -> AdversarialPayloadArgs {
+    match payload_type {
+        AdversarialPayloadType::ObjectsSize => AdversarialPayloadArgs {
+            fn_name: "create_shared_objects".to_owned(),
+            args: [
+                // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                (NUM_OBJECTS / 10).into(),
+                // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                (protocol_config.max_move_object_size() / 10).into(),
+            ]
+            .to_vec(),
+        },
+        AdversarialPayloadType::EventSize => AdversarialPayloadArgs {
+            fn_name: "emit_events".to_owned(),
+            args: [
+                // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                (protocol_config.max_num_event_emit() / 10).into(),
+                // TODO: Raise this. Using a smaller value here as full value errs
+                (protocol_config.max_event_emit_size() / 3).into(),
+            ]
+            .to_vec(),
+        },
+        AdversarialPayloadType::DynamicFieldsCount => AdversarialPayloadArgs {
+            fn_name: "add_dynamic_fields".to_owned(),
+            args: [protocol_config
+                .object_runtime_max_num_cached_objects()
+                .into()]
+            .to_vec(),
+        },
+        AdversarialPayloadType::EventCount => AdversarialPayloadArgs {
+            fn_name: "emit_events".to_owned(),
+            args: [
+                // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                protocol_config.max_num_event_emit().into(),
+                // Intentionally emitting small objects as we're only checking the count
+                (10u64).into(),
+            ]
+            .to_vec(),
+        },
     }
 }

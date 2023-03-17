@@ -4,6 +4,7 @@
 use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_protocol_config::ProtocolConfig;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -14,11 +15,15 @@ use tracing::{error, info};
 #[derive(Debug)]
 pub struct SystemStateObserver {
     pub reference_gas_price: Receiver<u64>,
+    pub protocol_config: ProtocolConfig,
     pub _sender: Sender<()>,
 }
 
 impl SystemStateObserver {
-    pub fn new(proxy: Arc<dyn ValidatorProxy + Send + Sync>) -> Self {
+    pub fn new(
+        proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+        protocol_config: ProtocolConfig,
+    ) -> Self {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         let mut interval = tokio::time::interval_at(Instant::now(), Duration::from_secs(60));
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
@@ -45,6 +50,7 @@ impl SystemStateObserver {
         Self {
             reference_gas_price: rx,
             _sender: sender,
+            protocol_config,
         }
     }
 }
