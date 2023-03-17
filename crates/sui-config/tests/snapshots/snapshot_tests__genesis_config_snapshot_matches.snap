@@ -5,7 +5,7 @@ expression: genesis_config
 validator_config_info: ~
 parameters:
   timestamp_ms: 0
-  protocol_version: 2
+  protocol_version: 3
   allow_insertion_of_extra_objects: true
   initial_sui_custody_account_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
   initial_validator_stake_mist: 25000000000000000
@@ -80,3 +80,4 @@ accounts:
       - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
         gas_value: 100000000000000
     gas_object_ranges: []
+

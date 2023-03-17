@@ -189,7 +189,8 @@ module sui::package {
     public fun authorize_upgrade(
         cap: &mut UpgradeCap,
         policy: u8,
-        digest: vector<u8>
+        digest: vector<u8>,
+        _dummy_parameter: bool,
     ): UpgradeTicket {
         let id_zero = object::id_from_address(@0x0);
         assert!(cap.package != id_zero, EAlreadyAuthorized);
