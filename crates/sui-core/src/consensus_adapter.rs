@@ -55,11 +55,10 @@ pub mod consensus_tests;
 
 // Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
 // Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
-pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
+pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 1_000_000;
 
 // Assuming 100 nodes cluster
-const MAX_PENDING_LOCAL_SUBMISSIONS: usize =
-    (MAX_PENDING_CONSENSUS_TRANSACTIONS as usize) / 100 * 2;
+const MAX_PENDING_LOCAL_SUBMISSIONS: usize = 1_000_000;
 
 const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,

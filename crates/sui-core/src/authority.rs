@@ -142,11 +142,11 @@ pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 
 // Reject a transaction if the number of certificates pending execution is above this threshold.
 // 20000 = 10k TPS * 2s resident time in transaction manager.
-pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
+pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 1_000_000;
 
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
-pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
+pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1_000_000;
 
 type CertTxGuard<'a> =
     DBTxGuard<'a, TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>;
