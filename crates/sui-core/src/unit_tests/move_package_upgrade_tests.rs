@@ -711,6 +711,8 @@ async fn test_publish_dependent_downgrade() {
     );
 
     runner.publish(root_modules, root_dep_ids).await;
-    // TODO: get the actual error code for comparison once this test is enabled
-    effects.status.unwrap_err();
+    assert_eq!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PublishUpgradeDependencyDowngrade
+    );
 }
