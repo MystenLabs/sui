@@ -290,28 +290,31 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     });
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
+        let call_args = vec![
+            system_object_arg.clone(),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
+            CallArg::Pure(
+                bcs::to_bytes(&get_sui_system_state_version(change_epoch.protocol_version))
+                    .unwrap(),
+            ),
+        ];
+        debug!(
+            "Call arguments to advance_epoch transaction: {:?}",
+            call_args
+        );
         let res = builder.move_call(
             (*module_id.address()).into(),
             module_id.name().to_owned(),
             function,
             vec![],
-            vec![
-                system_object_arg.clone(),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version.as_u64()).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
-                CallArg::Pure(
-                    bcs::to_bytes(&protocol_config.storage_fund_reinvest_rate()).unwrap(),
-                ),
-                CallArg::Pure(bcs::to_bytes(&protocol_config.reward_slashing_rate()).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
-                CallArg::Pure(
-                    bcs::to_bytes(&get_sui_system_state_version(change_epoch.protocol_version))
-                        .unwrap(),
-                ),
-            ],
+            call_args,
         );
         assert_invariant!(res.is_ok(), "Unable to generate advance_epoch transaction!");
         builder.finish()
@@ -328,9 +331,9 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
 
     if result.is_err() {
         tracing::error!(
-            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. System state object: {:?}. Tx data: {:?}",
+            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
             result.as_ref().err(),
-            temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
+            temporary_store.objects(),
             change_epoch,
         );
         temporary_store.drop_writes();
@@ -374,7 +377,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         let mut new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
 
         info!(
-            "upgraded system object {:?}",
+            "upgraded system package {:?}",
             new_package.compute_object_reference()
         );
 

@@ -290,7 +290,7 @@ async fn test_create_advance_epoch_tx_race() {
 
     // panic if we enter safe mode. If you remove the check for `is_tx_already_executed` in
     // AuthorityState::create_and_execute_advance_epoch_tx, this test should fail.
-    register_fail_point("record_is_safe_mode_metric", || {
+    register_fail_point("record_checkpoint_builder_is_safe_mode_metric", || {
         panic!("safe mode recorded");
     });
 

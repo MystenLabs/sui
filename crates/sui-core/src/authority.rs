@@ -3254,7 +3254,7 @@ impl AuthorityState {
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
-        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode());
+        epoch_store.record_checkpoint_builder_is_safe_mode_metric(system_obj.safe_mode());
         // The change epoch transaction cannot fail to execute.
         assert!(effects.status().is_ok());
         Ok((system_obj, effects))

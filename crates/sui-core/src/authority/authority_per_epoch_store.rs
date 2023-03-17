@@ -1876,12 +1876,18 @@ impl AuthorityPerEpochStore {
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 
-    pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+    pub fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+        self.metrics.is_safe_mode.set(safe_mode as i64);
+    }
+
+    pub fn record_checkpoint_builder_is_safe_mode_metric(&self, safe_mode: bool) {
         if safe_mode {
             // allow tests to inject a panic here.
-            fail_point!("record_is_safe_mode_metric");
+            fail_point!("record_checkpoint_builder_is_safe_mode_metric");
         }
-        self.metrics.is_safe_mode.set(safe_mode as i64);
+        self.metrics
+            .checkpoint_builder_advance_epoch_is_safe_mode
+            .set(safe_mode as i64)
     }
 
     fn record_epoch_total_duration_metric(&self) {
