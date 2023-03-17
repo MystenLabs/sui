@@ -44,10 +44,9 @@ describe('Transaction Builders', () => {
   it('SplitCoin + TransferObjects', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const tx = new Transaction();
-    const coin = tx.splitCoin(
-      tx.object(coins[0].objectId),
+    const [coin] = tx.splitCoins(tx.object(coins[0].objectId), [
       tx.pure(DEFAULT_GAS_BUDGET * 2),
-    );
+    ]);
     tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateTransaction(toolbox.signer, tx);
   });
@@ -95,7 +94,7 @@ describe('Transaction Builders', () => {
 
   it('SplitCoin from gas object + TransferObjects', async () => {
     const tx = new Transaction();
-    const coin = tx.splitCoin(tx.gas, tx.pure(1));
+    const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
     tx.transferObjects([coin], tx.pure(DEFAULT_RECIPIENT));
     await validateTransaction(toolbox.signer, tx);
   });

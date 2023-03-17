@@ -13,16 +13,24 @@ it('can construct and serialize an empty tranaction', () => {
 
 it('can be serialized and deserialized to the same values', () => {
   const tx = new Transaction();
-  tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+  tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
   const serialized = tx.serialize();
   const tx2 = Transaction.from(serialized);
   expect(serialized).toEqual(tx2.serialize());
 });
 
-it('allows transfer with the result of split commands', () => {
+it('allows transfer with the single result of split commands', () => {
   const tx = new Transaction();
-  const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+  const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
   tx.add(Commands.TransferObjects([coin], tx.object('0x2')));
+});
+
+it('allows transfer with the nested result of split commands', () => {
+  const tx = new Transaction();
+  const [coin1, coin2] = tx.add(
+    Commands.SplitCoins(tx.gas, [tx.pure(100), tx.pure(100)]),
+  );
+  tx.add(Commands.TransferObjects([coin1, coin2], tx.object('0x2')));
 });
 
 it('supports nested results through either array index or destructuring', () => {
@@ -54,19 +62,19 @@ describe('offline build', () => {
 
   it('builds a split command', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure('u64', 100))));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure('u64', 100))]));
     await tx.build();
   });
 
   it('infers the type of inputs', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
     await tx.build();
   });
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
     tx.add(
       Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
     );
@@ -86,7 +94,7 @@ describe('offline build', () => {
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
     tx.add(
       Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
     );
