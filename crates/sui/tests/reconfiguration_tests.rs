@@ -14,7 +14,7 @@ use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_macros::{register_fail_point, register_fail_point_async, sim_test};
+use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -41,10 +41,7 @@ use test_utils::{
     },
     network::TestClusterBuilder,
 };
-use tokio::{
-    sync::broadcast,
-    time::{sleep, timeout},
-};
+use tokio::time::{sleep, timeout};
 use tracing::{info, warn};
 
 #[sim_test]
@@ -281,8 +278,12 @@ async fn test_passive_reconfig() {
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
+#[cfg(msim)]
 #[sim_test]
 async fn test_create_advance_epoch_tx_race() {
+    use sui_macros::{register_fail_point, register_fail_point_async};
+    use tokio::sync::broadcast;
+
     telemetry_subscribers::init_for_testing();
     sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
