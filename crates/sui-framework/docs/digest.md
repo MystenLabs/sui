@@ -12,9 +12,6 @@ Sui types for message digests.
 -  [Function `sha3_256_digest_to_bytes`](#0x2_digest_sha3_256_digest_to_bytes)
 
 
-<pre><code></code></pre>
-
-
 
 <a name="0x2_digest_Sha3256Digest"></a>
 
