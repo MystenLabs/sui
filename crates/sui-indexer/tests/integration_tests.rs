@@ -8,6 +8,7 @@ mod pg_integration {
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
     use move_core_types::ident_str;
+    use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
     use prometheus::Registry;
     use std::env;
@@ -33,10 +34,9 @@ mod pg_integration {
     use sui_types::object::ObjectFormatOptions;
     use sui_types::query::TransactionFilter;
     use sui_types::utils::to_sender_signed_transaction;
+    use sui_types::SUI_FRAMEWORK_ADDRESS;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, transfer_coin};
-    use move_core_types::identifier::Identifier;
-    use sui_types::SUI_FRAMEWORK_ADDRESS;
 
     use tokio::task::JoinHandle;
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -190,7 +190,8 @@ mod pg_integration {
         wait_until_transaction_synced(&store, digest_one.base58_encode().as_str()).await;
         let (_, _, digest_two) = create_devnet_nft(context).await.unwrap();
         wait_until_transaction_synced(&store, digest_two.base58_encode().as_str()).await;
-        let (transferred_object, sender, receiver, digest_three, _, _) = transfer_coin(context).await.unwrap();
+        let (transferred_object, sender, receiver, digest_three, _, _) =
+            transfer_coin(context).await.unwrap();
         wait_until_transaction_synced(&store, digest_three.base58_encode().as_str()).await;
 
         // Test various ways of querying events
@@ -198,21 +199,32 @@ mod pg_integration {
         let query_response = indexer_rpc_client
             .query_events(to_query, None, None, None)
             .await?;
-        // Interestingly, transferring coins do not emit events?
+
+        // Note that transferring coins do not emit an event
         assert_eq!(query_response.data.len(), 2);
-        assert_eq!(query_response.data[0].transaction_module, ident_str!("devnet_nft").into());
-        assert_eq!(query_response.data[1].transaction_module, ident_str!("devnet_nft").into());
+        assert_eq!(
+            query_response.data[0].transaction_module,
+            ident_str!("devnet_nft").into()
+        );
+        assert_eq!(
+            query_response.data[1].transaction_module,
+            ident_str!("devnet_nft").into()
+        );
 
         let filter_on_transaction = EventFilter::Transaction(digest_one);
         let query_response = indexer_rpc_client
             .query_events(filter_on_transaction, None, None, None)
             .await?;
         assert_eq!(query_response.data.len(), 1);
-        assert_eq!(digest_one, query_response.data.first().unwrap().id.tx_digest);
+        assert_eq!(
+            digest_one,
+            query_response.data.first().unwrap().id.tx_digest
+        );
 
         let filter_on_module = EventFilter::MoveModule {
             package: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-            module: Identifier::new("devnet_nft").unwrap() };
+            module: Identifier::new("devnet_nft").unwrap(),
+        };
         let query_response = indexer_rpc_client
             .query_events(filter_on_module, None, None, None)
             .await?;
@@ -220,7 +232,9 @@ mod pg_integration {
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
-        let filter_on_event_type = EventFilter::MoveEventType(StructTag::from_str("0x2::devnet_nft::MintNFTEvent").unwrap());
+        let filter_on_event_type = EventFilter::MoveEventType(
+            StructTag::from_str("0x2::devnet_nft::MintNFTEvent").unwrap(),
+        );
         let query_response = indexer_rpc_client
             .query_events(filter_on_event_type, None, None, None)
             .await?;
@@ -229,21 +243,21 @@ mod pg_integration {
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
         let object_correctly_transferred = indexer_rpc_client
-        .get_owned_objects(
-            receiver,
-            Some(SuiObjectDataOptions::new().with_type()),
-            None,
-            None,
-            None,
-        )
-        .await?
-        .data
-        .into_iter()
-        .filter_map(|object_resp| match object_resp {
-            SuiObjectResponse::Exists(obj_data) => Some(obj_data),
-            _ => None
-        })
-        .any(|obj| obj.object_id == transferred_object);
+            .get_owned_objects(
+                receiver,
+                Some(SuiObjectDataOptions::new().with_type()),
+                None,
+                None,
+                None,
+            )
+            .await?
+            .data
+            .into_iter()
+            .filter_map(|object_resp| match object_resp {
+                SuiObjectResponse::Exists(obj_data) => Some(obj_data),
+                _ => None,
+            })
+            .any(|obj| obj.object_id == transferred_object);
 
         assert!(object_correctly_transferred);
 
