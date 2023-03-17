@@ -59,27 +59,27 @@ jobs:
 
       - name: Cargo clean
         run: |
-          ssh simtest-01.sui.ios "cd ~/sui && cargo clean && git restore Cargo.lock"
+          ssh simtest-01.sui.io "cd ~/sui && cargo clean && git restore Cargo.lock"
 
       - name: Tmpfs clean
         run: |
-          ssh simtest-01.sui.ios "sudo rm -rf /tmp/*.*"
+          ssh simtest-01.sui.io "sudo rm -rf /tmp/*.*"
 
       - name: Checkout sui repo
         run: |
-          ssh simtest-01.sui.ios "cd ~/sui && git fetch origin && git rebase origin/main"
+          ssh simtest-01.sui.io "cd ~/sui && git fetch origin && git rebase origin/main"
 
       - name: Install simtest
         run: |
-          ssh simtest-01.sui.ios "cd ~/sui && ./scripts/simtest/install.sh"
+          ssh simtest-01.sui.io "cd ~/sui && ./scripts/simtest/install.sh"
 
       - name: Build simtest
         run: |
-          ssh simtest-01.sui.ios "cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
+          ssh simtest-01.sui.io "cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
       
       - name: Run simtest
         run: |
-          ssh simtest-01.sui.ios "cd ~/sui && ./scripts/simtest/simtest-run.sh"
+          ssh simtest-01.sui.io "cd ~/sui && ./scripts/simtest/simtest-run.sh"
 
   notify:
     name: Notify
