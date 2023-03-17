@@ -65,7 +65,7 @@ export function ValidatorLogo({
     return validatorMeta ? (
         <div
             className={cl(
-                ['w-full flex justify-start  font-semibold'],
+                'w-full flex justify-start font-semibold',
                 stacked ? 'flex-col items-start' : 'flex-row items-center',
                 isTitle ? 'gap-2.5' : 'gap-2'
             )}
