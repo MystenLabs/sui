@@ -480,7 +480,7 @@ impl SuiTransactionEffectsAPI for SuiTransactionEffectsV1 {
     }
 
     fn executed_epoch(&self) -> SuiEpochId {
-        self.executed_epoch.into()
+        self.executed_epoch
     }
 
     fn transaction_digest(&self) -> &TransactionDigest {
