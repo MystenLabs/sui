@@ -23,11 +23,11 @@ use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::clock::Clock;
 use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::crypto::DefaultHash;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     SuiAuthoritySignature, ToFromBytes,
 };
-use sui_types::crypto::{DefaultHash, PublicKey as AccountsPublicKey};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -43,11 +43,9 @@ use sui_types::messages_checkpoint::{
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
-use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
-    SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
+    SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
@@ -136,44 +134,8 @@ impl Genesis {
         0
     }
 
-    pub fn validator_set(&self) -> Vec<ValidatorInfo> {
-        self.sui_system_object()
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let metadata = validator.verified_metadata();
-                ValidatorInfo {
-                    name: metadata.name.clone(),
-                    account_key: AccountsPublicKey::Ed25519(metadata.network_pubkey.clone()), //TODO this is wrong and we shouldn't have this here
-                    protocol_key: metadata.sui_pubkey_bytes(),
-                    worker_key: metadata.worker_pubkey.clone(),
-                    network_key: metadata.network_pubkey.clone(),
-                    gas_price: validator.gas_price,
-                    commission_rate: validator.commission_rate,
-                    network_address: metadata.net_address.clone(),
-                    p2p_address: metadata.p2p_address.clone(),
-                    narwhal_primary_address: metadata.primary_address.clone(),
-                    narwhal_worker_address: metadata.worker_address.clone(),
-                    description: metadata.description.clone(),
-                    image_url: metadata.image_url.clone(),
-                    project_url: metadata.project_url.clone(),
-                }
-            })
-            .collect()
-    }
-
-    pub fn validator_summary_set(&self) -> Vec<(SuiValidatorSummary, VerifiedValidatorMetadataV1)> {
-        self.sui_system_object()
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let summary = validator.clone().into_sui_validator_summary();
-                let metadata = validator.verified_metadata().clone();
-                (summary, metadata)
-            })
-            .collect()
+    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
+        self.sui_system_object().validators.active_validators
     }
 
     pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
@@ -355,17 +317,8 @@ impl UnsignedGenesis {
         0
     }
 
-    pub fn validator_summary_set(&self) -> Vec<(SuiValidatorSummary, VerifiedValidatorMetadataV1)> {
-        self.sui_system_object()
-            .validators
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let summary = validator.clone().into_sui_validator_summary();
-                let metadata = validator.verified_metadata().clone();
-                (summary, metadata)
-            })
-            .collect()
+    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
+        self.sui_system_object().validators.active_validators
     }
 
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {

@@ -4,6 +4,7 @@
 use inquire::Select;
 use std::collections::BTreeMap;
 use sui_config::genesis::UnsignedGenesis;
+use sui_types::sui_system_state::SuiValidatorGenesis;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     coin::CoinMetadata,
@@ -11,10 +12,6 @@ use sui_types::{
     governance::StakedSui,
     move_package::MovePackage,
     object::{MoveObject, Owner},
-    sui_system_state::{
-        sui_system_state_inner_v1::VerifiedValidatorMetadataV1,
-        sui_system_state_summary::SuiValidatorSummary,
-    },
 };
 
 const STR_ALL: &str = "All";
@@ -30,15 +27,17 @@ const STR_VALIDATORS: &str = "Validators";
 
 #[allow(clippy::or_fun_call)]
 pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
+    let system_object = genesis.sui_system_object();
+
     // Prepare Validator info
-    let summary_set = genesis.validator_summary_set();
-    let validator_map = summary_set
+    let validator_set = &system_object.validators.active_validators;
+    let validator_map = validator_set
         .iter()
-        .map(|(summary, metadata)| (summary.name.as_str(), (summary, metadata)))
+        .map(|v| (v.verified_metadata().name.as_str(), v))
         .collect::<BTreeMap<_, _>>();
-    let validator_address_map = summary_set
+    let validator_address_map = validator_set
         .iter()
-        .map(|(summary, _metadata)| (summary.sui_address, summary))
+        .map(|v| (v.verified_metadata().sui_address, v))
         .collect::<BTreeMap<_, _>>();
 
     let mut validator_options = validator_map
@@ -46,13 +45,9 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
         .map(|(name, _)| *name)
         .collect::<Vec<_>>();
     validator_options.extend_from_slice(&[STR_ALL, STR_EXIT]);
-    println!(
-        "Total Number of Validators: {}",
-        genesis.validator_summary_set().len()
-    );
+    println!("Total Number of Validators: {}", validator_set.len());
 
     // Prepare Sui distribution info
-    let system_object = genesis.sui_system_object();
     let mut sui_distribution = BTreeMap::new();
     let entry = sui_distribution
         .entry("Sui System".to_string())
@@ -99,7 +94,7 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
                     let validator = validator_address_map
                         .get(&staked_sui.validator_address())
                         .unwrap();
-                    assert_eq!(validator.staking_pool_id, staked_sui.pool_id());
+                    assert_eq!(validator.staking_pool.id, staked_sui.pool_id());
 
                     staked_sui_map.insert(object.id(), staked_sui);
                 } else {
@@ -159,20 +154,20 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
 #[allow(clippy::ptr_arg)]
 fn examine_validators(
     validator_options: &Vec<&str>,
-    validator_map: &BTreeMap<&str, (&SuiValidatorSummary, &VerifiedValidatorMetadataV1)>,
+    validator_map: &BTreeMap<&str, &SuiValidatorGenesis>,
 ) {
     loop {
         let ans = Select::new("Select one validator to examine ('All' to display all Validators, 'Exit' to return to Main):", validator_options.clone()).prompt();
         match ans {
             Ok(name) if name == STR_ALL => {
-                for (summary, metadata) in validator_map.values() {
-                    display_validator(summary, metadata);
+                for validator in validator_map.values() {
+                    display_validator(validator);
                 }
             }
             Ok(name) if name == STR_EXIT => break,
             Ok(name) => {
-                let (summary, metadata) = validator_map.get(name).unwrap();
-                display_validator(summary, metadata);
+                let validator = validator_map.get(name).unwrap();
+                display_validator(validator);
             }
             Err(err) => {
                 println!("Error: {err}");
@@ -185,7 +180,7 @@ fn examine_validators(
 
 fn examine_object(
     owner_map: &BTreeMap<ObjectID, Owner>,
-    validator_address_map: &BTreeMap<SuiAddress, &SuiValidatorSummary>,
+    validator_address_map: &BTreeMap<SuiAddress, &SuiValidatorGenesis>,
     package_map: &BTreeMap<ObjectID, &MovePackage>,
     sui_map: &BTreeMap<ObjectID, GasCoin>,
     staked_sui_map: &BTreeMap<ObjectID, StakedSui>,
@@ -291,44 +286,60 @@ fn examine_total_supply(
     }
 }
 
-fn display_validator(summary: &SuiValidatorSummary, metadata: &VerifiedValidatorMetadataV1) {
+fn display_validator(validator: &SuiValidatorGenesis) {
+    let metadata = validator.verified_metadata();
     println!("Validator name: {}", metadata.name);
     println!("{:#?}", metadata);
-    println!("Voting Power: {}", summary.voting_power);
-    println!("Gas Price: {}", summary.gas_price);
-    println!("Next Epoch Gas Price: {}", summary.next_epoch_gas_price);
-    println!("Commission Rate: {}", summary.commission_rate);
+    println!("Voting Power: {}", validator.voting_power);
+    println!("Gas Price: {}", validator.gas_price);
+    println!("Next Epoch Gas Price: {}", validator.next_epoch_gas_price);
+    println!("Commission Rate: {}", validator.commission_rate);
     println!(
         "Next Epoch Commission Rate: {}",
-        summary.next_epoch_commission_rate
+        validator.next_epoch_commission_rate
     );
-    println!("Next Epoch Stake: {}", summary.next_epoch_stake);
-    println!("Staking Pool ID: {}", summary.staking_pool_id);
+    println!("Next Epoch Stake: {}", validator.next_epoch_stake);
+    println!("Staking Pool ID: {}", validator.staking_pool.id);
     println!(
         "Staking Pool Activation Epoch: {:?}",
-        summary.staking_pool_activation_epoch
+        validator.staking_pool.activation_epoch
     );
     println!(
         "Staking Pool Deactivation Epoch: {:?}",
-        summary.staking_pool_deactivation_epoch
+        validator.staking_pool.deactivation_epoch
     );
     println!(
         "Staking Pool Sui Balance: {:?}",
-        summary.staking_pool_sui_balance
+        validator.staking_pool.sui_balance
     );
-    println!("Rewards Pool: {}", summary.rewards_pool);
-    println!("Pool Token Balance: {}", summary.pool_token_balance);
-    println!("Pending Delegation: {}", summary.pending_stake);
+    println!(
+        "Rewards Pool: {}",
+        validator.staking_pool.rewards_pool.value()
+    );
+    println!(
+        "Pool Token Balance: {}",
+        validator.staking_pool.pool_token_balance
+    );
+    println!(
+        "Pending Delegation: {}",
+        validator.staking_pool.pending_stake
+    );
     println!(
         "Pending Total Sui Withdraw: {}",
-        summary.pending_total_sui_withdraw
+        validator.staking_pool.pending_total_sui_withdraw
     );
     println!(
         "Pendign Pool Token Withdraw: {}",
-        summary.pending_pool_token_withdraw
+        validator.staking_pool.pending_pool_token_withdraw
     );
-    println!("Exchange Rates ID: {}", summary.exchange_rates_id);
-    println!("Exchange Rates Size: {}", summary.exchange_rates_size);
+    println!(
+        "Exchange Rates ID: {}",
+        validator.staking_pool.exchange_rates.id
+    );
+    println!(
+        "Exchange Rates Size: {}",
+        validator.staking_pool.exchange_rates.size
+    );
     print_divider(&metadata.name);
 }
 
@@ -340,14 +351,17 @@ fn display_sui(gas_coin: &GasCoin, owner_map: &BTreeMap<ObjectID, Owner>) {
 
 fn display_staked_sui(
     staked_sui: &StakedSui,
-    validator_address_map: &BTreeMap<SuiAddress, &SuiValidatorSummary>,
+    validator_address_map: &BTreeMap<SuiAddress, &SuiValidatorGenesis>,
     owner_map: &BTreeMap<ObjectID, Owner>,
 ) {
     let validator = validator_address_map
         .get(&staked_sui.validator_address())
         .unwrap();
     println!("{:#?}", staked_sui);
-    println!("Staked to Validator: {}", validator.name);
+    println!(
+        "Staked to Validator: {}",
+        validator.verified_metadata().name
+    );
     println!("Owner: {}\n", owner_map.get(&staked_sui.id()).unwrap());
 }
 

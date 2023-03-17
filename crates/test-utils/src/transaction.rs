@@ -4,12 +4,12 @@
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use sui_types::multiaddr::Multiaddr;
 use tracing::{debug, info};
 
 use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
@@ -55,25 +55,25 @@ pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransa
 pub async fn publish_package(
     gas_object: Object,
     path: PathBuf,
-    configs: &[ValidatorInfo],
+    net_addresses: &[Multiaddr],
 ) -> ObjectRef {
-    let (effects, _) = publish_package_for_effects(gas_object, path, configs).await;
+    let (effects, _) = publish_package_for_effects(gas_object, path, net_addresses).await;
     parse_package_ref(effects.created()).unwrap()
 }
 
 pub async fn publish_package_for_effects(
     gas_object: Object,
     path: PathBuf,
-    configs: &[ValidatorInfo],
+    net_addresses: &[Multiaddr],
 ) -> (TransactionEffects, TransactionEvents) {
-    submit_single_owner_transaction(make_publish_package(gas_object, path), configs).await
+    submit_single_owner_transaction(make_publish_package(gas_object, path), net_addresses).await
 }
 
 /// Helper function to publish the move package of a simple shared counter.
-pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInfo]) -> ObjectRef {
+pub async fn publish_counter_package(gas_object: Object, net_addresses: &[Multiaddr]) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    publish_package(gas_object, path, configs).await
+    publish_package(gas_object, path, net_addresses).await
 }
 
 /// Helper function to publish basic package.
@@ -443,15 +443,15 @@ pub async fn delete_devnet_nft(
 /// Submit a certificate containing only owned-objects to all authorities.
 pub async fn submit_single_owner_transaction(
     transaction: VerifiedTransaction,
-    configs: &[ValidatorInfo],
+    net_addresses: &[Multiaddr],
 ) -> (TransactionEffects, TransactionEvents) {
     let certificate = make_tx_certs_and_signed_effects(vec![transaction])
         .0
         .pop()
         .unwrap();
     let mut responses = Vec::new();
-    for config in configs {
-        let client = get_client(config);
+    for addr in net_addresses {
+        let client = get_client(addr);
         let reply = client
             .handle_certificate(certificate.clone().into())
             .await
@@ -466,11 +466,16 @@ pub async fn submit_single_owner_transaction(
 /// may drop transactions. The certificate is submitted to every Sui authority.
 pub async fn submit_shared_object_transaction(
     transaction: VerifiedTransaction,
-    configs: &[ValidatorInfo],
+    net_addresses: &[Multiaddr],
 ) -> SuiResult<(TransactionEffects, TransactionEvents)> {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
-    submit_shared_object_transaction_with_committee(transaction, configs, &committee, &key_pairs)
-        .await
+    submit_shared_object_transaction_with_committee(
+        transaction,
+        net_addresses,
+        &committee,
+        &key_pairs,
+    )
+    .await
 }
 
 /// Keep submitting the certificates of a shared-object transaction until it is sequenced by
@@ -478,7 +483,7 @@ pub async fn submit_shared_object_transaction(
 /// may drop transactions. The certificate is submitted to every Sui authority.
 pub async fn submit_shared_object_transaction_with_committee(
     transaction: VerifiedTransaction,
-    configs: &[ValidatorInfo],
+    net_addresses: &[Multiaddr],
     committee: &Committee,
     key_pairs: &[AuthorityKeyPair],
 ) -> SuiResult<(TransactionEffects, TransactionEvents)> {
@@ -489,10 +494,10 @@ pub async fn submit_shared_object_transaction_with_committee(
             .unwrap();
 
     let replies = loop {
-        let futures: Vec<_> = configs
+        let futures: Vec<_> = net_addresses
             .iter()
-            .map(|config| {
-                let client = get_client(config);
+            .map(|addr| {
+                let client = get_client(addr);
                 let cert = certificate.clone();
                 async move { client.handle_certificate(cert.into()).await }
             })
@@ -547,10 +552,10 @@ pub fn parse_package_ref(created_objs: &[(ObjectRef, Owner)]) -> Option<ObjectRe
 }
 
 /// Get the framework object
-pub async fn get_framework_object(configs: &[ValidatorInfo]) -> Object {
+pub async fn get_framework_object(net_addresses: impl Iterator<Item = &Multiaddr>) -> Object {
     let mut responses = Vec::new();
-    for config in configs {
-        let client = get_client(config);
+    for addr in net_addresses {
+        let client = get_client(addr);
         let reply = client
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 SUI_FRAMEWORK_OBJECT_ID,
