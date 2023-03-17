@@ -403,6 +403,7 @@ where
                 .as_ref()
                 .map(|_epoch_change| TemporaryEpochStore {
                     owner_index: vec![],
+                    epoch_id: checkpoint.epoch,
                 });
 
         Ok((
