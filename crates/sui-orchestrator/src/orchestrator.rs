@@ -310,7 +310,7 @@ impl Orchestrator {
             .execute(instances.iter(), &ssh_command)
             .await?;
 
-        // For the nodes to boot.
+        // Wait for the nodes to boot.
         self.ssh_manager
             .wait_for_command(instances.iter(), &ssh_command, CommandStatus::Running)
             .await?;
