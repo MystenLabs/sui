@@ -6,7 +6,7 @@ A: object(100), B: object(101), C: object(102)
 task 1 'view-object'. lines 8-8:
 Owner: Account Address ( B )
 Version: 1
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(101)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1000000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(101)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 2000000u64}}
 
 task 2 'run'. lines 10-10:
 created: object(107)
@@ -15,7 +15,7 @@ written: object(101), object(106)
 task 3 'view-object'. lines 12-12:
 Owner: Account Address ( B )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(101)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 999990u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(101)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1999990u64}}
 
 task 4 'view-object'. lines 14-14:
 Owner: Account Address ( A )
@@ -28,4 +28,4 @@ Error: Transaction was not signed by the correct sender: Object 0xbea8d80a001a7a
 task 6 'view-object'. lines 18-18:
 Owner: Account Address ( B )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(101)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 999990u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(101)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1999990u64}}

@@ -31,7 +31,7 @@ use crate::{
 use crate::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 use sui_protocol_config::ProtocolConfig;
 
-pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
+pub const GAS_VALUE_FOR_TESTING: u64 = 2_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]

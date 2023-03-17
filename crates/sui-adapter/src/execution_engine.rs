@@ -191,7 +191,11 @@ fn execute_transaction<
         execution_result
     });
     if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
+        if protocol_config.gas_checks_v2() {
+            temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
+        } else {
+            temporary_store.charge_gas_v1(gas_object_ref.0, &mut gas_status, &mut result, gas);
+        }
     }
     if !is_system {
         #[cfg(debug_assertions)]

@@ -3144,7 +3144,7 @@ async fn test_sui_system_state_nop_upgrade() {
 
     let authority_state = init_state().await;
 
-    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MIN);
+    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX);
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
     let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
@@ -3171,7 +3171,7 @@ async fn test_sui_system_state_nop_upgrade() {
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
         mutable: true,
     });
-    let new_protocol_version = ProtocolVersion::MIN.as_u64() + 1;
+    let new_protocol_version = ProtocolVersion::MAX.as_u64() + 1;
     let new_system_state_version = SUI_SYSTEM_STATE_TESTING_VERSION1;
 
     let pt = {

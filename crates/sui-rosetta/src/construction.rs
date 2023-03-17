@@ -224,7 +224,7 @@ pub async fn metadata(
                 .into_iter()
                 .map(|coin| coin.object_ref())
                 .collect::<Vec<_>>();
-            (TransactionMetadata::PaySui, sender_coins, 1000)
+            (TransactionMetadata::PaySui, sender_coins, 2000)
         }
         InternalOperation::Delegation {
             sender,
