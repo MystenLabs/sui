@@ -90,7 +90,7 @@ jobs:
           host: "simtest-01.sui.io"
           username: "ubuntu"
           key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          command_timeout: "120m"
+          command_timeout: "20m"
           script: |
             cd ~/sui
             ./scripts/simtest/cargo-simtest simtest build
@@ -112,6 +112,7 @@ jobs:
           host: "simtest-01.sui.io"
           username: "ubuntu"
           key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          command_timeout: "120m"
           script: |
             cd ~/sui
             ./scripts/simtest/simtest-run.sh
