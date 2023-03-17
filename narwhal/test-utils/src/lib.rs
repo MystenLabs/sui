@@ -9,7 +9,7 @@ use config::{
 };
 use crypto::{
     to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
-    PublicKey, Signature,
+    PublicKey, PublicKeyBytes, Signature,
 };
 use fastcrypto::{
     hash::Hash as _,
@@ -139,7 +139,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     .expect("Failed creating database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<PublicKey, Round>,
+        LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 

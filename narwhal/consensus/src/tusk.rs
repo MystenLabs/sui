@@ -6,7 +6,7 @@ use crate::{
     utils, ConsensusError, Outcome,
 };
 use config::{Committee, Stake};
-use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
+use fastcrypto::hash::Hash;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{debug, error_span};
 use types::{
@@ -125,7 +125,7 @@ impl ConsensusProtocol for Tusk {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
+            debug!("Latest commit of {}: Round {}", name.to_string(), round);
         }
 
         Ok((Outcome::Commit, committed_sub_dags))

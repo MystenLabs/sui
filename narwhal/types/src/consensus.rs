@@ -4,7 +4,7 @@
 
 use crate::{Batch, Certificate, CertificateDigest, Round};
 use config::Committee;
-use crypto::PublicKey;
+use crypto::{PublicKey, PublicKeyBytes};
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -144,7 +144,7 @@ pub type StoreResult<T> = Result<T, TypedStoreError>;
 /// The persistent storage of the sequencer.
 pub struct ConsensusStore {
     /// The latest committed round of each validator.
-    last_committed: DBMap<PublicKey, Round>,
+    last_committed: DBMap<PublicKeyBytes, Round>,
     /// The global consensus sequence.
     committed_sub_dags_by_index: DBMap<SequenceNumber, CommittedSubDagShell>,
 }
@@ -152,7 +152,7 @@ pub struct ConsensusStore {
 impl ConsensusStore {
     /// Create a new consensus store structure by using already loaded maps.
     pub fn new(
-        last_committed: DBMap<PublicKey, Round>,
+        last_committed: DBMap<PublicKeyBytes, Round>,
         sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
     ) -> Self {
         Self {
@@ -171,7 +171,7 @@ impl ConsensusStore {
     /// Persist the consensus state.
     pub fn write_consensus_state(
         &self,
-        last_committed: &HashMap<PublicKey, Round>,
+        last_committed: &HashMap<PublicKeyBytes, Round>,
         sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
         let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
@@ -186,7 +186,7 @@ impl ConsensusStore {
     }
 
     /// Load the last committed round of each validator.
-    pub fn read_last_committed(&self) -> HashMap<PublicKey, Round> {
+    pub fn read_last_committed(&self) -> HashMap<PublicKeyBytes, Round> {
         self.last_committed.iter().collect()
     }
 

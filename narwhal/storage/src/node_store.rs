@@ -88,7 +88,7 @@ impl NodeStorage {
             Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
-            Self::LAST_COMMITTED_CF;<PublicKey, Round>,
+            Self::LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>
         );
 
