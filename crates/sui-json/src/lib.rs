@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, VecDeque};
+use std::fmt::{self, Debug, Formatter};
+use std::str::FromStr;
+
 use anyhow::{anyhow, bail};
 use fastcrypto::encoding::{Encoding, Hex};
 use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
-use move_core_types::account_address::AccountAddress;
 use move_core_types::u256::U256;
 use move_core_types::{
     identifier::Identifier,
@@ -15,10 +18,8 @@ use move_core_types::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Number, Value as JsonValue};
-use std::collections::VecDeque;
-use std::fmt::{self, Debug, Formatter};
-use std::str::FromStr;
+use serde_json::{json, Number, Value as JsonValue, Value};
+
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::move_package::MovePackage;
@@ -73,14 +74,49 @@ impl fmt::Display for SuiJsonValueError {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum SuiJsonCallArg {
     // Needs to become an Object Ref or Object ID, depending on object type
     Object(ObjectID),
     // pure value, bcs encoded
-    Pure(Vec<u8>),
+    Pure(SuiJsonValue),
     // a vector of objects
     ObjVec(Vec<ObjectID>),
+}
+
+// Intermediate type to hold resolved args
+#[derive(Eq, PartialEq, Debug)]
+pub enum ResolvedCallArg {
+    Object(ObjectID),
+    Pure(Vec<u8>),
+    ObjVec(Vec<ObjectID>),
+}
+
+impl SuiJsonCallArg {
+    pub fn try_from(
+        value: CallArg,
+        layout: Option<&MoveTypeLayout>,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(match value {
+            CallArg::Pure(p) => SuiJsonCallArg::Pure(SuiJsonValue::from_bcs_bytes(layout, &p)?),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
+            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => SuiJsonCallArg::Object(id),
+        })
+    }
+
+    pub fn pure(&self) -> Option<&SuiJsonValue> {
+        match self {
+            SuiJsonCallArg::Pure(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn object(&self) -> Option<&ObjectID> {
+        match self {
+            SuiJsonCallArg::Object(o) => Some(o),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Deserialize, Serialize, JsonSchema)]
@@ -118,8 +154,37 @@ impl SuiJsonValue {
             .ok_or_else(|| anyhow!("Unable to serialize {:?}. Expected {}", move_value, ty))
     }
 
-    pub fn from_bcs_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
-        SuiJsonValue::new(try_from_bcs_bytes(bytes)?)
+    pub fn from_bcs_bytes(
+        layout: Option<&MoveTypeLayout>,
+        bytes: &[u8],
+    ) -> Result<Self, anyhow::Error> {
+        let json = if let Some(layout) = layout {
+            // Try to convert Vec<u8> inputs into string
+            fn try_parse_string(layout: &MoveTypeLayout, bytes: &[u8]) -> Option<String> {
+                if let MoveTypeLayout::Vector(t) = layout {
+                    if let MoveTypeLayout::U8 = **t {
+                        return bcs::from_bytes::<String>(bytes).ok();
+                    }
+                }
+                None
+            }
+            if let Some(s) = try_parse_string(layout, bytes) {
+                json!(s)
+            } else {
+                let move_value = bcs::from_bytes_seed(layout, bytes)?;
+                move_value_to_json(&move_value).unwrap_or_else(|| {
+                    JsonValue::Array(
+                        bytes
+                            .iter()
+                            .map(|b| JsonValue::Number(Number::from(*b)))
+                            .collect(),
+                    )
+                })
+            }
+        } else {
+            json!(bytes)
+        };
+        SuiJsonValue::new(json)
     }
 
     pub fn to_json_value(&self) -> JsonValue {
@@ -272,42 +337,58 @@ fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
             }
             Ok(SuiAddress::from_str(&s)?)
         }
+        JsonValue::Array(bytes) => {
+            fn value_to_byte_array(v: &Vec<Value>) -> Option<Vec<u8>> {
+                let mut bytes = vec![];
+                for b in v {
+                    let b = b.as_u64()?;
+                    if b <= u8::MAX as u64 {
+                        bytes.push(b as u8);
+                    } else {
+                        return None;
+                    }
+                }
+                Some(bytes)
+            }
+            let bytes = value_to_byte_array(bytes)
+                .ok_or_else(|| anyhow!("Invalid input: Cannot parse input into SuiAddress."))?;
+            Ok(SuiAddress::try_from(bytes)?)
+        }
         v => bail!("Unexpected arg {v} for expected type address"),
     }
 }
 
-fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
-    // Try to deserialize data
-    if let Ok(v) = bcs::from_bytes::<String>(bytes) {
-        Ok(JsonValue::String(v))
-    } else if let Ok(v) = bcs::from_bytes::<AccountAddress>(bytes) {
-        // Converting address to string without trimming 0
-        Ok(JsonValue::String(format!("{v:#x}")))
-    } else if let Ok(v) = bcs::from_bytes::<u8>(bytes) {
-        Ok(JsonValue::Number(Number::from(v)))
-    } else if let Ok(v) = bcs::from_bytes::<u16>(bytes) {
-        Ok(JsonValue::Number(Number::from(v)))
-    } else if let Ok(v) = bcs::from_bytes::<u32>(bytes) {
-        Ok(JsonValue::Number(Number::from(v)))
-    } else if let Ok(v) = bcs::from_bytes::<bool>(bytes) {
-        Ok(JsonValue::Bool(v))
-    } else if let Ok(v) = bcs::from_bytes::<Vec<u32>>(bytes) {
-        let v = v
-            .into_iter()
-            .map(|v| JsonValue::Number(Number::from(v)))
-            .collect();
-        Ok(JsonValue::Array(v))
-    } else if let Ok(v) = bcs::from_bytes::<Vec<String>>(bytes) {
-        let v = v.into_iter().map(JsonValue::String).collect();
-        Ok(JsonValue::Array(v))
-    } else {
-        // Fallback to bytearray if fail to deserialize data
-        let v = bytes
-            .iter()
-            .map(|v| JsonValue::Number(Number::from(*v)))
-            .collect();
-        Ok(JsonValue::Array(v))
-    }
+fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
+    Some(match move_value {
+        MoveValue::Vector(values) => JsonValue::Array(
+            values
+                .iter()
+                .map(move_value_to_json)
+                .collect::<Option<_>>()?,
+        ),
+        MoveValue::Bool(v) => json!(v),
+        MoveValue::Signer(v) | MoveValue::Address(v) => json!(SuiAddress::from(*v).to_string()),
+        MoveValue::U8(v) => json!(v),
+        MoveValue::U64(v) => json!(v.to_string()),
+        MoveValue::U128(v) => json!(v.to_string()),
+        MoveValue::U16(v) => json!(v),
+        MoveValue::U32(v) => json!(v),
+        MoveValue::U256(v) => json!(v.to_string()),
+        MoveValue::Struct(move_struct) => match move_struct {
+            MoveStruct::Runtime(values) => {
+                let values = values.iter().map(move_value_to_json).collect::<Vec<_>>();
+                json!(values)
+            }
+            // We only care about values here, assuming struct type information is known at the client side.
+            MoveStruct::WithTypes { fields, .. } | MoveStruct::WithFields(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|(key, value)| (key, move_value_to_json(value)))
+                    .collect::<BTreeMap<_, _>>();
+                json!(fields)
+            }
+        },
+    })
 }
 
 impl std::str::FromStr for SuiJsonValue {
@@ -315,21 +396,6 @@ impl std::str::FromStr for SuiJsonValue {
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
         // Wrap input with json! if serde_json fails, the failure usually cause by missing quote escapes.
         SuiJsonValue::new(serde_json::from_str(s).or_else(|_| serde_json::from_value(json!(s)))?)
-    }
-}
-
-impl TryFrom<CallArg> for SuiJsonValue {
-    type Error = anyhow::Error;
-
-    fn try_from(value: CallArg) -> Result<Self, Self::Error> {
-        use serde_json::Value;
-        match value {
-            CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
-            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                SuiJsonValue::new(Value::String(Hex::encode(id)))
-            }
-        }
     }
 }
 
@@ -568,12 +634,12 @@ fn resolve_call_arg(
     idx: usize,
     arg: &SuiJsonValue,
     param: &SignatureToken,
-) -> Result<SuiJsonCallArg, anyhow::Error> {
+) -> Result<ResolvedCallArg, anyhow::Error> {
     let (is_primitive, layout_opt) = primitive_type(view, type_args, param);
     if is_primitive {
         match layout_opt {
             Some(layout) => {
-                return Ok(SuiJsonCallArg::Pure(arg.to_bcs_bytes(&layout).map_err(
+                return Ok(ResolvedCallArg::Pure(arg.to_bcs_bytes(&layout).map_err(
                     |e| {
                         anyhow!(
                         "Could not serialize argument of type {:?} at {} into {}. Got error: {:?}",
@@ -607,13 +673,13 @@ fn resolve_call_arg(
         | SignatureToken::StructInstantiation(_, _)
         | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_) => Ok(SuiJsonCallArg::Object(resolve_object_arg(
+        | SignatureToken::MutableReference(_) => Ok(ResolvedCallArg::Object(resolve_object_arg(
             idx,
             &arg.to_json_value(),
         )?)),
         SignatureToken::Vector(inner) => match &**inner {
             SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_, _) => {
-                Ok(SuiJsonCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
+                Ok(ResolvedCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
             }
             _ => {
                 bail!(
@@ -638,7 +704,7 @@ fn resolve_call_args(
     type_args: &[TypeTag],
     json_args: &[SuiJsonValue],
     parameter_types: &[SignatureToken],
-) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
+) -> Result<Vec<ResolvedCallArg>, anyhow::Error> {
     json_args
         .iter()
         .zip(parameter_types)
@@ -656,7 +722,7 @@ pub fn resolve_move_function_args(
     type_args: &[TypeTag],
     combined_args_json: Vec<SuiJsonValue>,
     allow_arbitrary_function_call: bool,
-) -> Result<Vec<(SuiJsonCallArg, SignatureToken)>, anyhow::Error> {
+) -> Result<Vec<(ResolvedCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
     let module = package.deserialize_module(&module_ident)?;
     let function_str = function.as_ident_str();
@@ -698,14 +764,13 @@ pub fn resolve_move_function_args(
             combined_args_json.len()
         );
     }
-
     // Check that the args are valid and convert to the correct format
     let call_args = resolve_call_args(&view, type_args, &combined_args_json, parameters)?;
     let tupled_call_args = call_args
-        .iter()
+        .into_iter()
         .zip(parameters.iter())
-        .map(|(arg, expected_type)| (arg.clone(), expected_type.clone()))
-        .collect::<Vec<(SuiJsonCallArg, SignatureToken)>>();
+        .map(|(arg, expected_type)| (arg, expected_type.clone()))
+        .collect::<Vec<_>>();
     Ok(tupled_call_args)
 }
 
