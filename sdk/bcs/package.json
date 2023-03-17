@@ -56,11 +56,11 @@
   ],
   "homepage": "https://github.com/mystenlabs/sui#readme",
   "devDependencies": {
-    "@size-limit/preset-small-lib": "^8.1.0",
-    "size-limit": "^8.1.0",
-    "tsup": "^6.5.0",
+    "@size-limit/preset-small-lib": "^8.2.4",
+    "size-limit": "^8.2.4",
+    "tsup": "^6.6.3",
     "typescript": "^4.9.4",
-    "vitest": "^0.26.3"
+    "vitest": "^0.29.3"
   },
   "dependencies": {
     "bs58": "^5.0.0"

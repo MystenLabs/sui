@@ -22,9 +22,9 @@
     },
     "dependencies": {
         "@mysten/sui.js": "workspace:*",
-        "@sentry/react": "^7.38.0",
-        "@sentry/tracing": "^7.38.0",
-        "@tanstack/react-query": "^4.20.9",
+        "@sentry/react": "^7.43.0",
+        "@sentry/tracing": "^7.43.0",
+        "@tanstack/react-query": "^4.26.1",
         "bignumber.js": "^9.1.1",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
@@ -32,14 +32,14 @@
     "devDependencies": {
         "@headlessui/tailwindcss": "^0.1.2",
         "@tailwindcss/aspect-ratio": "^0.4.2",
-        "@types/react": "^18.0.26",
-        "eslint": "^8.31.0",
-        "eslint-config-prettier": "^8.6.0",
+        "@types/react": "^18.0.28",
+        "eslint": "^8.36.0",
+        "eslint-config-prettier": "^8.7.0",
         "postcss": "^8.4.19",
-        "prettier": "^2.8.1",
-        "tailwindcss": "^3.2.4",
+        "prettier": "^2.8.4",
+        "tailwindcss": "^3.2.7",
         "typescript": "^4.9.4",
-        "vite": "^4.0.4",
-        "vitest": "^0.26.3"
+        "vite": "^4.2.0",
+        "vitest": "^0.29.3"
     }
 }
