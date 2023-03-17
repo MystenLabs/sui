@@ -147,6 +147,8 @@ Similar to local Sui Explorer, you can also setup a local Sui Wallet. Open a Ter
 pnpm wallet start
 ```
 
+**Tips** You can set the default environment to be local network with https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables so that you don't have to switch network manually.
+
 For more details, reference [https://github.com/MystenLabs/sui/tree/main/apps/wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet).
 
 ## Generating example data
