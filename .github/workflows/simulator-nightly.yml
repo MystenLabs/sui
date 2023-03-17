@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  simtest :
-    name: simtest-01
+  simtest:
+    name: simtest
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -37,6 +37,64 @@ jobs:
 
       - name: Cargo clean
         uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: "simtest-01.sui.io"
+          username: "ubuntu"
+          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/sui
+            cargo clean
+            git restore Cargo.lock
+
+      - name: Tmpfs clean
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: "simtest-01.sui.io"
+          username: "ubuntu"
+          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          script: |
+            sudo rm -rf /tmp/*.*
+
+      - name: Checkout sui repo
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: "simtest-01.sui.io"
+          username: "ubuntu"
+          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/sui
+            git fetch origin
+            git rebase origin/main"
+
+      - name: Install simtest
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: "simtest-01.sui.io"
+          username: "ubuntu"
+          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/sui
+            ./scripts/simtest/install.sh
+
+      - name: Build simtest
+        uses: appleboy/ssh-action@v0.1.8
+        env: 
+          CARGO_TERM_COLOR: always
+          CARGO_INCREMENTAL: 0
+          CARGO_NET_RETRY: 10
+          RUSTUP_MAX_RETRIES: 10
+          RUST_BACKTRACE: short
+          RUST_LOG: off
+        with:
+          host: "simtest-01.sui.io"
+          username: "ubuntu"
+          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/sui
+            ./scripts/simtest/cargo-simtest simtest build
+      
+      - name: Run simtest
+        uses: appleboy/ssh-action@v0.1.8
         env: 
           CARGO_TERM_COLOR: always
           CARGO_INCREMENTAL: 0
@@ -52,32 +110,9 @@ jobs:
           host: "simtest-01.sui.io"
           username: "ubuntu"
           key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
-          script:
-            env
-            ls -al
-            # cd ~/sui
-            # cargo clean
-            # git restore Cargo.lock
-
-      # - name: Tmpfs clean
-      #   run: |
-      #     ssh simtest-01.sui.io "sudo rm -rf /tmp/*.*"
-
-      # - name: Checkout sui repo
-      #   run: |
-      #     ssh simtest-01.sui.io "cd ~/sui && git fetch origin && git rebase origin/main"
-
-      # - name: Install simtest
-      #   run: |
-      #     ssh simtest-01.sui.io "cd ~/sui && ./scripts/simtest/install.sh"
-
-      # - name: Build simtest
-      #   run: |
-      #     ssh simtest-01.sui.io "cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
-      
-      # - name: Run simtest
-      #   run: |
-      #     ssh simtest-01.sui.io "cd ~/sui && ./scripts/simtest/simtest-run.sh"
+          script: |
+            cd ~/sui
+            ./scripts/simtest/simtest-run.sh
 
   # notify:
   #   name: Notify
