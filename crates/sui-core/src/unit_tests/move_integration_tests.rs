@@ -33,10 +33,6 @@ use std::{env, str::FromStr};
 
 const MAX_GAS: u64 = 10000;
 
-// TODO: passing empty list of dependencies to build_and_try_publish_test_package will fail this
-// test sooner than expected, we now have to verify if specified dependencies are on chain before
-// even attempting to publish (so that ObjectIDs of dependency packages can be passed to
-// publish/upgrade implementation), so this test may not make sense anymore
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_publishing_with_unpublished_deps() {

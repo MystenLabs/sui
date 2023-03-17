@@ -310,11 +310,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let mut dependencies: Vec<_> = dependencies
             .into_iter()
             .map(|d| {
-                let addr = self.compiled_state.named_address_mapping.get(&d);
-                if addr.is_none() {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
                     bail!("There is no published module address corresponding to name address {d}");
-                }
-                let id: ObjectID = addr.unwrap().into_inner().into();
+                };
+                let id: ObjectID = addr.into_inner().into();
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
