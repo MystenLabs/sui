@@ -183,6 +183,7 @@ impl AwsClient {
         vec![
             format!("(sudo mkfs.ext4 -E nodiscard /dev/{DRIVE} || true)"),
             format!("(sudo mount /dev/{DRIVE} {directory} || true)"),
+            format!("sudo chmod 777 -R {directory}"),
         ]
     }
 

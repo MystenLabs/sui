@@ -142,7 +142,6 @@ impl Orchestrator {
             "rustup default stable",
             // Create the working directory.
             &format!("mkdir -p {working_dir}"),
-            &format!("sudo chmod 777 -R {working_dir}"),
             // Clone the repo.
             &format!("(git clone {url} || true)"),
         ];
@@ -354,7 +353,7 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
-            ["set BENCH_MODE=true", "source $HOME/.cargo/env", &run].join(" && ")
+            ["export BENCH_MODE=true", "source $HOME/.cargo/env", &run].join(" && ")
         };
 
         let repo = self.settings.repository_name();

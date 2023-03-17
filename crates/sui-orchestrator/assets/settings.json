@@ -7,7 +7,7 @@
     "specs": "m5d.8xlarge",
     "repository": {
         "url": "http://github.com/mystenlabs/sui",
-        "commit": "0b337ef"
+        "commit": "nvme"
     },
     "results_directory": "./results",
     "logs_directory": "./logs"
