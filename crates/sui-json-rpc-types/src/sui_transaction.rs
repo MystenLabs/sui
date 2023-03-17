@@ -807,18 +807,18 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "GasCostSummary", rename_all = "camelCase")]
 pub struct SuiGasCostSummary {
-    pub computation_cost: u64,
-    pub storage_cost: u64,
-    pub storage_rebate: u64,
+    pub computation_cost: BigInt,
+    pub storage_cost: BigInt,
+    pub storage_rebate: BigInt,
     pub non_refundable_storage_fee: u64,
 }
 
 impl From<GasCostSummary> for SuiGasCostSummary {
     fn from(s: GasCostSummary) -> Self {
         Self {
-            computation_cost: s.computation_cost,
-            storage_cost: s.storage_cost,
-            storage_rebate: s.storage_rebate,
+            computation_cost: s.computation_cost.into(),
+            storage_cost: s.storage_cost.into(),
+            storage_rebate: s.storage_rebate.into(),
             non_refundable_storage_fee: s.non_refundable_storage_fee,
         }
     }
@@ -827,9 +827,9 @@ impl From<GasCostSummary> for SuiGasCostSummary {
 impl From<SuiGasCostSummary> for GasCostSummary {
     fn from(s: SuiGasCostSummary) -> Self {
         Self {
-            computation_cost: s.computation_cost,
-            storage_cost: s.storage_cost,
-            storage_rebate: s.storage_rebate,
+            computation_cost: s.computation_cost.into(),
+            storage_cost: s.storage_cost.into(),
+            storage_rebate: s.storage_rebate.into(),
             non_refundable_storage_fee: s.non_refundable_storage_fee,
         }
     }

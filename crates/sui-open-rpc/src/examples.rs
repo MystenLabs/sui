@@ -483,9 +483,9 @@ impl RpcExampleProvider {
                 executed_epoch: 0,
                 modified_at_versions: vec![],
                 gas_used: SuiGasCostSummary {
-                    computation_cost: 100,
-                    storage_cost: 100,
-                    storage_rebate: 10,
+                    computation_cost: 100.into(),
+                    storage_cost: 100.into(),
+                    storage_rebate: 10.into(),
                     non_refundable_storage_fee: 0,
                 },
                 shared_objects: vec![],

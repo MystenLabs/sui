@@ -174,9 +174,9 @@ export const AuthorityQuorumSignInfo = object({
 export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 
 export const GasCostSummary = object({
-  computationCost: number(),
-  storageCost: number(),
-  storageRebate: number(),
+  computationCost: string(),
+  storageCost: string(),
+  storageRebate: string(),
   nonRefundableStorageFee: number(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
@@ -535,21 +535,21 @@ export function getExecutionStatusGasSummary(
 
 export function getTotalGasUsed(
   data: SuiTransactionResponse | TransactionEffects,
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost +
-        gasSummary.storageCost -
-        gasSummary.storageRebate
+    ? BigInt(gasSummary.computationCost) +
+        BigInt(gasSummary.storageCost) -
+        BigInt(gasSummary.storageRebate)
     : undefined;
 }
 
 export function getTotalGasUsedUpperBound(
   data: SuiTransactionResponse | TransactionEffects,
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost + gasSummary.storageCost
+    ? BigInt(gasSummary.computationCost) + BigInt(gasSummary.storageCost)
     : undefined;
 }
 
