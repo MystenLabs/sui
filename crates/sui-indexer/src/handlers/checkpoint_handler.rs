@@ -9,10 +9,12 @@ use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
 use crate::models::recipients::Recipient;
 use crate::models::transactions::Transaction;
+use crate::multi_get_full_transactions;
 use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
+use crate::types::SuiTransactionFullResponse;
 use futures::future::join_all;
 use futures::FutureExt;
 use mysten_metrics::spawn_monitored_task;
@@ -23,14 +25,13 @@ use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiCommand, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
     SuiRawData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
 use tokio::task::JoinHandle;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const MULTI_GET_CHUNK_SIZE: usize = 500;
@@ -89,20 +90,15 @@ where
             self.metrics.total_checkpoint_requested.inc();
             let request_guard = self.metrics.full_node_read_request_latency.start_timer();
 
-            let mut checkpoint = self
+            let checkpoint = self
                 .download_checkpoint_data(next_cursor_sequence_number as u64)
-                .await;
-            // this happens very often b/c checkpoint indexing is faster than checkpoint
-            // generation. Ideally we will want to differentiate between a real error and
-            // a checkpoint not generated yet.
-            while checkpoint.is_err() {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                checkpoint = self
-                    .download_checkpoint_data(next_cursor_sequence_number as u64)
-                    .await
-            }
-            // unwrap here is safe because we checked for error above
-            let checkpoint = checkpoint.unwrap();
+                .await.map_err(|e| {
+                    error!(
+                        "Failed to download checkpoint data with checkpoint sequence number {} and error {:?}, retrying...",
+                        next_cursor_sequence_number, e
+                    );
+                    e
+                })?;
             request_guard.stop_and_record();
             self.metrics.total_checkpoint_received.inc();
 
@@ -126,15 +122,9 @@ where
             // Process websocket subscription
             let db_guard = self.metrics.db_write_request_latency.start_timer();
             for tx in &checkpoint.transactions {
-                let effect = tx
-                    .effects
-                    .as_ref()
-                    .expect("Transaction Effect cannot be None");
-                let events = tx
-                    .events
-                    .as_ref()
-                    .expect("Transaction Events cannot be None");
-                self.event_handler.process_events(effect, events).await?;
+                self.event_handler
+                    .process_events(&tx.effects, &tx.events)
+                    .await?;
             }
             db_guard.stop_and_record();
 
@@ -149,37 +139,52 @@ where
     async fn download_checkpoint_data(
         &self,
         seq: CheckpointSequenceNumber,
-    ) -> Result<CheckpointData, Error> {
-        let checkpoint = self
+    ) -> Result<CheckpointData, IndexerError> {
+        let mut checkpoint = self
             .rpc_client
             .read_api()
             .get_checkpoint(seq.into())
-            .await?;
+            .await
+            .map_err(|e| {
+                IndexerError::FullNodeReadingError(format!(
+                    "Failed to get checkpoint with sequence number {} and error {:?}",
+                    seq, e
+                ))
+            });
+        // this happens very often b/c checkpoint indexing is faster than checkpoint
+        // generation. Ideally we will want to differentiate between a real error and
+        // a checkpoint not generated yet.
+        while checkpoint.is_err() {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            checkpoint = self
+                .rpc_client
+                .read_api()
+                .get_checkpoint(seq.into())
+                .await
+                .map_err(|e| {
+                    IndexerError::FullNodeReadingError(format!(
+                        "Failed to get checkpoint with sequence number {} and error {:?}",
+                        seq, e
+                    ))
+                })
+        }
+        // unwrap here is safe because we checked for error above
+        let checkpoint = checkpoint.unwrap();
 
         let transactions = join_all(checkpoint.transactions.chunks(MULTI_GET_CHUNK_SIZE).map(
-            |digests| {
-                self.rpc_client
-                    .read_api()
-                    .multi_get_transactions_with_options(
-                        digests.to_vec(),
-                        SuiTransactionResponseOptions::new()
-                            .with_effects()
-                            .with_input()
-                            .with_events(),
-                    )
-            },
+            |digests| multi_get_full_transactions(self.rpc_client.read_api(), digests.to_vec()),
         ))
         .await
         .into_iter()
         .try_fold(vec![], |mut acc, chunk| {
             acc.extend(chunk?);
-            Ok::<_, Error>(acc)
+            Ok::<_, IndexerError>(acc)
         })?;
 
         let object_changes = transactions
             .iter()
             .flat_map(|tx| {
-                let effects = tx.effects.as_ref().expect("effects should not be empty");
+                let effects = &tx.effects;
                 let created = effects.created().iter();
                 let created = created.map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
                 let mutated = effects.mutated().iter();
@@ -228,6 +233,12 @@ where
                 let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
                 acc.extend(mutated_object_chunk);
                 Ok::<_, Error>(acc)
+            })
+            .map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to generate changed objects of checkpoint sequence {} with err {:?}",
+                    seq, e
+                ))
             })?;
 
         Ok(CheckpointData {
@@ -263,14 +274,7 @@ where
         // Index events
         let events = transactions
             .iter()
-            .flat_map(|tx| {
-                tx.events
-                    .as_ref()
-                    .expect("Events can only be None if there's an error in fetching or converting events")
-                    .data
-                    .iter()
-                    .map(move |event| event.clone().into())
-            })
+            .flat_map(|tx| tx.events.data.iter().map(move |event| event.clone().into()))
             .collect::<Vec<_>>();
 
         // Index objects
@@ -295,12 +299,11 @@ where
                         Object::from(&checkpoint.epoch, &checkpoint.sequence_number, status, o)
                     })
                     .collect::<Vec<_>>();
-                let effects = tx.effects.as_ref().expect("effects should not be empty");
-                let deleted = effects.deleted().iter();
+                let deleted = tx.effects.deleted().iter();
                 let deleted = deleted.map(|o| (ObjectStatus::Deleted, o));
-                let wrapped = effects.wrapped().iter();
+                let wrapped = tx.effects.wrapped().iter();
                 let wrapped = wrapped.map(|o| (ObjectStatus::Wrapped, o));
-                let unwrapped_then_deleted = effects.unwrapped_then_deleted().iter();
+                let unwrapped_then_deleted = tx.effects.unwrapped_then_deleted().iter();
                 let unwrapped_then_deleted =
                     unwrapped_then_deleted.map(|o| (ObjectStatus::UnwrappedThenDeleted, o));
                 let all_deleted_objects = deleted
@@ -335,22 +338,13 @@ where
         let move_calls: Vec<MoveCall> = transactions
             .iter()
             .map(|t| {
-                let tx = t
-                    .transaction
-                    .as_ref()
-                    .expect("transaction should not be empty")
-                    .data
-                    .transaction();
+                let tx = t.transaction.data.transaction();
                 (
                     tx.clone(),
                     t.digest,
                     checkpoint.sequence_number,
                     checkpoint.epoch,
-                    t.transaction
-                        .as_ref()
-                        .expect("transaction should not be empty")
-                        .data
-                        .sender(),
+                    t.transaction.data.sender(),
                 )
             })
             .filter_map(
@@ -382,17 +376,16 @@ where
         let recipients: Vec<Recipient> = transactions
             .iter()
             .flat_map(|tx| {
-                let effects = tx.effects.as_ref().expect("Effects should not be empty");
-                effects
-                    .created()
-                    .iter()
-                    .cloned()
-                    .chain(effects.mutated().iter().cloned())
-                    .chain(effects.unwrapped().iter().cloned())
+                let created = tx.effects.created().iter();
+                let mutated = tx.effects.mutated().iter();
+                let unwrapped = tx.effects.unwrapped().iter();
+                created
+                    .chain(mutated)
+                    .chain(unwrapped)
                     .filter_map(|obj_ref| match obj_ref.owner {
                         Owner::AddressOwner(address) => Some(Recipient {
                             id: None,
-                            transaction_digest: effects.transaction_digest().to_string(),
+                            transaction_digest: tx.effects.transaction_digest().to_string(),
                             checkpoint_sequence_number: checkpoint.sequence_number as i64,
                             epoch: checkpoint.epoch as i64,
                             recipient: address.to_string(),
@@ -429,7 +422,7 @@ where
     }
 
     fn index_packages(
-        transactions: &[SuiTransactionResponse],
+        transactions: &[SuiTransactionFullResponse],
         changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = changed_objects
@@ -450,23 +443,11 @@ where
         transactions
             .iter()
             .flat_map(|tx| {
-                tx.effects
-                    .as_ref()
-                    .expect("Effects in SuiTransactionResponse should not be empty")
-                    .created()
-                    .iter()
-                    .map(|oref| {
-                        object_map.get(&oref.reference.object_id).map(|o| {
-                            Package::try_from(
-                                *tx.transaction
-                                    .as_ref()
-                                    .expect("transaction should not be empty")
-                                    .data
-                                    .sender(),
-                                o,
-                            )
-                        })
-                    })
+                tx.effects.created().iter().map(|oref| {
+                    object_map
+                        .get(&oref.reference.object_id)
+                        .map(|o| Package::try_from(*tx.transaction.data.sender(), o))
+                })
             })
             .flatten()
             .collect()

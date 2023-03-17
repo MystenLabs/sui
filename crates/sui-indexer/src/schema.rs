@@ -20,7 +20,7 @@ diesel::table! {
     addresses (account_address) {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
-        first_appearance_time -> Nullable<Timestamp>,
+        first_appearance_time -> Int8,
     }
 }
 
@@ -197,7 +197,7 @@ diesel::table! {
         sender -> Varchar,
         recipients -> Array<Nullable<Text>>,
         checkpoint_sequence_number -> Int8,
-        transaction_time -> Nullable<Timestamp>,
+        timestamp_ms -> Int8,
         transaction_kind -> Text,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
