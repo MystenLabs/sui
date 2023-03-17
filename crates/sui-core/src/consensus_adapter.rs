@@ -201,7 +201,7 @@ pub struct ConsensusAdapter {
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
-    connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+    _connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
@@ -240,7 +240,7 @@ impl ConsensusAdapter {
             consensus_client,
             authority,
             num_inflight_transactions,
-            connection_monitor_status,
+            _connection_monitor_status: connection_monitor_status,
             metrics,
             submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
             latency_observer: LatencyObserver::new(),
@@ -342,19 +342,19 @@ impl ConsensusAdapter {
     /// move our positions up one, and submit at the same time. This allows low performing
     /// node a chance to participate in consensus and redeem their scores while maintaining performance.
     fn check_submission_wrt_connectivity(&self, positions: Vec<AuthorityName>) -> usize {
-        let filtered_positions = positions
-            .into_iter()
-            .filter(|authority| {
-                self.authority == *authority
-                    || self
-                        .connection_monitor_status
-                        .check_connection(&self.authority, authority)
-                        .unwrap_or(ConnectionStatus::Disconnected)
-                        == ConnectionStatus::Connected
-            })
-            .collect();
+        // let filtered_positions = positions
+        //     .into_iter()
+        //     .filter(|authority| {
+        //         self.authority == *authority
+        //             || self
+        //                 .connection_monitor_status
+        //                 .check_connection(&self.authority, authority)
+        //                 .unwrap_or(ConnectionStatus::Disconnected)
+        //                 == ConnectionStatus::Connected
+        //     })
+        //     .collect();
 
-        get_position_in_list(self.authority, filtered_positions)
+        get_position_in_list(self.authority, positions)
     }
 
     /// This method blocks until transaction is persisted in local database
