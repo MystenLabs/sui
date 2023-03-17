@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-#[cfg(feature = "pg_integration")]
+
 mod pg_integration {
     use diesel::migration::MigrationSource;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-    use move_core_types::account_address::AccountAddress;
     use move_core_types::ident_str;
     use move_core_types::language_storage::StructTag;
     use prometheus::Registry;
@@ -35,7 +34,7 @@ mod pg_integration {
     use sui_types::query::TransactionFilter;
     use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use test_utils::transaction::{create_devnet_nft, transfer_coin, delete_devnet_nft};
+    use test_utils::transaction::{create_devnet_nft, transfer_coin};
     use move_core_types::identifier::Identifier;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -229,7 +228,7 @@ mod pg_integration {
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
-        let gas_objects: Vec<SuiObjectData> = indexer_rpc_client
+        let object_correctly_transferred = indexer_rpc_client
         .get_owned_objects(
             receiver,
             Some(SuiObjectDataOptions::new().with_type()),
@@ -244,9 +243,8 @@ mod pg_integration {
             SuiObjectResponse::Exists(obj_data) => Some(obj_data),
             _ => None
         })
-        .collect();
+        .any(|obj| obj.object_id == transferred_object);
 
-        let object_correctly_transferred = gas_objects.iter().any(|obj| obj.object_id == transferred_object);
         assert!(object_correctly_transferred);
 
         Ok(())
