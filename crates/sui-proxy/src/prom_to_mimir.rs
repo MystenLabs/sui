@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::remote_write;
+use crate::var;
 use itertools::Itertools;
 use prometheus::proto::{Counter, Gauge, Histogram, Metric, MetricFamily, MetricType};
 use protobuf::RepeatedField;
@@ -116,7 +117,8 @@ impl From<Vec<MetricFamily>> for Mimir<Vec<remote_write::WriteRequest>> {
         Self {
             state: timeseries
                 .into_iter()
-                .chunks(500) // the upstream remote_write should have a max sample size per request set to this number
+                // the upstream remote_write should have a max sample size per request set to this number
+                .chunks(var!("MIMIR_MAX_SAMPLE_SIZE", 500))
                 .into_iter()
                 .map(|ts| remote_write::WriteRequest {
                     timeseries: ts.collect(),

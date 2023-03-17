@@ -75,7 +75,7 @@ pub fn make_reqwest_client(settings: RemoteWriteConfig) -> ReqwestClient {
     ReqwestClient {
         client: reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
-            .pool_max_idle_per_host(32)
+            .pool_max_idle_per_host(settings.pool_max_idle_per_host)
             .timeout(Duration::from_secs(15))
             .build()
             .expect("cannot create reqwest client"),
@@ -134,11 +134,14 @@ pub async fn server(
     }
 }
 
+/// CertKeyPair wraps a self signed certificate and the corresponding public key
+pub struct CertKeyPair(pub SelfSignedCertificate, pub Ed25519PublicKey);
+
 /// Generate server certs for use with peer verification
-pub fn generate_self_cert(hostname: String) -> (SelfSignedCertificate, Ed25519PublicKey) {
+pub fn generate_self_cert(hostname: String) -> CertKeyPair {
     let mut rng = rand::thread_rng();
     let keypair = Ed25519KeyPair::generate(&mut rng);
-    (
+    CertKeyPair(
         SelfSignedCertificate::new(keypair.copy().private(), &hostname),
         keypair.public().to_owned(),
     )
@@ -179,7 +182,7 @@ fn load_private_key(filename: &str) -> rustls::PrivateKey {
 pub fn create_server_cert_default_allow(
     hostname: String,
 ) -> Result<ServerConfig, sui_tls::rustls::Error> {
-    let (server_certificate, _) = generate_self_cert(hostname);
+    let CertKeyPair(server_certificate, _) = generate_self_cert(hostname);
 
     CertVerifier::new(AllowAll).rustls_server_config(
         vec![server_certificate.rustls_certificate()],
