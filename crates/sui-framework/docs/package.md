@@ -20,8 +20,14 @@ Functions for operating on Move packages from within Move:
 -  [Function `from_module`](#0x2_package_from_module)
 -  [Function `published_module`](#0x2_package_published_module)
 -  [Function `published_package`](#0x2_package_published_package)
+-  [Function `upgrade_package`](#0x2_package_upgrade_package)
 -  [Function `version`](#0x2_package_version)
 -  [Function `upgrade_policy`](#0x2_package_upgrade_policy)
+-  [Function `ticket_package`](#0x2_package_ticket_package)
+-  [Function `ticket_policy`](#0x2_package_ticket_policy)
+-  [Function `receipt_cap`](#0x2_package_receipt_cap)
+-  [Function `receipt_package`](#0x2_package_receipt_package)
+-  [Function `ticket_digest`](#0x2_package_ticket_digest)
 -  [Function `compatible_policy`](#0x2_package_compatible_policy)
 -  [Function `additive_policy`](#0x2_package_additive_policy)
 -  [Function `dep_only_policy`](#0x2_package_dep_only_policy)
@@ -508,6 +514,35 @@ Read the package address string.
 
 </details>
 
+<a name="0x2_package_upgrade_package"></a>
+
+## Function `upgrade_package`
+
+The ID of the package that this cap authorizes upgrades for.
+Can be <code>0x0</code> if the cap cannot currently authorize an upgrade
+because there is already a pending upgrade in the transaction.
+Otherwise guaranteed to be the latest version of any given
+package.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_package">upgrade_package</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_package">upgrade_package</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>): ID {
+    cap.<a href="package.md#0x2_package">package</a>
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_package_version"></a>
 
 ## Function `version`
@@ -553,6 +588,144 @@ The most permissive kind of upgrade currently supported by this
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>): u8 {
     cap.policy
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_package_ticket_package"></a>
+
+## Function `ticket_package`
+
+The package that this ticket is authorized to upgrade
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_package">ticket_package</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_package">ticket_package</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): ID {
+    ticket.<a href="package.md#0x2_package">package</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_package_ticket_policy"></a>
+
+## Function `ticket_policy`
+
+The kind of upgrade that this ticket authorizes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_policy">ticket_policy</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_policy">ticket_policy</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): u8 {
+    ticket.policy
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_package_receipt_cap"></a>
+
+## Function `receipt_cap`
+
+ID of the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> that this <code>receipt</code> should be used to
+update.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_cap">receipt_cap</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">package::UpgradeReceipt</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_cap">receipt_cap</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
+    receipt.cap
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_package_receipt_package"></a>
+
+## Function `receipt_package`
+
+ID of the package that was upgraded to: the latest version of
+the package, as of the upgrade represented by this <code>receipt</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_package">receipt_package</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">package::UpgradeReceipt</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_receipt_package">receipt_package</a>(receipt: &<a href="package.md#0x2_package_UpgradeReceipt">UpgradeReceipt</a>): ID {
+    receipt.<a href="package.md#0x2_package">package</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_package_ticket_digest"></a>
+
+## Function `ticket_digest`
+
+A hash of the package contents for the new version of the
+package.  This ticket only authorizes an upgrade to a package
+that matches this digest.  A package's contents are identified
+by two things:
+
+- modules: [[u8]]       a list of the package's module contents
+- deps:    [[u8; 32]]   a list of 32 byte ObjectIDs of the
+package's transitive dependencies
+
+A package's digest is calculated as:
+
+sha3_256(sort(modules ++ deps))
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>): &<a href="">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): &<a href="">vector</a>&lt;u8&gt; {
+    &ticket.<a href="digest.md#0x2_digest">digest</a>
 }
 </code></pre>
 
