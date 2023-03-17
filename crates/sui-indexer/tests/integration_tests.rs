@@ -36,7 +36,7 @@ mod pg_integration {
     use sui_types::utils::to_sender_signed_transaction;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use test_utils::transaction::{create_devnet_nft, transfer_coin};
+    use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, transfer_coin};
 
     use tokio::task::JoinHandle;
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -200,7 +200,6 @@ mod pg_integration {
             .query_events(to_query, None, None, None)
             .await?;
 
-        // Note that transferring coins do not emit an event
         assert_eq!(query_response.data.len(), 2);
         assert_eq!(
             query_response.data[0].transaction_module,
@@ -242,6 +241,7 @@ mod pg_integration {
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
+        // Verify that the transfer coin event occurred successfully, without emitting an event
         let object_correctly_transferred = indexer_rpc_client
             .get_owned_objects(
                 receiver,
@@ -258,9 +258,78 @@ mod pg_integration {
                 _ => None,
             })
             .any(|obj| obj.object_id == transferred_object);
-
         assert!(object_correctly_transferred);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_event_query_pagination_e2e() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+        let context = &mut test_cluster.wallet;
+
+        for _ in 0..5 {
+            let (sender, object_id, digest) = create_devnet_nft(context).await.unwrap();
+            wait_until_transaction_synced(&store, digest.base58_encode().as_str()).await;
+            let obj_resp = indexer_rpc_client
+                .get_object_with_options(object_id, None)
+                .await
+                .unwrap();
+            let data = obj_resp.object()?;
+            let result = delete_devnet_nft(
+                context,
+                &sender,
+                (data.object_id, data.version, data.digest),
+            )
+            .await;
+            wait_until_transaction_synced(&store, result.digest.base58_encode().as_str()).await;
+        }
+
+        let filter_on_module = EventFilter::MoveModule {
+            package: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+            module: Identifier::new("devnet_nft").unwrap(),
+        };
+        let query_response = indexer_rpc_client
+            .query_events(filter_on_module, None, None, None)
+            .await?;
+        assert_eq!(query_response.data.len(), 5);
+        for item in query_response.data {
+            println!("{}", item.type_);
+        }
+
+        let mint_nft_event = "0x2::devnet_nft::MintNFTEvent";
+        let filter = get_filter_on_event_type(mint_nft_event);
+        let query_response = indexer_rpc_client
+            .query_events(filter, None, Some(2), None)
+            .await?;
+        assert!(query_response.has_next_page);
+        assert_eq!(query_response.data.len(), 2);
+
+        let filter = get_filter_on_event_type(mint_nft_event);
+        let cursor = query_response.next_cursor;
+        let query_response = indexer_rpc_client
+            .query_events(filter, cursor, Some(4), None)
+            .await?;
+        assert!(!query_response.has_next_page);
+        assert_eq!(query_response.data.len(), 3);
+
+        let burn_nft_event = "0x2::devnet_nft::BurnNFTEvent";
+        let filter = get_filter_on_event_type(burn_nft_event);
+        let query_response = indexer_rpc_client
+            .query_events(filter, None, Some(4), None)
+            .await?;
+        assert!(query_response.has_next_page);
+        assert_eq!(query_response.data.len(), 4);
+
+        let filter = get_filter_on_event_type(burn_nft_event);
+        let cursor = query_response.next_cursor;
+        let query_response = indexer_rpc_client
+            .query_events(filter, cursor, Some(4), None)
+            .await?;
+        assert!(!query_response.has_next_page);
+        assert_eq!(query_response.data.len(), 1);
         Ok(())
     }
 
@@ -353,6 +422,10 @@ mod pg_integration {
             tokio::task::yield_now().await;
             tx = store.get_transaction_by_digest(tx_digest);
         }
+    }
+
+    fn get_filter_on_event_type(event_type: &str) -> EventFilter {
+        EventFilter::MoveEventType(StructTag::from_str(event_type).unwrap())
     }
 
     fn reset_database(conn: &mut PgPoolConnection) {
