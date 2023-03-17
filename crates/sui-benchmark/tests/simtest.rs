@@ -5,6 +5,7 @@
 mod test {
 
     use rand::{thread_rng, Rng};
+    use sui_protocol_config::ProtocolConfig;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
@@ -234,8 +235,9 @@ mod test {
         );
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin);
+        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_max_version();
         let system_state_observer = {
-            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            let mut system_state_observer = SystemStateObserver::new(proxy.clone(), protocol_config);
             if let Ok(_) = system_state_observer.reference_gas_price.changed().await {
                 info!("Got the reference gas price from system state object");
             }
