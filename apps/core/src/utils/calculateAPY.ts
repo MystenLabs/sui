@@ -22,17 +22,17 @@ export function calculateAPY(
     if (stakingPoolActivationEpoch || stakingPoolActivationEpoch === 0) {
         const numEpochsParticipated = epoch - stakingPoolActivationEpoch;
         apy =
-            Math.pow(
+            (Math.pow(
                 1 +
                     (+stakingPoolSuiBalance - +poolTokenBalance) /
                         +poolTokenBalance,
                         (365 / numEpochsParticipated)
-            ) - 1;
+            ) - 1) * 100;
     } else {
         apy = 0;
     }
     
-    const apyReturn = isNaN(apy) ? 0 : roundFloat(apy * 100, roundDecimals);
+    const apyReturn = roundFloat(apy, roundDecimals);
 
     // guard against very large numbers (e.g. 1e+100)
     return apyReturn > 100_000 ? 0 : apyReturn;
