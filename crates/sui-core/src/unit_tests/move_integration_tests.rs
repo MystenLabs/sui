@@ -2309,7 +2309,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let mut builder = ProgrammableTransactionBuilder::new();
     make_and_drop(&mut builder, package_id, &t, vec![]);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
@@ -2324,7 +2324,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![builder.pure(value.clone()).unwrap()];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
@@ -2342,7 +2342,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     ];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
@@ -2365,7 +2365,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![arg, id_result, arg];
     make_and_drop(&mut builder, package_id, &t, args);
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
@@ -2395,7 +2395,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         args,
     );
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
@@ -2485,7 +2485,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     let arg = builder.pure(value.clone()).unwrap();
     builder.command(Command::MakeMoveVec(None, vec![arg]));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(
@@ -2507,7 +2507,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     let args = vec![builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false)];
     builder.command(Command::MakeMoveVec(Some(t.clone()), args));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(
@@ -2531,7 +2531,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     ];
     builder.command(Command::MakeMoveVec(Some(t.clone()), args));
     let pt = builder.finish();
-    let effects = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
         .await
         .unwrap();
     assert_eq!(
