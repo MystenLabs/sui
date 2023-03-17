@@ -547,7 +547,7 @@ The `getDelegatedStakes` function has been renamed to `getStakes` and with the n
 
 ### Add getStakesByIds function
 
-With the new `getStakesByIds` it will be possible to query the delegated stakes using a vector of staked sui ids. The function returns all of the stakes queried grouped by validator staking pools, as well as the estimated staking rewards earned so far.
+With the new `getStakesByIds` it's possible to query the delegated stakes using a vector of staked SUI IDs. The function returns all of the stakes queried, grouped by validator staking pools, as well as the estimated staking rewards earned so far.
 
 ### Secp256k1 derive keypair
     
