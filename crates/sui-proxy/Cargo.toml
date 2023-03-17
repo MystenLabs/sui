@@ -31,6 +31,7 @@ reqwest = { version = "0.11.4", default-features = false, features = ["rustls-tl
 hyper = { version = "0.14", features = ["full"] }
 sui-tls = { path = "../sui-tls" }
 sui-types = { path = "../sui-types" }
+mysten-metrics = { path = "../mysten-metrics" }
 multiaddr = "0.17.0"
 prometheus = "0.13.3"
 snap = "1.1.0"
