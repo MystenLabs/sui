@@ -74,7 +74,10 @@ export const builder = new BCS(bcs)
     /**
      * Publish a Move module.
      */
-    Publish: { modules: [VECTOR, [VECTOR, BCS.U8]] },
+    Publish: {
+      modules: [VECTOR, [VECTOR, BCS.U8]],
+      dependencies: [VECTOR, BCS.ADDRESS],
+    },
     /**
      * Build a vector of objects using the input arguments.
      * It is impossible to construct a `vector<T: key>` otherwise,

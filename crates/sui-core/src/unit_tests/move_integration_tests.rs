@@ -2399,7 +2399,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
         .expect("Could not build resolution graph.");
 
     let SuiError::ModulePublishFailure { error } =
-        check_unpublished_dependencies(gather_dependencies(&resolution_graph).unpublished)
+        check_unpublished_dependencies(&gather_dependencies(&resolution_graph).unpublished)
             .err()
             .unwrap()
      else {

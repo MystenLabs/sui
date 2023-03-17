@@ -9,7 +9,9 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{
+    check_invalid_dependencies, check_unpublished_dependencies, BuildConfig,
+};
 
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
@@ -67,7 +69,19 @@ impl Build {
             },
         )?;
         if dump_bytecode_as_base64 {
-            println!("{}", json!(pkg.get_package_base64(with_unpublished_deps)))
+            check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
+            if !with_unpublished_deps {
+                check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
+            }
+
+            let package_dependencies = pkg.get_package_dependencies_hex();
+            println!(
+                "{}",
+                json!({
+                    "modules": pkg.get_package_base64(with_unpublished_deps),
+                    "dependencies": json!(package_dependencies),
+                })
+            )
         }
 
         if generate_struct_layouts {

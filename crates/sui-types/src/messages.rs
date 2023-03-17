@@ -2170,20 +2170,6 @@ pub enum ExecutionFailureStatus {
         The modules in the package must have their self-addresses set to zero."
     )]
     PublishErrorNonZeroAddress,
-    #[error(
-        "Publish/Upgrade Error, Missing dependency. \
-         A dependency of a published or upgraded package has not been assigned an on-chain \
-         address."
-    )]
-    PublishUpgradeMissingDependency,
-
-    #[error(
-        "Publish/Upgrade Error, Dependency downgrade. \
-         Indirect (transitive) dependency of published or upgraded package has been assigned an \
-         on-chain version that is less than the version required by one of the package's \
-         transitive dependencies."
-    )]
-    PublishUpgradeDependencyDowngrade,
 
     #[error(
         "Sui Move Bytecode Verification Error. \
@@ -2259,6 +2245,21 @@ pub enum ExecutionFailureStatus {
     Limit is {max_size} bytes"
     )]
     EffectsTooLarge { current_size: u64, max_size: u64 },
+
+    #[error(
+        "Publish/Upgrade Error, Missing dependency. \
+         A dependency of a published or upgraded package has not been assigned an on-chain \
+         address."
+    )]
+    PublishUpgradeMissingDependency,
+
+    #[error(
+        "Publish/Upgrade Error, Dependency downgrade. \
+         Indirect (transitive) dependency of published or upgraded package has been assigned an \
+         on-chain version that is less than the version required by one of the package's \
+         transitive dependencies."
+    )]
+    PublishUpgradeDependencyDowngrade,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

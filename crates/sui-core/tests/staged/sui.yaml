@@ -190,60 +190,60 @@ ExecutionFailureStatus:
     9:
       PublishErrorNonZeroAddress: UNIT
     10:
-      PublishUpgradeMissingDependency: UNIT
-    11:
-      PublishUpgradeDependencyDowngrade: UNIT
-    12:
       SuiMoveVerificationError: UNIT
-    13:
+    11:
       MovePrimitiveRuntimeError:
         NEWTYPE:
           TYPENAME: MoveLocationOpt
-    14:
+    12:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    15:
+    13:
       VMVerificationOrDeserializationError: UNIT
-    16:
+    14:
       VMInvariantViolation: UNIT
-    17:
+    15:
       FunctionNotFound: UNIT
-    18:
+    16:
       ArityMismatch: UNIT
-    19:
+    17:
       TypeArityMismatch: UNIT
-    20:
+    18:
       NonEntryFunctionInvoked: UNIT
-    21:
+    19:
       CommandArgumentError:
         STRUCT:
           - arg_idx: U16
           - kind:
               TYPENAME: CommandArgumentError
-    22:
+    20:
       TypeArgumentError:
         STRUCT:
           - argument_idx: U16
           - kind:
               TYPENAME: TypeArgumentError
-    23:
+    21:
       UnusedValueWithoutDrop:
         STRUCT:
           - result_idx: U16
           - secondary_idx: U16
-    24:
+    22:
       InvalidPublicFunctionReturnType:
         STRUCT:
           - idx: U16
-    25:
+    23:
       InvalidTransferObject: UNIT
-    26:
+    24:
       EffectsTooLarge:
         STRUCT:
           - current_size: U64
           - max_size: U64
+    25:
+      PublishUpgradeMissingDependency: UNIT
+    26:
+      PublishUpgradeDependencyDowngrade: UNIT
 ExecutionStatus:
   ENUM:
     0:

@@ -18,6 +18,7 @@ import {
   RawSigner,
   FaucetResponse,
   assert,
+  normalizeSuiObjectId,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -105,7 +106,7 @@ export async function publishPackage(
 
   const tmpobj = tmp.dirSync({ unsafeCleanup: true });
 
-  const compiledModules = JSON.parse(
+  const compiledModulesAndDeps = JSON.parse(
     execSync(
       `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath} --install-dir ${tmpobj.name}`,
       { encoding: 'utf-8' },
@@ -116,7 +117,10 @@ export async function publishPackage(
   tx.setGasBudget(10000);
 
   const cap = tx.publish(
-    compiledModules.map((m: any) => Array.from(fromB64(m))),
+    compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
+    compiledModulesAndDeps.dependencies.map((addr: string) =>
+      normalizeSuiObjectId(addr),
+    ),
   );
 
   // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
