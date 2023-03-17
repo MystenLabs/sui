@@ -180,16 +180,29 @@ mod pg_integration {
         wait_until_next_checkpoint(&store).await;
 
         let context = &mut test_cluster.wallet;
-        let (_sender, _object_id, digest) = create_devnet_nft(context).await.unwrap();
+        let (sender, object_id, digest) = create_devnet_nft(context).await.unwrap();
         wait_until_transaction_synced(&store, digest.base58_encode().as_str()).await;
 
         let to_query = EventFilter::Transaction(digest);
-
         let query_response = indexer_rpc_client
             .query_events(to_query, None, None, None)
             .await?;
 
         assert_eq!(digest, query_response.data.first().unwrap().id.tx_digest);
+
+        let to_query = EventFilter::Sender(sender);
+        let query_response = indexer_rpc_client
+            .query_events(to_query, None, None, None)
+            .await?;
+
+        assert_eq!(sender, query_response.data.first().unwrap().sender);
+
+        let to_query = EventFilter::Package(object_id);
+        let query_response = indexer_rpc_client
+            .query_events(to_query, None, None, None)
+            .await?;
+
+        assert_eq!(object_id, query_response.data.first().unwrap().package_id);
         Ok(())
     }
 
