@@ -26,12 +26,14 @@ export function calculateAPY(
                 1 +
                     (+stakingPoolSuiBalance - +poolTokenBalance) /
                         +poolTokenBalance,
-                        (365 / numEpochsParticipated)
-            ) - 1) * 100;
+                365 / numEpochsParticipated
+            ) -
+                1) *
+            100;
     } else {
         apy = 0;
     }
-    
+
     const apyReturn = roundFloat(apy, roundDecimals);
 
     // guard against very large numbers (e.g. 1e+100)
