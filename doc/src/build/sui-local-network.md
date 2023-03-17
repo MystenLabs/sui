@@ -162,3 +162,7 @@ pnpm sdk test:e2e
 ```
 
 For more details, refer to [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
+
+## Testing with the Sui TypeScript SDK
+
+The published Sui TypeScript SDK version might be behind the local network version. To make sure you're using the latest version of the SDK, use the `experimental`-tagged version (e.g., `0.0.0-experimental-20230317184920` ) in the [Current Tags section](https://www.npmjs.com/package/@mysten/sui.js/v/0.0.0-experimental-20230127130009?activeTab=versions) of the Sui NPM registry.
