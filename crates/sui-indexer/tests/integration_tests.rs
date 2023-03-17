@@ -187,7 +187,6 @@ mod pg_integration {
         let nft_creator = test_cluster.get_address_0();
         let context = &mut test_cluster.wallet;
 
-
         let (_, _, digest_one) = create_devnet_nft(context).await.unwrap();
         wait_until_transaction_synced(&store, digest_one.base58_encode().as_str()).await;
         let (_, _, digest_two) = create_devnet_nft(context).await.unwrap();
@@ -207,7 +206,10 @@ mod pg_integration {
             assert_eq!(item.transaction_module, ident_str!("devnet_nft").into());
             assert_eq!(item.package_id, ObjectID::from(SUI_FRAMEWORK_ADDRESS));
             assert_eq!(item.sender, nft_creator);
-            assert_eq!(item.type_, StructTag::from_str("0x2::devnet_nft::MintNFTEvent").unwrap());
+            assert_eq!(
+                item.type_,
+                StructTag::from_str("0x2::devnet_nft::MintNFTEvent").unwrap()
+            );
         }
 
         let filter_on_transaction = EventFilter::Transaction(digest_one);
