@@ -12,6 +12,7 @@ import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import { useGetInactiveValidators } from '../useGetInactiveValidators';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
 import { CardItem } from '_app/shared/card/CardItem';
@@ -75,6 +76,12 @@ export function DelegationDetailCard({
         staked: stakedId,
     }).toString()}`;
 
+    const { data: inActiveValidatorsIds } = useGetInactiveValidators(
+        system?.inactivePoolsId
+    );
+
+    const inActiveValidator = inActiveValidatorsIds.includes(validatorAddress);
+
     const commission = validatorData ? +validatorData.commissionRate / 100 : 0;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -103,6 +110,13 @@ export function DelegationDetailCard({
             <BottomMenuLayout>
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
+                        {inActiveValidator ? (
+                            <Alert className="mb-3">
+                                Unstake SUI from this inactive validator and
+                                stake on an active validator to start earning
+                                rewards again.
+                            </Alert>
+                        ) : null}
                         <div className="w-full flex">
                             <Card
                                 header={
@@ -195,19 +209,21 @@ export function DelegationDetailCard({
                             </Card>
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
-                            <Button
-                                size="large"
-                                mode="outline"
-                                href={stakeByValidatorAddress}
-                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
-                                disabled={!stakingEnabled}
-                            >
-                                <Icon
-                                    icon={SuiIcons.Add}
-                                    className="font-normal"
-                                />
-                                Stake SUI
-                            </Button>
+                            {!inActiveValidator ? (
+                                <Button
+                                    size="large"
+                                    mode="outline"
+                                    href={stakeByValidatorAddress}
+                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
+                                    disabled={!stakingEnabled}
+                                >
+                                    <Icon
+                                        icon={SuiIcons.Add}
+                                        className="font-normal"
+                                    />
+                                    Stake SUI
+                                </Button>
+                            ) : null}
                             {Boolean(totalStake) && delegationId && (
                                 <Button
                                     size="large"

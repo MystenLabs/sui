@@ -9,6 +9,7 @@ import { getAllStakeSui } from '../getAllStakeSui';
 import { StakeAmount } from '../home/StakeAmount';
 import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
+import { useGetInactiveValidators } from '../useGetInactiveValidators';
 import { useSystemState } from '../useSystemState';
 import BottomMenuLayout, {
     Menu,
@@ -67,6 +68,16 @@ export function ValidatorsCard() {
 
     const numberOfValidators = delegatedStake?.length || 0;
 
+    const { data: inActiveValidatorsIds } = useGetInactiveValidators(
+        system?.inactivePoolsId
+    );
+
+    const inActiveValidators = useMemo(() => {
+        return delegations?.filter((delegation) =>
+            inActiveValidatorsIds?.includes(delegation.validatorAddress)
+        );
+    }, [inActiveValidatorsIds, delegations]);
+
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading) {
@@ -92,6 +103,24 @@ export function ValidatorsCard() {
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
+                        {inActiveValidators?.length ? (
+                            <Alert className="mb-3">
+                                Unstake SUI from the inactive validators and
+                                stake on an active validator to start earning
+                                rewards again.
+                            </Alert>
+                        ) : null}
+                        <div className="grid grid-cols-2 gap-2.5 mb-4">
+                            {system &&
+                                inActiveValidators?.map((delegation) => (
+                                    <StakeCard
+                                        delegationObject={delegation}
+                                        currentEpoch={+system.epoch}
+                                        key={delegation.stakedSuiId}
+                                        inactiveValidator
+                                    />
+                                ))}
+                        </div>
                         <Card
                             padding="none"
                             header={
