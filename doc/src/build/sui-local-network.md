@@ -2,71 +2,15 @@
 title: Create a local Sui network
 ---
 
-Learn how to create a Sui network in your local environment. Use the [Sui Client CLI](cli-client.md) to interact with the local network.
-
-## Install Sui
-
-To create a local Sui network, first install Sui. See [Install Sui to Build](install.md).
-
-## Genesis
-
-To create the configuration files and objects for a local Sui network, run the `genesis` command. Genesis creates the network configuration files in the ~/.sui/sui_config folder. This includes a YAML file for fullnode, network, client, and each validator. It also creates a sui.keystore that stores client key pairs. 
-
-The network that genesis creates includes four validators and five user accounts that contain five coin objects each.
-
-```shell
-sui genesis
-```
-
-### Run genesis after using the Client CLI
-If you used the Sui Client CLI before you create a local network, it created a client.yaml file in the .sui/sui_config directory. When you run genesis to create a local network, a warning displays that the .sui/sui_config folder is not empty because of the existing client.yaml file. You can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
-
-Use the following command to replace the configuration files in the .sui/sui_config directory.
-```shell
-sui genesis --force
-```
-
-Use the following command to use a different directory to store the configuration files.
-```shell
-sui genesis --working-dir /workspace/config-files
-```
-
-The directory must already exist, and be empty, before you run the command.
-
-#### Embedded gateway
-
-You can use an embedded gateway with your local network. The gateway.yaml file contains information about the embedded gateway. The embedded gateway will be deprecated in a future release of Sui.
-
-## Start the local network
-
-Run the following command to start the local Sui network, assuming you
-accepted the default location for configuration:
-
-```shell
-sui start
-```
-
-This command looks for the Sui network configuration file
-`network.yaml` in the `~/.sui/sui_config` directory. If you used a different directory when you ran `genesis`, use the `--network.config` argument to specify the path to that directory when you start the network.
-
-Use the following command to use a network.yaml file in a directory other than the default:
-
-```shell
-sui start --network.config /workspace/config-files/network.yaml
-```
-When you start the network, Sui generates an authorities_db directory that stores validator data, and a consensus_db directory that stores consensus data. These directories are created alongside the other configuration files, either in the default directory or where you specified the `--working-dir` to be when you ran `genesis`.
-
-After the process completes, use the [Sui Client CLI](cli-client.md) to interact with the local network.
-
-To test your apps against the latest changes or to prepare for new features ahead of the next DevNet/TestNet release, we recommend testing on a local network using the `sui-test-validator` binary. This binary starts a single-node cluster with full-node and faucet capabilities.
+To test your dApps against the latest changes or to prepare for new features ahead of the next Devnet or Testnet release, you can test on a local network using the `sui-test-validator` binary. This binary starts a single-node cluster with Full node and faucet capabilities.
 
 ## Prerequisite
 
-[Install](../build/install.md) the required libraries.
+[Install](../build/install.md) the required libraries if not already installed.
 
 ## Install Sui
 
-You can install Sui from your local repository or from the remote repository on GitHub. If you build from your local source, you have the benefit of being able to run a local Sui Explorer and Sui Wallet.
+You can install Sui from your local repository or from the remote repository. If you build from your local source, you have the benefit of being able to run a local Sui Explorer and Sui Wallet.
 
 To run from your local source, clone the repository locally (or get latest, if already cloned). Then, run `cargo build` from the `sui` directory:
 
@@ -79,11 +23,9 @@ cd sui
 cargo build sui-test-validator sui
 ```
 
-To use remote code, `cargo install` Sui from the GitHub repository:
+To use remote code, `cargo install` Sui directly from the remote repository. The following example uses the `main` branch, but you can set other branches as needed (e.g., `--branch devnet`, `--branch testnet`, and so on) to target different network versions.
 
 ```bash
-# Change `--branch main` to `--branch devnet` or `--branch testnet` to 
-# target different network versions
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch main sui-test-validator sui
 ```
 
@@ -95,7 +37,7 @@ To run a local network with validators and a faucet, open a Terminal or Console 
 RUST_LOG="consensus=off" cargo run --bin sui-test-validator
 ```
 
-You can customize your local Sui network by passing values to the following flags:
+You can customize your local Sui network by passing values to the following flags for the `sui-test-validator` command:
 
 ```bash
 OPTIONS:
@@ -111,7 +53,7 @@ OPTIONS:
 
 Use `sui-validator-test --help` to see these options in your console.
 
-### Making faucet request
+### Making faucet requests
 
 To get gas coins for an address, open a new Terminal or Conaole window or tab. Make a cURL request with the address you want to receive the coins. Use the `sui client active-address` command to get the current active address, if needed.
 
@@ -125,7 +67,7 @@ curl --location --request POST 'http://127.0.0.1:9123/gas' \
 }'
 ```
 
-If successful, the response resembles the following output:
+If successful, the response resembles the following:
 
 ```bash
 {
@@ -187,7 +129,7 @@ If successful, the return resembles the following:
 
 ## Setup local Sui Explorer
 
-While [https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local) is compatible with the local network, it might not have all the latest features that are available in the `main` branch of the Sui repository. To run `explorer` locally, open a Terminal or Console window in the `sui` directory (install [pnpm](https://pnpm.io/installation) first if you don't already have it installed):
+While [https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local) is compatible with the local network, it might not have all the latest features that are available in the `main` branch of the Sui repository. To run `explorer` locally, open a Terminal or Console window in the `sui` directory (install [pnpm](https://pnpm.io/installation) first if you don't already have it):
 
 ```bash
 pnpm explorer dev
@@ -199,7 +141,7 @@ For more details, see [https://github.com/MystenLabs/sui/tree/main/apps/explorer
 
 ## Set up local Sui Wallet
 
-Similar to local Sui Explorer, you can also setup a local Sui Wallet. Open a Terminal or Console window or tab at the `sui` root directory and use the `wallet start` command (install [pnpm](https://pnpm.io/installation) first if you don't already have it installed):
+Similar to local Sui Explorer, you can also setup a local Sui Wallet. Open a Terminal or Console window or tab at the `sui` root directory and use the `wallet start` command (install [pnpm](https://pnpm.io/installation) first if you don't already have it):
 
 ```bash
 pnpm wallet start
@@ -209,7 +151,7 @@ For more details, reference [https://github.com/MystenLabs/sui/tree/main/apps/wa
 
 ## Generating example data
 
-Open a Terminal or Console window at the `sui` root directory. From there, run the TypeScript SDK end to end test against the local network to generate example data to the network (install [pnpm](https://pnpm.io/installation) first if you don't already have it installed):
+Open a Terminal or Console window or tab at the `sui` root directory. From there, run the TypeScript SDK end to end test against the local network to generate example data to the network (install [pnpm](https://pnpm.io/installation) first if you don't already have it):
 
 ```bash
 pnpm sdk test:e2e
