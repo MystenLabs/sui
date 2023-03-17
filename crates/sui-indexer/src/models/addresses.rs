@@ -4,7 +4,6 @@
 use crate::models::transactions::Transaction;
 use crate::schema::addresses;
 
-use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 #[derive(Queryable, Insertable, Debug)]
@@ -12,7 +11,7 @@ use diesel::prelude::*;
 pub struct Address {
     pub account_address: String,
     pub first_appearance_tx: String,
-    pub first_appearance_time: Option<NaiveDateTime>,
+    pub first_appearance_time: i64,
 }
 
 impl From<&Transaction> for Address {
@@ -20,7 +19,7 @@ impl From<&Transaction> for Address {
         Address {
             account_address: txn.sender.clone(),
             first_appearance_tx: txn.transaction_digest.clone(),
-            first_appearance_time: txn.transaction_time,
+            first_appearance_time: txn.timestamp_ms,
         }
     }
 }
