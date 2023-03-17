@@ -20,7 +20,7 @@ git clone https://github.com/MystenLabs/sui.git
 # Make sui the working directory
 cd sui
 # Build Sui
-cargo build sui-test-validator sui
+cargo build --bin sui-test-validator --bin sui
 ```
 
 To use remote code, `cargo install` Sui directly from the remote repository. The following example uses the `main` branch, but you can set other branches as needed (e.g., `--branch devnet`, `--branch testnet`, and so on) to target different network versions.
