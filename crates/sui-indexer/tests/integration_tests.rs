@@ -7,6 +7,9 @@ mod pg_integration {
     use diesel::migration::MigrationSource;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+    use move_core_types::account_address::AccountAddress;
+    use move_core_types::ident_str;
+    use move_core_types::language_storage::StructTag;
     use prometheus::Registry;
     use std::env;
     use std::str::FromStr;
@@ -20,7 +23,8 @@ mod pg_integration {
         SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
         SuiParsedMoveObject, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
         TransactionBytes,
-        EventFilter,        
+        EventFilter,
+        SuiObjectData,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::ObjectID;
@@ -31,7 +35,10 @@ mod pg_integration {
     use sui_types::query::TransactionFilter;
     use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use test_utils::transaction::{create_devnet_nft, delete_devnet_nft};
+    use test_utils::transaction::{create_devnet_nft, transfer_coin, delete_devnet_nft};
+    use move_core_types::identifier::Identifier;
+    use sui_types::SUI_FRAMEWORK_ADDRESS;
+
     use tokio::task::JoinHandle;
     const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -178,31 +185,70 @@ mod pg_integration {
     async fn test_event_query_e2e() -> Result<(), anyhow::Error> {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
         wait_until_next_checkpoint(&store).await;
-
         let context = &mut test_cluster.wallet;
-        let (sender, object_id, digest) = create_devnet_nft(context).await.unwrap();
-        wait_until_transaction_synced(&store, digest.base58_encode().as_str()).await;
 
-        let to_query = EventFilter::Transaction(digest);
-        let query_response = indexer_rpc_client
-            .query_events(to_query, None, None, None)
-            .await?;
+        let (_, _, digest_one) = create_devnet_nft(context).await.unwrap();
+        wait_until_transaction_synced(&store, digest_one.base58_encode().as_str()).await;
+        let (_, _, digest_two) = create_devnet_nft(context).await.unwrap();
+        wait_until_transaction_synced(&store, digest_two.base58_encode().as_str()).await;
+        let (transferred_object, sender, receiver, digest_three, _, _) = transfer_coin(context).await.unwrap();
+        wait_until_transaction_synced(&store, digest_three.base58_encode().as_str()).await;
 
-        assert_eq!(digest, query_response.data.first().unwrap().id.tx_digest);
-
+        // Test various ways of querying events
         let to_query = EventFilter::Sender(sender);
         let query_response = indexer_rpc_client
             .query_events(to_query, None, None, None)
             .await?;
+        // Interestingly, transferring coins do not emit events?
+        assert_eq!(query_response.data.len(), 2);
+        assert_eq!(query_response.data[0].transaction_module, ident_str!("devnet_nft").into());
+        assert_eq!(query_response.data[1].transaction_module, ident_str!("devnet_nft").into());
 
-        assert_eq!(sender, query_response.data.first().unwrap().sender);
-
-        let to_query = EventFilter::Package(object_id);
+        let filter_on_transaction = EventFilter::Transaction(digest_one);
         let query_response = indexer_rpc_client
-            .query_events(to_query, None, None, None)
+            .query_events(filter_on_transaction, None, None, None)
             .await?;
+        assert_eq!(query_response.data.len(), 1);
+        assert_eq!(digest_one, query_response.data.first().unwrap().id.tx_digest);
 
-        assert_eq!(object_id, query_response.data.first().unwrap().package_id);
+        let filter_on_module = EventFilter::MoveModule {
+            package: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+            module: Identifier::new("devnet_nft").unwrap() };
+        let query_response = indexer_rpc_client
+            .query_events(filter_on_module, None, None, None)
+            .await?;
+        assert_eq!(query_response.data.len(), 2);
+        assert_eq!(digest_one, query_response.data[0].id.tx_digest);
+        assert_eq!(digest_two, query_response.data[1].id.tx_digest);
+
+        let filter_on_event_type = EventFilter::MoveEventType(StructTag::from_str("0x2::devnet_nft::MintNFTEvent").unwrap());
+        let query_response = indexer_rpc_client
+            .query_events(filter_on_event_type, None, None, None)
+            .await?;
+        assert_eq!(query_response.data.len(), 2);
+        assert_eq!(digest_one, query_response.data[0].id.tx_digest);
+        assert_eq!(digest_two, query_response.data[1].id.tx_digest);
+
+        let gas_objects: Vec<SuiObjectData> = indexer_rpc_client
+        .get_owned_objects(
+            receiver,
+            Some(SuiObjectDataOptions::new().with_type()),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data
+        .into_iter()
+        .filter_map(|object_resp| match object_resp {
+            SuiObjectResponse::Exists(obj_data) => Some(obj_data),
+            _ => None
+        })
+        .collect();
+
+        let object_correctly_transferred = gas_objects.iter().any(|obj| obj.object_id == transferred_object);
+        assert!(object_correctly_transferred);
+
         Ok(())
     }
 
