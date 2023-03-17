@@ -638,6 +638,9 @@ impl SuiNode {
 
         consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
+        let new_epoch_start_state = epoch_store.epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
+
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
             checkpoint_service.clone(),
@@ -650,10 +653,8 @@ impl SuiNode {
                 .load()
                 .clone(),
             state.metrics.clone(),
+            committee.clone(),
         ));
-
-        let new_epoch_start_state = epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
 
         let transactions_addr = &config
             .consensus_config

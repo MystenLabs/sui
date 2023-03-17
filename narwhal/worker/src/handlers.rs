@@ -4,8 +4,7 @@
 use anemo::types::response::StatusCode;
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{Committee, WorkerCache, WorkerId};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 
@@ -81,8 +80,8 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
 
 /// Defines how the network receiver handles incoming primary messages.
 pub struct PrimaryReceiverHandler<V> {
-    // The public key of this authority.
-    pub name: PublicKey,
+    // The id of this authority.
+    pub authority_id: AuthorityIdentifier,
     // The id of this worker.
     pub id: WorkerId,
     // The committee information.
@@ -159,7 +158,13 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 };
             if first_attempt {
                 // Send first sync request to a single node.
-                let worker_name = match self.worker_cache.worker(&message.target, &self.id) {
+                let worker_name = match self.worker_cache.worker(
+                    self.committee
+                        .authority(&message.target)
+                        .unwrap()
+                        .protocol_key(),
+                    &self.id,
+                ) {
                     Ok(worker_info) => worker_info.name,
                     Err(e) => {
                         return Err(anemo::rpc::Status::internal(format!(
@@ -187,7 +192,13 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                 // If first request timed out or was missing batches, try broadcasting to some others.
                 let names: Vec<_> = self
                     .worker_cache
-                    .others_workers_by_id(&self.name, &self.id)
+                    .others_workers_by_id(
+                        self.committee
+                            .authority(&self.authority_id)
+                            .unwrap()
+                            .protocol_key(),
+                        &self.id,
+                    )
                     .into_iter()
                     .map(|(_, info)| info.name)
                     .collect();

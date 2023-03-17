@@ -40,7 +40,7 @@ impl WorkerNodeInner {
     #[instrument(level = "info", skip_all)]
     async fn start(
         &mut self,
-        // The primary's public key
+        // The primary's id
         primary_name: PublicKey,
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
@@ -71,8 +71,17 @@ impl WorkerNodeInner {
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
+        let authority = committee
+            .authority_by_key(&primary_name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Our node with key {:?} should be in committee",
+                    primary_name
+                )
+            });
+
         let handles = Worker::spawn(
-            primary_name,
+            authority.clone(),
             network_keypair,
             self.id,
             committee.clone(),

@@ -11,8 +11,10 @@ use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use parking_lot::Mutex;
@@ -54,6 +56,9 @@ pub struct ConsensusHandler<T> {
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: Mutex<LruCache<SequencedConsensusTransactionKey, ()>>,
     transaction_scheduler: AsyncTransactionScheduler,
+    /// Narwhal committee is used to derive the Narwhal's Certificate authority public key from the
+    /// corresponding authority id.
+    committee: Committee,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -68,6 +73,7 @@ impl<T> ConsensusHandler<T> {
         committee: Arc<Committee>,
         authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
         metrics: Arc<AuthorityMetrics>,
+        committee: Committee,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
         let transaction_scheduler =
@@ -85,6 +91,7 @@ impl<T> ConsensusHandler<T> {
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
             )),
             transaction_scheduler,
+            committee,
         }
     }
 }
@@ -207,8 +214,18 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 }
             };
 
+            let certificate_author = AuthorityName::from_bytes(
+                self.committee
+                    .authority_safe(&output_cert.header.author)
+                    .protocol_key_bytes()
+                    .0
+                    .as_ref(),
+            )
+            .unwrap();
+
             sequenced_transactions.push(SequencedConsensusTransaction {
                 certificate: output_cert.clone(),
+                certificate_author,
                 consensus_index: index_with_hash,
                 transaction,
             });
@@ -341,6 +358,7 @@ fn classify(transaction: &ConsensusTransaction) -> &'static str {
 
 pub struct SequencedConsensusTransaction {
     pub certificate: Arc<narwhal_types::Certificate>,
+    pub certificate_author: AuthorityName,
     pub consensus_index: ExecutionIndicesWithHash,
     pub transaction: SequencedConsensusTransactionKind,
 }
@@ -385,7 +403,7 @@ impl SequencedConsensusTransactionKind {
 
 impl SequencedConsensusTransaction {
     pub fn sender_authority(&self) -> AuthorityName {
-        (&self.certificate.header.author).into()
+        self.certificate_author
     }
 
     pub fn key(&self) -> SequencedConsensusTransactionKey {
@@ -408,6 +426,7 @@ impl SequencedConsensusTransaction {
         Self {
             transaction: SequencedConsensusTransactionKind::External(transaction),
             certificate: Default::default(),
+            certificate_author: AuthorityName::ZERO,
             consensus_index: Default::default(),
         }
     }

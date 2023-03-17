@@ -3,6 +3,7 @@
 
 // This test file tests the validity of the 'certificates' implementation.
 
+use config::AuthorityIdentifier;
 use crypto::KeyPair;
 use fastcrypto::traits::KeyPair as _;
 use rand::{
@@ -112,8 +113,9 @@ fn test_unknown_signature_in_certificate() {
     }
 
     let malicious_key = KeyPair::generate(&mut StdRng::from_rng(OsRng).unwrap());
+    let malicious_id: AuthorityIdentifier = AuthorityIdentifier(50u8);
 
-    let vote = Vote::new_with_signer(&header, malicious_key.public(), &malicious_key);
+    let vote = Vote::new_with_signer(&header, &malicious_id, &malicious_key);
     signatures.push((vote.author.clone(), vote.signature));
 
     assert!(Certificate::new(&committee, header, signatures).is_err());

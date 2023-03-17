@@ -141,19 +141,17 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .active_validators
             .iter()
             .map(|validator| {
-                let authority = narwhal_config::Authority {
-                    stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address: validator.narwhal_primary_address.clone(),
-                    network_key: validator.narwhal_network_pubkey.clone(),
-                };
+                let authority = narwhal_config::Authority::new(
+                    validator.protocol_pubkey.clone(),
+                    validator.voting_power as narwhal_config::Stake,
+                    validator.narwhal_primary_address.clone(),
+                    validator.narwhal_network_pubkey.clone(),
+                );
                 (validator.protocol_pubkey.clone(), authority)
             })
             .collect();
 
-        narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch as narwhal_config::Epoch,
-        }
+        narwhal_config::Committee::new(narwhal_committee, self.epoch as narwhal_config::Epoch)
     }
 
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo> {
