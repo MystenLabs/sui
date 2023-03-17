@@ -83,7 +83,11 @@ Use the steps in this section to install and configure a Sui Full node directly 
     ```
 ## Set up Sui addresses
 
-Sui addresses do not require on-chain initialization, you can spend from an address if it corresponds to your private key. You can derive a Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. The following code sample demonstrates how to derive a Sui address in Rust:
+Sui addresses do not require on-chain initialization, you can spend from an address if it corresponds to your private key. You can derive a 32-byte Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. 
+
+Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1, Secp256r1 and Multisig. The corresponding flag bytes are 0x00, 0x01, 0x02, 0x03 respectively. 
+
+The following code sample demonstrates how to derive a Sui address in Rust:
 
 ```rust
 let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = Multisig
@@ -91,12 +95,8 @@ let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = M
 let mut hasher = UserHash::default();
 hasher.update([flag]);
 hasher.update(pk);
-let g_arr = hasher.finalize();
-
-// The first 32 bytes is the Sui address.
-let mut res = [0u8; SUI_ADDRESS_LENGTH]; // SUI_ADDRESS_LENGTH = 32
-res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-let sui_address_string = hex::encode(res);
+let arr = hasher.finalize();
+let sui_address_string = hex::encode(arr);
 ```
 
 ## Displaying addresses

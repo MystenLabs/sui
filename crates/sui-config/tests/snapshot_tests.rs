@@ -26,17 +26,16 @@ use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, NetworkKeyPair,
+    NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::multiaddr::Multiaddr;
 
 #[test]
 #[cfg_attr(msim, ignore)]
 fn genesis_config_snapshot_matches() {
-    // Test creating fake SuiAddress from PublicKeyBytes.
-    let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let public_key = AuthorityPublicKeyBytes::from(keypair.public());
-    let fake_addr = SuiAddress::from(&public_key);
+    let ed_kp1: SuiKeyPair =
+        SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
+    let fake_addr: SuiAddress = (&ed_kp1.public()).into();
 
     let fake_obj_id = ObjectID::from(fake_addr);
     let mut genesis_config = GenesisConfig::for_local_testing();
