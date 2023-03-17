@@ -18,7 +18,7 @@ use sui_types::{
     MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
 };
 
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use crate::authority::{
     authority_tests::{execute_programmable_transaction, init_state},
@@ -51,14 +51,15 @@ pub fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
 
 pub fn build_upgrade_test_modules_with_dep_addr(
     test_dir: &str,
-    addr_name: &str,
-    obj_id: ObjectID,
+    dep_ids: impl IntoIterator<Item = (&'static str, ObjectID)>,
 ) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
     let mut build_config = BuildConfig::new_for_testing();
-    build_config
-        .config
-        .additional_named_addresses
-        .insert(addr_name.to_string(), AccountAddress::from(obj_id));
+    for (addr_name, obj_id) in dep_ids.into_iter() {
+        build_config
+            .config
+            .additional_named_addresses
+            .insert(addr_name.to_string(), AccountAddress::from(obj_id));
+    }
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let package = sui_framework::build_move_package(&path, build_config).unwrap();
@@ -541,8 +542,7 @@ async fn test_interleaved_upgrades() {
     // Base has been published. Publish a package now that depends on the base package.
     let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
         "dep_on_upgrading_package",
-        "base_addr",
-        runner.package.0,
+        [("base_addr", runner.package.0)],
     );
     let (depender_package, depender_cap) = runner.publish(module_bytes, dep_ids).await;
 
@@ -589,8 +589,7 @@ async fn test_interleaved_upgrades() {
         // Currently doesn't work -- need to wait for linkage table to be added to the loader.
         let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
             "dep_on_upgrading_package",
-            "base_addr",
-            dep_v2_package.0,
+            [("base_addr", dep_v2_package.0)],
         );
 
         // We take as input the upgrade cap
@@ -615,4 +614,85 @@ async fn test_interleaved_upgrades() {
     };
     let TransactionEffects::V1(effects) = runner.run(pt2).await;
     assert!(effects.status.is_ok());
+}
+
+#[tokio::test]
+async fn test_publish_override_happy_path() {
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    // Base has been published already. Publish a package now that depends on the base package.
+    let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package",
+        [("base_addr", runner.package.0)],
+    );
+    // Dependency graph: base <-- dep_on_upgrading_package
+    let (depender_package, _) = runner.publish(module_bytes, dep_ids).await;
+
+    // publish base package at version 2
+    // Dependency graph: base(v1) <-- dep_on_upgrading_package
+    //                   base(v2)
+    let pt1 = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = runner.package.0;
+        let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
+
+        // We take as input the upgrade cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
+        move_call! {
+            builder,
+            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+        };
+
+        builder.finish()
+    };
+    let TransactionEffects::V1(effects) = runner.run(pt1).await;
+    assert!(effects.status.is_ok());
+
+    let dep_v2_package = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap()
+        .0;
+
+    // Publish P that depends on both `dep_on_upgrading_package` and `stage1_basic_compatibility_valid`
+    // Dependency graph for dep_on_dep:
+    //    base(v1)
+    //    base(v2) <-- dep_on_upgrading_package <-- dep_on_dep
+    let (_, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_dep",
+        [
+            ("base_addr", dep_v2_package.0),
+            ("dep_on_upgrading_package", depender_package.0),
+        ],
+    );
+
+    let (new_package, _) = runner.publish(modules, dep_ids).await;
+
+    let package = runner
+        .authority_state
+        .database
+        .get_package(&new_package.0)
+        .unwrap()
+        .unwrap();
+
+    // Make sure the linkage table points to the correct versions!
+    let dep_ids_in_linkage_table: BTreeSet<_> = package
+        .linkage_table()
+        .values()
+        .map(|up| up.upgraded_id)
+        .collect();
+    assert!(dep_ids_in_linkage_table.contains(&dep_v2_package.0));
+    assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
 }
