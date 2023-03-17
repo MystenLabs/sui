@@ -98,6 +98,9 @@ pub enum SuiCommand {
         json: bool,
         #[clap(short = 'y', long = "yes")]
         accept_defaults: bool,
+        /// Do not print api version mismatch warning. Useful together with json == true.
+        #[clap(default_value = "false", long = "suppress-api-version-warning")]
+        suppress_api_version_warning: bool,
     },
     /// A tool for validators and validator candidates.
     #[clap(name = "validator")]
@@ -249,10 +252,14 @@ impl SuiCommand {
                 cmd,
                 json,
                 accept_defaults,
+                suppress_api_version_warning,
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None).await?;
+                if suppress_api_version_warning {
+                    context.suppress_api_version_warning();
+                }
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {

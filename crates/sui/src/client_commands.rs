@@ -1098,6 +1098,7 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
+    suppress_api_version_warning: bool,
 }
 
 impl WalletContext {
@@ -1117,8 +1118,13 @@ impl WalletContext {
             config,
             request_timeout,
             client: Default::default(),
+            suppress_api_version_warning: false,
         };
         Ok(context)
+    }
+
+    pub fn suppress_api_version_warning(&mut self) {
+        self.suppress_api_version_warning = true;
     }
 
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
@@ -1133,10 +1139,11 @@ impl WalletContext {
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout)
                 .await?;
-
-            if let Err(e) = client.check_api_version() {
-                warn!("{e}");
-                println!("{}", format!("[warn] {e}").yellow().bold());
+            if !self.suppress_api_version_warning {
+                if let Err(e) = client.check_api_version() {
+                    warn!("{e}");
+                    println!("{}", format!("[warn] {e}").yellow().bold());
+                }
             }
             self.client.write().await.insert(client).clone()
         })
