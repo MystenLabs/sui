@@ -135,6 +135,9 @@ impl SuiNodeProvider {
     }
 }
 
+/// extract will get the network pubkey bytes from a SuiValidatorSummary type.  This type comes from a
+/// full node rpc result.  See get_validators for details.  The key here, if extracted successfully, will
+/// ultimately be stored in the allow list and let us communicate with those actual peers via tls.
 fn extract(summary: SuiSystemStateSummary) -> impl Iterator<Item = (Ed25519PublicKey, SuiPeer)> {
     summary.active_validators.into_iter().filter_map(|vm| {
         match Ed25519PublicKey::from_bytes(&vm.network_pubkey_bytes) {

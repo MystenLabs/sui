@@ -9,12 +9,32 @@ pub mod peers;
 pub mod prom_to_mimir;
 pub mod remote_write;
 
+/// var extracts environment variables at runtime with a default fallback value
+/// if a default is not provided, the value is simply an empty string if not found
+/// This function will return the provided default if env::var cannot find the key
+/// or if the key is somehow malformed.
+#[macro_export]
+macro_rules! var {
+    ($key:expr) => {
+        match std::env::var($key) {
+            Ok(val) => val,
+            Err(_) => "".into(),
+        }
+    };
+    ($key:expr, $default:expr) => {
+        match std::env::var($key) {
+            Ok(val) => val.parse::<usize>().unwrap(),
+            Err(_) => $default,
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::prom_to_mimir::tests::*;
 
-    use crate::{config::RemoteWriteConfig, peers::SuiNodeProvider};
+    use crate::{admin::CertKeyPair, config::RemoteWriteConfig, peers::SuiNodeProvider};
     use axum::http::{header, StatusCode};
     use axum::routing::post;
     use axum::Router;
@@ -50,8 +70,8 @@ mod tests {
     #[tokio::test]
     async fn axum_acceptor() {
         // generate self-signed certificates
-        let (client_priv_cert, client_pub_key) = admin::generate_self_cert("sui".into());
-        let (server_priv_cert, _) = admin::generate_self_cert("localhost".into());
+        let CertKeyPair(client_priv_cert, client_pub_key) = admin::generate_self_cert("sui".into());
+        let CertKeyPair(server_priv_cert, _) = admin::generate_self_cert("localhost".into());
 
         // create a fake rpc server
         let dummy_remote_write_listener = std::net::TcpListener::bind("localhost:0").unwrap();
@@ -77,6 +97,7 @@ mod tests {
             url: dummy_remote_write_url.to_owned(),
             username: "bar".into(),
             password: "foo".into(),
+            ..Default::default()
         });
 
         // add handler to server
