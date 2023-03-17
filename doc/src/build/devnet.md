@@ -202,7 +202,7 @@ The package publish operation creates several objects:
 
 You can check the details of each object using the `sui client object <OBJECT_ID>` command or by using the Sui Explorer.
 
-When you publish a package, the IDs for the objects the compiler creates are different than the ones displayed in this example. The remainder of this topic uses `<PACKAGE_ID>` and `<FORGE_ID>` to represent the IDs for the created objects. You must replace these with the values for your package.
+When you publish a package, the IDs for the objects the compiler creates are different than the ones displayed in this example. The remainder of this topic uses `<PACKAGE_ID>` and `<FORGE_ID>` to represent the IDs for the created objects (except for console output examples). You must replace these with the values for your package.
 
 ## Make a Move call
 
