@@ -5,8 +5,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum FaucetError {
-    #[error("Faucet cannot read objects from fullnode")]
-    FullnodeReadingError,
+    #[error("Faucet cannot read objects from fullnode: {0}")]
+    FullnodeReadingError(String),
 
     #[error("Failed to parse transaction response {0}")]
     ParseTransactionResponseError(String),

@@ -17,9 +17,10 @@ describe('Test Object Display Standard', () => {
 
   it('Test getting Display fields', async () => {
     const boarId = (
-      await toolbox.provider.getObjectsOwnedByAddress({
+      await toolbox.provider.getOwnedObjects({
         owner: toolbox.address(),
         typeFilter: `${packageId}::boars::Boar`,
+        options: { showDisplay: true, showType: true },
       })
     )[0].objectId;
     const display = getObjectDisplay(

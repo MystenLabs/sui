@@ -49,33 +49,35 @@ export function AddressInput({
         <>
             <div
                 className={cx(
-                    'flex h-11 py-1 w-full px-3 pr-0 items-center rounded-2lg bg-white border border-solid box-border focus-within:border-steel transition-all overflow-hidden',
+                    'flex h-max w-full rounded-2lg bg-white border border-solid box-border focus-within:border-steel transition-all overflow-hidden',
                     meta.touched && meta.error
                         ? 'border-issue'
                         : 'border-gray-45'
                 )}
             >
-                <TextareaAutosize
-                    maxRows={2}
-                    minRows={1}
-                    disabled={disabled}
-                    placeholder={placeholder}
-                    value={formattedValue}
-                    onChange={handleOnChange}
-                    onBlur={field.onBlur}
-                    className={cx(
-                        'w-full text-bodySmall leading-100 font-medium font-mono bg-white placeholder:text-steel-dark placeholder:font-normal placeholder:font-mono border-none resize-none',
-                        meta.touched && meta.error
-                            ? 'text-issue'
-                            : 'text-gray-90'
-                    )}
-                    name={name}
-                />
+                <div className="min-h-[42px] w-full flex items-center pl-3 py-1">
+                    <TextareaAutosize
+                        maxRows={3}
+                        minRows={1}
+                        disabled={disabled}
+                        placeholder={placeholder}
+                        value={formattedValue}
+                        onChange={handleOnChange}
+                        onBlur={field.onBlur}
+                        className={cx(
+                            'w-full text-bodySmall leading-100 font-medium font-mono bg-white placeholder:text-steel-dark placeholder:font-normal placeholder:font-mono border-none resize-none',
+                            meta.touched && meta.error
+                                ? 'text-issue'
+                                : 'text-gray-90'
+                        )}
+                        name={name}
+                    />
+                </div>
 
                 <div
                     onClick={clearAddress}
                     className={cx(
-                        'flex bg-gray-40 items-center justify-center h-10 w-10 p-0.5 mr-0 right-0 max-w-[20%] mx-3 overflow-hidden',
+                        'flex bg-gray-40 items-center justify-center w-12 p-0.5 mr-0 right-0 max-w-[20%] mx-3.5',
                         meta.touched && field.value
                             ? 'cursor-pointer text-steel-darker text-body font-medium sui-icons-close'
                             : "bg-[url('_assets/images/qr-code.svg')] bg-no-repeat bg-center pr-0"

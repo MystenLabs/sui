@@ -3,7 +3,6 @@
 
 import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
-  Coin,
   ExecuteTransactionRequestType,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
@@ -21,7 +20,6 @@ import {
   SuiTransactionResponse,
   TransactionDigest,
   SuiTransactionResponseQuery,
-  SUI_TYPE_ARG,
   RpcApiVersion,
   parseVersionFromString,
   PaginatedEvents,
@@ -37,7 +35,6 @@ import {
   CoinMetadataStruct,
   PaginatedCoins,
   SuiObjectResponse,
-  GetOwnedObjectsResponse,
   DelegatedStake,
   CoinBalance,
   CoinSupply,
@@ -47,9 +44,11 @@ import {
   DryRunTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
-  CoinStruct,
   SuiTransactionResponseOptions,
   SuiEvent,
+  PaginatedObjectsResponse,
+  SuiObjectData,
+  ObjectOwner,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -459,12 +458,16 @@ export class JsonRpcProvider {
   /**
    * Get all objects owned by an address
    */
-  async getObjectsOwnedByAddress(input: {
-    owner: SuiAddress;
-    /** a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
-     * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>) */
-    typeFilter?: string;
-  }): Promise<SuiObjectInfo[]> {
+  async getOwnedObjects(
+    input: {
+      owner: SuiAddress;
+      /** a fully qualified type name for the object(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
+       * or type name without generics (e.g., 0x2::coin::Coin will match all 0x2::coin::Coin<T>) */
+      typeFilter?: string;
+      options?: SuiObjectDataOptions;
+      checkpointId?: CheckpointDigest;
+    } & PaginationArguments,
+  ): Promise<SuiObjectInfo[]> {
     try {
       if (
         !input.owner ||
@@ -473,63 +476,45 @@ export class JsonRpcProvider {
         throw new Error('Invalid Sui address');
       }
       const objects = await this.client.requestWithType(
-        'sui_getObjectsOwnedByAddress',
-        [input.owner],
-        GetOwnedObjectsResponse,
+        'sui_getOwnedObjects',
+        [
+          input.owner,
+          input.options,
+          input.cursor,
+          input.limit,
+          input.checkpointId,
+        ],
+        PaginatedObjectsResponse,
         this.options.skipDataValidation,
       );
+      const obj_infos = objects.data.map((object: SuiObjectResponse) => {
+        const details = object.details as SuiObjectData;
+        const obj_info: SuiObjectInfo = {
+          objectId: details.objectId,
+          version: details.version,
+          digest: details.digest,
+          owner: details.owner as ObjectOwner,
+          type: details.type as string,
+          previousTransaction: details.previousTransaction as TransactionDigest,
+        };
+        return obj_info;
+      });
+
       // TODO: remove this once we migrated to the new queryObject API
       if (input.typeFilter) {
-        return objects.filter(
+        return obj_infos.filter(
           (obj: SuiObjectInfo) =>
             obj.type === input.typeFilter ||
             obj.type.startsWith(input.typeFilter + '<'),
         );
       }
-      return objects;
+
+      return obj_infos;
     } catch (err) {
       throw new Error(
         `Error fetching owned object: ${err} for address ${input.owner}`,
       );
     }
-  }
-
-  /** @deprecated */
-  async selectCoinsWithBalanceGreaterThanOrEqual(
-    address: SuiAddress,
-    amount: bigint,
-    typeArg: string = SUI_TYPE_ARG,
-    exclude: ObjectId[] = [],
-  ): Promise<CoinStruct[]> {
-    const coinsStruct = await this.getCoins({
-      owner: address,
-      coinType: typeArg,
-    });
-    return Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coinsStruct.data,
-      amount,
-      exclude,
-    );
-  }
-
-  /** @deprecated */
-  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-    address: SuiAddress,
-    amount: bigint,
-    typeArg: string = SUI_TYPE_ARG,
-    exclude: ObjectId[] = [],
-  ): Promise<CoinStruct[]> {
-    const coinsStruct = await this.getCoins({
-      owner: address,
-      coinType: typeArg,
-    });
-    const coins = coinsStruct.data;
-
-    return Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-      coins,
-      amount,
-      exclude,
-    );
   }
 
   /**
@@ -621,35 +606,23 @@ export class JsonRpcProvider {
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { InputObject: objectID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { MutatedObject: objectID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
+    const filters = [
+      { filter: { InputObject: objectID } },
+      { filter: { MutatedObject: objectID } },
     ];
-
     try {
       if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
         throw new Error('Invalid Sui Object id');
       }
-      const results = await this.client.batchRequestWithType(
-        requests,
-        PaginatedTransactionResponse,
-        this.options.skipDataValidation,
+      const results = await Promise.all(
+        filters.map((filter) =>
+          this.client.requestWithType(
+            'sui_queryTransactions',
+            [{ filter }, null, null, descendingOrder],
+            PaginatedTransactionResponse,
+            this.options.skipDataValidation,
+          ),
+        ),
       );
       return [
         ...results[0].data.map((r) => r.digest),
@@ -670,34 +643,20 @@ export class JsonRpcProvider {
     addressID: SuiAddress,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { ToAddress: addressID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
-      {
-        method: 'sui_queryTransactions',
-        args: [
-          { filter: { FromAddress: addressID } },
-          null,
-          null,
-          descendingOrder,
-        ],
-      },
-    ];
+    const filters = [{ ToAddress: addressID }, { FromAddress: addressID }];
     try {
       if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
         throw new Error('Invalid Sui address');
       }
-      const results = await this.client.batchRequestWithType(
-        requests,
-        PaginatedTransactionResponse,
-        this.options.skipDataValidation,
+      const results = await Promise.all(
+        filters.map((filter) =>
+          this.client.requestWithType(
+            'sui_queryTransactions',
+            [{ filter }, null, null, descendingOrder],
+            PaginatedTransactionResponse,
+            this.options.skipDataValidation,
+          ),
+        ),
       );
       return [
         ...results[0].data.map((r) => r.digest),

@@ -4,7 +4,6 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use multiaddr::Multiaddr;
 use mysten_network::config::Config;
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -15,6 +14,7 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemStateInnerBenchmark;
 use sui_types::{error::SuiError, messages::*};
 

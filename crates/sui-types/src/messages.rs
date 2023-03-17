@@ -267,6 +267,48 @@ impl CallArg {
     }
 }
 
+impl From<bool> for CallArg {
+    fn from(b: bool) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&b).unwrap())
+    }
+}
+
+impl From<u8> for CallArg {
+    fn from(n: u8) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u16> for CallArg {
+    fn from(n: u16) -> Self {
+        // unwrap safe because every u16 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u32> for CallArg {
+    fn from(n: u32) -> Self {
+        // unwrap safe because every u32 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u64> for CallArg {
+    fn from(n: u64) -> Self {
+        // unwrap safe because every u64 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u128> for CallArg {
+    fn from(n: u128) -> Self {
+        // unwrap safe because every u128 value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
 impl ObjectArg {
     pub fn id(&self) -> ObjectID {
         match self {
@@ -2048,27 +2090,33 @@ pub struct TransactionInfoResponse {
     pub status: TransactionStatus,
 }
 
+/// This enum represents all possible states of a response returned from
+/// the safe client. Note that [struct SignedTransaction] and
+/// [struct SignedTransactionEffects] are represented as an Envelope
+/// instead of an VerifiedEnvelope. This is because the verification is
+/// now performed by the authority aggregator as an aggregated signature,
+/// instead of in SafeClient.
 #[derive(Clone, Debug)]
-pub enum VerifiedTransactionInfoResponse {
-    Signed(VerifiedSignedTransaction),
+pub enum PlainTransactionInfoResponse {
+    Signed(SignedTransaction),
     ExecutedWithCert(
         VerifiedCertificate,
-        VerifiedSignedTransactionEffects,
+        SignedTransactionEffects,
         TransactionEvents,
     ),
     ExecutedWithoutCert(
         VerifiedTransaction,
-        VerifiedSignedTransactionEffects,
+        SignedTransactionEffects,
         TransactionEvents,
     ),
 }
 
-impl VerifiedTransactionInfoResponse {
+impl PlainTransactionInfoResponse {
     pub fn is_executed(&self) -> bool {
         match self {
-            VerifiedTransactionInfoResponse::Signed(_) => false,
-            VerifiedTransactionInfoResponse::ExecutedWithCert(_, _, _)
-            | VerifiedTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
+            PlainTransactionInfoResponse::Signed(_) => false,
+            PlainTransactionInfoResponse::ExecutedWithCert(_, _, _)
+            | PlainTransactionInfoResponse::ExecutedWithoutCert(_, _, _) => true,
         }
     }
 }

@@ -169,6 +169,9 @@ impl Cluster for LocalNewCluster {
             .set_genesis_config(genesis_config)
             .enable_fullnode_events();
 
+        if let Some(epoch_duration_ms) = options.epoch_duration_ms {
+            cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
+        }
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
         }

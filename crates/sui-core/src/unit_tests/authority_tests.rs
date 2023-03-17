@@ -560,12 +560,12 @@ async fn test_dev_inspect_dynamic_field() {
         }))],
     };
     let kind = TransactionKind::programmable(pt);
-    let DevInspectResults { results, .. } = fullnode
+    let DevInspectResults { error, .. } = fullnode
         .dev_inspect_transaction(sender, kind, Some(1))
         .await
         .unwrap();
     // produces an error
-    let err = results.unwrap_err();
+    let err = error.unwrap();
     assert!(
         err.contains("kind: CircularObjectOwnership"),
         "unexpected error: {}",
@@ -2162,8 +2162,9 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .unwrap();
 
     assert!(authority_state
+        .db()
         .parent(&(object_id, account.version(), account.digest()))
-        .await
+        .unwrap()
         .is_some());
 }
 
@@ -2223,8 +2224,9 @@ async fn test_handle_confirmation_transaction_ok() {
     assert_eq!(next_sequence_number, new_account.version());
     let opt_cert = {
         let refx = authority_state
+            .db()
             .parent(&(object_id, new_account.version(), new_account.digest()))
-            .await
+            .unwrap()
             .unwrap();
         authority_state
             .get_certified_transaction(&refx, &authority_state.epoch_store_for_testing())
@@ -4328,16 +4330,21 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
-        authority
+        if let Some(cert) = authority
             .epoch_store_for_testing()
-            .handle_consensus_transaction(
+            .process_consensus_transaction(
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
-                authority.transaction_manager(),
                 authority.db(),
             )
             .await
-            .unwrap();
+            .unwrap()
+        {
+            authority
+                .transaction_manager()
+                .enqueue(vec![cert], &authority.epoch_store_for_testing())
+                .unwrap();
+        }
     } else {
         warn!("Failed to verify certificate: {:?}", cert);
     }

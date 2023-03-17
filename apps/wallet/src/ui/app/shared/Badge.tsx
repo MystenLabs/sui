@@ -17,10 +17,10 @@ const badgeStyle = cva(
     }
 );
 
-export interface CountDownTimerProps extends VariantProps<typeof badgeStyle> {
+export interface BadgeProps extends VariantProps<typeof badgeStyle> {
     label: string;
 }
 
-export function BadgeUI({ label, ...styles }: CountDownTimerProps) {
+export function Badge({ label, ...styles }: BadgeProps) {
     return <div className={badgeStyle(styles)}>{label}</div>;
 }

@@ -247,11 +247,13 @@ mod test {
         let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
         let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
+        let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
         let shared_counter_weight = 1;
         let transfer_object_weight = 1;
         let num_transfer_accounts = 2;
         let delegation_weight = 1;
         let batch_payment_weight = 1;
+        let adversarial_weight = 1;
         let shared_counter_hotness_factor = 50;
 
         let workloads = WorkloadConfiguration::build_workloads(
@@ -261,6 +263,8 @@ mod test {
             transfer_object_weight,
             delegation_weight,
             batch_payment_weight,
+            adversarial_weight,
+            batch_payment_size,
             shared_counter_hotness_factor,
             target_qps,
             in_flight_ratio,

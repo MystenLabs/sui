@@ -29,13 +29,15 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const transferNFT = useMutation({
-        mutationFn: (to: string) => {
+        mutationFn: async (to: string) => {
             if (!to || !signer) {
                 throw new Error('Missing data');
             }
             const tx = new Transaction();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
-            return signer.signAndExecuteTransaction({
+
+            const initializedSigner = await signer();
+            return initializedSigner.signAndExecuteTransaction({
                 transaction: tx,
                 options: {
                     showInput: true,

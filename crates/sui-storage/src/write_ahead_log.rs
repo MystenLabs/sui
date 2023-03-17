@@ -217,7 +217,6 @@ where
 }
 
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
-pub(crate) const MUTEX_TABLE_SHARD_SIZE: usize = 128;
 
 impl<C, ExecutionOutput> DBWriteAheadLog<C, ExecutionOutput>
 where
@@ -240,7 +239,7 @@ where
         Self {
             tables,
             recoverable_txes: Mutex::new(recoverable_txes),
-            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE, MUTEX_TABLE_SHARD_SIZE),
+            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
         }
     }
 

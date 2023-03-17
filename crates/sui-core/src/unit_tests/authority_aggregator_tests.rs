@@ -3,14 +3,19 @@
 
 use crate::test_utils::make_transfer_sui_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use sui_framework_build::compiled_package::BuildConfig;
+use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
+use sui_types::utils::create_fake_transaction;
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
@@ -199,8 +204,8 @@ where
             })
             .await;
         match response {
-            Ok(VerifiedTransactionInfoResponse::Signed(signed)) => {
-                let (data, sig) = signed.into_inner().into_data_and_sig();
+            Ok(PlainTransactionInfoResponse::Signed(signed)) => {
+                let (data, sig) = signed.into_data_and_sig();
                 votes.push(sig);
                 if let Some(inner_transaction) = tx_data {
                     assert_eq!(
@@ -210,7 +215,7 @@ where
                 }
                 tx_data = Some(data);
             }
-            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _, _)) => {
+            Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, _, _)) => {
                 return cert.into_inner();
             }
             _ => {}
@@ -232,7 +237,7 @@ where
         .await
         .unwrap()
         .signed_effects
-        .into_message()
+        .into_data()
 }
 
 pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
@@ -1757,6 +1762,184 @@ async fn test_handle_conflicting_transaction_response() {
     // Update aggregator committee to epoch 2, and transaction will succeed.
     agg.committee = committee_2;
     agg.process_transaction(tx1.clone()).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_byzantine_authority_sig_aggregation() {
+    telemetry_subscribers::init_for_testing();
+    // For 4 validators, we need 2f+1 = 3 for quorum for signing a sender signed tx.
+    assert!(run_aggregator(1, 4).await.is_ok());
+    assert!(run_aggregator(2, 4).await.is_err());
+
+    // For 6 validators, we need 2f+1 = 5 for quorum for signing a sender signed tx.
+    assert!(run_aggregator(1, 6).await.is_ok());
+    assert!(run_aggregator(2, 6).await.is_err());
+
+    // For 4 validators, we need 2f+1 = 3 for quorum for signing transaction effects.
+    assert!(process_with_cert(1, 4).await.is_ok());
+
+    // For 6 validators, we need 2f+1 = 5 for quorum for signing transaction effects.
+    assert!(process_with_cert(1, 6).await.is_ok());
+
+    // For 12 validators, we need 2f+1 = 9 for quorum for signing transaction effects.
+    assert!(process_with_cert(1, 12).await.is_ok());
+    assert!(process_with_cert(2, 12).await.is_ok());
+    assert!(process_with_cert(3, 12).await.is_ok());
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_fork_panic_process_cert_6_auths() {
+    telemetry_subscribers::init_for_testing();
+    let _ = process_with_cert(2, 6).await;
+}
+
+#[tokio::test]
+#[should_panic]
+async fn test_fork_panic_process_cert_4_auths() {
+    telemetry_subscribers::init_for_testing();
+    let _ = process_with_cert(2, 4).await;
+}
+
+// Aggregator aggregate signatures from authorities and process the transaction as signed.
+// Test [fn handle_transaction_response_with_signed].
+async fn run_aggregator(
+    num_byzantines: u8,
+    num_authorities: u8,
+) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
+    let tx = create_fake_transaction();
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    let mut byzantines = Vec::new();
+
+    // Assign a few authorities as byzantines represented in a list of pubkeys.
+    for i in 0..num_byzantines {
+        let byzantine =
+            get_key_pair_from_rng::<AuthorityKeyPair, StdRng>(&mut StdRng::from_seed([i; 32]))
+                .1
+                .public()
+                .into();
+        byzantines.push(byzantine);
+    }
+
+    // Set up authorities and their clients.
+    for i in 0..num_authorities {
+        let (_, sec): (_, AuthorityKeyPair) =
+            get_key_pair_from_rng(&mut StdRng::from_seed([i; 32]));
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    for (name, secret) in &authority_keys {
+        let auth_signature = if byzantines.contains(name) {
+            // If the authority is a byzantine authority, create an invalid auth signature.
+            AuthoritySignInfo::new(
+                0,
+                tx.clone().data(),
+                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                *name,
+                secret,
+            )
+        } else {
+            // Otherwise, create a valid auth signature on sender signed transaction.
+            AuthoritySignInfo::new(
+                0,
+                tx.clone().data(),
+                Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                *name,
+                secret,
+            )
+        };
+        // For each client, set the response with the correspond good/bad auth signatures.
+        let resp = HandleTransactionResponse {
+            status: TransactionStatus::Signed(auth_signature),
+        };
+        clients.get_mut(name).unwrap().set_tx_info_response(resp);
+    }
+
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 0);
+    agg.process_transaction(tx.clone()).await
+}
+
+// Aggregator aggregate signatures from authorities and process the transaction as executed.
+// Test [fn handle_transaction_response_with_executed].
+async fn process_with_cert(
+    num_byzantines: u8,
+    num_authorities: u8,
+) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
+    let tx = create_fake_transaction();
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    let mut byzantines = Vec::new();
+
+    // Assign a few authorities as byzantines represented in a list of pubkeys.
+    for i in 0..num_byzantines {
+        let byzantine =
+            get_key_pair_from_rng::<AuthorityKeyPair, StdRng>(&mut StdRng::from_seed([i; 32]))
+                .1
+                .public()
+                .into();
+        byzantines.push(byzantine);
+    }
+
+    // Set up authorities and their clients.
+    for i in 0..num_authorities {
+        let (_, sec): (_, AuthorityKeyPair) =
+            get_key_pair_from_rng(&mut StdRng::from_seed([i; 32]));
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+
+    // Process the transaction first with an execution result as signed.
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 0);
+    let cert = agg
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+    let effects = effects_with_tx(*cert.digest());
+
+    for (name, secret) in &authority_keys {
+        let auth_signature = if byzantines.contains(name) {
+            // If the authority is a byzantine authority, create an invalid auth signature.
+            AuthoritySignInfo::new(
+                0,
+                &effects.clone(),
+                Intent::default().with_scope(IntentScope::ProofOfPossession), // bad intent
+                *name,
+                secret,
+            )
+        } else {
+            // Otherwise, create a valid auth signature on transaction effects.
+            AuthoritySignInfo::new(
+                0,
+                &effects.clone(),
+                Intent::default().with_scope(IntentScope::TransactionEffects),
+                *name,
+                secret,
+            )
+        };
+        // Set the client response as executed with the signed transaction effects
+        // with corresponding good/bad auth signature.
+        let resp = HandleTransactionResponse {
+            status: TransactionStatus::Executed(
+                None,
+                SignedTransactionEffects::new_from_data_and_sig(effects.clone(), auth_signature),
+                TransactionEvents { data: vec![] },
+            ),
+        };
+
+        clients.get_mut(name).unwrap().set_tx_info_response(resp);
+    }
+    let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 0);
+    agg.process_transaction(tx.clone()).await
 }
 
 async fn assert_resp_err<E, F>(

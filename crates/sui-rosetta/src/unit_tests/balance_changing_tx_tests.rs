@@ -8,6 +8,7 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
+use serde_json::json;
 use signature::rand_core::OsRng;
 use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -32,7 +33,7 @@ use sui_types::messages::{
 use test_utils::network::TestClusterBuilder;
 
 use crate::state::extract_balance_changes_from_ops;
-use crate::types::{ConstructionMetadata, TransactionMetadata};
+use crate::types::ConstructionMetadata;
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -495,9 +496,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
     let sender = get_random_address(&network.accounts, vec![]);
-    let coin1 = get_random_sui(&client, sender, vec![]).await;
-    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
-    let gas = get_random_sui(&client, sender, vec![coin1.0, coin2.0]).await;
+    let gas = get_random_sui(&client, sender, vec![]).await;
     let validator = client
         .governance_api()
         .get_latest_sui_system_state()
@@ -505,32 +504,27 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
         .unwrap()
         .active_validators[0]
         .sui_address;
-    let data = client
-        .transaction_builder()
-        .request_add_stake(
-            sender,
-            vec![coin1.0, coin2.0],
-            Some(100000),
-            validator,
-            Some(gas.0),
-            10000,
-        )
-        .await?;
 
-    let ops: Operations = data.clone().try_into()?;
+    let ops: Operations = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"Stake",
+            "account": { "address" : sender.to_string() },
+            "amount" : { "value": "-100000" , "currency": { "symbol": "SUI", "decimals": 9}},
+            "metadata": { "Stake" : {"validator": validator.to_string()} }
+        }]
+    ))
+    .unwrap();
     let metadata = ConstructionMetadata {
-        tx_metadata: TransactionMetadata::Delegation {
-            coins: vec![coin1, coin2],
-        },
         sender,
-        gas: vec![gas],
+        coins: vec![gas],
+        objects: vec![],
+        total_coin_value: 0,
         gas_price: client.read_api().get_reference_gas_price().await?,
         budget: 10000,
     };
-    let parsed_data = ops
-        .into_internal(Some(metadata.tx_metadata.clone().into()))?
-        .try_into_data(metadata)?;
-    assert_eq!(data, parsed_data);
+    let parsed_data = ops.clone().into_internal()?.try_into_data(metadata)?;
+    assert_eq!(ops, Operations::try_from(parsed_data)?);
 
     Ok(())
 }
@@ -671,16 +665,27 @@ async fn get_random_sui(
 ) -> ObjectRef {
     let coins = client
         .read_api()
-        .get_objects_owned_by_address(sender)
+        .get_owned_objects(
+            sender,
+            Some(SuiObjectDataOptions::full_content()),
+            /* cursor */ None,
+            /* limit */ None,
+            /* at_checkpoint */ None,
+        )
         .await
-        .unwrap();
-    let coin = coins
+        .unwrap()
+        .data;
+
+    let coin_resp = coins
         .iter()
         .filter(|object| {
-            object.type_ == GasCoin::type_().to_string() && !except.contains(&object.object_id)
+            let obj = object.object().unwrap();
+            obj.is_gas_coin() && !except.contains(&obj.object_id)
         })
         .choose(&mut OsRng::default())
         .unwrap();
+
+    let coin = coin_resp.object().unwrap();
     (coin.object_id, coin.version, coin.digest)
 }
 
@@ -695,15 +700,24 @@ fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiA
 async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
     let coins = client
         .read_api()
-        .get_objects_owned_by_address(address)
+        .get_owned_objects(
+            address,
+            Some(SuiObjectDataOptions::full_content()),
+            /* cursor */ None,
+            /* limit */ None,
+            /* at_checkpoint */ None,
+        )
         .await
-        .unwrap();
+        .unwrap()
+        .data;
+
     let mut balance = 0u64;
     for coin in coins {
-        if coin.type_ == GasCoin::type_().to_string() {
+        let obj = coin.into_object().unwrap();
+        if obj.is_gas_coin() {
             let object = client
                 .read_api()
-                .get_object_with_options(coin.object_id, SuiObjectDataOptions::new().with_bcs())
+                .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
                 .await
                 .unwrap();
             let coin: GasCoin = object

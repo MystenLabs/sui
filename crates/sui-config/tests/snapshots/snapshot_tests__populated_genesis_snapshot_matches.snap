@@ -9,10 +9,10 @@ expression: genesis.validator_set()
   network-key: DX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=
   gas-price: 1
   commission-rate: 0
-  network-address: ""
-  p2p-address: ""
-  narwhal-primary-address: ""
-  narwhal-worker-address: ""
+  network-address: /ip4/127.0.0.1/tcp/80
+  p2p-address: /ip4/127.0.0.1/udp/80
+  narwhal-primary-address: /ip4/127.0.0.1/udp/80
+  narwhal-worker-address: /ip4/127.0.0.1/udp/80
   description: ""
   image-url: ""
   project-url: ""

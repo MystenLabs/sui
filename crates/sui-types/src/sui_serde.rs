@@ -9,7 +9,7 @@ use move_core_types::account_address::AccountAddress;
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 #[inline]
@@ -171,25 +171,4 @@ macro_rules! serde_to_from_bytes {
             }
         }
     };
-}
-
-pub struct AsMultiaddr;
-impl SerializeAs<Vec<u8>> for AsMultiaddr {
-    fn serialize_as<S>(value: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        multiaddr::Multiaddr::try_from(value.clone())
-            .map_err(S::Error::custom)?
-            .serialize(serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, Vec<u8>> for AsMultiaddr {
-    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(multiaddr::Multiaddr::deserialize(deserializer)?.to_vec())
-    }
 }

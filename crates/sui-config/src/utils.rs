@@ -32,14 +32,14 @@ fn get_ephemeral_port(host: &str) -> std::io::Result<u16> {
     Ok(addr.port())
 }
 
-pub fn new_tcp_network_address() -> multiaddr::Multiaddr {
+pub fn new_tcp_network_address() -> sui_types::multiaddr::Multiaddr {
     let host = format!("{}", get_local_ip_for_tests());
     format!("/ip4/{}/tcp/{}/http", host, get_available_port(&host))
         .parse()
         .unwrap()
 }
 
-pub fn new_udp_network_address() -> multiaddr::Multiaddr {
+pub fn new_udp_network_address() -> sui_types::multiaddr::Multiaddr {
     let host = format!("{}", get_local_ip_for_tests());
     format!("/ip4/{}/udp/{}", host, get_available_port(&host))
         .parse()
@@ -60,25 +60,9 @@ pub fn available_network_socket_address() -> std::net::SocketAddr {
         .unwrap()
 }
 
-pub fn udp_multiaddr_to_listen_address(
-    multiaddr: &multiaddr::Multiaddr,
-) -> Option<std::net::SocketAddr> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
-
-        (Some(Protocol::Dns(_)), Some(Protocol::Udp(port))) => {
-            Some((std::net::Ipv4Addr::UNSPECIFIED, port).into())
-        }
-
-        _ => None,
-    }
-}
-
-pub fn socket_address_to_udp_multiaddr(address: std::net::SocketAddr) -> multiaddr::Multiaddr {
+pub fn socket_address_to_udp_multiaddr(
+    address: std::net::SocketAddr,
+) -> sui_types::multiaddr::Multiaddr {
     match address {
         std::net::SocketAddr::V4(v4) => format!("/ip4/{}/udp/{}", v4.ip(), v4.port()),
         std::net::SocketAddr::V6(v6) => format!("/ip6/{}/udp/{}", v6.ip(), v6.port()),

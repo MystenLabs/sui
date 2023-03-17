@@ -38,6 +38,7 @@ use sui_types::messages::{
     ConsensusTransactionKey, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
     TransactionKind,
 };
+use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
@@ -734,7 +735,7 @@ impl CheckpointBuilder {
                     next_epoch_protocol_version: ProtocolVersion::new(
                         system_state_obj.protocol_version(),
                     ),
-                    // TODO: This should become
+                    // MUSTFIX: This should become
                     //
                     //   epoch_commitments: vec![root_state_digest.into()]
                     //
@@ -1036,8 +1037,8 @@ impl CheckpointSignatureAggregator {
         let their_digest = *data.summary.digest();
         let (_, signature) = data.summary.into_data_and_sig();
         let author = signature.authority;
+        // consensus ensures that authority == narwhal_cert.author
         if their_digest != self.digest {
-            // todo - consensus need to ensure data.summary.auth_signature.authority == narwhal_cert.author
             warn!(
                 "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
                 author.concise(),
@@ -1047,7 +1048,10 @@ impl CheckpointSignatureAggregator {
             );
             return Err(());
         }
-        match self.signatures.insert(signature) {
+
+        let envelope =
+            SignedCheckpointSummary::new_from_data_and_sig(self.summary.clone(), signature);
+        match self.signatures.insert(envelope) {
             InsertResult::Failed { error } => {
                 warn!(
                     "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",
@@ -1058,7 +1062,10 @@ impl CheckpointSignatureAggregator {
                 Err(())
             }
             InsertResult::QuorumReached(cert) => Ok(cert),
-            InsertResult::NotEnoughVotes => Err(()),
+            InsertResult::NotEnoughVotes {
+                bad_votes: _,
+                bad_authorities: _,
+            } => Err(()),
         }
     }
 }
@@ -1164,11 +1171,6 @@ impl CheckpointServiceNotify for CheckpointService {
             .skip_to_last()
             .next()
         {
-            // TODO(emmazzz): Right now we only record participation of validators whose
-            // checkpoint signatures make it to the certified checkpoint, which is only
-            // f+1 validators, and the rest of the signatures received are ignored. Later
-            // we may want to record those as well so that we have more fine grained scores
-            // for tallying rule.
             if sequence <= last_certified {
                 debug!(
                     "Ignore signature for checkpoint sequence {} from {} - already certified",

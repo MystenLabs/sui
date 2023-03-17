@@ -98,7 +98,6 @@ pub type RwLockGuard = tokio::sync::OwnedRwLockReadGuard<()>;
 impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
     pub fn new_with_cleanup(
         num_shards: usize,
-        shard_size: usize,
         cleanup_period: Duration,
         cleanup_initial_delay: Duration,
         cleanup_entries_threshold: usize,
@@ -108,7 +107,7 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         let lock_table: Arc<Vec<RwLock<InnerLockTable<K, L>>>> = Arc::new(
             (0..num_shards)
                 .into_iter()
-                .map(|_| RwLock::new(HashMap::with_capacity(shard_size)))
+                .map(|_| RwLock::new(HashMap::new()))
                 .collect(),
         );
         let cloned = lock_table.clone();
@@ -140,10 +139,9 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         }
     }
 
-    pub fn new(num_shards: usize, shard_size: usize) -> Self {
+    pub fn new(num_shards: usize) -> Self {
         Self::new_with_cleanup(
             num_shards,
-            shard_size,
             Duration::from_secs(10),
             Duration::from_secs(10),
             10_000,
@@ -287,7 +285,7 @@ impl<K: Hash, L: Lock> Drop for LockTable<K, L> {
 // e.g. that locks for different entries do not block entire bucket if it needs to wait on individual lock
 async fn test_mutex_table_concurrent_in_same_bucket() {
     use tokio::time::{sleep, timeout};
-    let mutex_table = Arc::new(MutexTable::<String>::new(1, 128));
+    let mutex_table = Arc::new(MutexTable::<String>::new(1));
     let john = mutex_table.try_acquire_lock("john".to_string());
     john.unwrap();
     {
@@ -300,7 +298,7 @@ async fn test_mutex_table_concurrent_in_same_bucket() {
     let jane = mutex_table.try_acquire_lock("jane".to_string());
     jane.unwrap();
 
-    let mutex_table = Arc::new(MutexTable::<String>::new(1, 128));
+    let mutex_table = Arc::new(MutexTable::<String>::new(1));
     let _john = mutex_table.acquire_lock("john".to_string()).await;
     {
         let mutex_table = mutex_table.clone();
@@ -320,13 +318,8 @@ async fn test_mutex_table_concurrent_in_same_bucket() {
 #[tokio::test]
 async fn test_mutex_table() {
     // Disable bg cleanup with Duration.MAX for initial delay
-    let mutex_table = MutexTable::<String>::new_with_cleanup(
-        1,
-        128,
-        Duration::from_secs(10),
-        Duration::MAX,
-        1000,
-    );
+    let mutex_table =
+        MutexTable::<String>::new_with_cleanup(1, Duration::from_secs(10), Duration::MAX, 1000);
     let john1 = mutex_table.try_acquire_lock("john".to_string());
     assert!(john1.is_ok());
     let john2 = mutex_table.try_acquire_lock("john".to_string());
@@ -354,13 +347,8 @@ async fn test_mutex_table() {
 
 #[tokio::test]
 async fn test_read_locks() {
-    let mutex_table = RwLockTable::<String>::new_with_cleanup(
-        1,
-        128,
-        Duration::from_secs(10),
-        Duration::MAX,
-        1000,
-    );
+    let mutex_table =
+        RwLockTable::<String>::new_with_cleanup(1, Duration::from_secs(10), Duration::MAX, 1000);
     let lock = "lock".to_string();
     let locks1 = mutex_table.acquire_read_locks(vec![lock.clone()]).await;
     assert!(mutex_table.try_acquire_lock(lock.clone()).is_err());
@@ -374,7 +362,6 @@ async fn test_read_locks() {
 async fn test_mutex_table_bg_cleanup() {
     let mutex_table = MutexTable::<String>::new_with_cleanup(
         1,
-        128,
         Duration::from_secs(5),
         Duration::from_secs(1),
         1000,
@@ -420,7 +407,7 @@ async fn test_mutex_table_bg_cleanup() {
 async fn test_mutex_table_bg_cleanup_with_size_threshold() {
     // set up the table to never trigger cleanup because of time period but only size threshold
     let mutex_table =
-        MutexTable::<String>::new_with_cleanup(1, 128, Duration::MAX, Duration::from_secs(1), 5);
+        MutexTable::<String>::new_with_cleanup(1, Duration::MAX, Duration::from_secs(1), 5);
     let lock1 = mutex_table.try_acquire_lock("lock1".to_string());
     let lock2 = mutex_table.try_acquire_lock("lock2".to_string());
     let lock3 = mutex_table.try_acquire_lock("lock3".to_string());

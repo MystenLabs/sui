@@ -33,7 +33,6 @@ pub mod transaction_orchestrator;
 #[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
-pub mod signature_verifier;
 pub mod test_authority_clients;
 
 pub mod batch_bls_verifier;

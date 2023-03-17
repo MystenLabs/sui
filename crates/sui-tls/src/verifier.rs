@@ -21,6 +21,7 @@ pub trait Allower: Send + Sync {
 }
 
 /// AllowAll will allow all public certificates to be validated, it fails open
+#[derive(Clone, Default)]
 pub struct AllowAll;
 
 impl Allower for AllowAll {

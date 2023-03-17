@@ -44,7 +44,6 @@
 -  [Function `get_active_or_pending_or_candidate_validator_ref`](#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref)
 -  [Function `get_active_validator_ref`](#0x2_validator_set_get_active_validator_ref)
 -  [Function `get_pending_validator_ref`](#0x2_validator_set_get_pending_validator_ref)
--  [Function `get_candidate_validator_ref`](#0x2_validator_set_get_candidate_validator_ref)
 -  [Function `verify_cap`](#0x2_validator_set_verify_cap)
 -  [Function `process_pending_removals`](#0x2_validator_set_process_pending_removals)
 -  [Function `process_validator_departure`](#0x2_validator_set_process_validator_departure)
@@ -80,6 +79,7 @@
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="validator_cap.md#0x2_validator_cap">0x2::validator_cap</a>;
+<b>use</b> <a href="validator_wrapper.md#0x2_validator_wrapper">0x2::validator_wrapper</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="vec_set.md#0x2_vec_set">0x2::vec_set</a>;
 <b>use</b> <a href="voting_power.md#0x2_voting_power">0x2::voting_power</a>;
@@ -136,7 +136,7 @@
  Mappings from staking pool's ID to the sui address of a validator.
 </dd>
 <dt>
-<code>inactive_validators: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
+<code>inactive_validators: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>, <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>&gt;</code>
 </dt>
 <dd>
  Mapping from a staking pool ID to the inactive validator that has that pool as its staking pool.
@@ -144,7 +144,7 @@
  is added to this table so that stakers can continue to withdraw their stake from it.
 </dd>
 <dt>
-<code>validator_candidates: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;</code>
+<code>validator_candidates: <a href="table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, <a href="validator_wrapper.md#0x2_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>&gt;</code>
 </dt>
 <dd>
  Table storing preactive validators, mapping their addresses to their <code>Validator </code> structs.
@@ -526,7 +526,7 @@ The epoch value corresponds to the first epoch this change takes place.
 Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to add a new validator candidate.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -535,7 +535,11 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x2_validator">validator</a>: Validator) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_validator_candidate">request_add_validator_candidate</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    <a href="validator.md#0x2_validator">validator</a>: Validator,
+    ctx: &<b>mut</b> TxContext,
+) {
     <b>assert</b>!(
         !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>)
             && !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
@@ -550,7 +554,11 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
     // Add <a href="validator.md#0x2_validator">validator</a> <b>to</b> the candidates mapping and the pool id mappings so that users can start
     // staking <b>with</b> this candidate.
     <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>), validator_address);
-    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.validator_candidates, sui_address(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator.md#0x2_validator">validator</a>);
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> self.validator_candidates,
+        sui_address(&<a href="validator.md#0x2_validator">validator</a>),
+        <a href="validator_wrapper.md#0x2_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="validator.md#0x2_validator">validator</a>, ctx),
+    );
 }
 </code></pre>
 
@@ -580,7 +588,8 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
         <a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address),
         <a href="validator_set.md#0x2_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>
     );
-    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <b>let</b> wrapper = <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_wrapper.md#0x2_validator_wrapper_destroy">validator_wrapper::destroy</a>(wrapper);
     <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x2_validator">validator</a>), <a href="validator_set.md#0x2_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
 
     <b>let</b> staking_pool_id = staking_pool_id(&<a href="validator.md#0x2_validator">validator</a>);
@@ -592,7 +601,11 @@ Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code> to 
     <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx));
 
     // Add <b>to</b> the inactive tables.
-    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, staking_pool_id, <a href="validator.md#0x2_validator">validator</a>);
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> self.inactive_validators,
+        staking_pool_id,
+        <a href="validator_wrapper.md#0x2_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="validator.md#0x2_validator">validator</a>, ctx),
+    );
 }
 </code></pre>
 
@@ -623,7 +636,8 @@ processed at the end of epoch.
         <a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address),
         <a href="validator_set.md#0x2_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>
     );
-    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <b>let</b> wrapper = <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_wrapper.md#0x2_validator_wrapper_destroy">validator_wrapper::destroy</a>(wrapper);
     <b>assert</b>!(
         !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>)
             && !<a href="validator_set.md#0x2_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self, &<a href="validator.md#0x2_validator">validator</a>),
@@ -746,7 +760,8 @@ the stake and any rewards corresponding to it will be immediately processed.
         <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
     } <b>else</b> { // This is an inactive pool.
         <b>assert</b>!(<a href="table.md#0x2_table_contains">table::contains</a>(&self.inactive_validators, staking_pool_id), <a href="validator_set.md#0x2_validator_set_ENoPoolFound">ENoPoolFound</a>);
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.inactive_validators, staking_pool_id);
+        <b>let</b> wrapper = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.inactive_validators, staking_pool_id);
+        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_wrapper.md#0x2_validator_wrapper_load_validator_maybe_upgrade">validator_wrapper::load_validator_maybe_upgrade</a>(wrapper);
         <a href="validator.md#0x2_validator_request_withdraw_stake">validator::request_withdraw_stake</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
     }
 }
@@ -1322,7 +1337,8 @@ Get mutable reference to either a candidate or an active validator by address.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): &<b>mut</b> Validator {
     <b>if</b> (<a href="table.md#0x2_table_contains">table::contains</a>(&self.validator_candidates, validator_address)) {
-        <b>return</b> <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address)
+        <b>let</b> wrapper = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address);
+        <b>return</b> <a href="validator_wrapper.md#0x2_validator_wrapper_load_validator_maybe_upgrade">validator_wrapper::load_validator_maybe_upgrade</a>(wrapper)
     };
     <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address)
 }
@@ -1506,7 +1522,8 @@ sender has the ability to modify the <code>Validator</code>.
         <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow_mut">table_vec::borrow_mut</a>(&<b>mut</b> self.pending_active_validators, validator_index)
     };
     <b>assert</b>!(include_candidate, <a href="validator_set.md#0x2_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>);
-    <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address)
+    <b>let</b> wrapper = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <a href="validator_wrapper.md#0x2_validator_wrapper_load_validator_maybe_upgrade">validator_wrapper::load_validator_maybe_upgrade</a>(wrapper)
 }
 </code></pre>
 
@@ -1634,7 +1651,7 @@ sender has the ability to modify the <code>Validator</code>.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, which_validator: u8): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, which_validator: u8): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1644,7 +1661,7 @@ sender has the ability to modify the <code>Validator</code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_active_or_pending_or_candidate_validator_ref">get_active_or_pending_or_candidate_validator_ref</a>(
-    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_address: <b>address</b>,
     which_validator: u8,
 ): &Validator {
@@ -1658,7 +1675,8 @@ sender has the ability to modify the <code>Validator</code>.
         <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
         <b>return</b> <a href="table_vec.md#0x2_table_vec_borrow">table_vec::borrow</a>(&self.pending_active_validators, validator_index)
     };
-    <a href="table.md#0x2_table_borrow">table::borrow</a>(&self.validator_candidates, validator_address)
+    <b>let</b> wrapper = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> self.validator_candidates, validator_address);
+    <a href="validator_wrapper.md#0x2_validator_wrapper_load_validator_maybe_upgrade">validator_wrapper::load_validator_maybe_upgrade</a>(wrapper)
 }
 </code></pre>
 
@@ -1726,33 +1744,6 @@ sender has the ability to modify the <code>Validator</code>.
 
 </details>
 
-<a name="0x2_validator_set_get_candidate_validator_ref"></a>
-
-## Function `get_candidate_validator_ref`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_validator_ref">get_candidate_validator_ref</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_candidate_validator_ref">get_candidate_validator_ref</a>(
-    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
-    validator_address: <b>address</b>,
-): &Validator {
-    <a href="table.md#0x2_table_borrow">table::borrow</a>(&self.validator_candidates, validator_address)
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_validator_set_verify_cap"></a>
 
 ## Function `verify_cap`
@@ -1762,7 +1753,7 @@ If <code>active_validator_only</code> is true, only verify the Cap for an active
 Otherwise, verify the Cap for au either active or pending validator.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_verify_cap">verify_cap</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, cap: &<a href="validator_cap.md#0x2_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>, which_validator: u8): <a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_verify_cap">verify_cap</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, cap: &<a href="validator_cap.md#0x2_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>, which_validator: u8): <a href="validator_cap.md#0x2_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>
 </code></pre>
 
 
@@ -1772,7 +1763,7 @@ Otherwise, verify the Cap for au either active or pending validator.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_verify_cap">verify_cap</a>(
-    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     cap: &UnverifiedValidatorOperationCap,
     which_validator: u8,
 ): ValidatorOperationCap {
@@ -1873,7 +1864,11 @@ is removed from <code>validators</code> and its staking pool is put into the <co
 
     // Deactivate the <a href="validator.md#0x2_validator">validator</a> and its staking pool
     <a href="validator.md#0x2_validator_deactivate">validator::deactivate</a>(&<b>mut</b> <a href="validator.md#0x2_validator">validator</a>, new_epoch);
-    <a href="table.md#0x2_table_add">table::add</a>(&<b>mut</b> self.inactive_validators, validator_pool_id, <a href="validator.md#0x2_validator">validator</a>);
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> self.inactive_validators,
+        validator_pool_id,
+        <a href="validator_wrapper.md#0x2_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="validator.md#0x2_validator">validator</a>, ctx),
+    );
 }
 </code></pre>
 

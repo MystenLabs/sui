@@ -42,7 +42,6 @@ use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 
 const NUM_SHARDS: usize = 4096;
-const SHARD_SIZE: usize = 128;
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -137,13 +136,13 @@ impl AuthorityStore {
         let epoch = committee.epoch;
 
         let store = Self {
-            mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
+            mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             execution_lock: RwLock::new(epoch),
-            objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS, SHARD_SIZE)),
+            objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
         };
         // Only initialize an empty database.
@@ -584,7 +583,8 @@ impl AuthorityStore {
     // Methods to mutate the store
 
     /// Insert a genesis object.
-    pub async fn insert_genesis_object(&self, object: Object) -> SuiResult {
+    /// TODO: delete this method entirely (still used by authority_tests.rs)
+    pub(crate) async fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
         let object_ref = object.compute_object_reference();
@@ -708,7 +708,6 @@ impl AuthorityStore {
             .acquire_read_locks_for_indirect_objects(&inner_temporary_store)
             .await;
         // Extract the new state from the execution
-        // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.perpetual_tables.transactions.batch();
 
         // Store the certificate indexed by transaction digest
@@ -920,7 +919,7 @@ impl AuthorityStore {
     ) -> SuiResult {
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
-        // TODO: replace with optimistic transactions (i.e. set lock to tx if none)
+        // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
         let _mutexes = self.acquire_locks(owned_input_objects).await;
 
         debug!(?owned_input_objects, "acquire_locks");

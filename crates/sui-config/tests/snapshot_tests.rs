@@ -18,7 +18,6 @@
 
 use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
-use multiaddr::Multiaddr;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_config::genesis::GenesisChainParameters;
@@ -29,6 +28,7 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, NetworkKeyPair,
 };
+use sui_types::multiaddr::Multiaddr;
 
 #[test]
 #[cfg_attr(msim, ignore)]
@@ -69,10 +69,10 @@ fn populated_genesis_snapshot_matches() {
         network_key: network_key.public().clone(),
         gas_price: 1,
         commission_rate: 0,
-        network_address: Multiaddr::empty(),
-        p2p_address: Multiaddr::empty(),
-        narwhal_primary_address: Multiaddr::empty(),
-        narwhal_worker_address: Multiaddr::empty(),
+        network_address: "/ip4/127.0.0.1/tcp/80".parse().unwrap(),
+        p2p_address: "/ip4/127.0.0.1/udp/80".parse().unwrap(),
+        narwhal_primary_address: "/ip4/127.0.0.1/udp/80".parse().unwrap(),
+        narwhal_worker_address: "/ip4/127.0.0.1/udp/80".parse().unwrap(),
         description: String::new(),
         image_url: String::new(),
         project_url: String::new(),

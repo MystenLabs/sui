@@ -221,7 +221,7 @@ module sui::sui_system_state_inner {
             ctx
         );
 
-        validator_set::request_add_validator_candidate(&mut self.validators, validator);
+        validator_set::request_add_validator_candidate(&mut self.validators, validator, ctx);
     }
 
     /// Called by a validator candidate to remove themselves from the candidacy. After this call
@@ -272,7 +272,7 @@ module sui::sui_system_state_inner {
         new_gas_price: u64,
     ) {
         // Verify the represented address is an active or pending validator, and the capability is still valid.
-        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_OR_PENDING_VALIDATOR);
+        let verified_cap = validator_set::verify_cap(&mut self.validators, cap, ACTIVE_OR_PENDING_VALIDATOR);
         let validator = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap, false /* include_candidate */);
 
         validator::request_set_gas_price(validator, verified_cap, new_gas_price);
@@ -285,7 +285,7 @@ module sui::sui_system_state_inner {
         new_gas_price: u64,
     ) {
         // Verify the represented address is an active or pending validator, and the capability is still valid.
-        let verified_cap = validator_set::verify_cap(&self.validators, cap, ANY_VALIDATOR);
+        let verified_cap = validator_set::verify_cap(&mut self.validators, cap, ANY_VALIDATOR);
         let candidate = validator_set::get_validator_mut_with_verified_cap(&mut self.validators, &verified_cap, true /* include_candidate */);
         validator::set_candidate_gas_price(candidate, verified_cap, new_gas_price)
     }
@@ -367,7 +367,7 @@ module sui::sui_system_state_inner {
         // Reportee needs to be an active validator
         assert!(validator_set::is_active_validator_by_sui_address(&self.validators, reportee_addr), ENotValidator);
         // Verify the represented reporter address is an active validator, and the capability is still valid.
-        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_VALIDATOR_ONLY);
+        let verified_cap = validator_set::verify_cap(&mut self.validators, cap, ACTIVE_VALIDATOR_ONLY);
         report_validator_impl(verified_cap, reportee_addr, &mut self.validator_report_records);
     }
 
@@ -381,7 +381,7 @@ module sui::sui_system_state_inner {
         cap: &UnverifiedValidatorOperationCap,
         reportee_addr: address,
     ) {
-        let verified_cap = validator_set::verify_cap(&self.validators, cap, ACTIVE_VALIDATOR_ONLY);
+        let verified_cap = validator_set::verify_cap(&mut self.validators, cap, ACTIVE_VALIDATOR_ONLY);
         undo_report_validator_impl(verified_cap, reportee_addr, &mut self.validator_report_records);
     }
 
@@ -479,6 +479,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let network_address = string::from_ascii(ascii::string(network_address));
         validator::update_next_epoch_network_address(validator, network_address);
     }
 
@@ -489,6 +490,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let network_address = string::from_ascii(ascii::string(network_address));
         validator::update_candidate_network_address(candidate, network_address);
     }
 
@@ -500,6 +502,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let p2p_address = string::from_ascii(ascii::string(p2p_address));
         validator::update_next_epoch_p2p_address(validator, p2p_address);
     }
 
@@ -510,6 +513,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let p2p_address = string::from_ascii(ascii::string(p2p_address));
         validator::update_candidate_p2p_address(candidate, p2p_address);
     }
 
@@ -521,6 +525,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let primary_address = string::from_ascii(ascii::string(primary_address));
         validator::update_next_epoch_primary_address(validator, primary_address);
     }
 
@@ -531,6 +536,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let primary_address = string::from_ascii(ascii::string(primary_address));
         validator::update_candidate_primary_address(candidate, primary_address);
     }
 
@@ -542,6 +548,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
+        let worker_address = string::from_ascii(ascii::string(worker_address));
         validator::update_next_epoch_worker_address(validator, worker_address);
     }
 
@@ -552,6 +559,7 @@ module sui::sui_system_state_inner {
         ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
+        let worker_address = string::from_ascii(ascii::string(worker_address));
         validator::update_candidate_worker_address(candidate, worker_address);
     }
 
@@ -932,7 +940,7 @@ module sui::sui_system_state_inner {
             ctx
         );
 
-        validator_set::request_add_validator_candidate(&mut self.validators, validator);
+        validator_set::request_add_validator_candidate(&mut self.validators, validator, ctx);
     }
 
 }

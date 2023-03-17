@@ -5,7 +5,6 @@ use crate::genesis;
 use crate::p2p::P2pConfig;
 use crate::Config;
 use anyhow::Result;
-use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
@@ -27,6 +26,7 @@ use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
+use sui_types::multiaddr::Multiaddr;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -105,8 +105,7 @@ fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
 }
 
 fn default_grpc_address() -> Multiaddr {
-    use multiaddr::multiaddr;
-    multiaddr!(Ip4([0, 0, 0, 0]), Tcp(8080u16))
+    "/ip4/0.0.0.0/tcp/8080".parse().unwrap()
 }
 fn default_authority_key_pair() -> AuthorityKeyPairWithPath {
     AuthorityKeyPairWithPath::new(get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut OsRng).1)

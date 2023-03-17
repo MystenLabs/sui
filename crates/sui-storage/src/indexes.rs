@@ -846,9 +846,19 @@ impl IndexStore {
             .map(|(_, object_info)| object_info.object_id))
     }
 
-    pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
+    pub fn get_owner_objects(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> SuiResult<Vec<ObjectInfo>> {
+        let cursor = match cursor {
+            Some(cursor) => cursor,
+            None => ObjectID::ZERO,
+        };
+
         Ok(self
-            .get_owner_objects_iterator(owner, ObjectID::ZERO, MAX_GET_OWNED_OBJECT_SIZE)?
+            .get_owner_objects_iterator(owner, cursor, limit)?
             .collect())
     }
 
@@ -860,7 +870,8 @@ impl IndexStore {
         starting_object_id: ObjectID,
         count: usize,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        let count = min(count, MAX_GET_OWNED_OBJECT_SIZE);
+        // We use +1 to grab the next cursor
+        let count = min(count, MAX_GET_OWNED_OBJECT_SIZE + 1);
         debug!(?owner, ?count, ?starting_object_id, "get_owner_objects");
         Ok(self
             .tables

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::digests::ObjectDigest;
 use sui_types::object::Owner;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use sui_types::{
@@ -27,20 +28,16 @@ use super::workload::{Workload, MAX_GAS_FOR_TESTING};
 /// Value of each address's "primary coin" in mist. The first transaction gives
 /// each address a coin worth PRIMARY_COIN_VALUE, and all subsequent transfers
 /// send TRANSFER_AMOUNT coins each time
-const PRIMARY_COIN_VALUE: u64 = 10_000_000;
+const PRIMARY_COIN_VALUE: u64 = 100_000_000;
 
 /// Number of mist sent to each address on each batch transfer
 const TRANSFER_AMOUNT: u64 = 1;
 
-// TODO: make this configurable via CLI
-/// Number of payments in each batch
-const BATCH_SIZE: u64 = 15;
+const DUMMY_GAS: ObjectRef = (ObjectID::ZERO, SequenceNumber::MIN, ObjectDigest::MIN);
 
 #[derive(Debug)]
 pub struct BatchPaymentTestPayload {
     state: InMemoryWallet,
-    // largest value coins owned by each address
-    primary_coins: BTreeMap<SuiAddress, ObjectID>,
     /// total number of payments made, to be used in reporting batch TPS
     num_payments: usize,
     /// address of the first sender. important because in the beginning, only one address has any coins.
@@ -61,7 +58,7 @@ impl Payload for BatchPaymentTestPayload {
         if self.num_payments == 0 {
             for (coin_obj, owner) in effects.created().into_iter().chain(effects.mutated()) {
                 if let Owner::AddressOwner(addr) = owner {
-                    self.primary_coins.insert(addr, coin_obj.0);
+                    self.state.account_mut(&addr).unwrap().gas = coin_obj;
                 } else {
                     unreachable!("Initial payment should only send to addresses")
                 }
@@ -81,10 +78,7 @@ impl Payload for BatchPaymentTestPayload {
             addrs[self.num_payments % num_recipients]
         };
         // we're only using gas objects in this benchmark, so safe to assume everything owned by an address is a gas object
-        let gas_obj = self
-            .state
-            .owned_object(&sender, self.primary_coins.get(&sender).unwrap())
-            .unwrap();
+        let gas_obj = self.state.gas(&sender).unwrap();
         let amount = if self.num_payments == 0 {
             PRIMARY_COIN_VALUE
         } else {
@@ -109,6 +103,7 @@ impl Payload for BatchPaymentTestPayload {
 #[derive(Debug)]
 pub struct BatchPaymentWorkloadBuilder {
     num_payloads: u64,
+    batch_size: u32,
 }
 
 impl BatchPaymentWorkloadBuilder {
@@ -117,6 +112,7 @@ impl BatchPaymentWorkloadBuilder {
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
+        batch_size: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -132,6 +128,7 @@ impl BatchPaymentWorkloadBuilder {
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 BatchPaymentWorkloadBuilder {
                     num_payloads: max_ops,
+                    batch_size,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -165,13 +162,17 @@ impl WorkloadBuilder<dyn Payload> for BatchPaymentWorkloadBuilder {
         _init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
-        Box::<dyn Workload<dyn Payload>>::from(Box::new(BatchPaymentWorkload { payload_gas }))
+        Box::<dyn Workload<dyn Payload>>::from(Box::new(BatchPaymentWorkload {
+            payload_gas,
+            batch_size: self.batch_size,
+        }))
     }
 }
 
 #[derive(Debug, Default)]
 pub struct BatchPaymentWorkload {
     payload_gas: Vec<Gas>,
+    batch_size: u32,
 }
 
 #[async_trait]
@@ -205,21 +206,20 @@ impl Workload<dyn Payload> for BatchPaymentWorkload {
         for (addr, gas) in gas_by_address {
             let mut state = InMemoryWallet::default();
             let key = gas[0].2.clone();
-            let gas_objs: Vec<ObjectRef> = gas.into_iter().map(|g| g.0).collect();
-            let primary_coin = gas_objs[0].0;
-            state.add_account(addr, key, gas_objs);
-            let mut primary_coins = BTreeMap::new();
-            primary_coins.insert(addr, primary_coin);
+            let mut objs: Vec<ObjectRef> = gas.into_iter().map(|g| g.0).collect();
+            let gas_coin = objs.pop().unwrap();
+            state.add_account(addr, key, gas_coin, objs);
             // add empty accounts for `addr` to transfer to
-            for _ in 0..BATCH_SIZE - 1 {
+            for _ in 0..self.batch_size - 1 {
                 let (a, key) = get_key_pair();
-                state.add_account(a, Arc::new(key), Vec::new());
+                // we'll replace this after the first send
+                let gas = DUMMY_GAS;
+                state.add_account(a, Arc::new(key), gas, Vec::new());
             }
             payloads.push(Box::new(BatchPaymentTestPayload {
                 state,
                 num_payments: 0,
                 first_sender: addr,
-                primary_coins,
                 system_state_observer: system_state_observer.clone(),
             }));
         }

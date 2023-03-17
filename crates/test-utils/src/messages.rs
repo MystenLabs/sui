@@ -9,7 +9,7 @@ use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::test_utils::dummy_transaction_effects;
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_json_rpc_types::SuiObjectInfo;
+use sui_json_rpc_types::SuiObjectResponse;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_types::base_types::ObjectRef;
@@ -75,7 +75,8 @@ pub async fn get_gas_object_with_wallet_context(
     if res.is_empty() {
         None
     } else {
-        Some(res.swap_remove(0).to_object_ref())
+        // TODO (jian): handle unwrap error
+        Some(res.swap_remove(0).into_object().unwrap().object_ref())
     }
 }
 
@@ -87,9 +88,10 @@ pub async fn get_sui_gas_object_with_wallet_context(
     let res = get_gas_objects_with_wallet_context(context, address).await;
     res.iter()
         .map(|obj| {
+            let obj_data = obj.clone().into_object().unwrap();
             (
-                parse_sui_struct_tag(&obj.type_).unwrap(),
-                obj.to_object_ref(),
+                parse_sui_struct_tag(&obj_data.type_.clone().unwrap().to_string()).unwrap(),
+                obj_data.object_ref(),
             )
         })
         .collect()
@@ -98,21 +100,26 @@ pub async fn get_sui_gas_object_with_wallet_context(
 pub async fn get_gas_objects_with_wallet_context(
     context: &WalletContext,
     address: &SuiAddress,
-) -> Vec<SuiObjectInfo> {
+) -> Vec<SuiObjectResponse> {
     context
         .gas_objects(*address)
         .await
         .unwrap()
         .into_iter()
-        .map(|(_val, _object, object_ref)| object_ref)
+        .map(|(_val, object_data)| SuiObjectResponse::Exists(object_data))
         .collect()
+    // .try_fold(vec![], |mut acc, (_val, object_data)| {
+    //     let obj_resp = SuiObjectResponse::Exists(object_data);
+    //     acc.push(obj_resp);
+    //     Ok::<Vec<SuiObjectResponse>, Error>(acc)
+    // })?
 }
 
 /// A helper function to get all accounts and their owned gas objects
 /// with a WalletContext.
 pub async fn get_account_and_gas_objects(
     context: &WalletContext,
-) -> Vec<(SuiAddress, Vec<SuiObjectInfo>)> {
+) -> Vec<(SuiAddress, Vec<SuiObjectResponse>)> {
     let owned_gas_objects = futures::future::join_all(
         context
             .config
@@ -157,7 +164,8 @@ pub async fn make_transactions_with_wallet_context(
                 recipient,
                 *address,
                 Some(2),
-                obj.to_object_ref(),
+                // TODO (jian)
+                obj.clone().into_object().expect("REASON").object_ref(),
                 MAX_GAS,
             );
             let tx = to_sender_signed_transaction(
@@ -241,19 +249,23 @@ pub fn make_transactions_with_pre_genesis_objects(
 }
 
 /// Make a few different test transaction containing the same shared object.
-pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
+pub fn test_shared_object_transactions(
+    shared_object: Option<Object>,
+    gas_objects: Option<Vec<Object>>,
+) -> Vec<VerifiedTransaction> {
     // The key pair of the sender of the transaction.
     let (sender, keypair) = deterministic_random_account_key();
 
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
-    let shared_object = Object::shared_for_testing();
+    let shared_object = shared_object.unwrap_or_else(Object::shared_for_testing);
+    let gas_objects = gas_objects.unwrap_or_else(generate_test_gas_objects);
     let shared_object_id = shared_object.id();
     let initial_shared_version = shared_object.version();
     let module = "object_basics";
     let function = "create";
 
-    for gas_object in generate_test_gas_objects() {
+    for gas_object in gas_objects {
         let data = TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             SUI_FRAMEWORK_OBJECT_ID,

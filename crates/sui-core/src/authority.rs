@@ -102,7 +102,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
-use crate::execution_driver::execution_process;
+use crate::execution_driver::{execution_process, EXECUTION_MAX_ATTEMPTS};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
@@ -137,8 +137,6 @@ pub mod epoch_start_configuration;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
-
-pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 
 // Reject a transaction if the number of certificates pending execution is above this threshold.
 // 20000 = 10k TPS * 2s resident time in transaction manager.
@@ -195,6 +193,7 @@ pub struct AuthorityMetrics {
     pub(crate) execution_driver_executed_transactions: IntCounter,
 
     pub(crate) skipped_consensus_txns: IntCounter,
+    pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
 
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
@@ -368,6 +367,12 @@ impl AuthorityMetrics {
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
+                registry,
+            )
+            .unwrap(),
+            skipped_consensus_txns_cache_hit: register_int_counter_with_registry!(
+                "skipped_consensus_txns_cache_hit",
+                "Total number of consensus transactions skipped because of local cache hit",
                 registry,
             )
             .unwrap(),
@@ -1578,8 +1583,7 @@ impl AuthorityState {
             sui_simulator::task::shutdown_current_node();
         }
     }
-    // TODO: This function takes both committee and genesis as parameter.
-    // Technically genesis already contains committee information. Could consider merging them.
+
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     pub async fn new(
         name: AuthorityName,
@@ -1636,7 +1640,7 @@ impl AuthorityState {
         // Process tx recovery log first, so that checkpoint recovery (below)
         // doesn't observe partially-committed txes.
         state
-            .process_tx_recovery_log(None, &epoch_store)
+            .process_tx_recovery_log(&epoch_store)
             .await
             .expect("Could not fully process recovery log at startup!");
 
@@ -1758,41 +1762,26 @@ impl AuthorityState {
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(
         &self,
-        limit: Option<usize>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let mut limit = limit.unwrap_or(usize::MAX);
-        while limit > 0 {
-            limit -= 1;
-            if let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
-                let digest = tx_guard.tx_id();
-                debug!(?digest, "replaying failed cert from log");
+        while let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
+            let digest = tx_guard.tx_id();
+            debug!(?digest, "replaying failed cert from log");
 
-                if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
-                    // This tx will be only partially executed, however the store will be in a safe
-                    // state. We will simply never reach eventual consistency for this TX.
-                    // TODO: Should we revert the tx entirely? I'm not sure the effort is
-                    // warranted, since the only way this can happen is if we are repeatedly
-                    // failing to write to the db, in which case a revert probably won't succeed
-                    // either.
-                    error!(
-                        ?digest,
-                        "Abandoning in-progress TX after {} retries.", MAX_TX_RECOVERY_RETRY
-                    );
-                    // prevent the tx from going back into the recovery list again.
-                    tx_guard.release();
-                    continue;
-                }
+            if tx_guard.retry_num() >= EXECUTION_MAX_ATTEMPTS {
+                // All in-progress transactions must eventually succeed.
+                panic!(
+                    "Transaction {:?} still failing after {} retries",
+                    digest, EXECUTION_MAX_ATTEMPTS
+                );
+            }
 
-                if let Err(e) = self
-                    .process_certificate(tx_guard, &cert.into(), epoch_store)
-                    .instrument(error_span!("process_tx_recovery_log", tx_digest = ?digest))
-                    .await
-                {
-                    warn!(?digest, "Failed to process in-progress certificate: {e}");
-                }
-            } else {
-                break;
+            if let Err(e) = self
+                .process_certificate(tx_guard, &cert.into(), epoch_store)
+                .instrument(error_span!("process_tx_recovery_log", tx_digest = ?digest))
+                .await
+            {
+                warn!(?digest, "Failed to process in-progress certificate: {e}");
             }
         }
 
@@ -2157,9 +2146,14 @@ impl AuthorityState {
             .map(|o| o.owner)
     }
 
-    pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
+    pub fn get_owner_objects(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> SuiResult<Vec<ObjectInfo>> {
         if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects(owner)
+            indexes.get_owner_objects(owner, cursor, limit)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
@@ -2698,10 +2692,11 @@ impl AuthorityState {
             .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
             .await?;
 
-        // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
-        // For now write transactions after because if we write before, there is a chance the lock can fail
+        // Write transactions after because if we write before, there is a chance the lock can fail
         // and this can cause invalid transactions to be inserted in the table.
-        // https://github.com/MystenLabs/sui/issues/1990
+        // It is also safe being non-atomic with above, because if we crash before writing the
+        // transaction, we will just come back, re-acquire the same lock and write the transaction
+        // again.
         epoch_store.insert_signed_transaction(transaction)?;
 
         Ok(())
@@ -2809,12 +2804,6 @@ impl AuthorityState {
             tx_option = epoch_store.get_signed_transaction(tx_digest)?;
         }
         Ok(tx_option)
-    }
-
-    pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
-        self.database
-            .parent(object_ref)
-            .expect("TODO: propagate the error")
     }
 
     pub async fn get_objects(

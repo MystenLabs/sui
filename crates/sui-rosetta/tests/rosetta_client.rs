@@ -1,33 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Encoding, Hex};
-use rand::rngs::OsRng;
-use rand::seq::IteratorRandom;
-use reqwest::Client;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use serde_json::Value;
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
+
+use fastcrypto::encoding::{Encoding, Hex};
+use reqwest::Client;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use serde_json::Value;
+use tokio::task::JoinHandle;
+
 use sui_config::utils;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
-    ConstructionCombineRequest, ConstructionCombineResponse, ConstructionMetadataRequest,
-    ConstructionMetadataResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
-    ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    NetworkIdentifier, Signature, SignatureType, SuiEnv, TransactionIdentifierResponse,
+    AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, ConstructionCombineRequest,
+    ConstructionCombineResponse, ConstructionMetadataRequest, ConstructionMetadataResponse,
+    ConstructionPayloadsRequest, ConstructionPayloadsResponse, ConstructionPreprocessRequest,
+    ConstructionPreprocessResponse, ConstructionSubmitRequest, NetworkIdentifier, Signature,
+    SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
 use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
-use sui_types::gas_coin::GasCoin;
-use tokio::task::JoinHandle;
 
 pub async fn start_rosetta_test_server(
     client: SuiClient,
@@ -95,7 +95,7 @@ impl RosettaClient {
     /// rosetta construction e2e flow, see https://www.rosetta-api.org/docs/flow.html#construction-api
     pub async fn rosetta_flow(
         &self,
-        operations: Operations,
+        operations: &Operations,
         keystore: &Keystore,
     ) -> TransactionIdentifierResponse {
         let network_identifier = NetworkIdentifier {
@@ -132,7 +132,7 @@ impl RosettaClient {
                 RosettaEndpoint::Payloads,
                 &ConstructionPayloadsRequest {
                     network_identifier: network_identifier.clone(),
-                    operations,
+                    operations: operations.clone(),
                     metadata: Some(metadata.metadata),
                     public_keys: vec![],
                 },
@@ -176,26 +176,25 @@ impl RosettaClient {
         println!("Submit : {submit:?}");
         submit
     }
-}
 
-pub async fn get_random_sui(
-    client: &SuiClient,
-    sender: SuiAddress,
-    except: Vec<ObjectID>,
-) -> ObjectRef {
-    let coins = client
-        .read_api()
-        .get_objects_owned_by_address(sender)
-        .await
-        .unwrap();
-    let coin = coins
-        .iter()
-        .filter(|object| {
-            object.type_ == GasCoin::type_().to_string() && !except.contains(&object.object_id)
-        })
-        .choose(&mut OsRng::default())
-        .unwrap();
-    (coin.object_id, coin.version, coin.digest)
+    pub async fn get_balance(
+        &self,
+        network_identifier: NetworkIdentifier,
+        address: SuiAddress,
+        sub_account: Option<SubAccountType>,
+    ) -> AccountBalanceResponse {
+        let sub_account = sub_account.map(|account_type| SubAccount { account_type });
+        let request = AccountBalanceRequest {
+            network_identifier,
+            account_identifier: AccountIdentifier {
+                address,
+                sub_account,
+            },
+            block_identifier: Default::default(),
+            currencies: vec![],
+        };
+        self.call(RosettaEndpoint::Balance, &request).await
+    }
 }
 
 #[allow(dead_code)]

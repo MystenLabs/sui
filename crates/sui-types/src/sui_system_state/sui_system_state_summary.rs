@@ -3,10 +3,9 @@
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
-use crate::sui_serde::AsMultiaddr;
+use crate::multiaddr::Multiaddr;
 use fastcrypto::encoding::Base58;
 use fastcrypto::traits::ToFromBytes;
-use multiaddr::Multiaddr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -129,18 +128,10 @@ pub struct SuiValidatorSummary {
     pub description: String,
     pub image_url: String,
     pub project_url: String,
-    #[schemars(with = "String")]
-    #[serde_as(as = "AsMultiaddr")]
-    pub net_address: Vec<u8>,
-    #[schemars(with = "String")]
-    #[serde_as(as = "AsMultiaddr")]
-    pub p2p_address: Vec<u8>,
-    #[schemars(with = "String")]
-    #[serde_as(as = "AsMultiaddr")]
-    pub primary_address: Vec<u8>,
-    #[schemars(with = "String")]
-    #[serde_as(as = "AsMultiaddr")]
-    pub worker_address: Vec<u8>,
+    pub net_address: String,
+    pub p2p_address: String,
+    pub primary_address: String,
+    pub worker_address: String,
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Option<Base58>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
@@ -153,18 +144,10 @@ pub struct SuiValidatorSummary {
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Option<Base58>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Option<AsMultiaddr>")]
-    pub next_epoch_net_address: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Option<AsMultiaddr>")]
-    pub next_epoch_p2p_address: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Option<AsMultiaddr>")]
-    pub next_epoch_primary_address: Option<Vec<u8>>,
-    #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Option<AsMultiaddr>")]
-    pub next_epoch_worker_address: Option<Vec<u8>>,
+    pub next_epoch_net_address: Option<String>,
+    pub next_epoch_p2p_address: Option<String>,
+    pub next_epoch_primary_address: Option<String>,
+    pub next_epoch_worker_address: Option<String>,
 
     pub voting_power: u64,
     pub operation_cap_id: ID,

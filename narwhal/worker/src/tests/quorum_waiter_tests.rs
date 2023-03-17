@@ -45,7 +45,7 @@ async fn wait_for_quorum() {
 
         // ensure that the networks are connected
         network
-            .connect(network::multiaddr_to_address(&worker.info().worker_address).unwrap())
+            .connect(worker.info().worker_address.to_anemo_address().unwrap())
             .await
             .unwrap();
     }
@@ -102,7 +102,7 @@ async fn pipeline_for_quorum() {
 
         // ensure that the networks are connected
         network
-            .connect(network::multiaddr_to_address(&worker.info().worker_address).unwrap())
+            .connect(worker.info().worker_address.to_anemo_address().unwrap())
             .await
             .unwrap();
     }

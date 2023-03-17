@@ -2037,7 +2037,7 @@ async fn test_entry_point_string_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2072,7 +2072,7 @@ async fn test_entry_point_string_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2107,7 +2107,7 @@ async fn test_entry_point_string_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2162,7 +2162,7 @@ async fn test_entry_point_string_vec_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2207,7 +2207,7 @@ async fn test_entry_point_string_option_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2237,7 +2237,7 @@ async fn test_entry_point_string_option_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2265,7 +2265,7 @@ async fn test_entry_point_string_option_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }

@@ -5,7 +5,7 @@ use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Network;
 use config::Committee;
 use consensus::consensus::ConsensusRound;
-use crypto::{NetworkPublicKey, PublicKey};
+use crypto::{NetworkPublicKey, PublicKey, PublicKeyBytes};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
@@ -208,11 +208,11 @@ impl CertificateFetcher {
         // Skip fetching certificates at or below the gc round.
         let gc_round = self.gc_round();
         // Skip fetching certificates that already exist locally.
-        let mut written_rounds = BTreeMap::<PublicKey, BTreeSet<Round>>::new();
+        let mut written_rounds = BTreeMap::<PublicKeyBytes, BTreeSet<Round>>::new();
         for (origin, _) in self.committee.authorities() {
             // Initialize written_rounds for all authorities, because the handler only sends back
             // certificates for the set of authorities here.
-            written_rounds.insert(origin.clone(), BTreeSet::new());
+            written_rounds.insert(PublicKeyBytes::from(origin), BTreeSet::new());
         }
         // NOTE: origins_after_round() is inclusive.
         match self.certificate_store.origins_after_round(gc_round + 1) {
@@ -230,10 +230,13 @@ impl CertificateFetcher {
         };
 
         self.targets.retain(|origin, target_round| {
-            let last_written_round = written_rounds.get(origin).map_or(gc_round, |rounds| {
-                // TODO: switch to last() after it stabilizes for BTreeSet.
-                rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
-            });
+            let last_written_round =
+                written_rounds
+                    .get(&PublicKeyBytes::from(origin))
+                    .map_or(gc_round, |rounds| {
+                        // TODO: switch to last() after it stabilizes for BTreeSet.
+                        rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
+                    });
             // Drop sync target when cert store already has an equal or higher round for the origin.
             // This applies GC to targets as well.
             //
@@ -289,7 +292,7 @@ async fn run_fetch_task(
     state: Arc<CertificateFetcherState>,
     committee: Committee,
     gc_round: Round,
-    written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
+    written_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>>,
 ) -> DagResult<()> {
     // Send request to fetch certificates.
     let request = FetchCertificatesRequest::default()

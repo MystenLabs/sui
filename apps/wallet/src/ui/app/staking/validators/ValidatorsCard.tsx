@@ -95,7 +95,7 @@ export function ValidatorsCard() {
                         <Card
                             padding="none"
                             header={
-                                <div className="py-2.5 flex px-3.75 justify-start w-full">
+                                <div className="py-2.5 flex px-3.75 justify-center w-full">
                                     <Text
                                         variant="captionSmall"
                                         weight="semibold"

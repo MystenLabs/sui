@@ -8,8 +8,8 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BigInt, SuiObjectDataOptions, SuiObjectInfo, SuiObjectResponse, SuiTransactionBuilderMode,
-    SuiTypeTag, TransactionBytes,
+    BigInt, CheckpointId, ObjectsPage, Page, SuiObjectDataOptions, SuiObjectResponse,
+    SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -22,6 +22,9 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_adapter::execution_mode::{DevInspect, Normal};
 
+use crate::api::cap_page_objects_limit;
+use crate::error::Error;
+use anyhow::anyhow;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
 
@@ -50,17 +53,41 @@ impl AuthorityStateDataReader {
 
 #[async_trait]
 impl DataReader for AuthorityStateDataReader {
-    async fn get_objects_owned_by_address(
+    async fn get_owned_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error> {
-        let refs: Vec<SuiObjectInfo> = self
-            .0
-            .get_owner_objects(address)?
-            .into_iter()
-            .map(SuiObjectInfo::from)
-            .collect();
-        Ok(refs)
+        options: Option<SuiObjectDataOptions>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<ObjectsPage, anyhow::Error> {
+        if at_checkpoint.is_some() {
+            return Err(anyhow!("at_checkpoint param currently not supported"));
+        }
+
+        let limit = cap_page_objects_limit(limit)?;
+        let options = options.unwrap_or_default();
+
+        let mut objects = self.0.get_owner_objects(address, cursor, limit + 1)?;
+
+        // objects here are of size (limit + 1), where the last one is the cursor for the next page
+        let has_next_page = objects.len() > limit;
+        objects.truncate(limit);
+        let next_cursor = objects
+            .last()
+            .cloned()
+            .map_or(cursor, |o_info| Some(o_info.object_id));
+
+        let data = objects.into_iter().try_fold(vec![], |mut acc, o_info| {
+            let o_resp = SuiObjectResponse::try_from((o_info, options.clone()))?;
+            acc.push(o_resp);
+            Ok::<Vec<SuiObjectResponse>, Error>(acc)
+        })?;
+        Ok(Page {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn get_object_with_options(

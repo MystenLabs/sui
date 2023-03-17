@@ -148,6 +148,7 @@ impl JsonRpcServerBuilder {
             .layer(routing_layer);
 
         let server = ServerBuilder::default()
+            .batch_requests_supported(false)
             .max_response_body_size(MAX_REQUEST_SIZE)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)

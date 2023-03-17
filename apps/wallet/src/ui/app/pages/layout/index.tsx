@@ -38,6 +38,8 @@ function PageLayout({
                 )}
             >
                 {children}
+                <div id="overlay-portal-container"></div>
+                <div id="toaster-portal-container"></div>
             </div>
         </Loading>
     );

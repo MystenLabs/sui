@@ -3,20 +3,20 @@
 
 import { type Meta, type StoryObj } from '@storybook/react';
 
-import { BadgeUI } from './BadgeUI';
+import { Badge } from './Badge';
 
 export default {
-    component: BadgeUI,
-} as Meta<typeof BadgeUI>;
+    component: Badge,
+} as Meta<typeof Badge>;
 
-export const Success: StoryObj<typeof BadgeUI> = {
+export const Success: StoryObj<typeof Badge> = {
     args: {
         label: 'New',
         variant: 'success',
     },
 };
 
-export const Warning: StoryObj<typeof BadgeUI> = {
+export const Warning: StoryObj<typeof Badge> = {
     args: {
         label: 'At Risk',
         variant: 'warning',

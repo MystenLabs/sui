@@ -16,7 +16,6 @@ fdlimit = "0.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.2", features = ["serde"] }
 itertools = "0.10.5"
-multiaddr = "0.17.0"
 prometheus = "0.13.3"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }

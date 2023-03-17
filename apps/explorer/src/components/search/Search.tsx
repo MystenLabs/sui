@@ -36,7 +36,7 @@ function Search() {
                 queryValue={query}
                 onChange={handleTextChange}
                 onSelectResult={handleSelectResult}
-                placeholder="Search Addresses / Objects / Transactions / Epochs"
+                placeholder="Search Addresses / Objects / Transactions"
                 isLoading={isLoading}
                 options={results}
             />

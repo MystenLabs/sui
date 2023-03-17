@@ -14,7 +14,7 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
+use sui_storage::write_ahead_log::{DBWriteAheadLog, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
@@ -35,7 +35,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper, MAX_TX_RECOVERY_RETRY};
+use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper};
 use crate::batch_bls_verifier::*;
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
@@ -49,7 +49,6 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::transaction_manager::TransactionManager;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
@@ -493,15 +492,6 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
         let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
-
-        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
-            // If the tx has been retried too many times, it could be a poison pill, and we should
-            // prevent the client from continually retrying it.
-            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
-            debug!(?digest, "{}", err);
-            return Err(SuiError::ErrorWhileProcessingCertificate { err });
-        }
-
         Ok(guard)
     }
 
@@ -1189,7 +1179,6 @@ impl AuthorityPerEpochStore {
         next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
         // Atomically store all elements.
-        // TODO: clear the shared object locks per transaction after ensuring consistency.
         let mut write_batch = self.tables.assigned_shared_object_versions.batch();
 
         let tx_digest = *certificate.digest();
@@ -1475,27 +1464,6 @@ impl AuthorityPerEpochStore {
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
-    }
-
-    /// The transaction passed here went through verification in verify_consensus_transaction.
-    /// This method is called in the exact sequence message are ordered in consensus.
-    /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
-        &self,
-        transaction: VerifiedSequencedConsensusTransaction,
-        checkpoint_service: &Arc<C>,
-        transaction_manager: &Arc<TransactionManager>,
-        parent_sync_store: impl ParentSync,
-    ) -> SuiResult {
-        if let Some(certificate) = self
-            .process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
-            .await?
-        {
-            // The certificate has already been inserted into the pending_certificates table by
-            // process_consensus_transaction() above.
-            transaction_manager.enqueue(vec![certificate], self)?;
-        }
-        Ok(())
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,

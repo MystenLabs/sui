@@ -15,7 +15,6 @@ config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 futures = "0.3.24"
-multiaddr = "0.17.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
@@ -37,6 +36,7 @@ match_opt = "0.1.2"
 rand = "0.8.5"
 mockall = "0.11.2"
 
+mysten-network.workspace = true
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

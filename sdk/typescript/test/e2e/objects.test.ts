@@ -13,7 +13,7 @@ describe('Object Reading API', () => {
   });
 
   it('Get Owned Objects', async () => {
-    const gasObjects = await toolbox.provider.getObjectsOwnedByAddress({
+    const gasObjects = await toolbox.provider.getOwnedObjects({
       owner: toolbox.address(),
     });
     expect(gasObjects.length).to.greaterThan(0);

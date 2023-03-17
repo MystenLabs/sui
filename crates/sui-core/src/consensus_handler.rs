@@ -8,13 +8,16 @@ use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointService;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
-use mysten_metrics::monitored_scope;
+use lru::LruCache;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::num::NonZeroUsize;
+use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
@@ -29,14 +32,17 @@ pub struct ConsensusHandler<T> {
     epoch_store: Arc<AuthorityPerEpochStore>,
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
-    /// transaction_manager is needed to schedule certificates execution received from Narwhal.
-    transaction_manager: Arc<TransactionManager>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     parent_sync_store: T,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
+    /// Lru cache to quickly discard transactions processed by consensus
+    processed_cache: Mutex<LruCache<SequencedConsensusTransactionKey, ()>>,
+    transaction_scheduler: AsyncTransactionScheduler,
 }
+
+const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
 impl<T> ConsensusHandler<T> {
     pub fn new(
@@ -47,13 +53,18 @@ impl<T> ConsensusHandler<T> {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
+        let transaction_scheduler =
+            AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         Self {
             epoch_store,
             last_seen,
             checkpoint_service,
-            transaction_manager,
             parent_sync_store,
             metrics,
+            processed_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
+            )),
+            transaction_scheduler,
         }
     }
 }
@@ -91,11 +102,7 @@ fn update_hash(
 impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_output(
-        &self,
-        // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: ConsensusOutput,
-    ) {
+    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
         let mut sequenced_transactions = Vec::new();
 
@@ -174,7 +181,19 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
+        let mut transactions_to_schedule = vec![];
         for sequenced_transaction in sequenced_transactions {
+            // todo if we can make handle_consensus_transaction into sync function,
+            // we could acquire mutex once for entire loop
+            if self
+                .processed_cache
+                .lock()
+                .put(sequenced_transaction.key(), ())
+                .is_some()
+            {
+                self.metrics.skipped_consensus_txns_cache_hit.inc();
+                continue;
+            }
             let verified_transaction = match self.epoch_store.verify_consensus_transaction(
                 sequenced_transaction,
                 &self.metrics.skipped_consensus_txns,
@@ -183,16 +202,23 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 Err(()) => continue,
             };
 
-            self.epoch_store
-                .handle_consensus_transaction(
+            if let Some(transaction) = self
+                .epoch_store
+                .process_consensus_transaction(
                     verified_transaction,
                     &self.checkpoint_service,
-                    &self.transaction_manager,
                     &self.parent_sync_store,
                 )
                 .await
-                .expect("Unrecoverable error in consensus handler");
+                .expect("Unrecoverable error in consensus handler")
+            {
+                transactions_to_schedule.push(transaction);
+            }
         }
+
+        self.transaction_scheduler
+            .schedule(transactions_to_schedule)
+            .await;
 
         self.epoch_store
             .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
@@ -206,6 +232,38 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .expect("Failed to load consensus indices");
 
         index_with_hash.index.sub_dag_index
+    }
+}
+
+struct AsyncTransactionScheduler {
+    sender: tokio::sync::mpsc::Sender<Vec<VerifiedExecutableTransaction>>,
+}
+
+impl AsyncTransactionScheduler {
+    pub fn start(
+        transaction_manager: Arc<TransactionManager>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+    ) -> Self {
+        let (sender, recv) = tokio::sync::mpsc::channel(16);
+        spawn_monitored_task!(Self::run(recv, transaction_manager, epoch_store));
+        Self { sender }
+    }
+
+    pub async fn schedule(&self, transactions: Vec<VerifiedExecutableTransaction>) {
+        self.sender.send(transactions).await.ok();
+    }
+
+    pub async fn run(
+        mut recv: tokio::sync::mpsc::Receiver<Vec<VerifiedExecutableTransaction>>,
+        transaction_manager: Arc<TransactionManager>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+    ) {
+        while let Some(transactions) = recv.recv().await {
+            let _guard = monitored_scope("ConsensusHandler::enqueue");
+            transaction_manager
+                .enqueue(transactions, &epoch_store)
+                .expect("transaction_manager::enqueue should not fail");
+        }
     }
 }
 

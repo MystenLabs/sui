@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod adversarial;
 pub mod batch_payment;
 pub mod delegation;
 pub mod payload;

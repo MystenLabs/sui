@@ -12,8 +12,7 @@ use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::anemo_ext::NetworkExt;
 use std::sync::Arc;
 use std::time::Duration;
-use storage::CertificateStore;
-use store::Store;
+use storage::{CertificateStore, HeaderStore};
 use tokio::{
     sync::oneshot,
     task::{JoinHandle, JoinSet},
@@ -23,8 +22,8 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::Receiver,
-    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderDigest,
-    PrimaryToPrimaryClient, RequestVoteRequest, Vote,
+    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, PrimaryToPrimaryClient,
+    RequestVoteRequest, Vote,
 };
 
 #[cfg(test)]
@@ -37,7 +36,7 @@ pub struct Core {
     /// The committee information.
     committee: Committee,
     /// The persistent storage keyed to headers.
-    header_store: Store<HeaderDigest, Header>,
+    header_store: HeaderStore,
     /// The persistent storage keyed to certificates.
     certificate_store: CertificateStore,
     /// Handles synchronization with other nodes and our workers.
@@ -68,7 +67,7 @@ impl Core {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        header_store: Store<HeaderDigest, Header>,
+        header_store: HeaderStore,
         certificate_store: CertificateStore,
         synchronizer: Arc<Synchronizer>,
         signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
@@ -230,7 +229,7 @@ impl Core {
     async fn propose_header(
         name: PublicKey,
         committee: Committee,
-        header_store: Store<HeaderDigest, Header>,
+        header_store: HeaderStore,
         certificate_store: CertificateStore,
         signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
         metrics: Arc<PrimaryMetrics>,
@@ -251,9 +250,7 @@ impl Core {
         }
 
         // Process the header.
-        header_store
-            .async_write(header.digest(), header.clone())
-            .await;
+        header_store.write(&header)?;
         metrics.proposed_header_round.set(header.round as i64);
 
         // Reset the votes aggregator and sign our own header.

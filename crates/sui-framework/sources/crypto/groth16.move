@@ -10,6 +10,9 @@ module sui::groth16 {
     // Error if the given curve is not supported
     const EInvalidCurve: u64 = 1;
 
+    // Error if the number of public inputs given exceeds the max.
+    const ETooManyPublicInputs: u64 = 2;
+
     /// Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
     /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
     struct Curve has store, copy, drop {

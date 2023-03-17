@@ -12,6 +12,8 @@ use crate::workloads::WorkloadInfo;
 use anyhow::Result;
 use std::sync::Arc;
 
+use super::adversarial::AdversarialWorkloadBuilder;
+
 pub struct WorkloadConfiguration;
 
 impl WorkloadConfiguration {
@@ -29,6 +31,8 @@ impl WorkloadConfiguration {
                 transfer_object,
                 delegation,
                 batch_payment,
+                adversarial,
+                batch_payment_size,
                 shared_counter_hotness_factor,
                 ..
             } => {
@@ -39,6 +43,8 @@ impl WorkloadConfiguration {
                     transfer_object,
                     delegation,
                     batch_payment,
+                    adversarial,
+                    batch_payment_size,
                     shared_counter_hotness_factor,
                     target_qps,
                     in_flight_ratio,
@@ -58,6 +64,8 @@ impl WorkloadConfiguration {
         transfer_object_weight: u32,
         delegation_weight: u32,
         batch_payment_weight: u32,
+        adversarial_weight: u32,
+        batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
         target_qps: u64,
         in_flight_ratio: u64,
@@ -68,7 +76,8 @@ impl WorkloadConfiguration {
         let total_weight = shared_counter_weight
             + transfer_object_weight
             + delegation_weight
-            + batch_payment_weight;
+            + batch_payment_weight
+            + adversarial_weight;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
             shared_counter_weight as f32 / total_weight as f32,
@@ -98,8 +107,16 @@ impl WorkloadConfiguration {
             target_qps,
             num_workers,
             in_flight_ratio,
+            batch_payment_size,
         );
         workload_builders.push(batch_payment_workload);
+        let adversarial_workload = AdversarialWorkloadBuilder::from(
+            adversarial_weight as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+        );
+        workload_builders.push(adversarial_workload);
         let (workload_params, workload_builders): (Vec<_>, Vec<_>) = workload_builders
             .into_iter()
             .flatten()

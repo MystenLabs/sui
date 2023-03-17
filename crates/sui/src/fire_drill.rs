@@ -15,7 +15,6 @@ use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
-use multiaddr::Multiaddr;
 use std::path::{Path, PathBuf};
 use sui_config::node::KeyPairWithPath;
 use sui_config::utils;
@@ -25,6 +24,7 @@ use sui_sdk::{rpc_types::SuiTransactionEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
 use sui_types::messages::{CallArg, ObjectArg, TransactionData};
+use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{committee::EpochId, crypto::get_authority_key_pair};
 use sui_types::{
@@ -93,7 +93,8 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
     Ok(())
 }
 
-async fn get_gas_obj_ref(
+// TODO move this to a shared lib
+pub async fn get_gas_obj_ref(
     sui_address: SuiAddress,
     sui_client: &SuiClient,
 ) -> anyhow::Result<ObjectRef> {
@@ -158,7 +159,7 @@ async fn update_next_epoch_metadata(
     // pop out tcp
     new_network_address.pop().unwrap();
     let new_port = utils::get_available_port("127.0.0.1");
-    new_network_address.push(multiaddr::Protocol::Tcp(new_port));
+    new_network_address.push(Protocol::Tcp(new_port));
     new_network_address.push(http);
     info!("New network address: {:?}", new_network_address);
     new_config.network_address = new_network_address.clone();
@@ -169,7 +170,7 @@ async fn update_next_epoch_metadata(
     // pop out udp
     new_external_address.pop().unwrap();
     let new_port = utils::get_available_port("127.0.0.1");
-    new_external_address.push(multiaddr::Protocol::Udp(new_port));
+    new_external_address.push(Protocol::Udp(new_port));
     info!("New P2P external address: {:?}", new_external_address);
     new_config.p2p_config.external_address = Some(new_external_address.clone());
 
@@ -186,7 +187,7 @@ async fn update_next_epoch_metadata(
     // pop out udp
     new_primary_addresses.pop().unwrap();
     let new_port = utils::get_available_port("127.0.0.1");
-    new_primary_addresses.push(multiaddr::Protocol::Udp(new_port));
+    new_primary_addresses.push(Protocol::Udp(new_port));
     info!("New primary address: {:?}", new_primary_addresses);
 
     // worker address
@@ -203,7 +204,7 @@ async fn update_next_epoch_metadata(
     // pop out udp
     new_worker_addresses.pop().unwrap();
     let new_port = utils::get_available_port("127.0.0.1");
-    new_worker_addresses.push(multiaddr::Protocol::Udp(new_port));
+    new_worker_addresses.push(Protocol::Udp(new_port));
     info!("New worker address:: {:?}", new_worker_addresses);
 
     // Save new config
@@ -257,9 +258,7 @@ async fn update_next_epoch_metadata(
     update_metadata_on_chain(
         config,
         "update_validator_next_epoch_network_address",
-        vec![CallArg::Pure(
-            bcs::to_bytes(&new_network_address.to_vec()).unwrap(),
-        )],
+        vec![CallArg::Pure(bcs::to_bytes(&new_network_address).unwrap())],
         config.sui_address(),
         sui_client,
     )
@@ -269,9 +268,7 @@ async fn update_next_epoch_metadata(
     update_metadata_on_chain(
         config,
         "update_validator_next_epoch_p2p_address",
-        vec![CallArg::Pure(
-            bcs::to_bytes(&new_external_address.to_vec()).unwrap(),
-        )],
+        vec![CallArg::Pure(bcs::to_bytes(&new_external_address).unwrap())],
         config.sui_address(),
         sui_client,
     )
@@ -282,7 +279,7 @@ async fn update_next_epoch_metadata(
         config,
         "update_validator_next_epoch_primary_address",
         vec![CallArg::Pure(
-            bcs::to_bytes(&new_primary_addresses.to_vec()).unwrap(),
+            bcs::to_bytes(&new_primary_addresses).unwrap(),
         )],
         config.sui_address(),
         sui_client,
@@ -293,9 +290,7 @@ async fn update_next_epoch_metadata(
     update_metadata_on_chain(
         config,
         "update_validator_next_epoch_worker_address",
-        vec![CallArg::Pure(
-            bcs::to_bytes(&new_worker_addresses.to_vec()).unwrap(),
-        )],
+        vec![CallArg::Pure(bcs::to_bytes(&new_worker_addresses).unwrap())],
         config.sui_address(),
         sui_client,
     )

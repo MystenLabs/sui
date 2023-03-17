@@ -22,8 +22,10 @@ import { StatusIcon } from './StatusIcon';
 import { TxnAddressLink } from './TxnAddressLink';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
+import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
 // import { TxnImage } from '_components/transactions-card/TxnImage';
 import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
 import { TxnGasSummary } from '_src/ui/app/components/receipt-card/TxnGasSummary';
@@ -37,7 +39,7 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    // const { events } = txn;
+    const { events } = txn;
     const timestamp = txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
@@ -74,6 +76,13 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
     const showGasSummary = isSuccessful && isSender && gasTotal;
     const showSponsorInfo = !isSuccessful && isSender && isSponsoredTransaction;
+    const stakedTxn = events?.find(
+        ({ type }) => type === '0x2::validator::StakingRequestEvent'
+    );
+
+    const unstakeTxn = events?.find(
+        ({ type }) => type === '0x2::validator::UnstakingRequestEvent'
+    );
 
     let txnGasSummary: JSX.Element | undefined;
     if (showGasSummary && isSponsoredTransaction) {
@@ -124,23 +133,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             </Text>
                         </div>
                     )}
+                    {stakedTxn ? <StakeTxnCard event={stakedTxn} /> : null}
+                    {unstakeTxn ? <UnStakeTxnCard event={unstakeTxn} /> : null}
 
-                    {/* TODO: Support programmable transactions: */}
-                    {/* {isStakeTxn ? (
-                        moveCallLabel === 'Staked' ? (
-                            <StakeTxnCard
-                                txnEffects={effects!}
-                                events={events!}
-                            />
-                        ) : (
-                            <UnStakeTxnCard
-                                txn={txn}
-                                activeAddress={activeAddress}
-                                amount={totalSuiAmount || 0}
-                            />
-                        )
-                    ) 
-                    )} */}
                     <>
                         {/* {objectId && (
                             <TxnImage

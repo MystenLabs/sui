@@ -805,6 +805,11 @@ impl SequenceNumber {
         *self = next;
     }
 
+    pub fn decrement(&mut self) {
+        assert_ne!(self.0, 0);
+        self.0 -= 1;
+    }
+
     pub fn decrement_to(&mut self, prev: SequenceNumber) {
         debug_assert!(prev < *self, "Not a decrement: {} to {}", self, prev);
         *self = prev;

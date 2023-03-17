@@ -1,21 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::{traits::InsecureDefault, PublicKey};
-use dashmap::DashMap;
+use crypto::{traits::InsecureDefault, PublicKey, PublicKeyBytes};
 use fastcrypto::hash::Hash;
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, VecDeque},
-    iter,
-    sync::Arc,
-};
+use std::{cmp::Ordering, collections::BTreeMap, iter};
 
+use crate::NotifySubscribers;
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
 };
-use tokio::sync::{oneshot, oneshot::Sender};
-use tracing::warn;
 use types::{Certificate, CertificateDigest, Round, StoreResult};
 
 /// The main storage when we have to deal with certificates. It maintains
@@ -33,28 +26,27 @@ pub struct CertificateStore {
     /// by the certificate rounds. Certificate origin is used to produce unique keys.
     /// This helps us to perform range requests based on rounds. We avoid storing again the
     /// certificate here to not waste space. To dereference we use the certificates_by_id storage.
-    certificate_id_by_round: DBMap<(Round, PublicKey), CertificateDigest>,
+    certificate_id_by_round: DBMap<(Round, PublicKeyBytes), CertificateDigest>,
     /// A secondary index that keeps the certificate digest ids
     /// by the certificate origins. Certificate rounds are used to produce unique keys.
     /// This helps us to perform range requests based on rounds. We avoid storing again the
     /// certificate here to not waste space. To dereference we use the certificates_by_id storage.
-    certificate_id_by_origin: DBMap<(PublicKey, Round), CertificateDigest>,
-    /// Senders to notify for a write that happened for
-    /// the specified certificate digest id
-    notify_on_write_subscribers: Arc<DashMap<CertificateDigest, VecDeque<Sender<Certificate>>>>,
+    certificate_id_by_origin: DBMap<(PublicKeyBytes, Round), CertificateDigest>,
+    /// The pub/sub to notify for a write that happened for a certificate digest id
+    notify_subscribers: NotifySubscribers<CertificateDigest, Certificate>,
 }
 
 impl CertificateStore {
     pub fn new(
         certificates_by_id: DBMap<CertificateDigest, Certificate>,
-        certificate_id_by_round: DBMap<(Round, PublicKey), CertificateDigest>,
-        certificate_id_by_origin: DBMap<(PublicKey, Round), CertificateDigest>,
+        certificate_id_by_round: DBMap<(Round, PublicKeyBytes), CertificateDigest>,
+        certificate_id_by_origin: DBMap<(PublicKeyBytes, Round), CertificateDigest>,
     ) -> CertificateStore {
         Self {
             certificates_by_id,
             certificate_id_by_round,
             certificate_id_by_origin,
-            notify_on_write_subscribers: Arc::new(DashMap::new()),
+            notify_subscribers: NotifySubscribers::new(),
         }
     }
 
@@ -79,18 +71,30 @@ impl CertificateStore {
         // Index the certificate id by its round and origin.
         batch = batch.insert_batch(
             &self.certificate_id_by_round,
-            iter::once(((certificate.round(), certificate.origin()), id)),
+            iter::once((
+                (
+                    certificate.round(),
+                    PublicKeyBytes::from(&certificate.origin()),
+                ),
+                id,
+            )),
         )?;
         batch = batch.insert_batch(
             &self.certificate_id_by_origin,
-            iter::once(((certificate.origin(), certificate.round()), id)),
+            iter::once((
+                (
+                    PublicKeyBytes::from(&certificate.origin()),
+                    certificate.round(),
+                ),
+                id,
+            )),
         )?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
 
         if result.is_ok() {
-            self.notify_subscribers(id, certificate);
+            self.notify_subscribers.notify(&id, &certificate);
         }
 
         result
@@ -121,7 +125,7 @@ impl CertificateStore {
 
         // write the certificates id by their rounds
         let values = certificates.iter().map(|(digest, c)| {
-            let key = (c.round(), c.origin());
+            let key = (c.round(), PublicKeyBytes::from(&c.origin()));
             let value = digest;
             (key, value)
         });
@@ -129,7 +133,7 @@ impl CertificateStore {
 
         // write the certificates id by their origins
         let values = certificates.iter().map(|(digest, c)| {
-            let key = (c.origin(), c.round());
+            let key = (PublicKeyBytes::from(&c.origin()), c.round());
             let value = digest;
             (key, value)
         });
@@ -140,7 +144,8 @@ impl CertificateStore {
 
         if result.is_ok() {
             for (_id, certificate) in certificates {
-                self.notify_subscribers(certificate.digest(), certificate);
+                self.notify_subscribers
+                    .notify(&certificate.digest(), &certificate);
             }
         }
 
@@ -163,7 +168,7 @@ impl CertificateStore {
     /// If not found, None is returned as result.
     pub fn read_by_index(
         &self,
-        origin: PublicKey,
+        origin: PublicKeyBytes,
         round: Round,
     ) -> StoreResult<Option<Certificate>> {
         fail::fail_point!("certificate-store", |_| {
@@ -208,17 +213,13 @@ impl CertificateStore {
     /// Waits to get notified until the requested certificate becomes available
     pub async fn notify_read(&self, id: CertificateDigest) -> StoreResult<Certificate> {
         // we register our interest to be notified with the value
-        let (sender, receiver) = oneshot::channel();
-        self.notify_on_write_subscribers
-            .entry(id)
-            .or_insert_with(VecDeque::new)
-            .push_back(sender);
+        let receiver = self.notify_subscribers.subscribe(&id);
 
         // let's read the value because we might have missed the opportunity
         // to get notified about it
         if let Ok(Some(cert)) = self.read(id) {
             // notify any obligations - and remove the entries
-            self.notify_subscribers(id, cert.clone());
+            self.notify_subscribers.notify(&id, &cert);
 
             // reply directly
             return Ok(cert);
@@ -247,7 +248,7 @@ impl CertificateStore {
         batch = batch.delete_batch(&self.certificates_by_id, iter::once(id))?;
 
         // write the certificate index by its round
-        let key = (cert.round(), cert.origin());
+        let key = (cert.round(), PublicKeyBytes::from(&cert.origin()));
 
         batch = batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
 
@@ -263,7 +264,7 @@ impl CertificateStore {
         let certs = self.read_all(ids.clone())?;
         let keys_by_round = certs
             .into_iter()
-            .filter_map(|c| c.map(|cert| (cert.round(), cert.origin())))
+            .filter_map(|c| c.map(|cert| (cert.round(), PublicKeyBytes::from(&cert.origin()))))
             .collect::<Vec<_>>();
         if keys_by_round.is_empty() {
             return Ok(());
@@ -288,7 +289,10 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
+            iter = iter.skip_to(&(
+                round - 1,
+                PublicKeyBytes::from(&PublicKey::insecure_default()),
+            ))?;
         }
 
         let mut digests = Vec::new();
@@ -322,15 +326,18 @@ impl CertificateStore {
     pub fn origins_after_round(
         &self,
         round: Round,
-    ) -> StoreResult<BTreeMap<Round, Vec<PublicKey>>> {
+    ) -> StoreResult<BTreeMap<Round, Vec<PublicKeyBytes>>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
+            iter = iter.skip_to(&(
+                round - 1,
+                PublicKeyBytes::from(&PublicKey::insecure_default()),
+            ))?;
         }
 
-        let mut result = BTreeMap::<Round, Vec<PublicKey>>::new();
+        let mut result = BTreeMap::<Round, Vec<PublicKeyBytes>>::new();
         for ((r, origin), _) in iter {
             if r < round {
                 continue;
@@ -378,14 +385,14 @@ impl CertificateStore {
     /// Retrieves the last certificate of the given origin.
     /// Returns None if there is no certificate for the origin.
     pub fn last_round(&self, origin: &PublicKey) -> StoreResult<Option<Certificate>> {
-        let key = (origin.clone(), Round::MAX);
+        let key = (PublicKeyBytes::from(origin), Round::MAX);
         if let Some(((name, _round), digest)) = self
             .certificate_id_by_origin
             .iter()
             .skip_prior_to(&key)?
             .next()
         {
-            if &name == origin {
+            if name == PublicKeyBytes::from(origin) {
                 return self.certificates_by_id.get(&digest);
             }
         }
@@ -411,14 +418,14 @@ impl CertificateStore {
     /// Retrieves the last round number of the given origin.
     /// Returns None if there is no certificate for the origin.
     pub fn last_round_number(&self, origin: &PublicKey) -> StoreResult<Option<Round>> {
-        let key = (origin.clone(), Round::MAX);
+        let key = (PublicKeyBytes::from(origin), Round::MAX);
         if let Some(((name, round), _)) = self
             .certificate_id_by_origin
             .iter()
             .skip_prior_to(&key)?
             .next()
         {
-            if &name == origin {
+            if name == PublicKeyBytes::from(origin) {
                 return Ok(Some(round));
             }
         }
@@ -429,7 +436,7 @@ impl CertificateStore {
     /// Returns None if there is no more local certificate from the origin with bigger round.
     pub fn next_round_number(
         &self,
-        origin: &PublicKey,
+        origin: &PublicKeyBytes,
         round: Round,
     ) -> StoreResult<Option<Round>> {
         let key = (origin.clone(), round + 1);
@@ -454,27 +461,12 @@ impl CertificateStore {
     pub fn is_empty(&self) -> bool {
         self.certificates_by_id.is_empty()
     }
-
-    /// Notifies the subscribed ones that listen on updates for the
-    /// certificate with the provided id. The obligations are notified
-    /// with the provided value. The obligation entries under the certificate id
-    /// are removed completely. If we fail to notify an obligation we don't
-    /// fail and we rather print a warn message.
-    fn notify_subscribers(&self, id: CertificateDigest, value: Certificate) {
-        if let Some((_, mut senders)) = self.notify_on_write_subscribers.remove(&id) {
-            while let Some(s) = senders.pop_front() {
-                if s.send(value.clone()).is_err() {
-                    warn!("Couldn't notify obligation for certificate with id {id}");
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::certificate_store::CertificateStore;
-    use crypto::{traits::InsecureDefault, PublicKey};
+    use crypto::{traits::InsecureDefault, PublicKey, PublicKeyBytes};
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
     use std::{
@@ -508,8 +500,8 @@ mod test {
 
         let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) = reopen!(&rocksdb,
             CERTIFICATES_CF;<CertificateDigest, Certificate>,
-            CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-            CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>
+            CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
+            CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>
         );
 
         CertificateStore::new(
@@ -617,7 +609,10 @@ mod test {
         // THEN
         let mut i = 0;
         let mut current_round = 0;
-        while let Some(r) = store.next_round_number(&origin, current_round).unwrap() {
+        while let Some(r) = store
+            .next_round_number(&PublicKeyBytes::from(&origin), current_round)
+            .unwrap()
+        {
             assert_eq!(rounds[i], r);
             i += 1;
             current_round = r;

@@ -120,12 +120,9 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let gas_size = gas_object.object_size_for_gas_metering();
 
     gas_status.charge_storage_read(obj_size + gas_size)?;
+    gas_status.bucketize_computation()?;
     gas_status.charge_storage_mutation(obj_size, 0.into())?;
     gas_status.charge_storage_mutation(gas_size, 0.into())?;
-    // computation gas is for both read and writes, so on a simple transfer is twice the objects
-    // (transfer object and gas coin)
-    gas_status.charge_computation_gas_for_storage_mutation((obj_size + gas_size) as u64 * 2)?;
-    gas_status.bucketize_computation()?;
     let summary = gas_status.summary();
     assert_eq!(gas_cost, &summary);
     Ok(())

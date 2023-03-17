@@ -10,7 +10,7 @@ export function useObjectsOwnedByAddress(address?: SuiAddress | null) {
     const rpc = useRpcClient();
     return useQuery(
         ['objects-owned', address],
-        () => rpc.getObjectsOwnedByAddress({ owner: address! }),
+        () => rpc.getOwnedObjects({ owner: address! }),
         {
             enabled: !!address,
         }

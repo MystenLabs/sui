@@ -14,7 +14,6 @@ use std::{
 };
 use sui_config::NetworkConfig;
 use sui_config::{genesis::Genesis, ValidatorInfo};
-use sui_core::signature_verifier::IgnoreSignatureVerifier;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::{make_authority_clients, AuthorityAPI, NetworkAuthorityClient},
@@ -140,6 +139,17 @@ impl ExecutionEffects {
             Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::Immutable => unreachable!(), // owner of gas object is always an address
         }
     }
+
+    pub fn is_ok(&self) -> bool {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
+                certified_effects.data().status().is_ok()
+            }
+            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+                sui_tx_effects.status().is_ok()
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -165,9 +175,9 @@ pub trait ValidatorProxy {
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
 pub struct LocalValidatorAggregatorProxy {
-    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient, IgnoreSignatureVerifier>,
+    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     // Stress client does not verify individual validator signatures since this is very expensive
-    qd: Arc<QuorumDriver<NetworkAuthorityClient, IgnoreSignatureVerifier>>,
+    qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
     requests: Mutex<JoinSet<()>>,
@@ -231,7 +241,7 @@ impl LocalValidatorAggregatorProxy {
     }
 
     async fn new_impl(
-        aggregator: AuthorityAggregator<NetworkAuthorityClient, IgnoreSignatureVerifier>,
+        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,

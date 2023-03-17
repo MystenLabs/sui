@@ -8,10 +8,10 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata,
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
+use crate::multiaddr::Multiaddr;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
-use multiaddr::Multiaddr;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -47,18 +47,18 @@ pub struct ValidatorMetadataV1 {
     pub description: String,
     pub image_url: String,
     pub project_url: String,
-    pub net_address: Vec<u8>,
-    pub p2p_address: Vec<u8>,
-    pub primary_address: Vec<u8>,
-    pub worker_address: Vec<u8>,
+    pub net_address: String,
+    pub p2p_address: String,
+    pub primary_address: String,
+    pub worker_address: String,
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
-    pub next_epoch_net_address: Option<Vec<u8>>,
-    pub next_epoch_p2p_address: Option<Vec<u8>>,
-    pub next_epoch_primary_address: Option<Vec<u8>>,
-    pub next_epoch_worker_address: Option<Vec<u8>>,
+    pub next_epoch_net_address: Option<String>,
+    pub next_epoch_p2p_address: Option<String>,
+    pub next_epoch_primary_address: Option<String>,
+    pub next_epoch_worker_address: Option<String>,
 }
 
 #[derive(derivative::Derivative, Clone, Eq, PartialEq)]
@@ -115,15 +115,24 @@ impl ValidatorMetadataV1 {
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
         let net_address = Multiaddr::try_from(self.net_address.clone())
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
+
+        // Ensure p2p, primary, and worker addresses are both Multiaddr's and valid anemo addresses
         let p2p_address = Multiaddr::try_from(self.p2p_address.clone())
             .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
-        // Also make sure that the p2p address is a valid anemo address.
-        // MUSTFIX: This will trigger a bunch of Move test failures today since we did not give proper
-        // value for p2p address.
-        // multiaddr_to_anemo_address(&p2p_address).ok_or(E_METADATA_INVALID_P2P_ADDR)?;
+        p2p_address
+            .to_anemo_address()
+            .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+
         let primary_address = Multiaddr::try_from(self.primary_address.clone())
             .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+        primary_address
+            .to_anemo_address()
+            .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+
         let worker_address = Multiaddr::try_from(self.worker_address.clone())
+            .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+        worker_address
+            .to_anemo_address()
             .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
 
         let next_epoch_protocol_pubkey = match self.next_epoch_protocol_pubkey_bytes.clone() {
@@ -184,23 +193,41 @@ impl ValidatorMetadataV1 {
 
         let next_epoch_p2p_address = match self.next_epoch_p2p_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?,
-            )),
+            Some(address) => {
+                let address =
+                    Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+                address
+                    .to_anemo_address()
+                    .map_err(|_| E_METADATA_INVALID_P2P_ADDR)?;
+
+                Ok(Some(address))
+            }
         }?;
 
         let next_epoch_primary_address = match self.next_epoch_primary_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?,
-            )),
+            Some(address) => {
+                let address =
+                    Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+                address
+                    .to_anemo_address()
+                    .map_err(|_| E_METADATA_INVALID_PRIMARY_ADDR)?;
+
+                Ok(Some(address))
+            }
         }?;
 
         let next_epoch_worker_address = match self.next_epoch_worker_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
-            Some(address) => Ok(Some(
-                Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?,
-            )),
+            Some(address) => {
+                let address =
+                    Multiaddr::try_from(address).map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+                address
+                    .to_anemo_address()
+                    .map_err(|_| E_METADATA_INVALID_WORKER_ADDR)?;
+
+                Ok(Some(address))
+            }
         }?;
 
         Ok(VerifiedValidatorMetadataV1 {
@@ -374,7 +401,7 @@ pub struct ValidatorSetV1 {
     pub pending_active_validators: TableVec,
     pub pending_removals: Vec<u64>,
     pub staking_pool_mappings: Table,
-    pub inactive_pools: Table,
+    pub inactive_validators: Table,
     pub validator_candidates: Table,
     pub at_risk_validators: VecMap<SuiAddress, u64>,
 }
@@ -517,7 +544,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                             id: staking_pool_mappings_id,
                             size: staking_pool_mappings_size,
                         },
-                    inactive_pools:
+                    inactive_validators:
                         Table {
                             id: inactive_pools_id,
                             size: inactive_pools_size,
@@ -600,7 +627,7 @@ impl Default for SuiSystemStateInnerV1 {
             pending_active_validators: TableVec::default(),
             pending_removals: vec![],
             staking_pool_mappings: Table::default(),
-            inactive_pools: Table::default(),
+            inactive_validators: Table::default(),
             validator_candidates: Table::default(),
             at_risk_validators: VecMap { contents: vec![] },
         };

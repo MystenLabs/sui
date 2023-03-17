@@ -7,21 +7,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ValidatorLogo } from './ValidatorLogo';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
-import { BadgeUI } from '_src/ui/app/shared/BadgeUI';
 
 type ValidatorListItemProp = {
     selected?: boolean;
     value: string | number;
     validatorAddress: string;
-    atRisk?: boolean;
-    newValidator?: boolean;
 };
 export function ValidatorListItem({
     selected,
     value,
     validatorAddress,
-    atRisk,
-    newValidator,
 }: ValidatorListItemProp) {
     return (
         <AnimatePresence>
@@ -44,25 +39,13 @@ export function ValidatorListItem({
                                     className="absolute text-success text-heading6 translate-x-4 -translate-y-1 rounded-full bg-white"
                                 />
                             )}
-                            <div className="flex">
-                                <ValidatorLogo
-                                    validatorAddress={validatorAddress}
-                                    showAddress
-                                    iconSize="md"
-                                    size="body"
-                                />
-                            </div>
-                            <div className="-ml-4 flex gap-1">
-                                {newValidator && (
-                                    <BadgeUI label="New" variant="success" />
-                                )}
-                                {atRisk && (
-                                    <BadgeUI
-                                        label="At Risk"
-                                        variant="warning"
-                                    />
-                                )}
-                            </div>
+                            <ValidatorLogo
+                                validatorAddress={validatorAddress}
+                                showAddress
+                                iconSize="md"
+                                size="body"
+                                showActiveStatus
+                            />
                         </div>
                     </div>
                     <div className="flex gap-0.5 items-center">

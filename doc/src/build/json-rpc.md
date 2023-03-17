@@ -20,9 +20,9 @@ To configure your own Sui Full node, see [Configure a Sui Full node](fullnode.md
 
 You can sign transactions and interact with the Sui network using any of the following:
 
-* [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
-* [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
-* [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
+ * [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
+ * [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+ * [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
 ## Sui JSON-RPC examples
 
@@ -44,7 +44,7 @@ curl --location --request POST $SUI_RPC_HOST \
 The examples in this section demonstrate how to create transfer transactions. To use the example commands, replace the values between double brackets ({{ example_ID }} with actual values.
 
 Objects IDs for `{{coin_object_id}}` and `{{gas_object_id}}` must
-be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjectsByAddress`](#sui_getObjectsOwnedByAddress) to return object IDs. 
+be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjects`](#sui_getOwnedObjects) to return object IDs. 
 
 **Important:** As a security best practice, you should serialize data from the JSON-RPC service locally in the same location as the signer. This reduces the risk of trusting data from the service directly.
 

@@ -7,11 +7,11 @@ use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use crate::versioned::Versioned;
 use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-use multiaddr::Multiaddr;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -175,7 +175,8 @@ where
 
 /// Given a system state type version, and the ID of the table, along with a key, retrieve the
 /// dynamic field as a Validator type. We need the version to determine which inner type to use for
-/// the Validator type.
+/// the Validator type. This is assuming that the validator is stored in the table as
+/// ValidatorWrapper type.
 pub fn get_validator_from_table<S, K>(
     system_state_version: u64,
     object_store: &S,
@@ -186,9 +187,15 @@ where
     S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned,
 {
+    let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)?;
+    let versioned = field.inner;
     match system_state_version {
         1 => {
-            let validator: ValidatorV1 = get_dynamic_field_from_store(object_store, table_id, key)?;
+            let validator: ValidatorV1 = get_dynamic_field_from_store(
+                object_store,
+                versioned.id.id.bytes,
+                &system_state_version,
+            )?;
             Ok(validator.into_sui_validator_summary())
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
@@ -200,27 +207,6 @@ where
 
 pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
     INIT_SYSTEM_STATE_VERSION
-}
-
-pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
-            Some((hostname.as_ref(), port).into())
-        }
-        _ => {
-            tracing::debug!("unsupported p2p multiaddr: '{multiaddr}'");
-            None
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -238,4 +224,9 @@ impl PoolTokenExchangeRate {
             self.pool_token_amount as f64 / self.sui_amount as f64
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct ValidatorWrapper {
+    pub inner: Versioned,
 }
