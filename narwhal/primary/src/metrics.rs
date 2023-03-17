@@ -308,8 +308,7 @@ pub struct PrimaryMetrics {
     pub proposer_batch_latency: Histogram,
     /// The number of headers being resent because they will not get committed.
     pub proposer_resend_headers: IntCounter,
-    /// The latency of a batch between the time it has been
-    /// created and until it has been included to a header proposal.
+    /// The number of batches being resent because they will not get committed.
     pub proposer_resend_batches: IntCounter,
     /// Time it takes for a header to be materialised to a certificate
     pub header_to_certificate_latency: Histogram,
