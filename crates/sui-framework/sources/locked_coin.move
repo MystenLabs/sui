@@ -9,8 +9,6 @@ module sui::locked_coin {
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::{Self, EpochTimeLock};
 
-    friend sui::sui_system;
-
     /// A coin of type `T` locked until `locked_until_epoch`.
     struct LockedCoin<phantom T> has key {
         id: UID,
@@ -26,13 +24,6 @@ module sui::locked_coin {
             locked_until_epoch
         };
         transfer::transfer(locked_coin, owner);
-    }
-
-    /// Destruct a LockedCoin wrapper and keep the balance.
-    public(friend) fun into_balance<T>(coin: LockedCoin<T>): (Balance<T>, EpochTimeLock) {
-        let LockedCoin { id, locked_until_epoch, balance } = coin;
-        object::delete(id);
-        (balance, locked_until_epoch)
     }
 
     /// Public getter for the locked coin's value
