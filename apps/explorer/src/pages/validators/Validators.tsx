@@ -44,7 +44,6 @@ export function validatorsTableData(
                 validatorsEvents,
                 validator.suiAddress
             );
-
             return {
                 name: {
                     name: validatorName,
@@ -52,6 +51,7 @@ export function validatorsTableData(
                 },
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
+                nextEpochGasPrice: validator.nextEpochGasPrice,
                 commission: +validator.commissionRate / 100,
                 img: img,
                 address: validator.suiAddress,
@@ -112,6 +112,12 @@ export function validatorsTableData(
             {
                 header: 'Stake',
                 accessorKey: 'stake',
+                enableSorting: true,
+                cell: (props: any) => <StakeColumn stake={props.getValue()} />,
+            },
+            {
+                header: 'Next Epoch Gas Price',
+                accessorKey: 'nextEpochGasPrice',
                 enableSorting: true,
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
             },
@@ -249,10 +255,6 @@ function ValidatorPageResult() {
 
     return (
         <div>
-            <Heading as="h1" variant="heading2/bold">
-                Validators
-            </Heading>
-
             <div className="mt-8 grid gap-5 md:grid-cols-2">
                 <Card spacing="lg">
                     <div className="flex w-full basis-full flex-col gap-8">
