@@ -209,6 +209,20 @@ impl SuiNode {
             batch_verifier_metrics,
         );
 
+        if let Some(override_buffer_stake) =
+            epoch_store.get_override_protocol_upgrade_buffer_stake()
+        {
+            let default_buffer_stake = epoch_store
+                .protocol_config()
+                .buffer_stake_for_protocol_upgrade_bps();
+
+            warn!(
+                ?override_buffer_stake,
+                ?default_buffer_stake,
+                "buffer_stake_for_protocol_upgrade_bps is currently overridden"
+            );
+        }
+
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
             genesis.checkpoint(),
@@ -421,6 +435,20 @@ impl SuiNode {
             .consensus_adapter
             .close_epoch(epoch_store);
         Ok(())
+    }
+
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self, epoch: EpochId) -> SuiResult {
+        self.state
+            .clear_override_protocol_upgrade_buffer_stake(epoch)
+    }
+
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
+        self.state
+            .set_override_protocol_upgrade_buffer_stake(epoch, buffer_stake_bps)
     }
 
     // Testing-only API to start epoch close process.

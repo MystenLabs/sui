@@ -4985,8 +4985,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
-            capabilities
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 
@@ -5003,8 +5003,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
             capabilities.clone(),
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 
@@ -5016,8 +5016,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
-            capabilities
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 
@@ -5034,8 +5034,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
             capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 
@@ -5052,8 +5052,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
-            capabilities
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 
@@ -5070,8 +5070,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
-            capabilities
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 
@@ -5088,8 +5088,8 @@ fn test_choose_next_system_packages() {
         AuthorityState::choose_protocol_version_and_system_packages(
             ProtocolVersion::MIN,
             &committee,
-            &protocol_config,
-            capabilities
+            capabilities,
+            protocol_config.buffer_stake_for_protocol_upgrade_bps(),
         )
     );
 }

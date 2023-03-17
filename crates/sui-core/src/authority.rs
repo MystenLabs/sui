@@ -24,7 +24,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tap::TapFallible;
+use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -47,7 +47,7 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, SuiTransactionEvents,
 };
 use sui_macros::{fail_point, nondeterministic};
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
@@ -2839,6 +2839,47 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
+    /// Ordinarily, protocol upgrades occur when 2f + 1 + (f *
+    /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps) vote for the upgrade.
+    ///
+    /// This method can be used to dynamic adjust the amount of buffer. If set to 0, the upgrade
+    /// will go through with only 2f+1 votes.
+    ///
+    /// IMPORTANT: If this is used, it must be used on >=2f+1 validators (all should have the same
+    /// value), or you risk halting the chain.
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        expected_epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        let actual_epoch = epoch_store.epoch();
+        if actual_epoch != expected_epoch {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch,
+            });
+        }
+
+        epoch_store.set_override_protocol_upgrade_buffer_stake(buffer_stake_bps)
+    }
+
+    pub fn clear_override_protocol_upgrade_buffer_stake(
+        &self,
+        expected_epoch: EpochId,
+    ) -> SuiResult {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        let actual_epoch = epoch_store.epoch();
+        if actual_epoch != expected_epoch {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch,
+            });
+        }
+
+        epoch_store.clear_override_protocol_upgrade_buffer_stake()
+    }
+
     /// Get the set of system packages that are compiled in to this build, if those packages are
     /// compatible with the current versions of those packages on-chain.
     pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
@@ -3008,10 +3049,15 @@ impl AuthorityState {
     fn choose_protocol_version_and_system_packages(
         current_protocol_version: ProtocolVersion,
         committee: &Committee,
-        protocol_config: &ProtocolConfig,
         capabilities: Vec<AuthorityCapabilities>,
+        mut buffer_stake_bps: u64,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
         let next_protocol_version = current_protocol_version + 1;
+
+        if buffer_stake_bps > 10000 {
+            warn!("clamping buffer_stake_bps to 10000");
+            buffer_stake_bps = 10000;
+        }
 
         // For each validator, gather the protocol version and system packages that it would like
         // to upgrade to in the next epoch.
@@ -3061,15 +3107,15 @@ impl AuthorityState {
                 let total_votes = stake_aggregator.total_votes();
                 let quorum_threshold = committee.quorum_threshold();
                 let f = committee.total_votes - committee.quorum_threshold();
-                let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
-                // multiple by buffer_bps / 10000, rounded up.
-                let buffer_stake = (f * buffer_bps + 9999) / 10000;
+
+                // multiple by buffer_stake_bps / 10000, rounded up.
+                let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;
                 let effective_threshold = quorum_threshold + buffer_stake;
 
                 info!(
                     ?total_votes,
                     ?quorum_threshold,
-                    ?buffer_bps,
+                    ?buffer_stake_bps,
                     ?effective_threshold,
                     ?next_protocol_version,
                     ?packages,
@@ -3102,12 +3148,21 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
+        let buffer_stake_bps = epoch_store
+            .get_override_protocol_upgrade_buffer_stake()
+            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
+            .unwrap_or_else(|| {
+                epoch_store
+                    .protocol_config()
+                    .buffer_stake_for_protocol_upgrade_bps()
+            });
+
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.protocol_version(),
                 epoch_store.committee(),
-                epoch_store.protocol_config(),
                 epoch_store.get_capabilities(),
+                buffer_stake_bps,
             );
 
         let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(

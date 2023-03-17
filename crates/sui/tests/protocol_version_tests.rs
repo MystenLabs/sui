@@ -205,7 +205,81 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    async fn test_protocol_version_upgrade_forced() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_version_callback(Arc::new(|idx, name| {
+                if name.is_some() && idx == 0 {
+                    // first validator only does not support version 2.
+                    SupportedProtocolVersions::new_for_testing(1, 1)
+                } else {
+                    SupportedProtocolVersions::new_for_testing(1, 2)
+                }
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
+        });
+
+        // upgrade happens with only 3 votes
+        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+    }
+
+    #[sim_test]
+    async fn test_protocol_version_upgrade_no_override_cleared() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_version_callback(Arc::new(|idx, name| {
+                if name.is_some() && idx == 0 {
+                    // first validator only does not support version 2.
+                    SupportedProtocolVersions::new_for_testing(1, 1)
+                } else {
+                    SupportedProtocolVersions::new_for_testing(1, 2)
+                }
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
+        });
+
+        // Verify that clearing the override is respected.
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.clear_override_protocol_upgrade_buffer_stake(0)
+                    .unwrap()
+            });
+        });
+
+        // default buffer stake is in effect, we do not advance to version 2.
+        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+    }
+
+    #[sim_test]
     async fn test_protocol_version_upgrade_no_quorum() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
