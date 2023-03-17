@@ -867,11 +867,12 @@ impl SuiNode {
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let new_epoch_start_state = self
+            let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
-                .expect("Read Sui System State object cannot fail")
-                .into_epoch_start_state();
+                .expect("Read Sui System State object cannot fail");
+            cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
+            let new_epoch_start_state = latest_system_state.into_epoch_start_state();
             let next_epoch_committee = new_epoch_start_state.get_sui_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
