@@ -64,7 +64,7 @@ jobs:
           script: |
             cd ~/sui
             git fetch origin
-            git rebase origin/main"
+            git rebase origin/main
 
       - name: Install simtest
         uses: appleboy/ssh-action@v0.1.8
