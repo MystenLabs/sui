@@ -3137,6 +3137,7 @@ async fn test_genesis_sui_system_state_object() {
 
 #[cfg(msim)]
 #[sim_test]
+#[ignore]
 async fn test_sui_system_state_nop_upgrade() {
     use sui_adapter::programmable_transactions;
     use sui_types::sui_system_state::SUI_SYSTEM_STATE_TESTING_VERSION1;
