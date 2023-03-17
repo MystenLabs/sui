@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-
+// #[cfg(feature = "pg_integration")]
 mod pg_integration {
     use diesel::migration::MigrationSource;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -20,11 +20,9 @@ mod pg_integration {
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-        SuiParsedMoveObject, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-        TransactionBytes,
-        EventFilter,
-        SuiObjectData,
+        EventFilter, SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse,
+        SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponseOptions,
+        SuiTransactionResponseQuery, TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::ObjectID;
@@ -247,7 +245,9 @@ mod pg_integration {
         let object_correctly_transferred = indexer_rpc_client
             .get_owned_objects(
                 receiver,
-                Some(SuiObjectDataOptions::new().with_type()),
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
                 None,
                 None,
                 None,
