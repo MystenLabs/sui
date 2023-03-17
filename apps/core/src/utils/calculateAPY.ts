@@ -26,7 +26,7 @@ export function calculateAPY(
                 1 +
                     (+stakingPoolSuiBalance - +poolTokenBalance) /
                         +poolTokenBalance,
-                        (365/ numEpochsParticipated)
+                        (365 / numEpochsParticipated)
             ) - 1;
     } else {
         apy = 0;
