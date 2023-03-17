@@ -1,6 +1,6 @@
 Sui indexer is an off-fullnode service to serve data from Sui protocol, including both data directly generated from chain and derivative data.
 
-## Architecture 
+## Architecture
 ![enhanced_FN](https://user-images.githubusercontent.com/106119108/221022505-a1d873c6-60e2-45f1-b2aa-e50192c4dfbb.png)
 
 
@@ -46,4 +46,15 @@ to run the test locally, start a Postgresql DB and run the test using following 
 ```sh
 POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration
 ```
+
+If you run into an error like `DatabaseError(UniqueViolation, "duplicate key value violates unique constraint \"pg_proc_proname_args_nsp_index\""))'` you can try running each integration test individually with
+```sh
+POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+```
+
+And to execute a single test such as just `test_event_query_e2e`, you can do
+```sh
+POSTGRES_PORT=5432 cargo test test_event_query_e2e --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+```
+
 Note: all existing data will be wiped during the test.
