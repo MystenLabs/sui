@@ -39,7 +39,7 @@ jobs:
       # Runs tests much faster - disables signing and verification
       USE_MOCK_CRYPTO: 1
       CARGO_TERM_COLOR: always
-      NUM_CPUS: 24
+      NUM_CPUS: 12
 
     steps:
     - name: Cargo clean
@@ -69,7 +69,7 @@ jobs:
   notify:
     name: Notify
     needs: [simtest]
-    runs-on: [self-hosted, simtest-01]
+    runs-on: ubuntu-latest
     if: always() # always notify
 
     steps:
