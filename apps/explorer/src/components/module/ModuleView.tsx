@@ -42,10 +42,14 @@ function unwrapTypeReference(
     type: SuiMoveNormalizedType
 ): null | TypeReference {
     if (typeof type === 'object') {
-        if (type.type === "Struct") {
+        if (type.type === 'Struct') {
             return type.content;
         }
-        if (type.type === "Reference" || type.type === "MutableReference" || type.type === "Vector") {
+        if (
+            type.type === 'Reference' ||
+            type.type === 'MutableReference' ||
+            type.type === 'Vector'
+        ) {
             return unwrapTypeReference(type.content);
         }
     }
