@@ -537,6 +537,7 @@ impl Proposer {
 
                     if !retransmit_rounds.is_empty() {
                         // Add the digests to retransmit to the digests for the next header
+                        let num_to_resend = digests_to_resend.len();
                         digests_to_resend.extend(&self.digests);
                         self.digests = digests_to_resend;
 
@@ -547,11 +548,14 @@ impl Proposer {
 
                         debug!(
                             "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
-                            self.digests.len(),
+                            num_to_resend,
                             retransmit_rounds,
                             commit_round,
                             self.proposed_headers.len()
                         );
+
+                        self.metrics.proposer_resend_headers.inc_by(retransmit_rounds.len() as u64);
+                        self.metrics.proposer_resend_batches.inc_by(num_to_resend as u64);
                     }
                 },
 
