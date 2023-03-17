@@ -6,14 +6,8 @@ use move_core_types::ident_str;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
-<<<<<<< HEAD
-use std::collections::HashSet;
-use std::sync::Arc;
-||||||| parent of 880b556cc ([simtests] Stress test committee changes)
-use std::collections::HashSet;
-=======
 use std::collections::{HashMap, HashSet};
->>>>>>> 880b556cc ([simtests] Stress test committee changes)
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::builder::ConfigBuilder;
 use sui_config::{NodeConfig, ValidatorInfo};
@@ -32,8 +26,8 @@ use sui_types::gas::GasCostSummary;
 use sui_types::id::ID;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransactionEffects, ExecutionStatus, ObjectArg, TransactionData,
-    TransactionEffectsAPI, VerifiedTransaction,
+    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
+    VerifiedTransaction,
 };
 use sui_types::object::{generate_test_gas_objects_with_owner, Object};
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemStateTrait};
@@ -81,7 +75,7 @@ async fn advance_epoch_tx_test() {
             effects
         })
         .collect();
-    let results: HashSet<_> = futures::future::join_all(tasks)
+    let results: HashSet<_> = join_all(tasks)
         .await
         .into_iter()
         .map(|result| result.digest())
@@ -601,7 +595,7 @@ async fn test_reconfig_with_committee_change_stress() {
     // (either that or we create these objects via Transaction later, but that's more work)
     let all_validator_keys = gen_keys(11);
 
-    let object_set: HashMap<_, _> = all_validator_keys
+    let object_set: HashMap<SuiAddress, (Vec<Object>, Object)> = all_validator_keys
         .iter()
         .map(|key| {
             let sender: SuiAddress = key.public().into();
@@ -620,6 +614,13 @@ async fn test_reconfig_with_committee_change_stress() {
             objs
         })
         .collect();
+
+    let initial_network = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(genesis_objects.clone())
+        .build();
+
     let mut object_map: HashMap<SuiAddress, (Vec<ObjectRef>, ObjectRef)> = object_set
         .into_iter()
         .map(|(sender, (gas, stake))| {
@@ -627,38 +628,69 @@ async fn test_reconfig_with_committee_change_stress() {
                 sender,
                 (
                     gas.into_iter()
-                        .map(|obj| obj.compute_object_reference())
+                        .map(|obj| {
+                            initial_network
+                                .genesis
+                                .object(obj.id())
+                                .unwrap()
+                                .compute_object_reference()
+                        })
                         .collect::<Vec<_>>(),
-                    stake.compute_object_reference(),
+                    initial_network
+                        .genesis
+                        .object(stake.id())
+                        .unwrap()
+                        .compute_object_reference(),
                 ),
             )
         })
         .collect();
 
-    let initial_network = ConfigBuilder::new_with_temp_dir()
-        .rng(StdRng::from_seed([0; 32]))
-        .with_validator_account_keys(gen_keys(5))
-        .with_objects(genesis_objects.clone())
-        .build();
     // Network config composed of the join of all committees that will
     // exist at any point during this test. Each NetworkConfig epoch committee
     // will be a subset of this
     let validator_superset = ConfigBuilder::new_with_temp_dir()
         .rng(StdRng::from_seed([0; 32]))
-        .with_validator_account_keys(gen_keys(11))
+        .with_validator_account_keys(all_validator_keys)
         .with_objects(genesis_objects.clone())
         .build();
 
-    let genesis_objects: Vec<_> = genesis_objects
-        .into_iter()
-        .map(|o| init_configs.genesis.object(o.id()).unwrap())
+    let mut validator_handles = spawn_test_authorities(&initial_network).await;
+    assert_eq!(validator_handles.len(), 5);
+
+    let initial_keys: HashSet<_> = initial_network
+        .validator_configs()
+        .iter()
+        .map(|config| config.protocol_public_key())
         .collect();
 
-    let mut authorities = spawn_test_authorities(&initial_network).await;
-    assert_eq!(authorities.len(), 5);
+    // start all the other nodes (they should start as fullnodes as they are not
+    // yet in the committee)
+    let fullnode_futures: Vec<_> = validator_superset
+        .validator_configs()
+        .iter()
+        .filter(|config| !initial_keys.contains(&config.protocol_public_key()))
+        .map(|config| async {
+            // Make sure that the new validator config shares the same genesis as the initial one.
+            let mut new_config = config.clone();
+            new_config.genesis = initial_network.validator_configs()[0].genesis.clone();
+            start_node(&new_config, RegistryService::new(Registry::new())).await
+        })
+        .collect();
+    let mut fullnode_handles = futures::future::join_all(fullnode_futures).await;
+    for handle in &fullnode_handles {
+        handle.with(|node| {
+            assert!(node
+                .state()
+                .is_fullnode(&node.state().epoch_store_for_testing()));
+        });
+    }
+
+    assert_eq!(validator_handles.len(), 5);
+    assert_eq!(fullnode_handles.len(), 6);
 
     // give time for authorities to startup and genesis
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let initial_pubkeys: Vec<_> = initial_network
         .validator_set()
@@ -685,10 +717,8 @@ async fn test_reconfig_with_committee_change_stress() {
     let mut epoch = 0;
 
     while !standby_nodes.is_empty() {
-        // Add 2 validators from standby_set to committee (and add to end of current_set).
-        // Remove first 2 validators from committee (and beginning of current_set) and add to end of standby_set.
-        // This effectively creates a circular buffer of two different leaving and joining
-        // validators per epoch
+        // Add 2 validators and remove 2 validators to/from the committee
+        // per iteration (epoch)
 
         let joining_validators = standby_nodes.split_off(standby_nodes.len() - 2);
         assert_eq!(joining_validators.len(), 2);
@@ -698,7 +728,7 @@ async fn test_reconfig_with_committee_change_stress() {
             let sender = node_config.sui_address();
             let (gas_objects, stake) = object_map.get(&sender).unwrap();
             let effects = execute_join_committee_txes(
-                &authorities,
+                &validator_handles,
                 gas_objects.clone(),
                 *stake,
                 &validator_info,
@@ -716,8 +746,8 @@ async fn test_reconfig_with_committee_change_stress() {
         }
 
         // last 2 validators request to leave
-        let auth_len = authorities.len();
-        for auth in &authorities[auth_len - 2..] {
+        let auth_len = validator_handles.len();
+        for auth in &validator_handles[auth_len - 2..] {
             let node_config = validator_superset
                 .validator_configs()
                 .iter()
@@ -727,7 +757,7 @@ async fn test_reconfig_with_committee_change_stress() {
             let sender = node_config.sui_address();
             let (gas_objects, stake) = object_map.get(&sender).unwrap();
             let effects =
-                execute_leave_committee_txes(&authorities, gas_objects[3], node_config).await;
+                execute_leave_committee_txes(&validator_handles, gas_objects[3], node_config).await;
 
             let gas_objects = vec![
                 gas_objects[0],
@@ -738,34 +768,29 @@ async fn test_reconfig_with_committee_change_stress() {
             object_map.insert(sender, (gas_objects, *stake));
         }
 
-        trigger_reconfiguration(&authorities).await;
-
-        // Start new Nodes
-        let mut joined_auth_handles: Vec<_> = vec![];
-        for (_val, node_config) in joining_validators.clone() {
-            let handle =
-                start_node(&node_config.clone(), RegistryService::new(Registry::new())).await;
-
-            handle
-                .with_async(|node| async {
-                    // When the node started, it's not part of the committee, and hence a fullnode.
-                    assert!(node
-                        .state()
-                        .is_fullnode(&node.state().epoch_store_for_testing()));
-                })
-                .await;
-            joined_auth_handles.push(handle);
-        }
-
+        trigger_reconfiguration(&validator_handles).await;
         epoch += 1;
 
-        // Give time for new nodes to catch up and reconfig as validators
-        // TODO can we reduce the wait time here?
-        tokio::time::sleep(Duration::from_secs(30 * epoch)).await;
+        // allow time for reconfig
+        tokio::time::sleep(Duration::from_secs(30)).await;
 
-        for handle in &joined_auth_handles {
-            // Make sure that nodes are now validators after being given time to
-            // sync and reconfig
+        // bookkeeping and verification for joined validators
+        let joined_auths: Vec<_> = joining_validators
+            .iter()
+            .map(|(val, _node)| val.protocol_key())
+            .collect();
+
+        assert_eq!(joined_auths.len(), 2);
+
+        // find handles for nodes that joined, check that they are now
+        // fullnodes, and if so, remove them from the fullnodes list
+        // and add to the validator list
+        for name in joined_auths.into_iter() {
+            let pos = fullnode_handles
+                .iter()
+                .position(|handle| handle.with(|node| node.state().name == name))
+                .unwrap();
+            let handle = fullnode_handles.remove(pos);
             handle
                 .with_async(|node| async {
                     assert_eq!(node.state().epoch_store_for_testing().epoch(), epoch);
@@ -774,10 +799,17 @@ async fn test_reconfig_with_committee_change_stress() {
                         .is_validator(&node.state().epoch_store_for_testing()));
                 })
                 .await;
+
+            // insert to the beginning, as the end currently contains the validators
+            // that requested to leave
+            validator_handles.insert(0, handle);
         }
 
-        // Check that nodes have left the committee, and are now fullnodes
-        let left_auth_handles = authorities.split_off(authorities.len() - 2);
+        // Bookkeeping and verification for left validators
+
+        // The last two validator_handles were the ones that left the committee
+        let mut left_auth_handles = validator_handles.split_off(validator_handles.len() - 2);
+        assert_eq!(left_auth_handles.len(), 2);
 
         for handle in &left_auth_handles {
             handle.with(|node| {
@@ -786,17 +818,15 @@ async fn test_reconfig_with_committee_change_stress() {
                     .is_fullnode(&node.state().epoch_store_for_testing()));
             });
         }
+        fullnode_handles.push(left_auth_handles.pop().unwrap());
+        fullnode_handles.push(left_auth_handles.pop().unwrap());
 
         // Check that new validators have joined the committee.
-        authorities.insert(0, joined_auth_handles.pop().unwrap());
-        authorities.insert(0, joined_auth_handles.pop().unwrap());
-        assert_eq!(authorities.len(), 5);
-
-        let authority_pubkeys: Vec<_> = authorities
+        let valdator_pubkeys: Vec<_> = validator_handles
             .iter()
             .map(|auth| auth.with(|node| node.state().name))
             .collect();
-        authorities.last().unwrap().with(|node| {
+        validator_handles.last().unwrap().with(|node| {
             assert_eq!(
                 node.state()
                     .epoch_store_for_testing()
@@ -804,7 +834,7 @@ async fn test_reconfig_with_committee_change_stress() {
                     .num_members(),
                 5
             );
-            for key in authority_pubkeys.iter() {
+            for key in valdator_pubkeys.iter() {
                 assert!(node
                     .state()
                     .epoch_store_for_testing()
@@ -813,6 +843,7 @@ async fn test_reconfig_with_committee_change_stress() {
             }
         });
     }
+    assert_eq!(epoch, 3);
 }
 
 async fn execute_join_committee_txes(
@@ -852,10 +883,10 @@ async fn execute_join_committee_txes(
             CallArg::Pure(bcs::to_bytes("description".as_bytes()).unwrap()),
             CallArg::Pure(bcs::to_bytes("image_url".as_bytes()).unwrap()),
             CallArg::Pure(bcs::to_bytes("project_url".as_bytes()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.network_address().to_vec()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.p2p_address().to_vec()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.narwhal_primary_address().to_vec()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.narwhal_worker_address().to_vec()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.network_address()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.p2p_address()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.narwhal_primary_address()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.narwhal_worker_address()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
@@ -865,16 +896,8 @@ async fn execute_join_committee_txes(
     let transaction =
         to_sender_signed_transaction(candidate_tx_data, node_config.account_key_pair());
     let effects = execute_transaction(authorities, transaction).await.unwrap();
-    // assert!(effects.status().is_ok());
-    if let ExecutionStatus::Failure {
-        error: e,
-        command: c,
-    } = effects.status().clone()
-    {
-        panic!("Add validator candidate tx unsuccessful: {:?}, {:?}", e, c);
-    } else {
-        info!("Add validator candidate tx successful");
-    }
+    assert!(effects.status().is_ok());
+
     effects_ret.push(effects);
 
     // Step 2: Give the candidate enough stake.
@@ -899,16 +922,8 @@ async fn execute_join_committee_txes(
     .unwrap();
     let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
     let effects = execute_transaction(authorities, transaction).await.unwrap();
-    // assert!(effects.status().is_ok());
-    if let ExecutionStatus::Failure {
-        error: e,
-        command: c,
-    } = effects.status().clone()
-    {
-        panic!("Add stake tx unsuccessful: {:?}, {:?}", e, c);
-    } else {
-        info!("Add stake tx successful");
-    }
+    assert!(effects.status().is_ok());
+
     effects_ret.push(effects);
 
     // Step 3: Convert the candidate to an active valdiator.
