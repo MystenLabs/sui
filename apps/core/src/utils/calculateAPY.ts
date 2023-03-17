@@ -34,7 +34,8 @@ export function calculateAPY(
         apy = 0;
     }
 
-    const apyReturn = roundFloat(apy, roundDecimals);
+    //guard against NaN
+    const apyReturn = isNaN(apy) ? 0 : roundFloat(apy, roundDecimals);
 
     // guard against very large numbers (e.g. 1e+100)
     return apyReturn > 100_000 ? 0 : apyReturn;
