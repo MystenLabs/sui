@@ -81,6 +81,7 @@ pub enum SuiSystemState {
 
 /// This is the fixed type used by genesis.
 pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
+pub type SuiValidatorGenesis = ValidatorV1;
 
 /// This is the fixed type used by benchmarking.
 pub type SuiSystemStateInnerBenchmark = SuiSystemStateInnerV1;

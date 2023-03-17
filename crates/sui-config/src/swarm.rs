@@ -9,7 +9,7 @@ use crate::node::{
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{
     builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
-    genesis, utils, Config, NodeConfig, ValidatorInfo,
+    genesis, utils, Config, NodeConfig,
 };
 use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
@@ -20,10 +20,12 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::committee::Committee;
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
+use sui_types::multiaddr::Multiaddr;
+use sui_types::sui_system_state::SuiSystemStateInnerGenesis;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
@@ -42,12 +44,21 @@ impl NetworkConfig {
         &self.validator_configs
     }
 
-    pub fn validator_set(&self) -> Vec<ValidatorInfo> {
-        self.genesis.validator_set()
+    pub fn net_addresses(&self) -> Vec<Multiaddr> {
+        self.genesis
+            .committee_with_network()
+            .network_metadata
+            .into_values()
+            .map(|n| n.network_address)
+            .collect()
     }
 
-    pub fn committee(&self) -> Committee {
-        self.genesis.committee().unwrap()
+    pub fn genesis_system_state(&self) -> SuiSystemStateInnerGenesis {
+        self.genesis.sui_system_object()
+    }
+
+    pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
+        self.genesis.committee_with_network()
     }
 
     pub fn into_validator_configs(self) -> Vec<NodeConfig> {
