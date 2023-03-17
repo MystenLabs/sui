@@ -61,7 +61,7 @@ async-stream = { version = "0.3", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
-axum = { version = "0.6" }
+axum = { version = "0.6", features = ["headers"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", features = ["tls-rustls"] }
@@ -69,7 +69,8 @@ backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
-base64 = { version = "0.13", features = ["alloc"] }
+base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
+base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -244,6 +245,8 @@ half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hdrhistogram = { version = "7" }
+headers = { version = "0.3", default-features = false }
+headers-core = { version = "0.2", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4" }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
@@ -422,7 +425,7 @@ prometheus = { version = "0.13" }
 proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
-protobuf = { version = "2", default-features = false }
+protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -496,6 +499,7 @@ serde_with = { version = "2", features = ["hex"] }
 serde_yaml = { version = "0.8", default-features = false }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
+sha1 = { version = "0.10" }
 sha2-274715c4dabd11b0 = { package = "sha2", version = "0.9" }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10" }
 sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9" }
@@ -566,7 +570,8 @@ toml_edit = { version = "0.15" }
 tonic = { version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.3", features = ["full"] }
+tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
+tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
@@ -685,7 +690,7 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
-axum = { version = "0.6" }
+axum = { version = "0.6", features = ["headers"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", features = ["tls-rustls"] }
@@ -693,7 +698,8 @@ backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
-base64 = { version = "0.13", features = ["alloc"] }
+base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
+base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -895,6 +901,8 @@ half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hdrhistogram = { version = "7" }
+headers = { version = "0.3", default-features = false }
+headers-core = { version = "0.2", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4" }
 hex = { version = "0.4" }
@@ -1110,7 +1118,7 @@ prost = { version = "0.11" }
 prost-build = { version = "0.11" }
 prost-derive = { version = "0.11", default-features = false }
 prost-types = { version = "0.11" }
-protobuf = { version = "2", default-features = false }
+protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -1199,6 +1207,7 @@ serde_with_macros = { version = "2", default-features = false }
 serde_yaml = { version = "0.8", default-features = false }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
+sha1 = { version = "0.10" }
 sha2-274715c4dabd11b0 = { package = "sha2", version = "0.9" }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10" }
 sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9" }
@@ -1281,7 +1290,8 @@ tonic-build = { version = "0.8" }
 tonic-health = { version = "0.8" }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.3", features = ["full"] }
+tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
+tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
