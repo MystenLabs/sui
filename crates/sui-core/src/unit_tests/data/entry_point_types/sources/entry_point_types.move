@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module entry_point_string::entry_point_string {
+module entry_point_types::entry_point_types {
     use std::ascii;
     use std::string;
     use sui::tx_context::TxContext;
@@ -43,4 +43,16 @@ module entry_point_string::entry_point_string {
         _: Option<vector<Option<string::String>>>
     ) {
     }
+
+    public fun drop_all<T: drop>(v: vector<T>, expected_len: u64) {
+        let actual = 0;
+        while ((!vector::is_empty(&v))) {
+            vector::pop_back(&mut v);
+            actual = actual + 1;
+        };
+        vector::destroy_empty(v);
+        assert!(actual == expected_len, 0);
+    }
+
+    public fun id<T>(x: T): T { x }
 }

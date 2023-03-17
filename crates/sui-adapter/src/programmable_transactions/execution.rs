@@ -958,7 +958,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     msg,
                 ));
             };
-            special_argument_validate(bytes, idx as u16, layout)?;
+            bcs_argument_validate(bytes, idx as u16, layout)?;
             return Ok(());
         }
         Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
@@ -1031,24 +1031,24 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
 fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
-) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
+) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
         Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
             invariant_violation!("references and type parameters should be checked elsewhere")
         }
-        Type::Bool => Some(SpecialArgumentLayout::Bool),
-        Type::U8 => Some(SpecialArgumentLayout::U8),
-        Type::U16 => Some(SpecialArgumentLayout::U16),
-        Type::U32 => Some(SpecialArgumentLayout::U32),
-        Type::U64 => Some(SpecialArgumentLayout::U64),
-        Type::U128 => Some(SpecialArgumentLayout::U128),
-        Type::U256 => Some(SpecialArgumentLayout::U256),
-        Type::Address => Some(SpecialArgumentLayout::Address),
+        Type::Bool => Some(PrimitiveArgumentLayout::Bool),
+        Type::U8 => Some(PrimitiveArgumentLayout::U8),
+        Type::U16 => Some(PrimitiveArgumentLayout::U16),
+        Type::U32 => Some(PrimitiveArgumentLayout::U32),
+        Type::U64 => Some(PrimitiveArgumentLayout::U64),
+        Type::U128 => Some(PrimitiveArgumentLayout::U128),
+        Type::U256 => Some(PrimitiveArgumentLayout::U256),
+        Type::Address => Some(PrimitiveArgumentLayout::Address),
 
         Type::Vector(inner) => {
             let info_opt = primitive_serialization_layout(context, inner)?;
-            info_opt.map(|layout| SpecialArgumentLayout::Vector(Box::new(layout)))
+            info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
         Type::StructInstantiation(idx, targs) => {
             let Some(s) = context.session.get_struct_type(*idx) else {
@@ -1058,7 +1058,7 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             // is option of a string
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 let info_opt = primitive_serialization_layout(context, &targs[0])?;
-                info_opt.map(|layout| SpecialArgumentLayout::Option(Box::new(layout)))
+                info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else {
                 None
             }
@@ -1069,11 +1069,11 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             };
             let resolved_struct = get_struct_ident(&s);
             if resolved_struct == RESOLVED_SUI_ID {
-                Some(SpecialArgumentLayout::Address)
+                Some(PrimitiveArgumentLayout::Address)
             } else if resolved_struct == RESOLVED_ASCII_STR {
-                Some(SpecialArgumentLayout::Ascii)
+                Some(PrimitiveArgumentLayout::Ascii)
             } else if resolved_struct == RESOLVED_UTF8_STR {
-                Some(SpecialArgumentLayout::UTF8)
+                Some(PrimitiveArgumentLayout::UTF8)
             } else {
                 None
             }
@@ -1089,11 +1089,11 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
 /// There is validation to do on top of the BCS layout. Currently only needed for
 /// strings
 #[derive(Debug)]
-pub enum SpecialArgumentLayout {
+pub enum PrimitiveArgumentLayout {
     /// An option
-    Option(Box<SpecialArgumentLayout>),
+    Option(Box<PrimitiveArgumentLayout>),
     /// A vector
-    Vector(Box<SpecialArgumentLayout>),
+    Vector(Box<PrimitiveArgumentLayout>),
     /// An ASCII encoded string
     Ascii,
     /// A UTF8 encoded string
@@ -1108,42 +1108,40 @@ pub enum SpecialArgumentLayout {
     U256,
     Address,
 }
-impl SpecialArgumentLayout {
+
+impl PrimitiveArgumentLayout {
     /// returns true iff all BCS compatible bytes are actually values for this type.
     /// For example, this function returns false for Option and Strings since they need additional
     /// validation.
-    fn bcs_only(&self) -> bool {
+    pub fn bcs_only(&self) -> bool {
         match self {
             // have additional restrictions past BCS
-            SpecialArgumentLayout::Option(_)
-            | SpecialArgumentLayout::Ascii
-            | SpecialArgumentLayout::UTF8 => false,
+            PrimitiveArgumentLayout::Option(_)
+            | PrimitiveArgumentLayout::Ascii
+            | PrimitiveArgumentLayout::UTF8 => false,
             // Move primitives are BCS compatible and do not need additional validation
-            SpecialArgumentLayout::Bool
-            | SpecialArgumentLayout::U8
-            | SpecialArgumentLayout::U16
-            | SpecialArgumentLayout::U32
-            | SpecialArgumentLayout::U64
-            | SpecialArgumentLayout::U128
-            | SpecialArgumentLayout::U256
-            | SpecialArgumentLayout::Address => true,
+            PrimitiveArgumentLayout::Bool
+            | PrimitiveArgumentLayout::U8
+            | PrimitiveArgumentLayout::U16
+            | PrimitiveArgumentLayout::U32
+            | PrimitiveArgumentLayout::U64
+            | PrimitiveArgumentLayout::U128
+            | PrimitiveArgumentLayout::U256
+            | PrimitiveArgumentLayout::Address => true,
             // vector only needs validation if it's inner type does
-            SpecialArgumentLayout::Vector(inner) => inner.bcs_only(),
+            PrimitiveArgumentLayout::Vector(inner) => inner.bcs_only(),
         }
     }
 }
 
 /// Checks the bytes against the `SpecialArgumentLayout` using `bcs`. It does not actually generate
-/// the deserialized value, only walks the bytes
-pub fn special_argument_validate(
+/// the deserialized value, only walks the bytes. While not necessary if the layout does not contain
+/// special arguments (e.g. Option or String) we check the BCS bytes for predictability
+pub fn bcs_argument_validate(
     bytes: &[u8],
     idx: u16,
-    layout: SpecialArgumentLayout,
+    layout: PrimitiveArgumentLayout,
 ) -> Result<(), ExecutionError> {
-    if layout.bcs_only() {
-        // will be covered in the value is deserialized by the VM
-        return Ok(());
-    }
     bcs::from_bytes_seed(&layout, bytes).map_err(|_| {
         ExecutionError::new_with_source(
             ExecutionErrorKind::command_argument_error(CommandArgumentError::InvalidBCSBytes, idx),
@@ -1152,7 +1150,7 @@ pub fn special_argument_validate(
     })
 }
 
-impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
+impl<'d> serde::de::DeserializeSeed<'d> for &PrimitiveArgumentLayout {
     type Value = ();
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
@@ -1160,7 +1158,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
     ) -> Result<Self::Value, D::Error> {
         use serde::de::Error;
         match self {
-            SpecialArgumentLayout::Ascii => {
+            PrimitiveArgumentLayout::Ascii => {
                 let s: &str = serde::Deserialize::deserialize(deserializer)?;
                 if !s.is_ascii() {
                     Err(D::Error::custom("not an ascii string"))
@@ -1168,47 +1166,47 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
                     Ok(())
                 }
             }
-            SpecialArgumentLayout::UTF8 => {
+            PrimitiveArgumentLayout::UTF8 => {
                 deserializer.deserialize_string(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::Option(layout) => {
+            PrimitiveArgumentLayout::Option(layout) => {
                 deserializer.deserialize_option(OptionElementVisitor(layout))
             }
-            SpecialArgumentLayout::Vector(layout) => {
+            PrimitiveArgumentLayout::Vector(layout) => {
                 deserializer.deserialize_seq(VectorElementVisitor(layout))
             }
             // primitive move value cases, which are hit to make sure the correct number of bytes
             // are removed for elements of an option/vector
-            SpecialArgumentLayout::Bool => {
+            PrimitiveArgumentLayout::Bool => {
                 deserializer.deserialize_bool(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U8 => {
+            PrimitiveArgumentLayout::U8 => {
                 deserializer.deserialize_u8(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U16 => {
+            PrimitiveArgumentLayout::U16 => {
                 deserializer.deserialize_u16(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U32 => {
+            PrimitiveArgumentLayout::U32 => {
                 deserializer.deserialize_u32(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U64 => {
+            PrimitiveArgumentLayout::U64 => {
                 deserializer.deserialize_u64(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U128 => {
+            PrimitiveArgumentLayout::U128 => {
                 deserializer.deserialize_u128(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U256 => {
+            PrimitiveArgumentLayout::U256 => {
                 U256::deserialize(deserializer)?;
                 Ok(())
             }
-            SpecialArgumentLayout::Address => {
+            PrimitiveArgumentLayout::Address => {
                 SuiAddress::deserialize(deserializer)?;
                 Ok(())
             }
@@ -1216,7 +1214,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
     }
 }
 
-struct VectorElementVisitor<'a>(&'a SpecialArgumentLayout);
+struct VectorElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
 impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
     type Value = ();
@@ -1234,7 +1232,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
     }
 }
 
-struct OptionElementVisitor<'a>(&'a SpecialArgumentLayout);
+struct OptionElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
 impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
     type Value = ();
@@ -1258,29 +1256,29 @@ impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
     }
 }
 
-impl fmt::Display for SpecialArgumentLayout {
+impl fmt::Display for PrimitiveArgumentLayout {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SpecialArgumentLayout::Vector(inner) => {
+            PrimitiveArgumentLayout::Vector(inner) => {
                 write!(f, "vector<{inner}>")
             }
-            SpecialArgumentLayout::Option(inner) => {
+            PrimitiveArgumentLayout::Option(inner) => {
                 write!(f, "std::option::Option<{inner}>")
             }
-            SpecialArgumentLayout::Ascii => {
+            PrimitiveArgumentLayout::Ascii => {
                 write!(f, "std::{}::{}", RESOLVED_ASCII_STR.1, RESOLVED_ASCII_STR.2)
             }
-            SpecialArgumentLayout::UTF8 => {
+            PrimitiveArgumentLayout::UTF8 => {
                 write!(f, "std::{}::{}", RESOLVED_UTF8_STR.1, RESOLVED_UTF8_STR.2)
             }
-            SpecialArgumentLayout::Bool => write!(f, "bool"),
-            SpecialArgumentLayout::U8 => write!(f, "u8"),
-            SpecialArgumentLayout::U16 => write!(f, "u16"),
-            SpecialArgumentLayout::U32 => write!(f, "u32"),
-            SpecialArgumentLayout::U64 => write!(f, "u64"),
-            SpecialArgumentLayout::U128 => write!(f, "u128"),
-            SpecialArgumentLayout::U256 => write!(f, "u256"),
-            SpecialArgumentLayout::Address => write!(f, "address"),
+            PrimitiveArgumentLayout::Bool => write!(f, "bool"),
+            PrimitiveArgumentLayout::U8 => write!(f, "u8"),
+            PrimitiveArgumentLayout::U16 => write!(f, "u16"),
+            PrimitiveArgumentLayout::U32 => write!(f, "u32"),
+            PrimitiveArgumentLayout::U64 => write!(f, "u64"),
+            PrimitiveArgumentLayout::U128 => write!(f, "u128"),
+            PrimitiveArgumentLayout::U256 => write!(f, "u256"),
+            PrimitiveArgumentLayout::Address => write!(f, "address"),
         }
     }
 }

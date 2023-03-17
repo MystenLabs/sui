@@ -30,7 +30,7 @@ use move_vm_runtime::{
 
 use crate::{
     execution_mode::ExecutionMode,
-    programmable_transactions::execution::{special_argument_validate, SpecialArgumentLayout},
+    programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout},
 };
 use sui_framework::natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
@@ -257,7 +257,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     );
                 }
                 if let Some(layout) = additional_validation_layout(view, param_type) {
-                    special_argument_validate(&arg, idx as u16, layout)?;
+                    bcs_argument_validate(&arg, idx as u16, layout)?;
                 }
             }
             CheckCallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
@@ -333,7 +333,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
 fn additional_validation_layout(
     view: &BinaryIndexedView,
     param_type: &SignatureToken,
-) -> Option<SpecialArgumentLayout> {
+) -> Option<PrimitiveArgumentLayout> {
     match param_type {
         // should be ruled out above
         SignatureToken::Reference(_)
@@ -343,22 +343,22 @@ fn additional_validation_layout(
         // actually checking this requires a VM instance to load the type arguments
         SignatureToken::TypeParameter(_) => None,
         // primitives
-        SignatureToken::Bool => Some(SpecialArgumentLayout::Bool),
-        SignatureToken::U8 => Some(SpecialArgumentLayout::U8),
-        SignatureToken::U16 => Some(SpecialArgumentLayout::U16),
-        SignatureToken::U32 => Some(SpecialArgumentLayout::U32),
-        SignatureToken::U64 => Some(SpecialArgumentLayout::U64),
-        SignatureToken::U128 => Some(SpecialArgumentLayout::U128),
-        SignatureToken::U256 => Some(SpecialArgumentLayout::U256),
-        SignatureToken::Address => Some(SpecialArgumentLayout::Address),
+        SignatureToken::Bool => Some(PrimitiveArgumentLayout::Bool),
+        SignatureToken::U8 => Some(PrimitiveArgumentLayout::U8),
+        SignatureToken::U16 => Some(PrimitiveArgumentLayout::U16),
+        SignatureToken::U32 => Some(PrimitiveArgumentLayout::U32),
+        SignatureToken::U64 => Some(PrimitiveArgumentLayout::U64),
+        SignatureToken::U128 => Some(PrimitiveArgumentLayout::U128),
+        SignatureToken::U256 => Some(PrimitiveArgumentLayout::U256),
+        SignatureToken::Address => Some(PrimitiveArgumentLayout::Address),
 
         SignatureToken::Vector(inner) => additional_validation_layout(view, inner)
-            .map(|layout| SpecialArgumentLayout::Vector(Box::new(layout))),
+            .map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout))),
         SignatureToken::StructInstantiation(idx, targs) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 additional_validation_layout(view, &targs[0])
-                    .map(|layout| SpecialArgumentLayout::Option(Box::new(layout)))
+                    .map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else {
                 None
             }
@@ -366,11 +366,11 @@ fn additional_validation_layout(
         SignatureToken::Struct(idx) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_SUI_ID {
-                Some(SpecialArgumentLayout::Address)
+                Some(PrimitiveArgumentLayout::Address)
             } else if resolved_struct == RESOLVED_ASCII_STR {
-                Some(SpecialArgumentLayout::Ascii)
+                Some(PrimitiveArgumentLayout::Ascii)
             } else if resolved_struct == RESOLVED_UTF8_STR {
-                Some(SpecialArgumentLayout::UTF8)
+                Some(PrimitiveArgumentLayout::UTF8)
             } else {
                 None
             }

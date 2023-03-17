@@ -8973,6 +8973,7 @@ dependencies = [
  "sui-simulator",
  "sui-storage",
  "sui-types",
+ "sui-verifier",
  "tap",
  "telemetry-subscribers",
  "tempfile",
