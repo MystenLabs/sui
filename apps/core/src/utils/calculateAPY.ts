@@ -26,14 +26,13 @@ export function calculateAPY(
                 1 +
                     (+stakingPoolSuiBalance - +poolTokenBalance) /
                         +poolTokenBalance,
-                365 / numEpochsParticipated
+                        (365/ numEpochsParticipated)
             ) - 1;
     } else {
         apy = 0;
     }
-
-    //guard against NaN
-    const apyReturn = apy ? roundFloat(apy, roundDecimals) : 0;
+    
+    const apyReturn = isNaN(apy) ? 0 : roundFloat(apy * 100, roundDecimals);
 
     // guard against very large numbers (e.g. 1e+100)
     return apyReturn > 100_000 ? 0 : apyReturn;
