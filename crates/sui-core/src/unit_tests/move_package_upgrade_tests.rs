@@ -70,6 +70,32 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     )
 }
 
+async fn upgrade_happy_path(runner: &UpgradeStateRunner) -> ProgrammableTransaction {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let current_package_id = runner.package.0;
+    let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
+
+    // We take as input the upgrade cap
+    builder
+        .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+        .unwrap();
+
+    // Create the upgrade ticket
+    let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+    let digest_arg = builder.pure(digest).unwrap();
+    let upgrade_ticket = move_call! {
+        builder,
+        (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+    };
+    let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
+    move_call! {
+        builder,
+        (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+    };
+
+    builder.finish()
+}
+
 pub struct UpgradeStateRunner {
     pub sender: SuiAddress,
     pub sender_key: AccountKeyPair,
@@ -156,31 +182,7 @@ impl UpgradeStateRunner {
 #[tokio::test]
 async fn test_upgrade_package_happy_path() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let current_package_id = runner.package.0;
-        let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
-
-        // We take as input the upgrade cap
-        builder
-            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
-            .unwrap();
-
-        // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
-        let digest_arg = builder.pure(digest).unwrap();
-        let upgrade_ticket = move_call! {
-            builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
-        };
-        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
-        move_call! {
-            builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
-        };
-
-        builder.finish()
-    };
+    let pt = upgrade_happy_path(&runner).await;
     let TransactionEffects::V1(effects) = runner.run(pt).await;
 
     assert!(effects.status.is_ok());
@@ -631,31 +633,7 @@ async fn test_publish_override_happy_path() {
     // publish base package at version 2
     // Dependency graph: base(v1) <-- dep_on_upgrading_package
     //                   base(v2)
-    let pt1 = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let current_package_id = runner.package.0;
-        let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
-
-        // We take as input the upgrade cap
-        builder
-            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
-            .unwrap();
-
-        // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
-        let digest_arg = builder.pure(digest).unwrap();
-        let upgrade_ticket = move_call! {
-            builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
-        };
-        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
-        move_call! {
-            builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
-        };
-
-        builder.finish()
-    };
+    let pt1 = upgrade_happy_path(&runner).await;
     let TransactionEffects::V1(effects) = runner.run(pt1).await;
     assert!(effects.status.is_ok());
 
@@ -695,4 +673,44 @@ async fn test_publish_override_happy_path() {
         .collect();
     assert!(dep_ids_in_linkage_table.contains(&dep_v2_package.0));
     assert!(dep_ids_in_linkage_table.contains(&depender_package.0));
+}
+
+// test the case when trying to publish a module whose indirect dependency was downgraded (should fail)
+#[tokio::test]
+// TODO: turn this test on once the Move loader changes (otherwise it fails when trying to build DEP
+// module with the upgraded dependency)
+#[ignore]
+async fn test_publish_dependent_downgrade() {
+    // create V1 of base package
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    // create V2 of base package
+    let pt = upgrade_happy_path(&runner).await;
+    let TransactionEffects::V1(effects) = runner.run(pt).await;
+
+    assert!(effects.status.is_ok());
+    let ((new_package_id, _, _), _) = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .unwrap();
+
+    // publish DEP package that depends on V2 of base package
+    let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_upgrading_package",
+        [("base_addr", *new_package_id)],
+    );
+    let ((dep_id, _, _), _) = runner.publish(module_bytes, dep_ids).await;
+
+    // publish root package that depends on both DEP package V1 of base package
+    let (_, root_modules, root_dep_ids) = build_upgrade_test_modules_with_dep_addr(
+        "dep_on_dep",
+        [
+            ("base_addr", runner.package.0),
+            ("dep_on_upgrading_package", dep_id),
+        ],
+    );
+
+    runner.publish(root_modules, root_dep_ids).await;
+    // TODO: get the actual error code for comparison once this test is enabled
+    effects.status.unwrap_err();
 }
