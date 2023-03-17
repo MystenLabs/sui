@@ -184,7 +184,9 @@ mod pg_integration {
     async fn test_event_query_e2e() -> Result<(), anyhow::Error> {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
         wait_until_next_checkpoint(&store).await;
+        let nft_creator = test_cluster.get_address_0();
         let context = &mut test_cluster.wallet;
+
 
         let (_, _, digest_one) = create_devnet_nft(context).await.unwrap();
         wait_until_transaction_synced(&store, digest_one.base58_encode().as_str()).await;
@@ -195,20 +197,18 @@ mod pg_integration {
         wait_until_transaction_synced(&store, digest_three.base58_encode().as_str()).await;
 
         // Test various ways of querying events
-        let to_query = EventFilter::Sender(sender);
+        let filter_on_sender = EventFilter::Sender(sender);
         let query_response = indexer_rpc_client
-            .query_events(to_query, None, None, None)
+            .query_events(filter_on_sender, None, None, None)
             .await?;
 
         assert_eq!(query_response.data.len(), 2);
-        assert_eq!(
-            query_response.data[0].transaction_module,
-            ident_str!("devnet_nft").into()
-        );
-        assert_eq!(
-            query_response.data[1].transaction_module,
-            ident_str!("devnet_nft").into()
-        );
+        for item in query_response.data {
+            assert_eq!(item.transaction_module, ident_str!("devnet_nft").into());
+            assert_eq!(item.package_id, ObjectID::from(SUI_FRAMEWORK_ADDRESS));
+            assert_eq!(item.sender, nft_creator);
+            assert_eq!(item.type_, StructTag::from_str("0x2::devnet_nft::MintNFTEvent").unwrap());
+        }
 
         let filter_on_transaction = EventFilter::Transaction(digest_one);
         let query_response = indexer_rpc_client
