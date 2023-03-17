@@ -13,8 +13,10 @@ use sui_types::messages_checkpoint::{
     CheckpointTimestamp, EndOfEpochData,
 };
 
+use crate::BigInt;
 use crate::Page;
 
+pub type SuiCheckpointSequenceNumber = BigInt;
 pub type CheckpointPage = Page<Checkpoint, CheckpointSequenceNumber>;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]

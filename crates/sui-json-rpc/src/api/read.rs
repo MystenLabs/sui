@@ -6,7 +6,7 @@ use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
     BigInt, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType, ObjectsPage,
-    SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiCheckpointSequenceNumber, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiTransactionResponse, SuiTransactionResponseOptions,
     SuiTransactionResponseQuery, TransactionsPage,
@@ -203,7 +203,8 @@ pub trait ReadApi {
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+    async fn get_latest_checkpoint_sequence_number(&self)
+        -> RpcResult<SuiCheckpointSequenceNumber>;
 
     /// Return a checkpoint
     #[method(name = "getCheckpoint")]

@@ -14,7 +14,7 @@ describe('Checkpoints Reading API', () => {
   it('Get latest checkpoint sequence number', async () => {
     const checkpointSequenceNumber =
       await toolbox.provider.getLatestCheckpointSequenceNumber();
-    expect(checkpointSequenceNumber).to.greaterThan(0);
+    expect(checkpointSequenceNumber).toBeGreaterThan(0);
   });
 
   it('gets checkpoint by id', async () => {
