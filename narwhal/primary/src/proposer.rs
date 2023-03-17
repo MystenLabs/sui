@@ -83,12 +83,12 @@ pub struct Proposer {
     /// Holds the certificate of the last leader (if any).
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
-    /// Digests are popped in LIFO order from the front.
+    /// Digests are roughly oldest to newest, and popped in FIFO order from the front.
     digests: VecDeque<OurDigestMessage>,
 
     /// Holds the map of proposed previous round headers and their digest messages, to ensure that
     /// all batches' digest included will eventually be re-sent.
-    proposed_headers: BTreeMap<Round, (Header, Vec<OurDigestMessage>)>,
+    proposed_headers: BTreeMap<Round, (Header, VecDeque<OurDigestMessage>)>,
     /// Committed headers channel on which we get updates on which of
     /// our own headers have been committed.
     rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
@@ -197,7 +197,7 @@ impl Proposer {
 
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let header_digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
+        let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
         let parents: Vec<_> = self.last_parents.drain(..).collect();
 
         // Here we check that the timestamp we will include in the header is consistent with the
@@ -282,7 +282,7 @@ impl Proposer {
 
         // NOTE: This log entry is used to compute performance.
         let (header_creation_secs, avg_inclusion_secs) =
-            if let Some(digest) = header_digests.first() {
+            if let Some(digest) = header_digests.front() {
                 (
                     Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64(),
                     total_inclusion_secs / header_digests.len() as f64,
@@ -520,6 +520,7 @@ impl Proposer {
                         max_committed_round = max_committed_round.max(round);
                         let Some(_) = self.proposed_headers.remove(&round) else {
                             info!("Own committed header not found at round {round}, probably because of restarts.");
+                            // There can still be later committed headers in proposed_headers.
                             continue;
                         };
                     }
@@ -527,7 +528,9 @@ impl Proposer {
                     // Now for any round below the current commit round we re-insert
                     // the batches into the digests we need to send, effectively re-sending
                     // them in FIFO order.
-                    let mut digests_to_resend = Vec::new();
+                    // Oldest to newest payloads.
+                    let mut digests_to_resend = VecDeque::new();
+                    // Oldest to newest rounds.
                     let mut retransmit_rounds = Vec::new();
 
                     // Iterate in order of rounds of our own headers.
@@ -542,11 +545,11 @@ impl Proposer {
                     }
 
                     if !retransmit_rounds.is_empty() {
-                        // Add the digests to retransmit to the digests for the next header
                         let num_to_resend = digests_to_resend.len();
-                        for digest in digests_to_resend.into_iter().rev() {
-                            self.digests.push_front(digest);
-                        }
+                        // Since all of digests_to_resend are roughly newer than self.digests,
+                        // prepend digests_to_resend to the digests for the next header.
+                        digests_to_resend.append(&mut self.digests);
+                        self.digests = digests_to_resend;
 
                         // Now delete the headers with batches we re-transmit
                         for round in &retransmit_rounds {
