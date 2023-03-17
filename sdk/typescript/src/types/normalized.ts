@@ -13,6 +13,7 @@ import {
   literal,
   record,
   is,
+  unknown,
 } from 'superstruct';
 
 export type SuiMoveFunctionArgTypesResponse = Infer<
@@ -80,15 +81,28 @@ function isSuiMoveNormalizedType(
   value: unknown,
 ): value is SuiMoveNormalizedType {
   if (!value) return false;
-  if (typeof value === 'string') return true;
-  if (is(value, SuiMoveNormalizedTypeParameterType)) return true;
-  if (isSuiMoveNormalizedStructType(value)) return true;
-  if (typeof value !== 'object') return false;
+  // if (typeof value.content === 'string') return true;
+  // if (is(value.content, SuiMoveNormalizedTypeParameterType)) return true;
+  // if (isSuiMoveNormalizedStructType(value)) return true;
+  // if (typeof value !== 'object') return false;
+  const valueProperties = value as {type: string, content: unknown};
 
-  const valueProperties = value as Record<string, unknown>;
-  if (is(valueProperties.Reference, SuiMoveNormalizedType)) return true;
-  if (is(valueProperties.MutableReference, SuiMoveNormalizedType)) return true;
-  if (is(valueProperties.Vector, SuiMoveNormalizedType)) return true;
+  if (["Bool", "U8", "U16", "U32", "U64", "U128", "U256", "Address", "Signer"].includes(valueProperties.type) && typeof valueProperties.content === "string")
+    return true;
+  if (["Vector", "Reference", "MutableReference"].includes(valueProperties.type) && is(valueProperties.content, SuiMoveNormalizedType))
+    return true;
+  if (valueProperties.type === "TypeParameter" && typeof valueProperties.content === "number")
+    return true;
+  if(valueProperties.type === "Struct") {
+    const contents = valueProperties.content as Record<string, unknown>;
+    return (typeof contents.address === "string" && typeof contents.module === "string" &&
+      typeof name === "string" && Array.isArray(contents.typeArguments) &&
+      contents.typeArguments.every(value => is(value, SuiMoveNormalizedType)))
+  }
+  // const valueProperties = value as Record<string, unknown>;
+  // if (is(valueProperties.Reference, SuiMoveNormalizedType)) return true;
+  // if (is(valueProperties.MutableReference, SuiMoveNormalizedType)) return true;
+  // if (is(valueProperties.Vector, SuiMoveNormalizedType)) return true;
   return false;
 }
 
