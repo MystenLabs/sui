@@ -5,10 +5,10 @@
 /// Initializes a simple collection.
 module sui::boars {
     use sui::tx_context::{TxContext, sender};
-    use sui::transfer::{transfer, share_object};
+    use sui::transfer::{transfer, /* share_object */};
     use sui::collectible;
     use sui::display;
-    use sui::royalty;
+    // use sui::royalty;
     use std::string::utf8;
     use std::option;
 
@@ -50,12 +50,12 @@ module sui::boars {
         display::update_version(&mut display);
         collectible::return_display(&mut creator_cap, display, borrow);
 
-        let (policy, royalty_cap) = royalty::new_royalty_policy(type_owner_cap, 500, ctx);
+        // let (policy, royalty_cap) = royalty::new_royalty_policy(type_owner_cap, 500, ctx);
 
-        transfer(royalty_cap, sender);
+        transfer(type_owner_cap, sender);
         transfer(creator_cap, sender);
         transfer(publisher, sender);
-        share_object(policy)
+        // share_object(policy)
     }
 
     #[test_only]

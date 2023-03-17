@@ -15,7 +15,7 @@ module sui::collectible {
     use sui::tx_context::TxContext;
     use sui::display::{Self, Display};
     use sui::package::{Self, Publisher};
-    use sui::kiosk::{Self, TransferPolicyCap};
+    use sui::transfer_policy::{Self, TransferPolicy};
     use sui::borrow::{Self, Borrow, Referent};
 
     /// A witness type passed is not an OTW.
@@ -71,7 +71,7 @@ module sui::collectible {
         otw: OTW, max_supply: Option<u64>, ctx: &mut TxContext
     ): (
         Publisher,
-        TransferPolicyCap<Collectible<T>>,
+        TransferPolicy<Collectible<T>>,
         CollectionCreatorCap<T>,
     ) {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
@@ -83,7 +83,7 @@ module sui::collectible {
 
         (
             publisher,
-            kiosk::new_transfer_policy_cap_protected<Collectible<T>>(ctx),
+            transfer_policy::new_protected<Collectible<T>>(ctx),
             CollectionCreatorCap<T> {
                 id: object::new(ctx),
                 minted: 0,
