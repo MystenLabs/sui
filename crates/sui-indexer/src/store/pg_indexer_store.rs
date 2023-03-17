@@ -58,7 +58,7 @@ GROUP BY table_name;
 pub struct PgIndexerStore {
     cp: PgConnectionPool,
     partition_manager: PartitionManager,
-    pub module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
+    module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
 
 impl PgIndexerStore {
@@ -920,7 +920,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     fn module_cache(&self) -> &Self::ModuleCache {
-        todo!()
+        &self.module_cache
     }
 }
 

@@ -191,7 +191,7 @@ mod pg_integration {
             .unwrap();
 
         let layout = coin_object
-            .get_layout(ObjectFormatOptions::default(), &store.module_cache)
+            .get_layout(ObjectFormatOptions::default(), store.module_cache())
             .unwrap();
 
         assert!(layout.is_some());

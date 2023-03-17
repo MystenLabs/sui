@@ -86,14 +86,7 @@ CREATE TABLE owner_history
 CREATE INDEX owner_history_new_owner_index ON owner_history (owner_type, owner_address);
 CREATE INDEX owner_history_old_owner_index ON owner_history (old_owner_type, old_owner_address);
 
--- TODO: Add trigger to automatically create partitions at new epoch when we have Epoch Table
 CREATE TABLE owner_history_partition_0 PARTITION OF owner_history FOR VALUES FROM (0) TO (1);
-CREATE TABLE owner_history_partition_1 PARTITION OF owner_history FOR VALUES FROM (1) TO (2);
-CREATE TABLE owner_history_partition_2 PARTITION OF owner_history FOR VALUES FROM (2) TO (3);
-CREATE TABLE owner_history_partition_3 PARTITION OF owner_history FOR VALUES FROM (3) TO (4);
-CREATE TABLE owner_history_partition_4 PARTITION OF owner_history FOR VALUES FROM (4) TO (5);
-CREATE TABLE owner_history_partition_5 PARTITION OF owner_history FOR VALUES FROM (5) TO (6);
-
 -- store proc for updating owner_history table from owner table
 CREATE OR REPLACE FUNCTION owner_history_func() RETURNS TRIGGER AS
 $body$
