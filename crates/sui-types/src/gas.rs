@@ -547,6 +547,7 @@ pub fn check_gas_balance(
     gas_price: u64,
     more_gas_objs: Vec<Object>,
     cost_table: &SuiCostTable,
+    protocol_config: &ProtocolConfig,
 ) -> UserInputResult {
     if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
         return Err(UserInputError::GasObjectNotOwnedObject {
@@ -556,7 +557,7 @@ pub fn check_gas_balance(
 
     let max_gas_budget = cost_table.max_gas_budget as u128 * gas_price as u128;
     let min_gas_budget = cost_table.min_gas_budget_external() as u128 * gas_price as u128;
-    let required_gas_amount = gas_budget as u128;
+    let mut required_gas_amount = gas_budget as u128;
 
     if required_gas_amount > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
@@ -575,6 +576,9 @@ pub fn check_gas_balance(
     let mut gas_balance = get_gas_balance(gas_object)? as u128;
     for extra_obj in more_gas_objs {
         gas_balance += get_gas_balance(&extra_obj)? as u128;
+    }
+    if !protocol_config.gas_checks_v2() {
+        required_gas_amount = (gas_budget as u128) * (gas_price as u128);
     }
     ok_or_gas_balance_error!(gas_balance, required_gas_amount)
 }

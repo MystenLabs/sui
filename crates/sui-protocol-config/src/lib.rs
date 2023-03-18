@@ -865,6 +865,10 @@ impl ProtocolConfig {
     pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
         self.buffer_stake_for_protocol_upgrade_bps = Some(b)
     }
+
+    pub fn set_gas_checks_v2(&mut self, b: bool) {
+        self.feature_flags.gas_buckets_sub_and_storage_computation = b;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

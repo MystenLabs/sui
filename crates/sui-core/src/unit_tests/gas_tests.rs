@@ -11,6 +11,7 @@ use crate::authority::authority_tests::{init_state, init_state_with_ids_and_obje
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::is_system_package;
@@ -73,6 +74,38 @@ async fn test_tx_gas_balance_less_than_budget() {
             needed_gas_amount: (gas_price * budget) as u128,
         }
     );
+}
+
+#[tokio::test]
+async fn test_tx_gas_budget_balance_v1() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_gas_checks_v2(false);
+        config
+    });
+
+    // for v1 with a gas_price of 1000 the balance will not be enough because of a bug
+    // in check gas balance
+    let gas_price = 1000;
+    let gas_balance = *MIN_GAS_BUDGET * 2 * gas_price;
+    let budget = *MIN_GAS_BUDGET * 2 * gas_price;
+    let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
+    assert_eq!(
+        UserInputError::try_from(result.response.unwrap_err()).unwrap(),
+        UserInputError::GasBalanceTooLow {
+            gas_balance: gas_balance as u128,
+            needed_gas_amount: (gas_price * budget) as u128,
+        }
+    );
+}
+
+#[tokio::test]
+async fn test_tx_gas_budget_balance_v2() {
+    // for v2 this (same as above) works correctly
+    let gas_price = 1000;
+    let gas_balance = *MIN_GAS_BUDGET * 2 * gas_price;
+    let budget = *MIN_GAS_BUDGET * 2 * gas_price;
+    let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
+    assert!(result.response.is_ok());
 }
 
 #[tokio::test]
