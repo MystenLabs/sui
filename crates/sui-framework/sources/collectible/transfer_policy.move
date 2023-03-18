@@ -56,14 +56,17 @@ module sui::transfer_policy {
     /// transfers. Can only be created with the `Publisher` object.
     struct TransferPolicy<phantom T: key + store> has key, store {
         id: UID,
-        /// How many rounds of constraints a transfer request must pass
-        /// before being finally confirmed by this `TransferPolicyCap`.
+        /// The Balance of the `TransferPolicy` which collects `SUI`.
+        /// By default, transfer policy does not collect anything , and it's
+        /// a matter of an implementation of a specific rule - whether to add
+        /// to balance and how much.
         balance: Balance<SUI>,
         /// Set of types of attached rules.
         rules: VecSet<TypeName>
     }
 
-    /// A Capability granting the owner a
+    /// A Capability granting the owner permission to add/remove rules as well
+    /// as to `withdraw` and `destroy_and_withdraw` the `TransferPolicy`.
     struct TransferPolicyCap<phantom T: key + store> has key, store {
         id: UID,
         policy_id: ID
@@ -111,10 +114,16 @@ module sui::transfer_policy {
     /// wrapped types.
     public(friend) fun new_protected<T: key + store>(
         ctx: &mut TxContext
-    ): TransferPolicy<T> {
+    ): (TransferPolicy<T>, TransferPolicyCap<T>) {
         let id = object::new(ctx);
-        event::emit(TransferPolicyCreated<T> { id: object::uid_to_inner(&id) });
-        TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() }
+        let policy_id = object::uid_to_inner(&id);
+
+        event::emit(TransferPolicyCreated<T> { id: policy_id });
+
+        (
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
+            TransferPolicyCap { id: object::new(ctx), policy_id }
+        )
     }
 
     /// Withdraw some amount of profits from the `TransferPolicy`. If amount is not

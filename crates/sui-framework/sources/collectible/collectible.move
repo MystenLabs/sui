@@ -15,7 +15,7 @@ module sui::collectible {
     use sui::tx_context::TxContext;
     use sui::display::{Self, Display};
     use sui::package::{Self, Publisher};
-    use sui::transfer_policy::{Self, TransferPolicy};
+    use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap};
     use sui::borrow::{Self, Borrow, Referent};
 
     /// A witness type passed is not an OTW.
@@ -56,6 +56,7 @@ module sui::collectible {
         id: UID,
         max_supply: Option<u64>,
         display: Referent<Display<Collectible<T>>>,
+        policy: Referent<TransferPolicyCap<Collectible<T>>>,
         minted: u64
     }
 
@@ -78,17 +79,19 @@ module sui::collectible {
 
         let publisher = package::claim(otw, ctx);
         let display = display::new_protected<Collectible<T>>(ctx);
+        let (policy, policy_cap) = transfer_policy::new_protected<Collectible<T>>(ctx);
 
         assert!(package::from_module<T>(&publisher), EModuleDoesNotContainT);
 
         (
             publisher,
-            transfer_policy::new_protected<Collectible<T>>(ctx),
+            policy,
             CollectionCreatorCap<T> {
                 id: object::new(ctx),
                 minted: 0,
                 max_supply,
-                display: borrow::new(display, ctx)
+                display: borrow::new(display, ctx),
+                policy: borrow::new(policy_cap, ctx),
             }
         )
     }

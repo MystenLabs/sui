@@ -130,7 +130,7 @@ module sui::kiosk {
 
     // === New Kiosk + ownership modes ===
 
-    /// Creates a new Kiosk without owner but with a Capability.
+    /// Creates a new `Kiosk` with a matching `KioskOwnerCap`.
     public fun new(ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
         let kiosk = Kiosk {
             id: object::new(ctx),
@@ -195,7 +195,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
     ): T {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: true }) == false, EListedExclusively);
+        assert!(!df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: true }), EListedExclusively);
 
         self.item_count = self.item_count - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
@@ -210,7 +210,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: true }) == false, EListedExclusively);
+        assert!(!df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: true }), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
         event::emit(ItemListed<T> {
@@ -255,7 +255,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: false }) == false, EAlreadyListed);
+        assert!(!df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: false }), EAlreadyListed);
 
         let uid = object::new(ctx);
         df::add(&mut self.id, Listing { id, is_exclusive: true }, min_price);
@@ -318,7 +318,7 @@ module sui::kiosk {
     // === Kiosk fields access ===
 
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
-    public fun is_owner(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
+    public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.for
     }
 
@@ -375,44 +375,6 @@ module sui::kiosk {
 }
 
 #[test_only]
-module sui::kiosk_creature {
-    use sui::tx_context::{TxContext, sender};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer::transfer;
-    use sui::package::{Self, Publisher};
-
-    struct Creature has key, store { id: UID }
-    struct KIOSK_CREATURE has drop {}
-
-    // Create a publisher + 2 `Creature`s -> to sender
-    fun init(otw: KIOSK_CREATURE, ctx: &mut TxContext) {
-        transfer(package::claim(otw, ctx), sender(ctx))
-    }
-
-    public fun new_creature(ctx: &mut TxContext): (Creature, ID) {
-        let uid = object::new(ctx);
-        let id = object::uid_to_inner(&uid);
-
-        (Creature { id: uid }, id)
-    }
-
-    #[test_only]
-    public fun init_collection(ctx: &mut TxContext) {
-        init(KIOSK_CREATURE {}, ctx)
-    }
-
-    #[test_only]
-    public fun get_publisher(ctx: &mut TxContext): Publisher {
-        package::claim(KIOSK_CREATURE {}, ctx)
-    }
-
-    public fun return_creature(self: Creature) {
-        let Creature { id } = self;
-        object::delete(id)
-    }
-}
-
-#[test_only]
 /// Kiosk testing strategy:
 /// - [ ] test purchase flow
 /// - [ ] test purchase cap flow
@@ -452,7 +414,7 @@ module sui::kiosk_tests {
     }
 
     #[test]
-    fun test_list_and_take() {
+    fun test_place_and_take() {
         let ctx = &mut tx_context::dummy();
         let (policy, policy_cap) = get_policy(ctx);
         let (asset, item_id) = get_asset(ctx);

@@ -27,13 +27,10 @@ module sui::borrow {
 
     /// Create a new `Referent` struct
     public fun new<T: key + store>(value: T, ctx: &mut TxContext): Referent<T> {
-        let uid = object::new(ctx);
-        let id = object::uid_to_inner(&uid);
-        let value = option::some(value);
-
-        object::delete(uid);
-
-        Referent { id, value }
+        Referent {
+            id: object::new_id(ctx),
+            value: option::some(value)
+        }
     }
 
     /// Borrow the `T` from the `Referent` receiving the `T` and a `Borrow`
