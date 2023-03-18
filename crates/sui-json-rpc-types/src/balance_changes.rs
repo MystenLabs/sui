@@ -19,5 +19,7 @@ pub struct BalanceChange {
     pub coin_type: TypeTag,
     /// The amount indicate the balance value changes,
     /// negative amount means spending coin value and positive means receiving coin value.
+    #[schemars(with = "String")]
+    #[serde_as(as = "DisplayFromStr")]
     pub amount: i128,
 }

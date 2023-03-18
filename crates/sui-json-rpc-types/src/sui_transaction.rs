@@ -162,6 +162,10 @@ impl SuiTransactionResponseOptions {
         self.show_balance_changes || self.show_object_changes
     }
 
+    pub fn require_input(&self) -> bool {
+        self.show_input || self.show_object_changes
+    }
+
     pub fn require_effects(&self) -> bool {
         self.show_effects
             || self.show_events
