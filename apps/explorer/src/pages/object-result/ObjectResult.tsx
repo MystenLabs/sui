@@ -5,8 +5,11 @@ import { useRpcClient } from '@mysten/core';
 import { getTransactionSender } from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
+import { useGetObject } from '../../hooks/useGetObject';
+import { extractName } from '../../utils/objectUtils';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
+import { PageHeader } from '~/ui/PageHeader';
 import {
     instanceOfDataType,
     translate,
@@ -31,6 +34,9 @@ const DATATYPE_DEFAULT: DataType = {
     loadState: 'pending',
 };
 
+const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+const PACKAGE_TYPE_NAME = 'Move Package';
+
 function Fail({ objID }: { objID: string | undefined }) {
     return (
         <Banner variant="error" spacing="lg" fullWidth>
@@ -39,7 +45,7 @@ function Fail({ objID }: { objID: string | undefined }) {
         </Banner>
     );
 }
-
+ 
 function ObjectResultAPI({ objID }: { objID: string }) {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     const rpc = useRpcClient();
@@ -115,28 +121,53 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     return <div>Something went wrong</div>;
 }
 
-function ObjectResult() {
+
+export function ObjectResult() {
     const { id: objID } = useParams();
     const { state } = useLocation();
-
-    if (instanceOfDataType(state)) {
-        return (
-            <ErrorBoundary>
-                <ObjectView data={state} />
-            </ErrorBoundary>
-        );
+    const { data, isLoading, isError } = useGetObject(objID!);
+    if (isLoading) {
+        return <LoadingSpinner text="Loading data" />;
     }
 
-    if (objID !== undefined) {
-        return (
-            <ErrorBoundary>
-                <ObjectResultAPI objID={objID} />
-            </ErrorBoundary>
-        );
+    if (isError) {
+        return <Fail objID={objID} />;
     }
 
-    return <Fail objID={objID} />;
+   if (instanceOfDataType(state)) {
+    return (
+        <ErrorBoundary>
+            <ObjectView data={state} />
+        </ErrorBoundary>
+    );
+ 
+}
+    const resp = translate(data);
+    const name = extractName(resp.data?.contents);
+    const isPackage = resp.objType === PACKAGE_TYPE_NAME;
+    // Handle Package, Object, and Module, Genesis
+
+    // Return move Package view
+    // Return move Object view
+
+    return (<div className="mt-5 mb-10">
+        <PageHeader
+                    type={isPackage ? 'Package' : 'Object'}
+                    title={resp.id}
+                    subtitle={name}
+                />
+
+        <ErrorBoundary>
+            <div className='mt-10'>
+                <ObjectView data={resp} />
+                </div>
+        </ErrorBoundary>
+    </div>)
+
+
+
+
+  
 }
 
-export { ObjectResult };
 export type { DataType };

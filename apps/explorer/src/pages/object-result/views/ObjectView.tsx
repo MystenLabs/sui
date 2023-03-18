@@ -2,37 +2,46 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
-import { extractName } from '../../../utils/objectUtils';
 import { type DataType } from '../ObjectResultType';
-import PkgView from './PkgView';
-import TokenView from './TokenView';
+import { TableHeader } from '~/ui/TableHeader';
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
-import { PageHeader } from '~/ui/PageHeader';
 
-const PACKAGE_TYPE_NAME = 'Move Package';
 
 function ObjectView({ data }: { data: DataType }) {
-    const name = extractName(data.data?.contents);
-
-    const isPackage = data.objType === PACKAGE_TYPE_NAME;
+    console.log(data)
 
     return (
-        <>
-            <div className="mt-5 mb-10">
-                <PageHeader
-                    type={isPackage ? 'Package' : 'Object'}
-                    title={data.id}
-                    subtitle={name}
-                />
-            </div>
-            <ErrorBoundary>
-                {isPackage ? (
-                    <PkgView data={data} />
-                ) : (
-                    <TokenView data={data} />
-                )}
-            </ErrorBoundary>
-        </>
+        <TabGroup size="lg">
+        <TabList>
+            <Tab>Details</Tab>
+ 
+        </TabList>
+        <TabPanels>
+            <TabPanel>
+                <div
+                    className= 'block grid-cols-1 gap-0 md:grid md:grid-cols-1 md:gap-3'
+                    
+                >
+                    <section
+                        className='md:ml-4 block grid-cols-1 gap-0 md:grid md:grid-cols-1 md:gap-3'
+                        
+                        data-testid="transaction-timestamp"
+                    >
+                     
+                    </section>
+
+                 
+                </div>
+              
+            </TabPanel>
+            
+            <TabPanel>
+                
+            </TabPanel>
+        </TabPanels>
+    </TabGroup>
     );
 }
 
