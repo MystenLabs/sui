@@ -9,8 +9,8 @@ use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
 use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, DefaultHash, KeypairTraits, PublicKey,
-    SignatureScheme, SuiPublicKey, SuiSignature,
+    AuthorityPublicKeyBytes, DefaultHash, KeypairTraits, PublicKey, SignatureScheme, SuiPublicKey,
+    SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
@@ -453,31 +453,13 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&AuthorityPublicKeyBytes> for SuiAddress {
-    fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
-        let mut hasher = DefaultHash::default();
-        hasher.update([AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
-        hasher.update(pkb);
-        let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
-    }
-}
-
 impl<T: SuiPublicKey> From<&T> for SuiAddress {
     fn from(pk: &T) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([T::SIGNATURE_SCHEME.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
@@ -487,11 +469,7 @@ impl From<&PublicKey> for SuiAddress {
         hasher.update([pk.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
@@ -509,11 +487,7 @@ impl From<MultiSigPublicKey> for SuiAddress {
             hasher.update(w.to_le_bytes());
         });
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
