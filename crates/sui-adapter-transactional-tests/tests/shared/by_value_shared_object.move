@@ -27,7 +27,7 @@ module t2::o2 {
     }
 }
 
-//# publish
+//# publish --dependencies t2
 
 module t1::o1 {
     use t2::o2::{Self, Obj2};

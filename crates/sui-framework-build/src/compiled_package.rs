@@ -51,6 +51,8 @@ use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME};
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 pub struct CompiledPackage {
     pub package: MoveCompiledPackage,
+    /// The dependency IDs of this package
+    pub dependency_ids: PackageDependencies,
     /// Path to the Move package (i.e., where the Move.toml file is)
     pub path: PathBuf,
 }
@@ -163,6 +165,7 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
 ) -> SuiResult<CompiledPackage> {
+    let dependency_ids = gather_dependencies(&resolution_graph);
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
@@ -190,7 +193,11 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
-    Ok(CompiledPackage { package, path })
+    Ok(CompiledPackage {
+        package,
+        dependency_ids,
+        path,
+    })
 }
 
 impl CompiledPackage {
@@ -280,6 +287,25 @@ impl CompiledPackage {
         }
     }
 
+    /// Return the set of Object IDs corresponding to this package's transitive dependencies'
+    /// original package IDs.
+    pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
+        let mut ids: BTreeSet<_> = self
+            .package
+            .deps_compiled_units
+            .iter()
+            .map(|(_, m)| match &m.unit {
+                CompiledUnitEnum::Module(m) => ObjectID::from(*m.module.address()),
+                CompiledUnitEnum::Script(_) => unimplemented!("Scripts not supported in Sui Move"),
+            })
+            .collect();
+
+        // `0x0` is not a real dependency ID -- it means that the package has unpublished
+        // dependencies.
+        ids.remove(&ObjectID::ZERO);
+        ids.into_iter().collect()
+    }
+
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
     pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
         self.get_dependency_sorted_modules(with_unpublished_deps)
@@ -297,6 +323,15 @@ impl CompiledPackage {
         self.get_package_bytes(with_unpublished_deps)
             .iter()
             .map(|b| Base64::from_bytes(b))
+            .collect()
+    }
+
+    pub fn get_package_dependencies_hex(&self) -> Vec<String> {
+        self.dependency_ids
+            .published
+            .values()
+            .into_iter()
+            .map(|object_id| object_id.to_hex_uncompressed())
             .collect()
     }
 
@@ -543,7 +578,7 @@ pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependenc
     }
 }
 
-pub fn check_unpublished_dependencies(unpublished: BTreeSet<Symbol>) -> Result<(), SuiError> {
+pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<(), SuiError> {
     if unpublished.is_empty() {
         return Ok(());
     };
@@ -570,7 +605,7 @@ pub fn check_unpublished_dependencies(unpublished: BTreeSet<Symbol>) -> Result<(
     })
 }
 
-pub fn check_invalid_dependencies(invalid: BTreeMap<Symbol, String>) -> Result<(), SuiError> {
+pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<(), SuiError> {
     if invalid.is_empty() {
         return Ok(());
     }

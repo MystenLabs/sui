@@ -17,17 +17,23 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectChange, ParentSync, Storage},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 pub trait StorageView<E: std::fmt::Debug>:
-    ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync + ChildObjectResolver
+    ResourceResolver<Error = E>
+    + ModuleResolver<Error = E>
+    + BackingPackageStore
+    + Storage
+    + ParentSync
+    + ChildObjectResolver
 {
 }
 impl<
         E: std::fmt::Debug,
         T: ResourceResolver<Error = E>
             + ModuleResolver<Error = E>
+            + BackingPackageStore
             + Storage
             + ParentSync
             + ChildObjectResolver,

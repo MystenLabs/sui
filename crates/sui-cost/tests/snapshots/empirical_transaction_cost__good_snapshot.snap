@@ -1,6 +1,5 @@
 ---
 source: crates/sui-cost/tests/empirical_transaction_cost.rs
-assertion_line: 78
 expression: common_costs_actual
 ---
 {
@@ -11,7 +10,7 @@ expression: common_costs_actual
   },
   "Publish": {
     "computationCost": 1000,
-    "storageCost": 154,
+    "storageCost": 174,
     "storageRebate": 0
   },
   "SharedCounterAssertValue": {

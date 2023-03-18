@@ -32,7 +32,8 @@ use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, Command, InputObjects, Transaction, TransactionEffects, TransactionEvents,
+    CallArg, Command, InputObjectKind, InputObjects, Transaction, TransactionEffects,
+    TransactionEvents,
 };
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
@@ -46,7 +47,6 @@ use sui_types::sui_system_state::{
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
-use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
@@ -54,6 +54,7 @@ use sui_types::{
     error::SuiResult,
     object::Object,
 };
+use sui_types::{MOVE_STDLIB_ADDRESS, MOVE_STDLIB_OBJECT_ID};
 use tracing::trace;
 
 #[derive(Clone, Debug)]
@@ -802,8 +803,11 @@ fn build_unsigned_genesis_data(
 
     // Get Move and Sui Framework
     let modules = [
-        sui_framework::get_move_stdlib(),
-        sui_framework::get_sui_framework(),
+        (sui_framework::get_move_stdlib(), vec![]),
+        (
+            sui_framework::get_sui_framework(),
+            vec![MOVE_STDLIB_OBJECT_ID],
+        ),
     ];
 
     let objects =
@@ -944,7 +948,7 @@ fn create_genesis_transaction(
 
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
-    modules: &[Vec<CompiledModule>],
+    modules: &[(Vec<CompiledModule>, Vec<ObjectID>)],
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
     parameters: &GenesisChainParameters,
@@ -957,12 +961,13 @@ fn create_genesis_objects(
     let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
         .expect("We defined natives to not fail here");
 
-    for modules in modules {
+    for (modules, dependencies) in modules {
         process_package(
             &mut store,
             &move_vm,
             genesis_ctx,
             modules.to_owned(),
+            dependencies.to_owned(),
             &protocol_config,
         )
         .unwrap();
@@ -983,11 +988,10 @@ fn process_package(
     vm: &MoveVM,
     ctx: &mut TxContext,
     modules: Vec<CompiledModule>,
+    dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
 ) -> Result<()> {
-    let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-    let ids: Vec<_> = inputs.iter().map(|kind| kind.object_id()).collect();
-    let input_objects = store.get_objects(&ids[..]);
+    let dependency_objects = store.get_objects(&dependencies);
     // When publishing genesis packages, since the std framework packages all have
     // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
     // them as dependencies even though they are not. Hence input_objects contain objects
@@ -1001,23 +1005,28 @@ fn process_package(
             .collect();
         assert!(
             // An object either exists on-chain, or is one of the packages to be published.
-            inputs
+            dependencies
                 .iter()
-                .zip(input_objects.iter())
-                .all(|(kind, obj_opt)| obj_opt.is_some()
-                    || to_be_published_addresses.contains(&kind.object_id()))
+                .zip(dependency_objects.iter())
+                .all(|(dependency, obj_opt)| obj_opt.is_some()
+                    || to_be_published_addresses.contains(dependency))
         );
     }
-    let filtered = inputs
-        .into_iter()
-        .zip(input_objects.into_iter())
-        .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object.to_owned())))
-        .collect::<Vec<_>>();
+    let loaded_dependencies: Vec<_> = dependencies
+        .iter()
+        .zip(dependency_objects.into_iter())
+        .filter_map(|(dependency, object)| {
+            Some((
+                InputObjectKind::MovePackage(*dependency),
+                object?.to_owned(),
+            ))
+        })
+        .collect();
 
     debug_assert!(ctx.digest() == TransactionDigest::genesis());
     let mut temporary_store = TemporaryStore::new(
         &*store,
-        InputObjects::new(filtered),
+        InputObjects::new(loaded_dependencies),
         ctx.digest(),
         protocol_config,
     );
@@ -1033,7 +1042,7 @@ fn process_package(
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         // executing in Genesis mode does not create a package upgrade
-        builder.command(Command::Publish(module_bytes));
+        builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
     programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(

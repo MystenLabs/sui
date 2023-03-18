@@ -369,20 +369,24 @@ import {
   JsonRpcProvider,
   RawSigner,
   Transaction,
+  normalizeSuiObjectId,
 } from '@mysten/sui.js';
 const { execSync } = require('child_process');
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const compiledModules = JSON.parse(
+const compiledModulesAndDependencies = JSON.parse(
   execSync(
     `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
     { encoding: 'utf-8' },
   ),
 );
 const tx = new Transaction();
-tx.publish(compiledModules);
+tx.publish(
+    compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
+    compiledModulesAndDeps.dependencies.map((addr: string) => normalizeSuiObjectId(addr)),
+);
 const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });
 ```

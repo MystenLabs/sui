@@ -128,19 +128,15 @@ async fn test_publish_and_move_call() {
     let sender = get_random_address(&network.accounts, vec![]);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../sui_programmability/examples/fungible_tokens");
-    let package = sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
-    let compiled_module = package
-        .get_modules()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect::<Vec<_>>();
+    let compiled_package =
+        sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
+    let compiled_modules_bytes =
+        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.publish_immutable(compiled_module);
+        builder.publish_immutable(compiled_modules_bytes, dependencies);
         builder.finish()
     };
     let response =

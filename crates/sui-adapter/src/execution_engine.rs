@@ -4,12 +4,13 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::execution_mode::{self, ExecutionMode};
-use move_binary_format::CompiledModule;
+use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tracing::{debug, info, instrument, warn};
 
 use crate::programmable_transactions;
@@ -369,12 +370,29 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     }
 
     for (version, modules) in change_epoch.system_packages.into_iter() {
-        let modules = modules
+        let modules: Vec<_> = modules
             .into_iter()
             .map(|m| CompiledModule::deserialize(&m).unwrap())
             .collect();
 
-        let mut new_package = Object::new_system_package(modules, version, tx_ctx.digest())?;
+        assert_invariant!(
+            !modules.is_empty(),
+            "System package must have at least one module"
+        );
+
+        let pkg_id = ObjectID::from(*modules[0].address());
+        let mut dependencies = vec![];
+        // Sui framework package has one dependency while Move stdlib package (the other one) has
+        // none.
+        // TODO: Should we assert that there could only be two system package here to avoid
+        // potential surprises with passing the right type of dependencies?
+        if pkg_id == SUI_FRAMEWORK_OBJECT_ID {
+            let (std_move_pkg, _) = sui_framework::make_std_sui_move_pkgs();
+            dependencies.push(std_move_pkg);
+        }
+
+        let mut new_package =
+            Object::new_system_package(modules, version, tx_ctx.digest(), &dependencies)?;
 
         info!(
             "upgraded system package {:?}",
