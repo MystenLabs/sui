@@ -209,6 +209,7 @@ async fn check_gas(
             gas_price,
             more_gas_objects,
             &cost_table,
+            protocol_config,
         )?;
 
         gas::start_gas_metering(
