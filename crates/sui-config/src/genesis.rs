@@ -401,6 +401,11 @@ pub struct GenesisChainParameters {
     pub initial_stake_subsidy_distribution_amount: u64,
     pub stake_subsidy_period_length: u64,
     pub stake_subsidy_decrease_rate: u16,
+    pub max_validator_count: u64,
+    pub min_validator_joining_stake: u64,
+    pub validator_low_stake_threshold: u64,
+    pub validator_very_low_stake_threshold: u64,
+    pub validator_low_stake_grace_period: u64,
 }
 
 /// Initial set of parameters for a chain.
@@ -501,6 +506,14 @@ impl GenesisCeremonyParameters {
                 .initial_stake_subsidy_distribution_amount,
             stake_subsidy_period_length: self.stake_subsidy_period_length,
             stake_subsidy_decrease_rate: self.stake_subsidy_decrease_rate,
+            max_validator_count: sui_types::governance::MAX_VALIDATOR_COUNT,
+            min_validator_joining_stake: sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST,
+            validator_low_stake_threshold:
+                sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+            validator_very_low_stake_threshold:
+                sui_types::governance::VALIDATOR_VERY_LOW_STAKE_THRESHOLD_MIST,
+            validator_low_stake_grace_period:
+                sui_types::governance::VALIDATOR_LOW_STAKE_GRACE_PERIOD,
         }
     }
 }
@@ -1350,8 +1363,7 @@ impl TokenDistributionSchedule {
 
         // Check that all validators have sufficient stake allocated to ensure they meet the
         // minimum stake threshold
-        let minimum_required_stake =
-            sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI;
+        let minimum_required_stake = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
         for (validator, stake) in validators {
             if stake < minimum_required_stake {
                 panic!("validator {validator} has '{stake}' stake and does not meet the minimum required stake threshold of '{minimum_required_stake}'");
@@ -1363,8 +1375,7 @@ impl TokenDistributionSchedule {
         validators: I,
     ) -> Self {
         let mut supply = TOTAL_SUPPLY_MIST;
-        let default_allocation =
-            sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI;
+        let default_allocation = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
 
         let allocations = validators
             .into_iter()

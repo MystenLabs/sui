@@ -72,6 +72,11 @@ module sui_system::governance_test_utils {
             0,   // stake subsidy
             10,  // stake_subsidy_period_length
             0,   // stake_subsidy_decrease_rate
+            150, // max_validator_count
+            1,   // min_validator_joining_stake
+            1,   // validator_low_stake_threshold
+            0,   // validator_very_low_stake_threshold
+            7,   // validator_low_stake_grace_period
             ctx,
         )
     }

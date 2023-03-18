@@ -33,7 +33,30 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
+
+    /// The duration of an epoch, in milliseconds.
     pub epoch_duration_ms: u64,
+
+    /// Maximum number of active validators at any moment.
+    /// We do not allow the number of validators in any epoch to go above this.
+    pub max_vaidator_count: u64,
+
+    /// Lower-bound on the amount of stake required to become a validator.
+    pub min_validator_joining_stake: u64,
+
+    /// Validators with stake amount below `validator_low_stake_threshold` are considered to
+    /// have low stake and will be escorted out of the validator set after being below this
+    /// threshold for more than `validator_low_stake_grace_period` number of epochs.
+    pub validator_low_stake_threshold: u64,
+
+    /// Validators with stake below `validator_very_low_stake_threshold` will be removed
+    /// immediately at epoch change, no grace period.
+    pub validator_very_low_stake_threshold: u64,
+
+    /// A validator can have stake below `validator_low_stake_threshold`
+    /// for this many epochs before being kicked out.
+    pub validator_low_stake_grace_period: u64,
+
     pub extra_fields: Bag,
 }
 
@@ -590,6 +613,12 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 SystemParametersV1 {
                     governance_start_epoch,
                     epoch_duration_ms,
+                    //TODO should we include these in the summary?
+                    max_vaidator_count: _,
+                    min_validator_joining_stake: _,
+                    validator_low_stake_threshold: _,
+                    validator_very_low_stake_threshold: _,
+                    validator_low_stake_grace_period: _,
                     extra_fields: _,
                 },
             reference_gas_price,
@@ -672,6 +701,14 @@ impl Default for SuiSystemStateInnerV1 {
             parameters: SystemParametersV1 {
                 governance_start_epoch: 0,
                 epoch_duration_ms: 10000,
+                max_vaidator_count: crate::governance::MAX_VALIDATOR_COUNT,
+                min_validator_joining_stake: crate::governance::MIN_VALIDATOR_JOINING_STAKE_MIST,
+                validator_low_stake_threshold:
+                    crate::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+                validator_very_low_stake_threshold:
+                    crate::governance::VALIDATOR_VERY_LOW_STAKE_THRESHOLD_MIST,
+                validator_low_stake_grace_period:
+                    crate::governance::VALIDATOR_LOW_STAKE_GRACE_PERIOD,
                 extra_fields: Default::default(),
             },
             reference_gas_price: 1,
