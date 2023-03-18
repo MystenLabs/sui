@@ -430,6 +430,7 @@ pub enum Owner {
     /// The object ID is converted to SuiAddress as SuiAddress is universal.
     ObjectOwner(SuiAddress),
     /// Object is shared, can be used by any address, and is mutable.
+    #[serde(rename_all = "camelCase")]
     Shared {
         /// The version at which the object became shared
         initial_shared_version: SequenceNumber,

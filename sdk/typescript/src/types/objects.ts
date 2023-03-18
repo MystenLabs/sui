@@ -302,7 +302,7 @@ export function getSharedObjectInitialVersion(
 ): number | undefined {
   const owner = getObjectOwner(resp);
   if (typeof owner === 'object' && 'Shared' in owner) {
-    return owner.Shared.initial_shared_version;
+    return owner.Shared.initialSharedVersion;
   } else {
     return undefined;
   }

@@ -413,7 +413,7 @@ Owner:
     2:
       Shared:
         STRUCT:
-          - initial_shared_version:
+          - initialSharedVersion:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT

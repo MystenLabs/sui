@@ -38,17 +38,17 @@ export const EpochId = number();
 
 export const SuiChangeEpoch = object({
   epoch: EpochId,
-  storage_charge: number(),
-  computation_charge: number(),
-  storage_rebate: number(),
-  epoch_start_timestamp_ms: optional(number()),
+  storageCharge: number(),
+  computationCharge: number(),
+  storageRebate: number(),
+  epochStartTimestampMs: optional(number()),
 });
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
 
 export const SuiConsensusCommitPrologue = object({
   epoch: number(),
   round: number(),
-  commit_timestamp_ms: number(),
+  commitTimestampMs: number(),
 });
 export type SuiConsensusCommitPrologue = Infer<
   typeof SuiConsensusCommitPrologue
@@ -70,7 +70,7 @@ export const SuiCommand = union([
   object({
     MoveCall: object({
       arguments: array(SuiArgument),
-      type_arguments: array(string()),
+      typeArguments: array(string()),
       package: ObjectId,
       module: string(),
       function: string(),
@@ -142,7 +142,7 @@ export const GenericAuthoritySignature = union([
 export const AuthorityQuorumSignInfo = object({
   epoch: EpochId,
   signature: GenericAuthoritySignature,
-  signers_map: array(number()),
+  signersMap: array(number()),
 });
 export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 
@@ -197,7 +197,7 @@ export const TransactionEffects = object({
   /** Object Refs of objects now deleted (the old refs) */
   deleted: optional(array(SuiObjectRef)),
   /** Object Refs of objects now deleted (the old refs) */
-  unwrapped_then_deleted: optional(array(SuiObjectRef)),
+  unwrappedThenDeleted: optional(array(SuiObjectRef)),
   /** Object refs of objects now wrapped in other objects */
   wrapped: optional(array(SuiObjectRef)),
   /**
