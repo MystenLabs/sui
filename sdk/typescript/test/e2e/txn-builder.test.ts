@@ -48,10 +48,9 @@ describe('Transaction Builders', () => {
     const tx = new Transaction();
     const coin_0 = coins[0].details as SuiObjectData;
 
-    const coin = tx.splitCoins(
-      tx.object(coin_0.objectId),
-      [tx.pure(DEFAULT_GAS_BUDGET * 2)],
-    );
+    const coin = tx.splitCoins(tx.object(coin_0.objectId), [
+      tx.pure(DEFAULT_GAS_BUDGET * 2),
+    ]);
     tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateTransaction(toolbox.signer, tx);
   });

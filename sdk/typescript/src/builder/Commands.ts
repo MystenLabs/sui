@@ -156,12 +156,9 @@ export const Commands = {
   },
   SplitCoins(
     coin: CommandArgument,
-    amounts: CommandArgument[]
+    amounts: CommandArgument[],
   ): SplitCoinsCommand {
-    return create(
-      { kind: 'SplitCoins', coin, amounts },
-      SplitCoinsCommand
-    );
+    return create({ kind: 'SplitCoins', coin, amounts }, SplitCoinsCommand);
   },
   MergeCoins(
     destination: CommandArgument,
