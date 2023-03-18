@@ -149,6 +149,46 @@ If successful, the response resembles the following:
 }
 ```
 
+## Connect the Sui Client CLI to your local network
+
+```bash
+# If this is your first time creating a local network, create a new environment with alias `local` for local network
+sui client new-env --alias local --rpc http://127.0.0.1:9000
+
+# set the active environment for the Client CLI to the new local environment
+sui client switch --env local
+Active environment switched to [local]
+
+# confirm your local env
+sui client active-env
+local
+
+# show the current Sui active address for the Client CLI
+sui client active-address
+0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de
+
+# request test tokens from local faucet
+curl --location --request POST 'http://127.0.0.1:9123/gas' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "FixedAmountRequest": {
+        "recipient": "0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"
+    }
+}'
+{"transferredGasObjects":[{"amount":200000000,"id":"0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"}],"error":null}%
+
+# check gas
+sui client gas
+                             Object ID                              |  Gas Value
+--------------------------------------------------------------------------------
+ 0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45 |  200000000
+ 0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d |  200000000
+ 0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2 |  200000000
+ 0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088 |  200000000
+ 0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4 |  200000000
+
+```
+
 ## Set up a local Sui Explorer
 
 To connect the live Sui Explorer to your local network, open the URL:[https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
