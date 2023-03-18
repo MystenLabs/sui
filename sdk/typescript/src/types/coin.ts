@@ -17,6 +17,7 @@ import { ObjectId, TransactionDigest } from './common';
 
 export const CoinStruct = object({
   coinType: string(),
+  // TODO(chris): rename this to objectId
   coinObjectId: ObjectId,
   version: number(),
   digest: TransactionDigest,
