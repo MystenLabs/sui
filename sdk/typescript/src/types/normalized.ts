@@ -60,33 +60,31 @@ export type SuiMoveNormalizedTypeParameterType = Infer<
   typeof SuiMoveNormalizedTypeParameterType
 >;
 
-// export type SuiMoveNormalizedType =
-//   | { type: 'Bool' }
-//   | { type: 'U8' }
-//   | { type: 'U16' }
-//   | { type: 'U32' }
-//   | { type: 'U64' }
-//   | { type: 'U128' }
-//   | { type: 'U256' }
-//   | { type: 'Address' }
-//   | { type: 'Signer' }
-//   | {
-//       type: 'Struct';
-//       content: {
-//         address: string;
-//         module: string;
-//         name: string;
-//         typeArguments: SuiMoveNormalizedType[];
-//       };
-//     }
-//   | { type: 'Vector'; content: SuiMoveNormalizedType }
-//   | { type: 'TypeParameter'; content: number }
-//   | { type: 'Reference'; content: SuiMoveNormalizedType }
-//   | { type: 'MutableReference'; content: SuiMoveNormalizedType };
+export type SuiMoveNormalizedType =
+  | { type: 'Bool' }
+  | { type: 'U8' }
+  | { type: 'U16' }
+  | { type: 'U32' }
+  | { type: 'U64' }
+  | { type: 'U128' }
+  | { type: 'U256' }
+  | { type: 'Address' }
+  | { type: 'Signer' }
+  | {
+      type: 'Struct';
+      content: {
+        address: string;
+        module: string;
+        name: string;
+        typeArguments: SuiMoveNormalizedType[];
+      };
+    }
+  | { type: 'Vector'; content: SuiMoveNormalizedType }
+  | { type: 'TypeParameter'; content: number }
+  | { type: 'Reference'; content: SuiMoveNormalizedType }
+  | { type: 'MutableReference'; content: SuiMoveNormalizedType };
 
-export type SuiMoveNormalizedType = { type: string; content?: any };
-
-function isSuiMoveNormalizedType(
+export function isSuiMoveNormalizedType(
   value: unknown,
 ): value is SuiMoveNormalizedType {
   if (!value) return false;
@@ -110,7 +108,7 @@ function isSuiMoveNormalizedType(
     ['Vector', 'Reference', 'MutableReference'].includes(
       valueProperties.type,
     ) &&
-    is(valueProperties.content, SuiMoveNormalizedType)
+    isSuiMoveNormalizedType(valueProperties.content)
   )
     return true;
   if (
@@ -123,15 +121,15 @@ function isSuiMoveNormalizedType(
     return (
       typeof contents.address === 'string' &&
       typeof contents.module === 'string' &&
-      typeof name === 'string' &&
+      typeof contents.name === 'string' &&
       Array.isArray(contents.typeArguments) &&
-      contents.typeArguments.every((value) => is(value, SuiMoveNormalizedType))
+      contents.typeArguments.every((value) => isSuiMoveNormalizedType(value))
     );
   }
   return false;
 }
 
-export const SuiMoveNormalizedType = define<SuiMoveNormalizedType>(
+const SuiMoveNormalizedType = define<SuiMoveNormalizedType>(
   'SuiMoveNormalizedType',
   isSuiMoveNormalizedType,
 );
@@ -219,7 +217,7 @@ export function extractMutableReference(
 ): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' &&
     'MutableReference' === normalizedType.type &&
-    typeof normalizedType.content === 'object'
+    is(normalizedType.content, SuiMoveNormalizedType)
     ? normalizedType.content
     : undefined;
 }
