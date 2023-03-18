@@ -25,7 +25,8 @@ custom coins with <code><a href="balance.md#0x2_balance_Supply">Supply</a></code
 -  [Function `destroy_supply`](#0x2_balance_destroy_supply)
 
 
-<pre><code></code></pre>
+<pre><code><b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+</code></pre>
 
 
 
@@ -90,6 +91,16 @@ Can be used to store coins which don't need the key ability.
 <a name="@Constants_0"></a>
 
 ## Constants
+
+
+<a name="0x2_balance_ENotSystemAddress"></a>
+
+Sender is not @0x0 the system address.
+
+
+<pre><code><b>const</b> <a href="balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>: u64 = 3;
+</code></pre>
+
 
 
 <a name="0x2_balance_ENonZero"></a>
@@ -414,11 +425,11 @@ Destroy a zero <code><a href="balance.md#0x2_balance_Balance">Balance</a></code>
 ## Function `create_staking_rewards`
 
 CAUTION: this function creates a <code><a href="balance.md#0x2_balance_Balance">Balance</a></code> without increasing the supply.
-It should only be called by <code><a href="sui_system.md#0x2_sui_system_advance_epoch">sui_system::advance_epoch</a></code> to create staking rewards,
+It should only be called by the epoch change system txn to create staking rewards,
 and nowhere else.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+<pre><code><b>fun</b> <a href="balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
 </code></pre>
 
 
@@ -427,7 +438,8 @@ and nowhere else.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64): <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+<pre><code><b>fun</b> <a href="balance.md#0x2_balance_create_staking_rewards">create_staking_rewards</a>&lt;T&gt;(value: u64, ctx: &TxContext): <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="balance.md#0x2_balance_Balance">Balance</a> { value }
 }
 </code></pre>
@@ -441,11 +453,11 @@ and nowhere else.
 ## Function `destroy_storage_rebates`
 
 CAUTION: this function destroys a <code><a href="balance.md#0x2_balance_Balance">Balance</a></code> without decreasing the supply.
-It should only be called by <code><a href="sui_system.md#0x2_sui_system_advance_epoch">sui_system::advance_epoch</a></code> to destroy storage rebates,
+It should only be called by the epoch change system txn to destroy storage rebates,
 and nowhere else.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;)
+<pre><code><b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -454,7 +466,8 @@ and nowhere else.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;) {
+<pre><code><b>fun</b> <a href="balance.md#0x2_balance_destroy_storage_rebates">destroy_storage_rebates</a>&lt;T&gt;(self: <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;, ctx: &TxContext) {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="balance.md#0x2_balance_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> <a href="balance.md#0x2_balance_Balance">Balance</a> { value: _ } = self;
 }
 </code></pre>

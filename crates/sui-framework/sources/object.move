@@ -10,7 +10,6 @@ module sui::object {
     friend sui::clock;
     friend sui::dynamic_field;
     friend sui::dynamic_object_field;
-    friend sui::sui_system;
     friend sui::transfer;
 
     #[test_only]
@@ -21,6 +20,9 @@ module sui::object {
 
     /// The hardcoded ID for the singleton Clock Object.
     const SUI_CLOCK_OBJECT_ID: address = @0x6;
+
+    /// Sender is not @0x0 the system address.
+    const ENotSystemAddress: u64 = 0;
 
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
@@ -78,7 +80,8 @@ module sui::object {
 
     /// Create the `UID` for the singleton `SuiSystemState` object.
     /// This should only be called once from `sui_system`.
-    public(friend) fun sui_system_state(): UID {
+    fun sui_system_state(ctx: &TxContext): UID {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         UID {
             id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
         }
