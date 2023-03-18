@@ -59,18 +59,41 @@ public fun add<Name: copy + drop + store, Value: store>(
 
 spec add {
     pragma opaque;
-    aborts_if [abstract] prover::uid_has_field(object, name);
-    modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
-    ensures [abstract] object == old(object);
-    ensures [abstract] exists<object::DynamicFields<Name>>(object::uid_to_address(object));
-    ensures [abstract] (!old(exists<object::DynamicFields<Name>>(object::uid_to_address(object))))
-        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names == vec(name);
-    ensures [abstract] old(exists<object::DynamicFields<Name>>(object::uid_to_address(object)))
-        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names == old(concat(
-                global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
+
+    let addr  = object.id.bytes;
+
+    // the function aborts when the key already exists
+    aborts_if [abstract] spec_uid_has_field(object, name);
+
+    // this function, upon completion, will update the shards
+    modifies [abstract] global<NameShard<Name>>(addr);
+    modifies [abstract] global<PairShard<Name, Value>>(addr);
+
+    // function preserves object ID
+    ensures [abstract] object.id == old(object.id);
+
+    // update to the name shard
+    ensures [abstract] exists<NameShard<Name>>(addr);
+    ensures [abstract] (!old(exists<NameShard<Name>>(addr)))
+        ==> global<NameShard<Name>>(addr).names == vec(name);
+    ensures [abstract] old(exists<NameShard<Name>>(addr))
+        ==> global<NameShard<Name>>(addr).names == concat(
+                old(global<NameShard<Name>>(addr).names),
                 vec(name)
-            ));
-    }
+            );
+
+    // update to the kv-pair shard
+    ensures [abstract] exists<PairShard<Name, Value>>(addr);
+    ensures [abstract] (!old(exists<PairShard<Name, Value>>(addr)))
+        ==> global<PairShard<Name, Value>>(addr).entries == prover::map_set(
+                prover::map_new(), name, value
+            );
+    ensures [abstract] old(exists<PairShard<Name, Value>>(addr))
+        ==> global<PairShard<Name, Value>>(addr).entries == prover::map_set(
+                old(global<PairShard<Name, Value>>(addr).entries),
+                name, value
+            );
+}
 
 /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
@@ -88,7 +111,9 @@ public fun borrow<Name: copy + drop + store, Value: store>(
 
 spec borrow {
     pragma opaque;
-    aborts_if [abstract] !prover::uid_has_field(object, name);
+    aborts_if [abstract] !spec_uid_has_field(object, name);
+    aborts_if [abstract] !spec_uid_has_field_with_type<Name, Value>(object, name);
+    ensures result == spec_uid_get_value(object, name);
 }
 
 /// Mutably borrows the `object`s dynamic field with the name specified by `name: Name`.
@@ -106,8 +131,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
 }
 
 spec borrow_mut {
-    pragma opaque;
-    aborts_if [abstract] !prover::uid_has_field(object, name);
+    pragma intrinsic;
 }
 
 /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
@@ -128,17 +152,34 @@ public fun remove<Name: copy + drop + store, Value: store>(
 
 spec remove {
     pragma opaque;
-    aborts_if [abstract] !prover::uid_has_field(object, name);
-    modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
+
+    let addr  = object.id.bytes;
+
+    // the function aborts when the key does not exist
+    aborts_if [abstract] !spec_uid_has_field(object, name);
+
+    // the function aborts when the key exists but value type does not match
+    aborts_if [abstract] !spec_uid_has_field_with_type<Name, Value>(object, name);
+
+    // this function, upon completion, will update the shards
+    modifies [abstract] global<NameShard<Name>>(addr);
+    modifies [abstract] global<PairShard<Name, Value>>(addr);
+
+    // function preserves object ID
     ensures [abstract] object.id == old(object.id);
-    ensures [abstract] old(prover::uid_num_fields<Name>(object)) == 1
-        ==> !exists<object::DynamicFields<Name>>(object::uid_to_address(object));
-    ensures [abstract] old(prover::uid_num_fields<Name>(object)) > 1
-        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names ==
-                old(prover::vec_remove(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
-                    index_of(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names, name)));
-    // this is needed to ensure that there was only one field with a given name
-    ensures [abstract] !prover::uid_has_field(object, name);
+
+    // update to the name shard
+    ensures [abstract] exists<NameShard<Name>>(addr);
+    ensures [abstract] global<NameShard<Name>>(addr).names == sui::prover_vec::remove(
+        old(global<NameShard<Name>>(addr).names),
+        index_of(old(global<NameShard<Name>>(addr).names), name)
+    );
+
+    // update to the kv-pair shard
+    ensures [abstract] exists<PairShard<Name, Value>>(addr);
+    ensures [abstract] global<PairShard<Name, Value>>(addr).entries == prover::map_del(
+        old(global<PairShard<Name, Value>>(addr).entries), name
+    );
 }
 
 
@@ -153,6 +194,12 @@ public fun exists_<Name: copy + drop + store>(
     has_child_object(object_addr, hash)
 }
 
+spec exists_ {
+    pragma opaque;
+    aborts_if [abstract] false;
+    ensures result == spec_uid_has_field(object, name);
+}
+
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` with an assigned value of type `Value`.
 public fun exists_with_type<Name: copy + drop + store, Value: store>(
@@ -162,6 +209,12 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
     let object_addr = object::uid_to_address(object);
     let hash = hash_type_and_key(object_addr, name);
     has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
+}
+
+spec exists_with_type {
+    pragma opaque;
+    aborts_if [abstract] false;
+    ensures result == spec_uid_has_field_with_type<Name, Value>(object, name);
 }
 
 public(friend) fun field_info<Name: copy + drop + store>(
@@ -174,6 +227,13 @@ public(friend) fun field_info<Name: copy + drop + store>(
     (id, object::id_to_address(value))
 }
 
+spec field_info {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) fun field_info_mut<Name: copy + drop + store>(
     object: &mut UID,
     name: Name,
@@ -182,6 +242,13 @@ public(friend) fun field_info_mut<Name: copy + drop + store>(
     let hash = hash_type_and_key(object_addr, name);
     let Field { id, name: _, value } = borrow_child_object_mut<Field<Name, ID>>(object, hash);
     (id, object::id_to_address(value))
+}
+
+spec field_info_mut {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
 }
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
@@ -250,6 +317,107 @@ spec has_child_object_with_ty {
     // TODO: stub to be replaced by actual abort conditions if any
     aborts_if [abstract] true;
     // TODO: specify actual function behavior
+}
+
+// === Dynamic fields sharded by key-value types ===
+
+#[verify_only]
+/// A slice of the dynamic fields associated with an object sharded by K type.
+struct NameShard<Name: copy + drop + store> has key {
+    names: vector<Name>,
+}
+spec NameShard {
+    // this makes the vector a set
+    invariant forall i in 0..len(names), j in 0..len(names):
+        names[i] == names[j] ==> i == j;
+}
+
+#[verify_only]
+/// A slice of the dynamic fields associated with an object sharded by K-V type.
+struct PairShard<phantom Name: copy + drop + store, phantom Value: store> has key {
+    entries: prover::Map<Name, Value>,
+}
+
+spec module {
+    invariant<Name, Value> forall addr: address:
+        exists<PairShard<Name, Value>>(addr) ==> exists<NameShard<Name>>(addr);
+
+    invariant<Name, Value> forall addr: address
+        where exists<NameShard<Name>>(addr) && exists<PairShard<Name, Value>>(addr):
+            forall k: Name where prover::map_contains(global<PairShard<Name, Value>>(addr).entries, k):
+                contains(global<NameShard<Name>>(addr).names, k);
+
+    invariant<Name, Value> forall addr: address
+        where exists<NameShard<Name>>(addr) && exists<PairShard<Name, Value>>(addr):
+            forall k: Name where !contains(global<NameShard<Name>>(addr).names, k):
+                !prover::map_contains(global<PairShard<Name, Value>>(addr).entries, k);
+}
+
+// === Utility spec functions ===
+
+/// Checks if a given object has field with a given name.
+spec fun spec_has_field<T: key, Name: copy + drop + store>(obj: T, name: Name): bool {
+    let uid = object::borrow_uid(obj);
+    spec_uid_has_field<Name>(uid, name)
+}
+
+spec fun spec_uid_has_field<Name: copy + drop + store>(uid: object::UID, name: Name): bool {
+    let addr = object::uid_to_address(uid);
+    exists<NameShard<Name>>(addr) &&
+        contains(global<NameShard<Name>>(addr).names, name)
+}
+
+/// Checks if a given object has field with a given name and type.
+spec fun spec_has_field_with_type<T: key, Name: copy + drop + store, Value: store>(obj: T, name: Name): bool {
+    let uid = object::borrow_uid(obj);
+    spec_uid_has_field_with_type<Name, Value>(uid, name)
+}
+
+spec fun spec_uid_has_field_with_type<Name: copy + drop + store, Value: store>(uid: object::UID, name: Name): bool {
+    let addr = object::uid_to_address(uid);
+    exists<PairShard<Name, Value>>(addr) &&
+        prover::map_contains(global<PairShard<Name, Value>>(addr).entries, name)
+}
+
+/// Returns number of K-type fields of a given object.
+spec fun spec_num_fields<T: key, Name: copy + drop + store>(obj: T): num {
+    let uid = object::borrow_uid(obj);
+    spec_uid_num_fields<Name>(uid)
+}
+
+spec fun spec_uid_num_fields<Name: copy + drop + store>(uid: object::UID): num {
+    let addr = object::uid_to_address(uid);
+    if (!exists<NameShard<Name>>(addr)) {
+        0
+    } else {
+        len(global<NameShard<Name>>(addr).names)
+    }
+}
+
+/// Returns number of K-type fields of a given object with a given value type.
+spec fun spec_num_fields_with_type<T: key, Name: copy + drop + store, Value: store>(obj: T): num {
+    let uid = object::borrow_uid(obj);
+    spec_uid_num_fields_with_type<Name, Value>(uid)
+}
+
+spec fun spec_uid_num_fields_with_type<Name: copy + drop + store, Value: store>(uid: object::UID): num {
+    let addr = object::uid_to_address(uid);
+    if (!exists<PairShard<Name, Value>>(addr)) {
+        0
+    } else {
+        prover::map_len(global<PairShard<Name, Value>>(addr).entries)
+    }
+}
+
+/// Returns number of K-type fields of a given object with a given value type.
+spec fun spec_get_value<T: key, Name: copy + drop + store, Value: store>(obj: T, name: Name): Value {
+    let uid = object::borrow_uid(obj);
+    spec_uid_get_value<Name, Value>(uid, name)
+}
+
+spec fun spec_uid_get_value<Name: copy + drop + store, Value: store>(uid: object::UID, name: Name): Value {
+    let addr = object::uid_to_address(uid);
+    prover::map_get(global<PairShard<Name, Value>>(addr).entries, name)
 }
 
 }
