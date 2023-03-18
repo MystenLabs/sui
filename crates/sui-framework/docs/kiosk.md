@@ -10,7 +10,7 @@ policies.
 The system has 3 main audiences:
 
 1. Creators: for a type to be tradable in the Kiosk ecosystem,
-creator (publisher) of the type needs to issue a <code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a></code>
+creator (publisher) of the type needs to issue a <code>TransferPolicyCap</code>
 which gives them a power to enforce any constraint on trades by
 either using one of the pre-built primitives (see <code>sui::royalty</code>)
 or by implementing a custom policy. The latter requires additional
@@ -23,33 +23,27 @@ making it available for everyone to authorize deals "for free"
 
 2. Traders: anyone can create a Kiosk and depending on whether it's
 a shared object or some shared-wrapper the owner can trade any type
-that has issued <code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a></code> in a Kiosk. To do so, they need
+that has issued <code>TransferPolicyCap</code> in a Kiosk. To do so, they need
 to make an offer, and any party can purchase the item for the amount of
 SUI set in the offer. The responsibility to follow the transfer policy
 set by the creator of the <code>T</code> is on the buyer.
 
 3. Marketplaces: marketplaces can either watch for the offers made in
 personal Kiosks or even integrate the Kiosk primitive and build on top
-of it. In the custom logic scenario, the <code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a></code> can also
+of it. In the custom logic scenario, the <code>TransferPolicyCap</code> can also
 be used to implement application-specific transfer rules.
 
 
 -  [Resource `Kiosk`](#0x2_kiosk_Kiosk)
 -  [Resource `KioskOwnerCap`](#0x2_kiosk_KioskOwnerCap)
 -  [Resource `PurchaseCap`](#0x2_kiosk_PurchaseCap)
--  [Struct `TransferRequest`](#0x2_kiosk_TransferRequest)
--  [Resource `TransferPolicyCap`](#0x2_kiosk_TransferPolicyCap)
--  [Struct `Key`](#0x2_kiosk_Key)
--  [Struct `Offer`](#0x2_kiosk_Offer)
--  [Struct `NewOfferEvent`](#0x2_kiosk_NewOfferEvent)
--  [Struct `TransferPolicyCapIssued`](#0x2_kiosk_TransferPolicyCapIssued)
+-  [Struct `Item`](#0x2_kiosk_Item)
+-  [Struct `Listing`](#0x2_kiosk_Listing)
+-  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
 -  [Function `set_owner`](#0x2_kiosk_set_owner)
--  [Function `new_transfer_policy_cap`](#0x2_kiosk_new_transfer_policy_cap)
--  [Function `new_transfer_policy_cap_protected`](#0x2_kiosk_new_transfer_policy_cap_protected)
--  [Function `destroy_transfer_policy_cap`](#0x2_kiosk_destroy_transfer_policy_cap)
 -  [Function `place`](#0x2_kiosk_place)
 -  [Function `take`](#0x2_kiosk_take)
 -  [Function `list`](#0x2_kiosk_list)
@@ -58,12 +52,14 @@ be used to implement application-specific transfer rules.
 -  [Function `list_with_purchase_cap`](#0x2_kiosk_list_with_purchase_cap)
 -  [Function `purchase_with_cap`](#0x2_kiosk_purchase_with_cap)
 -  [Function `return_purchase_cap`](#0x2_kiosk_return_purchase_cap)
--  [Function `allow_transfer`](#0x2_kiosk_allow_transfer)
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
+-  [Function `has_access`](#0x2_kiosk_has_access)
+-  [Function `uid_mut_as_owner`](#0x2_kiosk_uid_mut_as_owner)
 -  [Function `uid_mut`](#0x2_kiosk_uid_mut)
 -  [Function `owner`](#0x2_kiosk_owner)
 -  [Function `item_count`](#0x2_kiosk_item_count)
 -  [Function `profits_amount`](#0x2_kiosk_profits_amount)
+-  [Function `profits_mut`](#0x2_kiosk_profits_mut)
 -  [Function `purchase_cap_kiosk`](#0x2_kiosk_purchase_cap_kiosk)
 -  [Function `purchase_cap_item`](#0x2_kiosk_purchase_cap_item)
 -  [Function `purchase_cap_min_price`](#0x2_kiosk_purchase_cap_min_price)
@@ -76,8 +72,8 @@ be used to implement application-specific transfer rules.
 <b>use</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field">0x2::dynamic_object_field</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="package.md#0x2_package">0x2::package</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="transfer_policy.md#0x2_transfer_policy">0x2::transfer_policy</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
@@ -87,8 +83,10 @@ be used to implement application-specific transfer rules.
 
 ## Resource `Kiosk`
 
-An object that stores collectibles of all sorts.
-For sale, for collecting reasons, for fun.
+An object which allows selling collectibles within "kiosk" ecosystem.
+By default gives the functionality to list an item openly - for anyone
+to purchase proviging the guarantees for creators that every transfer
+needs to be approved via the <code>TransferPolicy</code>.
 
 
 <pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a> <b>has</b> store, key
@@ -127,6 +125,13 @@ For sale, for collecting reasons, for fun.
  Number of items stored in a Kiosk. Used to allow unpacking
  an empty Kiosk if it was wrapped or has a single owner.
 </dd>
+<dt>
+<code>allow_extensions: bool</code>
+</dt>
+<dd>
+ Whether to open the UID to public. Set to <code><b>true</b></code> by default
+ but the owner can switch the state if necessary.
+</dd>
 </dl>
 
 
@@ -136,8 +141,8 @@ For sale, for collecting reasons, for fun.
 
 ## Resource `KioskOwnerCap`
 
-A capability that is issued for Kiosks that don't have owner
-specified.
+A Capability granting the bearer a right to <code>place</code> and <code>take</code> items
+from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> as well as to <code>list</code> them and <code>list_with_purchase_cap</code>.
 
 
 <pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> <b>has</b> store, key
@@ -177,6 +182,9 @@ purchase it from a <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> for
 Allows exclusive listing: only bearer of the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> can
 purchase the asset. However, the capablity should be used
 carefully as losing it would lock the asset in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+
+The main application for the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is building extensions
+on top of the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
 
 
 <pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T: store, key&gt; <b>has</b> store, key
@@ -218,81 +226,14 @@ carefully as losing it would lock the asset in the <code><a href="kiosk.md#0x2_k
 
 </details>
 
-<a name="0x2_kiosk_TransferRequest"></a>
+<a name="0x2_kiosk_Item"></a>
 
-## Struct `TransferRequest`
-
-A "Hot Potato" forcing the buyer to get a transfer permission
-from the item type (<code>T</code>) owner on purchase attempt.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T: store, key&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>paid: u64</code>
-</dt>
-<dd>
- Amount of SUI paid for the item. Can be used to
- calculate the fee / transfer policy enforcement.
-</dd>
-<dt>
-<code>from: <a href="object.md#0x2_object_ID">object::ID</a></code>
-</dt>
-<dd>
- The ID of the Kiosk the object is being sold from.
- Can be used by the TransferPolicy implementors to
- create an allowlist of Kiosks which can trade the type.
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_kiosk_TransferPolicyCap"></a>
-
-## Resource `TransferPolicyCap`
-
-A unique capability that allows owner of the <code>T</code> to authorize
-transfers. Can only be created with the <code>Publisher</code> object.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a>&lt;T: store, key&gt; <b>has</b> store, key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_kiosk_Key"></a>
-
-## Struct `Key`
+## Struct `Item`
 
 Dynamic field key for an item placed into the kiosk.
 
 
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_Key">Key</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_Item">Item</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -313,15 +254,15 @@ Dynamic field key for an item placed into the kiosk.
 
 </details>
 
-<a name="0x2_kiosk_Offer"></a>
+<a name="0x2_kiosk_Listing"></a>
 
-## Struct `Offer`
+## Struct `Listing`
 
 Dynamic field key for an active offer to purchase the T. If an
 item is listed without a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>, exclusive is set to <code><b>false</b></code>.
 
 
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -348,16 +289,16 @@ item is listed without a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">Purchase
 
 </details>
 
-<a name="0x2_kiosk_NewOfferEvent"></a>
+<a name="0x2_kiosk_ItemListed"></a>
 
-## Struct `NewOfferEvent`
+## Struct `ItemListed`
 
 Emitted when an item was listed by the safe owner. Can be used
 to track available offers anywhere on the network; the event is
 type-indexed which allows for searching for offers of a specific <code>T</code>
 
 
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_NewOfferEvent">NewOfferEvent</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -390,35 +331,6 @@ type-indexed which allows for searching for offers of a specific <code>T</code>
 
 </details>
 
-<a name="0x2_kiosk_TransferPolicyCapIssued"></a>
-
-## Struct `TransferPolicyCapIssued`
-
-Emitted when a publisher creates a new <code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a></code> making
-the discoverability and tracking the supported types easier.
-
-
-<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_TransferPolicyCapIssued">TransferPolicyCapIssued</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -429,47 +341,7 @@ the discoverability and tracking the supported types easier.
 Trying to withdraw higher amount than stored.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEnough">ENotEnough</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EIncorrectAmount"></a>
-
-Coin paid does not match the offer price.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EIncorrectArgument"></a>
-
-Incorrect arguments passed into <code>switch_mode</code> function.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EIncorrectArgument">EIncorrectArgument</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EListedExclusively"></a>
-
-Attempt to take an item that has a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> issued.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>: u64 = 7;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_ENotEmpty"></a>
-
-Trying to close a Kiosk and it has items in it.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEmpty">ENotEmpty</a>: u64 = 6;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEnough">ENotEnough</a>: u64 = 2;
 </code></pre>
 
 
@@ -479,17 +351,57 @@ Trying to close a Kiosk and it has items in it.
 Trying to withdraw profits and sender is not owner.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>: u64 = 1;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="0x2_kiosk_EOwnerNotSet"></a>
+<a name="0x2_kiosk_EAlreadyListed"></a>
 
-Trying to withdraw profits as owner and owner is not set.
+Tryng to exclusively list an already listed item.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EOwnerNotSet">EOwnerNotSet</a>: u64 = 0;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_EExtensionsDisabled"></a>
+
+Trying to call <code>uid_mut</code> when extensions disabled
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EExtensionsDisabled">EExtensionsDisabled</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_EIncorrectAmount"></a>
+
+Coin paid does not match the offer price.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_EListedExclusively"></a>
+
+Attempt to take an item that has a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> issued.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x2_kiosk_ENotEmpty"></a>
+
+Trying to close a Kiosk and it has items in it.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ENotEmpty">ENotEmpty</a>: u64 = 3;
 </code></pre>
 
 
@@ -499,17 +411,7 @@ Trying to withdraw profits as owner and owner is not set.
 <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> does not match the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
 
 
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>: u64 = 8;
-</code></pre>
-
-
-
-<a name="0x2_kiosk_EWrongTarget"></a>
-
-Transfer is accepted by a wrong Kiosk.
-
-
-<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EWrongTarget">EWrongTarget</a>: u64 = 4;
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>: u64 = 5;
 </code></pre>
 
 
@@ -518,7 +420,7 @@ Transfer is accepted by a wrong Kiosk.
 
 ## Function `new`
 
-Creates a new Kiosk without owner but with a Capability.
+Creates a new <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> with a matching <code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>)
@@ -535,7 +437,8 @@ Creates a new Kiosk without owner but with a Capability.
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         profits: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
         owner: sender(ctx),
-        item_count: 0
+        item_count: 0,
+        allow_extensions: <b>true</b>
     };
 
     <b>let</b> cap = <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> {
@@ -572,7 +475,7 @@ case where there's no items inside and a <code><a href="kiosk.md#0x2_kiosk_Kiosk
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_close_and_withdraw">close_and_withdraw</a>(
     self: <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, ctx: &<b>mut</b> TxContext
 ): Coin&lt;SUI&gt; {
-    <b>let</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a> { id, profits, owner: _, item_count } = self;
+    <b>let</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a> { id, profits, owner: _, item_count, allow_extensions: _ } = self;
     <b>let</b> <a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a> { id: cap_id, for } = cap;
 
     <b>assert</b>!(<a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&id) == for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
@@ -620,99 +523,6 @@ in a third party module.
 
 </details>
 
-<a name="0x2_kiosk_new_transfer_policy_cap"></a>
-
-## Function `new_transfer_policy_cap`
-
-Register a type in the Kiosk system and receive an <code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a></code>
-which is required to confirm kiosk deals for the <code>T</code>. If there's no
-<code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a></code> available for use, the type can not be traded in
-kiosks.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_new_transfer_policy_cap">new_transfer_policy_cap</a>&lt;T: store, key&gt;(pub: &<a href="package.md#0x2_package_Publisher">package::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_new_transfer_policy_cap">new_transfer_policy_cap</a>&lt;T: key + store&gt;(
-    pub: &Publisher, ctx: &<b>mut</b> TxContext
-): <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="package.md#0x2_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
-    <b>let</b> id = <a href="object.md#0x2_object_new">object::new</a>(ctx);
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_TransferPolicyCapIssued">TransferPolicyCapIssued</a>&lt;T&gt; { id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&id) });
-    <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a> { id }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_new_transfer_policy_cap_protected"></a>
-
-## Function `new_transfer_policy_cap_protected`
-
-Special case for the <code>sui::collectible</code> module to be able to register
-type without a <code>Publisher</code> object. Is not magical and a similar logic
-can be implemented for the regular <code>register_type</code> call for wrapped types.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_new_transfer_policy_cap_protected">new_transfer_policy_cap_protected</a>&lt;T: store, key&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="kiosk.md#0x2_kiosk_new_transfer_policy_cap_protected">new_transfer_policy_cap_protected</a>&lt;T: key + store&gt;(
-    ctx: &<b>mut</b> TxContext
-): <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt; {
-    <b>let</b> id = <a href="object.md#0x2_object_new">object::new</a>(ctx);
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_TransferPolicyCapIssued">TransferPolicyCapIssued</a>&lt;T&gt; { id: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&id) });
-    <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a> { id }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_destroy_transfer_policy_cap"></a>
-
-## Function `destroy_transfer_policy_cap`
-
-Destroy a TransferPolicyCap.
-Can be performed by any party as long as they own it.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_destroy_transfer_policy_cap">destroy_transfer_policy_cap</a>&lt;T: store, key&gt;(cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_destroy_transfer_policy_cap">destroy_transfer_policy_cap</a>&lt;T: key + store&gt;(
-    cap: <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;
-) {
-    <b>let</b> <a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a> { id } = cap;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_kiosk_place"></a>
 
 ## Function `place`
@@ -735,7 +545,7 @@ Performs an authorization check to make sure only owner can do that.
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.item_count = self.item_count + 1;
-    dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Key">Key</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, item)
+    dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, item)
 }
 </code></pre>
 
@@ -764,11 +574,11 @@ Performs an authorization check to make sure only owner can do that.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ): T {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id, is_exclusive: <b>true</b> }) == <b>false</b>, <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
     self.item_count = self.item_count - 1;
-    df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id, is_exclusive: <b>false</b> });
-    dof::remove(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Key">Key</a> { id })
+    df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    dof::remove(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id })
 }
 </code></pre>
 
@@ -797,8 +607,10 @@ Performs an authorization check to make sure only owner can sell.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id, is_exclusive: <b>false</b> }, price);
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_NewOfferEvent">NewOfferEvent</a>&lt;T&gt; {
+    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+
+    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }, price);
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a>&lt;T&gt; {
         <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id, price
     })
 }
@@ -844,16 +656,13 @@ Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 Make a trade: pay the owner of the item and request a Transfer to the <code>target</code>
 kiosk (to prevent item being taken by the approving party).
 
-Received <code><a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a></code> needs to be handled by the publisher of the T,
+Received <code>TransferRequest</code> needs to be handled by the publisher of the T,
 if they have a method implemented that allows a trade, it is possible to
 request their approval (by calling some function) so that the trade can be
 finalized.
 
-After a confirmation is received from the creator, an item can be placed to
-a destination safe.
 
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, payment: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;): (T, <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, payment: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (T, <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -863,19 +672,16 @@ a destination safe.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, payment: Coin&lt;SUI&gt;
-): (T, <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt;) {
-    <b>let</b> price = df::remove&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id, is_exclusive: <b>false</b> });
-    <b>let</b> inner = dof::remove&lt;<a href="kiosk.md#0x2_kiosk_Key">Key</a>, T&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Key">Key</a> { id });
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, id: ID, payment: Coin&lt;SUI&gt;, ctx: &<b>mut</b> TxContext
+): (T, TransferRequest&lt;T&gt;) {
+    <b>let</b> price = df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    <b>let</b> inner = dof::remove&lt;<a href="kiosk.md#0x2_kiosk_Item">Item</a>, T&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id });
 
     self.item_count = self.item_count - 1;
     <b>assert</b>!(price == <a href="coin.md#0x2_coin_value">coin::value</a>(&payment), <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.profits, <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(payment));
 
-    (inner, <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt; {
-        paid: price,
-        from: <a href="object.md#0x2_object_id">object::id</a>(self),
-    })
+    (inner, <a href="transfer_policy.md#0x2_transfer_policy_new_request">transfer_policy::new_request</a>(price, <a href="object.md#0x2_object_id">object::id</a>(self), ctx))
 }
 </code></pre>
 
@@ -904,9 +710,10 @@ for any price equal or higher than the <code>min_price</code>.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: u64, ctx: &<b>mut</b> TxContext
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
 
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
-    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id, is_exclusive: <b>true</b> }, min_price);
+    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }, min_price);
 
     <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
         id: uid,
@@ -929,7 +736,7 @@ Unpack the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>
 as the price for the listing making sure it's no less than <code>min_amount</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_with_cap">purchase_with_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;, payment: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;): (T, <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_with_cap">purchase_with_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;, payment: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (T, <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -939,19 +746,19 @@ as the price for the listing making sure it's no less than <code>min_amount</cod
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_with_cap">purchase_with_cap</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;, payment: Coin&lt;SUI&gt;
-): (T, <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt;) {
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;, payment: Coin&lt;SUI&gt;, ctx: &<b>mut</b> TxContext
+): (T, TransferRequest&lt;T&gt;) {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price } = purchase_cap;
     <b>let</b> paid = <a href="coin.md#0x2_coin_value">coin::value</a>(&payment);
 
     <b>assert</b>!(paid &gt;= min_price, <a href="kiosk.md#0x2_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
 
-    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id: item_id, is_exclusive: <b>true</b> });
-    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id: item_id, is_exclusive: <b>false</b> }, paid);
+    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>true</b> });
+    df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>false</b> }, paid);
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
 
-    <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T&gt;(self, item_id, payment)
+    <a href="kiosk.md#0x2_kiosk_purchase">purchase</a>&lt;T&gt;(self, item_id, payment, ctx)
 }
 </code></pre>
 
@@ -964,7 +771,7 @@ as the price for the listing making sure it's no less than <code>min_amount</cod
 ## Function `return_purchase_cap`
 
 Return the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> without making a purchase; remove an active offer and
-allow taking . Can only be returned to its <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>, aborts otherwise.
+allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>, aborts otherwise.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_purchase_cap">return_purchase_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;)
@@ -982,41 +789,8 @@ allow taking . Can only be returned to its <code><a href="kiosk.md#0x2_kiosk_Kio
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
-    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Offer">Offer</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Offer">Offer</a> { id: item_id, is_exclusive: <b>true</b> });
+    df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>true</b> });
     <a href="object.md#0x2_object_delete">object::delete</a>(id)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_kiosk_allow_transfer"></a>
-
-## Function `allow_transfer`
-
-Allow a <code><a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a></code> for the type <code>T</code>. The call is protected
-by the type constraint, as only the publisher of the <code>T</code> can get
-<code><a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;</code>.
-
-Note: unless there's a policy for <code>T</code> to allow transfers,
-Kiosk trades will not be possible.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_allow_transfer">allow_transfer</a>&lt;T: store, key&gt;(_cap: &<a href="kiosk.md#0x2_kiosk_TransferPolicyCap">kiosk::TransferPolicyCap</a>&lt;T&gt;, req: <a href="kiosk.md#0x2_kiosk_TransferRequest">kiosk::TransferRequest</a>&lt;T&gt;): (u64, <a href="object.md#0x2_object_ID">object::ID</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_allow_transfer">allow_transfer</a>&lt;T: key + store&gt;(
-    _cap: &<a href="kiosk.md#0x2_kiosk_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;, req: <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a>&lt;T&gt;
-): (u64, ID) {
-    <b>let</b> <a href="kiosk.md#0x2_kiosk_TransferRequest">TransferRequest</a> { paid, from } = req;
-    (paid, from)
 }
 </code></pre>
 
@@ -1061,16 +835,14 @@ Withdraw profits from the Kiosk.
 
 </details>
 
-<a name="0x2_kiosk_uid_mut"></a>
+<a name="0x2_kiosk_has_access"></a>
 
-## Function `uid_mut`
+## Function `has_access`
 
-Get the UID to for dynamic field access. Requires a <code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a></code>
-to prevent third party attachements without owner's approval in the
-shared storage scenario.
+Check whether the <code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a></code> matches the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut">uid_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): bool
 </code></pre>
 
 
@@ -1079,8 +851,60 @@ shared storage scenario.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut">uid_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> UID {
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_access">has_access</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): bool {
+    <a href="object.md#0x2_object_id">object::id</a>(self) == cap.for
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_uid_mut_as_owner"></a>
+
+## Function `uid_mut_as_owner`
+
+Access the <code>UID</code> using the <code><a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">uid_mut_as_owner</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">uid_mut_as_owner</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> UID {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    &<b>mut</b> self.id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_uid_mut"></a>
+
+## Function `uid_mut`
+
+Get the mutable <code>UID</code> for dynamic field access and extensions.
+Aborts if <code>allow_extensions</code> set to <code><b>false</b></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut">uid_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>): &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut">uid_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): &<b>mut</b> UID {
+    <b>assert</b>!(self.allow_extensions, <a href="kiosk.md#0x2_kiosk_EExtensionsDisabled">EExtensionsDisabled</a>);
     &<b>mut</b> self.id
 }
 </code></pre>
@@ -1157,6 +981,32 @@ Get the amount of profits collected by selling items.
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_amount">profits_amount</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>): u64 {
     <a href="balance.md#0x2_balance_value">balance::value</a>(&self.profits)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_profits_mut"></a>
+
+## Function `profits_mut`
+
+Get mutable access to <code>profits</code> - useful for extendability.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_mut">profits_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>): &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_mut">profits_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> Balance&lt;SUI&gt; {
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    &<b>mut</b> self.profits
 }
 </code></pre>
 

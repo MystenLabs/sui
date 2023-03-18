@@ -136,13 +136,10 @@ Create a new <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code> s
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow_new">new</a>&lt;T: key + store&gt;(value: T, ctx: &<b>mut</b> TxContext): <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt; {
-    <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
-    <b>let</b> id = <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&uid);
-    <b>let</b> value = <a href="_some">option::some</a>(value);
-
-    <a href="object.md#0x2_object_delete">object::delete</a>(uid);
-
-    <a href="borrow.md#0x2_borrow_Referent">Referent</a> { id, value }
+    <a href="borrow.md#0x2_borrow_Referent">Referent</a> {
+        id: <a href="object.md#0x2_object_new_id">object::new_id</a>(ctx),
+        value: <a href="_some">option::some</a>(value)
+    }
 }
 </code></pre>
 
