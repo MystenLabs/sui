@@ -21,7 +21,7 @@ services:
       - ./validator.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis.blob:/opt/sui/config/genesis.blob:ro
       - ../genesis/key-pairs:/opt/sui/key-pairs/:ro
-      - suidb:/opt/sui/db:rw
+      - /opt/sui/db:/opt/sui/db:rw
     command:
       [
         "/usr/local/bin/sui-node",
@@ -34,6 +34,3 @@ services:
       options:
         max-file: "10"
         max-size: "5g"
-
-volumes:
-  suidb:
