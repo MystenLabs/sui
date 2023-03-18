@@ -128,7 +128,7 @@ module sui::kiosk {
         price: u64
     }
 
-    // === New Kiosk + ownership modes ===
+    // === Kiosk packing and unpacking ===
 
     /// Creates a new `Kiosk` with a matching `KioskOwnerCap`.
     public fun new(ctx: &mut TxContext): (Kiosk, KioskOwnerCap) {
@@ -166,7 +166,7 @@ module sui::kiosk {
         coin::from_balance(profits, ctx)
     }
 
-    /// Change the owner to the transaction sender.
+    /// Change the `owner` field to the transaction sender.
     /// The change is purely cosmetical and does not affect any of the
     /// basic kiosk functions unless some logic for this is implemented
     /// in a third party module.
