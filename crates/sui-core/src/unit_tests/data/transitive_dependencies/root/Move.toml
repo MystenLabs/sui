@@ -4,4 +4,4 @@ version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../../../../../../sui-framework" }
-PackageADependsOnB = { local = "../Package_A_Depends_On_B" }
+A = { local = "../a" }

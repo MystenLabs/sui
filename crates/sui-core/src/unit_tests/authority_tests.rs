@@ -5312,13 +5312,7 @@ async fn test_publish_transitive_dependencies_ok() {
 
     // Publish `package C`
     let mut package_c_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    package_c_path.extend([
-        "src",
-        "unit_tests",
-        "data",
-        "transitive_dependencies",
-        "package_C",
-    ]);
+    package_c_path.extend(["src", "unit_tests", "data", "transitive_dependencies", "c"]);
 
     // Set `c` to 0x0 address so that compiler doesn't complain about
     // this being a non-zero address when publishing. We can't set the address
@@ -5350,13 +5344,7 @@ async fn test_publish_transitive_dependencies_ok() {
 
     // Publish `package B`
     let mut package_b_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    package_b_path.extend([
-        "src",
-        "unit_tests",
-        "data",
-        "transitive_dependencies",
-        "package_B_depends_on_C",
-    ]);
+    package_b_path.extend(["src", "unit_tests", "data", "transitive_dependencies", "b"]);
 
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.additional_named_addresses.extend([
@@ -5386,13 +5374,7 @@ async fn test_publish_transitive_dependencies_ok() {
 
     // Publish `package A`
     let mut package_a_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    package_a_path.extend([
-        "src",
-        "unit_tests",
-        "data",
-        "transitive_dependencies",
-        "package_A_depends_on_B",
-    ]);
+    package_a_path.extend(["src", "unit_tests", "data", "transitive_dependencies", "a"]);
 
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.additional_named_addresses.extend([
@@ -5428,7 +5410,7 @@ async fn test_publish_transitive_dependencies_ok() {
         "unit_tests",
         "data",
         "transitive_dependencies",
-        "package_root_depends_on_A",
+        "root",
     ]);
 
     let mut build_config = BuildConfig::new_for_testing();
