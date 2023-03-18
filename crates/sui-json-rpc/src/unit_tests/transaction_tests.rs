@@ -111,6 +111,55 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new(),
+            )),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+    let object_to_transfer = objects.first().unwrap().object().unwrap().object_id;
+
+    // Make a transfer transactions
+    let transaction_bytes: TransactionBytes = http_client
+        .transfer_object(*address, object_to_transfer, None, 1000, *address)
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let original_sender_signed_data = tx.data().clone();
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    let response = http_client
+        .execute_transaction(
+            tx_bytes,
+            signatures,
+            Some(SuiTransactionResponseOptions::new().with_raw_input()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    let decode_sender_signed_data: SenderSignedData =
+        bcs::from_bytes(&response.raw_transaction).unwrap();
+    // verify that the raw transaction data returned by the response is the same
+    // as the original transaction data
+    assert_eq!(decode_sender_signed_data, original_sender_signed_data);
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await.unwrap();
 
