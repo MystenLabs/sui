@@ -54,6 +54,8 @@ ChangeEpoch:
             - TYPENAME: SequenceNumber
             - SEQ:
                 SEQ: U8
+            - SEQ:
+                TYPENAME: ObjectID
 Command:
   ENUM:
     0:

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::access::ModuleAccess;
-use sui_framework::make_std_sui_move_pkgs;
+use sui_framework::get_move_stdlib_package;
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::{
@@ -54,11 +54,10 @@ async fn test_package_override() {
         // entirely because we will call into it for genesis.
         framework_modules.push(test_module);
 
-        let (std_move_pkg, _) = make_std_sui_move_pkgs();
         let package_override = Object::new_package_for_testing(
             framework_modules,
             TransactionDigest::genesis(),
-            [&std_move_pkg],
+            &[get_move_stdlib_package()],
         )
         .unwrap();
 

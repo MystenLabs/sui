@@ -28,6 +28,7 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
+use sui_framework::{make_system_objects, make_system_packages};
 use tracing::info;
 
 use sui_json_rpc_types::{
@@ -218,17 +219,6 @@ async fn construct_shared_object_transaction_with_sequence_number(
         gas_object_id,
         shared_object_id,
     )
-}
-
-pub fn create_genesis_module_packages() -> Vec<Object> {
-    let sui_modules = sui_framework::get_sui_framework();
-    let std_modules = sui_framework::get_move_stdlib();
-    let (std_move_pkg, _) = sui_framework::make_std_sui_move_pkgs();
-    vec![
-        Object::new_package_for_testing(std_modules, TransactionDigest::genesis(), &[]).unwrap(),
-        Object::new_package_for_testing(sui_modules, TransactionDigest::genesis(), [&std_move_pkg])
-            .unwrap(),
-    ]
 }
 
 #[tokio::test]
@@ -1553,7 +1543,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = create_genesis_module_packages();
+    let genesis_module_objects = make_system_objects();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -1638,7 +1628,7 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = create_genesis_module_packages();
+    let genesis_module_objects = make_system_objects();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -4193,9 +4183,7 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
-    let pkg =
-        Object::new_package_for_testing(modules, digest, [&std_move_pkg, &sui_move_pkg]).unwrap();
+    let pkg = Object::new_package_for_testing(modules, digest, &make_system_packages()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
@@ -4227,9 +4215,7 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let (std_move_pkg, sui_move_pkg) = sui_framework::make_std_sui_move_pkgs();
-    let pkg =
-        Object::new_package_for_testing(modules, digest, [&std_move_pkg, &sui_move_pkg]).unwrap();
+    let pkg = Object::new_package_for_testing(modules, digest, &make_system_packages()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
     fullnode.insert_genesis_object(pkg).await;

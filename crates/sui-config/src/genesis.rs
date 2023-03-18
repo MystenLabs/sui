@@ -47,6 +47,7 @@ use sui_types::sui_system_state::{
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
+use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
@@ -54,7 +55,6 @@ use sui_types::{
     error::SuiResult,
     object::Object,
 };
-use sui_types::{MOVE_STDLIB_ADDRESS, MOVE_STDLIB_OBJECT_ID};
 use tracing::trace;
 
 #[derive(Clone, Debug)]
@@ -803,10 +803,13 @@ fn build_unsigned_genesis_data(
 
     // Get Move and Sui Framework
     let modules = [
-        (sui_framework::get_move_stdlib(), vec![]),
+        (
+            sui_framework::get_move_stdlib(),
+            sui_framework::get_move_stdlib_transitive_dependencies(),
+        ),
         (
             sui_framework::get_sui_framework(),
-            vec![MOVE_STDLIB_OBJECT_ID],
+            sui_framework::get_sui_framework_transitive_dependencies(),
         ),
     ];
 
@@ -1041,7 +1044,7 @@ fn process_package(
         .collect();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        // executing in Genesis mode does not create a package upgrade
+        // executing in Genesis mode does not create an `UpgradeCap`.
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };

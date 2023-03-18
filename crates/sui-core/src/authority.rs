@@ -69,7 +69,6 @@ use sui_types::messages_checkpoint::{
     CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::move_package::MovePackage;
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::query::TransactionFilter;
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
@@ -2886,15 +2885,16 @@ impl AuthorityState {
     pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
             MOVE_STDLIB_OBJECT_ID,
-            sui_framework::get_move_stdlib(), &[],
-        ) .await else {
+            sui_framework::get_move_stdlib(),
+            sui_framework::get_move_stdlib_transitive_dependencies(),
+        ).await else {
             return vec![];
         };
 
-        let (std_move_pkg, _) = sui_framework::make_std_sui_move_pkgs();
         let Some(sui_framework) = self.compare_system_package(
             SUI_FRAMEWORK_OBJECT_ID,
-            sui_framework_injection::get_modules(self.name), [&std_move_pkg],
+            sui_framework_injection::get_modules(self.name),
+            sui_framework::get_sui_framework_transitive_dependencies(),
         ).await else {
             return vec![];
         };
@@ -2917,7 +2917,7 @@ impl AuthorityState {
         &self,
         id: ObjectID,
         modules: Vec<CompiledModule>,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        dependencies: Vec<ObjectID>,
     ) -> Option<ObjectRef> {
         let cur_object = match self.get_object(&id).await {
             Ok(Some(cur_object)) => cur_object,
@@ -2939,20 +2939,14 @@ impl AuthorityState {
             .try_as_package()
             .expect("Framework not package");
 
-        let mut new_object = match Object::new_system_package(
+        let mut new_object = Object::new_system_package(
             modules,
             // Start at the same version as the current package, and increment if compatibility is
             // successful
             cur_object.version(),
-            cur_object.previous_transaction,
             dependencies,
-        ) {
-            Ok(object) => object,
-            Err(e) => {
-                error!("Failed to create new framework package for {id}: {e:?}");
-                return None;
-            }
-        };
+            cur_object.previous_transaction,
+        );
 
         if cur_ref == new_object.compute_object_reference() {
             return Some(cur_ref);
@@ -2990,9 +2984,9 @@ impl AuthorityState {
         Some(new_object.compute_object_reference())
     }
 
-    /// Return the new versions and module bytes for the packages that have been committed to for a
-    /// framework upgrade, in `system_packages`.  Loads the module contents from the binary, and
-    /// performs the following checks:
+    /// Return the new versions, module bytes, and dependencies for the packages that have been
+    /// committed to for a framework upgrade, in `system_packages`.  Loads the module contents from
+    /// the binary, and performs the following checks:
     ///
     /// - Whether its contents matches what is on-chain already, in which case no upgrade is
     ///   required, and its contents are omitted from the output.
@@ -3006,7 +3000,7 @@ impl AuthorityState {
     async fn get_system_package_bytes(
         &self,
         system_packages: Vec<ObjectRef>,
-    ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>)>> {
+    ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await.expect("read cannot fail");
 
@@ -3022,12 +3016,14 @@ impl AuthorityState {
                 continue;
             }
 
-            let (std_move_pkg, _) = sui_framework::make_std_sui_move_pkgs();
             let (bytes, dependencies) = match system_package.0 {
-                MOVE_STDLIB_OBJECT_ID => (sui_framework::get_move_stdlib_bytes(), vec![]),
+                MOVE_STDLIB_OBJECT_ID => (
+                    sui_framework::get_move_stdlib_bytes(),
+                    sui_framework::get_move_stdlib_transitive_dependencies(),
+                ),
                 SUI_FRAMEWORK_OBJECT_ID => (
                     sui_framework_injection::get_bytes(self.name),
-                    vec![&std_move_pkg],
+                    sui_framework::get_sui_framework_transitive_dependencies(),
                 ),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
@@ -3038,10 +3034,9 @@ impl AuthorityState {
                     .map(|m| CompiledModule::deserialize(m).unwrap())
                     .collect(),
                 system_package.1,
+                dependencies.clone(),
                 cur_object.previous_transaction,
-                dependencies,
-            )
-            .unwrap();
+            );
 
             let new_ref = new_object.compute_object_reference();
             if new_ref != system_package {
@@ -3049,7 +3044,7 @@ impl AuthorityState {
                 return None;
             }
 
-            res.push((system_package.1, bytes));
+            res.push((system_package.1, bytes, dependencies));
         }
 
         Some(res)

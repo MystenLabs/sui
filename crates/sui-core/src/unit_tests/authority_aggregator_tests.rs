@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use sui_framework::make_std_sui_move_pkgs;
+use sui_framework::make_system_packages;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
@@ -330,11 +330,10 @@ async fn test_quorum_map_and_reduce_timeout() {
         .into_iter()
         .cloned()
         .collect();
-    let (std_move_pkg, sui_move_pkg) = make_std_sui_move_pkgs();
     let pkg = Object::new_package_for_testing(
         modules,
         TransactionDigest::genesis(),
-        [&std_move_pkg, &sui_move_pkg],
+        &make_system_packages(),
     )
     .unwrap();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
