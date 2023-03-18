@@ -43,7 +43,7 @@ export class SuiSystemStateUtil {
     // TODO: validate coin types and handle locked coins
     const tx = new Transaction();
 
-    const coin = tx.splitCoin(tx.gas, tx.pure(amount));
+    const coin = tx.splitCoins(tx.gas, [tx.pure(amount)]);
     tx.moveCall({
       target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${ADD_STAKE_FUN_NAME}`,
       arguments: [
