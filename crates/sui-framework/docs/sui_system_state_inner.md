@@ -115,6 +115,41 @@ A list of system config parameters.
  The duration of an epoch, in milliseconds.
 </dd>
 <dt>
+<code>max_validator_count: u64</code>
+</dt>
+<dd>
+ Maximum number of active validators at any moment.
+ We do not allow the number of validators in any epoch to go above this.
+</dd>
+<dt>
+<code>min_validator_joining_stake: u64</code>
+</dt>
+<dd>
+ Lower-bound on the amount of stake required to become a validator.
+</dd>
+<dt>
+<code>validator_low_stake_threshold: u64</code>
+</dt>
+<dd>
+ Validators with stake amount below <code>validator_low_stake_threshold</code> are considered to
+ have low stake and will be escorted out of the validator set after being below this
+ threshold for more than <code>validator_low_stake_grace_period</code> number of epochs.
+</dd>
+<dt>
+<code>validator_very_low_stake_threshold: u64</code>
+</dt>
+<dd>
+ Validators with stake below <code>validator_very_low_stake_threshold</code> will be removed
+ immediately at epoch change, no grace period.
+</dd>
+<dt>
+<code>validator_low_stake_grace_period: u64</code>
+</dt>
+<dd>
+ A validator can have stake below <code>validator_low_stake_threshold</code>
+ for this many epochs before being kicked out.
+</dd>
+<dt>
 <code>extra_fields: <a href="_Bag">bag::Bag</a></code>
 </dt>
 <dd>
@@ -430,64 +465,11 @@ the epoch advancement transaction.
 
 
 
-<a name="0x3_sui_system_state_inner_MAX_VALIDATOR_COUNT"></a>
-
-Maximum number of active validators at any moment.
-We do not allow the number of validators in any epoch to go above this.
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>: u64 = 150;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE"></a>
-
-Lower-bound on the amount of stake required to become a validator.
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>: u64 = 30000000000000000;
-</code></pre>
-
-
-
 <a name="0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
 
 
 
 <pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>: u64 = 7;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD"></a>
-
-Validators with stake amount below <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a></code> are considered to
-have low stake and will be escorted out of the validator set after being below this
-threshold for more than <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a></code> number of epochs.
-And validators with stake below <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a></code> will be removed
-immediately at epoch change, no grace period.
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>: u64 = 25000000000000000;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>: u64 = 20000000000000000;
 </code></pre>
 
 
@@ -500,7 +482,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, governance_start_epoch: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, initial_stake_subsidy_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, governance_start_epoch: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, initial_stake_subsidy_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, max_validator_count: u64, min_validator_joining_stake: u64, validator_low_stake_threshold: u64, validator_very_low_stake_threshold: u64, validator_low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
 </code></pre>
 
 
@@ -520,6 +502,11 @@ This function will be called only once in genesis.
     initial_stake_subsidy_distribution_amount: u64,
     stake_subsidy_period_length: u64,
     stake_subsidy_decrease_rate: u16,
+    max_validator_count: u64,
+    min_validator_joining_stake: u64,
+    validator_low_stake_threshold: u64,
+    validator_very_low_stake_threshold: u64,
+    validator_low_stake_grace_period: u64,
     ctx: &<b>mut</b> TxContext,
 ): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
     <b>let</b> validators = <a href="validator_set.md#0x3_validator_set_new">validator_set::new</a>(validators, ctx);
@@ -533,6 +520,11 @@ This function will be called only once in genesis.
         parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">SystemParameters</a> {
             governance_start_epoch,
             epoch_duration_ms,
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
             extra_fields: <a href="_new">bag::new</a>(ctx),
         },
         reference_gas_price,
@@ -561,7 +553,7 @@ This function will be called only once in genesis.
 ## Function `request_add_validator_candidate`
 
 Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
-stakes in their staking pool. Once they have at least <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a></code> amount of stake they
+stakes in their staking pool. Once they have at least <code>MIN_VALIDATOR_JOINING_STAKE</code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
 Note: <code>proof_of_possession</code> MUST be a valid signature using sui_address and protocol_pubkey_bytes.
@@ -675,11 +667,11 @@ epoch has already reached the maximum.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(
-        <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>,
+        <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_count,
         <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ELimitExceeded">ELimitExceeded</a>,
     );
 
-    <a href="validator_set.md#0x3_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>, ctx);
+    <a href="validator_set.md#0x3_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, self.parameters.min_validator_joining_stake, ctx);
 }
 </code></pre>
 
@@ -1774,9 +1766,9 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
-        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>,
-        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>,
-        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>,
+        self.parameters.validator_low_stake_threshold,
+        self.parameters.validator_very_low_stake_threshold,
+        self.parameters.validator_low_stake_grace_period,
         self.parameters.governance_start_epoch,
         ctx,
     );

@@ -54,6 +54,26 @@ module sui_system::sui_system_state_inner {
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
 
+        /// Maximum number of active validators at any moment.
+        /// We do not allow the number of validators in any epoch to go above this.
+        max_validator_count: u64,
+
+        /// Lower-bound on the amount of stake required to become a validator.
+        min_validator_joining_stake: u64,
+
+        /// Validators with stake amount below `validator_low_stake_threshold` are considered to
+        /// have low stake and will be escorted out of the validator set after being below this
+        /// threshold for more than `validator_low_stake_grace_period` number of epochs.
+        validator_low_stake_threshold: u64,
+
+        /// Validators with stake below `validator_very_low_stake_threshold` will be removed
+        /// immediately at epoch change, no grace period.
+        validator_very_low_stake_threshold: u64,
+
+        /// A validator can have stake below `validator_low_stake_threshold`
+        /// for this many epochs before being kicked out.
+        validator_low_stake_grace_period: u64,
+
         /// Any extra fields that's not defined statically.
         extra_fields: Bag,
     }
@@ -127,22 +147,6 @@ module sui_system::sui_system_state_inner {
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
-    /// Maximum number of active validators at any moment.
-    /// We do not allow the number of validators in any epoch to go above this.
-    const MAX_VALIDATOR_COUNT: u64 = 150;
-
-    /// Lower-bound on the amount of stake required to become a validator.
-    const MIN_VALIDATOR_JOINING_STAKE: u64 = 30_000_000_000_000_000; // 30 million SUI
-
-    /// Validators with stake amount below `VALIDATOR_LOW_STAKE_THRESHOLD` are considered to
-    /// have low stake and will be escorted out of the validator set after being below this
-    /// threshold for more than `VALIDATOR_LOW_STAKE_GRACE_PERIOD` number of epochs.
-    /// And validators with stake below `VALIDATOR_VERY_LOW_STAKE_THRESHOLD` will be removed
-    /// immediately at epoch change, no grace period.
-    const VALIDATOR_LOW_STAKE_THRESHOLD: u64 = 25_000_000_000_000_000; // 25 million SUI
-    const VALIDATOR_VERY_LOW_STAKE_THRESHOLD: u64 = 20_000_000_000_000_000; // 20 million SUI
-    const VALIDATOR_LOW_STAKE_GRACE_PERIOD: u64 = 7; // A validator can have stake below VALIDATOR_LOW_STAKE_THRESHOLD for 7 epochs before being kicked out.
-
     // ==== functions that can only be called by genesis ====
 
     /// Create a new SuiSystemState object and make it shared.
@@ -158,6 +162,11 @@ module sui_system::sui_system_state_inner {
         initial_stake_subsidy_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
+        max_validator_count: u64,
+        min_validator_joining_stake: u64,
+        validator_low_stake_threshold: u64,
+        validator_very_low_stake_threshold: u64,
+        validator_low_stake_grace_period: u64,
         ctx: &mut TxContext,
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
@@ -171,6 +180,11 @@ module sui_system::sui_system_state_inner {
             parameters: SystemParameters {
                 governance_start_epoch,
                 epoch_duration_ms,
+                max_validator_count,
+                min_validator_joining_stake,
+                validator_low_stake_threshold,
+                validator_very_low_stake_threshold,
+                validator_low_stake_grace_period,
                 extra_fields: bag::new(ctx),
             },
             reference_gas_price,
@@ -255,11 +269,11 @@ module sui_system::sui_system_state_inner {
         ctx: &mut TxContext,
     ) {
         assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < MAX_VALIDATOR_COUNT,
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
             ELimitExceeded,
         );
 
-        validator_set::request_add_validator(&mut self.validators, MIN_VALIDATOR_JOINING_STAKE, ctx);
+        validator_set::request_add_validator(&mut self.validators, self.parameters.min_validator_joining_stake, ctx);
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -717,9 +731,9 @@ module sui_system::sui_system_state_inner {
             &mut storage_fund_reward,
             &mut self.validator_report_records,
             reward_slashing_rate,
-            VALIDATOR_LOW_STAKE_THRESHOLD,
-            VALIDATOR_VERY_LOW_STAKE_THRESHOLD,
-            VALIDATOR_LOW_STAKE_GRACE_PERIOD,
+            self.parameters.validator_low_stake_threshold,
+            self.parameters.validator_very_low_stake_threshold,
+            self.parameters.validator_low_stake_grace_period,
             self.parameters.governance_start_epoch,
             ctx,
         );
@@ -904,7 +918,7 @@ module sui_system::sui_system_state_inner {
         ctx: &mut TxContext,
     ) {
         assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < MAX_VALIDATOR_COUNT,
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
             ELimitExceeded,
         );
 

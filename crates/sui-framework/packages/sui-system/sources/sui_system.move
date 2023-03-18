@@ -51,6 +51,11 @@ module sui_system::sui_system {
         initial_stake_subsidy_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
+        max_validator_count: u64,
+        min_validator_joining_stake: u64,
+        validator_low_stake_threshold: u64,
+        validator_very_low_stake_threshold: u64,
+        validator_low_stake_grace_period: u64,
         ctx: &mut TxContext,
     ) {
         let system_state = sui_system_state_inner::create(
@@ -64,6 +69,11 @@ module sui_system::sui_system {
             initial_stake_subsidy_distribution_amount,
             stake_subsidy_period_length,
             stake_subsidy_decrease_rate,
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
             ctx,
         );
         let version = sui_system_state_inner::system_state_version(&system_state);

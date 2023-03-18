@@ -48,6 +48,11 @@ module sui_system::genesis {
         initial_stake_subsidy_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
+        max_validator_count: u64,
+        min_validator_joining_stake: u64,
+        validator_low_stake_threshold: u64,
+        validator_very_low_stake_threshold: u64,
+        validator_low_stake_grace_period: u64,
     }
 
     struct TokenDistributionSchedule {
@@ -164,6 +169,11 @@ module sui_system::genesis {
             genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
             genesis_chain_parameters.stake_subsidy_period_length,
             genesis_chain_parameters.stake_subsidy_decrease_rate,
+            genesis_chain_parameters.max_validator_count,
+            genesis_chain_parameters.min_validator_joining_stake,
+            genesis_chain_parameters.validator_low_stake_threshold,
+            genesis_chain_parameters.validator_very_low_stake_threshold,
+            genesis_chain_parameters.validator_low_stake_grace_period,
             ctx,
         );
     }
