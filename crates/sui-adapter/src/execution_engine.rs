@@ -83,6 +83,7 @@ pub fn execute_transaction_to_effects<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
+    let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -112,6 +113,14 @@ pub fn execute_transaction_to_effects<
     // Remove from dependencies the generic hash
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
+    #[cfg(debug_assertions)]
+    {
+        if !Mode::allow_arbitrary_function_calls() {
+            temporary_store
+                .check_ownership_invariants(&transaction_signer, gas, is_epoch_change)
+                .unwrap()
+        } // else, in dev inspect mode and anything goes--don't check
+    }
     let (inner, effects) = temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,

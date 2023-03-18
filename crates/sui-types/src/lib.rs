@@ -82,6 +82,12 @@ pub const SUI_SYSTEM_OBJ_CALL_ARG: CallArg = CallArg::Object(ObjectArg::SharedOb
 pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(6);
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
+/// Return `true` if `id` is a special system package that can be upgraded at epoch boundaries
+/// All new system package ID's must be added here
+pub fn is_system_package(id: ObjectID) -> bool {
+    matches!(id, MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID)
+}
+
 const fn get_hex_address_two() -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];
     addr[AccountAddress::LENGTH - 1] = 2u8;
@@ -100,10 +106,6 @@ pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
 pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     use move_command_line_common::types::ParsedType;
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
-}
-
-pub fn is_system_package(id: ObjectID) -> bool {
-    matches!(id, MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID)
 }
 
 fn resolve_address(addr: &str) -> Option<AccountAddress> {
