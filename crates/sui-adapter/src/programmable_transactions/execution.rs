@@ -908,14 +908,14 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         .map_err(|e| context.convert_vm_error(e))?;
     let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
     let return_value_kinds = match function_kind {
-        FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::Init => {
+        FunctionKind::Init => {
             assert_invariant!(
                 signature.return_.is_empty(),
-                "entry functions must have no return values"
+                "init functions must have no return values"
             );
             vec![]
         }
-        FunctionKind::NonEntry => {
+        FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
             check_non_entry_signature::<_, _, Mode>(context, module_id, function, &signature)?
         }
     };
