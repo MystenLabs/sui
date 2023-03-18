@@ -138,7 +138,7 @@ curl --location --request POST 'http://127.0.0.1:9000' \
 }'
 ```
 
-If successful, the return resembles the following:
+If successful, the response resembles the following:
 
 ```bash
 {
