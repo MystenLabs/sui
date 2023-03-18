@@ -87,12 +87,13 @@ impl Build {
 
 /// Resolve Move.lock file path in package directory (where Move.toml is).
 pub fn resolve_lock_file_path(
-    build_config: MoveBuildConfig,
+    mut build_config: MoveBuildConfig,
     package_path: Option<PathBuf>,
 ) -> Result<MoveBuildConfig, anyhow::Error> {
-    let package_root = base::reroot_path(package_path)?;
-    let lock_file_path = package_root.join("Move.lock");
-    let mut build_config = build_config;
-    build_config.lock_file = Some(lock_file_path);
+    if build_config.lock_file.is_none() {
+        let package_root = base::reroot_path(package_path)?;
+        let lock_file_path = package_root.join("Move.lock");
+        build_config.lock_file = Some(lock_file_path);
+    }
     Ok(build_config)
 }
