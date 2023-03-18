@@ -10,7 +10,7 @@ module sui::coin {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
@@ -47,6 +47,15 @@ module sui::coin {
         /// Description of the token
         description: string::String,
         /// URL for the token logo
+        icon_url: Option<Url>
+    }
+
+    struct CoinMetadataUpdated<phantom T> has copy, drop {
+        id: ID,
+        decimals: u8,
+        name: string::String,
+        symbol: ascii::String,
+        description: string::String,
         icon_url: Option<Url>
     }
 
@@ -369,6 +378,14 @@ module sui::coin {
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, name: string::String
     ) {
         metadata.name = name;
+        event::emit(CoinMetadataUpdated<T> {
+            name: metadata.name,
+            id: object::uid_to_inner(&metadata.id),
+            decimals: metadata.decimals,
+            description: metadata.description,
+            icon_url: metadata.icon_url,
+            symbol: metadata.symbol
+        });
     }
 
     /// Update the symbol of the coin in `CoinMetadata`
@@ -376,6 +393,14 @@ module sui::coin {
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, symbol: ascii::String
     ) {
         metadata.symbol = symbol;
+        event::emit(CoinMetadataUpdated<T> {
+            name: metadata.name,
+            id: object::uid_to_inner(&metadata.id),
+            decimals: metadata.decimals,
+            description: metadata.description,
+            icon_url: metadata.icon_url,
+            symbol: metadata.symbol
+        });
     }
 
     /// Update the description of the coin in `CoinMetadata`
@@ -383,6 +408,14 @@ module sui::coin {
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, description: string::String
     ) {
         metadata.description = description;
+        event::emit(CoinMetadataUpdated<T> {
+            name: metadata.name,
+            id: object::uid_to_inner(&metadata.id),
+            decimals: metadata.decimals,
+            description: metadata.description,
+            icon_url: metadata.icon_url,
+            symbol: metadata.symbol
+        });
     }
 
     /// Update the url of the coin in `CoinMetadata`
@@ -390,6 +423,14 @@ module sui::coin {
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, url: ascii::String
     ) {
         metadata.icon_url = option::some(url::new_unsafe(url));
+        event::emit(CoinMetadataUpdated<T> {
+            name: metadata.name,
+            id: object::uid_to_inner(&metadata.id),
+            decimals: metadata.decimals,
+            description: metadata.description,
+            icon_url: metadata.icon_url,
+            symbol: metadata.symbol
+        });
     }
 
     // === Get coin metadata fields for on-chain consumption ===
