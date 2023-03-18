@@ -25,28 +25,34 @@ module sui::voting_power {
     const QUORUM_THRESHOLD: u64 = 6_667;
 
     // Cap voting power of an individual validator at 10%.
-    // TODO: determine what this should be
     const MAX_VOTING_POWER: u64 = 1_000;
+
+    /// 4 is the minimum committee size where our BFT assumption still holds.
+    const MIN_COMMITTEE_SIZE: u64 = 4;
+
+    /// Assuming MIN_COMMITTEE_SIZE = 4, under the desired cap of 10%, the max voting power a validator can have
+    /// would be 25% (in a 4-validator setting).
+    const ABSOLUTE_MAX_VOTING_POWER: u64 = 25_0000;
 
     const ETotalPowerMismatch: u64 = 1;
     const ERelativePowerMismatch: u64 = 2;
     const EVotingPowerOverThreshold: u64 = 3;
     const EInvalidVotingPower: u64 = 4;
+    const EInvalidCommitteeSize: u64 = 5;
 
     /// Set the voting power of all validators.
     /// Each validator's voting power is initialized using their stake. We then attempt to cap their voting power
     /// at `MAX_VOTING_POWER`. If `MAX_VOTING_POWER` is not a feasible cap, we pick the lowest possible cap.
     public fun set_voting_power(validators: &mut vector<Validator>) {
+        let size = vector::length(validators);
+        assert!(size >= MIN_COMMITTEE_SIZE, EInvalidCommitteeSize);
+
         // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
         // have 100%. So we bound the threshold_pct to be always enough to find a solution.
-        let threshold = math::min(
-            TOTAL_VOTING_POWER,
-            math::max(MAX_VOTING_POWER, divide_and_round_up(TOTAL_VOTING_POWER, vector::length(validators))),
-        );
+        let threshold = math::max(MAX_VOTING_POWER, divide_and_round_up(TOTAL_VOTING_POWER, size));
         let (info_list, remaining_power) = init_voting_power_info(validators, threshold);
         adjust_voting_power(&mut info_list, threshold, remaining_power);
         update_voting_power(validators, info_list);
-        // TODO: We could consider removing this once we are confident about the code.
         check_invariants(validators);
     }
 
@@ -143,7 +149,7 @@ module sui::voting_power {
         let total = 0;
         while (i < len) {
             let voting_power = validator::voting_power(vector::borrow(v, i));
-            assert!(voting_power > 0, EInvalidVotingPower);
+            assert!(voting_power > 0 && voting_power <= ABSOLUTE_MAX_VOTING_POWER, EInvalidVotingPower);
             total = total + voting_power;
             i = i + 1;
         };

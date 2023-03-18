@@ -63,6 +63,26 @@
 ## Constants
 
 
+<a name="0x2_voting_power_ABSOLUTE_MAX_VOTING_POWER"></a>
+
+Assuming MIN_COMMITTEE_SIZE = 4, under the desired cap of 10%, the max voting power a validator can have
+would be 25% (in a 4-validator setting).
+
+
+<pre><code><b>const</b> <a href="voting_power.md#0x2_voting_power_ABSOLUTE_MAX_VOTING_POWER">ABSOLUTE_MAX_VOTING_POWER</a>: u64 = 250000;
+</code></pre>
+
+
+
+<a name="0x2_voting_power_EInvalidCommitteeSize"></a>
+
+
+
+<pre><code><b>const</b> <a href="voting_power.md#0x2_voting_power_EInvalidCommitteeSize">EInvalidCommitteeSize</a>: u64 = 5;
+</code></pre>
+
+
+
 <a name="0x2_voting_power_EInvalidVotingPower"></a>
 
 
@@ -104,6 +124,16 @@
 
 
 <pre><code><b>const</b> <a href="voting_power.md#0x2_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>: u64 = 1000;
+</code></pre>
+
+
+
+<a name="0x2_voting_power_MIN_COMMITTEE_SIZE"></a>
+
+4 is the minimum committee size where our BFT assumption still holds.
+
+
+<pre><code><b>const</b> <a href="voting_power.md#0x2_voting_power_MIN_COMMITTEE_SIZE">MIN_COMMITTEE_SIZE</a>: u64 = 4;
 </code></pre>
 
 
@@ -152,16 +182,15 @@ at <code><a href="voting_power.md#0x2_voting_power_MAX_VOTING_POWER">MAX_VOTING_
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="voting_power.md#0x2_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;) {
+    <b>let</b> size = <a href="_length">vector::length</a>(validators);
+    <b>assert</b>!(size &gt;= <a href="voting_power.md#0x2_voting_power_MIN_COMMITTEE_SIZE">MIN_COMMITTEE_SIZE</a>, <a href="voting_power.md#0x2_voting_power_EInvalidCommitteeSize">EInvalidCommitteeSize</a>);
+
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct <b>to</b> be always enough <b>to</b> find a solution.
-    <b>let</b> threshold = <a href="math.md#0x2_math_min">math::min</a>(
-        <a href="voting_power.md#0x2_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>,
-        <a href="math.md#0x2_math_max">math::max</a>(<a href="voting_power.md#0x2_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>, divide_and_round_up(<a href="voting_power.md#0x2_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>, <a href="_length">vector::length</a>(validators))),
-    );
+    <b>let</b> threshold = <a href="math.md#0x2_math_max">math::max</a>(<a href="voting_power.md#0x2_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>, divide_and_round_up(<a href="voting_power.md#0x2_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>, size));
     <b>let</b> (info_list, remaining_power) = <a href="voting_power.md#0x2_voting_power_init_voting_power_info">init_voting_power_info</a>(validators, threshold);
     <a href="voting_power.md#0x2_voting_power_adjust_voting_power">adjust_voting_power</a>(&<b>mut</b> info_list, threshold, remaining_power);
     <a href="voting_power.md#0x2_voting_power_update_voting_power">update_voting_power</a>(validators, info_list);
-    // TODO: We could consider removing this once we are confident about the code.
     <a href="voting_power.md#0x2_voting_power_check_invariants">check_invariants</a>(validators);
 }
 </code></pre>
@@ -378,7 +407,7 @@ Check a few invariants that must hold after setting the voting power.
     <b>let</b> total = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="voting_power.md#0x2_voting_power">voting_power</a> = <a href="validator.md#0x2_validator_voting_power">validator::voting_power</a>(<a href="_borrow">vector::borrow</a>(v, i));
-        <b>assert</b>!(<a href="voting_power.md#0x2_voting_power">voting_power</a> &gt; 0, <a href="voting_power.md#0x2_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>);
+        <b>assert</b>!(<a href="voting_power.md#0x2_voting_power">voting_power</a> &gt; 0 && <a href="voting_power.md#0x2_voting_power">voting_power</a> &lt;= <a href="voting_power.md#0x2_voting_power_ABSOLUTE_MAX_VOTING_POWER">ABSOLUTE_MAX_VOTING_POWER</a>, <a href="voting_power.md#0x2_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>);
         total = total + <a href="voting_power.md#0x2_voting_power">voting_power</a>;
         i = i + 1;
     };
