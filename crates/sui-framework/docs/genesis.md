@@ -343,6 +343,12 @@ all the information we need in the system.
             ctx
         );
 
+        // Ensure that each <a href="validator.md#0x2_validator">validator</a> is unique
+        <b>assert</b>!(
+            !<a href="validator_set.md#0x2_validator_set_is_duplicate_validator">validator_set::is_duplicate_validator</a>(&validators, &<a href="validator.md#0x2_validator">validator</a>),
+            2,
+        );
+
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x2_validator">validator</a>);
 
         i = i + 1;
