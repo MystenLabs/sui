@@ -46,7 +46,7 @@ use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
     SuiObjectDataFilter, SuiTransactionEvents,
 };
-use sui_macros::{fail_point, nondeterministic};
+use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
@@ -3213,7 +3213,21 @@ impl AuthorityState {
             "Creating advance epoch transaction"
         );
 
+        fail_point_async!("change_epoch_tx_delay");
         let _tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
+
+        // The tx could have been executed by state sync already - if so simply return an error.
+        // The checkpoint builder will shortly be terminated by reconfiguration anyway.
+        if self
+            .database
+            .is_tx_already_executed(tx_digest)
+            .expect("read cannot fail")
+        {
+            warn!("change epoch tx has already been executed via state sync");
+            return Err(anyhow::anyhow!(
+                "change epoch tx has already been executed via state sync"
+            ));
+        }
 
         let execution_guard = self
             .database

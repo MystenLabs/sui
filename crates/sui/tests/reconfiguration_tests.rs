@@ -277,6 +277,88 @@ async fn test_passive_reconfig() {
     .expect("Timed out waiting for cluster to target epoch");
 }
 
+// This test just starts up a cluster that reconfigures itself under 0 load.
+#[cfg(msim)]
+#[sim_test]
+async fn test_create_advance_epoch_tx_race() {
+    use sui_macros::{register_fail_point, register_fail_point_async};
+    use tokio::sync::broadcast;
+
+    telemetry_subscribers::init_for_testing();
+    sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+    // panic if we enter safe mode. If you remove the check for `is_tx_already_executed` in
+    // AuthorityState::create_and_execute_advance_epoch_tx, this test should fail.
+    register_fail_point("record_is_safe_mode_metric", || {
+        panic!("safe mode recorded");
+    });
+
+    // Intercept the specified async wait point on a given node, and wait there until a message
+    // is sent from the given tx.
+    let register_wait = |failpoint, node_id, tx: Arc<broadcast::Sender<()>>| {
+        let node = sui_simulator::task::NodeId(node_id);
+        register_fail_point_async(failpoint, move || {
+            let cur_node = sui_simulator::current_simnode_id();
+            let tx = tx.clone();
+            async move {
+                if cur_node == node {
+                    let mut rx = tx.subscribe();
+
+                    info!(
+                        "waiting for test to send continuation signal for {}",
+                        failpoint
+                    );
+                    rx.recv().await.unwrap();
+                    info!("continuing {}", failpoint);
+                }
+            }
+        });
+    };
+
+    // Set up wait points.
+    let (change_epoch_delay_tx, _) = broadcast::channel(1);
+    let change_epoch_delay_tx = Arc::new(change_epoch_delay_tx);
+    let (reconfig_delay_tx, _) = broadcast::channel(1);
+    let reconfig_delay_tx = Arc::new(reconfig_delay_tx);
+
+    // Test code runs in node 1 - node 2 is always a validator.
+    let target_node = 2;
+    register_wait(
+        "change_epoch_tx_delay",
+        target_node,
+        change_epoch_delay_tx.clone(),
+    );
+    register_wait("reconfig_delay", target_node, reconfig_delay_tx.clone());
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(1000)
+        .build()
+        .await
+        .unwrap();
+
+    let mut epoch_rx = test_cluster
+        .fullnode_handle
+        .sui_node
+        .subscribe_to_epoch_change();
+
+    // wait for cluster to reconfigure.
+    timeout(Duration::from_secs(30), epoch_rx.recv())
+        .await
+        .expect("Timed out waiting for cluster to reconfigure")
+        .unwrap();
+
+    // Allow time for paused node to execute change epoch tx via state sync.
+    sleep(Duration::from_secs(5)).await;
+
+    // now release the pause, node will find that change epoch tx has already been executed.
+    info!("releasing change epoch delay tx");
+    change_epoch_delay_tx.send(()).unwrap();
+
+    // proceeded with reconfiguration.
+    sleep(Duration::from_secs(1)).await;
+    reconfig_delay_tx.send(()).unwrap();
+}
+
 #[sim_test]
 async fn test_reconfig_with_failing_validator() {
     telemetry_subscribers::init_for_testing();

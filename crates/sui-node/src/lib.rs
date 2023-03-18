@@ -71,6 +71,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
@@ -883,6 +884,8 @@ impl SuiNode {
                 next_epoch,
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
+
+            fail_point_async!("reconfig_delay");
 
             // We save the connection monitor status map regardless of validator / fullnode status
             // so that we don't need to restart the connection monitor every epoch.

@@ -9299,8 +9299,10 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
+ "futures",
  "once_cell",
  "sui-proc-macros",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -9412,6 +9414,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
+ "sui-macros",
  "sui-network",
  "sui-protocol-config",
  "sui-simulator",

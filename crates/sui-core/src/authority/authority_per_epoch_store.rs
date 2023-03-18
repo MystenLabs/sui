@@ -57,6 +57,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
+use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::MutexGuard;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -1876,6 +1877,10 @@ impl AuthorityPerEpochStore {
     }
 
     pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+        if safe_mode {
+            // allow tests to inject a panic here.
+            fail_point!("record_is_safe_mode_metric");
+        }
         self.metrics.is_safe_mode.set(safe_mode as i64);
     }
 
