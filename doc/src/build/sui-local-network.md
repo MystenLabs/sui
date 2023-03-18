@@ -76,7 +76,8 @@ Use `sui-validator-test --help` to see these options in your console.
 ## Use the local faucet
 
 You need to have coins to pay for gas on your local network just like other networks. Use the following cURL command to get test coins from the local faucet you just installed and started. 
-To add the coins to the current active address on the local network, use the `sui client active-address` command to retrieve it. Use the `sui client addresses` command to see all of the addresses on your local network. 
+
+To add the coins to the current active address on the local network, use the `sui client active-address` command to retrieve it. Use the `sui client addresses` command to see all of the addresses on your local network. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui](#set-up-a-local-sui-wallet).
 
 ```bash
 curl --location --request POST 'http://127.0.0.1:9123/gas' \
