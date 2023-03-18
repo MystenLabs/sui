@@ -35,7 +35,6 @@ sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-json = { path = "../sui-json" }
 sui-config = { path = "../sui-config" }
-sui-transaction-builder = { path = "../sui-transaction-builder" }
 telemetry-subscribers.workspace = true
 
 test-utils = { path = "../test-utils" }

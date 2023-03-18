@@ -13,11 +13,8 @@ move-vm-types.workspace = true
 move-vm-test-utils.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-sui-protocol-config = { path = "../sui-protocol-config" }
-
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.141", features = ["derive"] }
-bcs = "0.1.4"
 once_cell = "1.16"
 
 

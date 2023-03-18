@@ -33,23 +33,18 @@ anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
-ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
 ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
-ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
-ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
-ark-ff-468e82937335b1c9 = { package = "ark-ff", version = "0.3", default-features = false, features = ["std"] }
-ark-ff-9fbad63c4bcf4a8f = { package = "ark-ff", version = "0.4", features = ["asm", "parallel"] }
+ark-ec = { version = "0.4", features = ["parallel"] }
+ark-ff = { version = "0.4", features = ["asm", "parallel"] }
 ark-groth16 = { version = "0.4" }
 ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
 ark-r1cs-std = { version = "0.4", default-features = false }
 ark-relations = { version = "0.4", features = ["std"] }
-ark-serialize-468e82937335b1c9 = { package = "ark-serialize", version = "0.3", default-features = false, features = ["std"] }
-ark-serialize-9fbad63c4bcf4a8f = { package = "ark-serialize", version = "0.4", features = ["derive", "std"] }
+ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-snark = { version = "0.4", default-features = false }
-ark-std-468e82937335b1c9 = { package = "ark-std", version = "0.3", default-features = false, features = ["std"] }
-ark-std-9fbad63c4bcf4a8f = { package = "ark-std", version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -204,7 +199,6 @@ fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
 flate2 = { version = "1" }
-flexstr = { version = "0.9" }
 float-cmp = { version = "0.9" }
 fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
@@ -296,7 +290,6 @@ lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default
 leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
-libm = { version = "0.2" }
 librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
@@ -369,7 +362,7 @@ num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
+num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
 number_prefix = { version = "0.4" }
@@ -442,7 +435,6 @@ rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["std"] }
-rand_distr = { version = "0.4" }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
@@ -515,7 +507,6 @@ slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
-smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
@@ -544,7 +535,7 @@ termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16" }
+textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
 thiserror = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -577,7 +568,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
-tracing-log = { version = "0.1" }
+tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
@@ -598,7 +589,6 @@ unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
-unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
@@ -650,28 +640,21 @@ anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
-ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
 ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
-ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
-ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
-ark-ff-468e82937335b1c9 = { package = "ark-ff", version = "0.3", default-features = false, features = ["std"] }
-ark-ff-9fbad63c4bcf4a8f = { package = "ark-ff", version = "0.4", features = ["asm", "parallel"] }
-ark-ff-asm-468e82937335b1c9 = { package = "ark-ff-asm", version = "0.3", default-features = false }
-ark-ff-asm-9fbad63c4bcf4a8f = { package = "ark-ff-asm", version = "0.4", default-features = false }
-ark-ff-macros-468e82937335b1c9 = { package = "ark-ff-macros", version = "0.3", default-features = false }
-ark-ff-macros-9fbad63c4bcf4a8f = { package = "ark-ff-macros", version = "0.4", default-features = false }
+ark-ec = { version = "0.4", features = ["parallel"] }
+ark-ff = { version = "0.4", features = ["asm", "parallel"] }
+ark-ff-asm = { version = "0.4", default-features = false }
+ark-ff-macros = { version = "0.4", default-features = false }
 ark-groth16 = { version = "0.4" }
 ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
 ark-r1cs-std = { version = "0.4", default-features = false }
 ark-relations = { version = "0.4", features = ["std"] }
-ark-serialize-468e82937335b1c9 = { package = "ark-serialize", version = "0.3", default-features = false, features = ["std"] }
-ark-serialize-9fbad63c4bcf4a8f = { package = "ark-serialize", version = "0.4", features = ["derive", "std"] }
+ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-serialize-derive = { version = "0.4", default-features = false }
 ark-snark = { version = "0.4", default-features = false }
-ark-std-468e82937335b1c9 = { package = "ark-std", version = "0.3", default-features = false, features = ["std"] }
-ark-std-9fbad63c4bcf4a8f = { package = "ark-std", version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -857,7 +840,6 @@ fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
 flate2 = { version = "1" }
-flexstr = { version = "0.9" }
 float-cmp = { version = "0.9" }
 fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
@@ -962,7 +944,6 @@ leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
-libm = { version = "0.2" }
 librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
@@ -1039,7 +1020,7 @@ num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
+num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
 number_prefix = { version = "0.4" }
@@ -1135,7 +1116,6 @@ rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["std"] }
-rand_distr = { version = "0.4" }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
@@ -1162,8 +1142,7 @@ rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
-rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
-rustc_version-9fbad63c4bcf4a8f = { package = "rustc_version", version = "0.4", default-features = false }
+rustc_version = { version = "0.4", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
@@ -1223,7 +1202,6 @@ slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
-smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
@@ -1258,7 +1236,7 @@ test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16" }
+textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
@@ -1297,7 +1275,7 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
-tracing-log = { version = "0.1" }
+tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
@@ -1318,7 +1296,6 @@ unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
-unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
