@@ -6,7 +6,7 @@ use config::{Committee, Epoch, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_logged_monitored_task;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
 use tokio::time::{sleep_until, Instant};
@@ -30,7 +30,7 @@ pub struct OurDigestMessage {
     pub worker_id: WorkerId,
     pub timestamp: TimestampMs,
     /// A channel to send an () as an ack after this digest is processed by the primary.
-    pub ack_channel: oneshot::Sender<()>,
+    pub ack_channel: Option<oneshot::Sender<()>>,
 }
 
 #[cfg(test)]
@@ -83,11 +83,12 @@ pub struct Proposer {
     /// Holds the certificate of the last leader (if any).
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
-    digests: Vec<(BatchDigest, WorkerId, TimestampMs)>,
+    /// Digests are roughly oldest to newest, and popped in FIFO order from the front.
+    digests: VecDeque<OurDigestMessage>,
 
-    /// Holds the map of proposed previous round headers, used to ensure that
+    /// Holds the map of proposed previous round headers and their digest messages, to ensure that
     /// all batches' digest included will eventually be re-sent.
-    proposed_headers: BTreeMap<Round, Header>,
+    proposed_headers: BTreeMap<Round, (Header, VecDeque<OurDigestMessage>)>,
     /// Committed headers channel on which we get updates on which of
     /// our own headers have been committed.
     rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
@@ -138,7 +139,7 @@ impl Proposer {
                     round: 0,
                     last_parents: genesis,
                     last_leader: None,
-                    digests: Vec::with_capacity(2 * max_header_num_of_batches),
+                    digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
                     metrics,
@@ -196,7 +197,7 @@ impl Proposer {
 
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
+        let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
         let parents: Vec<_> = self.last_parents.drain(..).collect();
 
         // Here we check that the timestamp we will include in the header is consistent with the
@@ -219,9 +220,9 @@ impl Proposer {
             self.name.clone(),
             this_round,
             this_epoch,
-            digests
+            header_digests
                 .iter()
-                .map(|(digest, worker_id, created_at)| (*digest, (*worker_id, *created_at)))
+                .map(|m| (m.digest, (m.worker_id, m.timestamp)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
         )
@@ -256,15 +257,11 @@ impl Proposer {
             debug!(msg);
         }
 
-        // Register the header by the current round, to remember that we need to commit
-        // it, or re-include the batch digests that it contains.
-        self.proposed_headers.insert(this_round, header.clone());
-
         // Update metrics related to latency
         let mut total_inclusion_secs = 0.0;
-        for (_digest, _worker_id, created_at_timestamp) in digests.clone() {
+        for digest in &header_digests {
             let batch_inclusion_secs =
-                Duration::from_millis(header.created_at - created_at_timestamp).as_secs_f64();
+                Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64();
             total_inclusion_secs += batch_inclusion_secs;
 
             #[cfg(feature = "benchmark")]
@@ -272,8 +269,8 @@ impl Proposer {
                 // NOTE: This log entry is used to compute performance.
                 tracing::info!(
                     "Batch {:?} from worker {} took {} seconds from creation to be included in a proposed header",
-                    _digest,
-                    _worker_id,
+                    digest.digest,
+                    digest.worker_id,
                     batch_inclusion_secs
                 );
             }
@@ -284,21 +281,27 @@ impl Proposer {
         }
 
         // NOTE: This log entry is used to compute performance.
-        let (header_creation_secs, avg_inclusion_secs) = if let Some(digest) = digests.first() {
-            (
-                Duration::from_millis(header.created_at - digest.2).as_secs_f64(),
-                total_inclusion_secs / digests.len() as f64,
-            )
-        } else {
-            (self.max_header_delay.as_secs_f64(), 0.0)
-        };
+        let (header_creation_secs, avg_inclusion_secs) =
+            if let Some(digest) = header_digests.front() {
+                (
+                    Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64(),
+                    total_inclusion_secs / header_digests.len() as f64,
+                )
+            } else {
+                (self.max_header_delay.as_secs_f64(), 0.0)
+            };
         debug!(
             "Header {:?} was created in {} seconds. Contains {} batches, with average delay {} seconds.",
             header.digest(),
             header_creation_secs,
-            digests.len(),
+            header_digests.len(),
             avg_inclusion_secs,
         );
+
+        // Register the header by the current round, to remember that we need to commit
+        // it, or re-include the batch digests that it contains.
+        self.proposed_headers
+            .insert(this_round, (header.clone(), header_digests));
 
         Ok(header)
     }
@@ -512,32 +515,40 @@ impl Proposer {
 
                 Some((commit_round, commit_headers)) = self.rx_committed_own_headers.recv() => {
                     // Remove committed headers from the list of pending
-                    for round in &commit_headers {
-                        self.proposed_headers.remove(round);
+                    let mut max_committed_round = 0;
+                    for round in commit_headers {
+                        max_committed_round = max_committed_round.max(round);
+                        let Some(_) = self.proposed_headers.remove(&round) else {
+                            info!("Own committed header not found at round {round}, probably because of restarts.");
+                            // There can still be later committed headers in proposed_headers.
+                            continue;
+                        };
                     }
 
-                    // Now for any round much below the current commit round we re-insert
+                    // Now for any round below the current commit round we re-insert
                     // the batches into the digests we need to send, effectively re-sending
-                    // them
-                    let mut digests_to_resend = Vec::new();
+                    // them in FIFO order.
+                    // Oldest to newest payloads.
+                    let mut digests_to_resend = VecDeque::new();
+                    // Oldest to newest rounds.
                     let mut retransmit_rounds = Vec::new();
 
                     // Iterate in order of rounds of our own headers.
-                    for (round_header, header) in &mut self.proposed_headers {
-                        // If we are within 2 rounds of the commit we break
-                        if round_header + 2 >= commit_round {
+                    for (header_round, (_header, included_digests)) in &mut self.proposed_headers {
+                        // Stop once we have processed headers at and below last committed round.
+                        if *header_round > max_committed_round {
                             break;
                         }
-
-                        digests_to_resend.extend(
-                            header.payload.iter().map(|(digest, (worker, created_at))| (*digest, *worker, *created_at))
-                        );
-                        retransmit_rounds.push(*round_header);
+                        // Add payloads from oldest to newest.
+                        digests_to_resend.append(included_digests);
+                        retransmit_rounds.push(*header_round);
                     }
 
                     if !retransmit_rounds.is_empty() {
-                        // Add the digests to retransmit to the digests for the next header
-                        digests_to_resend.extend(&self.digests);
+                        let num_to_resend = digests_to_resend.len();
+                        // Since all of digests_to_resend are roughly newer than self.digests,
+                        // prepend digests_to_resend to the digests for the next header.
+                        digests_to_resend.append(&mut self.digests);
                         self.digests = digests_to_resend;
 
                         // Now delete the headers with batches we re-transmit
@@ -547,11 +558,14 @@ impl Proposer {
 
                         debug!(
                             "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
-                            self.digests.len(),
+                            num_to_resend,
                             retransmit_rounds,
                             commit_round,
                             self.proposed_headers.len()
                         );
+
+                        self.metrics.proposer_resend_headers.inc_by(retransmit_rounds.len() as u64);
+                        self.metrics.proposer_resend_batches.inc_by(num_to_resend as u64);
                     }
                 },
 
@@ -621,21 +635,15 @@ impl Proposer {
                 }
 
                 // Receive digests from our workers.
-                Some(OurDigestMessage {
-                    digest,
-                    worker_id,
-                    timestamp,
-                    ack_channel,
-                }) = self.rx_our_digests.recv() => {
-                    let digest_record = (digest, worker_id, timestamp, );
-                    self.digests.push(digest_record);
+                Some(mut message) = self.rx_our_digests.recv() => {
                     // Signal back to the worker that the batch is recorded on the
                     // primary, and will be tracked until inclusion. This means that
                     // if the primary does not fail it will attempt to send the digest
                     // (and re-send if necessary) until it is sequenced, or the end of
                     // the epoch is reached. For the moment this does not persist primary
                     // crashes and re-starts.
-                    let _ = ack_channel.send(());
+                    let _ = message.ack_channel.take().unwrap().send(());
+                    self.digests.push_back(message);
                 }
 
                 // Check whether any timer expired.

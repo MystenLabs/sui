@@ -1147,7 +1147,7 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 digest: message.digest,
                 worker_id: message.worker_id,
                 timestamp: message.metadata.created_at,
-                ack_channel: tx_ack,
+                ack_channel: Some(tx_ack),
             })
             .await
             .map(|_| anemo::Response::new(()))
