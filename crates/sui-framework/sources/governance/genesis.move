@@ -122,6 +122,12 @@ module sui::genesis {
                 ctx
             );
 
+            // Ensure that each validator is unique
+            assert!(
+                !validator_set::is_duplicate_validator(&validators, &validator),
+                2,
+            );
+
             vector::push_back(&mut validators, validator);
 
             i = i + 1;

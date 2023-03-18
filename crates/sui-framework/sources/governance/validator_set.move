@@ -540,10 +540,14 @@ module sui::validator_set {
     /// It differs from `is_active_validator_by_sui_address` in that the former checks
     /// only the sui address but this function looks at more metadata.
     fun is_duplicate_with_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-        let len = vector::length(&self.active_validators);
+        is_duplicate_validator(&self.active_validators, new_validator)
+    }
+
+    public(friend) fun is_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
+        let len = vector::length(validators);
         let i = 0;
         while (i < len) {
-            let v = vector::borrow(&self.active_validators, i);
+            let v = vector::borrow(validators, i);
             if (validator::is_duplicate(v, new_validator)) {
                 return true
             };

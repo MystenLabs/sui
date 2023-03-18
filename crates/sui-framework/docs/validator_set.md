@@ -30,6 +30,7 @@
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#0x2_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#0x2_validator_set_is_duplicate_with_active_validator)
+-  [Function `is_duplicate_validator`](#0x2_validator_set_is_duplicate_validator)
 -  [Function `is_duplicate_with_pending_validator`](#0x2_validator_set_is_duplicate_with_pending_validator)
 -  [Function `get_candidate_or_active_validator_mut`](#0x2_validator_set_get_candidate_or_active_validator_mut)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
@@ -1276,10 +1277,34 @@ only the sui address but this function looks at more metadata.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
-    <b>let</b> len = <a href="_length">vector::length</a>(&self.active_validators);
+    <a href="validator_set.md#0x2_validator_set_is_duplicate_validator">is_duplicate_validator</a>(&self.active_validators, new_validator)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_is_duplicate_validator"></a>
+
+## Function `is_duplicate_validator`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
+    <b>let</b> len = <a href="_length">vector::length</a>(validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; len) {
-        <b>let</b> v = <a href="_borrow">vector::borrow</a>(&self.active_validators, i);
+        <b>let</b> v = <a href="_borrow">vector::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x2_validator_is_duplicate">validator::is_duplicate</a>(v, new_validator)) {
             <b>return</b> <b>true</b>
         };
