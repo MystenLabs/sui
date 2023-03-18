@@ -455,6 +455,7 @@ impl RpcExampleProvider {
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
         let signatures = tx.into_inner().tx_signatures().to_vec();
+        let raw_transaction = bcs::to_bytes(tx1.data()).unwrap();
 
         let tx_digest = tx1.digest();
         let object_change = ObjectChange::Transferred {
@@ -507,6 +508,7 @@ impl RpcExampleProvider {
                 data: SuiTransactionData::try_from(data1).unwrap(),
                 tx_signatures: signatures.clone(),
             }),
+            raw_transaction,
             confirmed_local_execution: None,
             checkpoint: None,
             errors: vec![],

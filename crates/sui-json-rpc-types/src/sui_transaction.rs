@@ -97,6 +97,8 @@ pub type TransactionsPage = Page<SuiTransactionResponse, TransactionDigest>;
 pub struct SuiTransactionResponseOptions {
     /// Whether to show transaction input data. Default to be False
     pub show_input: bool,
+    /// Whether to show bcs-encoded transaction input data
+    pub show_raw_input: bool,
     /// Whether to show transaction effects. Default to be False
     pub show_effects: bool,
     /// Whether to show transaction events. Default to be False
@@ -116,6 +118,7 @@ impl SuiTransactionResponseOptions {
         Self {
             show_effects: true,
             show_input: true,
+            show_raw_input: true,
             show_events: true,
             show_object_changes: true,
             show_balance_changes: true,
@@ -124,6 +127,11 @@ impl SuiTransactionResponseOptions {
 
     pub fn with_input(mut self) -> Self {
         self.show_input = true;
+        self
+    }
+
+    pub fn with_raw_input(mut self) -> Self {
+        self.show_raw_input = true;
         self
     }
 
@@ -163,7 +171,7 @@ impl SuiTransactionResponseOptions {
     }
 
     pub fn require_input(&self) -> bool {
-        self.show_input || self.show_object_changes
+        self.show_input || self.show_raw_input || self.show_object_changes
     }
 
     pub fn require_effects(&self) -> bool {
@@ -178,6 +186,7 @@ impl SuiTransactionResponseOptions {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase", rename = "TransactionResponse")]
 pub struct SuiTransactionResponse {
@@ -185,6 +194,12 @@ pub struct SuiTransactionResponse {
     /// Transaction input data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<SuiTransaction>,
+    /// BCS encoded [SenderSignedData] that includes input object references
+    /// returns empty array if `show_raw_transaction` is false
+    #[serde_as(as = "Base64")]
+    #[schemars(with = "Base64")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_transaction: Vec<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<SuiTransactionEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]

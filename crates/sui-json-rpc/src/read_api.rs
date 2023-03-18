@@ -1107,6 +1107,14 @@ fn convert_to_response(
     let mut response = SuiTransactionResponse::new(cache.digest);
     response.errors = cache.errors;
 
+    if opts.show_raw_input && cache.transaction.is_some() {
+        let sender_signed_data = cache.transaction.as_ref().unwrap().data();
+        match bcs::to_bytes(sender_signed_data) {
+            Ok(t) => response.raw_transaction = t,
+            Err(e) => response.errors.push(e.to_string()),
+        }
+    }
+
     if opts.show_input && cache.transaction.is_some() {
         match cache.transaction.unwrap().into_message().try_into() {
             Ok(t) => {

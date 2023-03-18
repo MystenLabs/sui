@@ -159,6 +159,7 @@
               "name": "options",
               "value": {
                 "showInput": true,
+                "showRawInput": true,
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": true,
@@ -216,6 +217,7 @@
                   "ALhGcUtEV3kT9ukC4ItNjlv5/gATBGmWEQan7ri2YKHzbtI2rSMpWvxUg7CN+Jap2zPyhfXIes+xt9Q60H2Ylw1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
                 ]
               },
+              "rawTransaction": "AQAAAAAAAgAge6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YABAE+C8chYe5jWTAC/tGw4Q72L9sz6fGWoYThpjNH9ysPcAgAAAAAAAAAgsQwARuKTwIzsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/8BAQEBAQABAABh+7W080KkC9v4f+SpRrnjjRjPj/x7AAC5dRdce2qVdgHo2MfOhj8xPaPb2SqD7ybRKLiP5mvybg4NCc2vcn0dhAIAAAAAAAAAIMzKqXoCzDqYBBZw4WCdtxTphYyW6eRphV8c87/fl+hlYfu1tPNCpAvb+H/kqUa5440Yz4/8ewAAuXUXXHtqlXYBAAAAAAAAAOgDAAAAAAAAAAFhALhGcUtEV3kT9ukC4ItNjlv5/gATBGmWEQan7ri2YKHzbtI2rSMpWvxUg7CN+Jap2zPyhfXIes+xt9Q60H2Ylw1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ==",
               "effects": {
                 "messageVersion": "v1",
                 "status": {
@@ -1305,6 +1307,7 @@
               "name": "options",
               "value": {
                 "showInput": true,
+                "showRawInput": false,
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
@@ -1358,6 +1361,7 @@
                   "ALwMcYis9u/ynkzVhCb8UNtgS8kWOk6MaMWXlWOXONq5KDbfEv49Z0cEvz2tObRkDjaS9kxNSc+Cjfe1F0PtEwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA=="
                 ]
               },
+              "rawTransaction": "AQAAAAAAAgAggZbQSLem0EyO3IlXnYb9P8kMUvmhTGuBK5T+YTxbzrsBAF7rHUSeJRYWbVfXH96xVNDcns23swBX0KkyaEysNSzcAgAAAAAAAAAg43+UGkUe+CCaD7+/G1SbK7Jrjq7giJUUbfJ7w88mEMEBAQEBAQABAACCF5xX1Ylbq/tlXNYujohqUzNLXnvpvmWOt1nMNeP8ZgEaPomAKdAk7sHUTGr14vrN7YTQO1NzUU8W49ZuAAgQUQIAAAAAAAAAIGS7c6HtWLLBiwy/N3eS4gbmuA1NXupk4ucFY7FYkCbEghecV9WJW6v7ZVzWLo6IalMzS1576b5ljrdZzDXj/GYBAAAAAAAAAOgDAAAAAAAAAAFhALwMcYis9u/ynkzVhCb8UNtgS8kWOk6MaMWXlWOXONq5KDbfEv49Z0cEvz2tObRkDjaS9kxNSc+Cjfe1F0PtEwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA==",
               "effects": {
                 "messageVersion": "v1",
                 "status": {
@@ -6755,6 +6759,14 @@
               "$ref": "#/components/schemas/ObjectChange"
             }
           },
+          "rawTransaction": {
+            "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
+          },
           "timestampMs": {
             "type": [
               "integer",
@@ -6801,6 +6813,11 @@
           },
           "showObjectChanges": {
             "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showRawInput": {
+            "description": "Whether to show bcs-encoded transaction input data",
             "default": false,
             "type": "boolean"
           }
