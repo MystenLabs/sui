@@ -282,6 +282,7 @@ async fn test_passive_reconfig() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_create_advance_epoch_tx_race() {
+    use std::sync::Arc;
     use sui_macros::{register_fail_point, register_fail_point_async};
     use tokio::sync::broadcast;
 
