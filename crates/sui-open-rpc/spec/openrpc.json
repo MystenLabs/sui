@@ -752,12 +752,10 @@
       "description": "Return the sequence number of the latest checkpoint that has been executed",
       "params": [],
       "result": {
-        "name": "CheckpointSequenceNumber",
+        "name": "SuiCheckpointSequenceNumber",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/BigInt"
         }
       }
     },
