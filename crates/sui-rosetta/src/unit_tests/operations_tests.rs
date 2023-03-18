@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Encoding, Hex};
 use move_core_types::value::MoveTypeLayout;
-
-use shared_crypto::intent::IntentMessage;
 use sui_json_rpc_types::SuiCallArg;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::messages::{CallArg, TransactionData};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
-use crate::types::{ConstructionMetadata, OperationType};
+use crate::types::ConstructionMetadata;
 
 #[tokio::test]
 async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
