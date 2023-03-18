@@ -1135,10 +1135,9 @@ impl WalletContext {
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout)
                 .await?;
-
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
-                println!("{}", format!("[warn] {e}").yellow().bold());
+                eprintln!("{}", format!("[warn] {e}").yellow().bold());
             }
             self.client.write().await.insert(client).clone()
         })
