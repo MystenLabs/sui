@@ -13,6 +13,7 @@ pub struct SuiTransactionFullResponse {
     pub digest: TransactionDigest,
     /// Transaction input data
     pub transaction: SuiTransaction,
+    pub raw_transaction: Vec<u8>,
     pub effects: SuiTransactionEffects,
     pub events: SuiTransactionEvents,
     pub object_changes: Option<Vec<ObjectChange>>,
@@ -29,6 +30,7 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
         let SuiTransactionResponse {
             digest,
             transaction,
+            raw_transaction,
             effects,
             events,
             object_changes,
@@ -80,6 +82,7 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
         Ok(SuiTransactionFullResponse {
             digest,
             transaction,
+            raw_transaction,
             effects,
             events,
             object_changes,
@@ -103,11 +106,13 @@ impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
             timestamp_ms,
             confirmed_local_execution,
             checkpoint,
+            raw_transaction,
         } = response;
 
         SuiTransactionResponse {
             digest,
             transaction: Some(transaction),
+            raw_transaction,
             effects: Some(effects),
             events: Some(events),
             object_changes,
