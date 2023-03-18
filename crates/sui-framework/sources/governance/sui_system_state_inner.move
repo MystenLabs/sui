@@ -711,10 +711,10 @@ module sui::sui_system_state_inner {
             &mut storage_fund_reward,
             &mut self.validator_report_records,
             reward_slashing_rate,
-            self.parameters.governance_start_epoch,
             VALIDATOR_LOW_STAKE_THRESHOLD,
             VALIDATOR_VERY_LOW_STAKE_THRESHOLD,
             VALIDATOR_LOW_STAKE_GRACE_PERIOD,
+            self.parameters.governance_start_epoch,
             ctx,
         );
 

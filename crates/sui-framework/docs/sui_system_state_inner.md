@@ -1761,10 +1761,10 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
-        self.parameters.governance_start_epoch,
         <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>,
         <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>,
         <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>,
+        self.parameters.governance_start_epoch,
         ctx,
     );
 
