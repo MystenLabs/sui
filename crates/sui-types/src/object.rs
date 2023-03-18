@@ -588,6 +588,25 @@ impl Object {
         ))
     }
 
+    pub fn new_upgraded_package<'a>(
+        previous_package: &MovePackage,
+        new_package_id: ObjectID,
+        modules: Vec<CompiledModule>,
+        previous_transaction: TransactionDigest,
+        max_move_package_size: u64,
+        dependencies: impl IntoIterator<Item = &'a MovePackage>,
+    ) -> Result<Self, ExecutionError> {
+        Ok(Self::new_package_from_data(
+            Data::Package(previous_package.new_upgraded(
+                new_package_id,
+                modules,
+                max_move_package_size,
+                dependencies,
+            )?),
+            previous_transaction,
+        ))
+    }
+
     pub fn new_package_for_testing<'p>(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,

@@ -244,6 +244,11 @@ ExecutionFailureStatus:
       PublishUpgradeMissingDependency: UNIT
     26:
       PublishUpgradeDependencyDowngrade: UNIT
+    27:
+      PackageUpgradeError:
+        STRUCT:
+          - upgrade_error:
+              TYPENAME: PackageUpgradeError
 ExecutionStatus:
   ENUM:
     0:
@@ -432,6 +437,36 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
+PackageUpgradeError:
+  ENUM:
+    0:
+      UnableToFetchPackage:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+    1:
+      NotAPackage:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+    2:
+      IncompatibleUpgrade: UNIT
+    3:
+      DigestDoesNotMatch:
+        STRUCT:
+          - digest:
+              SEQ: U8
+    4:
+      UnknownUpgradePolicy:
+        STRUCT:
+          - policy: U8
+    5:
+      PackageIDDoesNotMatch:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+          - ticket_id:
+              TYPENAME: ObjectID
 ProgrammableMoveCall:
   STRUCT:
     - package:

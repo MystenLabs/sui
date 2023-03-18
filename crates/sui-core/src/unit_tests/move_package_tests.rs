@@ -3,7 +3,7 @@
 
 use move_binary_format::file_format::CompiledModule;
 
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -216,6 +216,60 @@ fn test_upgrade_upgrades_linkage() {
 }
 
 #[test]
+fn test_upgrade_linkage_digest_to_new_dep() {
+    let c_id1 = ObjectID::from_single_byte(0xc1);
+    let c_pkg = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("Cv1"),
+        u64::MAX,
+        [],
+    )
+    .unwrap();
+
+    let c_id2 = ObjectID::from_single_byte(0xc2);
+    let c_new = c_pkg
+        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .unwrap();
+
+    let b_pkg = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("B"),
+        u64::MAX,
+        [&c_pkg],
+    )
+    .unwrap();
+
+    let b_id2 = ObjectID::from_single_byte(0xb2);
+    let b_new = b_pkg
+        .new_upgraded(b_id2, build_test_modules("B"), u64::MAX, [&c_new])
+        .unwrap();
+
+    assert_eq!(
+        b_new.linkage_table(),
+        &linkage_table! {
+            c_id1 => (c_id2, c_new.version()),
+        },
+    );
+
+    // Make sure that we compute the package digest off of the update dependencies and not the old
+    // dependencies in the linkage table.
+    assert_eq!(
+        b_new.digest(),
+        MovePackage::compute_digest_for_modules_and_deps(
+            &build_test_modules("B")
+                .iter()
+                .map(|module| {
+                    let mut bytes = Vec::new();
+                    module.serialize(&mut bytes).unwrap();
+                    bytes
+                })
+                .collect::<Vec<_>>(),
+            [&c_id2]
+        )
+    )
+}
+
+#[test]
 fn test_upgrade_downngrades_linkage() {
     let c_id1 = ObjectID::from_single_byte(0xc1);
     let c_pkg = MovePackage::new_initial(
@@ -299,6 +353,46 @@ fn test_transitively_depending_on_upgrade() {
             c_id1 => (c_id2, c_new.version()),
         },
     );
+}
+
+#[test]
+fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest() {
+    let c_v1 = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("Cv1"),
+        u64::MAX,
+        [],
+    )
+    .unwrap();
+
+    let c_id2 = ObjectID::from_single_byte(0xc2);
+    let c_v2 = c_v1
+        .new_upgraded(c_id2, build_test_modules("Cv2"), u64::MAX, [])
+        .unwrap();
+
+    let b_pkg = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("B"),
+        u64::MAX,
+        [&c_v1],
+    )
+    .unwrap();
+
+    let b_v2 = MovePackage::new_initial(
+        OBJECT_START_VERSION,
+        build_test_modules("Bv2"),
+        u64::MAX,
+        [&c_v2],
+    )
+    .unwrap();
+
+    let local_v1 = build_test_package("B").get_package_digest(false);
+    let local_v2 = build_test_package("Bv2").get_package_digest(false);
+
+    assert_ne!(b_pkg.digest(), b_v2.digest());
+    assert_eq!(b_pkg.digest(), local_v1);
+    assert_eq!(b_v2.digest(), local_v2);
+    assert_ne!(local_v1, local_v2);
 }
 
 #[test]
@@ -405,12 +499,15 @@ fn test_fail_on_upgrade_missing_type() {
     assert_eq!(err.kind(), &ExecutionErrorKind::InvariantViolation);
 }
 
-pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
+pub fn build_test_package(test_dir: &str) -> CompiledPackage {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_package", test_dir]);
-    sui_framework::build_move_package(&path, build_config)
-        .unwrap()
+    sui_framework::build_move_package(&path, build_config).unwrap()
+}
+
+pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
+    build_test_package(test_dir)
         .get_modules()
         .cloned()
         .collect()
