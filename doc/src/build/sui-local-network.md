@@ -149,13 +149,13 @@ If successful, the response resembles the following:
 }
 ```
 
-## Connect Command Line Tool to Local Network
+## Connect the Sui Client CLI to your local network
 
 ```bash
 # If this is your first time creating a local network, create a new environment with alias `local` for local network
 sui client new-env --alias local --rpc http://127.0.0.1:9000
 
-# switch to the new local environment
+# set the active environment for the Client CLI to the new local environment
 sui client switch --env local
 Active environment switched to [local]
 
@@ -163,7 +163,7 @@ Active environment switched to [local]
 sui client active-env
 local
 
-# show your sui address
+# show the current Sui active address for the Client CLI
 sui client active-address
 0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de
 
