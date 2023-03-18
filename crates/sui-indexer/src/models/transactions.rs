@@ -219,6 +219,8 @@ impl TryInto<SuiTransactionFullResponse> for Transaction {
                 ))
             })?,
             transaction,
+            // TODO: store raw_transaction in db
+            raw_transaction: vec![],
             effects,
             confirmed_local_execution: self.confirmed_local_execution,
             timestamp_ms: self.timestamp_ms as u64,
