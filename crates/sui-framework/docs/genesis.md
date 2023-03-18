@@ -338,9 +338,6 @@ all the information we need in the system.
             p2p_address,
             primary_address,
             worker_address,
-            // Initialize all validators <b>with</b> no stake. Stake distribution
-            // will be handled by the 'allocate_tokens' call bellow.
-            <a href="_none">option::none</a>(),
             gas_price,
             commission_rate,
             ctx
