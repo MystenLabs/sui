@@ -659,15 +659,15 @@ impl From<&ObjectRef> for ObjectKey {
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
 pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
-    use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
+    use crate::messages::InputObjectKind as I;
     Ok(tx
         .intent_message()
         .value
         .input_objects()?
         .into_iter()
         .filter_map(|object| match object {
-            MovePackage(_) | SharedMoveObject { .. } => None,
-            ImmOrOwnedMoveObject(obj) => Some(obj.into()),
+            I::MovePackage(_) | I::SharedMoveObject { .. } => None,
+            I::ImmOrOwnedMoveObject(obj) => Some(obj.into()),
         })
         .collect())
 }

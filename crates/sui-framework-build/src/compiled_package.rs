@@ -41,7 +41,7 @@ use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
-    move_package::{FnInfo, FnInfoKey, FnInfoMap},
+    move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
@@ -304,6 +304,13 @@ impl CompiledPackage {
         // dependencies.
         ids.remove(&ObjectID::ZERO);
         ids.into_iter().collect()
+    }
+
+    pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
+        MovePackage::compute_digest_for_modules_and_deps(
+            &self.get_package_bytes(with_unpublished_deps),
+            self.dependency_ids.published.values(),
+        )
     }
 
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order

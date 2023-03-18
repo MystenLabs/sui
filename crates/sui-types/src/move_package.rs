@@ -3,10 +3,12 @@
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
+    crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
     SUI_FRAMEWORK_ADDRESS,
 };
+use fastcrypto::hash::HashFunction;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
@@ -102,12 +104,18 @@ pub struct MovePackage {
 }
 
 /// Rust representation of upgrade policy constants in `sui::package`.
-#[allow(dead_code)]
-const UPGRADE_POLICY_COMPATIBLE: u8 = 0;
-#[allow(dead_code)]
-const UPGRADE_POLICY_ADDITIVE: u8 = 128;
-#[allow(dead_code)]
-const UPGRADE_POLICY_DEP_ONLY: u8 = 192;
+pub const UPGRADE_POLICY_COMPATIBLE: u8 = 0;
+pub const UPGRADE_POLICY_ADDITIVE: u8 = 128;
+pub const UPGRADE_POLICY_DEP_ONLY: u8 = 192;
+
+pub fn is_valid_package_upgrade_policy(policy: &u8) -> bool {
+    [
+        UPGRADE_POLICY_COMPATIBLE,
+        UPGRADE_POLICY_ADDITIVE,
+        UPGRADE_POLICY_DEP_ONLY,
+    ]
+    .contains(policy)
+}
 
 /// Rust representation of `sui::package::UpgradeCap`.
 #[derive(Debug, Serialize, Deserialize)]
@@ -161,6 +169,36 @@ impl MovePackage {
             .into());
         }
         Ok(pkg)
+    }
+
+    pub fn digest(&self) -> [u8; 32] {
+        Self::compute_digest_for_modules_and_deps(
+            self.module_map.values(),
+            self.linkage_table
+                .values()
+                .map(|UpgradeInfo { upgraded_id, .. }| upgraded_id),
+        )
+    }
+
+    /// It is important that this function is shared across both the calculation of the
+    /// digest for the package, and the calculation of the digest on-chain.
+    pub fn compute_digest_for_modules_and_deps<'a>(
+        modules: impl IntoIterator<Item = &'a Vec<u8>>,
+        object_ids: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> [u8; 32] {
+        let mut bytes: Vec<&[u8]> = modules
+            .into_iter()
+            .map(|x| x.as_ref())
+            .chain(object_ids.into_iter().map(|obj_id| obj_id.as_ref()))
+            .collect();
+        // NB: sorting so the order of the modules and the order of the dependencies does not matter.
+        bytes.sort();
+
+        let mut digest = DefaultHash::default();
+        for b in bytes {
+            digest.update(b);
+        }
+        digest.finalize().digest
     }
 
     /// Create an initial version of the package along with this version's type origin and linkage

@@ -852,6 +852,9 @@ impl ProtocolConfig {
     pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
         self.buffer_stake_for_protocol_upgrade_bps = Some(b)
     }
+    pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
+        self.feature_flags.package_upgrades = val
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
