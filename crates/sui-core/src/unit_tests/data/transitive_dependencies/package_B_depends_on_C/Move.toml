@@ -1,0 +1,6 @@
+[package]
+name = "PackageBDependsOnC"
+version = "0.0.1"
+
+[dependencies]
+PackageC = { local = "../package_C" }

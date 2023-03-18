@@ -1,0 +1,6 @@
+[package]
+name = "PackageADependsOnB"
+version = "0.0.1"
+
+[dependencies]
+PackageBDependsOnC = { local = "../package_B_depends_on_C" }

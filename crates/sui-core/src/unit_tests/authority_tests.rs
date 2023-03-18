@@ -5299,6 +5299,199 @@ async fn test_for_inc_201_dry_run() {
 }
 
 #[tokio::test]
+async fn test_publish_transitive_dependencies_ok() {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (sender, key): (_, AccountKeyPair) = get_key_pair();
+    let gas_id = ObjectID::random();
+    let state = init_state_with_ids(vec![(sender, gas_id)]).await;
+
+    // Get gas object
+    let gas_object = state.get_object(&gas_id).await.unwrap().unwrap();
+    let gas_ref = gas_object.compute_object_reference();
+
+    // Publish `package C`
+    let mut package_c_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    package_c_path.extend([
+        "src",
+        "unit_tests",
+        "data",
+        "transitive_dependencies",
+        "package_C",
+    ]);
+
+    // Set `c` to 0x0 address so that compiler doesn't complain about
+    // this being a non-zero address when publishing. We can't set the address
+    // in the manifest either, because then we'll get a "Conflicting addresses"
+    // if we try to set `c`'s address via `additional_named_addresses`.
+    let mut build_config = BuildConfig::new_for_testing();
+    build_config.config.additional_named_addresses.insert(
+        "c".to_string(),
+        AccountAddress::from_hex_literal("0x0").unwrap(),
+    );
+
+    let modules = build_config
+        .build(package_c_path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(modules, vec![]);
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    let txn_effects = send_and_confirm_transaction(&state, signed)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+    let ((package_c_id, _, _), _) = txn_effects.created().first().unwrap();
+    let gas_ref = txn_effects.gas_object().0;
+
+    // Publish `package B`
+    let mut package_b_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    package_b_path.extend([
+        "src",
+        "unit_tests",
+        "data",
+        "transitive_dependencies",
+        "package_B_depends_on_C",
+    ]);
+
+    let mut build_config = BuildConfig::new_for_testing();
+    build_config.config.additional_named_addresses.insert(
+        "b".to_string(),
+        AccountAddress::from_hex_literal("0x0").unwrap(),
+    );
+
+    build_config
+        .config
+        .additional_named_addresses
+        .insert("c".to_string(), AccountAddress::from(*package_c_id));
+
+    let modules = build_config
+        .build(package_b_path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    builder.publish_immutable(modules, vec![*package_c_id]); // Note: B depends on C
+
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    let txn_effects = send_and_confirm_transaction(&state, signed)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+    let ((package_b_id, _, _), _) = txn_effects.created().first().unwrap();
+    let gas_ref = txn_effects.gas_object().0;
+
+    // Publish `package A`
+    let mut package_a_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    package_a_path.extend([
+        "src",
+        "unit_tests",
+        "data",
+        "transitive_dependencies",
+        "package_A_depends_on_B",
+    ]);
+
+    let mut build_config = BuildConfig::new_for_testing();
+    build_config.config.additional_named_addresses.insert(
+        "a".to_string(),
+        AccountAddress::from_hex_literal("0x0").unwrap(),
+    );
+
+    build_config
+        .config
+        .additional_named_addresses
+        .insert("b".to_string(), AccountAddress::from(*package_b_id));
+
+    build_config
+        .config
+        .additional_named_addresses
+        .insert("c".to_string(), AccountAddress::from(*package_c_id));
+
+    let modules = build_config
+        .build(package_a_path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    builder.publish_immutable(modules, vec![*package_b_id, *package_c_id]); // Note: A depends on B and C.
+
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    let txn_effects = send_and_confirm_transaction(&state, signed)
+        .await
+        .unwrap()
+        .1
+        .into_data();
+    let ((package_a_id, _, _), _) = txn_effects.created().first().unwrap();
+    let gas_ref = txn_effects.gas_object().0;
+
+    // Publish `package root`
+    let mut package_root_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    package_root_path.extend([
+        "src",
+        "unit_tests",
+        "data",
+        "transitive_dependencies",
+        "package_root_depends_on_A",
+    ]);
+
+    let mut build_config = BuildConfig::new_for_testing();
+    build_config.config.additional_named_addresses.insert(
+        "examples".to_string(),
+        AccountAddress::from_hex_literal("0x0").unwrap(),
+    );
+
+    build_config
+        .config
+        .additional_named_addresses
+        .insert("a".to_string(), AccountAddress::from(*package_a_id));
+
+    build_config
+        .config
+        .additional_named_addresses
+        .insert("b".to_string(), AccountAddress::from(*package_b_id));
+
+    build_config
+        .config
+        .additional_named_addresses
+        .insert("c".to_string(), AccountAddress::from(*package_c_id));
+
+    let modules = build_config
+        .build(package_root_path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ false);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    builder.publish_immutable(
+        modules,
+        vec![
+            // Note: root depends on A, B, C.
+            *package_a_id,
+            *package_b_id,
+            *package_c_id,
+            SUI_FRAMEWORK_OBJECT_ID,
+            MOVE_STDLIB_OBJECT_ID,
+        ],
+    );
+
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let signed = to_sender_signed_transaction(txn_data, &key);
+    send_and_confirm_transaction(&state, signed).await.unwrap(); // Must succeed.
+}
+
+#[tokio::test]
 async fn test_publish_missing_dependency() {
     use sui_framework_build::compiled_package::BuildConfig;
 
