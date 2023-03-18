@@ -223,7 +223,6 @@ module sui::sui_system_state_inner {
             p2p_address,
             primary_address,
             worker_address,
-            option::none(),
             gas_price,
             commission_rate,
             ctx

@@ -50,9 +50,15 @@ module sui::validator_tests {
             VALID_P2P_ADDR,
             VALID_CONSENSUS_ADDR,
             VALID_WORKER_ADDR,
-            option::some(init_stake),
             1,
             0,
+            ctx
+        );
+
+        validator::request_add_stake_at_genesis(
+            &mut validator,
+            init_stake,
+            VALID_ADDRESS,
             ctx
         );
 

@@ -596,7 +596,6 @@ To produce a valid PoP, run [fn test_proof_of_possession].
         p2p_address,
         primary_address,
         worker_address,
-        <a href="_none">option::none</a>(),
         gas_price,
         commission_rate,
         ctx
