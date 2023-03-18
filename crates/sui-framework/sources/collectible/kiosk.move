@@ -65,7 +65,7 @@ module sui::kiosk {
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
-    /// to purchase proviging the guarantees for creators that every transfer
+    /// to purchase providing the guarantees for creators that every transfer
     /// needs to be approved via the `TransferPolicy`.
     struct Kiosk has key, store {
         id: UID,
