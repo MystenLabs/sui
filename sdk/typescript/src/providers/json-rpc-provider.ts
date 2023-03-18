@@ -791,14 +791,14 @@ export class JsonRpcProvider {
   /**
    * Get the sequence number of the latest checkpoint that has been executed
    */
-  async getLatestCheckpointSequenceNumber(): Promise<bigint> {
+  async getLatestCheckpointSequenceNumber(): Promise<string> {
     const resp = await this.client.requestWithType(
       'sui_getLatestCheckpointSequenceNumber',
       [],
       string(),
       this.options.skipDataValidation,
     );
-    return BigInt(resp);
+    return String(resp);
   }
 
   /**
