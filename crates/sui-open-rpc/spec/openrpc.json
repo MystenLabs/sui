@@ -2746,8 +2746,7 @@
         "properties": {
           "amount": {
             "description": "The amount indicate the balance value changes, negative amount means spending coin value and positive means receiving coin value.",
-            "type": "integer",
-            "format": "int128"
+            "type": "string"
           },
           "coinType": {
             "type": "string"
