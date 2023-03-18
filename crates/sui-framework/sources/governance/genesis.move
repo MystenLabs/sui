@@ -46,12 +46,12 @@ module sui::genesis {
         epoch_duration_ms: u64,
     }
 
-    struct TokenDistributionSchedule has drop, copy {
+    struct TokenDistributionSchedule {
         stake_subsidy_fund_mist: u64,
         allocations: vector<TokenAllocation>,
     }
 
-    struct TokenAllocation has drop, copy {
+    struct TokenAllocation {
         recipient_address: address,
         amount_mist: u64,
 
@@ -73,10 +73,15 @@ module sui::genesis {
         // Ensure this is only called at genesis
         assert!(tx_context::epoch(ctx) == 0, 0);
 
+        let TokenDistributionSchedule {
+            stake_subsidy_fund_mist,
+            allocations,
+        } = token_distribution_schedule;
+
         let sui_supply = sui::new(ctx);
         let subsidy_fund = balance::split(
             &mut sui_supply,
-            token_distribution_schedule.stake_subsidy_fund_mist
+            stake_subsidy_fund_mist,
         );
         let storage_fund = balance::zero();
 
@@ -136,7 +141,7 @@ module sui::genesis {
         // Allocate tokens and staking operations
         allocate_tokens(
             sui_supply,
-            token_distribution_schedule.allocations,
+            allocations,
             &mut validators,
             ctx
         );
@@ -166,31 +171,33 @@ module sui::genesis {
         validators: &mut vector<Validator>,
         ctx: &mut TxContext,
     ) {
-        let count = vector::length(&allocations);
-        let i = 0;
-        while (i < count) {
-            let allocation = *vector::borrow(&allocations, i);
 
-            let allocation_balance = balance::split(&mut sui_supply, allocation.amount_mist);
+        while (!vector::is_empty(&allocations)) {
+            let TokenAllocation {
+                recipient_address,
+                amount_mist,
+                staked_with_validator,
+            } = vector::pop_back(&mut allocations);
 
-            if (option::is_some(&allocation.staked_with_validator)) {
-                let validator_address = option::destroy_some(allocation.staked_with_validator);
+            let allocation_balance = balance::split(&mut sui_supply, amount_mist);
+
+            if (option::is_some(&staked_with_validator)) {
+                let validator_address = option::destroy_some(staked_with_validator);
                 let validator = validator_set::get_validator_mut(validators, validator_address);
                 validator::request_add_stake_at_genesis(
                     validator,
                     allocation_balance,
-                    allocation.recipient_address,
+                    recipient_address,
                     ctx
                 );
             } else {
                 sui::transfer(
                     coin::from_balance(allocation_balance, ctx),
-                    allocation.recipient_address,
+                    recipient_address,
                 );
             };
-
-            i = i + 1;
         };
+        vector::destroy_empty(allocations);
 
         // Provided allocations must fully allocate the sui_supply and there
         // should be none left at this point.
