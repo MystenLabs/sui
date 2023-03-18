@@ -213,9 +213,9 @@ mod sim_only_tests {
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
                     // first validator only does not support version 2.
-                    SupportedProtocolVersions::new_for_testing(1, 1)
+                    SupportedProtocolVersions::new_for_testing(START, START)
                 } else {
-                    SupportedProtocolVersions::new_for_testing(1, 2)
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
                 }
             }))
             .build()
@@ -231,7 +231,7 @@ mod sim_only_tests {
         });
 
         // upgrade happens with only 3 votes
-        monitor_version_change(&test_cluster, 2 /* expected proto version */).await;
+        monitor_version_change(&test_cluster, FINISH /* expected proto version */).await;
     }
 
     #[sim_test]
@@ -242,10 +242,10 @@ mod sim_only_tests {
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
-                    // first validator only does not support version 2.
-                    SupportedProtocolVersions::new_for_testing(1, 1)
+                    // first validator only does not support version FINISH.
+                    SupportedProtocolVersions::new_for_testing(START, START)
                 } else {
-                    SupportedProtocolVersions::new_for_testing(1, 2)
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
                 }
             }))
             .build()
@@ -269,8 +269,8 @@ mod sim_only_tests {
             });
         });
 
-        // default buffer stake is in effect, we do not advance to version 2.
-        monitor_version_change(&test_cluster, 1 /* expected proto version */).await;
+        // default buffer stake is in effect, we do not advance to version FINISH.
+        monitor_version_change(&test_cluster, START /* expected proto version */).await;
     }
 
     #[sim_test]
