@@ -198,6 +198,36 @@
 <dd>
 
 </dd>
+<dt>
+<code>max_validator_count: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>min_validator_joining_stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_low_stake_threshold: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_very_low_stake_threshold: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_low_stake_grace_period: u64</code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
@@ -406,6 +436,11 @@ all the information we need in the system.
         genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
         genesis_chain_parameters.stake_subsidy_period_length,
         genesis_chain_parameters.stake_subsidy_decrease_rate,
+        genesis_chain_parameters.max_validator_count,
+        genesis_chain_parameters.min_validator_joining_stake,
+        genesis_chain_parameters.validator_low_stake_threshold,
+        genesis_chain_parameters.validator_very_low_stake_threshold,
+        genesis_chain_parameters.validator_low_stake_grace_period,
         ctx,
     );
 }
