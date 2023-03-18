@@ -95,6 +95,9 @@ module sui::kiosk {
     /// Allows exclusive listing: only bearer of the `PurchaseCap` can
     /// purchase the asset. However, the capablity should be used
     /// carefully as losing it would lock the asset in the `Kiosk`.
+    ///
+    /// The main application for the `PurchaseCap` is building extensions
+    /// on top of the `Kiosk`.
     struct PurchaseCap<phantom T: key + store> has key, store {
         id: UID,
         /// ID of the `Kiosk` the cap belongs to.
@@ -325,9 +328,8 @@ module sui::kiosk {
         &mut self.id
     }
 
-    /// Get the UID to for dynamic field access. Requires a `KioskOwnerCap`
-    /// to prevent third party attachements without owner's approval in the
-    /// shared storage scenario.
+    /// Get the mutable `UID` for dynamic field access and extensions.
+    /// Aborts if `allow_extensions` set to `false`.
     public fun uid_mut(self: &mut Kiosk): &mut UID {
         assert!(self.allow_extensions, EExtensionsDisabled);
         &mut self.id
@@ -346,6 +348,12 @@ module sui::kiosk {
     /// Get the amount of profits collected by selling items.
     public fun profits_amount(self: &Kiosk): u64 {
         balance::value(&self.profits)
+    }
+
+    /// Get mutable access to `profits` - useful for extendability.
+    public fun profits_mut(self: &mut Kiosk, cap: &KioskOwnerCap): &mut Balance<SUI> {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        &mut self.profits
     }
 
     // === PurchaseCap fields access ===
@@ -405,186 +413,190 @@ module sui::kiosk_creature {
 }
 
 #[test_only]
+/// Kiosk testing strategy:
+/// - [ ] test purchase flow
+/// - [ ] test purchase cap flow
+/// - [ ] test withdraw methods
 module sui::kiosk_tests {
-    use sui::kiosk_creature::{Creature, new_creature, init_collection, get_publisher, return_creature};
-    use sui::test_scenario::{Self as ts};
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
-    use sui::transfer_policy::{Self as policy, TransferPolicy};
-    use sui::package::Publisher;
-    use sui::transfer::{share_object, transfer};
-    use sui::tx_context::{dummy as ctx, TxContext};
-    use sui::sui::SUI;
-    use sui::object;
-    use sui::coin;
-    use sui::package;
-    // use std::option;
     use std::vector;
+    use sui::tx_context::{Self, TxContext};
+    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
+    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
+    use sui::object::{Self, ID, UID};
+    use sui::sui::SUI;
+    use sui::package;
+    use sui::coin;
 
-    /// The price for a Creature.
-    const PRICE: u64 = 1000;
+    const AMT: u64 = 10_000;
 
-    /// Addresses for the current testing suite.
-    fun folks(): (address, address) { (@0xA71CE, @0xB0B) }
+    struct Asset has key, store { id: UID }
+    struct OTW has drop {}
 
-    fun get_policy(ctx: &mut TxContext): TransferPolicy<Creature> {
-        let publisher = get_publisher(ctx);
-        let policy = policy::new(&publisher, ctx);
+    /// Prepare: accounts
+    /// Alice, Bob and my favorite guy - Carl
+    fun folks(): (address, address, address) { (@0xA11CE, @0xB0B, @0xCA51) }
+
+    /// Prepare: TransferPolicy<Asset>
+    fun get_policy(ctx: &mut TxContext): (TransferPolicy<Asset>, TransferPolicyCap<Asset>) {
+        let publisher = package::test_claim(OTW {}, ctx);
+        let (policy, cap) = policy::new(&publisher, ctx);
         package::burn_publisher(publisher);
-        policy
+        (policy, cap)
     }
 
-    fun return_policy(policy: TransferPolicy<Creature>, ctx: &mut TxContext): u64 {
-        let profits = policy::destroy_and_withdraw(policy, ctx);
-        coin::burn_for_testing(profits)
+    /// Prepare: Asset
+    fun get_asset(ctx: &mut TxContext): (Asset, ID) {
+        let uid = object::new(ctx);
+        let id = object::uid_to_inner(&uid);
+        (Asset { id: uid }, id)
     }
 
-    fun return_kiosk(kiosk: Kiosk, kiosk_cap: KioskOwnerCap, ctx: &mut TxContext): u64 {
-        let profits = kiosk::close_and_withdraw(kiosk, kiosk_cap, ctx);
-        coin::burn_for_testing(profits)
+    #[test]
+    fun test_list_and_take() {
+        let ctx = &mut tx_context::dummy();
+        let (policy, policy_cap) = get_policy(ctx);
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        let asset = kiosk::take(&mut kiosk, &owner_cap, item_id);
+
+        return_kiosk(kiosk, owner_cap, ctx);
+        return_assets(vector[ asset ]);
+        return_policy(policy, policy_cap, ctx);
+    }
+
+    #[test]
+    fun test_purchase() {
+        let ctx = &mut tx_context::dummy();
+        let (policy, policy_cap) = get_policy(ctx);
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
+
+        let payment = coin::mint_for_testing<SUI>(AMT, ctx);
+        let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment, ctx);
+        policy::confirm_request(&mut policy, request);
+
+        return_kiosk(kiosk, owner_cap, ctx);
+        return_assets(vector[ asset ]);
+        return_policy(policy, policy_cap, ctx);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::kiosk::EIncorrectAmount)]
+    fun test_purchase_wrong_amount() {
+        let ctx = &mut tx_context::dummy();
+        let (policy, policy_cap) = get_policy(ctx);
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
+
+        let payment = coin::mint_for_testing<SUI>(AMT + 1, ctx);
+        let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment, ctx);
+        policy::confirm_request(&mut policy, request);
+        return_assets(vector[ asset ]);
+        return_policy(policy, policy_cap, ctx);
+
+        abort 1337
     }
 
     #[test]
     fun test_purchase_cap() {
-        let ctx = &mut ctx();
+        let ctx = &mut tx_context::dummy();
+        let (policy, policy_cap) = get_policy(ctx);
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
 
-        let (creature, item_id) = new_creature(ctx);
-        let (kiosk, kiosk_cap) = kiosk::new(ctx);
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &owner_cap, item_id, AMT, ctx);
 
-        kiosk::place(&mut kiosk, &kiosk_cap, creature);
-        // create a PurchaseCap
-        let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &kiosk_cap, item_id, 10_000, ctx);
-
-        // use it right away to purchase a `Creature`
-        let (creature, request) = kiosk::purchase_with_cap(
-            &mut kiosk,
-            purchase_cap,
-            coin::mint_for_testing<SUI>(100_000, ctx),
-            ctx
-        );
-
-        let kiosk_id = object::id(&kiosk);
-        let from_id = policy::from(&request);
-        let profits = return_kiosk(kiosk, kiosk_cap, ctx);
-
-        assert!(profits == 100_000, 1);
-        assert!(kiosk_id == from_id, 2);
-
-        let policy = get_policy(ctx);
+        let payment = coin::mint_for_testing<SUI>(AMT, ctx);
+        let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment, ctx);
         policy::confirm_request(&mut policy, request);
-        return_policy(policy, ctx);
-        return_creature(creature);
+
+        return_kiosk(kiosk, owner_cap, ctx);
+        return_assets(vector[ asset ]);
+        return_policy(policy, policy_cap, ctx);
     }
 
     #[test]
     fun test_purchase_cap_return() {
-        let ctx = &mut ctx();
+        let ctx = &mut tx_context::dummy();
+        let (policy, policy_cap) = get_policy(ctx);
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
 
-        let (creature, item_id) = new_creature(ctx);
-        let (kiosk, kiosk_cap) = kiosk::new(ctx);
-
-        kiosk::place(&mut kiosk, &kiosk_cap, creature);
-
-        // create a PurchaseCap
-        let purchase_cap = kiosk::list_with_purchase_cap<Creature>(&mut kiosk, &kiosk_cap, item_id, 10_000, ctx);
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        let purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
         kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
+        let asset = kiosk::take(&mut kiosk, &owner_cap, item_id);
 
-        let creature = kiosk::take(&mut kiosk, &kiosk_cap, item_id);
-
-        return_kiosk(kiosk, kiosk_cap, ctx);
-        return_creature(creature);
+        return_kiosk(kiosk, owner_cap, ctx);
+        return_assets(vector[ asset ]);
+        return_policy(policy, policy_cap, ctx);
     }
 
     #[test]
-    fun test_placing() {
-        let (user, creator) = folks();
-        let test = ts::begin(creator);
+    #[expected_failure(abort_code = sui::kiosk::EAlreadyListed)]
+    fun test_purchase_cap_already_listed_fail() {
+        let ctx = &mut tx_context::dummy();
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
 
-        // Creator creates a collection and gets a Publisher object.
-        init_collection(ts::ctx(&mut test));
+        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
+        let _purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
 
-        // Creator creates a Kiosk and registers a type.
-        // No transfer policy set, TransferPolicyCap is frozen.
-        ts::next_tx(&mut test, creator); {
-            let pub = ts::take_from_address<Publisher>(&test, creator);
-            let ctx = ts::ctx(&mut test);
-            let (kiosk, kiosk_cap) = kiosk::new(ctx);
-            let policy = get_policy(ctx);
+        abort 1337
+    }
 
-            share_object(kiosk);
-            share_object(policy);
-            transfer(pub, creator);
-            transfer(kiosk_cap, creator);
+    #[test]
+    #[expected_failure(abort_code = sui::kiosk::EListedExclusively)]
+    fun test_purchase_cap_issued_list_fail() {
+        let ctx = &mut tx_context::dummy();
+        let (asset, item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        let purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
+        kiosk::list<Asset>(&mut kiosk, &owner_cap, item_id, AMT);
+        kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
+
+        abort 1337
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::kiosk::ENotEmpty)]
+    fun test_kiosk_has_items() {
+        let ctx = &mut tx_context::dummy();
+        let (asset, _item_id) = get_asset(ctx);
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::place(&mut kiosk, &owner_cap, asset);
+        return_kiosk(kiosk, owner_cap, ctx);
+    }
+
+    /// Cleanup: TransferPolicy
+    fun return_policy(policy: TransferPolicy<Asset>, cap: TransferPolicyCap<Asset>, ctx: &mut TxContext): u64 {
+        let profits = policy::destroy_and_withdraw(policy, cap, ctx);
+        coin::burn_for_testing(profits)
+    }
+
+    /// Cleanup: Kiosk
+    fun return_kiosk(kiosk: Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext): u64 {
+        let profits = kiosk::close_and_withdraw(kiosk, cap, ctx);
+        coin::burn_for_testing(profits)
+    }
+
+    /// Cleanup: vector<Asset>
+    fun return_assets(assets: vector<Asset>) {
+        while (vector::length(&assets) > 0) {
+            let Asset { id } = vector::pop_back(&mut assets);
+            object::delete(id)
         };
 
-        // Get the TransferPolicyCap from the effects + Kiosk
-        let effects = ts::next_tx(&mut test, creator);
-        let kiosk_id = *vector::borrow(&ts::shared(&effects), 0);
-        let (creature, creature_id) = new_creature(ts::ctx(&mut test));
-
-        // Place an offer to sell a `creature` for a `PRICE`.
-        ts::next_tx(&mut test, creator); {
-            let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
-            let kiosk_cap = ts::take_from_address<KioskOwnerCap>(&test, creator);
-
-            kiosk::place_and_list(
-                &mut kiosk,
-                &kiosk_cap,
-                creature,
-                PRICE
-            );
-
-            ts::return_shared(kiosk);
-            transfer(kiosk_cap, creator);
-        };
-
-        let effects = ts::next_tx(&mut test, creator);
-        assert!(ts::num_user_events(&effects) == 1, 0);
-
-        //
-        // ts::next_tx(&mut test, user); {
-        //     let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
-        //     // let cap = ts::take_immutable_by_id<TransferPolicyCap<Creature>>(&test, cap_id);
-        //     // let
-        //     let coin = coin::mint_for_testing<SUI>(PRICE, ts::ctx(&mut test));
-
-        //     // Is there a change the system can be tricked?
-        //     // Say, someone makes a purchase of 2 Creatures at the same time.
-        //     let (creature, request) = kiosk::purchase(&mut kiosk, creature_id, coin);
-        //     let (paid, from) = transfer_request::allow_transfer(&cap, request);
-
-        //     assert!(paid == PRICE, 0);
-        //     assert!(from == object::id(&kiosk), 0);
-
-        //     transfer(creature, user);
-        //     ts::return_shared(kiosk);
-        //     ts::return_immutable(cap);
-        // };
-
-    //     ts::next_tx(&mut test, creator); {
-    //         let kiosk = ts::take_shared_by_id<Kiosk>(&test, kiosk_id);
-    //         let kiosk_cap = ts::take_from_address<KioskOwnerCap>(&test, creator);
-
-    //         let profits_1 = kiosk::withdraw(
-    //             &mut kiosk,
-    //             &kiosk_cap,
-    //             option::some(PRICE / 2),
-    //             ts::ctx(&mut test)
-    //         );
-
-    //         let profits_2 = kiosk::withdraw(
-    //             &mut kiosk,
-    //             &kiosk_cap,
-    //             option::none(),
-    //             ts::ctx(&mut test)
-    //         );
-
-    //         assert!(coin::value(&profits_1) == coin::value(&profits_2), 0);
-    //         transfer(profits_1, creator);
-    //         transfer(profits_2, creator);
-    //         transfer(kiosk_cap, creator);
-    //         ts::return_shared(kiosk);
-    //     };
-
-        ts::end(test);
+        vector::destroy_empty(assets)
     }
 }
