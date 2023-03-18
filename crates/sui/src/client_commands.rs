@@ -1279,7 +1279,10 @@ impl WalletContext {
                 SuiTransactionResponseOptions::new()
                     .with_effects()
                     .with_events()
-                    .with_input(),
+                    .with_input()
+                    .with_events()
+                    .with_object_changes()
+                    .with_balance_changes(),
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)
@@ -1421,13 +1424,13 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
-                writeln!(writer, " {0: ^42} | {1: ^11}", "Object ID", "Gas Value")?;
+                writeln!(writer, " {0: ^66} | {1: ^11}", "Object ID", "Gas Value")?;
                 writeln!(
                     writer,
-                    "----------------------------------------------------------------------"
+                    "----------------------------------------------------------------------------------"
                 )?;
                 for gas in gases {
-                    writeln!(writer, " {0: ^42} | {1: ^11}", gas.id(), gas.value())?;
+                    writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
             SuiClientCommandResult::SplitCoin(response) => {
@@ -1553,18 +1556,34 @@ fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
     }
 }
 
+// TODOD(chris): only print out the full response when `--verbose` is provided
 pub fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
     writeln!(writer, "{}", response.digest)?;
     writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
     if let Some(t) = &response.transaction {
-        write!(writer, "{}", t)?;
+        writeln!(writer, "{}", t)?;
     }
 
     writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
     if let Some(e) = &response.effects {
-        write!(writer, "{}", e)?;
+        writeln!(writer, "{}", e)?;
+    }
+
+    writeln!(writer, "{}", "----- Events ----".bold())?;
+    if let Some(e) = &response.events {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
+
+    writeln!(writer, "{}", "----- Object changes ----".bold())?;
+    if let Some(e) = &response.object_changes {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
+
+    writeln!(writer, "{}", "----- Balance changes ----".bold())?;
+    if let Some(e) = &response.balance_changes {
+        writeln!(writer, "{:#?}", json!(e))?;
     }
     Ok(writer)
 }
