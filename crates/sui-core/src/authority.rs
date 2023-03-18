@@ -1016,11 +1016,13 @@ impl AuthorityState {
         let mut gas_object_refs = transaction.gas().to_vec();
         let (gas_status, input_objects) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
-            let protocol_config = epoch_store.protocol_config();
-            let max_tx_gas = protocol_config.max_tx_gas();
+            // use a 100M sui coin
+            const MIST_TO_SUI: u64 = 1_000_000_000;
+            const DRY_RUN_SUI: u64 = 100_000_000;
+            let max_coin_value = MIST_TO_SUI * DRY_RUN_SUI;
             let gas_object_id = ObjectID::random();
             let gas_object = Object::new_move(
-                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_tx_gas),
+                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_coin_value),
                 Owner::AddressOwner(sender),
                 TransactionDigest::genesis(),
             );
