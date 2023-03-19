@@ -129,6 +129,13 @@ module sui::balance {
     public fun create_for_testing<T>(value: u64): Balance<T> {
         Balance { value }
     }
+
+    #[test_only]
+    /// Destroy a `Balance` of any coin for testing purposes.
+    public fun destroy_for_testing<T>(self: Balance<T>): u64 {
+        let Balance { value } = self;
+        value
+    }
 }
 
 #[test_only]
