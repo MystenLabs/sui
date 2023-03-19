@@ -271,6 +271,8 @@ Run the following command from the `sui` root folder:
 pnpm sdk test:e2e
 ```
 
+** Troubleshooting ** if you encounter `Retrying requesting from faucet: Retry failed: fetch is not defined`, you need to switch to [NodeJs 18](https://nodejs.org/de/blog/announcements/v18-release-announce).
+
 For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
 
 ## Test with the Sui TypeScript SDK
