@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::access::Access;
-use arc_swap::{ArcSwap, ArcSwapAny};
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
@@ -205,7 +204,7 @@ pub struct ConsensusAdapter {
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
-    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    low_scoring_authorities: ArcSwap<Arc<ArcSwap<HashMap<AuthorityName, u64>>>>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
@@ -237,10 +236,11 @@ impl ConsensusAdapter {
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
-        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         metrics: ConsensusAdapterMetrics,
     ) -> Self {
         let num_inflight_transactions = Default::default();
+        let low_scoring_authorities =
+            ArcSwap::from_pointee(Arc::new(ArcSwap::from_pointee(HashMap::new())));
         Self {
             consensus_client,
             authority,
@@ -251,6 +251,13 @@ impl ConsensusAdapter {
             submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
             latency_observer: LatencyObserver::new(),
         }
+    }
+
+    pub fn swap_low_scoring_authorities(
+        &self,
+        new_low_scoring: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    ) {
+        self.low_scoring_authorities.swap(Arc::new(new_low_scoring));
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
@@ -395,9 +402,11 @@ impl ConsensusAdapter {
     }
 
     fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
-        <Arc<ArcSwapAny<Arc<HashMap<AuthorityName, u64>>>> as Access<HashMap<AuthorityName, u64>>>::load(
-                &self.low_scoring_authorities,
-            ).get(authority).is_some()
+        self.low_scoring_authorities
+            .load()
+            .load_full()
+            .get(authority)
+            .is_some()
     }
 
     /// This method blocks until transaction is persisted in local database
