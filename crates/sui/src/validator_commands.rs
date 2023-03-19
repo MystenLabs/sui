@@ -55,11 +55,19 @@ pub enum SuiValidatorCommand {
     BecomeCandidate {
         #[clap(name = "validator-info-path")]
         file: PathBuf,
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
     },
     #[clap(name = "join-committee")]
-    JoinCommittee,
+    JoinCommittee {
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
+    },
     #[clap(name = "leave-committee")]
-    LeaveCommittee,
+    LeaveCommittee {
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
+    },
 }
 
 #[derive(Serialize)]
@@ -100,7 +108,6 @@ fn make_key_files(
         };
         write_keypair_to_file(&kp, &file_name)?;
     }
-    println!("Generated new key file: {:?}.", file_name);
     Ok(())
 }
 
@@ -183,7 +190,8 @@ impl SuiValidatorCommand {
                 );
                 SuiValidatorCommandResponse::MakeValidatorInfo
             }
-            SuiValidatorCommand::BecomeCandidate { file } => {
+            SuiValidatorCommand::BecomeCandidate { file, gas_budget } => {
+                let gas_budget = gas_budget.unwrap_or(15000);
                 let validator_info_bytes = fs::read(file)?;
                 // Note: we should probably rename the struct or evolve it accordingly.
                 let validator_info: GenesisValidatorInfo =
@@ -226,19 +234,40 @@ impl SuiValidatorCommand {
                     CallArg::Pure(bcs::to_bytes(&validator.gas_price()).unwrap()),
                     CallArg::Pure(bcs::to_bytes(&validator.commission_rate()).unwrap()),
                 ];
-                let response =
-                    call_0x5(context, "request_add_validator_candidate", args, &client).await?;
+                let response = call_0x5(
+                    context,
+                    "request_add_validator_candidate",
+                    args,
+                    &client,
+                    gas_budget,
+                )
+                .await?;
                 SuiValidatorCommandResponse::BecomeCandidate(response)
             }
 
-            SuiValidatorCommand::JoinCommittee => {
-                let response = call_0x5(context, "request_add_validator", vec![], &client).await?;
+            SuiValidatorCommand::JoinCommittee { gas_budget } => {
+                let gas_budget = gas_budget.unwrap_or(10000);
+                let response = call_0x5(
+                    context,
+                    "request_add_validator",
+                    vec![],
+                    &client,
+                    gas_budget,
+                )
+                .await?;
                 SuiValidatorCommandResponse::JoinCommittee(response)
             }
 
-            SuiValidatorCommand::LeaveCommittee => {
-                let response =
-                    call_0x5(context, "request_remove_validator", vec![], &client).await?;
+            SuiValidatorCommand::LeaveCommittee { gas_budget } => {
+                let gas_budget = gas_budget.unwrap_or(10000);
+                let response = call_0x5(
+                    context,
+                    "request_remove_validator",
+                    vec![],
+                    &client,
+                    gas_budget,
+                )
+                .await?;
                 SuiValidatorCommandResponse::LeaveCommittee(response)
             }
         });
@@ -251,17 +280,21 @@ async fn call_0x5(
     function: &'static str,
     call_args: Vec<CallArg>,
     sui_client: &SuiClient,
+    gas_budget: u64,
 ) -> anyhow::Result<SuiTransactionResponse> {
     let sender = context.active_address()?;
-    let gas_obj_ref = get_gas_obj_ref(sender, sui_client).await?;
     let mut args = vec![SUI_SYSTEM_OBJ_CALL_ARG];
     args.extend(call_args);
     let rgp = sui_client
         .governance_api()
         .get_reference_gas_price()
         .await?;
-    // 10k is a herustic number for gas unit
-    let gas_budget = 10_000 * rgp;
+
+    let gas_budget = gas_budget * rgp;
+    // TODO: remove the 2nd multiplication once the gas checker fix is in
+    let minimal_gas_budget = gas_budget * rgp;
+
+    let gas_obj_ref = get_gas_obj_ref(sender, sui_client, minimal_gas_budget).await?;
     let tx_data = TransactionData::new_move_call(
         sender,
         SUI_FRAMEWORK_OBJECT_ID,

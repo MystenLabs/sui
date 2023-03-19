@@ -97,13 +97,14 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
 pub async fn get_gas_obj_ref(
     sui_address: SuiAddress,
     sui_client: &SuiClient,
+    minimal_gas_balance: u64,
 ) -> anyhow::Result<ObjectRef> {
     let coins = sui_client
         .coin_read_api()
-        .get_coins(sui_address, Some("0x2::sui::SUI".into()), None, Some(3))
+        .get_coins(sui_address, Some("0x2::sui::SUI".into()), None, None)
         .await?
         .data;
-    let gas_obj = coins.iter().find(|c| c.balance >= 10000 * 100);
+    let gas_obj = coins.iter().find(|c| c.balance >= minimal_gas_balance);
     if gas_obj.is_none() {
         bail!("Validator doesn't have enough Sui coins to cover transaction fees.");
     }
@@ -306,7 +307,7 @@ async fn update_metadata_on_chain(
     sui_address: SuiAddress,
     sui_client: &SuiClient,
 ) -> anyhow::Result<()> {
-    let gas_obj_ref = get_gas_obj_ref(sui_address, sui_client).await?;
+    let gas_obj_ref = get_gas_obj_ref(sui_address, sui_client, 10000 * 100).await?;
     let mut args = vec![CallArg::Object(ObjectArg::SharedObject {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
