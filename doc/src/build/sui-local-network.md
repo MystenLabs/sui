@@ -198,12 +198,15 @@ To connect the live Sui Explorer to your local network, open the URL:[https://ex
 Run the following command from the `sui` root folder:
 
 ```bash
+# If you haven't already, install all the dependencies for the workspace first
+pnpm install
+# start the explorer server
 pnpm explorer dev
 ```
 
 After the command completes, open your local Sui Explorer at the following URL: [http://localhost:3000/](http://localhost:3000/).
 
-For more details about Sui explorer, see [https://github.com/MystenLabs/sui/tree/main/apps/explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer).
+For more details about Sui explorer, see [the Explorer README](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md#set-up).
 
 ## Set up a local Sui Wallet
 
@@ -214,6 +217,9 @@ You can also use a local Sui Wallet to test with your local network. You can the
 Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
 ```bash
+# If you haven't already, install all the dependencies for the workspace first
+pnpm install
+# To build the extension and watch for changes run
 pnpm wallet start
 ```
 
