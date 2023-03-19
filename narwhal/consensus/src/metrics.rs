@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use prometheus::{
-    default_registry, register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
-    Registry,
+    default_registry, linear_buckets, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -92,11 +92,14 @@ impl ConsensusMetrics {
             committed_certificates: register_histogram_with_registry!(
                 "committed_certificates",
                 "The number of certificates committed on a commit round",
-                // buckets in number of certificates
-                vec![
-                    0.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 150.0,
-                    200.0, 300.0, 400.0, 500.0, 1_000.0, 2_000.0, 5_000.0
-                ],
+                // total 64 buckets in number of certificates, up to 950.
+                [
+                    linear_buckets(1.0, 1.0, 9).unwrap(), 
+                    linear_buckets(10.0, 2.0, 15).unwrap(),
+                    linear_buckets(40.0, 5.0, 10).unwrap(), 
+                    linear_buckets(100.0, 10.0, 15).unwrap(),
+                    linear_buckets(250.0, 50.0, 15).unwrap(),
+                ].concat(),
                 registry
             ).unwrap(),
             certificate_commit_latency: register_histogram_with_registry!(
