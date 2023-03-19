@@ -375,9 +375,12 @@ pub struct ProtocolConfig {
     // hash::blake2b256
     hash_blake2b256_cost_base: Option<u64>,
     hash_blake2b256_data_cost_per_byte: Option<u64>,
+    hash_blake2b256_data_cost_per_block: Option<u64>,
+
     // hash::keccak256
     hash_keccak256_cost_base: Option<u64>,
     hash_keccak256_data_cost_per_byte: Option<u64>,
+    hash_keccak256_data_cost_per_block: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -651,11 +654,19 @@ impl ProtocolConfig {
         self.hash_blake2b256_data_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
     }
+    pub fn hash_blake2b256_data_cost_per_block(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
     pub fn hash_keccak256_cost_base(&self) -> u64 {
         self.hash_keccak256_cost_base.expect(CONSTANT_ERR_MSG)
     }
     pub fn hash_keccak256_data_cost_per_byte(&self) -> u64 {
         self.hash_keccak256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_block(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_block
             .expect(CONSTANT_ERR_MSG)
     }
 
@@ -846,9 +857,11 @@ impl ProtocolConfig {
                 // hash::blake2b256
                 hash_blake2b256_cost_base: Some(52),
                 hash_blake2b256_data_cost_per_byte: Some(0),
+                hash_blake2b256_data_cost_per_block: Some(0),
                 // hash::keccak256
                 hash_keccak256_cost_base: Some(52),
-                hash_keccak256_data_cost_per_byte: Some(0)
+                hash_keccak256_data_cost_per_byte: Some(0),
+                hash_keccak256_data_cost_per_block: Some(0)
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,

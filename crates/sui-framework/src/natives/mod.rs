@@ -104,11 +104,17 @@ impl NativesCostTable {
                 hash_blake2b256_data_cost_per_byte: protocol_config
                     .hash_blake2b256_data_cost_per_byte()
                     .into(),
+                hash_blake2b256_data_cost_per_block: protocol_config
+                    .hash_blake2b256_data_cost_per_block()
+                    .into(),
             },
             hash_keccak256_cost_params: HashKeccak256CostParams {
                 hash_keccak256_cost_base: protocol_config.hash_keccak256_cost_base().into(),
                 hash_keccak256_data_cost_per_byte: protocol_config
                     .hash_keccak256_data_cost_per_byte()
+                    .into(),
+                hash_keccak256_data_cost_per_block: protocol_config
+                    .hash_keccak256_data_cost_per_block()
                     .into(),
             },
         }
