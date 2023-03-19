@@ -103,7 +103,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             |resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == response.digest)
         ));
         let sender_signed_data: SenderSignedData =
-            bcs::from_bytes(&response.raw_transaction).unwrap();
+            bcs::from_bytes(&response.raw_transaction.unwrap()).unwrap();
         assert_eq!(sender_signed_data.digest(), tx_digest);
     }
 
@@ -151,7 +151,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
         .await?;
 
     let decode_sender_signed_data: SenderSignedData =
-        bcs::from_bytes(&response.raw_transaction).unwrap();
+        bcs::from_bytes(&response.raw_transaction.unwrap()).unwrap();
     // verify that the raw transaction data returned by the response is the same
     // as the original transaction data
     assert_eq!(decode_sender_signed_data, original_sender_signed_data);

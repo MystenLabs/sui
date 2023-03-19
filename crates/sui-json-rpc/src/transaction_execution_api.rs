@@ -78,11 +78,8 @@ impl TransactionExecutionApi {
 
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), sigs);
         let tx = txn.data().clone().try_into()?;
-        let raw_transaction = if opts.show_raw_input {
-            bcs::to_bytes(txn.data())?
-        } else {
-            vec![]
-        };
+        let raw_transaction = opts.show_raw_input.then_some(bcs::to_bytes(txn.data())?);
+
         let digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();

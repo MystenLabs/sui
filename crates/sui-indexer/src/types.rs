@@ -47,6 +47,12 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
                 digest
             )
         })?;
+        let raw_transaction = raw_transaction.ok_or_else(|| {
+            anyhow::anyhow!(
+                "RawTransaction is None in SuiTransactionFullResponse of digest {:?}.",
+                digest
+            )
+        })?;
         let effects = effects.ok_or_else(|| {
             anyhow::anyhow!(
                 "Effects is None in SuiTransactionFullResponse of digest {:?}.",
@@ -112,7 +118,7 @@ impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
         SuiTransactionResponse {
             digest,
             transaction: Some(transaction),
-            raw_transaction,
+            raw_transaction: Some(raw_transaction),
             effects: Some(effects),
             events: Some(events),
             object_changes,

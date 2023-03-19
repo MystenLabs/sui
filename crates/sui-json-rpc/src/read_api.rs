@@ -1138,7 +1138,7 @@ fn convert_to_response(
     if opts.show_raw_input && cache.transaction.is_some() {
         let sender_signed_data = cache.transaction.as_ref().unwrap().data();
         match bcs::to_bytes(sender_signed_data) {
-            Ok(t) => response.raw_transaction = t,
+            Ok(t) => response.raw_transaction = Some(t),
             Err(e) => response.errors.push(e.to_string()),
         }
     }

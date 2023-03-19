@@ -196,10 +196,10 @@ pub struct SuiTransactionResponse {
     pub transaction: Option<SuiTransaction>,
     /// BCS encoded [SenderSignedData] that includes input object references
     /// returns empty array if `show_raw_transaction` is false
-    #[serde_as(as = "Base64")]
-    #[schemars(with = "Base64")]
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub raw_transaction: Vec<u8>,
+    #[serde_as(as = "Option<Base64>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_transaction: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<SuiTransactionEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]

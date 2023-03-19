@@ -6831,9 +6831,12 @@
           },
           "rawTransaction": {
             "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/Base64"
+              },
+              {
+                "type": "null"
               }
             ]
           },
