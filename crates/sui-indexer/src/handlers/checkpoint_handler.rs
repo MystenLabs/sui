@@ -1,24 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::IndexerError;
-use crate::metrics::IndexerCheckpointHandlerMetrics;
-use crate::models::checkpoints::Checkpoint;
-use crate::models::objects::{DeletedObject, Object, ObjectStatus};
-use crate::models::packages::Package;
-use crate::models::transactions::Transaction;
-use crate::multi_get_full_transactions;
-use crate::store::{
-    CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
-    TransactionObjectChanges,
-};
-use crate::types::SuiTransactionFullResponse;
-use futures::future::join_all;
-use futures::FutureExt;
-use mysten_metrics::spawn_monitored_task;
-use prometheus::Registry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+
+use futures::future::join_all;
+use futures::FutureExt;
+use prometheus::Registry;
+use tokio::task::JoinHandle;
+use tracing::{error, info, warn};
+
+use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
@@ -27,8 +19,19 @@ use sui_json_rpc_types::{
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tokio::task::JoinHandle;
-use tracing::{error, info, warn};
+
+use crate::errors::IndexerError;
+use crate::metrics::IndexerCheckpointHandlerMetrics;
+use crate::models::checkpoints::Checkpoint;
+use crate::models::objects::{DeletedObject, Object, ObjectStatus};
+use crate::models::packages::Package;
+use crate::models::transactions::Transaction;
+use crate::store::{
+    CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
+    TransactionObjectChanges,
+};
+use crate::types::SuiTransactionFullResponse;
+use crate::utils::multi_get_full_transactions;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
 const MULTI_GET_CHUNK_SIZE: usize = 500;

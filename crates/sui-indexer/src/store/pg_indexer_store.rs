@@ -14,7 +14,7 @@ use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use tracing::{error, info};
+use tracing::info;
 
 use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -24,7 +24,6 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::error_logs::commit_error_logs;
 use crate::models::events::Event;
 use crate::models::objects::Object;
 use crate::models::transactions::Transaction;
@@ -1010,17 +1009,6 @@ impl IndexerStore for PgIndexerStore {
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
         // TODO: create new partition on epoch change
         self.partition_manager.advance_epoch(data.epoch_id + 1)
-    }
-
-    fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError> {
-        if !errors.is_empty() {
-            let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-            let new_error_logs = errors.into_iter().map(|e| e.into()).collect();
-            if let Err(e) = commit_error_logs(&mut pg_pool_conn, new_error_logs) {
-                error!("Failed writing error logs with error {:?}", e);
-            }
-        }
-        Ok(())
     }
 
     fn module_cache(&self) -> &Self::ModuleCache {

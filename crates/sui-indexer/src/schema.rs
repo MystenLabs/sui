@@ -48,15 +48,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    error_logs (id) {
-        id -> Int8,
-        error_type -> Varchar,
-        error -> Text,
-        error_time -> Timestamp,
-    }
-}
-
-diesel::table! {
     events (id) {
         id -> Int8,
         transaction_digest -> Varchar,
@@ -235,7 +226,6 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     addresses,
     checkpoints,
-    error_logs,
     events,
     input_objects,
     move_calls,

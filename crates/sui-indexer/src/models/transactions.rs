@@ -5,7 +5,6 @@ use crate::errors::IndexerError;
 use crate::schema::transactions;
 use crate::schema::transactions::transaction_digest;
 use crate::types::SuiTransactionFullResponse;
-use crate::utils::log_errors_to_pg;
 use crate::PgPoolConnection;
 
 use diesel::prelude::*;
@@ -52,13 +51,10 @@ pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
     tx_resps: Vec<SuiTransactionFullResponse>,
 ) -> Result<usize, IndexerError> {
-    let new_txn_iter = tx_resps.into_iter().map(|tx| tx.try_into());
-
-    let mut errors = vec![];
-    let new_txns: Vec<Transaction> = new_txn_iter
-        .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
-        .collect();
-    log_errors_to_pg(pg_pool_conn, errors);
+    let new_txns: Vec<Transaction> = tx_resps
+        .into_iter()
+        .map(|tx| tx.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
 
     let txn_commit_result: Result<usize, Error> = pg_pool_conn
         .build_transaction()

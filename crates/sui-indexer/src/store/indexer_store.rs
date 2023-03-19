@@ -133,8 +133,6 @@ pub trait IndexerStore {
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
-    fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError>;
-
     fn module_cache(&self) -> &Self::ModuleCache;
 }
 
