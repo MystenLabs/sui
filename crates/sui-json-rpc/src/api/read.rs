@@ -5,7 +5,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectsPage,
+    Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType, ObjectsPage,
     SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiTransactionResponse, SuiTransactionResponseOptions,
@@ -29,7 +29,7 @@ pub trait ReadApi {
         address: SuiAddress,
         /// the objects query criteria.
         query: Option<SuiObjectResponseQuery>,
-        /// Optional paging cursor
+        /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<ObjectID>,
         /// Max number of items returned per page, default to [MAX_GET_OWNED_OBJECT_SIZE] if not specified.
         limit: Option<usize>,
@@ -43,7 +43,7 @@ pub trait ReadApi {
         &self,
         /// The ID of the parent object
         parent_object_id: ObjectID,
-        /// Optional paging cursor
+        /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<ObjectID>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
@@ -153,7 +153,7 @@ pub trait ReadApi {
         &self,
         /// the transaction query criteria.
         query: SuiTransactionResponseQuery,
-        /// Optional paging cursor
+        /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.
         limit: Option<usize>,
@@ -212,4 +212,16 @@ pub trait ReadApi {
         /// Checkpoint identifier, can use either checkpoint digest, or checkpoint sequence number as input.
         id: CheckpointId,
     ) -> RpcResult<Checkpoint>;
+
+    /// Return paginated list of checkpoints
+    #[method(name = "getCheckpoints")]
+    async fn get_checkpoints(
+        &self,
+        /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
+        cursor: Option<CheckpointSequenceNumber>,
+        /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.
+        limit: Option<usize>,
+        /// query result ordering, default to false (ascending order), oldest record first.
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage>;
 }
