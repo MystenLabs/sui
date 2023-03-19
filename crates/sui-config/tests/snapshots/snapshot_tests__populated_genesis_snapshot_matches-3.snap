@@ -2,9 +2,14 @@
 source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object()
 ---
+new_dummy_field: 100
 epoch: 0
 protocol_version: 3
+<<<<<<< HEAD
 system_state_version: 1
+=======
+system_state_version: 2
+>>>>>>> 11327b690e (Add V2 type in Rust)
 validators:
   total_stake: 25000000000000000
   active_validators:

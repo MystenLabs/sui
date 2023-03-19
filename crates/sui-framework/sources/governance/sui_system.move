@@ -813,7 +813,7 @@ module sui::sui_system {
             // If we are upgrading the system state, we need to make sure that the protocol version
             // is also upgraded.
             assert!(old_protocol_version != next_protocol_version, 0);
-            let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
+            let cur_state: SuiSystemStateInnerV2 = dynamic_field::remove(&mut wrapper.id, wrapper.version);
             let new_state = upgrade_system_state(cur_state, new_system_state_version);
             wrapper.version = new_system_state_version;
             dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
@@ -895,25 +895,26 @@ module sui::sui_system {
         }
     }
 
-    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
+    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInnerV2 {
         let version = self.version;
-        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, version);
+        let inner: &SuiSystemStateInnerV2 = dynamic_field::borrow(&self.id, version);
         assert!(inner.system_state_version == version, 0);
         inner
     }
 
-    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         let version = self.version;
-        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
+        let inner: &mut SuiSystemStateInnerV2 = dynamic_field::borrow_mut(&mut self.id, version);
         assert!(inner.system_state_version == version, 0);
         inner
     }
 
-    fun upgrade_system_state(self: SuiSystemStateInner, new_system_state_version: u64): SuiSystemStateInnerV2 {
+    fun upgrade_system_state(self: SuiSystemStateInnerV2, new_system_state_version: u64): SuiSystemStateInnerV2 {
         // Whenever we upgrade the system state version, we will have to first
         // ship a framework upgrade that introduces a new system state type, and make this
         // function generate such type from the old state.
-        let SuiSystemStateInner {
+        let SuiSystemStateInnerV2 {
+            new_dummy_field,
             epoch: u64,
             protocol_version,
             system_state_version: _,
@@ -927,7 +928,7 @@ module sui::sui_system {
             epoch_start_timestamp_ms,
         } = self;
         SuiSystemStateInnerV2 {
-            new_dummy_field: 100,
+            new_dummy_field,
             epoch: u64,
             protocol_version,
             system_state_version: new_system_state_version,

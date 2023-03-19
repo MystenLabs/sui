@@ -7,6 +7,7 @@ use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use crate::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
@@ -21,6 +22,7 @@ use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary}
 
 pub mod epoch_start_sui_system_state;
 pub mod sui_system_state_inner_v1;
+pub mod sui_system_state_inner_v2;
 pub mod sui_system_state_summary;
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
@@ -80,6 +82,7 @@ pub trait SuiSystemStateTrait {
 #[enum_dispatch(SuiSystemStateTrait)]
 pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
+    V2(SuiSystemStateInnerV2),
 }
 
 /// This is the fixed type used by genesis.
@@ -95,6 +98,7 @@ impl SuiSystemState {
     pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {
         match self {
             SuiSystemState::V1(inner) => inner,
+            _ => unreachable!(),
         }
     }
 
@@ -155,6 +159,11 @@ where
                 )?;
             Ok(SuiSystemState::V1(result))
         }
+        2 => {
+            let result: SuiSystemStateInnerV2 =
+                get_dynamic_field_from_store(object_store, wrapper.id.id.bytes, &wrapper.version)?;
+            Ok(SuiSystemState::V2(result))
+        }
         // The following case is for sim_test only to support authority_tests::test_sui_system_state_nop_upgrade.
         #[cfg(msim)]
         SUI_SYSTEM_STATE_TESTING_VERSION1 => {
@@ -191,8 +200,11 @@ where
     Ok(validator.into_sui_validator_summary())
 }
 
-pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
-    INIT_SYSTEM_STATE_VERSION
+pub fn get_sui_system_state_version(protocol_version: ProtocolVersion) -> u64 {
+    match protocol_version.as_u64() {
+        1 | 2 | 3 => 1,
+        _ => 2,
+    }
 }
 
 pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {

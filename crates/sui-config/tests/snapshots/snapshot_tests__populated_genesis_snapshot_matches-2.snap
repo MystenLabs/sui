@@ -4,5 +4,5 @@ expression: genesis.sui_system_wrapper_object()
 ---
 id:
   id: "0x0000000000000000000000000000000000000000000000000000000000000005"
-version: 1
+version: 2
 

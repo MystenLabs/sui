@@ -1972,7 +1972,7 @@ gas coins.
         // If we are upgrading the system state, we need <b>to</b> make sure that the protocol version
         // is also upgraded.
         <b>assert</b>!(old_protocol_version != next_protocol_version, 0);
-        <b>let</b> cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
+        <b>let</b> cur_state: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> = <a href="dynamic_field.md#0x2_dynamic_field_remove">dynamic_field::remove</a>(&<b>mut</b> wrapper.id, wrapper.version);
         <b>let</b> new_state = <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(cur_state, new_system_state_version);
         wrapper.version = new_system_state_version;
         <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> wrapper.id, wrapper.version, new_state);
@@ -2225,7 +2225,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">sui_system::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -2234,9 +2234,9 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state">load_system_state</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
     <b>let</b> version = self.version;
-    <b>let</b> inner: &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, version);
+    <b>let</b> inner: &<a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, version);
     <b>assert</b>!(inner.system_state_version == version, 0);
     inner
 }
@@ -2252,7 +2252,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">sui_system::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -2261,9 +2261,9 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
     <b>let</b> version = self.version;
-    <b>let</b> inner: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
+    <b>let</b> inner: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> = <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
     <b>assert</b>!(inner.system_state_version == version, 0);
     inner
 }
@@ -2279,7 +2279,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">sui_system::SuiSystemStateInner</a>, new_system_state_version: u64): <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">sui_system::SuiSystemStateInnerV2</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">sui_system::SuiSystemStateInnerV2</a>, new_system_state_version: u64): <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">sui_system::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -2288,11 +2288,12 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a>, new_system_state_version: u64): <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, new_system_state_version: u64): <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
     // Whenever we upgrade the system state version, we will have <b>to</b> first
     // ship a framework upgrade that introduces a new system state type, and make this
     // function generate such type from the <b>old</b> state.
-    <b>let</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInner">SuiSystemStateInner</a> {
+    <b>let</b> <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
+        new_dummy_field,
         epoch: u64,
         protocol_version,
         system_state_version: _,
@@ -2306,7 +2307,7 @@ Returns all the validators who are currently reporting <code>addr</code>
         epoch_start_timestamp_ms,
     } = self;
     <a href="sui_system.md#0x2_sui_system_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
-        new_dummy_field: 100,
+        new_dummy_field,
         epoch: u64,
         protocol_version,
         system_state_version: new_system_state_version,
