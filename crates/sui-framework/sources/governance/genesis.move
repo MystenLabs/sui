@@ -41,9 +41,14 @@ module sui::genesis {
     }
 
     struct GenesisChainParameters has drop, copy {
+        protocol_version: u64,
+        system_state_version: u64,
         governance_start_epoch: u64,
         chain_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+        initial_stake_subsidy_distribution_amount: u64,
+        stake_subsidy_period_length: u64,
+        stake_subsidy_decrease_rate: u16,
     }
 
     struct TokenDistributionSchedule {
@@ -68,8 +73,6 @@ module sui::genesis {
         genesis_chain_parameters: GenesisChainParameters,
         genesis_validators: vector<GenesisValidatorMetadata>,
         token_distribution_schedule: TokenDistributionSchedule,
-        protocol_version: u64,
-        system_state_version: u64,
         ctx: &mut TxContext,
     ) {
         // Ensure this is only called at genesis
@@ -155,12 +158,14 @@ module sui::genesis {
             validators,
             subsidy_fund,
             storage_fund,
+            genesis_chain_parameters.protocol_version,
+            genesis_chain_parameters.system_state_version,
             genesis_chain_parameters.governance_start_epoch,
-            INIT_STAKE_SUBSIDY_AMOUNT,
-            protocol_version,
-            system_state_version,
             genesis_chain_parameters.chain_start_timestamp_ms,
             genesis_chain_parameters.epoch_duration_ms,
+            genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
+            genesis_chain_parameters.stake_subsidy_period_length,
+            genesis_chain_parameters.stake_subsidy_decrease_rate,
             ctx,
         );
     }
