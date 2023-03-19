@@ -764,6 +764,20 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
+    fn get_total_address_number(&self) -> Result<u64, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let total_addresses = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                addresses::table
+                    .select(count(addresses::account_address))
+                    .first::<i64>(conn)
+            })
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))?;
+        Ok(total_addresses as u64)
+    }
+
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
         let TemporaryCheckpointStore {
             checkpoint,

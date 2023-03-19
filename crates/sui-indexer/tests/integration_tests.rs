@@ -18,11 +18,11 @@ pub mod pg_integration_test {
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
         EventFilter, SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse,
-        SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponseOptions,
-        SuiTransactionResponseQuery, TransactionBytes,
+        SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponse,
+        SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::{ObjectID, SuiAddress};
     use sui_types::digests::TransactionDigest;
     use sui_types::gas_coin::GasCoin;
     use sui_types::messages::ExecuteTransactionRequestType;
@@ -35,6 +35,65 @@ pub mod pg_integration_test {
 
     use sui_indexer::indexer_test_utils::start_test_indexer;
     use tokio::task::JoinHandle;
+
+    async fn execute_simple_transfer(
+        test_cluster: &mut TestCluster,
+        indexer_rpc_client: &HttpClient,
+    ) -> Result<
+        (
+            SuiTransactionResponse,
+            SuiAddress,
+            SuiAddress,
+            Vec<ObjectID>,
+        ),
+        anyhow::Error,
+    > {
+        let sender = test_cluster.accounts.first().unwrap();
+        let recipient = test_cluster.accounts.last().unwrap();
+        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+            .get_owned_objects(
+                *sender,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::new().with_type(),
+                )),
+                None,
+                None,
+                None,
+            )
+            .await?
+            .data
+            .into_iter()
+            .filter_map(|object_resp| match object_resp {
+                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
+                _ => None,
+            })
+            .collect();
+
+        let transaction_bytes: TransactionBytes = indexer_rpc_client
+            .transfer_object(
+                *sender,
+                *gas_objects.first().unwrap(),
+                Some(*gas_objects.last().unwrap()),
+                2000,
+                *recipient,
+            )
+            .await?;
+        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let tx =
+            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(sender)?);
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+        let tx_response = indexer_rpc_client
+            .execute_transaction(
+                tx_bytes,
+                signatures,
+                Some(SuiTransactionResponseOptions::full_content()),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok((tx_response, *sender, *recipient, gas_objects))
+    }
 
     #[tokio::test]
     async fn test_genesis_sync() {
@@ -68,53 +127,23 @@ pub mod pg_integration_test {
     }
 
     #[tokio::test]
+    async fn test_total_address() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+        let total_address_count = store.get_total_address_number().unwrap();
+        // one sender address of all zeroes and 9 recipient addresses.
+        assert_eq!(total_address_count, 10);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let address = test_cluster.accounts.first().unwrap();
-        let recipient_address = test_cluster.accounts.last().unwrap();
-        let gas_objects: Vec<ObjectID> = indexer_rpc_client
-            .get_owned_objects(
-                *address,
-                Some(SuiObjectResponseQuery::new_with_options(
-                    SuiObjectDataOptions::new().with_type(),
-                )),
-                None,
-                None,
-                None,
-            )
-            .await?
-            .data
-            .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
-                _ => None,
-            })
-            .collect();
-
-        let transaction_bytes: TransactionBytes = indexer_rpc_client
-            .transfer_object(
-                *address,
-                *gas_objects.first().unwrap(),
-                Some(*gas_objects.last().unwrap()),
-                2000,
-                *recipient_address,
-            )
-            .await?;
-        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-        let tx =
-            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let tx_response = indexer_rpc_client
-            .execute_transaction(
-                tx_bytes,
-                signatures,
-                Some(SuiTransactionResponseOptions::full_content()),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?;
+        let (tx_response, sender, recipient, gas_objects) =
+            execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
         let (_, _, nft_digest) = create_devnet_nft(&mut test_cluster.wallet).await.unwrap();
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
@@ -131,7 +160,7 @@ pub mod pg_integration_test {
 
         // query tx with sender address
         let from_query =
-            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(*address));
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(sender));
         let tx_from_query_response = indexer_rpc_client
             .query_transactions(from_query, None, None, None)
             .await?;
@@ -148,9 +177,8 @@ pub mod pg_integration_test {
         );
 
         // query tx with recipient address
-        let to_query = SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(
-            *recipient_address,
-        ));
+        let to_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(recipient));
         let tx_to_query_response = indexer_rpc_client
             .query_transactions(to_query, None, None, None)
             .await?;
