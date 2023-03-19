@@ -3,7 +3,6 @@
 
 pub mod addresses;
 pub mod checkpoints;
-pub mod error_logs;
 pub mod events;
 pub mod objects;
 pub mod owners;
