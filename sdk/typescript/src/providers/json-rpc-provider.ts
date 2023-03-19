@@ -1037,11 +1037,14 @@ export class JsonRpcProvider {
    * Returns historical checkpoints paginated
    */
   async getCheckpoints(input: {
-    /** exclusive cursor if `Some`, otherwise start from the beginning */
+    /**
+     * An optional paging cursor. If provided, the query will start from the next item after the specified cursor.
+     * Default to start from the first item if not specified.
+     */
     cursor?: number;
-    /** Maximum item returned per page, default to 20 if not specified. */
+    /** Maximum item returned per page, default to 100 if not specified. */
     limit?: number;
-    /** query result ordering, default to false (ascending order), oldest record first.s */
+    /** query result ordering, default to false (ascending order), oldest record first */
     descendingOrder: boolean;
   }): Promise<CheckpointPage> {
     try {

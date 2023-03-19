@@ -435,7 +435,6 @@
                 "storageRebate": 0
               },
               "timestampMs": 1676911928,
-              "endOfEpochData": null,
               "transactions": [
                 "3bpzHaSLTQ6p4trLDk2euZxzQ6XqLeWDmUNTAdEXXL2c"
               ],
@@ -452,11 +451,11 @@
           "name": "Read API"
         }
       ],
-      "description": "Return pagenated list of checkpoints",
+      "description": "Return paginated list of checkpoints",
       "params": [
         {
           "name": "cursor",
-          "description": "exclusive cursor if `Some`, otherwise start from the beginning",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint64",
@@ -465,7 +464,7 @@
         },
         {
           "name": "limit",
-          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -644,7 +643,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -1059,7 +1058,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -1658,7 +1657,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
           }
@@ -3302,19 +3301,19 @@
       "EndOfEpochData": {
         "type": "object",
         "required": [
-          "epoch_commitments",
-          "next_epoch_committee",
-          "next_epoch_protocol_version"
+          "epochCommitments",
+          "nextEpochCommittee",
+          "nextEpochProtocolVersion"
         ],
         "properties": {
-          "epoch_commitments": {
+          "epochCommitments": {
             "description": "Commitments to epoch specific state (e.g. live object set)",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CheckpointCommitment"
             }
           },
-          "next_epoch_committee": {
+          "nextEpochCommittee": {
             "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
             "type": "array",
             "items": {
@@ -3333,7 +3332,7 @@
               "minItems": 2
             }
           },
-          "next_epoch_protocol_version": {
+          "nextEpochProtocolVersion": {
             "description": "The protocol version that is in effect during the epoch that starts immediately after this checkpoint.",
             "allOf": [
               {

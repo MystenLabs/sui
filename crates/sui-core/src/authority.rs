@@ -2150,6 +2150,7 @@ impl AuthorityState {
     pub fn get_owner_objects(
         &self,
         owner: SuiAddress,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
         filter: Option<SuiObjectDataFilter>,
@@ -2164,6 +2165,7 @@ impl AuthorityState {
     pub fn get_owner_objects_iterator(
         &self,
         owner: SuiAddress,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         filter: Option<SuiObjectDataFilter>,
@@ -2203,7 +2205,7 @@ impl AuthorityState {
     pub fn get_dynamic_fields(
         &self,
         owner: ObjectID,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> SuiResult<Vec<DynamicFieldInfo>> {
@@ -2216,6 +2218,7 @@ impl AuthorityState {
     pub fn get_dynamic_fields_iterator(
         &self,
         owner: ObjectID,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         if let Some(indexes) = &self.indexes {
@@ -2343,7 +2346,7 @@ impl AuthorityState {
     pub fn get_transactions(
         &self,
         filter: Option<TransactionFilter>,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
@@ -2426,45 +2429,19 @@ impl AuthorityState {
 
     pub fn get_checkpoints(
         &self,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<CheckpointSequenceNumber>,
-        limit: Option<usize>,
-        reverse: bool,
+        limit: u64,
+        descending_order: bool,
     ) -> Result<Vec<Checkpoint>, anyhow::Error> {
         let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
-
-        let mut cursor = cursor.unwrap_or(0);
-        if cursor != 0 && !reverse {
-            cursor += 1;
-        }
-        let limit = limit.unwrap_or(1) as u64;
-
-        let end_index = std::cmp::min(cursor + limit, max_checkpoint);
-        let mut values = (cursor..=end_index).collect::<Vec<_>>();
-
-        if reverse && cursor == 0 {
-            cursor = max_checkpoint
-        }
-
-        if reverse {
-            let mut start_index = 0;
-            if let Some(_result) = cursor.checked_sub(limit) {
-                start_index = std::cmp::max(cursor - limit, 0);
-            }
-            values = (start_index..=(cursor - 1)).collect::<Vec<_>>();
-        }
-
-        let mut checkpoint_numbers = values;
-
-        if reverse {
-            checkpoint_numbers.reverse();
-        }
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
 
         let verified_checkpoints = self
             .get_checkpoint_store()
-            .multi_get_checkpoint_by_sequence_number(checkpoint_numbers.as_slice())?;
+            .multi_get_checkpoint_by_sequence_number(&checkpoint_numbers)?;
 
-        // let checks: Vec<VerifiedCheckpoint> = verified_checkpoints.into_iter().flatten().collect();
         let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
             .into_iter()
             .flatten()
@@ -2473,7 +2450,7 @@ impl AuthorityState {
 
         let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
             .iter()
-            .map(|chsummary| chsummary.content_digest)
+            .map(|summary| summary.content_digest)
             .collect();
 
         let checkpoint_contents = self
@@ -2500,7 +2477,7 @@ impl AuthorityState {
     pub async fn query_events(
         &self,
         query: EventFilter,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
@@ -3409,6 +3386,128 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+}
+
+fn calculate_checkpoint_numbers(
+    // If `Some`, the query will start from the next item after the specified cursor
+    cursor: Option<CheckpointSequenceNumber>,
+    limit: u64,
+    descending_order: bool,
+    max_checkpoint: CheckpointSequenceNumber,
+) -> Vec<CheckpointSequenceNumber> {
+    let (start_index, end_index) = match cursor {
+        Some(t) => {
+            if descending_order {
+                let start = std::cmp::min(t.saturating_sub(1), max_checkpoint);
+                let end = start.saturating_sub(limit - 1);
+                (end, start)
+            } else {
+                let start =
+                    std::cmp::min(t.checked_add(1).unwrap_or(max_checkpoint), max_checkpoint);
+                let end = std::cmp::min(
+                    start.checked_add(limit - 1).unwrap_or(max_checkpoint),
+                    max_checkpoint,
+                );
+                (start, end)
+            }
+        }
+        None => {
+            if descending_order {
+                (max_checkpoint.saturating_sub(limit - 1), max_checkpoint)
+            } else {
+                (0, std::cmp::min(limit - 1, max_checkpoint))
+            }
+        }
+    };
+
+    if descending_order {
+        (start_index..=end_index).rev().collect()
+    } else {
+        (start_index..=end_index).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_checkpoint_numbers() {
+        let cursor = Some(10);
+        let limit = 5;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![9, 8, 7, 6, 5]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_descending_no_cursor() {
+        let cursor = None;
+        let limit = 5;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![15, 14, 13, 12, 11]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_no_cursor() {
+        let cursor = None;
+        let limit = 5;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_with_cursor() {
+        let cursor = Some(10);
+        let limit = 5;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![11, 12, 13, 14, 15]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_limit_exceeds_max() {
+        let cursor = None;
+        let limit = 20;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, (0..=15).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_descending_limit_exceeds_max() {
+        let cursor = None;
+        let limit = 20;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, (0..=15).rev().collect::<Vec<_>>());
     }
 }
 

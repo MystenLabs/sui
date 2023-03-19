@@ -2,4 +2,4 @@
 "@mysten/sui.js": minor
 ---
 
-add getCheckpoints
+Add a new `getCheckpoints` endpoint that returns a paginated list of checkpoints.

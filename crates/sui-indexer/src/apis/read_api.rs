@@ -450,16 +450,10 @@ where
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        if self
-            .method_to_be_forwarded
-            .contains(&"get_checkpoints".to_string())
-        {
-            return self
-                .fullnode
-                .get_checkpoints(cursor, limit, descending_order)
-                .await;
-        }
-        self.get_checkpoints(cursor, limit, descending_order).await
+        return self
+            .fullnode
+            .get_checkpoints(cursor, limit, descending_order)
+            .await;
     }
 }
 
