@@ -149,12 +149,14 @@ module sui::sui_system_state_inner {
         validators: vector<Validator>,
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
-        governance_start_epoch: u64,
-        initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         system_state_version: u64,
+        governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+        initial_stake_subsidy_distribution_amount: u64,
+        stake_subsidy_period_length: u64,
+        stake_subsidy_decrease_rate: u16,
         ctx: &mut TxContext,
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
@@ -172,7 +174,13 @@ module sui::sui_system_state_inner {
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
-            stake_subsidy: stake_subsidy::create(stake_subsidy_fund, initial_stake_subsidy_amount, ctx),
+            stake_subsidy: stake_subsidy::create(
+                stake_subsidy_fund,
+                initial_stake_subsidy_distribution_amount,
+                stake_subsidy_period_length,
+                stake_subsidy_decrease_rate,
+                ctx
+            ),
             safe_mode: false,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),

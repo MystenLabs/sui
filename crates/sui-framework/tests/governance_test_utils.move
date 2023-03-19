@@ -64,13 +64,15 @@ module sui::governance_test_utils {
             validators,
             balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
+            1,   // protocol version
+            1,   // system state version
             100, // governance_start_epoch, we set this to a big-ish number so that
                  // low stake departure won't start kicking in for testing
-            0, // stake subsidy
-            1, // protocol version
-            1, // system state version
-            0, // epoch_start_timestamp_ms
-            42, // epoch_duration_ms, doesn't matter what number we put here
+            0,   // epoch_start_timestamp_ms
+            42,  // epoch_duration_ms, doesn't matter what number we put here
+            0,   // stake subsidy
+            10,  // stake_subsidy_period_length
+            0,   // stake_subsidy_decrease_rate
             ctx,
         )
     }

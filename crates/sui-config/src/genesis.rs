@@ -397,9 +397,14 @@ pub struct GenesisValidatorMetadata {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GenesisChainParameters {
+    pub protocol_version: u64,
+    pub system_state_version: u64,
     pub governance_start_epoch: u64,
     pub chain_start_timestamp_ms: u64,
     pub epoch_duration_ms: u64,
+    pub initial_stake_subsidy_distribution_amount: u64,
+    pub stake_subsidy_period_length: u64,
+    pub stake_subsidy_decrease_rate: u16,
 }
 
 /// Initial set of parameters for a chain.
@@ -425,6 +430,22 @@ pub struct GenesisCeremonyParameters {
     /// The duration of an epoch, in milliseconds.
     #[serde(default = "GenesisCeremonyParameters::default_epoch_duration_ms")]
     pub epoch_duration_ms: u64,
+
+    /// The amount of stake subsidy to be drawn down per distribution.
+    /// This amount decays and decreases over time.
+    #[serde(
+        default = "GenesisCeremonyParameters::default_initial_stake_subsidy_distribution_amount"
+    )]
+    pub initial_stake_subsidy_distribution_amount: u64,
+
+    /// Number of distributions to occur before the distribution amount decays.
+    #[serde(default = "GenesisCeremonyParameters::default_stake_subsidy_period_length")]
+    pub stake_subsidy_period_length: u64,
+
+    /// The rate at which the distribution amount decays at the end of each
+    /// period. Expressed in basis points.
+    #[serde(default = "GenesisCeremonyParameters::default_stake_subsidy_decrease_rate")]
+    pub stake_subsidy_decrease_rate: u16,
     // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
@@ -436,6 +457,10 @@ impl GenesisCeremonyParameters {
             allow_insertion_of_extra_objects: true,
             governance_start_epoch: 0,
             epoch_duration_ms: Self::default_epoch_duration_ms(),
+            initial_stake_subsidy_distribution_amount:
+                Self::default_initial_stake_subsidy_distribution_amount(),
+            stake_subsidy_period_length: Self::default_stake_subsidy_period_length(),
+            stake_subsidy_decrease_rate: Self::default_stake_subsidy_decrease_rate(),
         }
     }
 
@@ -453,6 +478,21 @@ impl GenesisCeremonyParameters {
     fn default_epoch_duration_ms() -> u64 {
         // 24 hrs
         24 * 60 * 60 * 1000
+    }
+
+    fn default_initial_stake_subsidy_distribution_amount() -> u64 {
+        // 1M Sui
+        1_000_000 * sui_types::gas_coin::MIST_PER_SUI
+    }
+
+    fn default_stake_subsidy_period_length() -> u64 {
+        // 30 distributions or epochs
+        30
+    }
+
+    fn default_stake_subsidy_decrease_rate() -> u16 {
+        // 10% in basis points
+        10000
     }
 }
 
@@ -1138,9 +1178,15 @@ pub fn generate_genesis_system_object(
     );
 
     let genesis_chain_parameters = GenesisChainParameters {
+        protocol_version: parameters.protocol_version.as_u64(),
+        system_state_version,
         governance_start_epoch: parameters.governance_start_epoch,
         chain_start_timestamp_ms: parameters.timestamp_ms,
         epoch_duration_ms: parameters.epoch_duration_ms,
+        initial_stake_subsidy_distribution_amount: parameters
+            .initial_stake_subsidy_distribution_amount,
+        stake_subsidy_period_length: parameters.stake_subsidy_period_length,
+        stake_subsidy_decrease_rate: parameters.stake_subsidy_decrease_rate,
     };
 
     let genesis_validators = committee
@@ -1191,8 +1237,6 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&genesis_chain_parameters).unwrap()),
             CallArg::Pure(bcs::to_bytes(&genesis_validators).unwrap()),
             CallArg::Pure(bcs::to_bytes(&token_distribution_schedule).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
         ]
         .into_iter()
         .map(|a| builder.input(a))
