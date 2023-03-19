@@ -275,6 +275,37 @@ async fn test_dry_run_transaction() {
 }
 
 #[tokio::test]
+async fn test_dry_run_no_gas_big_transfer() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+    let (_, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    let amount = 1_000_000_000u64;
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.transfer_sui(recipient, Some(amount));
+    let pt = builder.finish();
+    let data = TransactionData::new_programmable_with_dummy_gas_price(
+        sender,
+        vec![],
+        pt,
+        SuiCostTable::new_for_testing().max_gas_budget,
+    );
+
+    let signed = to_sender_signed_transaction(data, &sender_key);
+
+    let dry_run_res = fullnode
+        .dry_exec_transaction(
+            signed.data().intent_message().value.clone(),
+            *signed.digest(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(*dry_run_res.effects.status(), SuiExecutionStatus::Success);
+}
+
+#[tokio::test]
 async fn test_dev_inspect_object_by_bytes() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
