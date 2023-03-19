@@ -8616,6 +8616,7 @@ dependencies = [
  "sui-core",
  "sui-faucet",
  "sui-framework-build",
+ "sui-indexer",
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
@@ -8911,7 +8912,9 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
+ "url",
  "workspace-hack",
 ]
 

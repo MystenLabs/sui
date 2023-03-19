@@ -10,6 +10,8 @@ use sui::config::{SuiClientConfig, SuiEnv};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::Config;
 use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_indexer::indexer_test_utils::start_test_indexer;
+use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
@@ -52,6 +54,7 @@ pub trait Cluster {
 
     fn fullnode_url(&self) -> &str;
     fn user_key(&self) -> AccountKeyPair;
+    fn indexer_url(&self) -> &Option<String>;
 
     /// Returns faucet url in a remote cluster.
     fn remote_faucet_url(&self) -> Option<&str>;
@@ -120,6 +123,10 @@ impl Cluster for RemoteRunningCluster {
         &self.fullnode_url
     }
 
+    fn indexer_url(&self) -> &Option<String> {
+        &None
+    }
+
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
@@ -141,6 +148,7 @@ impl Cluster for RemoteRunningCluster {
 pub struct LocalNewCluster {
     test_cluster: TestCluster,
     fullnode_url: String,
+    indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
     config_directory: tempfile::TempDir,
 }
@@ -165,6 +173,11 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
+        let indexer_address = options.indexer_address.as_ref().map(|addr| {
+            addr.parse::<SocketAddr>()
+                .expect("Unable to parse indexer address")
+        });
+
         let mut cluster_builder = TestClusterBuilder::new()
             .set_genesis_config(genesis_config)
             .enable_fullnode_events();
@@ -186,6 +199,19 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
+        if options.pg_address.is_some() && indexer_address.is_some() {
+            let config = IndexerConfig {
+                db_url: options.pg_address.clone().unwrap(),
+                rpc_client_url: fullnode_url.clone(),
+                rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
+                rpc_server_port: indexer_address.as_ref().unwrap().port(),
+                ..Default::default()
+            };
+            start_test_indexer(config, /* reset_db */ true)
+                .await
+                .unwrap();
+        }
+
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -195,11 +221,16 @@ impl Cluster for LocalNewCluster {
             fullnode_url,
             faucet_key,
             config_directory: tempfile::tempdir()?,
+            indexer_url: options.indexer_address.clone(),
         })
     }
 
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
+    }
+
+    fn indexer_url(&self) -> &Option<String> {
+        &self.indexer_url
     }
 
     fn user_key(&self) -> AccountKeyPair {
@@ -229,6 +260,9 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
     fn fullnode_url(&self) -> &str {
         (**self).fullnode_url()
+    }
+    fn indexer_url(&self) -> &Option<String> {
+        (**self).indexer_url()
     }
 
     fn user_key(&self) -> AccountKeyPair {
