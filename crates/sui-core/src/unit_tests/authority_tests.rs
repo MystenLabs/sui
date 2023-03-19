@@ -28,7 +28,7 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
-use sui_framework::{make_system_objects, make_system_packages};
+use sui_framework::{make_system_objects, make_system_packages, system_package_ids};
 use tracing::info;
 
 use sui_json_rpc_types::{
@@ -57,10 +57,7 @@ use sui_types::{
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID,
-};
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::consensus_handler::SequencedConsensusTransaction;
@@ -4689,7 +4686,7 @@ async fn make_test_transaction(
 
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
-        SUI_FRAMEWORK_OBJECT_ID,
+        SuiFramework::ID,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         /* type_args */ vec![],
@@ -5225,10 +5222,7 @@ async fn test_for_inc_201_dev_inspect() {
         .get_package_bytes(false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.command(Command::Publish(
-        modules,
-        vec![MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID],
-    ));
+    builder.command(Command::Publish(modules, system_package_ids()));
     let kind = TransactionKind::programmable(builder.finish());
     let DevInspectResults { events, .. } = fullnode
         .dev_inspect_transaction(sender, kind, Some(1))
@@ -5261,10 +5255,7 @@ async fn test_for_inc_201_dry_run() {
         .get_package_bytes(false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(
-        modules,
-        vec![MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID],
-    );
+    builder.publish_immutable(modules, system_package_ids());
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
@@ -5415,18 +5406,10 @@ async fn test_publish_transitive_dependencies_ok() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-
-    builder.publish_immutable(
-        modules,
-        vec![
-            // Note: root depends on A, B, C.
-            *package_a_id,
-            *package_b_id,
-            *package_c_id,
-            SUI_FRAMEWORK_OBJECT_ID,
-            MOVE_STDLIB_OBJECT_ID,
-        ],
-    );
+    let mut deps = system_package_ids();
+    // Note: root depends on A, B, C.
+    deps.extend([*package_a_id, *package_b_id, *package_c_id]);
+    builder.publish_immutable(modules, deps);
 
     let kind = TransactionKind::programmable(builder.finish());
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5464,7 +5447,7 @@ async fn test_publish_missing_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![SUI_FRAMEWORK_OBJECT_ID]);
+    builder.publish_immutable(modules, vec![SuiFramework::ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5506,7 +5489,7 @@ async fn test_publish_missing_transitive_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(modules, vec![MOVE_STDLIB_OBJECT_ID]);
+    builder.publish_immutable(modules, vec![MoveStdlib::ID]);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
@@ -5548,15 +5531,10 @@ async fn test_publish_not_a_package_dependency() {
         .get_package_bytes(/* with_unpublished_deps */ false);
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.publish_immutable(
-        modules,
-        // One of these things is not like the others
-        vec![
-            MOVE_STDLIB_OBJECT_ID,
-            SUI_FRAMEWORK_OBJECT_ID,
-            SUI_SYSTEM_STATE_OBJECT_ID,
-        ],
-    );
+    let mut deps = system_package_ids();
+    // One of these things is not like the others
+    deps.push(SUI_SYSTEM_STATE_OBJECT_ID);
+    builder.publish_immutable(modules, deps);
     let kind = TransactionKind::programmable(builder.finish());
 
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);

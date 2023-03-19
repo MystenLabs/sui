@@ -13,10 +13,11 @@ use move_core_types::{
     language_storage::StructTag,
     u256::U256,
 };
+use sui_framework::system_package_ids;
 use sui_types::{
     error::ExecutionErrorKind, object::Data,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    utils::to_sender_signed_transaction, MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
+    utils::to_sender_signed_transaction,
 };
 
 use move_core_types::language_storage::TypeTag;
@@ -173,7 +174,7 @@ async fn test_publish_duplicate_modules() {
         sender,
         gas_object_ref,
         modules,
-        vec![MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID],
+        system_package_ids(),
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);

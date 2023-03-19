@@ -17,12 +17,22 @@ use sui_types::{
 
 pub mod natives;
 
-macro_rules! system_package {
+/// Defines a new system package at `$address` (an ObjectID), and a type with name `$Package` that
+/// implements the `SystemPackage` trait to give access to the package's contents.
+///
+/// The package's modules are expected to be found at sub-directory `$path` of the the cargo output
+/// directory.  The process of getting them there is usually managed by this crate's `build.rs`
+/// script.
+///
+/// The remaining `$Dep` arguments reference the types for other system packages that are transitive
+/// dependencies of this package.
+macro_rules! define_system_package {
     ($address:expr, $Package:ident, $path:literal, [$($Dep:ident),* $(,)?]) => {
         pub struct $Package;
 
         impl SystemPackage for $Package {
             const ID: ObjectID = ObjectID::from_address($address);
+
             const BCS_BYTES: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/", $path));
 
             fn transitive_dependencies() -> Vec<ObjectID> {
@@ -60,17 +70,17 @@ macro_rules! system_package {
     };
 }
 
-system_package!(MOVE_STDLIB_ADDRESS, MoveStdlib, "move-stdlib", []);
-system_package!(MOVE_STDLIB_ADDRESS, MoveStdlibTest, "move-stdlib-test", []);
+define_system_package!(MOVE_STDLIB_ADDRESS, MoveStdlib, "move-stdlib", []);
+define_system_package!(MOVE_STDLIB_ADDRESS, MoveStdlibTest, "move-stdlib-test", []);
 
-system_package!(
+define_system_package!(
     SUI_FRAMEWORK_ADDRESS,
     SuiFramework,
     "sui-framework",
     [MoveStdlib]
 );
 
-system_package!(
+define_system_package!(
     SUI_FRAMEWORK_ADDRESS,
     SuiFrameworkTest,
     "sui-framework-test",
@@ -87,6 +97,10 @@ pub trait SystemPackage {
     fn as_modules() -> Vec<CompiledModule>;
     fn as_package() -> MovePackage;
     fn as_object() -> Object;
+}
+
+pub fn system_package_ids() -> Vec<ObjectID> {
+    vec![MoveStdlib::ID, SuiFramework::ID]
 }
 
 pub fn make_system_modules() -> Vec<Vec<CompiledModule>> {

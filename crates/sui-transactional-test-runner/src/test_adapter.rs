@@ -37,7 +37,9 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
-use sui_framework::{make_system_modules, make_system_objects, DEFAULT_FRAMEWORK_PATH};
+use sui_framework::{
+    make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
+};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::clock::Clock;
 use sui_types::gas::{GasCostSummary, SuiCostTable};
@@ -56,8 +58,8 @@ use sui_types::{
     },
     object::{self, Object, ObjectFormatOptions},
     object::{MoveObject, Owner},
-    MOVE_STDLIB_ADDRESS, MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_OBJECT_ID,
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
@@ -306,10 +308,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
-        // we are assuming that all packages depend on Sui framework and (transitively) on Move
-        // stdlib so these don't have to be provided explicitly as parameters
-        dependencies.push(MOVE_STDLIB_OBJECT_ID);
-        dependencies.push(SUI_FRAMEWORK_OBJECT_ID);
+        // we are assuming that all packages depend on the system packages, so these don't have to
+        // be provided explicitly as parameters
+        dependencies.extend(system_package_ids());
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
