@@ -389,12 +389,7 @@ pub fn test_update_low_scoring_authorities_with_down_node() {
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(
-        low_scoring.clone(),
-        committee.clone(),
-        reputation_scores,
-        &metrics,
-    );
+    update_low_scoring_authorities(low_scoring.clone(), committee, reputation_scores, &metrics);
     assert_eq!(*low_scoring.load().get(&a4).unwrap(), 35_u64);
     assert_eq!(*low_scoring.load().get(&a5).unwrap(), 0_u64);
     assert_eq!(low_scoring.load().len(), 2);
