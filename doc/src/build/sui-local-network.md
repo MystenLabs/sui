@@ -55,7 +55,7 @@ RUST_LOG="consensus=off" cargo run --bin sui-test-validator
 
 The command starts the `sui-test-validator`. The `RUST_LOG`=`consensus=off` turns off consensus for the local network.
 
-**Important** Each time you start the `sui-test-validator`, the network starts as a new network with no previous data. The local network is not persistent.
+**Important:** Each time you start the `sui-test-validator`, the network starts as a new network with no previous data. The local network is not persistent.
 
 To customize your local Sui network, such as changing the port used, include additional parameters in the command to start `sui-test-validator`:
 
