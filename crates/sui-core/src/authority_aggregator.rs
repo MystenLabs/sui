@@ -21,7 +21,7 @@ use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::sui_system_state::{SuiSystemStateInnerBenchmark, SuiSystemStateTrait};
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
     committee::{Committee, ProtocolVersion},
@@ -926,10 +926,10 @@ where
     /// It should only be used for testing or benchmarking.
     pub async fn get_latest_system_state_object_for_testing(
         &self,
-    ) -> anyhow::Result<SuiSystemStateInnerBenchmark> {
+    ) -> anyhow::Result<SuiSystemState> {
         #[derive(Debug, Default)]
         struct State {
-            latest_system_state: Option<SuiSystemStateInnerBenchmark>,
+            latest_system_state: Option<SuiSystemState>,
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
