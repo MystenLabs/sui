@@ -153,14 +153,9 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             </Text>
                         </div>
                     )}
-
-                    {stakedTxn || unstakeTxn ? (
-                        stakedTxn ? (
-                            <StakeTxnCard event={stakedTxn} />
-                        ) : (
-                            <UnStakeTxnCard event={unstakeTxn!} />
-                        )
-                    ) : (
+                    {stakedTxn ? <StakeTxnCard event={stakedTxn} /> : null}
+                    {unstakeTxn ? <UnStakeTxnCard event={unstakeTxn} /> : null}
+                    {!stakedTxn && !unstakeTxn ? (
                         <>
                             {objectId && (
                                 <TxnImage
@@ -191,7 +186,7 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                 }
                             )}
                         </>
-                    )}
+                    ) : null}
 
                     {showSponsorInfo && (
                         <div className="flex justify-between items-center py-3.5">
