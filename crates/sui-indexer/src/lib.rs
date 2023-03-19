@@ -65,6 +65,8 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
+    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    pub migrated_methods: Vec<String>,
 }
 
 impl IndexerConfig {
@@ -91,6 +93,7 @@ impl Default for IndexerConfig {
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
             rpc_server_port: 9000,
+            migrated_methods: vec![],
         }
     }
 }
@@ -191,7 +194,11 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         .build(config.rpc_client_url.as_str())
         .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
 
-    builder.register_module(ReadApi::new(state.clone(), http_client.clone()))?;
+    builder.register_module(ReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        config.migrated_methods.clone(),
+    ))?;
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;

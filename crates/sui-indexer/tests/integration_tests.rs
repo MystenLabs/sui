@@ -128,7 +128,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_total_address() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (_test_cluster, _indexer_rpc_client, store, _handle) = start_test_cluster().await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let total_address_count = store.get_total_address_number().unwrap();
@@ -440,6 +440,15 @@ pub mod pg_integration_test {
         let config = IndexerConfig {
             db_url,
             rpc_client_url: test_cluster.rpc_url().to_string(),
+            migrated_methods: vec![
+                "get_checkpoint".to_string(),
+                "get_latest_checkpoint_sequence_number".to_string(),
+                "get_object_with_options".to_string(),
+                "get_total_transaction_number".to_string(),
+                "get_transaction".to_string(),
+                "multi_get_transactions_with_options".to_string(),
+                "query_transactions".to_string(),
+            ],
             ..Default::default()
         };
 
