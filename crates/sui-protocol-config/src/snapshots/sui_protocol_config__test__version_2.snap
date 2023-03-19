@@ -37,8 +37,8 @@ max_num_new_move_object_ids: 2048
 max_num_new_move_object_ids_system_tx: 32768
 max_num_deleted_move_object_ids: 2048
 max_num_deleted_move_object_ids_system_tx: 32768
-max_num_transfered_move_object_ids: 2048
-max_num_transfered_move_object_ids_system_tx: 32768
+max_num_transferred_move_object_ids: 2048
+max_num_transferred_move_object_ids_system_tx: 32768
 max_event_emit_size: 256000
 max_move_vector_len: 262144
 object_runtime_max_num_cached_objects: 1000
@@ -72,3 +72,4 @@ copy_convert_to_address_cost_per_byte: 10
 event_value_size_derivation_cost_per_byte: 1000
 event_tag_size_derivation_cost_per_byte: 1000
 event_emit_cost_per_byte: 1000
+

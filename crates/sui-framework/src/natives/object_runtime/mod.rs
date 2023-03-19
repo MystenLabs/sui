@@ -81,8 +81,8 @@ pub(crate) struct LocalProtocolConfig {
     pub(crate) max_num_event_emit: u64,
     pub(crate) max_num_new_move_object_ids: u64,
     pub(crate) max_num_new_move_object_ids_system_tx: u64,
-    pub(crate) max_num_transfered_move_object_ids: u64,
-    pub(crate) max_num_transfered_move_object_ids_system_tx: u64,
+    pub(crate) max_num_transferred_move_object_ids: u64,
+    pub(crate) max_num_transferred_move_object_ids_system_tx: u64,
     pub(crate) max_event_emit_size: u64,
     pub(crate) object_runtime_max_num_cached_objects: u64,
     pub(crate) object_runtime_max_num_cached_objects_system_tx: u64,
@@ -96,14 +96,14 @@ impl LocalProtocolConfig {
             max_num_deleted_move_object_ids: constants.max_num_deleted_move_object_ids(),
             max_num_event_emit: constants.max_num_event_emit(),
             max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
-            max_num_transfered_move_object_ids: constants.max_num_transfered_move_object_ids(),
+            max_num_transferred_move_object_ids: constants.max_num_transferred_move_object_ids(),
             max_event_emit_size: constants.max_event_emit_size(),
             max_num_deleted_move_object_ids_system_tx: constants
                 .max_num_deleted_move_object_ids_system_tx(),
             max_num_new_move_object_ids_system_tx: constants
                 .max_num_new_move_object_ids_system_tx(),
-            max_num_transfered_move_object_ids_system_tx: constants
-                .max_num_transfered_move_object_ids_system_tx(),
+            max_num_transferred_move_object_ids_system_tx: constants
+                .max_num_transferred_move_object_ids_system_tx(),
 
             object_runtime_max_num_cached_objects: constants
                 .object_runtime_max_num_cached_objects(),
@@ -260,17 +260,17 @@ impl<'a> ObjectRuntime<'a> {
         // Metered transactions don't have limits for now
 
         match check_limit_by_meter!(
-            // TODO: is this not redundant? Metered TX implies framework obj cannot be transfered
+            // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
             self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
             self.state.transfers.len(),
-            self.constants.max_num_transfered_move_object_ids,
-            self.constants.max_num_transfered_move_object_ids_system_tx
+            self.constants.max_num_transferred_move_object_ids,
+            self.constants.max_num_transferred_move_object_ids_system_tx
         ) {
             LimitThresholdCrossed::None => (),
             LimitThresholdCrossed::Soft(_, _) => (), /* TODO: add alerting */
             LimitThresholdCrossed::Hard(_, lim) => {
                 return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                    .with_message(format!("Transfering more than {} IDs is not allowed", lim))
+                    .with_message(format!("Transferring more than {} IDs is not allowed", lim))
                     .with_sub_status(
                         VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
                     ))
