@@ -4,10 +4,8 @@
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
-use crate::models::recipients::Recipient;
 use crate::models::transactions::Transaction;
 use crate::multi_get_full_transactions;
 use crate::store::{
@@ -23,13 +21,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiCommand, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions,
-    SuiRawData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
+    OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
+    SuiTransactionDataAPI, SuiTransactionEffectsAPI,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
 use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
@@ -335,64 +332,21 @@ where
         // Index packages
         let packages = Self::index_packages(transactions, changed_objects)?;
 
-        let move_calls: Vec<MoveCall> = transactions
+        // Store input objects, move calls and recipients separately for transaction query indexing.
+        let input_objects = transactions
             .iter()
-            .map(|t| {
-                let tx = t.transaction.data.transaction();
-                (
-                    tx.clone(),
-                    t.digest,
-                    checkpoint.sequence_number,
-                    checkpoint.epoch,
-                    t.transaction.data.sender(),
-                )
-            })
-            .filter_map(
-                |(tx_kind, txn_digest, checkpoint_seq, epoch, sender)| match tx_kind {
-                    SuiTransactionKind::ProgrammableTransaction(pt) => Some(
-                        pt.commands
-                            .into_iter()
-                            .filter_map(move |command| match command {
-                                SuiCommand::MoveCall(m) => Some(MoveCall {
-                                    id: None,
-                                    transaction_digest: txn_digest.to_string(),
-                                    checkpoint_sequence_number: checkpoint_seq as i64,
-                                    epoch: epoch as i64,
-                                    sender: sender.to_string(),
-                                    move_package: m.package.to_string(),
-                                    move_module: m.module,
-                                    move_function: m.function,
-                                }),
-                                _ => None,
-                            }),
-                    ),
-
-                    _ => None,
-                },
-            )
+            .map(|tx| tx.get_input_objects(checkpoint.epoch))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .flatten()
-            .collect();
-
-        let recipients: Vec<Recipient> = transactions
+            .collect::<Vec<_>>();
+        let move_calls = transactions
             .iter()
-            .flat_map(|tx| {
-                let created = tx.effects.created().iter();
-                let mutated = tx.effects.mutated().iter();
-                let unwrapped = tx.effects.unwrapped().iter();
-                created
-                    .chain(mutated)
-                    .chain(unwrapped)
-                    .filter_map(|obj_ref| match obj_ref.owner {
-                        Owner::AddressOwner(address) => Some(Recipient {
-                            id: None,
-                            transaction_digest: tx.effects.transaction_digest().to_string(),
-                            checkpoint_sequence_number: checkpoint.sequence_number as i64,
-                            epoch: checkpoint.epoch as i64,
-                            recipient: address.to_string(),
-                        }),
-                        _ => None,
-                    })
-            })
+            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch, checkpoint.sequence_number))
+            .collect();
+        let recipients = transactions
+            .iter()
+            .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
             .collect();
 
         // Index epoch
@@ -414,6 +368,7 @@ where
                 objects_changes,
                 addresses,
                 packages,
+                input_objects,
                 move_calls,
                 recipients,
             },

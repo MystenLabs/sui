@@ -101,8 +101,11 @@ impl<S: IndexerStore> ReadApi<S> {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state
-                    .get_all_transaction_digest_page(indexer_seq_number, limit, is_descending)
+                self.state.get_all_transaction_digest_page(
+                    indexer_seq_number,
+                    limit + 1,
+                    is_descending,
+                )
             }
             Some(TransactionFilter::MoveFunction {
                 package,
@@ -117,15 +120,22 @@ impl<S: IndexerStore> ReadApi<S> {
                     module,
                     function,
                     move_call_seq_number,
-                    limit,
+                    limit + 1,
                     is_descending,
                 )
             }
-            // TODO(gegaowp): input objects are tricky to retrive from
-            // SuiTransactionResponse, instead we should store the BCS
-            // serialized transaction and retrive from there.
-            // This is now blocked by the endpoint on FN side.
-            Some(TransactionFilter::InputObject(_input_obj_id)) => Ok(vec![]),
+            Some(TransactionFilter::InputObject(input_obj_id)) => {
+                let input_obj_seq = self
+                    .state
+                    .get_input_object_sequence_by_digest(cursor_str, is_descending)?;
+                self.state.get_transaction_digest_page_by_input_object(
+                    input_obj_id.to_string(),
+                    /* version */ None,
+                    input_obj_seq,
+                    limit + 1,
+                    is_descending,
+                )
+            }
             Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
