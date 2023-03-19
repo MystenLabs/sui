@@ -31,11 +31,27 @@ use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRea
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
-#[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectResponse {
-    Exists(SuiObjectData),
-    NotExists(ObjectID),
-    Deleted(SuiObjectRef),
+pub struct SuiObjectResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<SuiObjectData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<SuiObjectResponseError>,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
+#[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
+pub enum SuiObjectResponseError {
+    NotExists {
+        object_id: ObjectID,
+    },
+    Deleted {
+        object_id: ObjectID,
+        /// Object version.
+        version: SequenceNumber,
+        /// Base64 string representing the object digest
+        digest: ObjectDigest,
+    },
+    // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
 }
 
 #[serde_as]
