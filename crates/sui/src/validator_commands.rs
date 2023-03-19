@@ -8,6 +8,7 @@ use std::{
     path::PathBuf,
 };
 use sui_config::genesis::GenesisValidatorInfo;
+use sui_framework::{SuiFramework, SystemPackage};
 use sui_types::multiaddr::Multiaddr;
 
 use crate::client_commands::{write_transaction_response, WalletContext};
@@ -35,7 +36,7 @@ use sui_types::messages::Transaction;
 use sui_types::messages::{CallArg, TransactionData};
 use sui_types::{
     crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair},
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_OBJ_CALL_ARG,
+    SUI_SYSTEM_OBJ_CALL_ARG,
 };
 use tracing::info;
 
@@ -297,7 +298,7 @@ async fn call_0x5(
     let gas_obj_ref = get_gas_obj_ref(sender, sui_client, minimal_gas_budget).await?;
     let tx_data = TransactionData::new_move_call(
         sender,
-        SUI_FRAMEWORK_OBJECT_ID,
+        SuiFramework::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],

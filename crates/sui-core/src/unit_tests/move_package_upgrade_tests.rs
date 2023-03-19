@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{account_address::AccountAddress, ident_str};
+use sui_framework::{system_package_ids, MoveStdlib, SuiFramework, SystemPackage};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -15,7 +16,6 @@ use sui_types::{
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::BackingPackageStore,
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID,
 };
 
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
@@ -173,12 +173,12 @@ async fn test_upgrade_package_happy_path() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -229,12 +229,12 @@ async fn test_upgrade_incompatible() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -260,7 +260,7 @@ async fn test_upgrade_package_incorrect_digest() {
         let digest_arg = builder.pure(bad_digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         (builder.finish(), digest)
@@ -296,11 +296,11 @@ async fn test_upgrade_package_compatibility_too_permissive() {
         let digest_arg = builder.pure(digest).unwrap();
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::only_dep_upgrades(Argument::Input(0))
+            (SuiFramework::ID)::package::only_dep_upgrades(Argument::Input(0))
         };
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         builder.finish()
@@ -333,7 +333,7 @@ async fn test_upgrade_package_unsupported_compatibility() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         builder.finish()
@@ -366,7 +366,7 @@ async fn test_upgrade_package_invalid_compatibility() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         builder.finish()
@@ -423,9 +423,9 @@ async fn test_upgrade_ticket_doesnt_match() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
-        builder.upgrade(MOVE_STDLIB_OBJECT_ID, upgrade_ticket, vec![], modules);
+        builder.upgrade(MoveStdlib::ID, upgrade_ticket, vec![], modules);
         builder.finish()
     };
     let TransactionEffects::V1(effects) = runner.run(pt).await;
@@ -475,12 +475,12 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -516,17 +516,17 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let deps = if use_empty_deps {
             vec![]
         } else {
-            vec![MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID]
+            system_package_ids()
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, deps, modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -563,12 +563,12 @@ async fn test_interleaved_upgrades() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -603,12 +603,12 @@ async fn test_interleaved_upgrades() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, dep_ids, modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()
@@ -647,12 +647,12 @@ async fn test_publish_override_happy_path() {
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
         move_call! {
             builder,
-            (SUI_FRAMEWORK_OBJECT_ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
         };
 
         builder.finish()

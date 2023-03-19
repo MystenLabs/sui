@@ -21,6 +21,7 @@ use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
+use crate::is_system_package;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -28,7 +29,6 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
-use crate::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 use sui_protocol_config::ProtocolConfig;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 2_000_000_u64;
@@ -536,8 +536,7 @@ impl Object {
 
     /// Returns true if the object is a system package.
     pub fn is_system_package(&self) -> bool {
-        let id = self.id();
-        self.is_package() && (id == SUI_FRAMEWORK_OBJECT_ID || id == MOVE_STDLIB_OBJECT_ID)
+        self.is_package() && is_system_package(self.id())
     }
 
     /// Create a system package which is not subject to size limits. Panics if the object ID is not

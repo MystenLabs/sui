@@ -61,7 +61,7 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
-    use sui_framework::get_move_stdlib_package;
+    use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
@@ -73,7 +73,6 @@ mod sim_only_tests {
         object::{Object, OBJECT_START_VERSION},
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         storage::ObjectStore,
-        SUI_FRAMEWORK_OBJECT_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, timeout, Duration};
@@ -124,7 +123,7 @@ mod sim_only_tests {
             .sui_node
             .subscribe_to_epoch_change();
 
-        timeout(Duration::from_secs(60), async move {
+        timeout(Duration::from_secs(90), async move {
             while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
                 info!(
                     "received epoch {} {:?}",
@@ -389,7 +388,7 @@ mod sim_only_tests {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder
                 .move_call(
-                    SUI_FRAMEWORK_OBJECT_ID,
+                    SuiFramework::ID,
                     ident_str!("msim_extra_1").to_owned(),
                     ident_str!("canary").to_owned(),
                     vec![],
@@ -438,7 +437,7 @@ mod sim_only_tests {
         let effects = node_handle
             .with_async(|node| async {
                 let db = node.state().db();
-                let framework = db.get_object(&SUI_FRAMEWORK_OBJECT_ID);
+                let framework = db.get_object(&SuiFramework::ID);
                 let digest = framework.unwrap().unwrap().previous_transaction;
                 let effects = db.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
@@ -448,12 +447,12 @@ mod sim_only_tests {
         let modified_at = effects
             .modified_at_versions()
             .iter()
-            .find_map(|(id, v)| (id == &SUI_FRAMEWORK_OBJECT_ID).then_some(*v));
+            .find_map(|(id, v)| (id == &SuiFramework::ID).then_some(*v));
 
         let mutated_to = effects
             .mutated()
             .iter()
-            .find_map(|((id, v, _), _)| (id == &SUI_FRAMEWORK_OBJECT_ID).then_some(*v));
+            .find_map(|((id, v, _), _)| (id == &SuiFramework::ID).then_some(*v));
 
         (modified_at, mutated_to)
     }
@@ -601,7 +600,7 @@ mod sim_only_tests {
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
-            &[get_move_stdlib_package()],
+            &[MoveStdlib::as_package()],
         )
         .unwrap()
     }

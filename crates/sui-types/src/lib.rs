@@ -63,12 +63,12 @@ pub mod utils;
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID
 pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
-pub const MOVE_STDLIB_OBJECT_ID: ObjectID = ObjectID::from_single_byte(1);
+pub const MOVE_STDLIB_OBJECT_ID: ObjectID = ObjectID::from_address(MOVE_STDLIB_ADDRESS);
 
 /// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID
 pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = get_hex_address_two();
-pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(2);
+pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_FRAMEWORK_ADDRESS);
 
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
