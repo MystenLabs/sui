@@ -11,6 +11,7 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
 use tracing::{debug, info, warn};
 
+// TODO: migrate these values to config
 const MAD_DIVISOR: f64 = 0.7;
 const CUTOFF_VALUE: f64 = 2.4;
 
@@ -50,19 +51,25 @@ pub fn update_low_scoring_authorities(
         return;
     }
 
-    let mut new_inner = HashMap::new();
+    let mut final_low_scoring_map = HashMap::new();
 
     let mut score_list = vec![];
+    let mut non_zero_scores = vec![];
     for val in reputation_scores.scores_per_authority.values() {
         score_list.push(*val as f64);
+        if *val > 0 {
+            non_zero_scores.push(*val as f64);
+        }
     }
 
-    let median_value = median(&score_list);
+    let median_value = median(&non_zero_scores);
     let mut deviations = vec![];
     let mut abs_deviations = vec![];
     for (i, _) in score_list.clone().iter().enumerate() {
         deviations.push(score_list[i] - median_value);
-        abs_deviations.push((score_list[i] - median_value).abs());
+        if score_list[i] > 0.0 {
+            abs_deviations.push((score_list[i] - median_value).abs());
+        }
     }
 
     // adjusted median absolute deviation
@@ -101,7 +108,7 @@ pub fn update_low_scoring_authorities(
             .scores_per_authority
             .get(authority)
             .unwrap();
-        new_inner.insert(name, score);
+        final_low_scoring_map.insert(name, score);
         debug!("low scoring authority {} has score {}", name, score);
     }
 
@@ -117,7 +124,7 @@ pub fn update_low_scoring_authorities(
         return;
     }
 
-    low_scoring_authorities.swap(Arc::new(new_inner));
+    low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
 }
 
 #[test]
@@ -319,4 +326,76 @@ pub fn test_update_low_scoring_authorities() {
         70_u64
     );
     assert_eq!(low_scoring.load().len(), 1);
+}
+
+#[test]
+pub fn test_update_low_scoring_authorities_with_down_node() {
+    #![allow(clippy::mutable_key_type)]
+    use fastcrypto::traits::KeyPair;
+    use prometheus::Registry;
+    use std::collections::BTreeMap;
+    use std::collections::HashMap;
+    use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
+
+    let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec5): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec6): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec7): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec8): (_, AuthorityKeyPair) = get_key_pair();
+    let a1: AuthorityName = sec1.public().into();
+    let a2: AuthorityName = sec2.public().into();
+    let a3: AuthorityName = sec3.public().into();
+    let a4: AuthorityName = sec4.public().into();
+    let a5: AuthorityName = sec5.public().into();
+    let a6: AuthorityName = sec6.public().into();
+    let a7: AuthorityName = sec7.public().into();
+    let a8: AuthorityName = sec8.public().into();
+
+    let mut authorities = BTreeMap::new();
+    authorities.insert(a1, 1);
+    authorities.insert(a2, 1);
+    authorities.insert(a3, 1);
+    authorities.insert(a4, 1);
+    authorities.insert(a5, 1);
+    authorities.insert(a6, 1);
+    authorities.insert(a7, 1);
+    authorities.insert(a8, 1);
+    let committee = Arc::new(Committee::new(0, authorities));
+
+    let low_scoring = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
+
+    let mut inner = HashMap::new();
+    inner.insert(a1, 50);
+
+    low_scoring.swap(Arc::new(inner));
+
+    let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+
+    // there is a low outlier in the non zero scores, exclude it as well as down nodes
+    let mut scores = HashMap::new();
+    scores.insert(sec1.public().clone(), 45_u64);
+    scores.insert(sec2.public().clone(), 49_u64);
+    scores.insert(sec3.public().clone(), 55_u64);
+    scores.insert(sec4.public().clone(), 35_u64);
+    scores.insert(sec5.public().clone(), 0_u64); // down node
+    scores.insert(sec6.public().clone(), 50_u64);
+    scores.insert(sec7.public().clone(), 54_u64);
+    scores.insert(sec8.public().clone(), 51_u64);
+    let reputation_scores = ReputationScores {
+        scores_per_authority: scores,
+        final_of_schedule: true,
+    };
+
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee.clone(),
+        reputation_scores,
+        &metrics,
+    );
+    assert_eq!(*low_scoring.load().get(&a4).unwrap(), 35_u64);
+    assert_eq!(*low_scoring.load().get(&a5).unwrap(), 0_u64);
+    assert_eq!(low_scoring.load().len(), 2);
 }
