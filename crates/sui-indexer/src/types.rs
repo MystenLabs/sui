@@ -1,12 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::errors::IndexerError;
+use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use sui_json_rpc_types::{
-    BalanceChange, ObjectChange, SuiTransaction, SuiTransactionEffects, SuiTransactionEvents,
+    BalanceChange, ObjectChange, SuiCommand, SuiTransaction, SuiTransactionDataAPI,
+    SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents, SuiTransactionKind,
     SuiTransactionResponse,
 };
 use sui_types::digests::TransactionDigest;
+use sui_types::messages::{SenderSignedData, TransactionDataAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::object::Owner;
 
 #[derive(Debug, Clone)]
 pub struct SuiTransactionFullResponse {
@@ -71,6 +76,12 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
                 digest
             )
         })?;
+        if raw_transaction.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Unexpected empty RawTransaction in SuiTransactionFullResponse of digest {:?}.",
+                digest
+            ));
+        }
         if !errors.is_empty() {
             return Err(anyhow::anyhow!(
                 "Errors in SuiTransactionFullResponse of digest {:?}: {:?}",
@@ -122,5 +133,88 @@ impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
             checkpoint: Some(checkpoint),
             errors: vec![],
         }
+    }
+}
+
+impl SuiTransactionFullResponse {
+    pub fn get_input_objects(&self, epoch: u64) -> Result<Vec<InputObject>, IndexerError> {
+        let raw_tx = self.raw_transaction.clone();
+        let sender_signed_data: SenderSignedData = bcs::from_bytes(&raw_tx).map_err(|err| {
+            IndexerError::SerdeError(format!(
+                "Failed converting transaction {:?} from bytes {:?} to SenderSignedData with error: {:?}",
+                self.digest.clone(), raw_tx, err
+            ))
+        })?;
+        let input_objects: Vec<InputObject> =
+            sender_signed_data
+                .transaction_data()
+                .input_objects()
+                .map_err(|err| {
+                    IndexerError::InvalidArgumentError(format!(
+                    "Failed getting input objects of transaction {:?} from {:?} with error: {:?}",
+                    self.digest.clone(), raw_tx, err
+                ))
+                })?
+                .into_iter()
+                .map(|obj_kind| InputObject {
+                    id: None,
+                    transaction_digest: self.digest.to_string(),
+                    checkpoint_sequence_number: self.checkpoint as i64,
+                    epoch: epoch as i64,
+                    object_id: obj_kind.object_id().to_string(),
+                    object_version: obj_kind.version().map(|v| v.value() as i64),
+                })
+                .collect();
+        Ok(input_objects)
+    }
+
+    pub fn get_move_calls(&self, epoch: u64, checkpoint: u64) -> Vec<MoveCall> {
+        let tx_kind = self.transaction.data.transaction();
+        let sender = self.transaction.data.sender();
+        match tx_kind {
+            SuiTransactionKind::ProgrammableTransaction(pt) => {
+                let move_calls: Vec<MoveCall> = pt
+                    .commands
+                    .clone()
+                    .into_iter()
+                    .filter_map(move |command| match command {
+                        SuiCommand::MoveCall(m) => Some(MoveCall {
+                            id: None,
+                            transaction_digest: self.digest.to_string(),
+                            checkpoint_sequence_number: checkpoint as i64,
+                            epoch: epoch as i64,
+                            sender: sender.to_string(),
+                            move_package: m.package.to_string(),
+                            move_module: m.module,
+                            move_function: m.function,
+                        }),
+                        _ => None,
+                    })
+                    .collect();
+                Some(move_calls)
+            }
+            _ => None,
+        }
+        .unwrap_or_default()
+    }
+
+    pub fn get_recipients(&self, epoch: u64, checkpoint: u64) -> Vec<Recipient> {
+        let created = self.effects.created().iter();
+        let mutated = self.effects.mutated().iter();
+        let unwrapped = self.effects.unwrapped().iter();
+        created
+            .chain(mutated)
+            .chain(unwrapped)
+            .filter_map(|obj_ref| match obj_ref.owner {
+                Owner::AddressOwner(address) => Some(Recipient {
+                    id: None,
+                    transaction_digest: self.digest.to_string(),
+                    checkpoint_sequence_number: checkpoint as i64,
+                    epoch: epoch as i64,
+                    recipient: address.to_string(),
+                }),
+                _ => None,
+            })
+            .collect()
     }
 }

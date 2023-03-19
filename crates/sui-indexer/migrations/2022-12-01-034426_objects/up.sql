@@ -10,7 +10,7 @@ CREATE TABLE objects
 (
     epoch                  BIGINT        NOT NULL,
     checkpoint             BIGINT        NOT NULL,
-    object_id              address PRIMARY KEY,
+    object_id              address       PRIMARY KEY,
     version                BIGINT        NOT NULL,
     object_digest          base58digest  NOT NULL,
     -- owner related

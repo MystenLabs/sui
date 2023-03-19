@@ -72,7 +72,7 @@ mod pg_integration {
 
     #[tokio::test]
     async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
-        let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let address = test_cluster.accounts.first().unwrap();
@@ -105,13 +105,11 @@ mod pg_integration {
                 *recipient_address,
             )
             .await?;
-
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         let tx =
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
         let tx_response = indexer_rpc_client
             .execute_transaction(
                 tx_bytes,
@@ -120,8 +118,10 @@ mod pg_integration {
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
-
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let (_, _, nft_digest) = create_devnet_nft(&mut test_cluster.wallet).await.unwrap();
+        wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
+
         let tx_read_response = indexer_rpc_client
             .get_transaction_with_options(
                 tx_response.digest,
@@ -132,20 +132,25 @@ mod pg_integration {
         assert_eq!(tx_response.transaction, tx_read_response.transaction);
         assert_eq!(tx_response.effects, tx_read_response.effects);
 
-        // query txn with sender address
+        // query tx with sender address
         let from_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(*address));
         let tx_from_query_response = indexer_rpc_client
             .query_transactions(from_query, None, None, None)
             .await?;
         assert!(!tx_from_query_response.has_next_page);
-        assert_eq!(tx_from_query_response.data.len(), 1);
+        // first is payment, second is NFT creation
+        assert_eq!(tx_from_query_response.data.len(), 2);
         assert_eq!(
             tx_response.digest,
             tx_from_query_response.data.first().unwrap().digest
         );
+        assert_eq!(
+            nft_digest,
+            tx_from_query_response.data.last().unwrap().digest
+        );
 
-        // query txn with recipient address
+        // query tx with recipient address
         let to_query = SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(
             *recipient_address,
         ));
@@ -160,20 +165,52 @@ mod pg_integration {
             tx_to_query_response.data.last().unwrap().digest
         );
 
-        // query txn with mutated object id
+        // query tx with mutated object id
         let mutation_query = SuiTransactionResponseQuery::new_with_filter(
             TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
         );
         let tx_mutation_query_response = indexer_rpc_client
             .query_transactions(mutation_query, None, None, None)
             .await?;
-
         // the coin is first created by genesis txn, then transferred by the above txn
         assert!(!tx_mutation_query_response.has_next_page);
         assert_eq!(tx_mutation_query_response.data.len(), 2);
         assert_eq!(
             tx_response.digest,
             tx_mutation_query_response.data.last().unwrap().digest,
+        );
+
+        // query tx with input object id
+        let input_query = SuiTransactionResponseQuery::new_with_filter(
+            TransactionFilter::InputObject(*gas_objects.first().unwrap()),
+        );
+        let tx_input_query_response = indexer_rpc_client
+            .query_transactions(input_query, None, None, None)
+            .await?;
+        assert_eq!(tx_input_query_response.data.len(), 1);
+        assert_eq!(
+            tx_input_query_response.data.first().unwrap().digest,
+            tx_response.digest
+        );
+        assert_eq!(
+            Some(tx_input_query_response.data.last().unwrap().digest),
+            tx_input_query_response.next_cursor,
+        );
+
+        // query tx with move call
+        let move_call_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::MoveFunction {
+                package: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                module: Some("devnet_nft".to_string()),
+                function: None,
+            });
+        let tx_move_call_query_response = indexer_rpc_client
+            .query_transactions(move_call_query, None, None, None)
+            .await?;
+        assert_eq!(tx_move_call_query_response.data.len(), 1);
+        assert_eq!(
+            tx_move_call_query_response.data.first().unwrap().digest,
+            nft_digest
         );
         Ok(())
     }

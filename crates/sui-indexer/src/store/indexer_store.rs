@@ -5,11 +5,10 @@ use crate::errors::IndexerError;
 use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
-use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
-use crate::models::recipients::Recipient;
+use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::types::SuiTransactionFullResponse;
 use async_trait::async_trait;
@@ -82,6 +81,15 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
 
+    fn get_transaction_digest_page_by_input_object(
+        &self,
+        object_id: String,
+        version: Option<i64>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError>;
+
     fn get_transaction_digest_page_by_move_call(
         &self,
         package: String,
@@ -99,6 +107,12 @@ pub trait IndexerStore {
     ) -> Result<Option<i64>, IndexerError>;
 
     fn get_move_call_sequence_by_digest(
+        &self,
+        txn_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError>;
+
+    fn get_input_object_sequence_by_digest(
         &self,
         txn_digest: Option<String>,
         is_descending: bool,
@@ -139,6 +153,7 @@ pub struct TemporaryCheckpointStore {
     pub objects_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
     pub packages: Vec<Package>,
+    pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,
     pub recipients: Vec<Recipient>,
 }

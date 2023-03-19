@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::errors::IndexerError;
 use crate::schema::transactions;
+use crate::schema::transactions::transaction_digest;
+use crate::types::SuiTransactionFullResponse;
 use crate::utils::log_errors_to_pg;
+use crate::PgPoolConnection;
 
 use diesel::prelude::*;
 use diesel::result::Error;
@@ -10,11 +14,6 @@ use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
     SuiTransactionEffectsAPI,
 };
-
-use crate::errors::IndexerError;
-use crate::schema::transactions::transaction_digest;
-use crate::types::SuiTransactionFullResponse;
-use crate::PgPoolConnection;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = transactions)]
@@ -42,6 +41,8 @@ pub struct Transaction {
     pub storage_cost: i64,
     pub storage_rebate: i64,
     pub gas_price: i64,
+    // BCS bytes of SenderSignedData
+    pub raw_transaction: Vec<u8>,
     pub transaction_content: String,
     pub transaction_effects_content: String,
     pub confirmed_local_execution: Option<bool>,
@@ -186,6 +187,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             computation_cost: computation_cost as i64,
             storage_cost: storage_cost as i64,
             storage_rebate: storage_rebate as i64,
+            raw_transaction: tx_resp.raw_transaction,
             transaction_content: txn_json,
             transaction_effects_content: txn_effect_json,
             confirmed_local_execution: tx_resp.confirmed_local_execution,
@@ -219,8 +221,7 @@ impl TryInto<SuiTransactionFullResponse> for Transaction {
                 ))
             })?,
             transaction,
-            // TODO: store raw_transaction in db
-            raw_transaction: vec![],
+            raw_transaction: self.raw_transaction,
             effects,
             confirmed_local_execution: self.confirmed_local_execution,
             timestamp_ms: self.timestamp_ms as u64,

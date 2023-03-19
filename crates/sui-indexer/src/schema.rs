@@ -72,12 +72,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    input_objects (id) {
+        id -> Int8,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        object_id -> Varchar,
+        object_version -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     move_calls (id) {
         id -> Int8,
         transaction_digest -> Varchar,
         checkpoint_sequence_number -> Int8,
         epoch -> Int8,
-        sender -> Text,
+        sender -> Varchar,
         move_package -> Text,
         move_module -> Text,
         move_function -> Text,
@@ -214,6 +225,7 @@ diesel::table! {
         storage_cost -> Int8,
         storage_rebate -> Int8,
         gas_price -> Int8,
+        raw_transaction -> Bytea,
         transaction_content -> Text,
         transaction_effects_content -> Text,
         confirmed_local_execution -> Nullable<Bool>,
@@ -225,6 +237,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
     error_logs,
     events,
+    input_objects,
     move_calls,
     objects,
     objects_history,
