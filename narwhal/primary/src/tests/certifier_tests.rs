@@ -35,6 +35,8 @@ async fn propose_header() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+    let (tx_created_certificates, _rx_created_certificates) = mpsc::unbounded_channel();
+
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -118,6 +120,7 @@ async fn propose_header() {
         signature_service,
         tx_shutdown.subscribe(),
         rx_headers,
+        tx_created_certificates,
         metrics.clone(),
         network,
     );
@@ -149,6 +152,8 @@ async fn propose_header_failure() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+    let (tx_created_certificates, _rx_created_certificates) = mpsc::unbounded_channel();
+
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -215,6 +220,7 @@ async fn propose_header_failure() {
         signature_service,
         tx_shutdown.subscribe(),
         rx_headers,
+        tx_created_certificates,
         metrics.clone(),
         network,
     );
@@ -247,6 +253,7 @@ async fn shutdown_core() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+    let (tx_created_certificates, _rx_created_certificates) = mpsc::unbounded_channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -291,6 +298,7 @@ async fn shutdown_core() {
         signature_service.clone(),
         tx_shutdown.subscribe(),
         rx_headers,
+        tx_created_certificates,
         metrics.clone(),
         network.clone(),
     );

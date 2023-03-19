@@ -167,6 +167,7 @@ impl Primary {
             &primary_channel_metrics.tx_commited_own_headers,
             &primary_channel_metrics.tx_commited_own_headers_total,
         );
+        let (tx_created_certificates, rx_created_certificates) = mpsc::unbounded_channel();
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
@@ -470,6 +471,7 @@ impl Primary {
             signature_service,
             tx_shutdown.subscribe(),
             rx_headers,
+            tx_created_certificates,
             node_metrics.clone(),
             network.clone(),
         );
@@ -504,6 +506,7 @@ impl Primary {
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
+            rx_created_certificates,
             tx_headers,
             tx_narwhal_round_updates,
             rx_committed_own_headers,

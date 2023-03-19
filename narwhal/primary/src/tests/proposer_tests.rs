@@ -22,6 +22,7 @@ async fn propose_empty() {
     let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_created_certificates, rx_created_certificates) = mpsc::unbounded_channel();
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
@@ -40,6 +41,7 @@ async fn propose_empty() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
+        rx_created_certificates,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,
@@ -68,6 +70,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_created_certificates, rx_created_certificates) = mpsc::unbounded_channel();
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
@@ -90,6 +93,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
+        rx_created_certificates,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,
@@ -193,6 +197,8 @@ async fn equivocation_protection() {
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
+    let (_tx_created_certificates, rx_created_certificates) = mpsc::unbounded_channel();
+
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the proposer.
@@ -212,6 +218,7 @@ async fn equivocation_protection() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
+        rx_created_certificates,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,
@@ -266,6 +273,8 @@ async fn equivocation_protection() {
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
+    let (_tx_created_certificates, rx_created_certificates) = mpsc::unbounded_channel();
+
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let _proposer_handle = Proposer::spawn(
@@ -284,6 +293,7 @@ async fn equivocation_protection() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
+        rx_created_certificates,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,

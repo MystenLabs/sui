@@ -9,6 +9,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::{CertificateStore, ProposerStore};
+use tokio::sync::mpsc;
 use tokio::time::{sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
@@ -81,6 +82,8 @@ pub struct Proposer {
     round: Round,
     /// Signals a new narwhal round
     tx_narwhal_round_updates: watch::Sender<Round>,
+
+    pending_parents: Vec<Certificate>,
     /// Holds the certificates' ids waiting to be included in the next header.
     last_parents: Vec<Certificate>,
     /// Holds the certificate of the last leader (if any).
@@ -95,6 +98,8 @@ pub struct Proposer {
     /// Committed headers channel on which we get updates on which of
     /// our own headers have been committed.
     rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
+
+    rx_created_certificates: mpsc::UnboundedReceiver<Certificate>,
 
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
@@ -117,6 +122,7 @@ impl Proposer {
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_our_digests: Receiver<OurDigestMessage>,
+        rx_created_certificates: mpsc::UnboundedReceiver<Certificate>,
         tx_headers: Sender<Header>,
         tx_narwhal_round_updates: watch::Sender<Round>,
         rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
@@ -142,11 +148,13 @@ impl Proposer {
                     proposer_store,
                     certificate_store,
                     round: 0,
+                    pending_parents: Vec::new(),
                     last_parents: genesis,
                     last_leader: None,
                     digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
+                    rx_created_certificates,
                     metrics,
                 }
                 .run()
@@ -600,20 +608,15 @@ impl Proposer {
                 },
 
                 Some((parents, round, epoch)) = self.rx_parents.recv() => {
-                    // If the core already moved to the next epoch we should pull the next
-                    // committee as well.
-
-                    match epoch.cmp(&self.committee.epoch()) {
-                        Ordering::Equal => {
-                            // we can proceed.
-                        }
-                        _ => continue
+                    // Should not happen.
+                    if epoch != self.committee.epoch() {
+                        continue;
                     }
 
                     // Sanity check: verify provided certs are of the correct round & epoch.
                     for parent in parents.iter() {
                         if parent.round() != round || parent.epoch() != epoch {
-                            error!("Proposer received certificate {parent:?} that failed to match expected round {round} or epoch {epoch}. This should not be possible.");
+                            panic!("Proposer received certificate {parent:?} that failed to match expected round {round} or epoch {epoch}. This should not be possible.");
                         }
                     }
 

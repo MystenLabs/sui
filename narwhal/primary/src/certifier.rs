@@ -13,6 +13,7 @@ use network::anemo_ext::NetworkExt;
 use std::time::Duration;
 use std::{collections::BTreeSet, sync::Arc};
 use storage::{CertificateStore, HeaderStore};
+use tokio::sync::mpsc;
 use tokio::{
     sync::oneshot,
     task::{JoinHandle, JoinSet},
@@ -52,6 +53,7 @@ pub struct Certifier {
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives our newly created headers from the `Proposer`.
     rx_headers: Receiver<Header>,
+    tx_created_certificates: mpsc::UnboundedSender<Certificate>,
     /// Used to cancel vote requests for a previously-proposed header that is being replaced
     /// before a certificate could be formed.
     cancel_proposed_header: Option<oneshot::Sender<()>>,
@@ -78,6 +80,7 @@ impl Certifier {
         signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_headers: Receiver<Header>,
+        tx_created_certificates: mpsc::UnboundedSender<Certificate>,
         metrics: Arc<PrimaryMetrics>,
         primary_network: anemo::Network,
     ) -> JoinHandle<()> {
@@ -92,6 +95,7 @@ impl Certifier {
                     signature_service,
                     rx_shutdown,
                     rx_headers,
+                    tx_created_certificates,
                     cancel_proposed_header: None,
                     propose_header_tasks: JoinSet::new(),
                     network: primary_network,
@@ -392,7 +396,11 @@ impl Certifier {
                 Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
-                            self.synchronizer.accept_own_certificate(certificate, &self.network).await
+                            let mut result = self.synchronizer.accept_own_certificate(certificate.clone(), &self.network).await;
+                            if result.is_ok() {
+                                result = self.tx_created_certificates.send(certificate).map_err(|_| DagError::ShuttingDown);
+                            }
+                            result
                         },
                         Ok(Err(e)) => Err(e),
                         Err(_) => Err(DagError::ShuttingDown),
