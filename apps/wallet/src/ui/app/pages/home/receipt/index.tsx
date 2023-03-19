@@ -11,7 +11,7 @@ import Alert from '_components/alert';
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
-import ReceiptCard from '_components/receipt-card';
+import { ReceiptCard } from '_components/receipt-card';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 function ReceiptPage() {
@@ -34,6 +34,7 @@ function ReceiptPage() {
                     showInput: true,
                     showEffects: true,
                     showEvents: true,
+                    showBalanceChanges: true,
                 },
             });
         },
@@ -61,7 +62,7 @@ function ReceiptPage() {
         }
 
         return 'Transaction Failed';
-    }, [/*activeAddress,*/ data]);
+    }, [data]);
 
     if (!transactionId || !activeAddress) {
         return <Navigate to="/transactions" replace={true} />;
