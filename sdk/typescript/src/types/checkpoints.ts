@@ -10,6 +10,9 @@ import {
   string,
   union,
   tuple,
+  boolean,
+  optional,
+  any,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
@@ -32,13 +35,13 @@ export const ECMHLiveObjectSetDigest = object({
 });
 export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
 
-export const CheckpointCommitment = union([ECMHLiveObjectSetDigest]);
+export const CheckpointCommitment = any();
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
 
 export const EndOfEpochData = object({
   nextEpochCommittee: array(tuple([string(), number()])),
   nextEpochProtocolVersion: number(),
-  checkpointCommitments: array(CheckpointCommitment),
+  epochCommitments: array(CheckpointCommitment),
 });
 export type EndOfEpochData = Infer<typeof EndOfEpochData>;
 
@@ -52,11 +55,18 @@ export const Checkpoint = object({
   sequenceNumber: number(),
   digest: CheckpointDigest,
   networkTotalTransactions: number(),
-  previousDigest: union([CheckpointDigest, literal(null)]),
+  previousDigest: optional(CheckpointDigest),
   epochRollingGasCostSummary: GasCostSummary,
-  timestampMs: union([number(), literal(null)]),
-  endOfEpochData: union([EndOfEpochData, literal(null)]),
+  timestampMs: number(),
+  endOfEpochData: optional(EndOfEpochData),
   transactions: array(TransactionDigest),
   checkpointCommitments: array(CheckpointCommitment),
 });
 export type Checkpoint = Infer<typeof Checkpoint>;
+
+export const CheckpointPage = object({
+  data: array(Checkpoint),
+  nextCursor: union([number(), literal(null)]),
+  hasNextPage: boolean(),
+});
+export type CheckpointPage = Infer<typeof CheckpointPage>;
