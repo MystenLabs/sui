@@ -263,11 +263,11 @@ where
             changed_objects,
         } = data;
 
-        let previous_cp = if checkpoint.sequence_number == 0 {
+        let previous_cp = if <u64>::from(checkpoint.sequence_number) == 0 {
             Checkpoint::default()
         } else {
             self.state
-                .get_checkpoint((checkpoint.sequence_number - 1).into())?
+                .get_checkpoint((<u64>::from(checkpoint.sequence_number) - 1).into())?
         };
 
         // Index transaction
@@ -301,7 +301,12 @@ where
                     .unwrap_or(&vec![])
                     .iter()
                     .map(|(status, o)| {
-                        Object::from(&checkpoint.epoch, &checkpoint.sequence_number, status, o)
+                        Object::from(
+                            &checkpoint.epoch,
+                            &checkpoint.sequence_number.into(),
+                            status,
+                            o,
+                        )
                     })
                     .collect::<Vec<_>>();
                 let deleted = tx.effects.deleted().iter();
@@ -317,7 +322,7 @@ where
                     .map(|(status, oref)| {
                         DeletedObject::from(
                             &checkpoint.epoch,
-                            &checkpoint.sequence_number,
+                            &checkpoint.sequence_number.into(),
                             oref,
                             &tx.digest,
                             status,
@@ -344,11 +349,11 @@ where
             .collect::<Vec<_>>();
         let move_calls = transactions
             .iter()
-            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| tx.get_move_calls(checkpoint.epoch, checkpoint.sequence_number.into()))
             .collect();
         let recipients = transactions
             .iter()
-            .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number.into()))
             .collect();
 
         // Index addresses

@@ -18,7 +18,7 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('gets checkpoint by id', async () => {
-    const resp = await toolbox.provider.getCheckpoint({ id: 0 });
+    const resp = await toolbox.provider.getCheckpoint({ id: '0' });
     expect(resp.digest.length).greaterThan(0);
     expect(resp.transactions.length).greaterThan(0);
     expect(resp.epoch).not.toBeNull();
@@ -29,7 +29,7 @@ describe('Checkpoints Reading API', () => {
   });
 
   it('get checkpoint contents by digest', async () => {
-    const checkpoint_resp = await toolbox.provider.getCheckpoint({ id: 0 });
+    const checkpoint_resp = await toolbox.provider.getCheckpoint({ id: '0' });
     const digest = checkpoint_resp.digest;
     const resp = await toolbox.provider.getCheckpoint({ id: digest });
     expect(checkpoint_resp).toEqual(resp);
@@ -37,13 +37,13 @@ describe('Checkpoints Reading API', () => {
 
   it('getCheckpoints', async () => {
     const latest = await toolbox.provider.getLatestCheckpointSequenceNumber();
-    expect(latest).to.greaterThan(2);
+    expect(BigInt(latest)).toBeGreaterThan(2);
     const checkpoints = await toolbox.provider.getCheckpoints({
       descendingOrder: false,
       limit: 1,
     });
 
-    expect(checkpoints.nextCursor).toEqual(0);
+    expect(checkpoints.nextCursor).toEqual('0');
     expect(checkpoints.data.length).toEqual(1);
     expect(checkpoints.hasNextPage).toBeTruthy();
 
@@ -52,7 +52,7 @@ describe('Checkpoints Reading API', () => {
       limit: 1,
       descendingOrder: false,
     });
-    expect(checkpoints1.nextCursor).toEqual(1);
+    expect(checkpoints1.nextCursor).toEqual('1');
     expect(checkpoints1.data.length).toEqual(1);
     expect(checkpoints1.hasNextPage).toBeTruthy();
   });

@@ -103,7 +103,9 @@ impl ReadApi {
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
-                let summary = self.state.get_checkpoint_summary_by_sequence_number(seq)?;
+                let summary = self
+                    .state
+                    .get_checkpoint_summary_by_sequence_number(seq.into())?;
                 let content = self.state.get_checkpoint_contents(summary.content_digest)?;
                 (summary, content).into()
             }
@@ -867,15 +869,17 @@ impl ReadApiServer for ReadApi {
     async fn get_checkpoints(
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<CheckpointSequenceNumber>,
+        cursor: Option<SuiCheckpointSequenceNumber>,
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
 
-        let mut data = self
-            .state
-            .get_checkpoints(cursor, limit as u64 + 1, descending_order)?;
+        let mut data = self.state.get_checkpoints(
+            cursor.map(<u64>::from),
+            limit as u64 + 1,
+            descending_order,
+        )?;
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
