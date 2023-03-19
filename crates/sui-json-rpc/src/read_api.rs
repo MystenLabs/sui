@@ -366,7 +366,7 @@ impl ReadApiServer for ReadApi {
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
         // the input is needed for object_changes to retrieve the sender address.
-        if opts.show_input || opts.show_object_changes {
+        if opts.require_input() {
             temp_response.transaction =
                 Some(self.state.get_executed_transaction(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
@@ -457,15 +457,6 @@ impl ReadApiServer for ReadApi {
         }
 
         let opts = opts.unwrap_or_default();
-        if opts.show_balance_changes || opts.show_object_changes {
-            // Not supported because it's likely the response will easily exceed response limit
-            return Err(anyhow!(UserInputError::Unsupported(
-                "show_balance_changes and show_object_changes is not available on \
-                multiGetTransactions"
-                    .to_string()
-            ))
-            .into());
-        }
 
         // use LinkedHashMap to dedup and can iterate in insertion order.
         let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
@@ -478,7 +469,7 @@ impl ReadApiServer for ReadApi {
             return Err(anyhow!("The list of digests in the input contain duplicates").into());
         }
 
-        if opts.show_input {
+        if opts.require_input() {
             let transactions = self
                 .state
                 .multi_get_executed_transactions(&digests)
@@ -495,7 +486,7 @@ impl ReadApiServer for ReadApi {
         }
 
         // Fetch effects when `show_events` is true because events relies on effects
-        if opts.show_effects || opts.show_events {
+        if opts.require_effects() {
             let effects_list = self
                 .state
                 .multi_get_executed_effects(&digests)
@@ -603,6 +594,60 @@ impl ReadApiServer for ReadApi {
                     // events field will be Some if and only if `show_events` is true and
                     // there is no error in converting fetching events
                     cache_entry.events = Some(SuiTransactionEvents::default());
+                }
+            }
+        }
+
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        if opts.show_balance_changes {
+            let mut futures = vec![];
+            for resp in temp_response.values() {
+                futures.push(get_balance_change_from_effect(
+                    &object_cache,
+                    resp.effects.as_ref().ok_or_else(|| {
+                        anyhow!("unable to derive balance changes because effect is empty")
+                    })?,
+                ));
+            }
+            let results = join_all(futures).await;
+            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+                match result {
+                    Ok(balance_changes) => entry.1.balance_changes = Some(balance_changes),
+                    Err(e) => entry
+                        .1
+                        .errors
+                        .push(format!("Failed to fetch balance changes {e:?}")),
+                }
+            }
+        }
+
+        if opts.show_object_changes {
+            let mut futures = vec![];
+            for resp in temp_response.values() {
+                futures.push(get_object_change_from_effect(
+                    &object_cache,
+                    resp.transaction
+                        .as_ref()
+                        .ok_or_else(|| {
+                            anyhow!("unable to derive object changes because effect is empty")
+                        })?
+                        .data()
+                        .intent_message()
+                        .value
+                        .sender(),
+                    resp.effects.as_ref().ok_or_else(|| {
+                        anyhow!("unable to derive object changes because effect is empty")
+                    })?,
+                ));
+            }
+            let results = join_all(futures).await;
+            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+                match result {
+                    Ok(object_changes) => entry.1.object_changes = Some(object_changes),
+                    Err(e) => entry
+                        .1
+                        .errors
+                        .push(format!("Failed to fetch object changes {e:?}")),
                 }
             }
         }
@@ -731,15 +776,6 @@ impl ReadApiServer for ReadApi {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
         let opts = query.options.unwrap_or_default();
-        if opts.show_balance_changes || opts.show_object_changes {
-            // Not supported because it's likely the response will easily exceed response limit
-            return Err(anyhow!(UserInputError::Unsupported(
-                "show_balance_changes and show_object_changes is not available on \
-                queryTransactions"
-                    .to_string()
-            ))
-            .into());
-        }
 
         // Retrieve 1 extra item for next cursor
         let mut digests =

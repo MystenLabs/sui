@@ -18,6 +18,8 @@ import {
   RawSigner,
   FaucetResponse,
   assert,
+  SuiAddress,
+  ObjectId,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -34,6 +36,7 @@ export const DEFAULT_RECIPIENT =
 export const DEFAULT_RECIPIENT_2 =
   '0xbb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d';
 export const DEFAULT_GAS_BUDGET = 10000;
+export const DEFAULT_SEND_AMOUNT = 1000;
 
 export class TestToolbox {
   keypair: Ed25519Keypair;
@@ -50,6 +53,7 @@ export class TestToolbox {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
+  // TODO(chris): replace this with provider.getCoins instead
   async getGasObjectsOwnedByAddress() {
     const objects = await this.provider.getOwnedObjects({
       owner: this.address(),
@@ -146,4 +150,71 @@ export async function publishPackage(
   );
 
   return { packageId, publishTxn };
+}
+
+export function getRandomAddresses(n: number): SuiAddress[] {
+  return Array(n)
+    .fill(null)
+    .map(() => {
+      const keypair = Ed25519Keypair.generate();
+      return keypair.getPublicKey().toSuiAddress();
+    });
+}
+
+// TODO: shall we move the transaction builder part to Transaction.ts?
+export async function paySui(
+  signer: RawSigner,
+  numRecipients: number = 1,
+  recipients?: SuiAddress[],
+  amounts?: number[],
+  coinId?: ObjectId,
+) {
+  const tx = new Transaction();
+
+  recipients = recipients ?? getRandomAddresses(numRecipients);
+  amounts = amounts ?? Array(numRecipients).fill(DEFAULT_SEND_AMOUNT);
+
+  expect(
+    recipients.length === amounts.length,
+    'recipients and amounts must be the same length',
+  );
+
+  coinId =
+    coinId ??
+    (
+      await signer.provider.getCoins({
+        owner: await signer.getAddress(),
+        coinType: '0x2::sui::SUI',
+      })
+    ).data[0].coinObjectId;
+
+  recipients.forEach((recipient, i) => {
+    const coin = tx.splitCoin(tx.object(coinId!), tx.pure(amounts![i]));
+    tx.transferObjects([coin], tx.pure(recipient));
+  });
+
+  const txn = await signer.signAndExecuteTransaction({
+    transaction: tx,
+    options: {
+      showEffects: true,
+      showObjectChanges: true,
+    },
+  });
+  expect(getExecutionStatusType(txn)).toEqual('success');
+  return txn;
+}
+
+export async function executePaySuiNTimes(
+  signer: RawSigner,
+  nTimes: number,
+  numRecipientsPerTxn: number = 1,
+  recipients?: SuiAddress[],
+  amounts?: number[],
+) {
+  const txns = [];
+  for (let i = 0; i < nTimes; i++) {
+    // must await here to make sure the txns are executed in order
+    txns.push(await paySui(signer, numRecipientsPerTxn, recipients, amounts));
+  }
+  return txns;
 }
