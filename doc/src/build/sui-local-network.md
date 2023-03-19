@@ -106,7 +106,7 @@ You can use the Sui Client CLI with any Sui network. By default it connects to S
 sui client new-env --alias local --rpc http://127.0.0.1:9000
 ```
 
-Next, use the following commmand to set the active environment to the new `local` environment you created.
+Next, use the following command to set the active environment to the new `local` environment you created.
 
 ```
 sui client switch --env local
