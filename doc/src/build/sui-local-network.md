@@ -73,25 +73,93 @@ OPTIONS:
 
 Use `sui-validator-test --help` to see these options in your console.
 
-## Use the local faucet
+### Access your local Full node
 
-You need to have coins to pay for gas on your local network just like other networks. Use the following cURL command to get test coins from the local faucet you just installed and started. 
-
-To add the coins to the current active address on the local network, use the `sui client active-address` command to retrieve it. Use the `sui client addresses` command to see all of the addresses on your local network. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui](#set-up-a-local-sui-wallet).
+Use the following command to retrieve the total transaction count from your local network:
 
 ```bash
-curl --location --request POST 'http://127.0.0.1:9123/gas' \
+curl --location --request POST 'http://127.0.0.1:9000' \
 --header 'Content-Type: application/json' \
 --data-raw '{
-    "FixedAmountRequest": {
-        "recipient": "0x<ADDRESS>"
-    }
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTotalTransactionNumber",
+  "params": []
 }'
 ```
 
 If successful, the response resembles the following:
 
 ```bash
+{
+    "jsonrpc": "2.0",
+    "result": 168,
+    "id": 1
+}
+```
+
+## Connect the Sui Client CLI to your local network
+
+You can use the Sui Client CLI with any Sui network. By default it connects to Sui Devnet. To connect to your local network, create a new environment alias named `local` that sets the RPC URL the client uses to your local network.
+
+```shell
+sui client new-env --alias local --rpc http://127.0.0.1:9000
+```
+
+Next, use the following commmand to set the active environment to the new `local` environment you created.
+
+```
+sui client switch --env local
+```
+
+The command returns:
+
+`Active environment switched to [local]`
+
+You can check the current active environment with the following command:
+
+```
+sui client active-env
+```
+
+The command returns:
+
+`local`
+
+## Show the current active address
+
+The Sui Client CLI uses the active address for command if you don't specify one. Use the following command to show the active address on your local network.
+
+```
+sui client active-address
+```
+
+The command returns an address:
+
+`0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de`
+
+Use the active address to get test SUI to use on your local network. Use the `sui client addresses` command to see all of the addresses on your local network.
+
+**Note:** The address returned when you run the command is unique and does not match the one used in this example.
+
+## Use the local faucet
+
+Transactions on your local network require SUI coins to pay for gas fees just like other networks. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui Wallet](#set-up-a-local-sui-wallet). You can use the address for the local Sui Wallet with the faucet.
+
+Use the following cURL command to get test coins from the local faucet. 
+```bash
+curl --location --request POST 'http://127.0.0.1:9123/gas' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "FixedAmountRequest": {
+        "recipient": "0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"
+    }
+}'
+```
+
+If successful, the response resembles the following:
+
+```
 {
     "transferredGasObjects": [
         {
@@ -124,61 +192,15 @@ If successful, the response resembles the following:
 }
 ```
 
-### Access your local Full node
+### Check the gas coin objects for the active address
 
-Use the following command to retrieve the total transaction count from your local network:
-
-```bash
-curl --location --request POST 'http://127.0.0.1:9000' \
---header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_getTotalTransactionNumber",
-  "params": []
-}'
-```
-
-If successful, the response resembles the following:
-
-```bash
-{
-    "jsonrpc": "2.0",
-    "result": 168,
-    "id": 1
-}
-```
-
-## Connect the Sui Client CLI to your local network
-
-```bash
-# If this is your first time creating a local network, create a new environment with alias `local` for local network
-sui client new-env --alias local --rpc http://127.0.0.1:9000
-
-# set the active environment for the Client CLI to the new local environment
-sui client switch --env local
-Active environment switched to [local]
-
-# confirm your local env
-sui client active-env
-local
-
-# show the current Sui active address for the Client CLI
-sui client active-address
-0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de
-
-# request test tokens from local faucet
-curl --location --request POST 'http://127.0.0.1:9123/gas' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "FixedAmountRequest": {
-        "recipient": "0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"
-    }
-}'
-{"transferredGasObjects":[{"amount":200000000,"id":"0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"},{"amount":200000000,"id":"0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4","transferTxDigest":"KMkv5nwmqS4FuL3N7vRgVtzsgZLCBNV2wMfJkjmQXpe"}],"error":null}%
-
-# check gas
+After yoo get coins from the faucet, use the following command to view the coin objects for the address: 
+```shell
 sui client gas
+```
+
+The response resembles the following, but with different IDs:
+```
                              Object ID                              |  Gas Value
 --------------------------------------------------------------------------------
  0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45 |  200000000
@@ -189,45 +211,47 @@ sui client gas
 
 ```
 
-## Pre-requisites for Building Apps locally 
+## Install Sui Wallet and Sui Explorer locally 
 
-**Note:** To run the command you must have [pnpm](https://pnpm.io/installation) installed.
+To install and use the apps locally, you must first install [pnpm](https://pnpm.io/installation). Use the instructions appropriate for your operating system.
 
-```
-# install all the dependencies for the workspace first
+After you install `pnpm`, use the following command to install the required dependencies in your workspace:
+```shell
 pnpm install
+```
+
+After the installation completes, run the following command to install Sui Wallet and Sui Explorer:
+```shell
 pnpm turbo build
 ```
 
-**Trouble shooting:** If turbo build is not working, check if you accidentally created a `package-lock.json`, and remove it first if exists.
+If you encounter an error from turbo build, confirm that there is no `package-lock.json`. If the file exists, remove it and then run the command again.
 
-## Set up a local Sui Explorer
+### Set up Sui Explorer on your local network
 
 To connect the live Sui Explorer to your local network, open the URL:[https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
 
 Run the following command from the `sui` root folder:
 
-**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
+**Note:** To run the command you have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
 
 ```bash
-# start the explorer server
 pnpm explorer dev
 ```
 
 After the command completes, open your local Sui Explorer at the following URL: [http://localhost:3000/](http://localhost:3000/).
 
-For more details about Sui explorer, see [the Explorer README](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md#set-up).
+For more details about Sui Explorer, see the [Explorer README](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md#set-up).
 
 ## Set up a local Sui Wallet
 
 You can also use a local Sui Wallet to test with your local network. You can then see transactions executed from your local Sui Wallet on your local Sui Explorer.
 
-**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
+**Note:** To run the command you have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
 
 Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
 ```bash
-# To build the extension and watch for changes run
 pnpm wallet start
 ```
 
