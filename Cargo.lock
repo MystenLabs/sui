@@ -8954,6 +8954,7 @@ dependencies = [
  "jsonrpsee-proc-macros",
  "linked-hash-map",
  "move-binary-format",
+ "move-bytecode-utils",
  "move-core-types",
  "move-package",
  "mysten-metrics",
