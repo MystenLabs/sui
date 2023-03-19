@@ -134,6 +134,7 @@ export { default as ThumbUpStroke32 } from "./ThumbUpStroke32";
 export { default as Tokens32 } from "./Tokens32";
 export { default as TransferObject16 } from "./TransferObject16";
 export { default as TransferSui16 } from "./TransferSui16";
+export { default as Unstaked } from "./Unstaked";
 export { default as Version24 } from "./Version24";
 export { default as Video32 } from "./Video32";
 export { default as Wallet24 } from "./Wallet24";
