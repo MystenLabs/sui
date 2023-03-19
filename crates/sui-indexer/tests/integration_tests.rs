@@ -3,20 +3,17 @@
 
 // integration test with standalone postgresql database
 #[cfg(feature = "pg_integration")]
-mod pg_integration {
-    use diesel::migration::MigrationSource;
-    use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+pub mod pg_integration_test {
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
     use move_core_types::ident_str;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
-    use prometheus::Registry;
     use std::env;
     use std::str::FromStr;
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
-    use sui_indexer::{new_pg_connection_pool, Indexer, IndexerConfig, PgPoolConnection};
+    use sui_indexer::IndexerConfig;
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
@@ -36,8 +33,8 @@ mod pg_integration {
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, transfer_coin};
 
+    use sui_indexer::indexer_test_utils::start_test_indexer;
     use tokio::task::JoinHandle;
-    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
     #[tokio::test]
     async fn test_genesis_sync() {
@@ -408,30 +405,25 @@ mod pg_integration {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32771".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
-        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
-        let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
-
-        reset_database(&mut pg_connection_pool.get().unwrap());
+        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}/sui_indexer");
 
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
-        let store = PgIndexerStore::new(pg_connection_pool);
 
-        let store_clone = store.clone();
-        let registry = Registry::default();
-
-        let mut config = IndexerConfig::default();
-        config.rpc_client_url = test_cluster.rpc_url().to_string();
-        let indexer_config = config.clone();
-        let handle =
-            tokio::spawn(
-                async move { Indexer::start(&indexer_config, &registry, store_clone).await },
-            );
+        let config = IndexerConfig {
+            db_url,
+            rpc_client_url: test_cluster.rpc_url().to_string(),
+            ..Default::default()
+        };
 
         let http_addr_port = format!(
             "http://{}:{}",
             config.rpc_server_url, config.rpc_server_port
         );
         let http_client = HttpClientBuilder::default().build(http_addr_port).unwrap();
+
+        let (store, handle) = start_test_indexer(config, /* reset_db */ true)
+            .await
+            .unwrap();
 
         (test_cluster, http_client, store, handle)
     }
@@ -455,11 +447,5 @@ mod pg_integration {
 
     fn get_filter_on_event_type(event_type: &str) -> EventFilter {
         EventFilter::MoveEventType(StructTag::from_str(event_type).unwrap())
-    }
-
-    fn reset_database(conn: &mut PgPoolConnection) {
-        conn.revert_all_migrations(MIGRATIONS).unwrap();
-        conn.run_migrations(&MIGRATIONS.migrations().unwrap())
-            .unwrap();
     }
 }

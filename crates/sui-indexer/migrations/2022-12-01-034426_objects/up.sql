@@ -1,10 +1,17 @@
+DO $$
+BEGIN
 CREATE TYPE owner_type AS ENUM ('address_owner', 'object_owner', 'shared', 'immutable');
 CREATE TYPE object_status AS ENUM ('created', 'mutated', 'deleted', 'wrapped', 'unwrapped', 'unwrapped_then_deleted');
 CREATE TYPE bcs_bytes AS
-(
+    (
     name TEXT,
     data bytea
-);
+    );
+EXCEPTION
+    WHEN duplicate_object THEN
+        -- Type already exists, do nothing
+        NULL;
+END $$;
 
 CREATE TABLE objects
 (

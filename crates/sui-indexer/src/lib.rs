@@ -15,22 +15,23 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
-
-use errors::IndexerError;
-use mysten_metrics::spawn_monitored_task;
-use sui_core::event_handler::EventHandler;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use url::Url;
 
 use crate::apis::{
     CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, TransactionBuilderApi, WriteApi,
 };
 use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::store::IndexerStore;
+use errors::IndexerError;
+use mysten_metrics::spawn_monitored_task;
+use sui_core::event_handler::EventHandler;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
+use sui_sdk::{SuiClient, SuiClientBuilder};
 
 pub mod apis;
 pub mod errors;
 mod handlers;
+pub mod indexer_test_utils;
 pub mod metrics;
 pub mod models;
 pub mod processors;
@@ -67,7 +68,22 @@ pub struct IndexerConfig {
 }
 
 impl IndexerConfig {
-    pub fn default() -> Self {
+    /// returns connection url without the db name
+    pub fn base_connection_url(&self) -> String {
+        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
+        format!(
+            "{}://{}:{}@{}:{}/",
+            url.scheme(),
+            url.username(),
+            url.password().unwrap_or_default(),
+            url.host_str().unwrap_or_default(),
+            url.port().unwrap_or_default()
+        )
+    }
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
         Self {
             db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
             rpc_client_url: "http://127.0.0.1:9000".to_string(),

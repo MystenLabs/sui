@@ -1,7 +1,15 @@
+DO $$
+BEGIN
 -- SuiAddress and ObjectId type, 0x + 64 chars hex string
 CREATE DOMAIN address VARCHAR(66);
 -- Max char length for base58 encoded digest
 CREATE DOMAIN base58digest VARCHAR(44);
+EXCEPTION
+    WHEN duplicate_object THEN
+        -- Domain already exists, do nothing
+        NULL;
+END $$;
+
 
 CREATE TABLE transactions (
     id                          BIGSERIAL PRIMARY KEY,

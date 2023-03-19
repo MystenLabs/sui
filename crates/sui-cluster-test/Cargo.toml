@@ -24,6 +24,7 @@ prometheus = "0.13.3"
 fastcrypto = { workspace = true }
 shared-crypto = { path = "../shared-crypto" }
 
+sui-indexer = { path = "../sui-indexer" }
 sui-faucet = { path = "../sui-faucet" }
 sui-swarm = { path = "../sui-swarm" }
 sui = { path = "../sui" }
