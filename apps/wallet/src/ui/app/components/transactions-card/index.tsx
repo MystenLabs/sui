@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 
 import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
-import { TxnImage } from './TxnImage';
+// import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
@@ -32,8 +32,9 @@ export function TransactionCard({
     address: SuiAddress;
 }) {
     const executionStatus = getExecutionStatusType(txn);
-    const { events, objectChanges, balanceChanges } = txn;
-    const objectId = useMemo(() => {
+    const { events, balanceChanges } = txn;
+
+    /*const objectId = useMemo(() => {
         const resp = objectChanges?.find((item) => {
             if ('owner' in item) {
                 return item.owner === address;
@@ -41,7 +42,7 @@ export function TransactionCard({
             return false;
         });
         return resp && 'objectId' in resp ? resp.objectId : null;
-    }, [address, objectChanges]);
+    }, [address, objectChanges]);*/
 
     // we only show Sui Transfer amount or the first non-Sui transfer amount
     const transferAmount = useMemo(() => {
@@ -178,7 +179,7 @@ export function TransactionCard({
                                 isSender={isSender}
                                 isTransfer={!!recipientAddress}
                             />
-                            {objectId && <TxnImage id={objectId} />}
+                            {/* {objectId && <TxnImage id={objectId} />} */}
                         </>
                     )}
 
