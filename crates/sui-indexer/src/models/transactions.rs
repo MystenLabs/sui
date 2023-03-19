@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use diesel::prelude::*;
+use diesel::result::Error;
+
+use sui_json_rpc_types::{
+    OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
+    SuiTransactionEffectsAPI,
+};
+
 use crate::errors::IndexerError;
 use crate::schema::transactions;
 use crate::schema::transactions::transaction_digest;
 use crate::types::SuiTransactionFullResponse;
 use crate::PgPoolConnection;
-
-use diesel::prelude::*;
-use diesel::result::Error;
-use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
-    SuiTransactionEffectsAPI,
-};
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = transactions)]

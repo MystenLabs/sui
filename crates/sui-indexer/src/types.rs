@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::IndexerError;
-use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use sui_json_rpc_types::{
     BalanceChange, ObjectChange, SuiCommand, SuiTransaction, SuiTransactionDataAPI,
     SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents, SuiTransactionKind,
@@ -12,6 +10,10 @@ use sui_types::digests::TransactionDigest;
 use sui_types::messages::{SenderSignedData, TransactionDataAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Owner;
+
+use crate::errors::IndexerError;
+use crate::models::addresses::Address;
+use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 
 #[derive(Debug, Clone)]
 pub struct SuiTransactionFullResponse {
@@ -216,5 +218,22 @@ impl SuiTransactionFullResponse {
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn get_addresses(&self, epoch: u64, checkpoint: u64) -> Vec<Address> {
+        let mut addresses = self
+            .get_recipients(epoch, checkpoint)
+            .into_iter()
+            .map(|r| r.recipient)
+            .collect::<Vec<String>>();
+        addresses.push(self.transaction.data.sender().to_string());
+        addresses
+            .into_iter()
+            .map(|r| Address {
+                account_address: r,
+                first_appearance_tx: self.digest.to_string(),
+                first_appearance_time: self.timestamp_ms as i64,
+            })
+            .collect::<Vec<Address>>()
     }
 }

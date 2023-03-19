@@ -25,7 +25,6 @@ use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
-use crate::models::transactions::Transaction;
 use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
@@ -326,12 +325,6 @@ where
             })
             .collect();
 
-        // Index addresses
-        let addresses = db_transactions
-            .iter()
-            .map(|tx: &Transaction| tx.into())
-            .collect();
-
         // Index packages
         let packages = Self::index_packages(transactions, changed_objects)?;
 
@@ -350,6 +343,12 @@ where
         let recipients = transactions
             .iter()
             .flat_map(|tx| tx.get_recipients(checkpoint.epoch, checkpoint.sequence_number))
+            .collect();
+
+        // Index addresses
+        let addresses = transactions
+            .iter()
+            .flat_map(|tx| tx.get_addresses(checkpoint.epoch, checkpoint.sequence_number))
             .collect();
 
         // Index epoch
