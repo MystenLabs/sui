@@ -14,12 +14,19 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::{collections::VecDeque, ops::Mul};
 
+const BLAKE_2B256_BLOCK_SIZE: u16 = 128;
+const KECCAK_256_BLOCK_SIZE: u16 = 32;
+
 fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
     // The caller provides the cost per byte
     msg_cost_per_byte: InternalGas,
+    // The caller provides the cost per block
+    msg_cost_per_block: InternalGas,
+    // The caller specifies the block size
+    block_size: u16,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
@@ -27,10 +34,15 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     let msg = pop_arg!(args, VectorRef);
     let msg_ref = msg.as_bytes_ref();
 
+    let block_size = block_size as usize;
+
     // Charge the msg dependent costs
     native_charge_gas_early_exit!(
         context,
         msg_cost_per_byte.mul((msg_ref.len() as u64).into())
+            // Round up the blocks
+            + msg_cost_per_block
+                .mul((((msg_ref.len() + block_size - 1) / block_size) as u64).into())
     );
 
     Ok(NativeResult::ok(
@@ -47,6 +59,8 @@ pub struct HashKeccak256CostParams {
     pub hash_keccak256_cost_base: InternalGas,
     /// Cost per byte of `data`
     pub hash_keccak256_data_cost_per_byte: InternalGas,
+    /// Cost per block of `data`, where a block is
+    pub hash_keccak256_data_cost_per_block: InternalGas,
 }
 
 /***************************************************************************************************
@@ -74,6 +88,8 @@ pub fn keccak256(
         ty_args,
         args,
         hash_keccak256_cost_params.hash_keccak256_cost_base,
+        hash_keccak256_cost_params.hash_keccak256_data_cost_per_block,
+        KECCAK_256_BLOCK_SIZE,
     )
 }
 
@@ -83,6 +99,8 @@ pub struct HashBlake2b256CostParams {
     pub hash_blake2b256_cost_base: InternalGas,
     /// Cost per byte of `data`
     pub hash_blake2b256_data_cost_per_byte: InternalGas,
+    /// Cost per block of `data`, where a block is
+    pub hash_blake2b256_data_cost_per_block: InternalGas,
 }
 /***************************************************************************************************
  * native fun blake2b256
@@ -112,5 +130,7 @@ pub fn blake2b256(
         ty_args,
         args,
         hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_byte,
+        hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_block,
+        BLAKE_2B256_BLOCK_SIZE,
     )
 }
