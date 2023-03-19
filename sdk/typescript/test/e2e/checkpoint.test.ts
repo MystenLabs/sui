@@ -34,4 +34,26 @@ describe('Checkpoints Reading API', () => {
     const resp = await toolbox.provider.getCheckpoint({ id: digest });
     expect(checkpoint_resp).toEqual(resp);
   });
+
+  it('getCheckpoints', async () => {
+    const latest = await toolbox.provider.getLatestCheckpointSequenceNumber();
+    expect(latest).to.greaterThan(2);
+    const checkpoints = await toolbox.provider.getCheckpoints({
+      descendingOrder: false,
+      limit: 1,
+    });
+
+    expect(checkpoints.nextCursor).toEqual(0);
+    expect(checkpoints.data.length).toEqual(1);
+    expect(checkpoints.hasNextPage).toBeTruthy();
+
+    const checkpoints1 = await toolbox.provider.getCheckpoints({
+      cursor: checkpoints.nextCursor!,
+      limit: 1,
+      descendingOrder: false,
+    });
+    expect(checkpoints1.nextCursor).toEqual(1);
+    expect(checkpoints1.data.length).toEqual(1);
+    expect(checkpoints1.hasNextPage).toBeTruthy();
+  });
 });

@@ -435,7 +435,6 @@
                 "storageRebate": 0
               },
               "timestampMs": 1676911928,
-              "endOfEpochData": null,
               "transactions": [
                 "3bpzHaSLTQ6p4trLDk2euZxzQ6XqLeWDmUNTAdEXXL2c"
               ],
@@ -444,6 +443,50 @@
           }
         }
       ]
+    },
+    {
+      "name": "sui_getCheckpoints",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return paginated list of checkpoints",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "CheckpointPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Checkpoint_and_uint64"
+        }
+      }
     },
     {
       "name": "sui_getCoinMetadata",
@@ -600,7 +643,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -1015,7 +1058,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -1614,7 +1657,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
           }
@@ -3258,19 +3301,19 @@
       "EndOfEpochData": {
         "type": "object",
         "required": [
-          "epoch_commitments",
-          "next_epoch_committee",
-          "next_epoch_protocol_version"
+          "epochCommitments",
+          "nextEpochCommittee",
+          "nextEpochProtocolVersion"
         ],
         "properties": {
-          "epoch_commitments": {
+          "epochCommitments": {
             "description": "Commitments to epoch specific state (e.g. live object set)",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CheckpointCommitment"
             }
           },
-          "next_epoch_committee": {
+          "nextEpochCommittee": {
             "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
             "type": "array",
             "items": {
@@ -3289,7 +3332,7 @@
               "minItems": 2
             }
           },
-          "next_epoch_protocol_version": {
+          "nextEpochProtocolVersion": {
             "description": "The protocol version that is in effect during the epoch that starts immediately after this checkpoint.",
             "allOf": [
               {
@@ -4596,6 +4639,33 @@
             ]
           }
         ]
+      },
+      "Page_for_Checkpoint_and_uint64": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Checkpoint"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
       },
       "Page_for_Coin_and_ObjectID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",

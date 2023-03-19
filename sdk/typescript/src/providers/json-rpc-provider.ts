@@ -60,6 +60,7 @@ import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
 import { Transaction } from '../builder';
+import { CheckpointPage } from '../types/checkpoints';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
 
@@ -1028,6 +1029,35 @@ export class JsonRpcProvider {
     } catch (err) {
       throw new Error(
         `Error getting checkpoint with request type: ${err} for id: ${input.id}.`,
+      );
+    }
+  }
+
+  /**
+   * Returns historical checkpoints paginated
+   */
+  async getCheckpoints(input: {
+    /**
+     * An optional paging cursor. If provided, the query will start from the next item after the specified cursor.
+     * Default to start from the first item if not specified.
+     */
+    cursor?: number;
+    /** Maximum item returned per page, default to 100 if not specified. */
+    limit?: number;
+    /** query result ordering, default to false (ascending order), oldest record first */
+    descendingOrder: boolean;
+  }): Promise<CheckpointPage> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCheckpoints',
+        [input.cursor, input.limit, input.descendingOrder],
+        CheckpointPage,
+        this.options.skipDataValidation,
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting checkpoints with request type: ${err} for cursor: ${input.cursor}.`,
       );
     }
   }
