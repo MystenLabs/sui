@@ -189,11 +189,21 @@ sui client gas
 
 ```
 
+## Pre-requisites for Building Apps locally 
+
+**Note:** To run the command you must have [pnpm](https://pnpm.io/installation) installed.
+
+```
+# install all the dependencies for the workspace first
+pnpm install
+pnpm turbo build
+```
+
+**Trouble shooting:** If turbo build is not working, check if you accidentally created a `package-lock.json`, and remove it first if exists.
+
 ## Set up a local Sui Explorer
 
 To connect the live Sui Explorer to your local network, open the URL:[https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
-
-**Note:** To run the command you must have [pnpm](https://pnpm.io/installation) installed.
 
 Run the following command from the `sui` root folder:
 
@@ -222,6 +232,8 @@ pnpm install
 # To build the extension and watch for changes run
 pnpm wallet start
 ```
+
+Follow [this guide](https://github.com/MystenLabs/sui/blob/main/apps/wallet/README.md#install-the-extension-to-chrome) to load your locally built wallet to chrome
 
 **Note** You can set the default environment for the wallet to use so that you don't have to switch network manually. For details, see [https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables](https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables). 
 
