@@ -312,7 +312,12 @@ impl ConsensusAdapter {
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
                 let delay_step = latency * 3 / 2;
-                (delay_step, position, mapped_to_low_scoring)
+                const MAX_DELAY_MUL: usize = 10;
+                (
+                    delay_step * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+                    position,
+                    mapped_to_low_scoring,
+                )
             }
             _ => (Duration::ZERO, 0, false),
         };
