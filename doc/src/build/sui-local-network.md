@@ -207,9 +207,9 @@ To connect the live Sui Explorer to your local network, open the URL:[https://ex
 
 Run the following command from the `sui` root folder:
 
+**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
+
 ```bash
-# If you haven't already, install all the dependencies for the workspace first
-pnpm install
 # start the explorer server
 pnpm explorer dev
 ```
@@ -222,13 +222,11 @@ For more details about Sui explorer, see [the Explorer README](https://github.co
 
 You can also use a local Sui Wallet to test with your local network. You can then see transactions executed from your local Sui Wallet on your local Sui Explorer.
 
-**Note:** To run the command you must have [pnpm](https://pnpm.io/installation) installed.
+**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
 
 Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
 ```bash
-# If you haven't already, install all the dependencies for the workspace first
-pnpm install
 # To build the extension and watch for changes run
 pnpm wallet start
 ```
@@ -241,7 +239,7 @@ Follow [this guide](https://github.com/MystenLabs/sui/blob/main/apps/wallet/READ
 
 Use the TypeScript SDK to add example data to your network. 
 
-**Note:** To run the command you must have [pnpm](https://pnpm.io/installation) installed.
+**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
 
 Run the following command from the `sui` root folder: 
 
