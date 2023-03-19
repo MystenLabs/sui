@@ -556,6 +556,12 @@ impl SuiNode {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
+        let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
+            consensus_config,
+            state.name,
+            connection_monitor_status,
+            &registry_service.default_registry(),
+        ));
         let narwhal_manager =
             Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
 
@@ -564,13 +570,6 @@ impl SuiNode {
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
         narwhal_epoch_data_remover.run().await;
-
-        let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
-            consensus_config,
-            state.name,
-            connection_monitor_status,
-            &registry_service.default_registry(),
-        ));
 
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =
@@ -959,7 +958,7 @@ impl SuiNode {
                         Self::start_epoch_specific_validator_components(
                             &self.config,
                             self.state.clone(),
-                            consensus_adapter.clone(),
+                            consensus_adapter,
                             self.checkpoint_store.clone(),
                             new_epoch_store.clone(),
                             self.state_sync.clone(),

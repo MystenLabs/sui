@@ -294,27 +294,6 @@ dependencies = [
 
 [[package]]
 name = "ark-ff"
-<<<<<<< HEAD
-=======
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b3235cc41ee7a12aaaf2c575a2ad7b46713a8a50bda2fc3b003a04845c05dd6"
-dependencies = [
- "ark-ff-asm 0.3.0",
- "ark-ff-macros 0.3.0",
- "ark-serialize 0.3.0",
- "ark-std 0.3.0",
- "derivative",
- "num-bigint",
- "num-traits 0.2.15",
- "paste",
- "rustc_version 0.3.3",
- "zeroize",
-]
-
-[[package]]
-name = "ark-ff"
->>>>>>> 5b8c0bc2cd (implement median instead of using external crate)
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c2d42532524bee1da5a4f6f733eb4907301baa480829557adcff5dfaeee1d9a"
@@ -346,21 +325,6 @@ dependencies = [
 
 [[package]]
 name = "ark-ff-macros"
-<<<<<<< HEAD
-=======
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db2fd794a08ccb318058009eefdf15bcaaaaf6f8161eb3345f907222bac38b20"
-dependencies = [
- "num-bigint",
- "num-traits 0.2.15",
- "quote 1.0.23",
- "syn 1.0.107",
-]
-
-[[package]]
-name = "ark-ff-macros"
->>>>>>> 5b8c0bc2cd (implement median instead of using external crate)
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3c2e7d0f2d67cc7fc925355c74d36e7eda19073639be4a0a233d4611b8c959d"
@@ -6160,12 +6124,7 @@ version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
-<<<<<<< HEAD
- "autocfg 1.1.0",
-=======
  "autocfg",
- "libm",
->>>>>>> 5b8c0bc2cd (implement median instead of using external crate)
 ]
 
 [[package]]
@@ -8760,11 +8719,6 @@ dependencies = [
  "serde_yaml",
  "shared-crypto",
  "signature 1.6.4",
-<<<<<<< HEAD
- "statistical",
-=======
- "strum_macros",
->>>>>>> 5b8c0bc2cd (implement median instead of using external crate)
  "sui-adapter",
  "sui-config",
  "sui-framework",
@@ -11698,12 +11652,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.5.1",
  "rand_core 0.6.4",
-<<<<<<< HEAD
- "rand_xorshift 0.3.0",
-=======
- "rand_distr",
  "rand_xorshift",
->>>>>>> 5b8c0bc2cd (implement median instead of using external crate)
  "rand_xoshiro",
  "raw-cpuid",
  "rayon",
