@@ -11,8 +11,10 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
 use move_core_types::u256::U256;
+use move_core_types::value::MoveFieldLayout;
 pub use move_core_types::value::MoveTypeLayout;
 use move_core_types::{
+    ident_str,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     value::{MoveStruct, MoveStructLayout, MoveValue},
@@ -21,8 +23,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue, Value};
 
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{
+    ObjectID, SuiAddress, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_UTF8_MODULE_NAME,
+    STD_UTF8_STRUCT_NAME,
+};
 use sui_types::move_package::MovePackage;
+use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
     RESOLVED_UTF8_STR,
@@ -136,6 +142,7 @@ impl SuiJsonValue {
             } else {
                 let move_value = bcs::from_bytes_seed(layout, bytes)?;
                 move_value_to_json(&move_value).unwrap_or_else(|| {
+                    // fallback to array[u8] if fail to convert to json.
                     JsonValue::Array(
                         bytes
                             .iter()
@@ -342,6 +349,12 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
                 let values = values.iter().map(move_value_to_json).collect::<Vec<_>>();
                 json!(values)
             }
+            MoveStruct::WithTypes { fields, type_ } if is_move_string_type(type_) => {
+                // ascii::string and utf8::string has a single bytes field.
+                let (_, v) = fields.first()?;
+                let string: String = bcs::from_bytes(&v.simple_serialize()?).ok()?;
+                json!(string)
+            }
             // We only care about values here, assuming struct type information is known at the client side.
             MoveStruct::WithTypes { fields, .. } | MoveStruct::WithFields(fields) => {
                 let fields = fields
@@ -352,6 +365,15 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
             }
         },
     })
+}
+
+fn is_move_string_type(tag: &StructTag) -> bool {
+    (tag.address == MOVE_STDLIB_ADDRESS
+        && tag.module.as_ident_str() == STD_UTF8_MODULE_NAME
+        && tag.name.as_ident_str() == STD_UTF8_STRUCT_NAME)
+        || (tag.address == MOVE_STDLIB_ADDRESS
+            && tag.module.as_ident_str() == STD_ASCII_MODULE_NAME
+            && tag.name.as_ident_str() == STD_ASCII_STRUCT_NAME)
 }
 
 impl std::str::FromStr for SuiJsonValue {
@@ -490,13 +512,38 @@ pub fn primitive_type(
         }
         SignatureToken::Struct(struct_handle_idx) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *struct_handle_idx);
-            if resolved_struct == RESOLVED_ASCII_STR || resolved_struct == RESOLVED_UTF8_STR {
+            if resolved_struct == RESOLVED_ASCII_STR {
+                (
+                    true,
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+                        type_: StructTag {
+                            address: *RESOLVED_ASCII_STR.0,
+                            module: RESOLVED_ASCII_STR.1.into(),
+                            name: RESOLVED_ASCII_STR.2.into(),
+                            type_params: vec![],
+                        },
+                        fields: vec![MoveFieldLayout::new(
+                            ident_str!("bytes").into(),
+                            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                        )],
+                    })),
+                )
+            } else if resolved_struct == RESOLVED_UTF8_STR {
                 // both structs structs representing strings have one field - a vector of type u8
                 (
                     true,
-                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
-                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-                    ]))),
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+                        type_: StructTag {
+                            address: *RESOLVED_UTF8_STR.0,
+                            module: RESOLVED_UTF8_STR.1.into(),
+                            name: RESOLVED_UTF8_STR.2.into(),
+                            type_params: vec![],
+                        },
+                        fields: vec![MoveFieldLayout::new(
+                            ident_str!("bytes").into(),
+                            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                        )],
+                    })),
                 )
             } else if resolved_struct == RESOLVED_SUI_ID {
                 (
