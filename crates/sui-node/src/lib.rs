@@ -565,58 +565,16 @@ impl SuiNode {
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
         narwhal_epoch_data_remover.run().await;
 
-        let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
-        let sui_tx_validator_metrics =
-            SuiTxValidatorMetrics::new(&registry_service.default_registry());
-        Self::start_epoch_specific_validator_components(
-            config,
-            state.clone(),
-            connection_monitor_status,
-            checkpoint_store,
-            epoch_store,
-            state_sync_handle,
-            narwhal_manager,
-            narwhal_epoch_data_remover,
-            committee,
-            accumulator,
-            checkpoint_metrics,
-            sui_tx_validator_metrics,
-            registry_service,
-        )
-        .await
-    }
-
-    async fn start_epoch_specific_validator_components(
-        config: &NodeConfig,
-        state: Arc<AuthorityState>,
-        connection_monitor_status: Arc<ConnectionMonitorStatus>,
-        checkpoint_store: Arc<CheckpointStore>,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        state_sync_handle: state_sync::Handle,
-        narwhal_manager: NarwhalManager,
-        narwhal_epoch_data_remover: EpochDataRemover,
-        committee: Arc<Committee>,
-        accumulator: Arc<StateAccumulator>,
-        checkpoint_metrics: Arc<CheckpointMetrics>,
-        sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
-        registry_service: &RegistryService,
-    ) -> Result<ValidatorComponents> {
-        let consensus_config = config
-            .consensus_config()
-            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-
-        // create a new map that gets injected into both the consensus handler and the consensus adapter
-        // the consensus handler will write values forwarded from consensus, and the consensus adapter
-        // will read the values to make decisions about which validator submits a transaction to consensus
-        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
-
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             consensus_config,
             state.name,
             connection_monitor_status,
-            low_scoring_authorities.clone(),
             &registry_service.default_registry(),
         ));
+
+        let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
+        let sui_tx_validator_metrics =
+            SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
         let validator_server_handle = Self::start_grpc_validator_service(
             config,
@@ -626,6 +584,39 @@ impl SuiNode {
         )
         .await?;
 
+        Self::start_epoch_specific_validator_components(
+            config,
+            state.clone(),
+            consensus_adapter,
+            checkpoint_store,
+            epoch_store,
+            state_sync_handle,
+            narwhal_manager,
+            narwhal_epoch_data_remover,
+            committee,
+            accumulator,
+            validator_server_handle,
+            checkpoint_metrics,
+            sui_tx_validator_metrics,
+        )
+        .await
+    }
+
+    async fn start_epoch_specific_validator_components(
+        config: &NodeConfig,
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        checkpoint_store: Arc<CheckpointStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        state_sync_handle: state_sync::Handle,
+        narwhal_manager: NarwhalManager,
+        narwhal_epoch_data_remover: EpochDataRemover,
+        committee: Arc<Committee>,
+        accumulator: Arc<StateAccumulator>,
+        validator_server_handle: JoinHandle<Result<()>>,
+        checkpoint_metrics: Arc<CheckpointMetrics>,
+        sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+    ) -> Result<ValidatorComponents> {
         let (checkpoint_service, checkpoint_service_exit) = Self::start_checkpoint_service(
             config,
             consensus_adapter.clone(),
@@ -636,6 +627,13 @@ impl SuiNode {
             accumulator,
             checkpoint_metrics.clone(),
         );
+
+        // create a new map that gets injected into both the consensus handler and the consensus adapter
+        // the consensus handler will write values forwarded from consensus, and the consensus adapter
+        // will read the values to make decisions about which validator submits a transaction to consensus
+        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
+
+        consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
@@ -752,7 +750,6 @@ impl SuiNode {
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
-        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         prometheus_registry: &Registry,
     ) -> ConsensusAdapter {
         const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -778,7 +775,6 @@ impl SuiNode {
             Box::new(consensus_client),
             authority,
             Box::new(connection_monitor_status),
-            low_scoring_authorities,
             ca_metrics,
         )
     }
@@ -930,10 +926,10 @@ impl SuiNode {
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
             let new_validator_components = if let Some(ValidatorComponents {
-                validator_server_handle: _validator_server_handle,
+                validator_server_handle,
                 narwhal_manager,
                 narwhal_epoch_data_remover,
-                consensus_adapter: _consensus_adapter,
+                consensus_adapter,
                 checkpoint_service_exit,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
@@ -963,7 +959,7 @@ impl SuiNode {
                         Self::start_epoch_specific_validator_components(
                             &self.config,
                             self.state.clone(),
-                            self.connection_monitor_status.clone(),
+                            consensus_adapter.clone(),
                             self.checkpoint_store.clone(),
                             new_epoch_store.clone(),
                             self.state_sync.clone(),
@@ -971,9 +967,9 @@ impl SuiNode {
                             narwhal_epoch_data_remover,
                             Arc::new(next_epoch_committee.clone()),
                             self.accumulator.clone(),
+                            validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
-                            &self.registry_service,
                         )
                         .await?,
                     )
