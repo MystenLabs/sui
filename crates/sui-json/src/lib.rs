@@ -22,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue, Value};
 
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
@@ -75,49 +74,12 @@ impl fmt::Display for SuiJsonValueError {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub enum SuiJsonCallArg {
-    // Needs to become an Object Ref or Object ID, depending on object type
-    Object(ObjectID),
-    // pure value, bcs encoded
-    Pure(SuiJsonValue),
-    // a vector of objects
-    ObjVec(Vec<ObjectID>),
-}
-
 // Intermediate type to hold resolved args
 #[derive(Eq, PartialEq, Debug)]
 pub enum ResolvedCallArg {
     Object(ObjectID),
     Pure(Vec<u8>),
     ObjVec(Vec<ObjectID>),
-}
-
-impl SuiJsonCallArg {
-    pub fn try_from(
-        value: CallArg,
-        layout: Option<&MoveTypeLayout>,
-    ) -> Result<Self, anyhow::Error> {
-        Ok(match value {
-            CallArg::Pure(p) => SuiJsonCallArg::Pure(SuiJsonValue::from_bcs_bytes(layout, &p)?),
-            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => SuiJsonCallArg::Object(id),
-        })
-    }
-
-    pub fn pure(&self) -> Option<&SuiJsonValue> {
-        match self {
-            SuiJsonCallArg::Pure(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub fn object(&self) -> Option<&ObjectID> {
-        match self {
-            SuiJsonCallArg::Object(o) => Some(o),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Eq, PartialEq, Clone, Deserialize, Serialize, JsonSchema)]

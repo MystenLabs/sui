@@ -13,11 +13,10 @@ use move_core_types::resolver::ModuleResolver;
 use serde::Deserialize;
 use serde::Serialize;
 
-use sui_json_rpc_types::SuiCommand;
 use sui_json_rpc_types::SuiProgrammableMoveCall;
 use sui_json_rpc_types::SuiProgrammableTransaction;
 use sui_json_rpc_types::{BalanceChange, SuiArgument};
-use sui_sdk::json::SuiJsonCallArg;
+use sui_json_rpc_types::{SuiCallArg, SuiCommand};
 use sui_sdk::rpc_types::{
     SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
     SuiTransactionResponse,
@@ -241,7 +240,7 @@ impl Operations {
                 .get(i as usize)
                 .and_then(|inner| inner.get(j as usize))
         }
-        fn split_coin(inputs: &[SuiJsonCallArg], amount: SuiArgument) -> Option<Vec<KnownValue>> {
+        fn split_coin(inputs: &[SuiCallArg], amount: SuiArgument) -> Option<Vec<KnownValue>> {
             let amount: u64 = match amount {
                 SuiArgument::Input(i) => {
                     u64::from_str(inputs[i as usize].pure()?.to_json_value().as_str()?).ok()?
@@ -254,7 +253,7 @@ impl Operations {
         }
         fn transfer_object(
             aggregated_recipients: &mut HashMap<SuiAddress, u64>,
-            inputs: &[SuiJsonCallArg],
+            inputs: &[SuiCallArg],
             known_results: &[Vec<KnownValue>],
             objs: &[SuiArgument],
             recipient: SuiArgument,
@@ -283,7 +282,7 @@ impl Operations {
             Some(vec![])
         }
         fn stake_call(
-            inputs: &[SuiJsonCallArg],
+            inputs: &[SuiCallArg],
             known_results: &[Vec<KnownValue>],
             call: &SuiProgrammableMoveCall,
         ) -> Result<Option<(Option<u64>, SuiAddress)>, Error> {
@@ -313,7 +312,7 @@ impl Operations {
         }
 
         fn unstake_call(
-            inputs: &[SuiJsonCallArg],
+            inputs: &[SuiCallArg],
             call: &SuiProgrammableMoveCall,
         ) -> Result<Option<ObjectID>, Error> {
             let SuiProgrammableMoveCall { arguments, .. } = call;
