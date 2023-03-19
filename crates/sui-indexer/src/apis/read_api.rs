@@ -28,16 +28,15 @@ use sui_types::query::TransactionFilter;
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
     state: S,
-    method_to_be_forwarded: Vec<String>,
+    migrated_methods: Vec<String>,
 }
 
 impl<S: IndexerStore> ReadApi<S> {
-    pub fn new(state: S, fullnode_client: HttpClient) -> Self {
+    pub fn new(state: S, fullnode_client: HttpClient, migrated_methods: Vec<String>) -> Self {
         Self {
             state,
             fullnode: fullnode_client,
-            // TODO: read from config or env file
-            method_to_be_forwarded: vec![],
+            migrated_methods,
         }
     }
 
@@ -243,8 +242,8 @@ where
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"get_object_with_options".into())
         {
             return self
@@ -289,8 +288,8 @@ where
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"get_total_transaction_number".to_string())
         {
             return self.fullnode.get_total_transaction_number().await;
@@ -305,8 +304,8 @@ where
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"query_transactions".to_string())
         {
             return self
@@ -332,8 +331,8 @@ where
         digest: TransactionDigest,
         options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<SuiTransactionResponse> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"get_transaction".to_string())
         {
             return self
@@ -349,8 +348,8 @@ where
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionResponse>> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"multi_get_transactions_with_options".to_string())
         {
             return self
@@ -435,8 +434,8 @@ where
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"get_latest_checkpoint_sequence_number".to_string())
         {
             return self.fullnode.get_latest_checkpoint_sequence_number().await;
@@ -445,8 +444,8 @@ where
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
-        if self
-            .method_to_be_forwarded
+        if !self
+            .migrated_methods
             .contains(&"get_checkpoint".to_string())
         {
             return self.fullnode.get_checkpoint(id).await;
