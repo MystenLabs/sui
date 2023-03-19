@@ -15,7 +15,7 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::sui_system_state::SuiSystemStateInnerBenchmark;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
 use sui_network::tonic::transport::Channel;
@@ -56,7 +56,7 @@ pub trait AuthorityAPI {
     async fn handle_system_state_object(
         &self,
         request: SystemStateRequest,
-    ) -> Result<SuiSystemStateInnerBenchmark, SuiError>;
+    ) -> Result<SuiSystemState, SuiError>;
 }
 
 #[derive(Clone)]
@@ -153,7 +153,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_system_state_object(
         &self,
         request: SystemStateRequest,
-    ) -> Result<SuiSystemStateInnerBenchmark, SuiError> {
+    ) -> Result<SuiSystemState, SuiError> {
         self.client()
             .get_system_state_object(request)
             .await
