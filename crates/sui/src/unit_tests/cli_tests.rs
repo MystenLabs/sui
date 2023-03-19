@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::io::Read;
+use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
@@ -20,11 +22,11 @@ use sui_config::{
     NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionEffectsAPI,
+    SuiTransactionEffects, SuiTransactionEffectsAPI,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -849,6 +851,145 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         .unwrap_err()
         .to_string()
         .contains("DependentPackageNotFound"));
+    Ok(())
+}
+
+// TODO(tzakian): When we remove the upgrade feature flag un-ignore this test.
+// This test will fail until the protocol config allows upgrades (doesn't work with an override).
+#[sim_test]
+#[ignore]
+async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: 20_000,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let SuiClientCommandResult::Publish(response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // Hacky for now: we need to add the correct `published-at` field to the Move toml file.
+    // In the future once we have automated address management replace this logic!
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&upgrade_pkg_path)
+        .unwrap();
+    upgrade_pkg_path.pop();
+
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+
+    // Add a `published-at = "0x<package_object_id>"` to the Move manifest.
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    lines.insert(
+        idx + 1,
+        format!(
+            "published-at = \"{}\"",
+            package.reference.object_id.to_hex_uncompressed()
+        ),
+    );
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+
+    // Now run the upgrade
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: 20_000,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    resp.print(true);
+
+    let SuiClientCommandResult::Upgrade(response) = resp else {
+        unreachable!("Invalid upgrade response");
+    };
+    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+
+    let obj_ids = effects
+        .created()
+        .iter()
+        .map(|refe| refe.reference.object_id)
+        .collect::<Vec<_>>();
+
+    // Check the objects
+    for obj_id in obj_ids {
+        get_parsed_object_assert_existence(obj_id, context).await;
+    }
+
     Ok(())
 }
 
