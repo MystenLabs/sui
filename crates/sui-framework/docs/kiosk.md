@@ -85,7 +85,7 @@ be used to implement application-specific transfer rules.
 
 An object which allows selling collectibles within "kiosk" ecosystem.
 By default gives the functionality to list an item openly - for anyone
-to purchase proviging the guarantees for creators that every transfer
+to purchase providing the guarantees for creators that every transfer
 needs to be approved via the <code>TransferPolicy</code>.
 
 
@@ -496,7 +496,7 @@ case where there's no items inside and a <code><a href="kiosk.md#0x2_kiosk_Kiosk
 
 ## Function `set_owner`
 
-Change the owner to the transaction sender.
+Change the <code>owner</code> field to the transaction sender.
 The change is purely cosmetical and does not affect any of the
 basic kiosk functions unless some logic for this is implemented
 in a third party module.
