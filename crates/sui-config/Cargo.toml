@@ -9,7 +9,6 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 bcs = "0.1.4"
-arc-swap = "1.5.1"
 camino = "1.1.1"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.144", features = ["derive", "rc"] }
@@ -23,11 +22,8 @@ tempfile = "3.3.0"
 
 fastcrypto.workspace = true
 move-binary-format.workspace = true
-move-package.workspace = true
 move-core-types.workspace = true
-move-vm-runtime.workspace = true
 narwhal-config = { path = "../../narwhal/config" }
-narwhal-crypto = { path = "../../narwhal/crypto" }
 
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
