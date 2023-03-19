@@ -302,6 +302,7 @@ export const SuiObjectChangeMutated = object({
   objectType: string(),
   objectId: ObjectId,
   version: SequenceNumber,
+  previousVersion: SequenceNumber,
   digest: ObjectDigest,
 });
 export type SuiObjectChangeMutated = Infer<typeof SuiObjectChangeMutated>;
@@ -345,6 +346,13 @@ export const SuiObjectChange = union([
 ]);
 export type SuiObjectChange = Infer<typeof SuiObjectChange>;
 
+export const BalanceChange = object({
+  owner: ObjectOwner,
+  coinType: string(),
+  /* Coin balance change(positive means receive, negative means send) */
+  amount: string(),
+});
+
 export const SuiTransactionResponse = object({
   digest: TransactionDigest,
   transaction: optional(SuiTransaction),
@@ -354,6 +362,7 @@ export const SuiTransactionResponse = object({
   checkpoint: optional(number()),
   confirmedLocalExecution: optional(boolean()),
   objectChanges: optional(array(SuiObjectChange)),
+  balanceChanges: optional(array(BalanceChange)),
   /* Errors that occurred in fetching/serializing the transaction. */
   errors: optional(array(string())),
 });
@@ -366,9 +375,10 @@ export const SuiTransactionResponseOptions = object({
   showEffects: optional(boolean()),
   /* Whether to show transaction events. Default to be false. */
   showEvents: optional(boolean()),
-  /* Whether to show transaction events. Default to be false. */
+  /* Whether to show object changes. Default to be false. */
   showObjectChanges: optional(boolean()),
-  // MUSTFIX(chris): add showBalanceChanges
+  /* Whether to show coin balance changes. Default to be false. */
+  showBalanceChanges: optional(boolean()),
 });
 
 export type SuiTransactionResponseOptions = Infer<

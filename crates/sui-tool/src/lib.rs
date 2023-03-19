@@ -5,7 +5,6 @@
 use anyhow::Result;
 use futures::future::join_all;
 use itertools::Itertools;
-use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -13,6 +12,7 @@ use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{base_types::*, messages::*, object::Owner};
 use tokio::time::Instant;

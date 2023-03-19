@@ -54,6 +54,8 @@ ChangeEpoch:
             - TYPENAME: SequenceNumber
             - SEQ:
                 SEQ: U8
+            - SEQ:
+                TYPENAME: ObjectID
 Command:
   ENUM:
     0:
@@ -79,9 +81,11 @@ Command:
               TYPENAME: Argument
     4:
       Publish:
-        NEWTYPE:
-          SEQ:
-            SEQ: U8
+        TUPLE:
+          - SEQ:
+              SEQ: U8
+          - SEQ:
+              TYPENAME: ObjectID
     5:
       MakeMoveVec:
         TUPLE:
@@ -238,6 +242,15 @@ ExecutionFailureStatus:
         STRUCT:
           - current_size: U64
           - max_size: U64
+    25:
+      PublishUpgradeMissingDependency: UNIT
+    26:
+      PublishUpgradeDependencyDowngrade: UNIT
+    27:
+      PackageUpgradeError:
+        STRUCT:
+          - upgrade_error:
+              TYPENAME: PackageUpgradeError
 ExecutionStatus:
   ENUM:
     0:
@@ -321,6 +334,15 @@ MovePackage:
         MAP:
           KEY: STR
           VALUE: BYTES
+    - type_origin_table:
+        SEQ:
+          TYPENAME: TypeOrigin
+    - linkage_table:
+        MAP:
+          KEY:
+            TYPENAME: ObjectID
+          VALUE:
+            TYPENAME: UpgradeInfo
 MoveStructLayout:
   ENUM:
     0:
@@ -417,6 +439,36 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
+PackageUpgradeError:
+  ENUM:
+    0:
+      UnableToFetchPackage:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+    1:
+      NotAPackage:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+    2:
+      IncompatibleUpgrade: UNIT
+    3:
+      DigestDoesNotMatch:
+        STRUCT:
+          - digest:
+              SEQ: U8
+    4:
+      UnknownUpgradePolicy:
+        STRUCT:
+          - policy: U8
+    5:
+      PackageIDDoesNotMatch:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+          - ticket_id:
+              TYPENAME: ObjectID
 ProgrammableMoveCall:
   STRUCT:
     - package:
@@ -489,6 +541,12 @@ TypeArgumentError:
       TypeNotFound: UNIT
     1:
       ConstraintNotSatisfied: UNIT
+TypeOrigin:
+  STRUCT:
+    - module_name: STR
+    - struct_name: STR
+    - package:
+        TYPENAME: ObjectID
 TypeTag:
   ENUM:
     0:
@@ -534,4 +592,10 @@ TypedStoreError:
       MetricsReporting: UNIT
     5:
       RetryableTransactionError: UNIT
+UpgradeInfo:
+  STRUCT:
+    - upgraded_id:
+        TYPENAME: ObjectID
+    - upgraded_version:
+        TYPENAME: SequenceNumber
 

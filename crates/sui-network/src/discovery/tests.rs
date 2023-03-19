@@ -232,7 +232,7 @@ async fn peers_are_added_from_reocnfig_channel() -> Result<()> {
         new_peers: vec![PeerInfo {
             peer_id: PeerId(peer_2_network_pubkey.0.to_bytes()),
             affinity: PeerAffinity::High,
-            address: vec![multiaddr_to_anemo_address(&peer2_addr).unwrap()],
+            address: vec![peer2_addr.to_anemo_address().unwrap()],
         }],
     })
     .unwrap();

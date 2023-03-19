@@ -431,4 +431,12 @@ module sui::coin {
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
         Coin { id: object::new(ctx), balance: balance::create_for_testing(value) }
     }
+
+    #[test_only]
+    /// Burn coins of any type for testing purposes only
+    public fun burn_for_testing<T>(coin: Coin<T>): u64 {
+        let Coin { id, balance } = coin;
+        object::delete(id);
+        balance::destroy_for_testing(balance)
+    }
 }

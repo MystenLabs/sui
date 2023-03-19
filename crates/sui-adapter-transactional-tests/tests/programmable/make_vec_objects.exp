@@ -1,0 +1,30 @@
+processed 8 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-47:
+created: object(106)
+written: object(105)
+
+task 2 'programmable'. lines 48-55:
+written: object(107)
+
+task 3 'programmable'. lines 56-63:
+written: object(108)
+
+task 4 'programmable'. lines 64-68:
+written: object(109)
+
+task 5 'programmable'. lines 69-71:
+created: object(111)
+written: object(110)
+
+task 6 'view-object'. lines 73-73:
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(111)}}, value: 112u64}
+
+task 7 'programmable'. lines 75-81:
+written: object(112)
+deleted: object(111)

@@ -26,8 +26,7 @@ use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
-use storage::{CertificateStore, PayloadToken};
-use store::Store;
+use storage::{CertificateStore, PayloadStore};
 use thiserror::Error;
 use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -171,7 +170,7 @@ pub struct BlockSynchronizer {
     certificate_store: CertificateStore,
 
     /// The persistent storage for payload markers from workers
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
 
     /// Timeout when synchronizing the certificates
     certificates_synchronize_timeout: Duration,
@@ -192,7 +191,7 @@ impl BlockSynchronizer {
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
         network: anemo::Network,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        payload_store: PayloadStore,
         certificate_store: CertificateStore,
         parameters: Parameters,
     ) -> JoinHandle<()> {
@@ -548,7 +547,7 @@ impl BlockSynchronizer {
                     "Certificate with id {} not our own, checking in storage.",
                     certificate.digest()
                 );
-                match self.payload_store.read_all(payload).await {
+                match self.payload_store.read_all(payload) {
                     Ok(payload_result) => {
                         payload_result.into_iter().all(|x| x.is_some()).to_owned()
                     }
@@ -663,7 +662,7 @@ impl BlockSynchronizer {
     #[instrument(level = "trace", skip_all, fields(request_id, certificate=?certificate.header.digest()))]
     async fn wait_for_block_payload<'a>(
         payload_synchronize_timeout: Duration,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        payload_store: PayloadStore,
         certificate: Certificate,
     ) -> State {
         let futures = certificate
@@ -671,18 +670,13 @@ impl BlockSynchronizer {
             .payload
             .iter()
             .map(|(batch_digest, (worker_id, _))| {
-                payload_store.notify_read((*batch_digest, *worker_id))
+                payload_store.notify_contains(*batch_digest, *worker_id)
             })
             .collect::<Vec<_>>();
 
         // Wait for all the items to sync - have a timeout
         let result = timeout(payload_synchronize_timeout, join_all(futures)).await;
-        if result.is_err()
-            || result
-                .unwrap()
-                .into_iter()
-                .any(|r| r.map_or_else(|_| true, |f| f.is_none()))
-        {
+        if result.is_err() {
             return State::PayloadSynchronized {
                 result: Err(SyncError::Timeout {
                     digest: certificate.digest(),

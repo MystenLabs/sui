@@ -6,3 +6,5 @@ pub mod config;
 pub mod metrics;
 pub mod multiaddr;
 pub mod server;
+
+pub use crate::multiaddr::Multiaddr;

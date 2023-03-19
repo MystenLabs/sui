@@ -7,7 +7,7 @@ import { BCS, getSuiMoveConfig } from "../src/index";
 describe("BCS: Nested temp object", () => {
   it("should support object as a type", () => {
     const bcs = new BCS(getSuiMoveConfig());
-    const value = { name: { boop: "beep", beep: 100n } };
+    const value = { name: { boop: "beep", beep: "100" } };
 
     bcs.registerStructType("Beep", {
       name: {

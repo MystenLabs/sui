@@ -97,6 +97,8 @@ pub type TransactionsPage = Page<SuiTransactionResponse, TransactionDigest>;
 pub struct SuiTransactionResponseOptions {
     /// Whether to show transaction input data. Default to be False
     pub show_input: bool,
+    /// Whether to show bcs-encoded transaction input data
+    pub show_raw_input: bool,
     /// Whether to show transaction effects. Default to be False
     pub show_effects: bool,
     /// Whether to show transaction events. Default to be False
@@ -116,6 +118,7 @@ impl SuiTransactionResponseOptions {
         Self {
             show_effects: true,
             show_input: true,
+            show_raw_input: true,
             show_events: true,
             show_object_changes: true,
             show_balance_changes: true,
@@ -124,6 +127,11 @@ impl SuiTransactionResponseOptions {
 
     pub fn with_input(mut self) -> Self {
         self.show_input = true;
+        self
+    }
+
+    pub fn with_raw_input(mut self) -> Self {
+        self.show_raw_input = true;
         self
     }
 
@@ -162,6 +170,10 @@ impl SuiTransactionResponseOptions {
         self.show_balance_changes || self.show_object_changes
     }
 
+    pub fn require_input(&self) -> bool {
+        self.show_input || self.show_raw_input || self.show_object_changes
+    }
+
     pub fn require_effects(&self) -> bool {
         self.show_effects
             || self.show_events
@@ -174,6 +186,7 @@ impl SuiTransactionResponseOptions {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase", rename = "TransactionResponse")]
 pub struct SuiTransactionResponse {
@@ -181,6 +194,12 @@ pub struct SuiTransactionResponse {
     /// Transaction input data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<SuiTransaction>,
+    /// BCS encoded [SenderSignedData] that includes input object references
+    /// returns empty array if `show_raw_transaction` is false
+    #[serde_as(as = "Base64")]
+    #[schemars(with = "Base64")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_transaction: Vec<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<SuiTransactionEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -963,8 +982,9 @@ pub enum SuiCommand {
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(SuiArgument, Vec<SuiArgument>),
-    /// Publishes a Move package
-    Publish(SuiMovePackage),
+    /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    /// dependencies to link against on-chain.
+    Publish(SuiMovePackage, Vec<ObjectID>),
     /// Upgrades a Move package
     Upgrade(SuiMovePackage, Vec<ObjectID>, ObjectID, SuiArgument),
     /// `forall T: Vec<T> -> vector<T>`
@@ -1001,7 +1021,11 @@ impl Display for SuiCommand {
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Self::Publish(_bytes) => write!(f, "Publish(_)"),
+            Self::Publish(_bytes, deps) => {
+                write!(f, "Publish(_,")?;
+                write_sep(f, deps, ",")?;
+                write!(f, ")")
+            }
             Self::Upgrade(_bytes, deps, current_package_id, ticket) => {
                 write!(f, "Upgrade({ticket},")?;
                 write_sep(f, deps, ",")?;
@@ -1026,9 +1050,12 @@ impl From<Command> for SuiCommand {
                 arg.into(),
                 args.into_iter().map(SuiArgument::from).collect(),
             ),
-            Command::Publish(modules) => SuiCommand::Publish(SuiMovePackage {
-                disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
-            }),
+            Command::Publish(modules, dep_ids) => SuiCommand::Publish(
+                SuiMovePackage {
+                    disassembled: disassemble_modules(modules.iter()).unwrap_or_default(),
+                },
+                dep_ids,
+            ),
             Command::MakeMoveVec(tag_opt, args) => SuiCommand::MakeMoveVec(
                 tag_opt.map(|tag| tag.to_string()),
                 args.into_iter().map(SuiArgument::from).collect(),

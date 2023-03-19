@@ -7,77 +7,75 @@ parameters:
   timestamp_ms: 0
   protocol_version: 1
   allow_insertion_of_extra_objects: true
-  initial_sui_custody_account_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
-  initial_validator_stake_mist: 25000000000000000
   governance_start_epoch: 0
   epoch_duration_ms: 86400000
 committee_size: 4
 grpc_load_shed: ~
 grpc_concurrency_limit: 20000000000
 accounts:
-  - address: 58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1
+  - address: 73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0
     gas_objects:
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
     gas_object_ranges: []
-  - address: 58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1
+  - address: 73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0
     gas_objects:
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
     gas_object_ranges: []
-  - address: 58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1
+  - address: 73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0
     gas_objects:
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
     gas_object_ranges: []
-  - address: 58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1
+  - address: 73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0
     gas_objects:
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
     gas_object_ranges: []
-  - address: 58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1
+  - address: 73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0
     gas_objects:
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
-      - object_id: "0x58fe0e977d9cebceef216ee0abca798d7295d37117a9709d29d445f969384de1"
+      - object_id: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
         gas_value: 100000000000000
     gas_object_ranges: []
 

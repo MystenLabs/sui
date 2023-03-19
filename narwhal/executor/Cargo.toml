@@ -15,25 +15,19 @@ config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 futures = "0.3.24"
-multiaddr = "0.17.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
 tokio = { workspace = true, features = ["sync"] }
-tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"
 tracing = "0.1.36"
 prometheus = "0.13.3"
-backoff = { version = "0.4.0", features = ["tokio"] }
 storage = { path = "../storage", package = "narwhal-storage" }
-itertools = "0.10.5"
-tap = "1.0.1"
 
 types = { path = "../types", package = "narwhal-types" }
 network = { path = "../network", package = "narwhal-network" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 anyhow = "1.0.65"
-match_opt = "0.1.2"
 rand = "0.8.5"
 mockall = "0.11.2"
 
@@ -42,7 +36,6 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
-anemo-tower.workspace = true
 
 [dev-dependencies]
 indexmap = { version = "1.9.2", features = ["serde"] }

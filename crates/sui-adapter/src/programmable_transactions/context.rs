@@ -22,6 +22,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
+    move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, Storage, WriteKind},
 };
@@ -349,20 +350,44 @@ where
     }
 
     /// Create a new package
-    pub fn new_package(
+    pub fn new_package<'p>(
         &mut self,
         modules: Vec<move_binary_format::CompiledModule>,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        version: Option<SequenceNumber>,
     ) -> Result<ObjectID, ExecutionError> {
         // wrap the modules in an object, write it to the store
-        let package_object = Object::new_package(
+        let object = Object::new_package(
             modules,
-            OBJECT_START_VERSION,
+            version.unwrap_or(OBJECT_START_VERSION),
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
+            dependencies,
         )?;
-        let id = package_object.id();
-        self.new_packages.push(package_object);
-        Ok(id)
+        let object_id = object.id();
+        self.new_packages.push(object);
+        Ok(object_id)
+    }
+
+    /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
+    pub fn upgrade_package<'p>(
+        &mut self,
+        previous_package: &MovePackage,
+        new_modules: Vec<move_binary_format::CompiledModule>,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+    ) -> Result<ObjectID, ExecutionError> {
+        let new_package_object_id = self.tx_context.fresh_id();
+        let object = Object::new_upgraded_package(
+            previous_package,
+            new_package_object_id,
+            new_modules,
+            self.tx_context.digest(),
+            self.protocol_config.max_move_package_size(),
+            dependencies,
+        )?;
+        let object_id = object.id();
+        self.new_packages.push(object);
+        Ok(object_id)
     }
 
     /// Finish a command: clearing the borrows and adding the results to the result vector

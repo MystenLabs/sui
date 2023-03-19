@@ -21,7 +21,7 @@ use sui_types::{
     },
     messages::{
         Argument, CallArg, Command, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus,
-        ObjectArg, ObjectInfoRequestKind, TransactionKind, TypeArgumentError,
+        ObjectArg, ObjectInfoRequestKind, PackageUpgradeError, TransactionKind, TypeArgumentError,
     },
     object::{Data, Owner},
     storage::DeleteKind,
@@ -93,6 +93,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Command>(&samples)?;
     tracer.trace_type::<CommandArgumentError>(&samples)?;
     tracer.trace_type::<TypeArgumentError>(&samples)?;
+    tracer.trace_type::<PackageUpgradeError>(&samples)?;
 
     tracer.registry()
 }

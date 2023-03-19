@@ -9,25 +9,23 @@ edition = "2021"
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
-dashmap = "5.4.0"
 arc-swap = "1.5.1"
 axum = "0.6.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
-multiaddr = "0.17.0"
 prometheus = "0.13.3"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.36"
-parking_lot = "0.12.1"
 futures = "0.3.23"
-chrono = "0.4.23"
 tower = "0.4.13"
 git-version = "0.3.5"
 const-str = "0.5.3"
 reqwest = { version = "0.11.13", default_features= false, features = ["blocking", "json", "rustls-tls"] }
 tap = "1.0.1"
+serde = { version = "1.0.144", features = ["derive"] }
 
 sui-tls = { path = "../sui-tls" }
+sui-macros = { path = "../sui-macros" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
@@ -39,7 +37,6 @@ sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
-narwhal-config = { path = "../../narwhal/config" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

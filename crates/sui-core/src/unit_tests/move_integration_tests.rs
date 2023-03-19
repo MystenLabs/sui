@@ -7,7 +7,13 @@ use crate::authority::authority_tests::{
     call_move, call_move_, execute_programmable_transaction, init_state_with_ids,
     send_and_confirm_transaction, TestCallArg,
 };
-use move_core_types::identifier::Identifier;
+use move_core_types::{
+    account_address::AccountAddress,
+    identifier::{IdentStr, Identifier},
+    language_storage::StructTag,
+    u256::U256,
+};
+use sui_framework::system_package_ids;
 use sui_types::{
     error::ExecutionErrorKind, object::Data,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -30,6 +36,9 @@ use std::fs::File;
 use std::io::Read;
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
+use sui_verifier::entry_points_verifier::{
+    RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
+};
 
 const MAX_GAS: u64 = 10000;
 
@@ -108,8 +117,13 @@ async fn test_publish_empty_package() {
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     // empty package
-    let data =
-        TransactionData::new_module_with_dummy_gas_price(sender, gas_object_ref, vec![], MAX_GAS);
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        sender,
+        gas_object_ref,
+        vec![],
+        vec![],
+        MAX_GAS,
+    );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let err = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -126,6 +140,7 @@ async fn test_publish_empty_package() {
         sender,
         gas_object_ref,
         vec![vec![]],
+        vec![],
         MAX_GAS,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -155,8 +170,13 @@ async fn test_publish_duplicate_modules() {
     let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ false);
     assert_eq!(modules.len(), 1);
     modules.push(modules[0].clone());
-    let data =
-        TransactionData::new_module_with_dummy_gas_price(sender, gas_object_ref, modules, MAX_GAS);
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        sender,
+        gas_object_ref,
+        modules,
+        system_package_ids(),
+        MAX_GAS,
+    );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -1738,7 +1758,7 @@ async fn test_entry_point_string() {
         &sender,
         &sender_key,
         &gas,
-        "entry_point_string",
+        "entry_point_types",
         /* with_unpublished_deps */ false,
     )
     .await;
@@ -1753,7 +1773,7 @@ async fn test_entry_point_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "ascii_arg",
         vec![],
         vec![
@@ -1775,7 +1795,7 @@ async fn test_entry_point_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "utf8_arg",
         vec![],
         vec![
@@ -1797,7 +1817,7 @@ async fn test_entry_point_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "utf8_arg",
         vec![],
         vec![
@@ -1822,7 +1842,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &gas,
-        "entry_point_string",
+        "entry_point_types",
         /* with_unpublished_deps */ false,
     )
     .await;
@@ -1836,7 +1856,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1854,7 +1874,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "vec_option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1872,7 +1892,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_vec_option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1890,7 +1910,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1908,7 +1928,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "vec_option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1926,7 +1946,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "vec_option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1944,7 +1964,7 @@ async fn test_nested_string() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_vec_option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_bcs)],
@@ -1966,7 +1986,7 @@ async fn test_entry_point_string_vec() {
         &sender,
         &sender_key,
         &gas,
-        "entry_point_string",
+        "entry_point_types",
         /* with_unpublished_deps */ false,
     )
     .await;
@@ -1982,7 +2002,7 @@ async fn test_entry_point_string_vec() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "utf8_vec_arg",
         vec![],
         vec![
@@ -2007,7 +2027,7 @@ async fn test_entry_point_string_error() {
         &sender,
         &sender_key,
         &gas,
-        "entry_point_string",
+        "entry_point_types",
         /* with_unpublished_deps */ false,
     )
     .await;
@@ -2022,7 +2042,7 @@ async fn test_entry_point_string_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "ascii_arg",
         vec![],
         vec![
@@ -2037,7 +2057,7 @@ async fn test_entry_point_string_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2057,7 +2077,7 @@ async fn test_entry_point_string_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "ascii_arg",
         vec![],
         vec![
@@ -2072,7 +2092,7 @@ async fn test_entry_point_string_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2092,7 +2112,7 @@ async fn test_entry_point_string_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "utf8_arg",
         vec![],
         vec![
@@ -2107,7 +2127,7 @@ async fn test_entry_point_string_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2126,7 +2146,7 @@ async fn test_entry_point_string_vec_error() {
         &sender,
         &sender_key,
         &gas,
-        "entry_point_string",
+        "entry_point_types",
         /* with_unpublished_deps */ false,
     )
     .await;
@@ -2147,7 +2167,7 @@ async fn test_entry_point_string_vec_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "utf8_vec_arg",
         vec![],
         vec![
@@ -2162,7 +2182,7 @@ async fn test_entry_point_string_vec_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2181,7 +2201,7 @@ async fn test_entry_point_string_option_error() {
         &sender,
         &sender_key,
         &gas,
-        "entry_point_string",
+        "entry_point_types",
         /* with_unpublished_deps */ false,
     )
     .await;
@@ -2195,7 +2215,7 @@ async fn test_entry_point_string_option_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_ascii_arg",
         vec![],
         vec![TestCallArg::Pure(utf_option_bcs)],
@@ -2207,7 +2227,7 @@ async fn test_entry_point_string_option_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2225,7 +2245,7 @@ async fn test_entry_point_string_option_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_vec_bcs)],
@@ -2237,7 +2257,7 @@ async fn test_entry_point_string_option_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
@@ -2253,7 +2273,7 @@ async fn test_entry_point_string_option_error() {
         &sender,
         &sender_key,
         &package.0,
-        "entry_point_string",
+        "entry_point_types",
         "option_utf8_arg",
         vec![],
         vec![TestCallArg::Pure(utf_str_vec_bcs)],
@@ -2265,11 +2285,455 @@ async fn test_entry_point_string_option_error() {
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::TypeMismatch
+                kind: CommandArgumentError::InvalidBCSBytes
             },
             command: Some(0)
         }
     );
+}
+
+async fn test_make_move_vec_for_type<T: Clone + Serialize>(
+    authority: &AuthorityState,
+    gas: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    package_id: ObjectID,
+    t: TypeTag,
+    value: T,
+) {
+    fn make_and_drop(
+        builder: &mut ProgrammableTransactionBuilder,
+        package: ObjectID,
+        t: &TypeTag,
+        args: Vec<Argument>,
+    ) {
+        let n = builder.pure(args.len() as u64).unwrap();
+        let vec = builder.command(Command::MakeMoveVec(Some(t.clone()), args));
+        builder.programmable_move_call(
+            package,
+            Identifier::new("entry_point_types").unwrap(),
+            Identifier::new("drop_all").unwrap(),
+            vec![t.clone()],
+            vec![vec, n],
+        );
+    }
+    // empty
+    let mut builder = ProgrammableTransactionBuilder::new();
+    make_and_drop(&mut builder, package_id, &t, vec![]);
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    assert!(effects.created().is_empty());
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.unwrapped().is_empty());
+    assert!(effects.deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+
+    // single
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let args = vec![builder.pure(value.clone()).unwrap()];
+    make_and_drop(&mut builder, package_id, &t, args);
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    assert!(effects.created().is_empty());
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.unwrapped().is_empty());
+    assert!(effects.deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+
+    // two
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let args = vec![
+        builder.pure(value.clone()).unwrap(),
+        builder.pure(value.clone()).unwrap(),
+    ];
+    make_and_drop(&mut builder, package_id, &t, args);
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    assert!(effects.created().is_empty());
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.unwrapped().is_empty());
+    assert!(effects.deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+
+    // with move call value
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let arg = builder.pure(value.clone()).unwrap();
+    let id_result = builder.programmable_move_call(
+        package_id,
+        Identifier::new("entry_point_types").unwrap(),
+        Identifier::new("id").unwrap(),
+        vec![t.clone()],
+        vec![arg],
+    );
+    let args = vec![arg, id_result, arg];
+    make_and_drop(&mut builder, package_id, &t, args);
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    assert!(effects.created().is_empty());
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.unwrapped().is_empty());
+    assert!(effects.deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+
+    // nested
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let arg = builder.pure(value).unwrap();
+    let id_result = builder.programmable_move_call(
+        package_id,
+        Identifier::new("entry_point_types").unwrap(),
+        Identifier::new("id").unwrap(),
+        vec![t.clone()],
+        vec![arg],
+    );
+    let inner_args = vec![arg, id_result, arg];
+    let vec = builder.command(Command::MakeMoveVec(Some(t.clone()), inner_args));
+    let args = vec![vec, vec, vec];
+    make_and_drop(
+        &mut builder,
+        package_id,
+        &TypeTag::Vector(Box::new(t)),
+        args,
+    );
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    assert!(effects.created().is_empty());
+    assert_eq!(effects.mutated().len(), 1);
+    assert!(effects.unwrapped().is_empty());
+    assert!(effects.deleted().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+}
+
+macro_rules! make_vec_tests_for_type {
+    ($test:ident, $t:ty, $tag:expr, $value:expr) => {
+        #[tokio::test]
+        #[cfg_attr(msim, ignore)]
+        async fn $test() {
+            let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+            let gas = ObjectID::random();
+            let authority = init_state_with_ids(vec![(sender, gas)]).await;
+            let package = build_and_publish_test_package(
+                &authority,
+                &sender,
+                &sender_key,
+                &gas,
+                "entry_point_types",
+                /* with_unpublished_deps */ false,
+            )
+            .await;
+            let package_id = package.0;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                $tag,
+                $value,
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                TypeTag::Vector(Box::new($tag)),
+                Vec::<$t>::new(),
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                TypeTag::Vector(Box::new($tag)),
+                vec![$value, $value],
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                option_tag($tag),
+                None::<$t>,
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                option_tag($tag),
+                Some($value),
+            )
+            .await;
+            test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                package_id,
+                TypeTag::Vector(Box::new(option_tag($tag))),
+                vec![None, Some($value)],
+            )
+            .await;
+        }
+    };
+}
+
+make_vec_tests_for_type!(test_make_move_vec_bool, bool, TypeTag::Bool, false);
+make_vec_tests_for_type!(test_make_move_vec_u8, u8, TypeTag::U8, 0u8);
+make_vec_tests_for_type!(test_make_move_vec_u16, u16, TypeTag::U16, 0u16);
+make_vec_tests_for_type!(test_make_move_vec_u32, u32, TypeTag::U32, 0u32);
+make_vec_tests_for_type!(test_make_move_vec_u64, u64, TypeTag::U64, 0u64);
+make_vec_tests_for_type!(test_make_move_vec_u128, u128, TypeTag::U128, 0u128);
+make_vec_tests_for_type!(test_make_move_vec_u256, U256, TypeTag::U256, U256::zero());
+make_vec_tests_for_type!(
+    test_make_move_vec_address,
+    SuiAddress,
+    TypeTag::Address,
+    SuiAddress::ZERO
+);
+make_vec_tests_for_type!(
+    test_make_move_vec_address_id,
+    ObjectID,
+    TypeTag::Struct(Box::new(sui_types::id::ID::type_())),
+    ObjectID::ZERO
+);
+make_vec_tests_for_type!(test_make_move_vec_utf8, &str, utf8_tag(), "❤️🧀");
+make_vec_tests_for_type!(
+    test_make_move_vec_ascii,
+    &str,
+    ascii_tag(),
+    "love and cheese"
+);
+
+async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
+    authority: &AuthorityState,
+    gas: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    t: TypeTag,
+    value: T,
+) {
+    // single without a type argument
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let arg = builder.pure(value.clone()).unwrap();
+    builder.command(Command::MakeMoveVec(None, vec![arg]));
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::command_argument_error(
+                CommandArgumentError::TypeMismatch,
+                0
+            ),
+            command: Some(0)
+        }
+    );
+
+    // invalid BCS for any Move value
+    const ALWAYS_INVALID_BYTES: &[u8] = &[255, 255, 255];
+
+    // invalid bcs
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let args = vec![builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false)];
+    builder.command(Command::MakeMoveVec(Some(t.clone()), args));
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::command_argument_error(
+                CommandArgumentError::InvalidBCSBytes,
+                0
+            ),
+            command: Some(0)
+        }
+    );
+
+    // invalid bcs bytes at end
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let args = vec![
+        builder.pure(value.clone()).unwrap(),
+        builder.pure(value.clone()).unwrap(),
+        builder.pure(value).unwrap(),
+        builder.pure_bytes(ALWAYS_INVALID_BYTES.to_vec(), false),
+    ];
+    builder.command(Command::MakeMoveVec(Some(t.clone()), args));
+    let pt = builder.finish();
+    let effects = execute_programmable_transaction(authority, gas, sender, sender_key, pt)
+        .await
+        .unwrap();
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::command_argument_error(
+                CommandArgumentError::InvalidBCSBytes,
+                3,
+            ),
+            command: Some(0)
+        }
+    );
+}
+
+macro_rules! make_vec_error_tests_for_type {
+    ($test:ident, $t:ty, $tag:expr, $value:expr) => {
+        #[tokio::test]
+        #[cfg_attr(msim, ignore)]
+        async fn $test() {
+            let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+            let gas = ObjectID::random();
+            let authority = init_state_with_ids(vec![(sender, gas)]).await;
+            error_test_make_move_vec_for_type(&authority, &gas, &sender, &sender_key, $tag, $value)
+                .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                TypeTag::Vector(Box::new($tag)),
+                Vec::<$t>::new(),
+            )
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                TypeTag::Vector(Box::new($tag)),
+                vec![$value, $value],
+            )
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                option_tag($tag),
+                None::<$t>,
+            )
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                option_tag($tag),
+                Some($value),
+            )
+            .await;
+            error_test_make_move_vec_for_type(
+                &authority,
+                &gas,
+                &sender,
+                &sender_key,
+                TypeTag::Vector(Box::new(option_tag($tag))),
+                vec![None, Some($value)],
+            )
+            .await;
+        }
+    };
+}
+
+make_vec_error_tests_for_type!(test_error_make_move_vec_bool, bool, TypeTag::Bool, false);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u8, u8, TypeTag::U8, 0u8);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u16, u16, TypeTag::U16, 0u16);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u32, u32, TypeTag::U32, 0u32);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u64, u64, TypeTag::U64, 0u64);
+make_vec_error_tests_for_type!(test_error_make_move_vec_u128, u128, TypeTag::U128, 0u128);
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_u256,
+    U256,
+    TypeTag::U256,
+    U256::zero()
+);
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_address,
+    SuiAddress,
+    TypeTag::Address,
+    SuiAddress::ZERO
+);
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_address_id,
+    ObjectID,
+    TypeTag::Struct(Box::new(sui_types::id::ID::type_())),
+    ObjectID::ZERO
+);
+make_vec_error_tests_for_type!(test_error_make_move_vec_utf8, &str, utf8_tag(), "❤️🧀");
+make_vec_error_tests_for_type!(
+    test_error_make_move_vec_ascii,
+    &str,
+    ascii_tag(),
+    "love and cheese"
+);
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_make_move_vec_empty() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.command(Command::MakeMoveVec(None, vec![]));
+    let pt = builder.finish();
+    let result = execute_programmable_transaction(&authority, &gas, &sender, &sender_key, pt)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        result,
+        SuiError::UserInputError {
+            error: UserInputError::EmptyCommandInput
+        }
+    );
+}
+
+fn resolved_struct(
+    (address, module, name): (&AccountAddress, &IdentStr, &IdentStr),
+    type_args: Vec<TypeTag>,
+) -> TypeTag {
+    TypeTag::Struct(Box::new(StructTag {
+        address: *address,
+        module: module.to_owned(),
+        name: name.to_owned(),
+        type_params: type_args,
+    }))
+}
+
+fn option_tag(inner: TypeTag) -> TypeTag {
+    resolved_struct(RESOLVED_STD_OPTION, vec![inner])
+}
+
+fn utf8_tag() -> TypeTag {
+    resolved_struct(RESOLVED_UTF8_STR, vec![])
+}
+
+fn ascii_tag() -> TypeTag {
+    resolved_struct(RESOLVED_ASCII_STR, vec![])
 }
 
 #[tokio::test]
@@ -2388,7 +2852,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
         .expect("Could not build resolution graph.");
 
     let SuiError::ModulePublishFailure { error } =
-        check_unpublished_dependencies(gather_dependencies(&resolution_graph).unpublished)
+        check_unpublished_dependencies(&gather_dependencies(&resolution_graph).unpublished)
             .err()
             .unwrap()
      else {
@@ -2422,7 +2886,13 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let all_module_bytes = build_test_package(test_dir, with_unpublished_deps);
+    let build_config = BuildConfig::new_for_testing();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/");
+    path.push(test_dir);
+    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -2431,6 +2901,7 @@ pub async fn build_and_try_publish_test_package(
         *sender,
         gas_object_ref,
         all_module_bytes,
+        dependencies,
         gas_budget,
     );
     let transaction = to_sender_signed_transaction(data, sender_key);

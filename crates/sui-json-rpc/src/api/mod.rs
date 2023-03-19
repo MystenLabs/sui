@@ -8,6 +8,7 @@ mod read;
 mod transaction_builder;
 mod write;
 
+use anyhow::anyhow;
 pub use coin::CoinReadApiClient;
 pub use coin::CoinReadApiOpenRpc;
 pub use coin::CoinReadApiServer;
@@ -38,6 +39,8 @@ pub use transaction_builder::TransactionBuilderServer;
 /// To avoid unnecessary dependency on that crate, we have a reference here
 /// for document purposes.
 pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
+// TODOD(chris): make this configurable
+pub const QUERY_MAX_RESULT_LIMIT_CHECKPOINTS: usize = 100;
 
 pub const MAX_GET_OWNED_OBJECT_LIMIT: usize = 256;
 
@@ -57,5 +60,14 @@ pub fn cap_page_objects_limit(limit: Option<usize>) -> Result<usize, anyhow::Err
         // MUSTFIXD(jian): implement this error: Err(anyhow!("limit is greater than max get owned object size"))
     } else {
         Ok(limit)
+    }
+}
+
+pub fn validate_limit(limit: Option<usize>, max: usize) -> Result<usize, anyhow::Error> {
+    match limit {
+        Some(l) if l > max => Err(anyhow!("Page size limit {l} exceeds max limit {max}")),
+        Some(0) => Err(anyhow!("Page size limit cannot be smaller than 1")),
+        Some(l) => Ok(l),
+        None => Ok(max),
     }
 }

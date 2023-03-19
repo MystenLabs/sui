@@ -31,6 +31,12 @@ mod transaction_manager;
 pub mod transaction_orchestrator;
 
 #[cfg(test)]
+#[path = "unit_tests/move_package_tests.rs"]
+mod move_package_tests;
+#[cfg(test)]
+#[path = "unit_tests/move_package_upgrade_tests.rs"]
+mod move_package_upgrade_tests;
+#[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
 pub mod test_authority_clients;

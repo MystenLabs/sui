@@ -158,7 +158,7 @@ module sui::validator_set_tests {
         let validator_set = validator_set::new(vector[validator1], ctx1);
         assert_eq(validator_set::total_stake(&validator_set), 100);
 
-        validator_set::request_add_validator_candidate(&mut validator_set, validator2);
+        validator_set::request_add_validator_candidate(&mut validator_set, validator2, ctx1);
 
         test_scenario::next_tx(scenario, @0x42);
         {
@@ -195,7 +195,7 @@ module sui::validator_set_tests {
         let validator_set = validator_set::new(vector[validator1], ctx1);
         assert_eq(validator_set::total_stake(&validator_set), 100);
 
-        validator_set::request_add_validator_candidate(&mut validator_set, validator2);
+        validator_set::request_add_validator_candidate(&mut validator_set, validator2, ctx1);
 
         test_scenario::next_tx(scenario, @0x42);
         {
@@ -235,7 +235,7 @@ module sui::validator_set_tests {
         assert_eq(validator_set::total_stake(&validator_set), 100);
 
         // Add the second one as a candidate.
-        validator_set::request_add_validator_candidate(&mut validator_set, validator2);
+        validator_set::request_add_validator_candidate(&mut validator_set, validator2, ctx1);
         assert!(validator_set::is_validator_candidate(&validator_set, @0x2), 0);
 
         test_scenario::next_tx(scenario, @0x2);
@@ -414,7 +414,8 @@ module sui::validator_set_tests {
 
     fun add_and_activate_validator(validator_set: &mut ValidatorSet, validator: Validator, scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, validator::sui_address(&validator));
-        validator_set::request_add_validator_candidate(validator_set, validator);
-        validator_set::request_add_validator(validator_set, 0, test_scenario::ctx(scenario));
+        let ctx = test_scenario::ctx(scenario);
+        validator_set::request_add_validator_candidate(validator_set, validator, ctx);
+        validator_set::request_add_validator(validator_set, 0, ctx);
     }
 }

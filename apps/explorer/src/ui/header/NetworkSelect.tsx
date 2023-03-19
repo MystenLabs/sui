@@ -282,10 +282,13 @@ export function NetworkSelect({
                                             close();
                                         }}
                                     />
-                                    {selected && version ? (
-                                        <div className="-mx-4 -mb-4 mt-2 rounded-b-lg bg-gray-40">
+                                    {!!value && version ? (
+                                        <div className="-mx-3 -mb-4 mt-2 rounded-b-lg bg-gray-40">
                                             <NetworkVersion
-                                                label={selected.label}
+                                                label={
+                                                    selected?.label ??
+                                                    'Custom RPC'
+                                                }
                                                 version={version}
                                             />
                                         </div>

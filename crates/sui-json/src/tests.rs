@@ -10,6 +10,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
+use sui_framework::make_system_packages;
 use sui_framework_build::compiled_package::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
@@ -405,8 +406,12 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    let example_package =
-        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
+    let example_package = Object::new_package_for_testing(
+        compiled_modules,
+        TransactionDigest::genesis(),
+        &make_system_packages(),
+    )
+    .unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("geniteam").unwrap();
@@ -525,8 +530,12 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    let example_package =
-        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
+    let example_package = Object::new_package_for_testing(
+        compiled_modules,
+        TransactionDigest::genesis(),
+        &make_system_packages(),
+    )
+    .unwrap();
     let framework_pkg = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("object_basics").unwrap();
@@ -624,8 +633,12 @@ fn test_basic_args_linter_top_level() {
         .build(path)
         .unwrap()
         .into_modules();
-    let example_package =
-        Object::new_package_for_testing(compiled_modules, TransactionDigest::genesis()).unwrap();
+    let example_package = Object::new_package_for_testing(
+        compiled_modules,
+        TransactionDigest::genesis(),
+        &make_system_packages(),
+    )
+    .unwrap();
     let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("entry_point_vector").unwrap();

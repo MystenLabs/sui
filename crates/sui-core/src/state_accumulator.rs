@@ -53,7 +53,7 @@ impl StateAccumulator {
                 .flat_map(|fx| fx.deleted().iter().map(|obj_ref| obj_ref.2)),
         );
 
-        // TODO almost certainly not currectly handling "mutated" effects.
+        // MUSTFIX: almost certainly not correctly handling "mutated" effects.
         acc.insert_all(
             effects
                 .iter()

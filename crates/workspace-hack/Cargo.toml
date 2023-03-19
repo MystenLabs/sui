@@ -33,23 +33,18 @@ anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
-ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
 ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
-ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
-ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
-ark-ff-468e82937335b1c9 = { package = "ark-ff", version = "0.3", default-features = false, features = ["std"] }
-ark-ff-9fbad63c4bcf4a8f = { package = "ark-ff", version = "0.4", features = ["asm", "parallel"] }
+ark-ec = { version = "0.4", features = ["parallel"] }
+ark-ff = { version = "0.4", features = ["asm", "parallel"] }
 ark-groth16 = { version = "0.4" }
 ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
 ark-r1cs-std = { version = "0.4", default-features = false }
 ark-relations = { version = "0.4", features = ["std"] }
-ark-serialize-468e82937335b1c9 = { package = "ark-serialize", version = "0.3", default-features = false, features = ["std"] }
-ark-serialize-9fbad63c4bcf4a8f = { package = "ark-serialize", version = "0.4", features = ["derive", "std"] }
+ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-snark = { version = "0.4", default-features = false }
-ark-std-468e82937335b1c9 = { package = "ark-std", version = "0.3", default-features = false, features = ["std"] }
-ark-std-9fbad63c4bcf4a8f = { package = "ark-std", version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -61,7 +56,7 @@ async-stream = { version = "0.3", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
-axum = { version = "0.6" }
+axum = { version = "0.6", features = ["headers"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", features = ["tls-rustls"] }
@@ -69,7 +64,8 @@ backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
-base64 = { version = "0.13", features = ["alloc"] }
+base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
+base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -94,8 +90,7 @@ blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
 bs58 = { version = "0.4", features = ["check"] }
-bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", features = ["serde1"] }
-bstr-dff4ba8e3ae991db = { package = "bstr", version = "1" }
+bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
 bytemuck = { version = "1", default-features = false }
@@ -194,8 +189,8 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d96eee87465f02976eeb1ae3ceeba57b7d8bfe4b", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d96eee87465f02976eeb1ae3ceeba57b7d8bfe4b", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "af2d40caa3db127e60182591b8c7decfabea399c", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "af2d40caa3db127e60182591b8c7decfabea399c", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -204,7 +199,6 @@ fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
 flate2 = { version = "1" }
-flexstr = { version = "0.9" }
 float-cmp = { version = "0.9" }
 fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
@@ -244,6 +238,8 @@ half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hdrhistogram = { version = "7" }
+headers = { version = "0.3", default-features = false }
+headers-core = { version = "0.2", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4" }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
@@ -277,8 +273,7 @@ io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
-itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4" }
-itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
+itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 jsonrpsee = { version = "0.16", default-features = false, features = ["full"] }
 jsonrpsee-client-transport = { version = "0.16", default-features = false, features = ["tls", "web", "ws"] }
@@ -295,7 +290,6 @@ lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default
 leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
-libm = { version = "0.2" }
 librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
@@ -319,32 +313,33 @@ miniz_oxide = { version = "0.6", default-features = false, features = ["with-all
 mio = { version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-borrow-graph = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-compiler = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-core-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", features = ["address32"] }
-move-coverage = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-docgen = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-errmapgen = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-model = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-package = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-prover = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
+move-abigen = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-borrow-graph = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-compiler = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-core-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", features = ["address32"] }
+move-coverage = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-docgen = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-errmapgen = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-model = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-package = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-prover = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
@@ -367,7 +362,7 @@ num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
+num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
 number_prefix = { version = "0.4" }
@@ -422,7 +417,7 @@ prometheus = { version = "0.13" }
 proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
-protobuf = { version = "2", default-features = false }
+protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -440,7 +435,6 @@ rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["std"] }
-rand_distr = { version = "0.4" }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
@@ -496,6 +490,7 @@ serde_with = { version = "2", features = ["hex"] }
 serde_yaml = { version = "0.8", default-features = false }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
+sha1 = { version = "0.10" }
 sha2-274715c4dabd11b0 = { package = "sha2", version = "0.9" }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10" }
 sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9" }
@@ -512,7 +507,6 @@ slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
-smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
@@ -541,7 +535,7 @@ termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16" }
+textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
 thiserror = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -566,14 +560,15 @@ toml_edit = { version = "0.15" }
 tonic = { version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.3", features = ["full"] }
+tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
+tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
-tracing-log = { version = "0.1" }
+tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
@@ -594,7 +589,6 @@ unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
-unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
@@ -646,28 +640,21 @@ anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
-ark-bls12-377 = { version = "0.3", features = ["std"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
 ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
-ark-ec-468e82937335b1c9 = { package = "ark-ec", version = "0.3", default-features = false, features = ["std"] }
-ark-ec-9fbad63c4bcf4a8f = { package = "ark-ec", version = "0.4", features = ["parallel"] }
-ark-ff-468e82937335b1c9 = { package = "ark-ff", version = "0.3", default-features = false, features = ["std"] }
-ark-ff-9fbad63c4bcf4a8f = { package = "ark-ff", version = "0.4", features = ["asm", "parallel"] }
-ark-ff-asm-468e82937335b1c9 = { package = "ark-ff-asm", version = "0.3", default-features = false }
-ark-ff-asm-9fbad63c4bcf4a8f = { package = "ark-ff-asm", version = "0.4", default-features = false }
-ark-ff-macros-468e82937335b1c9 = { package = "ark-ff-macros", version = "0.3", default-features = false }
-ark-ff-macros-9fbad63c4bcf4a8f = { package = "ark-ff-macros", version = "0.4", default-features = false }
+ark-ec = { version = "0.4", features = ["parallel"] }
+ark-ff = { version = "0.4", features = ["asm", "parallel"] }
+ark-ff-asm = { version = "0.4", default-features = false }
+ark-ff-macros = { version = "0.4", default-features = false }
 ark-groth16 = { version = "0.4" }
 ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
 ark-r1cs-std = { version = "0.4", default-features = false }
 ark-relations = { version = "0.4", features = ["std"] }
-ark-serialize-468e82937335b1c9 = { package = "ark-serialize", version = "0.3", default-features = false, features = ["std"] }
-ark-serialize-9fbad63c4bcf4a8f = { package = "ark-serialize", version = "0.4", features = ["derive", "std"] }
+ark-serialize = { version = "0.4", features = ["derive", "std"] }
 ark-serialize-derive = { version = "0.4", default-features = false }
 ark-snark = { version = "0.4", default-features = false }
-ark-std-468e82937335b1c9 = { package = "ark-std", version = "0.3", default-features = false, features = ["std"] }
-ark-std-9fbad63c4bcf4a8f = { package = "ark-std", version = "0.4", default-features = false, features = ["parallel"] }
+ark-std = { version = "0.4", default-features = false, features = ["parallel"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128"] }
@@ -685,7 +672,7 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
-axum = { version = "0.6" }
+axum = { version = "0.6", features = ["headers"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", features = ["tls-rustls"] }
@@ -693,7 +680,8 @@ backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
 base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
-base64 = { version = "0.13", features = ["alloc"] }
+base64-594e8ee84c453af0 = { package = "base64", version = "0.13", features = ["alloc"] }
+base64-647d43efb71741da = { package = "base64", version = "0.21" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -720,8 +708,7 @@ blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
 bs58 = { version = "0.4", features = ["check"] }
-bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", features = ["serde1"] }
-bstr-dff4ba8e3ae991db = { package = "bstr", version = "1" }
+bstr = { version = "1" }
 bulletproofs = { version = "4" }
 bumpalo = { version = "3" }
 byte-slice-cast = { version = "1" }
@@ -842,9 +829,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d96eee87465f02976eeb1ae3ceeba57b7d8bfe4b", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d96eee87465f02976eeb1ae3ceeba57b7d8bfe4b", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d96eee87465f02976eeb1ae3ceeba57b7d8bfe4b", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "af2d40caa3db127e60182591b8c7decfabea399c", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "af2d40caa3db127e60182591b8c7decfabea399c", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "af2d40caa3db127e60182591b8c7decfabea399c", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -853,7 +840,6 @@ fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
 flate2 = { version = "1" }
-flexstr = { version = "0.9" }
 float-cmp = { version = "0.9" }
 fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
@@ -895,6 +881,8 @@ half = { version = "1", default-features = false }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hdrhistogram = { version = "7" }
+headers = { version = "0.3", default-features = false }
+headers-core = { version = "0.2", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4" }
 hex = { version = "0.4" }
@@ -935,8 +923,7 @@ io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools = { version = "0.10" }
-itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4" }
-itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
+itoa = { version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 jsonrpsee = { version = "0.16", default-features = false, features = ["full"] }
@@ -957,7 +944,6 @@ leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
-libm = { version = "0.2" }
 librocksdb-sys = { version = "0.10", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
@@ -983,32 +969,33 @@ mio = { version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-borrow-graph = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-compiler = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-core-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", features = ["address32"] }
-move-coverage = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-docgen = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-errmapgen = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-model = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-package = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-prover = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce", default-features = false }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "b47c1d8955e11ed99842fc40a5425c4198589dce" }
+move-abigen = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-borrow-graph = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-compiler = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-core-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", features = ["address32"] }
+move-coverage = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-docgen = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-errmapgen = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-model = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-package = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-prover = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25", default-features = false }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "f3cab72c7b7401de34a2d4c4ac86f9e402256e25" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
@@ -1033,7 +1020,7 @@ num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
+num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num_cpus = { version = "1", default-features = false }
 number_prefix = { version = "0.4" }
@@ -1110,7 +1097,7 @@ prost = { version = "0.11" }
 prost-build = { version = "0.11" }
 prost-derive = { version = "0.11", default-features = false }
 prost-types = { version = "0.11" }
-protobuf = { version = "2", default-features = false }
+protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 ptree = { version = "0.4" }
 quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -1129,7 +1116,6 @@ rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["std"] }
-rand_distr = { version = "0.4" }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
@@ -1156,8 +1142,7 @@ rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
 rustc-hex = { version = "2", default-features = false, features = ["std"] }
-rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
-rustc_version-9fbad63c4bcf4a8f = { package = "rustc_version", version = "0.4", default-features = false }
+rustc_version = { version = "0.4", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "quic"] }
 rustls-native-certs = { version = "0.6", default-features = false }
@@ -1199,6 +1184,7 @@ serde_with_macros = { version = "2", default-features = false }
 serde_yaml = { version = "0.8", default-features = false }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
+sha1 = { version = "0.10" }
 sha2-274715c4dabd11b0 = { package = "sha2", version = "0.9" }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10" }
 sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9" }
@@ -1216,7 +1202,6 @@ slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
-smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7", features = ["http"] }
@@ -1251,7 +1236,7 @@ test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
-textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16" }
+textwrap-986da7b5efc2b80e = { package = "textwrap", version = "0.16", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
@@ -1281,7 +1266,8 @@ tonic-build = { version = "0.8" }
 tonic-health = { version = "0.8" }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.3", features = ["full"] }
+tower-http-468e82937335b1c9 = { package = "tower-http", version = "0.3", features = ["full"] }
+tower-http-9fbad63c4bcf4a8f = { package = "tower-http", version = "0.4", features = ["trace"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
@@ -1289,7 +1275,7 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
-tracing-log = { version = "0.1" }
+tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
@@ -1310,7 +1296,6 @@ unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
-unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }

@@ -20,7 +20,7 @@ module t3::o3 {
     }
 }
 
-//# publish
+//# publish --dependencies t3
 
 module t2::o2 {
     use sui::object::{Self, UID};
@@ -52,7 +52,7 @@ module t2::o2 {
 }
 
 
-//# publish
+//# publish --dependencies t2 t3
 
 module t1::o1 {
     use sui::object::{Self, UID};

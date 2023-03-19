@@ -10,7 +10,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
-use parking_lot::RwLockReadGuard;
+use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{
@@ -20,7 +20,7 @@ use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_r
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
@@ -77,6 +77,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_authority_position: Histogram,
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
+    pub sequencing_estimated_latency: IntGauge,
 }
 
 impl ConsensusAdapterMetrics {
@@ -146,6 +147,12 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
                 .unwrap(),
+            sequencing_estimated_latency: register_int_gauge_with_registry!(
+                "sequencing_estimated_latency",
+                "Consensus latency estimated by consensus adapter",
+                registry,
+            )
+                .unwrap(),
         }
     }
 
@@ -200,6 +207,7 @@ pub struct ConsensusAdapter {
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
     submit_semaphore: Semaphore,
+    latency_observer: LatencyObserver,
 }
 
 pub trait CheckConnection: Send + Sync {
@@ -236,6 +244,7 @@ impl ConsensusAdapter {
             connection_monitor_status,
             metrics,
             submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
+            latency_observer: LatencyObserver::new(),
         })
     }
 
@@ -283,11 +292,16 @@ impl ConsensusAdapter {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
                 let position = self.submission_position(committee, tx_digest);
-                // DELAY_STEP is chosen as 1.5 * mean consensus delay
-                const DELAY_STEP: Duration = Duration::from_secs(7);
+                const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
+                let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
+                let latency = std::cmp::max(latency, DEFAULT_LATENCY);
+                self.metrics
+                    .sequencing_estimated_latency
+                    .set(latency.as_millis() as i64);
+                let delay_step = latency * 3 / 2;
                 const MAX_DELAY_MUL: usize = 10;
                 (
-                    DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+                    delay_step * std::cmp::min(position, MAX_DELAY_MUL) as u32,
                     position,
                 )
             }
@@ -721,11 +735,58 @@ impl<'a> Drop for InflightDropGuard<'a> {
             "not_submitted".to_string()
         };
 
+        let latency = self.start.elapsed();
+        if self.position == Some(0) {
+            self.adapter.latency_observer.report(latency);
+        }
         self.adapter
             .metrics
             .sequencing_certificate_latency
             .with_label_values(&[&position])
-            .observe(self.start.elapsed().as_secs_f64());
+            .observe(latency.as_secs_f64());
+    }
+}
+
+struct LatencyObserver {
+    data: Mutex<LatencyObserverInner>,
+    latency_ms: AtomicU64,
+}
+
+#[derive(Default)]
+struct LatencyObserverInner {
+    points: VecDeque<Duration>,
+    sum: Duration,
+}
+
+impl LatencyObserver {
+    pub fn new() -> Self {
+        Self {
+            data: Mutex::new(LatencyObserverInner::default()),
+            latency_ms: AtomicU64::new(u64::MAX),
+        }
+    }
+
+    pub fn report(&self, latency: Duration) {
+        const MAX_SAMPLES: usize = 64;
+        let mut data = self.data.lock();
+        data.points.push_back(latency);
+        data.sum += latency;
+        if data.points.len() >= MAX_SAMPLES {
+            let pop = data.points.pop_front().expect("data vector is not empty");
+            data.sum -= pop; // This does not overflow because of how running sum is calculated
+        }
+        let latency = data.sum.as_millis() as u64 / data.points.len() as u64;
+        self.latency_ms.store(latency, Ordering::Relaxed);
+    }
+
+    pub fn latency(&self) -> Option<Duration> {
+        let latency = self.latency_ms.load(Ordering::Relaxed);
+        if latency == u64::MAX {
+            // Not initialized yet (0 data points)
+            None
+        } else {
+            Some(Duration::from_millis(latency))
+        }
     }
 }
 

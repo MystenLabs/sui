@@ -8,7 +8,6 @@ use crate::digests::{
 };
 use crate::error::SuiError;
 use crate::message_envelope::Message;
-use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{
     SenderSignedData, TransactionDataAPI, TransactionEffects, TransactionEvents,
     VerifiedTransaction,
@@ -17,12 +16,14 @@ use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
 };
+use crate::move_package::MovePackage;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
     event::Event,
     object::Object,
 };
+use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
@@ -77,25 +78,75 @@ pub trait Storage {
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
 }
 
+pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
+
 pub trait BackingPackageStore {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<MovePackage>> {
+        self.get_package_object(package_id)
+            .map(|opt_obj| opt_obj.and_then(|obj| obj.data.try_into_package()))
+    }
+    /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
+    /// `package_id` were found. If any package in `package_ids` was not found it returns Err(<list
+    /// of any package ids that are unable to be found>).
+    fn get_package_objects<'a>(
+        &self,
+        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> SuiResult<PackageFetchResults<Object>> {
+        let package_objects: Vec<Result<Object, ObjectID>> = package_ids
+            .into_iter()
+            .map(|id| match self.get_package_object(id) {
+                Ok(None) => Ok(Err(*id)),
+                Ok(Some(o)) => Ok(Ok(o)),
+                Err(x) => Err(x),
+            })
+            .collect::<SuiResult<_>>()?;
+
+        let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
+            package_objects.into_iter().partition_result();
+        if !failed_to_fetch.is_empty() {
+            Ok(Err(failed_to_fetch))
+        } else {
+            Ok(Ok(fetched))
+        }
+    }
+    fn get_packages<'a>(
+        &self,
+        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> SuiResult<PackageFetchResults<MovePackage>> {
+        let objects = self.get_package_objects(package_ids)?;
+        Ok(objects.and_then(|objects| {
+            let (packages, failed): (Vec<_>, Vec<_>) = objects
+                .into_iter()
+                .map(|obj| {
+                    let obj_id = obj.id();
+                    obj.data.try_into_package().ok_or(obj_id)
+                })
+                .partition_result();
+            if !failed.is_empty() {
+                Err(failed)
+            } else {
+                Ok(packages)
+            }
+        }))
+    }
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        BackingPackageStore::get_package(self.as_ref(), package_id)
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for &S {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        BackingPackageStore::get_package(*self, package_id)
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for &mut S {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        BackingPackageStore::get_package(*self, package_id)
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
@@ -106,12 +157,10 @@ pub fn get_module<S: BackingPackageStore>(
     Ok(store
         .get_package(&ObjectID::from(*module_id.address()))?
         .and_then(|package| {
-            package.data.try_as_package().and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            })
+            package
+                .serialized_module_map()
+                .get(module_id.name().as_str())
+                .cloned()
         }))
 }
 
@@ -610,14 +659,15 @@ impl From<&ObjectRef> for ObjectKey {
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
 pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
+    use crate::messages::InputObjectKind as I;
     Ok(tx
         .intent_message()
         .value
         .input_objects()?
         .into_iter()
         .filter_map(|object| match object {
-            MovePackage(_) | SharedMoveObject { .. } => None,
-            ImmOrOwnedMoveObject(obj) => Some(obj.into()),
+            I::MovePackage(_) | I::SharedMoveObject { .. } => None,
+            I::ImmOrOwnedMoveObject(obj) => Some(obj.into()),
         })
         .collect())
 }

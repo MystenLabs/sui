@@ -185,7 +185,7 @@ async fn fetch_certificates_basic() {
         metrics.clone(),
     ));
 
-    let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
+    let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
     let fake_route =
         anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(NetworkProxy {
             request: tx_fetch_req,
@@ -237,7 +237,7 @@ async fn fetch_certificates_basic() {
 
     // Avoid any sort of missing payload by pre-populating the batch
     for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload.iter()) {
-        payload_store.async_write((*digest, *worker_id), 0u8).await;
+        payload_store.write(digest, worker_id).unwrap();
     }
 
     let total_certificates = fixture.authorities().count() * rounds as usize;

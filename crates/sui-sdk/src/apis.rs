@@ -16,8 +16,9 @@ use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiCoinMetadata, SuiCommittee, SuiEvent,
     SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
+    SuiObjectResponseQuery, SuiPastObjectResponse, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+    TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -46,7 +47,7 @@ impl ReadApi {
     pub async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectDataOptions>,
+        query: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         checkpoint: Option<CheckpointId>,
@@ -54,7 +55,7 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .get_owned_objects(address, options, cursor, limit, checkpoint)
+            .get_owned_objects(address, query, cursor, limit, checkpoint)
             .await?)
     }
 

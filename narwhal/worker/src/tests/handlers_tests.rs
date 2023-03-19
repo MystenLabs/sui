@@ -64,7 +64,11 @@ async fn synchronize() {
     let send_network = test_utils::random_network();
     send_network
         .connect_with_peer_id(
-            network::multiaddr_to_address(&target_worker.info().worker_address).unwrap(),
+            target_worker
+                .info()
+                .worker_address
+                .to_anemo_address()
+                .unwrap(),
             anemo::PeerId(target_worker.info().name.0.to_bytes()),
         )
         .await

@@ -2,12 +2,12 @@
 title: Connect to Sui Devnet
 ---
 
-Use the Sui Devnet network to experiment with Sui. Please submit feedback about your experience using Devnet, report bugs, and contribute to Sui.
+Use the Sui Devnet network to experiment with the version of Sui running on the Devnet network.
 
 The Sui Devnet network consists of:
 
-* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.devnet.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
-* A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
+ * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.devnet.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
+ * A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
 
 You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel. These coins have no financial value. With each Sui release, the network resets and removes all assets (coins and NFTs).
 
@@ -19,11 +19,11 @@ See the [terms of service](https://sui.io/terms/) for using the Devnet network.
 
 Sui provides the following tools to interact with Sui Devnet:
 
-* [Sui command line interface (CLI)](../build/cli-client.md)
-    * create and manage your private keys
-    * create example NFTs
-    * call and publish Move modules
-* [Sui Explorer](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md) to view transactions and objects on the network
+ * [Sui command line interface (CLI)](../build/cli-client.md)
+     * create and manage your private keys
+     * create example NFTs
+     * call and publish Move modules
+ * [Sui Explorer](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md) to view transactions and objects on the network
 
 ## Environment set up
 
@@ -47,24 +47,35 @@ To connect the Sui client to Sui Devnet, run the following command:
 ```shell
 sui client
 ```
+
 The first time you start Sui client, it displays the following message:
 
-```shell
-Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
 ```
+Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui Full node server [y/N]?
+```
+
 Press **y** and then press **Enter**. It then asks for the RPC server URL: 
 
-```shell
-Sui RPC server Url (Default to Sui Devnet if not specified) :
 ```
-Press **Enter** to connect to Sui Devnet. To use a custom RPC server, enter the URL to the RPC endpoint to use.
-
-```shell
-Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1):
+Sui Full node server URL (default to Sui Devnet if not specified) :
 ```
-Type **0** or **1** to select key scheme.
 
-### Connect to custom RPC endpoint
+Press **Enter** to connect to Sui Devnet. To use a custom RPC server, enter the URL to the custom RPC endpoint and then press **Enter**.
+
+```
+Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
+```
+
+Press **0**, **1**, or **2** to select a key scheme.
+
+Sui returns a message similar to the following (depending on the key scheme you selected) that includes the address and 24-word recovery phrase for the address:
+
+```
+Generated new keypair for address with scheme "ed25519" [0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442]
+Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud speed grocery raise erode there idea inform culture cousin shed sniff author spare carpet]
+```
+
+### Connect to a custom RPC endpoint
 
 If you previously used `sui genesis` with the force option (`-f` or `--force`), your client.yaml file already includes two RPC endpoints: localnet `http://0.0.0.0:9000` and devnet `https://fullnode.devnet.sui.io:443`). You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
 
@@ -89,15 +100,12 @@ Note that in the following sections, the object ID's, addresses, and authority s
 
 ## Request test tokens
 
-1. Join [Discord](https://discord.gg/sui). 
+ 1. Join [Discord](https://discord.gg/sui). 
    If you try to join the Sui Discord channel using a newly created Discord account you may need to wait a few days for validation. 
-1. Get your Sui client address:
-   ```shell
-   sui client active-address
-   ```
-1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) Discord channel.
+ 1. Get your Sui client address: `sui client active-address`
+ 1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) Discord channel.
   Send the following message to the channel with your client address:
-  !faucet <Your client address>
+  !faucet `<Your client address>`
 
 ## Mint an example NFT
 
@@ -107,99 +115,108 @@ sui client create-example-nft
 ```
 
 The command returns a response similar to the following:
-```shell
+```
 Successfully created an ExampleNFT:
 
-ID: ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
-Version: 1
-Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
-Type: 0x2::devnet_nft::DevNetNFT
+----- 0x2::devnet_nft::DevNetNFT (0xbacc053ad6e55084bd400cb0479533805ad2cfac33e085a3cc6b7364fcbde953[0x2]) -----
+Owner: Account Address ( 0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442 )
+Version: 0x2
+Storage Rebate: 29
+Previous Transaction: TransactionDigest(B5gTaoPCTef4rDjVRoD8C7QpJebiWtfc9eigHxqHNShb)
+----- Data -----
+type: 0x2::devnet_nft::DevNetNFT
+description: An NFT created by the Sui Command Line Tool
+id: 0xbacc053ad6e55084bd400cb0479533805ad2cfac33e085a3cc6b7364fcbde953
+name: Example NFT
+url: ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty
 ```
-
-The preceding command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Use the Sui Client CLI to [view objects owned by the address](../build/cli-client.md#view-objects-an-address-owns).
 
 To view the created object in [Sui Explorer](https://explorer.sui.io), append the object ID to the following URL https://explorer.sui.io/objects/.
 
 The following command demonstrates how to customize the name, description, or image of the NFT:
 ```shell
-$ sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
+sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
 ```
 
 The command returns a new object ID:
-```shell
+```
 Successfully created an ExampleNFT:
 
-ID: EC97467A40A1305FFDEF7019C3045FBC7AA31E29
-Version: 1
-Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
-Type: 0x2::devnet_nft::DevNetNFT
+----- 0x2::devnet_nft::DevNetNFT (0xa80a070133bfe7330eb8c02f5d91aaa9a6afe630eeb8b9ef9be08725642a02e1[0x3]) -----
+Owner: Account Address ( 0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442 )
+Version: 0x3
+Storage Rebate: 32
+Previous Transaction: TransactionDigest(9hTv1Nme1C1PLw7kXhaksJfRFX65VovJm78xaDkp7c4R)
+----- Data -----
+type: 0x2::devnet_nft::DevNetNFT
+description: The greatest chef in the world
+id: 0xa80a070133bfe7330eb8c02f5d91aaa9a6afe630eeb8b9ef9be08725642a02e1
+name: Greatest Chef
+url: https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png
 ```
 
-You can view details about the object in Sui Explorer:
-https://explorer.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
+To view details about the object in Sui Explorer, copy the object ID and search for it in the Explorer search field.
 
 ## Publish a Move module
 
-This section describes how to publish a sample Move package using code developed in the [Sui Move tutorial](../build/move/write-package.md).  The instructions assume that you installed Sui in the default location.
+This section describes how to publish a sample Move package using code developed in the [Sui Move tutorial](../build/move/write-package.md). The instructions assume that you installed Sui in the default location.
 ```shell
 sui client publish <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
 
 The response resembles the following:
 ```shell
------ Certificate ----
-Transaction Hash: TransactionDigest(3a6fv6mde6U4xvT4wxJao8qnCBjKEuSqYgpXPDW8mCjj)
-Transaction Signature: [Signature(AA==@VmcFxKAwZszgLfgakdpAIbQGasp0pLHWuaLoOCFWGzaY6+FBgicyr65fD90Fa/9qQF/o7QXYDqVV1QxceJ9JDw==@aNxLU5gVv2cahhUeZ7Ig6IduqqFGZB/ULs8OkUoCgBo=)]
-Signed Authorities Bitmap: RoaringBitmap<[0, 1, 3]>
-Transaction Kind : Publish
-Sender: 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f
-Gas Payment: Object ID: 0x0c5b70eea9c634f27b0198163085748aa218f7e7, version: 0x1f60, digest: o#JS+wEZt+ZfLbiYD7893GWBXhnPhG9tPRZE7rmfx5NP8=
-Gas Owner: 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING MyFirstPackage
+Successfully verified dependencies on-chain against source.
+----- Transaction Data ----
+Transaction Signature: [Signature(Ed25519SuiSignature(Ed25519SuiSignature([0, 125, 78, 25, 52, 44, 203, 148, 143, 172, 110, 105, 88, 189, 236, 21, 138, 189, 112, 187, 194, 114, 84, 187, 38, 11, 110, 190, 132, 156, 55, 133, 83, 217, 107, 116, 84, 218, 245, 76, 35, 142, 168, 225, 28, 203, 249, 10, 215, 121, 50, 75, 57, 182, 174, 91, 9, 101, 132, 93, 135, 17, 130, 185, 1, 179, 217, 77, 101, 114, 102, 91, 188, 47, 119, 202, 180, 98, 71, 241, 49, 221, 180, 213, 109, 5, 155, 216, 106, 151, 199, 153, 67, 200, 193, 58, 158])))]
+Transaction Kind : Programmable
+Inputs: ["0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f"]
+Commands: [
+  Publish(_),
+  TransferObjects([Result(0)],Input(0)),
+]
+
+Sender: 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f
+Gas Payment: Object ID: 0x53ee9fde15ff86e49f6af62c435266c8282c2d7cb7b1586c28f8c1c0e50d606a, version: 0x1, digest: HJws2g8eikAhnik4WkpMPUPxcbBBPwtGJCXmQbVjFfya 
+Gas Owner: 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f
 Gas Price: 1
-Gas Budget: 1000
+Gas Budget: 30000
 ----- Transaction Effects ----
 Status : Success
 Created Objects:
-  - ID: 0x93aedf72ed5ea0905f476defb5ad329654c4f103 , Owner: Immutable
-  - ID: 0xad1087d1da7fa964a9646a6eed968c9e118511dc , Owner: Account Address ( 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f )
+  - ID: 0x0afb60ea71302446ba4bf3a1e7b0c20a644db634fd2f0e32aa4ca9354dcfa4f8 , Owner: Immutable
+  - ID: 0x76c0ad2883daba4707184b34389abc8296f864bfc2efb12f13f7022a477d4a6f , Owner: Account Address ( 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f )
+  - ID: 0x7883028e68250215bcec8856f4fbce1e5edb813e58115230549768288dd1dcc9 , Owner: Account Address ( 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f )
 Mutated Objects:
-  - ID: 0x0c5b70eea9c634f27b0198163085748aa218f7e7 , Owner: Account Address ( 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f )
+  - ID: 0x53ee9fde15ff86e49f6af62c435266c8282c2d7cb7b1586c28f8c1c0e50d606a , Owner: Account Address ( 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f )
 ```
 
-The package publish operation does two important things:
+The package publish operation creates several objects:
 
-* Creates a package object (with ID `0x93aedf72ed5ea0905f476defb5ad329654c4f103`)
-* Creates a `Forge` object (with ID `0xad1087d1da7fa964a9646a6eed968c9e118511dc`) as a result of running a [module initializer](../build/move/debug-publish.md#module-initializers) for the one (and only) module of this package.
+* A package object (with ID `0x0afb60ea71302446ba4bf3a1e7b0c20a644db634fd2f0e32aa4ca9354dcfa4f8` in the example output).
+* A `Forge` object (with ID `0x76c0ad2883daba4707184b34389abc8296f864bfc2efb12f13f7022a477d4a6f` in the example output) as a result of running a [module initializer](../build/move/debug-publish.md#module-initializers) for the one (and only) module of this package.
+* An `UpgradeCap` object (with ID `0x7883028e68250215bcec8856f4fbce1e5edb813e58115230549768288dd1dcc9` in the example output) for use in future package upgrades.
 
-You can check the details of each object using the `sui client object <OBJECT_ID>` command. For example, checking the forge object returns:
+You can check the details of each object using the `sui client object <OBJECT_ID>` command or by using the Sui Explorer.
 
-```shell
------ Move Object (0xad1087d1da7fa964a9646a6eed968c9e118511dc[8033]) -----
-Owner: Account Address ( 0xf46dd460a0dbcc5b57deac988641a5ef29c4ab3f )
-Version: 8033
-Storage Rebate: 13
-Previous Transaction: TransactionDigest(3a6fv6mde6U4xvT4wxJao8qnCBjKEuSqYgpXPDW8mCjj)
------ Data -----
-type: 0x93aedf72ed5ea0905f476defb5ad329654c4f103::my_module::Forge
-id: 0xad1087d1da7fa964a9646a6eed968c9e118511dc
-swords_created: 0
-```
-
-When you publish a package, the IDs for the objects created are different than the ones displayed in this example. This remainder of this topic uses <PACKAGE_ID> and <FORGE_ID> to represent the IDs for the created objects. You must replace these with the values for your package.
+When you publish a package, the IDs for the objects the compiler creates are different than the ones displayed in this example. The remainder of this topic uses `<PACKAGE_ID>` and `<FORGE_ID>` to represent the IDs for the created objects (except for console output examples). You must replace these with the values for your package.
 
 ## Make a Move call
 
-This section describes how to call into functions defined in the package published in the previous section. Use the (<PACKAGE_ID>) and (<FORGE_ID>) values from your package to  create swords and transfer them to other players.
+This section describes how to call into functions defined in the package published in the previous section. Use the (`<PACKAGE_ID>`) and (`<FORGE_ID>`) values from your package to create swords and transfer them to other players.
 
-To demonstrate this, <PLAYER_ADDRESS> represents the address of the player to receive a sword. You can use an address of someone you know, or create another address for testing with the following Sui Client CLI command:
+To demonstrate this, `<PLAYER_ADDRESS>` represents the address of the player to receive a sword. You can use an address of someone you know, or create another address for testing with the following Sui Client CLI command:
 ```shell
 sui client new-address ed25519
 ```
 
-The command returns the following message and a 12 word recovery phrase for the address:
+The command returns the following message and a 24-word recovery phrase for the address:
 ```shell
-Created new keypair for address with scheme Secp256k1: [0x568318261d88535009dff39779b18e1bfac59c33]
-Secret Recovery Phrase : [mist drizzle rain shower downpour pond stream brook river ocean sea suinami]
+Created new keypair for address with scheme ED25519: [0xa01cd0c520f12a1e9d57bf3cc6ea0f8cf93e81e9fe46f7b4916c310a809dfddd]
+Secret Recovery Phrase : [sunny tip element salad frequent february amount notice chair kite race push noise ketchup that same cannon bench mirror please dinosaur indicate violin sunset]
 ```
 
 To create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L47) in the `my_module` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L4) of the package we previously published.
@@ -212,29 +229,35 @@ sui client call --function sword_create --module my_module --package 0x<PACKAGE_
 
 The response resembles the following:
 ```shell
------ Certificate ----
-Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
-Transaction Kind : Call
-Package ID : 0x689e58788c875e9c354f359792cec016da0a1b0
-Module : my_module
-Function : sword_create
-Arguments : [ImmOrOwnedObject((898922A9CABE93C6C38C55BBE047BFB0A8C864BF, SequenceNumber(1), o#9f12d4390e4fc8de3834c4960c6f265a78eca7c2b916ac1be66c1f00e1b47c68)), Pure([42, 0, 0, 0, 0, 0, 0, 0]), Pure([7, 0, 0, 0, 0, 0, 0, 0]), Pure([45, 50, 237, 113, 56, 27, 239, 127, 61, 140, 87, 180, 141, 248, 33, 35, 89, 54, 114, 170])]
-Type Arguments : []
+----- Transaction Data ----
+Transaction Signature: [Signature(Ed25519SuiSignature(Ed25519SuiSignature([0, 178, 50, 21, 4, 228, 131, 133, 216, 36, 226, 72, 149, 116, 225, 128, 3, 228, 203, 17, 185, 167, 107, 91, 123, 253, 21, 24, 10, 91, 152, 215, 199, 215, 144, 183, 170, 21, 66, 83, 27, 161, 252, 224, 42, 52, 97, 242, 186, 35, 32, 2, 222, 97, 167, 67, 197, 244, 60, 114, 32, 70, 41, 35, 2, 179, 217, 77, 101, 114, 102, 91, 188, 47, 119, 202, 180, 98, 71, 241, 49, 221, 180, 213, 109, 5, 155, 216, 106, 151, 199, 153, 67, 200, 193, 58, 158])))]
+Transaction Kind : Programmable
+Inputs: ["76c0ad2883daba4707184b34389abc8296f864bfc2efb12f13f7022a477d4a6f", [42,0,0,0,0,0,0,0], "\u0000\u0000\u0000\u0000\u0000\u0000\u0000", "0xa01cd0c520f12a1e9d57bf3cc6ea0f8cf93e81e9fe46f7b4916c310a809dfddd"]
+Commands: [
+  MoveCall(0x0afb60ea71302446ba4bf3a1e7b0c20a644db634fd2f0e32aa4ca9354dcfa4f8::my_module::sword_create(,Input(0),Input(1),Input(2)Input(3))),
+]
 
+Sender: 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f
+Gas Payment: Object ID: 0x53ee9fde15ff86e49f6af62c435266c8282c2d7cb7b1586c28f8c1c0e50d606a, version: 0x2, digest: 7SchKLPQhp18WwTSJHqvnb6cddzcBPVokn1erYAiiU6r 
+Gas Owner: 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f
+Gas Price: 1
+Gas Budget: 30000
 ----- Transaction Effects ----
-Status : Success { gas_cost: GasCostSummary { computation_cost: 69, storage_cost: 40, storage_rebate: 27 } }
+Status : Success
 Created Objects:
-  - ID: 2E34983D59E9FC5310CFBAA953D2188E6A84FD21 , Owner: Account Address ( 2D32ED71381BEF7F3D8C57B48DF82123593672AA )
+  - ID: 0x3265ebb34fc92ab905ec312a03044c03afaa4375dc83c44dee3c5246a8b67163 , Owner: Account Address ( 0xa01cd0c520f12a1e9d57bf3cc6ea0f8cf93e81e9fe46f7b4916c310a809dfddd )
 Mutated Objects:
-  - ID: 58C4DAA98694266F4DF47BA436CD99659B6A5342 , Owner: Account Address ( ADE6EAD34629411F730416D6AD48F6B382BBC6FD )
-  - ID: 898922A9CABE93C6C38C55BBE047BFB0A8C864BF , Owner: Account Address ( ADE6EAD34629411F730416D6AD48F6B382BBC6FD )
+  - ID: 0x53ee9fde15ff86e49f6af62c435266c8282c2d7cb7b1586c28f8c1c0e50d606a , Owner: Account Address ( 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f )
+  - ID: 0x76c0ad2883daba4707184b34389abc8296f864bfc2efb12f13f7022a477d4a6f , Owner: Account Address ( 0xf505046be474fd6ee5cdf7bb16fba9618d9c7fe040d494ab1af1c143e43d1e3f )
 ```
 
 Go to the Sui Explorer to observe a newly created object. You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
 
-Replace the object ID in the Explorer with the object ID of the created object you observed in your own command output, appended to:
-https://explorer.sui.io/objects/
+![Object view in Sui Explorer](../../static/build-explorer-object.png)
+*Explorer view of example sword object*
+
+To see your object in the current [Sui Explorer](https://explorer.sui.io), paste the object ID of the created object you observed in your own command output in the search field and press **Enter**.
 
 Related topics:
- * [Create Smart Contracts with Move](../build/move).
- * [Programming with Objects](../build/programming-with-objects/)
+ * [Create Smart Contracts with Move](../build/move/index.md)
+ * [Programming with Objects](../build/programming-with-objects/index.md)

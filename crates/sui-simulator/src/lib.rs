@@ -108,3 +108,8 @@ pub mod configs {
 macro_rules! return_if_killed {
     () => {};
 }
+
+#[cfg(msim)]
+pub fn current_simnode_id() -> msim::task::NodeId {
+    msim::runtime::NodeHandle::current().id()
+}

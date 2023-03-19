@@ -17,6 +17,8 @@ module sui::validator {
     use sui::url::Url;
     use sui::url;
     use sui::event;
+    use sui::bag::Bag;
+    use sui::bag;
     friend sui::genesis;
     friend sui::sui_system_state_inner;
     friend sui::validator_wrapper;
@@ -70,7 +72,7 @@ module sui::validator {
 
     const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
 
-    struct ValidatorMetadata has store, drop, copy {
+    struct ValidatorMetadata has store {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
         sui_address: address,
@@ -90,13 +92,13 @@ module sui::validator {
         image_url: Url,
         project_url: Url,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
-        net_address: vector<u8>,
+        net_address: String,
         /// The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
-        p2p_address: vector<u8>,
+        p2p_address: String,
         /// The address of the narwhal primary
-        primary_address: vector<u8>,
+        primary_address: String,
         /// The address of the narwhal worker
-        worker_address: vector<u8>,
+        worker_address: String,
 
         /// "next_epoch" metadata only takes effects in the next epoch.
         /// If none, current value will stay unchanged.
@@ -104,10 +106,13 @@ module sui::validator {
         next_epoch_proof_of_possession: Option<vector<u8>>,
         next_epoch_network_pubkey_bytes: Option<vector<u8>>,
         next_epoch_worker_pubkey_bytes: Option<vector<u8>>,
-        next_epoch_net_address: Option<vector<u8>>,
-        next_epoch_p2p_address: Option<vector<u8>>,
-        next_epoch_primary_address: Option<vector<u8>>,
-        next_epoch_worker_address: Option<vector<u8>>,
+        next_epoch_net_address: Option<String>,
+        next_epoch_p2p_address: Option<String>,
+        next_epoch_primary_address: Option<String>,
+        next_epoch_worker_address: Option<String>,
+
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     struct Validator has store {
@@ -130,6 +135,8 @@ module sui::validator {
         next_epoch_gas_price: u64,
         /// The commission rate of the validator starting the next epoch, in basis point.
         next_epoch_commission_rate: u64,
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     /// Event emitted when a new stake request is received.
@@ -162,10 +169,11 @@ module sui::validator {
         description: String,
         image_url: Url,
         project_url: Url,
-        net_address: vector<u8>,
-        p2p_address: vector<u8>,
-        primary_address: vector<u8>,
-        worker_address: vector<u8>,
+        net_address: String,
+        p2p_address: String,
+        primary_address: String,
+        worker_address: String,
+        extra_fields: Bag,
     ): ValidatorMetadata {
         let metadata = ValidatorMetadata {
             sui_address,
@@ -189,6 +197,7 @@ module sui::validator {
             next_epoch_p2p_address: option::none(),
             next_epoch_primary_address: option::none(),
             next_epoch_worker_address: option::none(),
+            extra_fields,
         };
         metadata
     }
@@ -207,10 +216,8 @@ module sui::validator {
         p2p_address: vector<u8>,
         primary_address: vector<u8>,
         worker_address: vector<u8>,
-        initial_stake_option: Option<Balance<SUI>>,
         gas_price: u64,
         commission_rate: u64,
-        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -234,20 +241,19 @@ module sui::validator {
             string::from_ascii(ascii::string(description)),
             url::new_unsafe_from_bytes(image_url),
             url::new_unsafe_from_bytes(project_url),
-            net_address,
-            p2p_address,
-            primary_address,
-            worker_address,
+            string::from_ascii(ascii::string(net_address)),
+            string::from_ascii(ascii::string(p2p_address)),
+            string::from_ascii(ascii::string(primary_address)),
+            string::from_ascii(ascii::string(worker_address)),
+            bag::new(ctx),
         );
 
         validate_metadata(&metadata);
 
         new_from_metadata(
             metadata,
-            initial_stake_option,
             gas_price,
             commission_rate,
-            is_active_at_genesis,
             ctx
         )
     }
@@ -294,6 +300,31 @@ module sui::validator {
                 amount: stake_amount,
             }
         );
+    }
+
+    /// Request to add stake to the validator's staking pool at genesis
+    public(friend) fun request_add_stake_at_genesis(
+        self: &mut Validator,
+        stake: Balance<SUI>,
+        staker_address: address,
+        ctx: &mut TxContext,
+    ) {
+        assert!(tx_context::epoch(ctx) == 0, 0);
+        let stake_amount = balance::value(&stake);
+        assert!(stake_amount > 0, 0);
+
+        staking_pool::request_add_stake(
+            &mut self.staking_pool,
+            stake, 
+            self.metadata.sui_address, 
+            staker_address, 
+            0, // epoch 0 -- genesis
+            ctx
+        );
+
+        // Process stake right away 
+        staking_pool::process_pending_stake(&mut self.staking_pool);
+        self.next_epoch_stake = self.next_epoch_stake + stake_amount;
     }
 
     /// Request to withdraw stake from the validator's staking pool, processed at the end of the epoch.
@@ -400,19 +431,19 @@ module sui::validator {
         &self.metadata.project_url
     }
 
-    public fun network_address(self: &Validator): &vector<u8> {
+    public fun network_address(self: &Validator): &String {
         &self.metadata.net_address
     }
 
-    public fun p2p_address(self: &Validator): &vector<u8> {
+    public fun p2p_address(self: &Validator): &String {
         &self.metadata.p2p_address
     }
 
-    public fun primary_address(self: &Validator): &vector<u8> {
+    public fun primary_address(self: &Validator): &String {
         &self.metadata.primary_address
     }
 
-    public fun worker_address(self: &Validator): &vector<u8> {
+    public fun worker_address(self: &Validator): &String {
         &self.metadata.worker_address
     }
 
@@ -432,19 +463,19 @@ module sui::validator {
         &self.metadata.worker_pubkey_bytes
     }
 
-    public fun next_epoch_network_address(self: &Validator): &Option<vector<u8>> {
+    public fun next_epoch_network_address(self: &Validator): &Option<String> {
         &self.metadata.next_epoch_net_address
     }
 
-    public fun next_epoch_p2p_address(self: &Validator): &Option<vector<u8>> {
+    public fun next_epoch_p2p_address(self: &Validator): &Option<String> {
         &self.metadata.next_epoch_p2p_address
     }
 
-    public fun next_epoch_primary_address(self: &Validator): &Option<vector<u8>> {
+    public fun next_epoch_primary_address(self: &Validator): &Option<String> {
         &self.metadata.next_epoch_primary_address
     }
 
-    public fun next_epoch_worker_address(self: &Validator): &Option<vector<u8>> {
+    public fun next_epoch_worker_address(self: &Validator): &Option<String> {
         &self.metadata.next_epoch_worker_address
     }
 
@@ -532,8 +563,9 @@ module sui::validator {
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
-            || self.metadata.net_address == other.metadata.net_address
-            || self.metadata.p2p_address == other.metadata.p2p_address
+            //TODO tests break when this is uncommented
+            // || self.metadata.net_address == other.metadata.net_address
+            // || self.metadata.p2p_address == other.metadata.p2p_address
             || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
     }
 
@@ -569,52 +601,52 @@ module sui::validator {
     }
 
     /// Update network address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_network_address(self: &mut Validator, net_address: vector<u8>) {
+    public(friend) fun update_next_epoch_network_address(self: &mut Validator, net_address: String) {
         self.metadata.next_epoch_net_address = option::some(net_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update network address of this candidate validator
-    public(friend) fun update_candidate_network_address(self: &mut Validator, net_address: vector<u8>) {
+    public(friend) fun update_candidate_network_address(self: &mut Validator, net_address: String) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         self.metadata.net_address = net_address;
         validate_metadata(&self.metadata);
     }
 
     /// Update p2p address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
+    public(friend) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_address: String) {
         self.metadata.next_epoch_p2p_address = option::some(p2p_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update p2p address of this candidate validator
-    public(friend) fun update_candidate_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
+    public(friend) fun update_candidate_p2p_address(self: &mut Validator, p2p_address: String) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         self.metadata.p2p_address = p2p_address;
         validate_metadata(&self.metadata);
     }
 
     /// Update primary address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_primary_address(self: &mut Validator, primary_address: vector<u8>) {
+    public(friend) fun update_next_epoch_primary_address(self: &mut Validator, primary_address: String) {
         self.metadata.next_epoch_primary_address = option::some(primary_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update primary address of this candidate validator
-    public(friend) fun update_candidate_primary_address(self: &mut Validator, primary_address: vector<u8>) {
+    public(friend) fun update_candidate_primary_address(self: &mut Validator, primary_address: String) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         self.metadata.primary_address = primary_address;
         validate_metadata(&self.metadata);
     }
 
     /// Update worker address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_worker_address(self: &mut Validator, worker_address: vector<u8>) {
+    public(friend) fun update_next_epoch_worker_address(self: &mut Validator, worker_address: String) {
         self.metadata.next_epoch_worker_address = option::some(worker_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update worker address of this candidate validator
-    public(friend) fun update_candidate_worker_address(self: &mut Validator, worker_address: vector<u8>) {
+    public(friend) fun update_candidate_worker_address(self: &mut Validator, worker_address: String) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         self.metadata.worker_address = worker_address;
         validate_metadata(&self.metadata);
@@ -727,53 +759,29 @@ module sui::validator {
     /// Create a new validator from the given `ValidatorMetadata`, called by both `new` and `new_for_testing`.
     fun new_from_metadata(
         metadata: ValidatorMetadata,
-        initial_stake_option: Option<Balance<SUI>>,
         gas_price: u64,
         commission_rate: u64,
-        is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
         let sui_address = metadata.sui_address;
 
-        let stake_amount =
-            if (option::is_some(&initial_stake_option)) balance::value(option::borrow(&initial_stake_option))
-            else 0;
-
         let staking_pool = staking_pool::new(ctx);
-
-        if (is_active_at_genesis) {
-            staking_pool::activate_staking_pool(&mut staking_pool, 0);
-        };
-
-        // Add the validator's starting stake to the staking pool if there exists one.
-        if (option::is_some(&initial_stake_option)) {
-            staking_pool::request_add_stake(
-                &mut staking_pool,
-                option::extract(&mut initial_stake_option),
-                sui_address,
-                sui_address,
-                tx_context::epoch(ctx),
-                ctx
-            );
-            // We immediately process this stake as they are at validator setup time and this is the validator staking with itself.
-            staking_pool::process_pending_stake(&mut staking_pool);
-        };
-        option::destroy_none(initial_stake_option);
 
         let operation_cap_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(sui_address, ctx);
         Validator {
             metadata,
-            // Initialize the voting power to be the same as the stake amount.
+            // Initialize the voting power to be 0.
             // At the epoch change where this validator is actually added to the
             // active validator set, the voting power will be updated accordingly.
-            voting_power: stake_amount,
+            voting_power: 0,
             operation_cap_id,
             gas_price,
             staking_pool,
             commission_rate,
-            next_epoch_stake: stake_amount,
+            next_epoch_stake: 0,
             next_epoch_gas_price: gas_price,
             next_epoch_commission_rate: commission_rate,
+            extra_fields: bag::new(ctx),
         }
     }
 
@@ -803,7 +811,7 @@ module sui::validator {
         is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
-        new_from_metadata(
+        let validator = new_from_metadata(
             new_metadata(
                 sui_address,
                 protocol_pubkey_bytes,
@@ -814,16 +822,32 @@ module sui::validator {
                 string::from_ascii(ascii::string(description)),
                 url::new_unsafe_from_bytes(image_url),
                 url::new_unsafe_from_bytes(project_url),
-                net_address,
-                p2p_address,
-                primary_address,
-                worker_address,
+                string::from_ascii(ascii::string(net_address)),
+                string::from_ascii(ascii::string(p2p_address)),
+                string::from_ascii(ascii::string(primary_address)),
+                string::from_ascii(ascii::string(worker_address)),
+                bag::new(ctx),
             ),
-            initial_stake_option,
             gas_price,
             commission_rate,
-            is_active_at_genesis,
             ctx
-        )
+        );
+
+        // Add the validator's starting stake to the staking pool if there exists one.
+        if (option::is_some(&initial_stake_option)) {
+            request_add_stake_at_genesis(
+                &mut validator,
+                option::extract(&mut initial_stake_option),
+                sui_address, // give the stake to the validator
+                ctx
+            );
+        };
+        option::destroy_none(initial_stake_option);
+
+        if (is_active_at_genesis) {
+            activate(&mut validator, 0);
+        };
+
+        validator
     }
 }

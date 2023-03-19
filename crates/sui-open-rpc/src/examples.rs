@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
 use move_core_types::parser::parse_struct_tag;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -19,10 +20,11 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
-    SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiParsedData,
-    SuiPastObjectResponse, SuiTransaction, SuiTransactionData, SuiTransactionEffects,
-    SuiTransactionEffectsV1, SuiTransactionResponse, SuiTransactionResponseOptions,
-    TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransaction,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionResponse,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes, TransactionsPage,
+    TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -325,11 +327,18 @@ impl RpcExampleProvider {
                 vec![
                     ("address", json!(owner)),
                     (
-                        "options",
-                        json!(SuiObjectDataOptions::new()
-                            .with_type()
-                            .with_owner()
-                            .with_previous_transaction()),
+                        "query",
+                        json!(SuiObjectResponseQuery {
+                            filter: Some(SuiObjectDataFilter::StructType(
+                                StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
+                            )),
+                            options: Some(
+                                SuiObjectDataOptions::new()
+                                    .with_type()
+                                    .with_owner()
+                                    .with_previous_transaction()
+                            )
+                        }),
                     ),
                     ("cursor", json!(ObjectID::new(self.rng.gen()))),
                     ("limit", json!(100)),
@@ -391,9 +400,12 @@ impl RpcExampleProvider {
                 vec![
                     (
                         "query",
-                        json!(TransactionFilter::InputObject(ObjectID::new(
-                            self.rng.gen()
-                        ))),
+                        json!(SuiTransactionResponseQuery {
+                            filter: Some(TransactionFilter::InputObject(ObjectID::new(
+                                self.rng.gen()
+                            ))),
+                            options: None,
+                        }),
                     ),
                     ("cursor", json!(TransactionDigest::new(self.rng.gen()))),
                     ("limit", json!(100)),
@@ -443,6 +455,7 @@ impl RpcExampleProvider {
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
         let signatures = tx.into_inner().tx_signatures().to_vec();
+        let raw_transaction = bcs::to_bytes(tx1.data()).unwrap();
 
         let tx_digest = tx1.digest();
         let object_change = ObjectChange::Transferred {
@@ -495,6 +508,7 @@ impl RpcExampleProvider {
                 data: SuiTransactionData::try_from(data1).unwrap(),
                 tx_signatures: signatures.clone(),
             }),
+            raw_transaction,
             confirmed_local_execution: None,
             checkpoint: None,
             errors: vec![],

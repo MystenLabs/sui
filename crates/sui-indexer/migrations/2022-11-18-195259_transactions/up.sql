@@ -5,11 +5,11 @@ CREATE DOMAIN base58digest VARCHAR(44);
 
 CREATE TABLE transactions (
     id                          BIGSERIAL PRIMARY KEY,
-    transaction_digest          VARCHAR(255) NOT NULL,
+    transaction_digest          base58digest NOT NULL,
     sender                      VARCHAR(255) NOT NULL,
     recipients                  TEXT[]       NOT NULL,
     checkpoint_sequence_number  BIGINT       NOT NULL,
-    transaction_time            TIMESTAMP,
+    timestamp_ms                BIGINT       NOT NULL,
     transaction_kind            TEXT         NOT NULL,
     -- object related
     created                     TEXT[]       NOT NULL,
@@ -20,9 +20,9 @@ CREATE TABLE transactions (
     -- each move call is <package>::<module>::<function>
     move_calls                  TEXT[]       NOT NULL,
     -- gas object related
-    gas_object_id               VARCHAR(255) NOT NULL,
+    gas_object_id               address      NOT NULL,
     gas_object_sequence         BIGINT       NOT NULL,
-    gas_object_digest           VARCHAR(255) NOT NULL,
+    gas_object_digest           address      NOT NULL,
     -- gas budget & cost related
     gas_budget                  BIGINT       NOT NULL,
     total_gas_cost              BIGINT       NOT NULL,
@@ -32,7 +32,8 @@ CREATE TABLE transactions (
     -- gas price from transaction data,
     -- not the reference gas price
     gas_price                   BIGINT       NOT NULL,
-    -- serialized transaction
+    -- BCS serialized SenderSignedData
+    raw_transaction             bytea        NOT NULL,
     transaction_content         TEXT         NOT NULL,
     transaction_effects_content TEXT         NOT NULL,
     confirmed_local_execution   BOOLEAN,
@@ -40,7 +41,7 @@ CREATE TABLE transactions (
 );
 
 CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest);
-CREATE INDEX transactions_transaction_time ON transactions (transaction_time);
+CREATE INDEX transactions_timestamp_ms ON transactions (timestamp_ms);
 CREATE INDEX transactions_sender ON transactions (sender);
 CREATE INDEX transactions_gas_object_id ON transactions (gas_object_id);
 CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);

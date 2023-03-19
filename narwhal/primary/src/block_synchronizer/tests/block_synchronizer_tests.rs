@@ -69,7 +69,11 @@ async fn test_successful_headers_synchronization() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -117,7 +121,7 @@ async fn test_successful_headers_synchronization() {
         primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
 
-        let address = network::multiaddr_to_address(&address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -210,7 +214,11 @@ async fn test_successful_payload_synchronization() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -257,7 +265,7 @@ async fn test_successful_payload_synchronization() {
         primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
 
-        let address = network::multiaddr_to_address(&address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -279,7 +287,7 @@ async fn test_successful_payload_synchronization() {
         let handler = worker_listener(-1, worker_address.clone(), network_key);
         handlers_workers.push(handler);
 
-        let address = network::multiaddr_to_address(worker_address).unwrap();
+        let address = worker_address.to_anemo_address().unwrap();
         let peer_id = PeerId(worker_name.0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -307,7 +315,7 @@ async fn test_successful_payload_synchronization() {
                 // Assume that the request is the correct one and just immediately
                 // store the batch to the payload store.
                 for digest in m.digests {
-                    payload_store.async_write((digest, worker), 1).await;
+                    payload_store.write(&digest, &worker).unwrap();
                 }
             }
         }
@@ -379,7 +387,11 @@ async fn test_timeout_while_waiting_for_certificates() {
         })
         .collect();
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -473,7 +485,11 @@ async fn test_reply_with_certificates_already_in_storage() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -573,7 +589,11 @@ async fn test_reply_with_payload_already_in_storage() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -617,8 +637,8 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload {
-                payload_store.async_write((digest, worker_id), 1).await;
+            for (digest, (worker_id, _)) in &certificate.header.payload {
+                payload_store.write(digest, worker_id).unwrap();
             }
         }
     }
@@ -677,7 +697,11 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary(&name)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")

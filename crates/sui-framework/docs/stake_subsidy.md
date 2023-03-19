@@ -12,9 +12,11 @@
 -  [Function `current_epoch_subsidy_amount`](#0x2_stake_subsidy_current_epoch_subsidy_amount)
 
 
-<pre><code><b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<pre><code><b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
+<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
@@ -54,6 +56,12 @@
 <dd>
  The amount of stake subsidy to be drawn down per epoch.
  This amount decays and decreases over time.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -98,7 +106,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_create">create</a>(<a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, initial_stake_subsidy_amount: u64): <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_create">create</a>(<a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, initial_stake_subsidy_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
 </code></pre>
 
 
@@ -107,11 +115,16 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_create">create</a>(<a href="balance.md#0x2_balance">balance</a>: Balance&lt;SUI&gt;, initial_stake_subsidy_amount: u64): <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_create">create</a>(
+    <a href="balance.md#0x2_balance">balance</a>: Balance&lt;SUI&gt;,
+    initial_stake_subsidy_amount: u64,
+    ctx: &<b>mut</b> TxContext,
+): <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
     <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
         epoch_counter: 0,
         <a href="balance.md#0x2_balance">balance</a>,
         current_epoch_amount: initial_stake_subsidy_amount,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     }
 }
 </code></pre>

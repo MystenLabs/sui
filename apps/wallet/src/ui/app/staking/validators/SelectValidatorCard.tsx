@@ -61,15 +61,6 @@ export function SelectValidatorCard() {
                     BigInt(validator.stakingPoolSuiBalance),
                     BigInt(totalStake)
                 ),
-                // flag for if the validator is at risk of being removed from the active set
-                atRiskValidator: data.atRiskValidators.some(
-                    (item) => item[0] === validator.suiAddress
-                ),
-                // flag new validators that have been activated in the current epoch
-                // for genesis validators, this will be false
-                newValidator:
-                    validator.stakingPoolActivationEpoch === +data.epoch &&
-                    data.epoch > 0,
             }))
             .sort((a, b) => {
                 if (sortKey === 'name') {

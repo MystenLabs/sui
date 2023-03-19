@@ -61,16 +61,18 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_framework_injection;
+    use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_types::{
+        base_types::SequenceNumber,
         digests::TransactionDigest,
-        messages::TransactionKind,
+        messages::{TransactionEffectsAPI, TransactionKind},
         object::{Object, OBJECT_START_VERSION},
         programmable_transaction_builder::ProgrammableTransactionBuilder,
-        SUI_FRAMEWORK_OBJECT_ID,
+        storage::ObjectStore,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, timeout, Duration};
@@ -93,6 +95,73 @@ mod sim_only_tests {
             .unwrap();
 
         expect_upgrade_succeeded(&test_cluster).await;
+    }
+
+    #[sim_test]
+    async fn test_protocol_version_upgrade_with_shutdown_validator() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        let validator = test_cluster.get_validator_addresses()[0].clone();
+        test_cluster.stop_validator(validator);
+
+        let mut epoch_rx = test_cluster
+            .fullnode_handle
+            .sui_node
+            .subscribe_to_epoch_change();
+
+        timeout(Duration::from_secs(90), async move {
+            while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
+                info!(
+                    "received epoch {} {:?}",
+                    committee.epoch(),
+                    protocol_version
+                );
+                match committee.epoch() {
+                    0 => assert_eq!(protocol_version, ProtocolVersion::new(START)),
+                    1 => {
+                        assert_eq!(protocol_version, ProtocolVersion::new(FINISH));
+                        test_cluster.start_validator(validator).await;
+                    }
+                    2 => {
+                        let validator_handle = test_cluster
+                            .swarm
+                            .validator(validator.clone())
+                            .unwrap()
+                            .get_node_handle()
+                            .unwrap();
+                        validator_handle
+                            .with_async(|node| async {
+                                // give time for restarted node to catch up, reconfig
+                                // to new protocol, and reconfig again
+                                sleep(Duration::from_secs(5)).await;
+
+                                let epoch_store = node.state().epoch_store_for_testing();
+                                assert_eq!(epoch_store.epoch(), 2);
+                                assert!(node.state().is_validator(&epoch_store));
+                            })
+                            .await;
+                        break;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        })
+        .await
+        .expect("Timed out waiting for cluster to target epoch");
     }
 
     #[sim_test]
@@ -136,7 +205,81 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    async fn test_protocol_version_upgrade_forced() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_version_callback(Arc::new(|idx, name| {
+                if name.is_some() && idx == 0 {
+                    // first validator only does not support version 2.
+                    SupportedProtocolVersions::new_for_testing(START, START)
+                } else {
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
+                }
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
+        });
+
+        // upgrade happens with only 3 votes
+        monitor_version_change(&test_cluster, FINISH /* expected proto version */).await;
+    }
+
+    #[sim_test]
+    async fn test_protocol_version_upgrade_no_override_cleared() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_version_callback(Arc::new(|idx, name| {
+                if name.is_some() && idx == 0 {
+                    // first validator only does not support version FINISH.
+                    SupportedProtocolVersions::new_for_testing(START, START)
+                } else {
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
+                }
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
+        });
+
+        // Verify that clearing the override is respected.
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.clear_override_protocol_upgrade_buffer_stake(0)
+                    .unwrap()
+            });
+        });
+
+        // default buffer stake is in effect, we do not advance to version FINISH.
+        monitor_version_change(&test_cluster, START /* expected proto version */).await;
+    }
+
+    #[sim_test]
     async fn test_protocol_version_upgrade_no_quorum() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
@@ -171,6 +314,10 @@ mod sim_only_tests {
         assert_eq!(call_canary(&cluster).await, 42);
         expect_upgrade_succeeded(&cluster).await;
         assert_eq!(call_canary(&cluster).await, 43);
+
+        let (modified_at, mutated_to) = get_framework_upgrade_effects(&cluster).await;
+        assert_eq!(Some(SequenceNumber::from(1)), modified_at);
+        assert_eq!(Some(SequenceNumber::from(2)), mutated_to);
     }
 
     #[sim_test]
@@ -241,7 +388,7 @@ mod sim_only_tests {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder
                 .move_call(
-                    SUI_FRAMEWORK_OBJECT_ID,
+                    SuiFramework::ID,
                     ident_str!("msim_extra_1").to_owned(),
                     ident_str!("canary").to_owned(),
                     vec![],
@@ -274,6 +421,40 @@ mod sim_only_tests {
 
     async fn expect_upgrade_succeeded(cluster: &TestCluster) {
         monitor_version_change(&cluster, FINISH /* expected proto version */).await;
+    }
+
+    async fn get_framework_upgrade_effects(
+        cluster: &TestCluster,
+    ) -> (Option<SequenceNumber>, Option<SequenceNumber>) {
+        let node_handle = cluster
+            .swarm
+            .validators()
+            .next()
+            .unwrap()
+            .get_node_handle()
+            .unwrap();
+
+        let effects = node_handle
+            .with_async(|node| async {
+                let db = node.state().db();
+                let framework = db.get_object(&SuiFramework::ID);
+                let digest = framework.unwrap().unwrap().previous_transaction;
+                let effects = db.get_executed_effects(&digest);
+                effects.unwrap().unwrap()
+            })
+            .await;
+
+        let modified_at = effects
+            .modified_at_versions()
+            .iter()
+            .find_map(|(id, v)| (id == &SuiFramework::ID).then_some(*v));
+
+        let mutated_to = effects
+            .mutated()
+            .iter()
+            .find_map(|((id, v, _), _)| (id == &SuiFramework::ID).then_some(*v));
+
+        (modified_at, mutated_to)
     }
 
     #[sim_test]
@@ -419,6 +600,7 @@ mod sim_only_tests {
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
+            &[MoveStdlib::as_package()],
         )
         .unwrap()
     }

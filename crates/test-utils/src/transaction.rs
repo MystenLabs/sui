@@ -13,8 +13,8 @@ use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionDataAPI,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -78,10 +78,12 @@ pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInf
 
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
+    let package = compile_basics_package();
     publish_package_with_wallet(
         context,
         sender,
-        compile_basics_package().get_package_bytes(/* with_unpublished_deps */ false),
+        package.get_package_bytes(/* with_unpublished_deps */ false),
+        package.get_dependency_original_package_ids(),
     )
     .await
 }
@@ -91,12 +93,13 @@ pub async fn publish_package_with_wallet(
     context: &WalletContext,
     sender: SuiAddress,
     all_module_bytes: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
 ) -> ObjectRef {
     let client = context.get_client().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(sender, all_module_bytes, None, GAS_BUDGET)
+            .publish(sender, all_module_bytes, dep_ids, None, GAS_BUDGET)
             .await
             .unwrap();
 
@@ -322,7 +325,9 @@ pub async fn transfer_coin(
         .read_api()
         .get_owned_objects(
             sender,
-            Some(SuiObjectDataOptions::full_content()),
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
             None,
             None,
             None,

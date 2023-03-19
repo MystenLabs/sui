@@ -21,7 +21,10 @@ module sui::validator_set {
     use sui::voting_power;
     use sui::validator_wrapper::ValidatorWrapper;
     use sui::validator_wrapper;
+    use sui::bag::Bag;
+    use sui::bag;
 
+    friend sui::genesis;
     friend sui::sui_system_state_inner;
 
     #[test_only]
@@ -58,10 +61,13 @@ module sui::validator_set {
         /// validator.
         /// When the candidate has met the min stake requirement, they can call `request_add_validator` to
         /// officially add them to the active validator set `active_validators` next epoch.
-        validator_candidates: Table<address, Validator>,
+        validator_candidates: Table<address, ValidatorWrapper>,
 
         /// Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
         at_risk_validators: VecMap<address, u64>,
+
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     /// Event containing staking and rewards related information of
@@ -139,6 +145,7 @@ module sui::validator_set {
             inactive_validators: table::new(ctx),
             validator_candidates: table::new(ctx),
             at_risk_validators: vec_map::empty(),
+            extra_fields: bag::new(ctx),
         };
         voting_power::set_voting_power(&mut validators.active_validators);
         validators
@@ -148,7 +155,11 @@ module sui::validator_set {
     // ==== functions to add or remove validators ====
 
     /// Called by `sui_system` to add a new validator candidate.
-    public(friend) fun request_add_validator_candidate(self: &mut ValidatorSet, validator: Validator) {
+    public(friend) fun request_add_validator_candidate(
+        self: &mut ValidatorSet,
+        validator: Validator,
+        ctx: &mut TxContext,
+    ) {
         assert!(
             !is_duplicate_with_active_validator(self, &validator)
                 && !is_duplicate_with_pending_validator(self, &validator),
@@ -163,7 +174,11 @@ module sui::validator_set {
         // Add validator to the candidates mapping and the pool id mappings so that users can start
         // staking with this candidate.
         table::add(&mut self.staking_pool_mappings, staking_pool_id(&validator), validator_address);
-        table::add(&mut self.validator_candidates, sui_address(&validator), validator);
+        table::add(
+            &mut self.validator_candidates,
+            sui_address(&validator),
+            validator_wrapper::create_v1(validator, ctx),
+        );
     }
 
     /// Called by `sui_system` to remove a validator candidate, and move them to `inactive_validators`.
@@ -173,7 +188,8 @@ module sui::validator_set {
             table::contains(&self.validator_candidates, validator_address),
             ENotValidatorCandidate
         );
-        let validator = table::remove(&mut self.validator_candidates, validator_address);
+        let wrapper = table::remove(&mut self.validator_candidates, validator_address);
+        let validator = validator_wrapper::destroy(wrapper);
         assert!(validator::is_preactive(&validator), EValidatorNotCandidate);
 
         let staking_pool_id = staking_pool_id(&validator);
@@ -200,7 +216,8 @@ module sui::validator_set {
             table::contains(&self.validator_candidates, validator_address),
             ENotValidatorCandidate
         );
-        let validator = table::remove(&mut self.validator_candidates, validator_address);
+        let wrapper = table::remove(&mut self.validator_candidates, validator_address);
+        let validator = validator_wrapper::destroy(wrapper);
         assert!(
             !is_duplicate_with_active_validator(self, &validator)
                 && !is_duplicate_with_pending_validator(self, &validator),
@@ -523,10 +540,14 @@ module sui::validator_set {
     /// It differs from `is_active_validator_by_sui_address` in that the former checks
     /// only the sui address but this function looks at more metadata.
     fun is_duplicate_with_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-        let len = vector::length(&self.active_validators);
+        is_duplicate_validator(&self.active_validators, new_validator)
+    }
+
+    public(friend) fun is_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
+        let len = vector::length(validators);
         let i = 0;
         while (i < len) {
-            let v = vector::borrow(&self.active_validators, i);
+            let v = vector::borrow(validators, i);
             if (validator::is_duplicate(v, new_validator)) {
                 return true
             };
@@ -552,7 +573,8 @@ module sui::validator_set {
     /// Get mutable reference to either a candidate or an active validator by address.
     fun get_candidate_or_active_validator_mut(self: &mut ValidatorSet, validator_address: address): &mut Validator {
         if (table::contains(&self.validator_candidates, validator_address)) {
-            return table::borrow_mut(&mut self.validator_candidates, validator_address)
+            let wrapper = table::borrow_mut(&mut self.validator_candidates, validator_address);
+            return validator_wrapper::load_validator_maybe_upgrade(wrapper)
         };
         get_validator_mut(&mut self.active_validators, validator_address)
     }
@@ -606,7 +628,7 @@ module sui::validator_set {
         res
     }
 
-    fun get_validator_mut(
+    public(friend) fun get_validator_mut(
         validators: &mut vector<Validator>,
         validator_address: address,
     ): &mut Validator {
@@ -637,7 +659,8 @@ module sui::validator_set {
             return table_vec::borrow_mut(&mut self.pending_active_validators, validator_index)
         };
         assert!(include_candidate, ENotActiveOrPendingValidator);
-        table::borrow_mut(&mut self.validator_candidates, validator_address)
+        let wrapper = table::borrow_mut(&mut self.validator_candidates, validator_address);
+        validator_wrapper::load_validator_maybe_upgrade(wrapper)
     }
 
     public(friend) fun get_validator_mut_with_verified_cap(
@@ -675,7 +698,7 @@ module sui::validator_set {
     }
 
     public(friend) fun get_active_or_pending_or_candidate_validator_ref(
-        self: &ValidatorSet,
+        self: &mut ValidatorSet,
         validator_address: address,
         which_validator: u8,
     ): &Validator {
@@ -689,7 +712,8 @@ module sui::validator_set {
             let validator_index = option::extract(&mut validator_index_opt);
             return table_vec::borrow(&self.pending_active_validators, validator_index)
         };
-        table::borrow(&self.validator_candidates, validator_address)
+        let wrapper = table::borrow_mut(&mut self.validator_candidates, validator_address);
+        validator_wrapper::load_validator_maybe_upgrade(wrapper)
     }
 
     public fun get_active_validator_ref(
@@ -712,18 +736,20 @@ module sui::validator_set {
         table_vec::borrow(&self.pending_active_validators, validator_index)
     }
 
+    #[test_only]
     public fun get_candidate_validator_ref(
         self: &ValidatorSet,
         validator_address: address,
     ): &Validator {
-        table::borrow(&self.validator_candidates, validator_address)
+        let wrapper = table::borrow(&self.validator_candidates, validator_address);
+        validator_wrapper::get_inner_validator_ref(wrapper)
     }
 
     /// Verify the capability is valid for a Validator.
     /// If `active_validator_only` is true, only verify the Cap for an active validator.
     /// Otherwise, verify the Cap for au either active or pending validator.
     public(friend) fun verify_cap(
-        self: &ValidatorSet,
+        self: &mut ValidatorSet,
         cap: &UnverifiedValidatorOperationCap,
         which_validator: u8,
     ): ValidatorOperationCap {

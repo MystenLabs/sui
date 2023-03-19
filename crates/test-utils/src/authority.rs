@@ -40,12 +40,21 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     configs
 }
 
-pub fn test_authority_configs_with_objects(objects: Vec<Object>) -> (NetworkConfig, Vec<Object>) {
+pub fn test_authority_configs_with_objects<I: IntoIterator<Item = Object> + Clone>(
+    objects: I,
+) -> (NetworkConfig, Vec<Object>) {
+    test_and_configure_authority_configs_with_objects(TEST_COMMITTEE_SIZE, objects)
+}
+
+pub fn test_and_configure_authority_configs_with_objects<I: IntoIterator<Item = Object> + Clone>(
+    committee_size: usize,
+    objects: I,
+) -> (NetworkConfig, Vec<Object>) {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
     let mut configs = ConfigBuilder::new(&config_dir)
         .rng(rng)
-        .committee_size(TEST_COMMITTEE_SIZE.try_into().unwrap())
+        .committee_size(committee_size.try_into().unwrap())
         .with_objects(objects.clone())
         .build();
 
@@ -113,24 +122,11 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNodeHandle>
-where
-    I: IntoIterator<Item = Object> + Clone,
-{
+pub async fn spawn_test_authorities(config: &NetworkConfig) -> Vec<SuiNodeHandle> {
     let mut handles = Vec::new();
     for validator in config.validator_configs() {
         let registry_service = RegistryService::new(Registry::new());
         let node = start_node(validator, registry_service).await;
-        let objects = objects.clone();
-
-        node.with_async(|node| async move {
-            let state = node.state();
-            for o in objects {
-                state.insert_genesis_object(o).await
-            }
-        })
-        .await;
-
         handles.push(node);
     }
     handles

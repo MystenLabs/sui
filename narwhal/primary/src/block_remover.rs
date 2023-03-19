@@ -10,13 +10,12 @@ use futures::future::try_join_all;
 use itertools::Either;
 use network::PrimaryToWorkerRpc;
 use std::{collections::HashMap, sync::Arc};
-use storage::{CertificateStore, PayloadToken};
-use store::{rocks::TypedStoreError, Store};
+use storage::{CertificateStore, HeaderStore, PayloadStore};
+use store::rocks::TypedStoreError;
 
 use tracing::{debug, instrument, warn};
 use types::{
-    metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    Round,
+    metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, HeaderDigest, Round,
 };
 
 #[cfg(test)]
@@ -39,10 +38,10 @@ pub struct BlockRemover {
     certificate_store: CertificateStore,
 
     /// Storage that keeps the headers by their digest id
-    header_store: Store<HeaderDigest, Header>,
+    header_store: HeaderStore,
 
     /// The persistent storage for payload markers from workers.
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
 
     /// The Dag structure for managing the stored certificates
     dag: Option<Arc<Dag>>,
@@ -60,8 +59,8 @@ impl BlockRemover {
         name: PublicKey,
         worker_cache: WorkerCache,
         certificate_store: CertificateStore,
-        header_store: Store<HeaderDigest, Header>,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        header_store: HeaderStore,
+        payload_store: PayloadStore,
         dag: Option<Arc<Dag>>,
         worker_network: anemo::Network,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
@@ -133,7 +132,6 @@ impl BlockRemover {
 
         self.header_store
             .remove_all(header_digests)
-            .await
             .map_err(Either::Left)?;
 
         // delete batch from the payload store as well
@@ -145,7 +143,6 @@ impl BlockRemover {
         }
         self.payload_store
             .remove_all(batches_to_cleanup)
-            .await
             .map_err(Either::Left)?;
 
         // NOTE: delete certificates in the end since if we need to repeat the request

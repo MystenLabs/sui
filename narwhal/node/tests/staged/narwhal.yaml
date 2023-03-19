@@ -66,8 +66,8 @@ WorkerInfo:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
-    - transactions: BYTES
-    - worker_address: BYTES
+    - transactions: STR
+    - worker_address: STR
 WorkerOthersBatchMessage:
   STRUCT:
     - digest:
@@ -90,3 +90,4 @@ WorkerSynchronizeMessage:
           CONTENT: U8
           SIZE: 96
     - is_certified: BOOL
+

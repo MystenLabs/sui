@@ -1647,7 +1647,7 @@ pub enum SignatureScheme {
     ED25519,
     Secp256k1,
     Secp256r1,
-    BLS12381,
+    BLS12381, // This is currently not supported for user Sui Address.
     MultiSig,
 }
 
@@ -1658,7 +1658,7 @@ impl SignatureScheme {
             SignatureScheme::Secp256k1 => 0x01,
             SignatureScheme::Secp256r1 => 0x02,
             SignatureScheme::MultiSig => 0x03,
-            SignatureScheme::BLS12381 => 0xff,
+            SignatureScheme::BLS12381 => 0xff, // This is currently not supported for user Sui Address.
         }
     }
 

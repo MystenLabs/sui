@@ -270,6 +270,7 @@ function StakingCard() {
                     initialValues={initialValues}
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
+                    validateOnMount
                 >
                     {({
                         isSubmitting,

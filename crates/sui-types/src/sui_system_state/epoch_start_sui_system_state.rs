@@ -6,10 +6,9 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, StakeUnit};
-use crate::sui_system_state::multiaddr_to_anemo_address;
+use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
-use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
@@ -163,7 +162,9 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .map(|validator| PeerInfo {
                 peer_id: PeerId(validator.narwhal_network_pubkey.0.to_bytes()),
                 affinity: PeerAffinity::High,
-                address: vec![multiaddr_to_anemo_address(&validator.p2p_address)
+                address: vec![validator
+                    .p2p_address
+                    .to_anemo_address()
                     .expect("p2p address must be valid anemo address and verified on-chain")],
             })
             .collect()

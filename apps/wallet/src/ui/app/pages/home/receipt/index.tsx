@@ -30,6 +30,7 @@ function ReceiptPage() {
             return rpc.getTransaction({
                 digest: transactionId!,
                 options: {
+                    showObjectChanges: true,
                     showInput: true,
                     showEffects: true,
                     showEvents: true,

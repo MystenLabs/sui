@@ -3,14 +3,13 @@
 
 use super::*;
 
-use super::authority_tests::{
-    create_genesis_module_packages, init_state_with_ids, send_and_confirm_transaction,
-};
+use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
 use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
+use sui_framework::make_system_objects;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::is_system_package;
@@ -120,12 +119,9 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let gas_size = gas_object.object_size_for_gas_metering();
 
     gas_status.charge_storage_read(obj_size + gas_size)?;
+    gas_status.bucketize_computation()?;
     gas_status.charge_storage_mutation(obj_size, 0.into())?;
     gas_status.charge_storage_mutation(gas_size, 0.into())?;
-    // computation gas is for both read and writes, so on a simple transfer is twice the objects
-    // (transfer object and gas coin)
-    gas_status.charge_computation_gas_for_storage_mutation((obj_size + gas_size) as u64 * 2)?;
-    gas_status.bucketize_computation()?;
     let summary = gas_status.summary();
     assert_eq!(gas_cost, &summary);
     Ok(())
@@ -298,11 +294,11 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         expected_gas_balance,
     );
     // genesis objects are read during transaction since they are direct dependencies.
-    let genesis_objects = create_genesis_module_packages();
+    let genesis_objects = make_system_objects();
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response.0.data().intent_message().value.kind() {
         TransactionKind::ProgrammableTransaction(pt) => match pt.commands.first().unwrap() {
-            Command::Publish(modules) => modules,
+            Command::Publish(modules, _dep_ids) => modules,
             _ => unreachable!(),
         },
         _ => unreachable!(),

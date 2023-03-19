@@ -3,6 +3,7 @@
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
+use crate::types::SuiTransactionFullResponse;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -11,11 +12,11 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{cap_page_limit, ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectsPage, Page,
-    SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType, ObjectsPage,
+    Page, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
@@ -50,11 +51,11 @@ impl<S: IndexerStore> ReadApi<S> {
         _options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
         // TODO(chris): support options in indexer
-        let txn_resp: SuiTransactionResponse = self
+        let txn_full_resp: SuiTransactionFullResponse = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?
             .try_into()?;
-        Ok(txn_resp)
+        Ok(txn_full_resp.into())
     }
 
     fn multi_get_transactions_with_options_internal(
@@ -67,10 +68,12 @@ impl<S: IndexerStore> ReadApi<S> {
             .map(|digest| digest.base58_encode())
             .collect::<Vec<_>>();
         let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
-        let tx_resp_vec = tx_vec
+        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = tx_vec
             .into_iter()
             .map(|txn| txn.try_into())
             .collect::<Result<Vec<_>, _>>()?;
+        let tx_resp_vec: Vec<SuiTransactionResponse> =
+            tx_full_resp_vec.into_iter().map(|txn| txn.into()).collect();
         Ok(tx_resp_vec)
     }
 
@@ -98,8 +101,11 @@ impl<S: IndexerStore> ReadApi<S> {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state
-                    .get_all_transaction_digest_page(indexer_seq_number, limit, is_descending)
+                self.state.get_all_transaction_digest_page(
+                    indexer_seq_number,
+                    limit + 1,
+                    is_descending,
+                )
             }
             Some(TransactionFilter::MoveFunction {
                 package,
@@ -114,15 +120,22 @@ impl<S: IndexerStore> ReadApi<S> {
                     module,
                     function,
                     move_call_seq_number,
-                    limit,
+                    limit + 1,
                     is_descending,
                 )
             }
-            // TODO(gegaowp): input objects are tricky to retrive from
-            // SuiTransactionResponse, instead we should store the BCS
-            // serialized transaction and retrive from there.
-            // This is now blocked by the endpoint on FN side.
-            Some(TransactionFilter::InputObject(_input_obj_id)) => Ok(vec![]),
+            Some(TransactionFilter::InputObject(input_obj_id)) => {
+                let input_obj_seq = self
+                    .state
+                    .get_input_object_sequence_by_digest(cursor_str, is_descending)?;
+                self.state.get_transaction_digest_page_by_input_object(
+                    input_obj_id.to_string(),
+                    /* version */ None,
+                    input_obj_seq,
+                    limit + 1,
+                    is_descending,
+                )
+            }
             Some(TransactionFilter::ChangedObject(mutated_obj_id)) => {
                 let indexer_seq_number = self
                     .state
@@ -215,13 +228,13 @@ where
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectDataOptions>,
+        query: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
         self.fullnode
-            .get_owned_objects(address, options, cursor, limit, at_checkpoint)
+            .get_owned_objects(address, query, cursor, limit, at_checkpoint)
             .await
     }
 
@@ -439,6 +452,18 @@ where
             return self.fullnode.get_checkpoint(id).await;
         }
         Ok(self.get_checkpoint_internal(id)?)
+    }
+
+    async fn get_checkpoints(
+        &self,
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        return self
+            .fullnode
+            .get_checkpoints(cursor, limit, descending_order)
+            .await;
     }
 }
 

@@ -18,23 +18,24 @@ export function calculateAPY(
         poolTokenBalance,
     } = validator;
 
-    // If the staking pool is active then we calculate its APY.
-    if (stakingPoolActivationEpoch) {
-        const num_epochs_participated = +epoch - +stakingPoolActivationEpoch;
+    // If the staking pool is active then we calculate its APY. Or if staking started in epoch 0
+    if (stakingPoolActivationEpoch || stakingPoolActivationEpoch === 0) {
+        const numEpochsParticipated = epoch - stakingPoolActivationEpoch;
         apy =
-            Math.pow(
+            (Math.pow(
                 1 +
                     (+stakingPoolSuiBalance - +poolTokenBalance) /
                         +poolTokenBalance,
-                365 / num_epochs_participated
-            ) - 1;
+                365 / numEpochsParticipated
+            ) -
+                1) *
+            100;
     } else {
         apy = 0;
     }
 
-    //guard against NaN
-    const apyReturn = apy ? roundFloat(apy, roundDecimals) : 0;
-
-    // guard against very large numbers (e.g. 1e+100)
-    return apyReturn > 100_000 ? 0 : apyReturn;
+    //guard against NaN and large numbers
+    return Number.isNaN(apy) || apy > 100_000
+        ? 0
+        : roundFloat(apy, roundDecimals);
 }

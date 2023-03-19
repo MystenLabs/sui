@@ -71,6 +71,11 @@ pub struct EpochMetrics {
 
     /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
     pub is_safe_mode: IntGauge,
+
+    /// When building the last checkpoint of the epoch, we execute advance epoch transaction once
+    /// without committing results to the store. It's useful to know whether this execution leads
+    /// to safe_mode, since in theory the result could be different from checkpoint executor.
+    pub checkpoint_builder_advance_epoch_is_safe_mode: IntGauge,
 }
 
 impl EpochMetrics {
@@ -146,6 +151,11 @@ impl EpochMetrics {
             is_safe_mode: register_int_gauge_with_registry!(
                 "is_safe_mode",
                 "Whether we are running in safe mode",
+                registry,
+            ).unwrap(),
+            checkpoint_builder_advance_epoch_is_safe_mode: register_int_gauge_with_registry!(
+                "checkpoint_builder_advance_epoch_is_safe_mode",
+                "Whether the advance epoch execution leads to safe mode while building the last checkpoint",
                 registry,
             ).unwrap(),
         };

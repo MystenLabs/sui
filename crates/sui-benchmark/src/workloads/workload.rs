@@ -12,7 +12,7 @@ use crate::ValidatorProxy;
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
-pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
+pub const MAX_GAS_FOR_TESTING: u64 = 100_000_000_000;
 
 #[async_trait]
 pub trait WorkloadBuilder<T: Payload + ?Sized>: Send + Sync + std::fmt::Debug {

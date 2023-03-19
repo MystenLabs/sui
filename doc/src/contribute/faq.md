@@ -11,11 +11,11 @@ Sui offers ease of development, a developer interface, fast transaction speeds, 
 
 Additional resources:
 
-* [Why Move?](../learn/why-move)
-* [How Sui Move differs from Core Move](../learn/sui-move-diffs.md)
-* [How Sui Works](../learn/how-sui-works.md)
-* [Sui Compared to Other Blockchains](../learn/sui-compared.md)
-* [Narwhal and Bullshark, Sui's Consensus Engine](../learn/architecture/consensus.md)
+ * [Why Move?](../learn/why-move)
+ * [How Sui Move differs from Core Move](../learn/sui-move-diffs.md)
+ * [How Sui Works](../learn/how-sui-works.md)
+ * [Sui Compared to Other Blockchains](../learn/sui-compared.md)
+ * [Narwhal and Bullshark, Sui's Consensus Engine](../learn/architecture/consensus.md)
 
 ## Can I buy Sui tokens?
 
@@ -39,7 +39,7 @@ Packages are immutable objects, and this property is relied upon in several plac
 
 See the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for node architecture information.
 
-See the instructions to [run a Sui Fullnode](../build/fullnode.md).
+See the instructions to [run a Sui Full node](../build/fullnode.md).
 
 ## Is Sui compatible with Ethereum Virtual Machine (EVM)?
 

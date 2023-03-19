@@ -5,16 +5,15 @@ use crate::errors::IndexerError;
 use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::events::Event;
-use crate::models::move_calls::MoveCall;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
-use crate::models::recipients::Recipient;
+use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
+use crate::types::SuiTransactionFullResponse;
 use async_trait::async_trait;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EventFilter, EventPage, SuiObjectData,
-    SuiTransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::event::EventID;
@@ -82,6 +81,15 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
 
+    fn get_transaction_digest_page_by_input_object(
+        &self,
+        object_id: String,
+        version: Option<i64>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError>;
+
     fn get_transaction_digest_page_by_move_call(
         &self,
         package: String,
@@ -104,6 +112,12 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
+    fn get_input_object_sequence_by_digest(
+        &self,
+        txn_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError>;
+
     fn get_recipient_sequence_by_digest(
         &self,
         txn_digest: Option<String>,
@@ -119,14 +133,13 @@ pub trait IndexerStore {
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
-    fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError>;
-
     fn module_cache(&self) -> &Self::ModuleCache;
 }
 
+#[derive(Clone, Debug)]
 pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
-    pub transactions: Vec<SuiTransactionResponse>,
+    pub transactions: Vec<SuiTransactionFullResponse>,
     pub changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
 }
 
@@ -138,6 +151,7 @@ pub struct TemporaryCheckpointStore {
     pub objects_changes: Vec<TransactionObjectChanges>,
     pub addresses: Vec<Address>,
     pub packages: Vec<Package>,
+    pub input_objects: Vec<InputObject>,
     pub move_calls: Vec<MoveCall>,
     pub recipients: Vec<Recipient>,
 }

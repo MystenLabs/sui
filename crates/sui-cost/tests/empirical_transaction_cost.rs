@@ -22,7 +22,7 @@ use test_utils::authority::spawn_test_authorities;
 use test_utils::messages::move_transaction_with_type_tags;
 use test_utils::transaction::make_publish_package;
 use test_utils::{
-    authority::test_authority_configs,
+    authority::test_authority_configs_with_objects,
     messages::move_transaction,
     transaction::{
         publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
@@ -263,8 +263,8 @@ async fn run_actual_costs(
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _ = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let _ = spawn_test_authorities(&configs).await;
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;

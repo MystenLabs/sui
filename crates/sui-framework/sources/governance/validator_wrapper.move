@@ -25,10 +25,27 @@ module sui::validator_wrapper {
     /// This function should always return the latest supported version.
     /// If the inner version is old, we upgrade it lazily in-place.
     public(friend) fun load_validator_maybe_upgrade(self: &mut ValidatorWrapper): &mut Validator {
+        upgrade_to_latest(self);
+        versioned::load_value_mut<Validator>(&mut self.inner)
+    }
+
+    /// Destroy the wrapper and retrieve the inner validator object.
+    public(friend) fun destroy(self: ValidatorWrapper): Validator {
+        upgrade_to_latest(&mut self);
+        let ValidatorWrapper { inner } = self;
+        versioned::destroy<Validator>(inner)
+    }
+
+    #[test_only]
+    /// Load the inner validator with assumed type. This should be used for testing only.
+    public(friend) fun get_inner_validator_ref(self: &ValidatorWrapper): &Validator {
+        versioned::load_value<Validator>(&self.inner)
+    }
+
+    fun upgrade_to_latest(self: &mut ValidatorWrapper) {
         let version = version(self);
         // TODO: When new versions are added, we need to explicitly upgrade here.
         assert!(version == 1, EInvalidVersion);
-        versioned::load_value_mut<Validator>(&mut self.inner)
     }
 
     fun version(self: &ValidatorWrapper): u64 {

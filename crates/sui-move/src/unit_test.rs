@@ -10,13 +10,13 @@ use move_cli::base::{
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
-use move_vm_test_utils::gas_schedule::INITIAL_COST_SCHEDULE;
 use once_cell::sync::Lazy;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 use sui_core::authority::TemporaryStore;
+use sui_cost_tables::bytecode_tables::initial_cost_schedule_for_unit_tests;
 use sui_framework::natives::{self, object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -46,6 +46,7 @@ impl Test {
         let with_unpublished_deps = false;
         let dump_bytecode_as_base64 = false;
         let generate_struct_layouts: bool = false;
+        let dump_package_digest = false;
         build::Build::execute_internal(
             &rerooted_path,
             BuildConfig {
@@ -55,6 +56,7 @@ impl Test {
             with_unpublished_deps,
             dump_bytecode_as_base64,
             generate_struct_layouts,
+            dump_package_digest,
         )?;
         run_move_unit_tests(
             &rerooted_path,
@@ -90,7 +92,7 @@ pub fn run_move_unit_tests(
             ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
-        Some(INITIAL_COST_SCHEDULE.clone()),
+        Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::stdout(),
     )

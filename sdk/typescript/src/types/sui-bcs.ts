@@ -32,7 +32,7 @@ export type SharedObjectRef = {
   objectId: string;
 
   /** The version the object was shared at */
-  initialSharedVersion: number | bigint;
+  initialSharedVersion: number | string;
 
   /** Whether reference is mutable */
   mutable: boolean;

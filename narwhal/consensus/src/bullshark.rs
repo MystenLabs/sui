@@ -9,7 +9,6 @@ use crate::{
 use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
-use fastcrypto::traits::EncodeDecodeBase64;
 use std::sync::Arc;
 use tokio::time::Instant;
 use tracing::{debug, error_span};
@@ -225,7 +224,7 @@ impl ConsensusProtocol for Bullshark {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
+            debug!("Latest commit of {}: Round {}", name.to_string(), round);
         }
 
         self.metrics

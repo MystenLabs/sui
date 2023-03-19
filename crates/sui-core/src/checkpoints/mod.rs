@@ -189,6 +189,13 @@ impl CheckpointStore {
         Ok(checkpoints)
     }
 
+    pub fn multi_get_checkpoint_content(
+        &self,
+        contents_digest: &[CheckpointContentsDigest],
+    ) -> Result<Vec<Option<CheckpointContents>>, TypedStoreError> {
+        self.checkpoint_content.multi_get(contents_digest)
+    }
+
     pub fn get_highest_verified_checkpoint(
         &self,
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
@@ -735,7 +742,7 @@ impl CheckpointBuilder {
                     next_epoch_protocol_version: ProtocolVersion::new(
                         system_state_obj.protocol_version(),
                     ),
-                    // TODO: This should become
+                    // MUSTFIX: This should become
                     //
                     //   epoch_commitments: vec![root_state_digest.into()]
                     //
@@ -1037,8 +1044,8 @@ impl CheckpointSignatureAggregator {
         let their_digest = *data.summary.digest();
         let (_, signature) = data.summary.into_data_and_sig();
         let author = signature.authority;
+        // consensus ensures that authority == narwhal_cert.author
         if their_digest != self.digest {
-            // todo - consensus need to ensure data.summary.auth_signature.authority == narwhal_cert.author
             warn!(
                 "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
                 author.concise(),
@@ -1171,11 +1178,6 @@ impl CheckpointServiceNotify for CheckpointService {
             .skip_to_last()
             .next()
         {
-            // TODO(emmazzz): Right now we only record participation of validators whose
-            // checkpoint signatures make it to the certified checkpoint, which is only
-            // f+1 validators, and the rest of the signatures received are ignored. Later
-            // we may want to record those as well so that we have more fine grained scores
-            // for tallying rule.
             if sequence <= last_certified {
                 debug!(
                     "Ignore signature for checkpoint sequence {} from {} - already certified",
@@ -1292,8 +1294,12 @@ mod tests {
                     MovePackage::new(
                         ObjectID::random(),
                         SequenceNumber::new(),
-                        &BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
+                        BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
                         100_000,
+                        // no modules so empty type_origin_table as no types are defined in this package
+                        Vec::new(),
+                        // no modules so empty linkage_table as no dependencies of this package exist
+                        BTreeMap::new(),
                     )
                     .unwrap(),
                 ),

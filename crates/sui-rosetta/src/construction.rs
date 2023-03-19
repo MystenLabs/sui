@@ -214,9 +214,9 @@ pub async fn metadata(
     let (total_required_amount, objects, budget) = match &option.internal_operation {
         InternalOperation::PaySui { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            (Some(amount), vec![], 1000)
+            (Some(amount), vec![], 2000)
         }
-        InternalOperation::Stake { amount, .. } => (*amount, vec![], 1200),
+        InternalOperation::Stake { amount, .. } => (*amount, vec![], 2000),
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
@@ -255,7 +255,7 @@ pub async fn metadata(
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(SuiError::from)?;
 
-            (Some(0), stake_refs, 2000)
+            (Some(0), stake_refs, 10000)
         }
     };
 

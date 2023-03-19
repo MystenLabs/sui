@@ -11,7 +11,6 @@ anyhow = { version = "1.0.64", features = ["backtrace"] }
 futures = "0.3.23"
 tempfile = "3.3.0"
 tracing = "0.1.36"
-signature = "1.6.0"
 bcs = "0.1.4"
 jsonrpsee = { version = "0.16.2", features = ["http-client"] }
 prometheus = "0.13.3"
@@ -19,7 +18,6 @@ tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 serde_json = "1.0.88"
 rand = "0.8.5"
 sui = { path = "../sui" }
-sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
@@ -33,8 +31,6 @@ sui-types = { path = "../sui-types" }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
 mysten-metrics = { path = "../mysten-metrics"}
-once_cell = "1.16"
-multiaddr = "0.17.0"
 shared-crypto = { path = "../shared-crypto" }
 
 mysten-network.workspace = true

@@ -3,7 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::args::*;
+use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
@@ -37,11 +37,14 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_framework::{
+    make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
+};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::clock::Clock;
 use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
-use sui_types::in_memory_storage::InMemoryStorage;
+use sui_types::messages::CallArg;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -53,14 +56,14 @@ use sui_types::{
         ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
         VerifiedTransaction,
     },
-    object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
+    object::{self, Object, ObjectFormatOptions},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
+use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 
 pub(crate) type FakeID = u64;
 
@@ -71,6 +74,8 @@ const RNG_SEED: [u8; 32] = [
     21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
+
+const DEFAULT_GAS_BUDGET: u64 = 10_000;
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
@@ -123,31 +128,10 @@ pub fn get_framework_object_ref() -> ObjectRef {
 
 /// Create and return objects wrapping the genesis modules for sui
 fn create_genesis_module_objects() -> Genesis {
-    let sui_modules = sui_framework::get_sui_framework();
-    let std_modules = sui_framework::get_move_stdlib();
-    let objects = vec![create_clock()];
-    // SAFETY: unwraps safe because genesis packages should never exceed max size
-    let packages = vec![
-        Object::new_package(
-            std_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-        Object::new_package(
-            sui_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-    ];
-    let modules = vec![std_modules, sui_modules];
     Genesis {
-        objects,
-        packages,
-        modules,
+        objects: vec![create_clock()],
+        packages: make_system_objects(),
+        modules: make_system_modules(),
     }
 }
 
@@ -305,6 +289,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             sender,
             upgradeable,
             view_gas_used,
+            dependencies,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -312,14 +297,27 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             module.serialize(&mut buf).unwrap();
             buf
         };
-        let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let mut dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
+                    bail!("There is no published module address corresponding to name address {d}");
+                };
+                let id: ObjectID = addr.into_inner().into();
+                Ok(id)
+            })
+            .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on the system packages, so these don't have to
+        // be provided explicitly as parameters
+        dependencies.extend(system_package_ids());
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                let cap = builder.publish_upgradeable(vec![module_bytes], dependencies);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish_immutable(vec![module_bytes]);
+                builder.publish_immutable(vec![module_bytes], dependencies);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
@@ -394,11 +392,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let mut builder = ProgrammableTransactionBuilder::new();
         let arguments = args
             .into_iter()
-            .map(|arg| arg.into_call_args(&mut builder, self))
+            .map(|arg| arg.into_argument(&mut builder, self))
             .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
 
-        let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
         let data = |sender, gas| {
             builder.command(Command::move_call(
                 package_id,
@@ -458,7 +456,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             start_line,
             command_lines_stop,
             stop_line: _,
-            data: _,
+            data,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident) => {{
@@ -520,12 +518,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 view_gas_used,
             }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
-                let obj_arg = SuiValue::Object(fake_id).into_call_args(&mut builder, self)?;
+                let obj_arg = SuiValue::Object(fake_id).into_argument(&mut builder, self)?;
                 let recipient = match self.accounts.get(&recipient) {
                     Some((recipient, _)) => *recipient,
                     None => panic!("Unbound account {}", recipient),
                 };
-                let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
                     builder.command(sui_types::messages::Command::TransferObjects(
@@ -549,8 +547,43 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }) => {
                 let transaction =
                     VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
-                let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
+                let summary = self.execute_txn(transaction, DEFAULT_GAS_BUDGET)?;
                 let output = self.object_summary_output(&summary, false, false);
+                Ok(output)
+            }
+            SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
+                sender,
+                gas_budget,
+                inputs,
+                view_events,
+                view_gas_used,
+            }) => {
+                let inputs = self.compiled_state().resolve_args(inputs)?;
+                let inputs: Vec<CallArg> = inputs
+                    .into_iter()
+                    .map(|arg| arg.into_call_arg(self))
+                    .collect::<anyhow::Result<_>>()?;
+                let file = data.ok_or_else(|| {
+                    anyhow::anyhow!("Missing commands for programmable transaction")
+                })?;
+                let contents = std::fs::read_to_string(file.path())?;
+                let commands = ParsedCommand::parse_vec(&contents)?;
+                let state = &self.compiled_state;
+                let commands = commands
+                    .into_iter()
+                    .map(|c| c.into_command(&|s| Some(state.resolve_named_address(s))))
+                    .collect::<anyhow::Result<Vec<Command>>>()?;
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let transaction = self.sign_txn(sender, |sender, gas| {
+                    TransactionData::new_programmable_with_dummy_gas_price(
+                        sender,
+                        vec![gas],
+                        ProgrammableTransaction { inputs, commands },
+                        gas_budget,
+                    )
+                });
+                let summary = self.execute_txn(transaction, gas_budget)?;
+                let output = self.object_summary_output(&summary, view_events, view_gas_used);
                 Ok(output)
             }
         }
@@ -743,8 +776,8 @@ impl<'a> SuiTestAdapter<'a> {
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
-            sui_types::object::Data::Package(pkg) => pkg
+            object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
+            object::Data::Package(pkg) => pkg
                 .serialized_module_map()
                 .keys()
                 .map(|s| s.as_str())

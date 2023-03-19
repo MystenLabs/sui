@@ -9,8 +9,8 @@ use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
 use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, DefaultHash, KeypairTraits, PublicKey,
-    SignatureScheme, SuiPublicKey, SuiSignature,
+    AuthorityPublicKeyBytes, DefaultHash, KeypairTraits, PublicKey, SignatureScheme, SuiPublicKey,
+    SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
@@ -311,6 +311,17 @@ impl From<&Object> for ObjectType {
     }
 }
 
+impl TryFrom<ObjectType> for StructTag {
+    type Error = anyhow::Error;
+
+    fn try_from(o: ObjectType) -> Result<Self, anyhow::Error> {
+        match o {
+            ObjectType::Package => Err(anyhow!("Cannot create StructTag from Package")),
+            ObjectType::Struct(move_object_type) => Ok(move_object_type.into()),
+        }
+    }
+}
+
 impl FromStr for ObjectType {
     type Err = anyhow::Error;
 
@@ -442,31 +453,13 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&AuthorityPublicKeyBytes> for SuiAddress {
-    fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
-        let mut hasher = DefaultHash::default();
-        hasher.update([AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
-        hasher.update(pkb);
-        let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
-    }
-}
-
 impl<T: SuiPublicKey> From<&T> for SuiAddress {
     fn from(pk: &T) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([T::SIGNATURE_SCHEME.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
@@ -476,11 +469,7 @@ impl From<&PublicKey> for SuiAddress {
         hasher.update([pk.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
@@ -498,11 +487,7 @@ impl From<MultiSigPublicKey> for SuiAddress {
             hasher.update(w.to_le_bytes());
         });
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because digest should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
@@ -805,6 +790,11 @@ impl SequenceNumber {
         *self = next;
     }
 
+    pub fn decrement(&mut self) {
+        assert_ne!(self.0, 0);
+        self.0 -= 1;
+    }
+
     pub fn decrement_to(&mut self, prev: SequenceNumber) {
         debug_assert!(prev < *self, "Not a decrement: {} to {}", self, prev);
         *self = prev;
@@ -853,6 +843,11 @@ impl ObjectID {
     /// Creates a new ObjectID
     pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
         Self(AccountAddress::new(obj_id))
+    }
+
+    /// Const fn variant of <ObjectID as From<AccountAddress>>::from
+    pub const fn from_address(addr: AccountAddress) -> Self {
+        Self(addr)
     }
 
     /// Random ObjectID

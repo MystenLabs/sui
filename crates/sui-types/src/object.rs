@@ -21,6 +21,7 @@ use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
+use crate::is_system_package;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -28,10 +29,9 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
-use crate::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 use sui_protocol_config::ProtocolConfig;
 
-pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
+pub const GAS_VALUE_FOR_TESTING: u64 = 2_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
@@ -396,6 +396,14 @@ impl Data {
         }
     }
 
+    pub fn try_into_package(self) -> Option<MovePackage> {
+        use Data::*;
+        match self {
+            Move(_) => None,
+            Package(p) => Some(p),
+        }
+    }
+
     pub fn type_(&self) -> Option<&MoveObjectType> {
         use Data::*;
         match self {
@@ -528,8 +536,7 @@ impl Object {
 
     /// Returns true if the object is a system package.
     pub fn is_system_package(&self) -> bool {
-        let id = self.id();
-        self.is_package() && (id == SUI_FRAMEWORK_OBJECT_ID || id == MOVE_STDLIB_OBJECT_ID)
+        self.is_package() && is_system_package(self.id())
     }
 
     /// Create a system package which is not subject to size limits. Panics if the object ID is not
@@ -537,47 +544,76 @@ impl Object {
     pub fn new_system_package(
         modules: Vec<CompiledModule>,
         version: SequenceNumber,
+        dependencies: Vec<ObjectID>,
         previous_transaction: TransactionDigest,
-    ) -> Result<Self, ExecutionError> {
-        let ret = Self::new_package(
-            modules,
-            version,
+    ) -> Self {
+        let ret = Self::new_package_from_data(
+            Data::Package(MovePackage::new_system(version, modules, dependencies)),
             previous_transaction,
-            // System objects are not subject to limits
-            u64::MAX,
-        )?;
+        );
+
         assert!(ret.is_system_package());
-        Ok(ret)
+        ret
+    }
+
+    pub fn new_package_from_data(data: Data, previous_transaction: TransactionDigest) -> Self {
+        Object {
+            data,
+            owner: Owner::Immutable,
+            previous_transaction,
+            storage_rebate: 0,
+        }
     }
 
     // Note: this will panic if `modules` is empty
-    pub fn new_package(
+    pub fn new_package<'p>(
         modules: Vec<CompiledModule>,
         version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        Ok(Object {
-            data: Data::Package(MovePackage::from_module_iter(
+        Ok(Self::new_package_from_data(
+            Data::Package(MovePackage::new_initial(
                 version,
                 modules,
                 max_move_package_size,
+                dependencies,
             )?),
-            owner: Owner::Immutable,
             previous_transaction,
-            storage_rebate: 0,
-        })
+        ))
     }
 
-    pub fn new_package_for_testing(
+    pub fn new_upgraded_package<'a>(
+        previous_package: &MovePackage,
+        new_package_id: ObjectID,
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
+        max_move_package_size: u64,
+        dependencies: impl IntoIterator<Item = &'a MovePackage>,
+    ) -> Result<Self, ExecutionError> {
+        Ok(Self::new_package_from_data(
+            Data::Package(previous_package.new_upgraded(
+                new_package_id,
+                modules,
+                max_move_package_size,
+                dependencies,
+            )?),
+            previous_transaction,
+        ))
+    }
+
+    pub fn new_package_for_testing<'p>(
+        modules: Vec<CompiledModule>,
+        previous_transaction: TransactionDigest,
+        dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
             OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
+            dependencies,
         )
     }
 

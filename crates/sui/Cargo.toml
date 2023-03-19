@@ -43,7 +43,6 @@ sui-protocol-config = { path = "../sui-protocol-config" }
 shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
-move-bytecode-utils.workspace = true
 
 rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
@@ -53,22 +52,11 @@ shell-words = "1.1.0"
 rocksdb = "0.20.1"
 
 tempfile = "3.3.0"
-narwhal-executor = { path = "../../narwhal/executor" }
 telemetry-subscribers.workspace = true
-typed-store.workspace = true
-typed-store-derive.workspace = true
-mysten-network.workspace = true
 
 move-core-types.workspace = true
-move-prover.workspace = true
-move-prover-boogie-backend.workspace = true
-move-stackless-bytecode.workspace = true
-move-unit-test.workspace = true
-move-cli.workspace = true
 move-package.workspace = true
-move-symbol-pool.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-multiaddr = "0.17.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"

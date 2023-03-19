@@ -20,7 +20,7 @@ diesel::table! {
     addresses (account_address) {
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
-        first_appearance_time -> Nullable<Timestamp>,
+        first_appearance_time -> Int8,
     }
 }
 
@@ -48,15 +48,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    error_logs (id) {
-        id -> Int8,
-        error_type -> Varchar,
-        error -> Text,
-        error_time -> Timestamp,
-    }
-}
-
-diesel::table! {
     events (id) {
         id -> Int8,
         transaction_digest -> Varchar,
@@ -72,12 +63,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    input_objects (id) {
+        id -> Int8,
+        transaction_digest -> Varchar,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        object_id -> Varchar,
+        object_version -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     move_calls (id) {
         id -> Int8,
         transaction_digest -> Varchar,
         checkpoint_sequence_number -> Int8,
         epoch -> Int8,
-        sender -> Text,
+        sender -> Varchar,
         move_package -> Text,
         move_module -> Text,
         move_function -> Text,
@@ -197,7 +199,7 @@ diesel::table! {
         sender -> Varchar,
         recipients -> Array<Nullable<Text>>,
         checkpoint_sequence_number -> Int8,
-        transaction_time -> Nullable<Timestamp>,
+        timestamp_ms -> Int8,
         transaction_kind -> Text,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
@@ -214,6 +216,7 @@ diesel::table! {
         storage_cost -> Int8,
         storage_rebate -> Int8,
         gas_price -> Int8,
+        raw_transaction -> Bytea,
         transaction_content -> Text,
         transaction_effects_content -> Text,
         confirmed_local_execution -> Nullable<Bool>,
@@ -223,8 +226,8 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     addresses,
     checkpoints,
-    error_logs,
     events,
+    input_objects,
     move_calls,
     objects,
     objects_history,

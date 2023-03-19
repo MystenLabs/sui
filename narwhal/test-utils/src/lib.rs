@@ -9,14 +9,14 @@ use config::{
 };
 use crypto::{
     to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
-    PublicKey, Signature,
+    PublicKey, PublicKeyBytes, Signature,
 };
 use fastcrypto::{
     hash::Hash as _,
     traits::{AllowedRng, KeyPair as _},
 };
 use indexmap::IndexMap;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{
     rngs::{OsRng, StdRng},
     thread_rng, Rng, SeedableRng,
@@ -139,7 +139,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     .expect("Failed creating database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<PublicKey, Round>,
+        LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 
@@ -184,7 +184,7 @@ impl PrimaryToPrimaryMockServer {
         network_keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (Receiver<SendCertificateRequest>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
         let (sender, receiver) = channel(1);
         let service = PrimaryToPrimaryServer::new(Self { sender });
 
@@ -249,7 +249,7 @@ impl PrimaryToWorkerMockServer {
         keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (Receiver<WorkerSynchronizeMessage>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
         let (synchronize_sender, synchronize_receiver) = channel(1);
         let service = PrimaryToWorkerServer::new(Self { synchronize_sender });
 
@@ -293,7 +293,7 @@ impl WorkerToWorkerMockServer {
         keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (Receiver<WorkerBatchMessage>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
         let (batch_sender, batch_receiver) = channel(1);
         let service = WorkerToWorkerServer::new(Self { batch_sender });
 
@@ -862,7 +862,7 @@ impl AuthorityFixture {
     }
 
     pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
-        anemo::Network::bind(network::multiaddr_to_address(&self.address).unwrap())
+        anemo::Network::bind(self.address.to_anemo_address().unwrap())
             .server_name("narwhal")
             .private_key(self.network_keypair().private().0.to_bytes())
             .start(router)
@@ -988,7 +988,7 @@ impl WorkerFixture {
     }
 
     pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
-        anemo::Network::bind(network::multiaddr_to_address(&self.info().worker_address).unwrap())
+        anemo::Network::bind(self.info().worker_address.to_anemo_address().unwrap())
             .server_name("narwhal")
             .private_key(self.keypair().private().0.to_bytes())
             .start(router)
@@ -1023,7 +1023,7 @@ impl WorkerFixture {
 }
 
 pub fn test_network(keypair: NetworkKeyPair, address: &Multiaddr) -> anemo::Network {
-    let address = network::multiaddr_to_address(address).unwrap();
+    let address = address.to_anemo_address().unwrap();
     let network_key = keypair.private().0.to_bytes();
     anemo::Network::bind(address)
         .server_name("narwhal")

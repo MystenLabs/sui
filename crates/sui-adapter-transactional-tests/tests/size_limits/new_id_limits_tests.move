@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on number of created IDs 
+// Test limts on number of created IDs
 
 //# init --addresses Test=0x0
 
@@ -32,16 +32,16 @@ module Test::M1 {
 }
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 1
+//# run Test::M1::create_n_ids --args 1 --gas-budget 1000000
 
 // create below create count limit should succeed
-//# run Test::M1::create_n_ids --args 256
+//# run Test::M1::create_n_ids --args 256 --gas-budget 1000000
 
 // create at create count limit should succeed
-//# run Test::M1::create_n_ids --args 2048 --view-gas-used
+//# run Test::M1::create_n_ids --args 2048 --gas-budget 1000000 --view-gas-used
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 2049
+//# run Test::M1::create_n_ids --args 2049 --gas-budget 1000000
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 4096
+//# run Test::M1::create_n_ids --args 4096 --gas-budget 1000000

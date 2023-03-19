@@ -45,6 +45,7 @@ pub enum ObjectChange {
         object_type: StructTag,
         object_id: ObjectID,
         version: SequenceNumber,
+        previous_version: SequenceNumber,
         digest: ObjectDigest,
     },
     /// Delete object

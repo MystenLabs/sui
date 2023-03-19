@@ -19,7 +19,7 @@ use crate::options::Opts;
 use crate::util::get_ed25519_keypair_from_keystore;
 use crate::{FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy};
 use sui_types::object::generate_max_test_gas_objects_with_owner;
-use test_utils::authority::test_and_configure_authority_configs;
+use test_utils::authority::test_and_configure_authority_configs_with_objects;
 use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
 use tokio::sync::{oneshot, Barrier};
@@ -83,7 +83,10 @@ impl Env {
         num_server_threads: u64,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in local mode..");
-        let mut network_config = test_and_configure_authority_configs(committee_size);
+        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
+        let generated_gas = generate_max_test_gas_objects_with_owner(2, address);
+        let (mut network_config, generated_gas) =
+            test_and_configure_authority_configs_with_objects(committee_size, generated_gas);
         let mut metric_port = server_metric_port;
         for node_config in network_config.validator_configs.iter_mut() {
             let parameters = &mut node_config
@@ -99,8 +102,6 @@ impl Env {
         }
         let config = Arc::new(network_config);
         // bring up servers ..
-        let (address, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
-        let generated_gas = generate_max_test_gas_objects_with_owner(2, address);
         let primary_gas = generated_gas
             .get(0)
             .context("No gas found at index 0")?
@@ -128,8 +129,7 @@ impl Env {
                 .unwrap();
             server_runtime.block_on(async move {
                 // Setup the network
-                let _validators: Vec<_> =
-                    spawn_test_authorities(generated_gas, &cloned_config).await;
+                let _validators: Vec<_> = spawn_test_authorities(&cloned_config).await;
                 let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
                 fullnode_barrier_clone.wait().await;
                 barrier.wait().await;
@@ -142,7 +142,7 @@ impl Env {
         info!("Fullnode rpc url: {fullnode_rpc_url}");
         fullnode_barrier.wait().await;
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_network_config(&config, registry, None).await,
+            LocalValidatorAggregatorProxy::from_genesis(&config.genesis, registry, None).await,
         );
         let keypair = Arc::new(keypair);
         let primary_gas = (

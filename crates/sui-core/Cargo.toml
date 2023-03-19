@@ -24,11 +24,8 @@ parking_lot = "0.12.1"
 async-trait = "0.1.61"
 tempfile = "3.3.0"
 itertools = "0.10.4"
-strum_macros = "^0.24"
 tracing = "0.1.36"
 signature = "1.6.0"
-bincode = "1.3.3"
-multiaddr = "0.17.0"
 prometheus = "0.13.3"
 arc-swap = "1.5.1"
 object_store = "=0.5.4"
@@ -46,7 +43,6 @@ sui-network = { path = "../sui-network" }
 sui-types = { path = "../sui-types" }
 sui-storage = { path = "../sui-storage" }
 sui-config = { path = "../sui-config" }
-sui-json = { path = "../sui-json" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 lru = "0.10"
@@ -60,7 +56,6 @@ move-package.workspace = true
 mysten-common.workspace = true
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
-narwhal-consensus = { path = "../../narwhal/consensus" }
 narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
@@ -89,6 +84,7 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
 narwhal-test-utils = { path = "../../narwhal/test-utils" }
+sui-verifier = { path = "../sui-verifier" }
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }

@@ -14,7 +14,7 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
+use sui_storage::write_ahead_log::{DBWriteAheadLog, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
@@ -35,7 +35,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper, MAX_TX_RECOVERY_RETRY};
+use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper};
 use crate::batch_bls_verifier::*;
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
@@ -49,7 +49,6 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
-use crate::transaction_manager::TransactionManager;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
@@ -58,6 +57,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
+use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::MutexGuard;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -82,6 +82,7 @@ use super::epoch_start_configuration::EpochStartConfigTrait;
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
+const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
 pub struct CertLockGuard(MutexGuard);
@@ -277,6 +278,10 @@ pub struct AuthorityEpochTables {
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
+
+    /// Contains a single key, which overrides the value of
+    /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
+    override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
 }
 
 impl AuthorityEpochTables {
@@ -493,15 +498,6 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
         let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
-
-        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
-            // If the tx has been retried too many times, it could be a poison pill, and we should
-            // prevent the client from continually retrying it.
-            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
-            debug!(?digest, "{}", err);
-            return Err(SuiError::ErrorWhileProcessingCertificate { err });
-        }
-
         Ok(guard)
     }
 
@@ -998,6 +994,37 @@ impl AuthorityPerEpochStore {
         Ok(result)
     }
 
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
+        warn!(
+            epoch = ?self.epoch(),
+            "clearing buffer_stake_for_protocol_upgrade_bps override"
+        );
+        self.tables
+            .override_protocol_upgrade_buffer_stake
+            .remove(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)?;
+        Ok(())
+    }
+
+    pub fn set_override_protocol_upgrade_buffer_stake(&self, new_stake_bps: u64) -> SuiResult {
+        warn!(
+            ?new_stake_bps,
+            epoch = ?self.epoch(),
+            "storing buffer_stake_for_protocol_upgrade_bps override"
+        );
+        self.tables.override_protocol_upgrade_buffer_stake.insert(
+            &OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX,
+            &new_stake_bps,
+        )?;
+        Ok(())
+    }
+
+    pub fn get_override_protocol_upgrade_buffer_stake(&self) -> Option<u64> {
+        self.tables
+            .override_protocol_upgrade_buffer_stake
+            .get(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)
+            .expect("force_protocol_upgrade read cannot fail")
+    }
+
     /// Record most recently advertised capabilities of all authorities
     pub fn record_capabilities(&self, capabilities: &AuthorityCapabilities) -> SuiResult {
         info!("received capabilities {:?}", capabilities);
@@ -1189,7 +1216,6 @@ impl AuthorityPerEpochStore {
         next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
         // Atomically store all elements.
-        // TODO: clear the shared object locks per transaction after ensuring consistency.
         let mut write_batch = self.tables.assigned_shared_object_versions.batch();
 
         let tx_digest = *certificate.digest();
@@ -1475,27 +1501,6 @@ impl AuthorityPerEpochStore {
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
-    }
-
-    /// The transaction passed here went through verification in verify_consensus_transaction.
-    /// This method is called in the exact sequence message are ordered in consensus.
-    /// Errors returned by this call are treated as critical errors and cause node to panic.
-    pub(crate) async fn handle_consensus_transaction<C: CheckpointServiceNotify>(
-        &self,
-        transaction: VerifiedSequencedConsensusTransaction,
-        checkpoint_service: &Arc<C>,
-        transaction_manager: &Arc<TransactionManager>,
-        parent_sync_store: impl ParentSync,
-    ) -> SuiResult {
-        if let Some(certificate) = self
-            .process_consensus_transaction(transaction, checkpoint_service, parent_sync_store)
-            .await?
-        {
-            // The certificate has already been inserted into the pending_certificates table by
-            // process_consensus_transaction() above.
-            transaction_manager.enqueue(vec![certificate], self)?;
-        }
-        Ok(())
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
@@ -1871,8 +1876,18 @@ impl AuthorityPerEpochStore {
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 
-    pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+    pub fn record_is_safe_mode_metric(&self, safe_mode: bool) {
         self.metrics.is_safe_mode.set(safe_mode as i64);
+    }
+
+    pub fn record_checkpoint_builder_is_safe_mode_metric(&self, safe_mode: bool) {
+        if safe_mode {
+            // allow tests to inject a panic here.
+            fail_point!("record_checkpoint_builder_is_safe_mode_metric");
+        }
+        self.metrics
+            .checkpoint_builder_advance_epoch_is_safe_mode
+            .set(safe_mode as i64)
     }
 
     fn record_epoch_total_duration_metric(&self) {

@@ -3,7 +3,7 @@
 
 use anyhow::{bail, ensure};
 use clap;
-use move_command_line_common::values::ParsableValue;
+use move_command_line_common::values::{ParsableValue, ParsedValue};
 use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
 use move_compiler::shared::parse_u128;
 use move_core_types::identifier::Identifier;
@@ -34,6 +34,12 @@ pub struct SuiPublishArgs {
     pub upgradeable: bool,
     #[clap(long = "view-gas-used")]
     pub view_gas_used: bool,
+    #[clap(
+        long = "dependencies",
+        multiple_values(true),
+        multiple_occurrences(false)
+    )]
+    pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -67,6 +73,26 @@ pub struct ConsensusCommitPrologueCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct ProgrammableTransactionCommand {
+    #[clap(long = "sender")]
+    pub sender: Option<String>,
+    #[clap(long = "gas-budget")]
+    pub gas_budget: Option<u64>,
+    #[clap(long = "view-events")]
+    pub view_events: bool,
+    #[clap(long = "view-gas-used")]
+    pub view_gas_used: bool,
+    #[clap(
+        long = "inputs",
+        parse(try_from_str = ParsedValue::parse),
+        takes_value(true),
+        multiple_values(true),
+        multiple_occurrences(true)
+    )]
+    pub inputs: Vec<ParsedValue<SuiExtraValueArgs>>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -74,6 +100,8 @@ pub enum SuiSubcommand {
     TransferObject(TransferObjectCommand),
     #[clap(name = "consensus-commit-prologue")]
     ConsensusCommitPrologue(ConsensusCommitPrologueCommand),
+    #[clap(name = "programmable")]
+    ProgrammableTransaction(ProgrammableTransactionCommand),
 }
 
 #[derive(Debug)]
@@ -145,7 +173,15 @@ impl SuiValue {
         }
     }
 
-    pub(crate) fn into_call_args(
+    pub(crate) fn into_call_arg(self, test_adapter: &SuiTestAdapter) -> anyhow::Result<CallArg> {
+        Ok(match self {
+            SuiValue::Object(fake_id) => CallArg::Object(Self::object_arg(fake_id, test_adapter)?),
+            SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
+            SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
+        })
+    }
+
+    pub(crate) fn into_argument(
         self,
         builder: &mut ProgrammableTransactionBuilder,
         test_adapter: &SuiTestAdapter,

@@ -11,8 +11,8 @@ use config::Committee;
 use consensus::dag::Dag;
 
 use crypto::PublicKey;
-use multiaddr::Multiaddr;
 use mysten_metrics::spawn_logged_monitored_task;
+use mysten_network::Multiaddr;
 use std::{sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
