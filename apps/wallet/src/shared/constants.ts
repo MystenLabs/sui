@@ -14,3 +14,6 @@ export const DEFAULT_NFT_IMAGE =
 
 // number of epochs before earning
 export const NUM_OF_EPOCH_BEFORE_EARNING = 2;
+export const UNSTAKE_REQUEST_EVENT_TYPE =
+    '0x2::validator::UnstakingRequestEvent';
+export const STAKE_REQUEST_EVENT_TYPE = '0x2::validator::StakingRequestEvent';

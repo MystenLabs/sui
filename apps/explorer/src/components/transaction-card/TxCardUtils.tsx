@@ -162,6 +162,7 @@ export const getDataOnTxDigests = (
                 showInput: true,
                 showEffects: true,
                 showEvents: true,
+                showBalanceChanges: true,
             },
         })
         .then((txEffs) =>
@@ -174,25 +175,21 @@ export const getDataOnTxDigests = (
                     const txn = getTransactionKind(txEff)!;
                     const txKind = getTransactionKindName(txn);
                     const recipient = null;
-                    //     getTransferObjectTransaction(txn)?.recipient ||
-                    //     getTransferSuiTransaction(txn)?.recipient;
 
-                    const transfer = getAmount({
-                        txnData: txEff,
-                        suiCoinOnly: true,
-                    })[0];
+                    const transfer = getAmount(txEff);
 
-                    // use only absolute value of sui amount
-                    const suiAmount = transfer?.amount
-                        ? Math.abs(transfer.amount)
-                        : null;
+                    // for txn tables from sender address
+                    const suiTransfer = transfer?.find(
+                        ({ address }) => address === getTransactionSender(txEff)
+                    );
 
                     return {
                         txId: digest,
                         status: getExecutionStatusType(txEff)!,
                         txGas: getTotalGasUsed(txEff),
-                        suiAmount,
-                        coinType: transfer?.coinType || null,
+                        // Since the amount could be negative, we need to use Math.abs
+                        suiAmount: Math.abs(suiTransfer?.amount || 0),
+                        coinType: suiTransfer?.coinType || null,
                         kind: txKind,
                         From: getTransactionSender(txEff),
                         timestamp_ms: txEff.timestampMs,

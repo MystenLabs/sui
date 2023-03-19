@@ -5,8 +5,6 @@ import {
     getExecutionStatusError,
     getExecutionStatusType,
     getTransactionDigest,
-    getTransactionKindName,
-    getTransactionKind,
     getTransactionSender,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
@@ -15,31 +13,16 @@ import { Link } from 'react-router-dom';
 
 import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
+import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { useGetTransferAmount, useGetTxnRecipientAddress } from '_hooks';
+import {
+    UNSTAKE_REQUEST_EVENT_TYPE,
+    STAKE_REQUEST_EVENT_TYPE,
+} from '_src/shared/constants';
 
-import type {
-    SuiAddress,
-    // SuiEvent,
-    SuiTransactionResponse,
-    // TransactionEvents,
-} from '@mysten/sui.js';
-
-// export const getTxnEffectsEventID = (
-//     events: TransactionEvents,
-//     address: string
-// ): string[] => {
-//     return events
-//         ?.map((event: SuiEvent) => {
-//             const data = Object.values(event).find(
-//                 (itm) => itm?.recipient?.AddressOwner === address
-//             );
-//             return data?.objectId;
-//         })
-//         .filter(notEmpty);
-// };
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 
 export function TransactionCard({
     txn,
@@ -48,28 +31,27 @@ export function TransactionCard({
     txn: SuiTransactionResponse;
     address: SuiAddress;
 }) {
-    const transaction = getTransactionKind(txn)!;
     const executionStatus = getExecutionStatusType(txn);
-    getTransactionKindName(transaction);
-
-    // const objectId = useMemo(() => {
-    //     return getTxnEffectsEventID(txn.events!, address)[0];
-    // }, [address, txn.events]);
-
-    const transfer = useGetTransferAmount({
-        txn,
-        activeAddress: address,
-    });
+    const { events, objectChanges, balanceChanges } = txn;
+    const objectId = useMemo(() => {
+        const resp = objectChanges?.find((item) => {
+            if ('owner' in item) {
+                return item.owner === address;
+            }
+            return false;
+        });
+        return resp && 'objectId' in resp ? resp.objectId : null;
+    }, [address, objectChanges]);
 
     // we only show Sui Transfer amount or the first non-Sui transfer amount
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
-        const amountTransfersSui = transfer?.find(
+        const amountTransfersSui = balanceChanges?.find(
             ({ coinType }) => coinType === SUI_TYPE_ARG
         );
 
         // Find non-SUI transfer amount
-        const amountTransfersNonSui = transfer?.find(
+        const amountTransfersNonSui = balanceChanges?.find(
             ({ coinType }) => coinType !== SUI_TYPE_ARG
         );
 
@@ -83,30 +65,53 @@ export function TransactionCard({
                 amountTransfersNonSui?.coinType ||
                 null,
         };
-    }, [transfer]);
+    }, [balanceChanges]);
 
-    const recipientAddress = useGetTxnRecipientAddress({ txn, address });
+    const recipientAddress = useMemo(() => {
+        if (balanceChanges) {
+            const resp = balanceChanges.find(
+                ({ owner }) =>
+                    owner !== 'Immutable' &&
+                    'AddressOwner' in owner &&
+                    owner.AddressOwner !== address
+            );
+            return resp &&
+                resp.owner !== 'Immutable' &&
+                'AddressOwner' in resp.owner
+                ? resp.owner.AddressOwner
+                : null;
+        }
+        // TODO: handle Object transfer
+        return null;
+    }, [balanceChanges, address]);
 
     const isSender = address === getTransactionSender(txn);
 
     const error = getExecutionStatusError(txn);
 
-    // Transition label - depending on the transaction type and amount
-    // Epoch change without amount is delegation object
-    // Special case for staking and unstaking move call transaction,
-    // For other transaction show Sent or Received
-    const txnLabel = useMemo(() => {
-        return isSender ? 'Sent' : 'Received';
-    }, [/*txnKind,transferAmount.amount,*/ isSender]);
+    const stakedTxn = events?.some(
+        ({ type }) => type === STAKE_REQUEST_EVENT_TYPE
+    )
+        ? 'Staked'
+        : null;
 
-    // TODO: Support programmable tx:
-    // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
-    const showSuiSymbol = false;
+    const unstakeTxn = events?.some(
+        ({ type }) => type === UNSTAKE_REQUEST_EVENT_TYPE
+    )
+        ? 'Unstaked'
+        : null;
+
+    const sentRecieveLabel = isSender ? 'Sent' : 'Received';
+
+    const txnLabel = stakedTxn ?? unstakeTxn ?? sentRecieveLabel;
+
+    const showSuiSymbol =
+        unstakeTxn || stakedTxn || transferAmount.coinType === SUI_TYPE_ARG;
 
     const transferAmountComponent = transferAmount.coinType &&
         transferAmount.amount && (
             <CoinBalance
-                amount={Math.abs(transferAmount.amount)}
+                amount={Math.abs(+transferAmount.amount)}
                 coinType={transferAmount.coinType}
             />
         );
@@ -124,8 +129,7 @@ export function TransactionCard({
                 <div className="w-7.5">
                     <TxnIcon
                         txnFailed={executionStatus !== 'success' || !!error}
-                        // TODO: Support programmable transactions variable icons here:
-                        variant="Send"
+                        variant={txnLabel}
                     />
                 </div>
                 <div className="flex flex-col w-full gap-1.5">
@@ -172,9 +176,9 @@ export function TransactionCard({
                             <TxnTypeLabel
                                 address={recipientAddress!}
                                 isSender={isSender}
-                                isTransfer={false}
+                                isTransfer={!!recipientAddress}
                             />
-                            {/* {objectId && <TxnImage id={objectId} />} */}
+                            {objectId && <TxnImage id={objectId} />}
                         </>
                     )}
 

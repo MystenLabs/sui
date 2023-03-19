@@ -4,11 +4,9 @@
 import { ArrowUpRight12 } from '@mysten/icons';
 import {
     getExecutionStatusType,
-    getTransactionKindName,
     getTotalGasUsed,
     getExecutionStatusError,
     SUI_TYPE_ARG,
-    getTransactionKind,
     getTransactionSender,
     getTransactionDigest,
     getGasData,
@@ -26,8 +24,12 @@ import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
-// import { TxnImage } from '_components/transactions-card/TxnImage';
-import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
+import { TxnImage } from '_components/transactions-card/TxnImage';
+import { notEmpty } from '_helpers';
+import {
+    UNSTAKE_REQUEST_EVENT_TYPE,
+    STAKE_REQUEST_EVENT_TYPE,
+} from '_src/shared/constants';
 import { TxnGasSummary } from '_src/ui/app/components/receipt-card/TxnGasSummary';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -38,35 +40,53 @@ type ReceiptCardProps = {
     activeAddress: SuiAddress;
 };
 
-function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { events } = txn;
+export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
+    const { events, balanceChanges, objectChanges } = txn;
     const timestamp = txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
-    const error = useMemo(() => getExecutionStatusError(txn), [txn]);
+    const error = getExecutionStatusError(txn);
     const isSuccessful = executionStatus === 'success';
-    const transaction = getTransactionKind(txn)!;
-    const txnKind = getTransactionKindName(transaction);
 
-    const recipientAddress = useGetTxnRecipientAddress({
-        txn,
-        address: activeAddress,
-    });
+    const objectId = useMemo(() => {
+        const resp = objectChanges?.find((item) => {
+            if ('owner' in item) {
+                return item.owner === activeAddress;
+            }
+            return false;
+        });
+        return resp && 'objectId' in resp ? resp.objectId : null;
+    }, [activeAddress, objectChanges]);
 
-    // const objectId = useMemo(() => {
-    //     return getTxnEffectsEventID(events!, activeAddress)[0];
-    // }, [events, activeAddress]);
+    const amountChange = useMemo(() => {
+        return balanceChanges
+            ?.map(({ amount, coinType, owner }) => {
+                const addressOwner =
+                    owner !== 'Immutable' && 'AddressOwner' in owner
+                        ? owner.AddressOwner
+                        : null;
+                const ObjectOwner =
+                    owner !== 'Immutable' && 'ObjectOwner' in owner
+                        ? owner.ObjectOwner
+                        : null;
+                const isSender =
+                    addressOwner === activeAddress ||
+                    ObjectOwner === activeAddress;
+                if (addressOwner !== activeAddress) {
+                    return {
+                        amount,
+                        coinType,
+                        isSender,
+                        address: addressOwner ?? ObjectOwner,
+                    };
+                }
+                return null;
+            })
+            .filter(notEmpty);
+    }, [activeAddress, balanceChanges]);
 
-    const transferAmount = useGetTransferAmount({
-        txn,
-        activeAddress,
-    });
-
-    const totalSuiAmount = useMemo(() => {
-        const amount = transferAmount?.find(
-            ({ coinType }) => coinType === SUI_TYPE_ARG
-        )?.amount;
-        return amount ? Math.abs(amount) : null;
-    }, [transferAmount]);
+    const totalSuiAmount =
+        amountChange?.find(({ coinType }) => coinType === SUI_TYPE_ARG)
+            ?.amount ?? 0;
 
     const { owner } = getGasData(txn)!;
     const transactionSender = getTransactionSender(txn);
@@ -77,11 +97,11 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const showGasSummary = isSuccessful && isSender && gasTotal;
     const showSponsorInfo = !isSuccessful && isSender && isSponsoredTransaction;
     const stakedTxn = events?.find(
-        ({ type }) => type === '0x2::validator::StakingRequestEvent'
+        ({ type }) => type === STAKE_REQUEST_EVENT_TYPE
     );
 
     const unstakeTxn = events?.find(
-        ({ type }) => type === '0x2::validator::UnstakingRequestEvent'
+        ({ type }) => type === UNSTAKE_REQUEST_EVENT_TYPE
     );
 
     let txnGasSummary: JSX.Element | undefined;
@@ -93,7 +113,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         txnGasSummary = (
             <TxnGasSummary
                 totalGas={gasTotal}
-                transferAmount={totalSuiAmount}
+                transferAmount={+totalSuiAmount}
             />
         );
     }
@@ -133,66 +153,60 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             </Text>
                         </div>
                     )}
-                    {stakedTxn ? <StakeTxnCard event={stakedTxn} /> : null}
-                    {unstakeTxn ? <UnStakeTxnCard event={unstakeTxn} /> : null}
 
-                    <>
-                        {/* {objectId && (
-                            <TxnImage
-                                id={objectId}
-                                actionLabel={nftObjectLabel}
-                            />
-                        )} */}
-
-                        {transferAmount && transferAmount.length > 0
-                            ? transferAmount.map(
-                                  ({ amount, coinType, receiverAddress }) => {
-                                      return (
-                                          <div
-                                              key={coinType + receiverAddress}
-                                              className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
-                                          >
-                                              <TxnAmount
-                                                  amount={amount}
-                                                  label={txnStatusText}
-                                                  coinType={coinType}
-                                              />
-
-                                              <TxnAddress
-                                                  address={recipientAddress!}
-                                                  label={
-                                                      isSender ? 'To' : 'From'
-                                                  }
-                                              />
-                                          </div>
-                                      );
-                                  }
-                              )
-                            : null}
-
-                        {showSponsorInfo && (
-                            <div className="flex justify-between items-center py-3.5">
-                                <Text
-                                    variant="p1"
-                                    weight="medium"
-                                    color="steel-darker"
-                                >
-                                    Sponsor
-                                </Text>
-                                <TxnAddressLink address={owner} />
-                            </div>
-                        )}
-
-                        {txnKind === 'ChangeEpoch' &&
-                            !transferAmount?.length && (
-                                <TxnAddress
-                                    address={recipientAddress!}
-                                    label="From"
+                    {stakedTxn || unstakeTxn ? (
+                        stakedTxn ? (
+                            <StakeTxnCard event={stakedTxn} />
+                        ) : (
+                            <UnStakeTxnCard event={unstakeTxn!} />
+                        )
+                    ) : (
+                        <>
+                            {objectId && (
+                                <TxnImage
+                                    id={objectId}
+                                    actionLabel={activeAddress}
                                 />
                             )}
 
-                        {txnGasSummary}
-                    </>
+                            {amountChange?.map(
+                                ({ amount, coinType, address, isSender }) => {
+                                    return (
+                                        <div
+                                            key={coinType + address}
+                                            className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
+                                        >
+                                            <TxnAmount
+                                                amount={amount}
+                                                label={txnStatusText}
+                                                coinType={coinType}
+                                            />
+
+                                            <TxnAddress
+                                                address={address!}
+                                                label={isSender ? 'To' : 'From'}
+                                            />
+                                        </div>
+                                    );
+                                }
+                            )}
+                        </>
+                    )}
+
+                    {showSponsorInfo && (
+                        <div className="flex justify-between items-center py-3.5">
+                            <Text
+                                variant="p1"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Sponsor
+                            </Text>
+                            <TxnAddressLink address={owner} />
+                        </div>
+                    )}
+
+                    {txnGasSummary}
 
                     <div className="flex gap-1.5 w-full py-3.5">
                         <ExplorerLink
@@ -211,5 +225,3 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         </div>
     );
 }
-
-export default ReceiptCard;

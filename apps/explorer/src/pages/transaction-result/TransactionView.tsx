@@ -124,30 +124,35 @@ export function TransactionView({
 
     const [recipientsPageNumber, setRecipientsPageNumber] = useState(1);
 
-    const coinTransfer = useMemo(
-        () =>
-            getAmount({
-                txnData: transaction,
-            }),
-        [transaction]
+    const coinTransfer = getAmount(transaction);
+
+    // Primary amount from sender and SUI coin type
+    const transferAmount = coinTransfer?.find(
+        ({ address }) => address === sender
     );
+    // casting here to avoid address type being null
+    // Depending on the size of coinBalance, we may need to use a different approach
+    const coinTranferRecipients =
+        (coinTransfer?.filter(
+            ({ address }) => address && address !== sender
+        ) as {
+            address: string;
+            amount: number;
+            coinType: string;
+        }[]) || null;
 
     const recipients = useMemo(() => {
         const startAt = (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE;
         const endAt = recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE;
-        return coinTransfer.slice(startAt, endAt);
-    }, [coinTransfer, recipientsPageNumber]);
+        return coinTranferRecipients?.slice(startAt, endAt);
+    }, [coinTranferRecipients, recipientsPageNumber]);
 
-    // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
-    // use absolute value
-    const totalRecipientsCount = coinTransfer.length;
-    const transferAmount = coinTransfer?.[0]?.amount
-        ? Math.abs(coinTransfer[0].amount)
-        : null;
+    // show amount for sender and SUI coin type
+    const totalRecipientsCount = coinTransfer?.length;
 
     const [formattedAmount, symbol] = useFormatCoin(
-        transferAmount,
-        coinTransfer?.[0]?.coinType
+        Math.abs(transferAmount?.amount || 0),
+        transferAmount?.coinType
     );
 
     // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
@@ -229,9 +234,7 @@ export function TransactionView({
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {coinTransfer.length === 1 &&
-                                coinTransfer?.[0]?.coinType &&
-                                formattedAmount ? (
+                                {formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={formattedAmount}
@@ -256,7 +259,7 @@ export function TransactionView({
                                 <div className="mt-10">
                                     <SenderTransactionAddress sender={sender} />
                                 </div>
-                                {recipients.length > 0 && (
+                                {recipients?.length > 0 && (
                                     <div className="mt-10">
                                         <RecipientTransactionAddresses
                                             recipients={recipients}
@@ -264,19 +267,24 @@ export function TransactionView({
                                     </div>
                                 )}
                                 <div className="mt-5 flex w-full max-w-lg">
-                                    {totalRecipientsCount >
-                                        MAX_RECIPIENTS_PER_PAGE && (
-                                        <Pagination
-                                            totalItems={totalRecipientsCount}
-                                            itemsPerPage={
-                                                MAX_RECIPIENTS_PER_PAGE
-                                            }
-                                            currentPage={recipientsPageNumber}
-                                            onPagiChangeFn={
-                                                setRecipientsPageNumber
-                                            }
-                                        />
-                                    )}
+                                    {totalRecipientsCount &&
+                                        totalRecipientsCount >
+                                            MAX_RECIPIENTS_PER_PAGE && (
+                                            <Pagination
+                                                totalItems={
+                                                    totalRecipientsCount
+                                                }
+                                                itemsPerPage={
+                                                    MAX_RECIPIENTS_PER_PAGE
+                                                }
+                                                currentPage={
+                                                    recipientsPageNumber
+                                                }
+                                                onPagiChangeFn={
+                                                    setRecipientsPageNumber
+                                                }
+                                            />
+                                        )}
                                 </div>
                             </section>
 
