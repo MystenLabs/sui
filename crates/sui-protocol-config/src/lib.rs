@@ -155,7 +155,7 @@ pub struct ProtocolConfig {
     /// Maximum size of serialized transaction effects for system transactions.
     max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
 
-    /// Maximum number of gas payment objets for a transaction.
+    /// Maximum number of gas payment objects for a transaction.
     max_gas_payment_objects: Option<u32>,
 
     /// Maximum number of modules in a Publish transaction.
@@ -240,10 +240,10 @@ pub struct ProtocolConfig {
     max_num_deleted_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
-    max_num_transfered_move_object_ids: Option<u64>,
+    max_num_transferred_move_object_ids: Option<u64>,
 
     /// Maximum number of IDs that a single system transaction can transfer. Enforced by the VM during execution.
-    max_num_transfered_move_object_ids_system_tx: Option<u64>,
+    max_num_transferred_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
@@ -496,12 +496,12 @@ impl ProtocolConfig {
         self.max_num_deleted_move_object_ids_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_transfered_move_object_ids(&self) -> u64 {
-        self.max_num_transfered_move_object_ids
+    pub fn max_num_transferred_move_object_ids(&self) -> u64 {
+        self.max_num_transferred_move_object_ids
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_transfered_move_object_ids_system_tx(&self) -> u64 {
-        self.max_num_transfered_move_object_ids_system_tx
+    pub fn max_num_transferred_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_transferred_move_object_ids_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_event_emit_size(&self) -> u64 {
@@ -717,7 +717,7 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
-                // will be overwitten before being returned
+                // will be overwritten before being returned
                 version,
 
                 // All flags are disabled in V1
@@ -755,8 +755,8 @@ impl ProtocolConfig {
                 max_num_new_move_object_ids_system_tx: Some(2048 * 16),
                 max_num_deleted_move_object_ids: Some(2048),
                 max_num_deleted_move_object_ids_system_tx: Some(2048 * 16),
-                max_num_transfered_move_object_ids: Some(2048),
-                max_num_transfered_move_object_ids_system_tx: Some(2048 * 16),
+                max_num_transferred_move_object_ids: Some(2048),
+                max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
                 max_event_emit_size: Some(250 * 1024),
                 max_move_vector_len: Some(256 * 1024),
                 object_runtime_max_num_cached_objects: Some(1000),

@@ -60,13 +60,13 @@ async fn main() -> Result<()> {
     };
 
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
-    let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
+    let max_num_transferred_move_object_ids = protocol_config.max_num_transferred_move_object_ids();
 
     if (opts.gas_request_chunk_size > max_num_new_move_object_ids)
-        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids)
+        || (opts.gas_request_chunk_size > max_num_transferred_move_object_ids)
     {
         eprintln!(
-            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transferred_move_object_ids}",
         );
     }
 
