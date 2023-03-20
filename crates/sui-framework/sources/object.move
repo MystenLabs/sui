@@ -50,10 +50,10 @@ module sui::object {
 
     // === id ===
 
-    /// Create an `ID`. Not to be mistaken for `object::new` which
+    /// Create an `ID` from an unused object address. Not to be mistaken for `object::new` which
     /// generates a new UID.
-    public fun new_id(ctx: &mut TxContext): ID {
-        ID { bytes: tx_context::new_object(ctx) }
+    public fun fresh_id(ctx: &mut TxContext): ID {
+        ID { bytes: tx_context::fresh_object_address(ctx) }
     }
 
     /// Get the raw bytes of a `ID`
@@ -121,7 +121,7 @@ module sui::object {
     /// This is the only way to create `UID`s.
     public fun new(ctx: &mut TxContext): UID {
         UID {
-            id: ID { bytes: tx_context::new_object(ctx) },
+            id: ID { bytes: tx_context::fresh_object_address(ctx) },
         }
     }
 

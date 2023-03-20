@@ -367,7 +367,7 @@ module sui::transfer_policy_test {
         let (policy, cap) = prepare(ctx);
 
         // time to make a new transfer request
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, object::fresh_id(ctx), ctx);
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -382,7 +382,7 @@ module sui::transfer_policy_test {
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, object::fresh_id(ctx), ctx);
 
         dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
         policy::confirm_request(&policy, request);
@@ -402,7 +402,7 @@ module sui::transfer_policy_test {
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, object::fresh_id(ctx), ctx);
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -419,7 +419,7 @@ module sui::transfer_policy_test {
         dummy_policy::set(&mut policy, &cap);
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, object::fresh_id(ctx), ctx);
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -434,7 +434,7 @@ module sui::transfer_policy_test {
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, object::fresh_id(ctx), ctx);
 
         // try to add receipt from another rule
         malicious_policy::cheat(&mut request);
