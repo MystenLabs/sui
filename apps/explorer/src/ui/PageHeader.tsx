@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CopyNew24, Flag16 } from '@mysten/icons';
+import { CopyNew24, Flag16, Nft16 } from '@mysten/icons';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
 import { Heading } from './Heading';
-import { ReactComponent as ImageIcon } from './icons/image.svg';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
 
@@ -27,7 +26,7 @@ export interface PageHeaderProps {
 const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
     Transaction: CallIcon,
     Checkpoint: Flag16,
-    Object: ImageIcon,
+    Object: Nft16,
     Package: CallIcon,
     Address: () => (
         <SenderIcon
@@ -50,7 +49,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     return (
         <div data-testid="pageheader">
             <div className="mb-3 flex items-center gap-2">
-                {Icon && <Icon className="text-steel" />}
+                {Icon && <Icon className="text-steel-dark" />}
                 <Heading variant="heading4/semibold" color="steel-darker">
                     {type}
                 </Heading>
