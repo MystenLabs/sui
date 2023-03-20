@@ -16,6 +16,7 @@ use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use tracing::info;
+use move_core_types::language_storage::StructTag;
 
 use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent};
@@ -423,6 +424,182 @@ impl IndexerStore for PgIndexerStore {
             None => Ok(ObjectRead::NotExists(object_id)),
             Some(o) => o.try_into_object_read(&self.module_cache),
         }
+    }
+
+    fn get_all_objects_page(
+        &self,
+        cursor: Option<ObjectID>,
+        limit: usize,
+        is_descending: bool,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+
+        let objects: Vec<Object> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                let mut boxed_query = objects_dsl::objects.into_boxed();
+
+                if let Some(checkpoint) = at_checkpoint {
+                    match checkpoint {
+                        CheckpointId::SequenceNumber(sequence_number) => {
+                            boxed_query = boxed_query.filter(objects_dsl::checkpoint.eq(sequence_number as i64));
+                        }
+                        CheckpointId::Digest(_digest) => {
+                            // TODO: do we take in digest?
+                        }
+                    }
+                }
+
+                if is_descending {
+                    boxed_query = boxed_query
+                        .order(objects_dsl::object_id.desc())
+                } else {
+                    boxed_query = boxed_query
+                        .order(objects_dsl::object_id.asc())
+                }
+
+                if let Some(cursor) = cursor {
+                    boxed_query.filter(objects_dsl::object_id.lt(cursor.to_string()))
+                    .limit((limit) as i64)
+                    .load::<Object>(conn)
+                } else {
+                    boxed_query
+                    .limit((limit) as i64)
+                    .load::<Object>(conn)
+                }
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading objects with cursor (object id: {:?}) and limit {} and err: {:?}",
+                    cursor, limit, e
+                ))
+            })?;
+
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(&self.module_cache))
+            .collect()
+    }
+
+    fn get_all_objects_page_by_owner(
+        &self,
+        cursor: Option<ObjectID>,
+        owner: SuiAddress,
+        limit: usize,
+        is_descending: bool,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+
+        let objects: Vec<Object> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                let mut boxed_query = objects_dsl::objects.into_boxed();
+
+                if let Some(checkpoint) = at_checkpoint {
+                    match checkpoint {
+                        CheckpointId::SequenceNumber(sequence_number) => {
+                            boxed_query = boxed_query.filter(objects_dsl::checkpoint.eq(sequence_number as i64));
+                        }
+                        CheckpointId::Digest(_digest) => {
+                            // TODO: do we take in digest?
+                        }
+                    }
+                }
+                if is_descending {
+                    boxed_query = boxed_query
+                        .order(objects_dsl::object_id.desc())
+                } else {
+                    boxed_query = boxed_query
+                        .order(objects_dsl::object_id.asc())
+                }
+
+                if let Some(cursor) = cursor {
+                    boxed_query
+                    .filter(objects_dsl::owner_address.eq(owner.to_string()))
+                    .filter(objects_dsl::object_id.lt(cursor.to_string()))
+                    .limit((limit) as i64)
+                    .load::<Object>(conn)
+                } else {
+                    boxed_query.filter(objects_dsl::owner_address.eq(owner.to_string()))
+                    .limit((limit) as i64)
+                    .load::<Object>(conn)
+                }
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading objects with cursor (object id: {:?}) and limit {} and err: {:?}",
+                    cursor, limit, e
+                ))
+            })?;
+
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(&self.module_cache))
+            .collect()
+    }
+
+    fn get_all_objects_page_by_type(
+        &self,
+        cursor: Option<ObjectID>,
+        type_: StructTag,
+        limit: usize,
+        is_descending: bool,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+
+        let objects: Vec<Object> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                let mut boxed_query = objects_dsl::objects.into_boxed();
+                if let Some(checkpoint) = at_checkpoint {
+                    match checkpoint {
+                        CheckpointId::SequenceNumber(sequence_number) => {
+                            boxed_query = boxed_query.filter(objects_dsl::checkpoint.eq(sequence_number as i64));
+                        }
+                        CheckpointId::Digest(_digest) => {
+                            // TODO: do we take in digest?
+                        }
+                    }
+                }
+
+                if is_descending {
+                    boxed_query = boxed_query
+                        .order(objects_dsl::object_id.desc())
+                } else {
+                    boxed_query = boxed_query
+                        .order(objects_dsl::object_id.asc())
+                }
+
+                if let Some(cursor) = cursor {
+                    boxed_query
+                    .filter(objects_dsl::object_type.eq(type_.to_string()))
+                    .filter(objects_dsl::object_id.lt(cursor.to_string()))
+                    .limit((limit) as i64)
+                    .load::<Object>(conn)
+                } else {
+                    boxed_query.filter(objects_dsl::object_type.eq(type_.to_string()))
+                    .limit((limit) as i64)
+                    .load::<Object>(conn)
+                }
+
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading objects with cursor (object id: {:?}) and limit {} and err: {:?}",
+                    cursor, limit, e
+                ))
+            })?;
+
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(&self.module_cache))
+            .collect()
     }
 
     fn get_move_call_sequence_by_digest(

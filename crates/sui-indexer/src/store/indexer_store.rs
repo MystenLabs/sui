@@ -3,11 +3,12 @@
 
 use async_trait::async_trait;
 
+use move_core_types::language_storage::StructTag;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiObjectData,
     SuiTransactionResponseOptions,
 };
-use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::error::SuiError;
 use sui_types::event::EventID;
 use sui_types::object::ObjectRead;
@@ -46,6 +47,32 @@ pub trait IndexerStore {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
+
+    fn get_all_objects_page(
+        &self,
+        cursor: Option<ObjectID>,
+        limit: usize,
+        is_descending: bool,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<Vec<ObjectRead>, IndexerError>;
+
+    fn get_all_objects_page_by_owner(
+        &self,
+        cursor: Option<ObjectID>,
+        owner: SuiAddress,
+        limit: usize,
+        is_descending: bool,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<Vec<ObjectRead>, IndexerError>;
+
+    fn get_all_objects_page_by_type(
+        &self,
+        cursor: Option<ObjectID>,
+        type_: StructTag,
+        limit: usize,
+        is_descending: bool,
+        at_checkpoint: Option<CheckpointId>,
+    ) -> Result<Vec<ObjectRead>, IndexerError>;
 
     fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;
 

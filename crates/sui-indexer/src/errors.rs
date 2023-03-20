@@ -6,7 +6,7 @@ use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
 use sui_types::base_types::ObjectIDParseError;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 
 #[derive(Debug, Error)]
 pub enum IndexerError {

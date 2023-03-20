@@ -54,7 +54,7 @@ use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 
 use crate::api::{cap_page_limit, validate_limit, ReadApiServer};
 use crate::api::{
-    MAX_GET_OWNED_OBJECT_LIMIT, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+    QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, QUERY_MAX_RESULT_LIMIT_OBJECTS,
 };
 use crate::error::Error;
 use crate::{
@@ -132,7 +132,7 @@ impl ReadApiServer for ReadApi {
             ))
             .into());
         }
-        let limit = validate_limit(limit, MAX_GET_OWNED_OBJECT_LIMIT)?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
 
