@@ -46,7 +46,6 @@ module sui::voting_power {
         let (info_list, remaining_power) = init_voting_power_info(validators, threshold);
         adjust_voting_power(&mut info_list, threshold, remaining_power);
         update_voting_power(validators, info_list);
-        // TODO: We could consider removing this once we are confident about the code.
         check_invariants(validators);
     }
 
