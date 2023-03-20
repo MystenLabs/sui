@@ -81,7 +81,7 @@ To view usage details for the Full node running in Docker, run the following com
 docker stats
 ```
 
-This command shows a live data stream of the Docker container resource usage, such as CPU and memory. To view data for all contains, use the following command:
+This command shows a live data stream of the Docker container resource usage, such as CPU and memory. To view data for all containers, use the following command:
 ```shell
 docker stats -a
 ```
