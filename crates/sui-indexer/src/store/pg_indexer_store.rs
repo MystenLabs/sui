@@ -1100,11 +1100,11 @@ WHERE e1.epoch = e2.epoch
 
     fn get_epochs(&self, id: EpochId, limit: usize) -> Result<Vec<EpochInfo>, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-        let epoch_info :Vec<DBEpochInfo> =   pg_pool_conn
+        let epoch_info :Vec<DBEpochInfo> = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                epochs_dsl::epochs.filter(epochs::epoch.ge(id as i64))
+                epochs_dsl::epochs.filter(epochs::epoch.gt(id as i64))
                     .limit(limit as i64).load(conn)
             })
             .map_err(|e| {
@@ -1114,11 +1114,11 @@ WHERE e1.epoch = e2.epoch
                 ))
             })?;
 
-        let validators : Vec<DBValidatorSummary> =   pg_pool_conn
+        let validators : Vec<DBValidatorSummary> = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                validators::dsl::validators.filter(validators::epoch.ge(id as i64)).load(conn)
+                validators::dsl::validators.filter(validators::epoch.gt(id as i64)).load(conn)
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(

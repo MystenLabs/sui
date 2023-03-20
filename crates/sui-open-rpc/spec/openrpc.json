@@ -1910,7 +1910,7 @@
           "name": "Extended API"
         }
       ],
-      "description": "Return all Coin objects owned by an address.",
+      "description": "Return current epoch info",
       "params": [],
       "result": {
         "name": "EpochInfo",
@@ -1927,6 +1927,7 @@
           "name": "Extended API"
         }
       ],
+      "description": "Return a list of epoch info",
       "params": [
         {
           "name": "cursor",

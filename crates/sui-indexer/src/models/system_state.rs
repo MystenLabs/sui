@@ -70,12 +70,6 @@ impl From<SuiSystemStateSummary> for DBSystemStateSummary {
     }
 }
 
-impl Into<SuiSystemStateSummary> for DBSystemStateSummary {
-    fn into(self) -> SuiSystemStateSummary {
-        todo!()
-    }
-}
-
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
 #[diesel(table_name = validators)]
 pub struct DBValidatorSummary {
