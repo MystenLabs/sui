@@ -102,6 +102,51 @@ impl ExecutionMode for Genesis {
     }
 
     fn allow_arbitrary_values() -> bool {
+        true
+    }
+
+    fn packages_are_predefined() -> bool {
+        true
+    }
+
+    fn empty_arguments() -> Self::ArgumentUpdates {}
+
+    fn empty_results() -> Self::ExecutionResults {}
+
+    fn add_argument_update<E: fmt::Debug, S: StorageView<E>>(
+        _context: &mut ExecutionContext<E, S>,
+        _acc: &mut Self::ArgumentUpdates,
+        _arg: Argument,
+        _new_value: &Value,
+    ) -> Result<(), ExecutionError> {
+        Ok(())
+    }
+
+    fn finish_command<E: fmt::Debug, S: StorageView<E>>(
+        _context: &mut ExecutionContext<E, S>,
+        _acc: &mut Self::ExecutionResults,
+        _argument_updates: Self::ArgumentUpdates,
+        _command_result: &[Value],
+    ) -> Result<(), ExecutionError> {
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct System;
+
+/// Execution mode for executing a system transaction, including the epoch change
+/// transaction and the consensus commit prologue. In this mode, we allow calls to
+/// any function bypassing visibility.
+impl ExecutionMode for System {
+    type ArgumentUpdates = ();
+    type ExecutionResults = ();
+
+    fn allow_arbitrary_function_calls() -> bool {
+        true
+    }
+
+    fn allow_arbitrary_values() -> bool {
         false
     }
 

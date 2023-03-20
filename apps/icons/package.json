@@ -12,9 +12,9 @@
   "devDependencies": {
     "@svgr/cli": "^6.5.1",
     "@svgr/core": "^6.5.1",
-    "@types/react": "^18.0.26",
-    "rimraf": "^3.0.2",
+    "@types/react": "^18.0.28",
     "react": "^18.2.0",
+    "rimraf": "^4.4.0",
     "typescript": "^4.9.4"
   }
 }

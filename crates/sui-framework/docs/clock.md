@@ -8,13 +8,15 @@ shared object that is created at 0x6 during genesis.
 
 
 -  [Resource `Clock`](#0x2_clock_Clock)
+-  [Constants](#@Constants_0)
 -  [Function `timestamp_ms`](#0x2_clock_timestamp_ms)
 -  [Function `create`](#0x2_clock_create)
--  [Function `set_timestamp`](#0x2_clock_set_timestamp)
+-  [Function `consensus_commit_prologue`](#0x2_clock_consensus_commit_prologue)
 
 
 <pre><code><b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
+<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
 
 
@@ -63,6 +65,21 @@ input parameter, unless it is passed by immutable reference.
 
 </details>
 
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_clock_ENotSystemAddress"></a>
+
+Sender is not @0x0 the system address.
+
+
+<pre><code><b>const</b> <a href="clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x2_clock_timestamp_ms"></a>
 
 ## Function `timestamp_ms`
@@ -97,7 +114,7 @@ Create and share the singleton Clock -- this function is
 called exactly once, during genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock_create">create</a>()
+<pre><code><b>fun</b> <a href="clock.md#0x2_clock_create">create</a>(ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -106,7 +123,9 @@ called exactly once, during genesis.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock_create">create</a>() {
+<pre><code><b>fun</b> <a href="clock.md#0x2_clock_create">create</a>(ctx: &TxContext) {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
+
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="clock.md#0x2_clock_Clock">Clock</a> {
         id: <a href="object.md#0x2_object_clock">object::clock</a>(),
         // Initialised <b>to</b> zero, but set <b>to</b> a real timestamp by a
@@ -121,15 +140,13 @@ called exactly once, during genesis.
 
 </details>
 
-<a name="0x2_clock_set_timestamp"></a>
+<a name="0x2_clock_consensus_commit_prologue"></a>
 
-## Function `set_timestamp`
-
-Set the Clock's timestamp -- this function should only be called by
-<code>sui::system_state::consensus_commit_prologue</code>.
+## Function `consensus_commit_prologue`
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock_set_timestamp">set_timestamp</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: u64)
+
+<pre><code><b>fun</b> <a href="clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: u64, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -138,7 +155,14 @@ Set the Clock's timestamp -- this function should only be called by
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock_set_timestamp">set_timestamp</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">Clock</a>, timestamp_ms: u64) {
+<pre><code><b>fun</b> <a href="clock.md#0x2_clock_consensus_commit_prologue">consensus_commit_prologue</a>(
+    <a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">Clock</a>,
+    timestamp_ms: u64,
+    ctx: &TxContext,
+) {
+    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
+
     <a href="clock.md#0x2_clock">clock</a>.timestamp_ms = timestamp_ms
 }
 </code></pre>

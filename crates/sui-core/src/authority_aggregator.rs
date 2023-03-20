@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
-    NetworkAuthorityClient,
+    make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
+    AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -12,7 +12,7 @@ use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
-use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_config::NetworkConfig;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
@@ -431,14 +431,13 @@ impl<A> AuthorityAggregator<A> {
         disallow_missing_intermediate_committees: bool,
     ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
         let network_clients =
-            make_network_authority_client_sets_from_committee(&committee, network_config).map_err(
-                |err| SuiError::GenericAuthorityError {
+            make_network_authority_clients_with_network_config(&committee, network_config)
+                .map_err(|err| SuiError::GenericAuthorityError {
                     error: format!(
                         "Failed to make authority clients from committee {committee}, err: {:?}",
                         err
                     ),
-                },
-            )?;
+                })?;
 
         let safe_clients = network_clients
             .into_iter()
@@ -543,7 +542,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         // tolerate it as long as we have 2f+1 good validators.
         // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
-            make_network_authority_client_sets_from_committee(&committee, &net_config)?;
+            make_network_authority_clients_with_network_config(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
             committee.committee,
             committee_store.clone(),
@@ -1028,9 +1027,9 @@ where
                                 ReduceOutput::Success(result)
                             }
                             Ok(None) => {
-                                // When the result is none, it is possible that the 
-                                // non_retryable_stake had been incremented due to 
-                                // failed individual signature verification. 
+                                // When the result is none, it is possible that the
+                                // non_retryable_stake had been incremented due to
+                                // failed individual signature verification.
                                 if state.non_retryable_stake >= validity_threshold {
                                     state.retryable = false;
                                     ReduceOutput::Failed(state)
@@ -1418,9 +1417,9 @@ where
                     {
                         Ok(Some(effects)) => ReduceOutput::Success(effects),
                         Ok(None) => {
-                            // When the result is none, it is possible that the 
-                            // non_retryable_stake had been incremented due to 
-                            // failed individual signature verification. 
+                            // When the result is none, it is possible that the
+                            // non_retryable_stake had been incremented due to
+                            // failed individual signature verification.
                             if state.non_retryable_stake >= validity {
                                 state.retryable = false;
                                 ReduceOutput::Failed(state)
@@ -1653,31 +1652,36 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         AuthorityAggregator<NetworkAuthorityClient>,
         BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
     )> {
-        let validator_info = if let Some(network_config) = self.network_config {
-            network_config.validator_set()
+        let genesis = if let Some(network_config) = self.network_config {
+            &network_config.genesis
         } else if let Some(genesis) = self.genesis {
-            genesis.validator_set()
+            genesis
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = Committee::new(0, ValidatorInfo::voting_rights(&validator_info));
+        let committee = genesis.committee_with_network();
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();
         }
 
-        let auth_clients = make_authority_clients(
-            &validator_info,
+        let auth_clients = make_authority_clients_with_timeout_config(
+            &committee,
             DEFAULT_CONNECT_TIMEOUT_SEC,
             DEFAULT_REQUEST_TIMEOUT_SEC,
-        );
+        )?;
         let committee_store = if let Some(committee_store) = self.committee_store {
             committee_store
         } else {
-            Arc::new(CommitteeStore::new_for_testing(&committee))
+            Arc::new(CommitteeStore::new_for_testing(&committee.committee))
         };
         Ok((
-            AuthorityAggregator::new(committee, committee_store, auth_clients.clone(), registry),
+            AuthorityAggregator::new(
+                committee.committee,
+                committee_store,
+                auth_clients.clone(),
+                registry,
+            ),
             auth_clients,
         ))
     }

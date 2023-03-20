@@ -62,6 +62,7 @@
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
@@ -114,6 +115,12 @@ A list of system config parameters.
 </dt>
 <dd>
  The duration of an epoch, in milliseconds.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -215,6 +222,12 @@ The top-level object containing all information of the Sui system.
 </dt>
 <dd>
  Unix timestamp of the current epoch start
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -513,12 +526,14 @@ This function will be called only once in genesis.
         parameters: <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SystemParameters">SystemParameters</a> {
             governance_start_epoch,
             epoch_duration_ms,
+            extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(stake_subsidy_fund, initial_stake_subsidy_amount),
+        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(stake_subsidy_fund, initial_stake_subsidy_amount, ctx),
         safe_mode: <b>false</b>,
         epoch_start_timestamp_ms,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     };
     system_state
 }
@@ -581,10 +596,8 @@ To produce a valid PoP, run [fn test_proof_of_possession].
         p2p_address,
         primary_address,
         worker_address,
-        <a href="_none">option::none</a>(),
         gas_price,
         commission_rate,
-        <b>false</b>, // not an initial <a href="validator.md#0x2_validator">validator</a> active at <a href="genesis.md#0x2_genesis">genesis</a>
         ctx
     );
 
@@ -1670,7 +1683,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, computation_reward: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_rebate_amount: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1683,15 +1696,15 @@ gas coins.
     self: &<b>mut</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>,
     new_epoch: u64,
     next_protocol_version: u64,
-    storage_charge: u64,
-    computation_charge: u64,
-    storage_rebate: u64,
+    storage_reward: Balance&lt;SUI&gt;,
+    computation_reward: Balance&lt;SUI&gt;,
+    storage_rebate_amount: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x2_validator">validator</a>, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &<b>mut</b> TxContext,
-) {
+) : Balance&lt;SUI&gt; {
     self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
     <b>let</b> bps_denominator_u64 = (<a href="sui_system_state_inner.md#0x2_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u64);
@@ -1706,8 +1719,8 @@ gas coins.
     <b>let</b> storage_fund_balance = <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund);
     <b>let</b> total_stake = storage_fund_balance + total_validators_stake;
 
-    <b>let</b> storage_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(storage_charge);
-    <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
+    <b>let</b> storage_charge = <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_reward);
+    <b>let</b> computation_charge = <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward);
 
     // Include stake subsidy in the rewards given out <b>to</b> validators and stakers.
     // Delay distributing any stake subsidies until after `governance_start_epoch`.
@@ -1748,10 +1761,10 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
-        self.parameters.governance_start_epoch,
         <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>,
         <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>,
         <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>,
+        self.parameters.governance_start_epoch,
         ctx,
     );
 
@@ -1772,8 +1785,8 @@ gas coins.
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
 
     // Destroy the storage rebate.
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate, 0);
-    <a href="balance.md#0x2_balance_destroy_storage_rebates">balance::destroy_storage_rebates</a>(<a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
+    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate_amount, 0);
+    <b>let</b> storage_rebate = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate_amount);
 
     <b>let</b> new_total_stake = <a href="validator_set.md#0x2_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
 
@@ -1785,7 +1798,7 @@ gas coins.
             total_stake: new_total_stake,
             storage_charge,
             storage_fund_reinvestment: (storage_fund_reinvestment_amount <b>as</b> u64),
-            storage_rebate,
+            storage_rebate: storage_rebate_amount,
             storage_fund_balance: <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund),
             stake_subsidy_amount,
             total_gas_fees: computation_charge,
@@ -1794,6 +1807,7 @@ gas coins.
         }
     );
     self.safe_mode = <b>false</b>;
+    storage_rebate
 }
 </code></pre>
 

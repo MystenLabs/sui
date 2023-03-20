@@ -8,19 +8,11 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.61"
-bcs = "0.1.4"
-enum_dispatch = "^0.3"
-fdlimit = "0.2.1"
 futures = "0.3.23"
-flexstr = "^0.9"
 serde = { version = "1.0.144", features = ["derive"] }
-serde_json = "1.0.88"
 tokio = { workspace = true, features = ["full", "tracing"] }
-tokio-stream = "^0.1"
 rocksdb = "0.20.1"
 tracing = "0.1.36"
-strum = "^0.24"
-strum_macros = "^0.24"
 anyhow = "1.0.64"
 tempfile = "3.3.0"
 tap = "1.0.1"
@@ -32,15 +24,11 @@ sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 move-core-types.workspace = true
-move-bytecode-utils.workspace = true
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 typed-store.workspace = true
 typed-store-derive.workspace = true
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre = "0.6.8"
-
-fastcrypto = { workspace = true, features = ["copy_key"] }
 
 [dev-dependencies]
 anyhow = "1.0.64"

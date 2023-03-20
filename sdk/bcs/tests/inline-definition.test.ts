@@ -9,7 +9,7 @@ describe("BCS: Inline struct definitions", () => {
     const bcs = new BCS(getSuiMoveConfig());
     const value = {
       t1: "Adam",
-      t2: 1000n,
+      t2: "1000",
       t3: ["aabbcc", "00aa00", "00aaffcc"],
     };
 

@@ -1,17 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::transactions;
-use crate::utils::log_errors_to_pg;
-
 use diesel::prelude::*;
 use diesel::result::Error;
+
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
     SuiTransactionEffectsAPI,
 };
 
 use crate::errors::IndexerError;
+use crate::schema::transactions;
 use crate::schema::transactions::transaction_digest;
 use crate::types::SuiTransactionFullResponse;
 use crate::PgPoolConnection;
@@ -42,6 +41,8 @@ pub struct Transaction {
     pub storage_cost: i64,
     pub storage_rebate: i64,
     pub gas_price: i64,
+    // BCS bytes of SenderSignedData
+    pub raw_transaction: Vec<u8>,
     pub transaction_content: String,
     pub transaction_effects_content: String,
     pub confirmed_local_execution: Option<bool>,
@@ -51,13 +52,10 @@ pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
     tx_resps: Vec<SuiTransactionFullResponse>,
 ) -> Result<usize, IndexerError> {
-    let new_txn_iter = tx_resps.into_iter().map(|tx| tx.try_into());
-
-    let mut errors = vec![];
-    let new_txns: Vec<Transaction> = new_txn_iter
-        .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
-        .collect();
-    log_errors_to_pg(pg_pool_conn, errors);
+    let new_txns: Vec<Transaction> = tx_resps
+        .into_iter()
+        .map(|tx| tx.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
 
     let txn_commit_result: Result<usize, Error> = pg_pool_conn
         .build_transaction()
@@ -186,6 +184,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             computation_cost: computation_cost as i64,
             storage_cost: storage_cost as i64,
             storage_rebate: storage_rebate as i64,
+            raw_transaction: tx_resp.raw_transaction,
             transaction_content: txn_json,
             transaction_effects_content: txn_effect_json,
             confirmed_local_execution: tx_resp.confirmed_local_execution,
@@ -219,6 +218,7 @@ impl TryInto<SuiTransactionFullResponse> for Transaction {
                 ))
             })?,
             transaction,
+            raw_transaction: self.raw_transaction,
             effects,
             confirmed_local_execution: self.confirmed_local_execution,
             timestamp_ms: self.timestamp_ms as u64,

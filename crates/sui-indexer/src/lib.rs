@@ -15,26 +15,23 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
-
-use errors::IndexerError;
-use mysten_metrics::spawn_monitored_task;
-use sui_core::event_handler::EventHandler;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
-use sui_json_rpc_types::SuiTransactionResponseOptions;
-use sui_sdk::apis::ReadApi as SuiReadApi;
-use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::TransactionDigest;
+use url::Url;
 
 use crate::apis::{
     CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, TransactionBuilderApi, WriteApi,
 };
 use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::store::IndexerStore;
-use crate::types::SuiTransactionFullResponse;
+use errors::IndexerError;
+use mysten_metrics::spawn_monitored_task;
+use sui_core::event_handler::EventHandler;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
+use sui_sdk::{SuiClient, SuiClientBuilder};
 
 pub mod apis;
 pub mod errors;
 mod handlers;
+pub mod indexer_test_utils;
 pub mod metrics;
 pub mod models;
 pub mod processors;
@@ -68,10 +65,27 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
+    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    pub migrated_methods: Vec<String>,
 }
 
 impl IndexerConfig {
-    pub fn default() -> Self {
+    /// returns connection url without the db name
+    pub fn base_connection_url(&self) -> String {
+        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
+        format!(
+            "{}://{}:{}@{}:{}/",
+            url.scheme(),
+            url.username(),
+            url.password().unwrap_or_default(),
+            url.host_str().unwrap_or_default(),
+            url.port().unwrap_or_default()
+        )
+    }
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
         Self {
             db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
@@ -79,6 +93,7 @@ impl IndexerConfig {
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
             rpc_server_port: 9000,
+            migrated_methods: vec![],
         }
     }
 }
@@ -179,7 +194,11 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         .build(config.rpc_client_url.as_str())
         .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
 
-    builder.register_module(ReadApi::new(state.clone(), http_client.clone()))?;
+    builder.register_module(ReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        config.migrated_methods.clone(),
+    ))?;
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
@@ -191,37 +210,4 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         config.rpc_server_port,
     );
     Ok(builder.start(default_socket_addr).await?)
-}
-
-pub async fn multi_get_full_transactions(
-    read_api: &SuiReadApi,
-    digests: Vec<TransactionDigest>,
-) -> Result<Vec<SuiTransactionFullResponse>, IndexerError> {
-    let sui_transactions = read_api
-        .multi_get_transactions_with_options(
-            digests.clone(),
-            SuiTransactionResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_events(),
-        )
-        .await
-        .map_err(|e| {
-            IndexerError::FullNodeReadingError(format!(
-                "Failed to get transactions {:?} with error: {:?}",
-                digests.clone(),
-                e
-            ))
-        })?;
-    let sui_full_transactions: Vec<SuiTransactionFullResponse> = sui_transactions
-        .into_iter()
-        .map(SuiTransactionFullResponse::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            IndexerError::FullNodeReadingError(format!(
-                "Unexpected None value in SuiTransactionFullResponse of digests {:?} with error {:?}",
-                digests, e
-            ))
-        })?;
-    Ok(sui_full_transactions)
 }

@@ -10,7 +10,7 @@ use std::{
 use move_core_types::account_address::AccountAddress;
 use rand::{rngs::StdRng, SeedableRng};
 use sui_config::{
-    genesis::GenesisChainParameters,
+    genesis::GenesisCeremonyParameters,
     genesis_config::{
         AccountConfig, GenesisConfig, ObjectConfigRange, ValidatorConfigInfo, ValidatorGenesisInfo,
     },
@@ -133,7 +133,7 @@ impl Config {
         // Make the genesis configuration file.
         GenesisConfig {
             validator_config_info: Some(validator_config_info),
-            parameters: GenesisChainParameters::new(),
+            parameters: GenesisCeremonyParameters::new(),
             committee_size: instances.len(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,

@@ -57,6 +57,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
+use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::MutexGuard;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -81,6 +82,7 @@ use super::epoch_start_configuration::EpochStartConfigTrait;
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
+const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
 pub struct CertLockGuard(MutexGuard);
@@ -276,6 +278,10 @@ pub struct AuthorityEpochTables {
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilities>,
+
+    /// Contains a single key, which overrides the value of
+    /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
+    override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
 }
 
 impl AuthorityEpochTables {
@@ -986,6 +992,37 @@ impl AuthorityPerEpochStore {
             result.push(signatures);
         }
         Ok(result)
+    }
+
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
+        warn!(
+            epoch = ?self.epoch(),
+            "clearing buffer_stake_for_protocol_upgrade_bps override"
+        );
+        self.tables
+            .override_protocol_upgrade_buffer_stake
+            .remove(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)?;
+        Ok(())
+    }
+
+    pub fn set_override_protocol_upgrade_buffer_stake(&self, new_stake_bps: u64) -> SuiResult {
+        warn!(
+            ?new_stake_bps,
+            epoch = ?self.epoch(),
+            "storing buffer_stake_for_protocol_upgrade_bps override"
+        );
+        self.tables.override_protocol_upgrade_buffer_stake.insert(
+            &OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX,
+            &new_stake_bps,
+        )?;
+        Ok(())
+    }
+
+    pub fn get_override_protocol_upgrade_buffer_stake(&self) -> Option<u64> {
+        self.tables
+            .override_protocol_upgrade_buffer_stake
+            .get(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)
+            .expect("force_protocol_upgrade read cannot fail")
     }
 
     /// Record most recently advertised capabilities of all authorities
@@ -1839,8 +1876,18 @@ impl AuthorityPerEpochStore {
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 
-    pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+    pub fn record_is_safe_mode_metric(&self, safe_mode: bool) {
         self.metrics.is_safe_mode.set(safe_mode as i64);
+    }
+
+    pub fn record_checkpoint_builder_is_safe_mode_metric(&self, safe_mode: bool) {
+        if safe_mode {
+            // allow tests to inject a panic here.
+            fail_point!("record_checkpoint_builder_is_safe_mode_metric");
+        }
+        self.metrics
+            .checkpoint_builder_advance_epoch_is_safe_mode
+            .set(safe_mode as i64)
     }
 
     fn record_epoch_total_duration_metric(&self) {

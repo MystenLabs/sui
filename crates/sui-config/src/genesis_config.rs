@@ -18,7 +18,7 @@ use sui_types::crypto::{
 };
 use sui_types::object::Object;
 
-use crate::genesis::GenesisChainParameters;
+use crate::genesis::GenesisCeremonyParameters;
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
 use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE};
@@ -34,7 +34,7 @@ pub struct ValidatorConfigInfo {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,
-    pub parameters: GenesisChainParameters,
+    pub parameters: GenesisCeremonyParameters,
     pub committee_size: usize,
     pub grpc_load_shed: Option<bool>,
     pub grpc_concurrency_limit: Option<usize>,

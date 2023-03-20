@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getObjectType } from '../../src';
+import { getObjectType, SuiObjectData } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Object Reading API', () => {
@@ -16,19 +16,20 @@ describe('Object Reading API', () => {
     const gasObjects = await toolbox.provider.getOwnedObjects({
       owner: toolbox.address(),
     });
-    expect(gasObjects.length).to.greaterThan(0);
+    expect(gasObjects.data.length).to.greaterThan(0);
   });
 
   it('Get Object', async () => {
     const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
-      gasObjects.map((gasObject) =>
-        toolbox.provider.getObject({
-          id: gasObject['objectId'],
+      gasObjects.map((gasObject) => {
+        const details = gasObject.details as SuiObjectData;
+        return toolbox.provider.getObject({
+          id: details.objectId,
           options: { showType: true },
-        }),
-      ),
+        });
+      }),
     );
     objectInfos.forEach((objectInfo) =>
       expect(getObjectType(objectInfo)).to.equal(
@@ -40,7 +41,10 @@ describe('Object Reading API', () => {
   it('Get Objects', async () => {
     const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
     expect(gasObjects.length).to.greaterThan(0);
-    const gasObjectIds = gasObjects.map((gasObject) => gasObject['objectId']);
+    const gasObjectIds = gasObjects.map((gasObject) => {
+      const details = gasObject.details as SuiObjectData;
+      return details.objectId;
+    });
     const objectInfos = await toolbox.provider.multiGetObjects({
       ids: gasObjectIds,
       options: {

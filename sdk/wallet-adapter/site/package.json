@@ -19,15 +19,15 @@
   "homepage": "https://github.com/shuding/nextra-docs-template#readme",
   "dependencies": {
     "@mysten/wallet-kit": "workspace:*",
-    "next": "^13.0.6",
+    "next": "^13.2.4",
     "nextra": "latest",
     "nextra-theme-docs": "latest",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/node": "18.11.10",
-    "@types/react": "^18.0.26",
-    "typescript": "^4.9.3"
+    "@types/node": "18.15.3",
+    "@types/react": "^18.0.28",
+    "typescript": "^4.9.4"
   }
 }

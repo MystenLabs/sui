@@ -17,6 +17,7 @@ import {
   Struct,
   define,
 } from 'superstruct';
+import { ObjectId } from '../types/common';
 import { COMMAND_TYPE, WellKnownEncoding, create } from './utils';
 
 const option = <T extends Struct<any, any>>(some: T) =>
@@ -103,6 +104,7 @@ export type MakeMoveVecCommand = Infer<typeof MakeMoveVecCommand>;
 export const PublishCommand = object({
   kind: literal('Publish'),
   modules: array(array(integer())),
+  dependencies: array(ObjectId),
 });
 export type PublishCommand = Infer<typeof PublishCommand>;
 
@@ -164,8 +166,8 @@ export const Commands = {
       MergeCoinsCommand,
     );
   },
-  Publish(modules: number[][]): PublishCommand {
-    return create({ kind: 'Publish', modules }, PublishCommand);
+  Publish(modules: number[][], dependencies: ObjectId[]): PublishCommand {
+    return create({ kind: 'Publish', modules, dependencies }, PublishCommand);
   },
   MakeMoveVec({
     type,

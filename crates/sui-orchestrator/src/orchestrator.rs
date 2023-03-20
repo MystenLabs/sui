@@ -500,10 +500,8 @@ impl Orchestrator {
         let mut latest_committee_size = 0;
         while let Some(parameters) = generator.next() {
             display::header(format!("Starting benchmark {i}"));
-            display::config(
-                "Load type",
-                format!("{}% shared objects", &parameters.shared_objects_ratio),
-            );
+            let ratio = &parameters.shared_objects_ratio;
+            display::config("Load type", format!("{ratio}% shared objects"));
             display::config("Parameters", &parameters);
             display::newline();
 

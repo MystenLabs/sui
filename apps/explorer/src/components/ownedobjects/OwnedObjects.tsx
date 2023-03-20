@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
+import {
+    Coin,
+    getObjectFields,
+    getObjectId,
+    PaginatedObjectsResponse,
+    is,
+} from '@mysten/sui.js';
 import { useEffect, useState } from 'react';
 
 import {
@@ -43,8 +49,8 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
 
         req.then((objects) => {
             let ids: string[];
-            if (objects instanceof Array) {
-                ids = objects.map(({ objectId }) => objectId);
+            if (is(objects, PaginatedObjectsResponse)) {
+                ids = objects.data.map((resp) => getObjectId(resp));
             } else {
                 ids = objects.data.map(({ objectId }) => objectId);
             }

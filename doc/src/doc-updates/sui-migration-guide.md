@@ -499,7 +499,7 @@ Effective with release .28, the function names are:
 
 ### Changes to getDelegatedStakes
     
-With the new staking flow introduced in release .28, the `getDelegatedStakes` function returns all of the stakes for an address grouped by validator staking pools, as well as the estimated staking rewards earned so far:
+The `getDelegatedStakes` function has been renamed to `getStakes`. The `getStakes` function returns all of the stakes for an address grouped by validator staking pools, as well as the estimated staking rewards earned so far:
     
 ```rust
     {
@@ -544,6 +544,10 @@ With the new staking flow introduced in release .28, the `getDelegatedStakes` fu
         "id": 1
     }
 ```
+
+### Add getStakesByIds function
+
+With the new `getStakesByIds` it's possible to query the delegated stakes using a vector of staked SUI IDs. The function returns all of the stakes queried, grouped by validator staking pools, as well as the estimated staking rewards earned so far.
 
 ### Secp256k1 derive keypair
     

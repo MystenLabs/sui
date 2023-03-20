@@ -71,6 +71,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
@@ -208,6 +209,20 @@ impl SuiNode {
             cache_metrics,
             batch_verifier_metrics,
         );
+
+        if let Some(override_buffer_stake) =
+            epoch_store.get_override_protocol_upgrade_buffer_stake()
+        {
+            let default_buffer_stake = epoch_store
+                .protocol_config()
+                .buffer_stake_for_protocol_upgrade_bps();
+
+            warn!(
+                ?override_buffer_stake,
+                ?default_buffer_stake,
+                "buffer_stake_for_protocol_upgrade_bps is currently overridden"
+            );
+        }
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
@@ -421,6 +436,20 @@ impl SuiNode {
             .consensus_adapter
             .close_epoch(epoch_store);
         Ok(())
+    }
+
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self, epoch: EpochId) -> SuiResult {
+        self.state
+            .clear_override_protocol_upgrade_buffer_stake(epoch)
+    }
+
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
+        self.state
+            .set_override_protocol_upgrade_buffer_stake(epoch, buffer_stake_bps)
     }
 
     // Testing-only API to start epoch close process.
@@ -838,11 +867,12 @@ impl SuiNode {
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let new_epoch_start_state = self
+            let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
-                .expect("Read Sui System State object cannot fail")
-                .into_epoch_start_state();
+                .expect("Read Sui System State object cannot fail");
+            cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
+            let new_epoch_start_state = latest_system_state.into_epoch_start_state();
             let next_epoch_committee = new_epoch_start_state.get_sui_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
@@ -855,6 +885,8 @@ impl SuiNode {
                 next_epoch,
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
+
+            fail_point_async!("reconfig_delay");
 
             // We save the connection monitor status map regardless of validator / fullnode status
             // so that we don't need to restart the connection monitor every epoch.

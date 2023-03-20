@@ -13,6 +13,10 @@ use sui_types::messages_checkpoint::{
     CheckpointTimestamp, EndOfEpochData,
 };
 
+use crate::Page;
+
+pub type CheckpointPage = Page<Checkpoint, CheckpointSequenceNumber>;
+
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
@@ -26,6 +30,7 @@ pub struct Checkpoint {
     /// checkpoint.
     pub network_total_transactions: u64,
     /// Digest of the previous checkpoint
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_digest: Option<CheckpointDigest>,
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
@@ -35,6 +40,7 @@ pub struct Checkpoint {
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
     pub timestamp_ms: CheckpointTimestamp,
     /// Present only on the final checkpoint of the epoch.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub end_of_epoch_data: Option<EndOfEpochData>,
     /// Transaction digests
     pub transactions: Vec<TransactionDigest>,

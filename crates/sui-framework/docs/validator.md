@@ -16,6 +16,7 @@
 -  [Function `activate`](#0x2_validator_activate)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_stake`](#0x2_validator_request_add_stake)
+-  [Function `request_add_stake_at_genesis`](#0x2_validator_request_add_stake_at_genesis)
 -  [Function `request_withdraw_stake`](#0x2_validator_request_withdraw_stake)
 -  [Function `request_set_gas_price`](#0x2_validator_request_set_gas_price)
 -  [Function `set_candidate_gas_price`](#0x2_validator_set_candidate_gas_price)
@@ -89,6 +90,7 @@
 <b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -107,7 +109,7 @@
 
 
 
-<pre><code><b>struct</b> <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> <b>has</b> store
 </code></pre>
 
 
@@ -247,6 +249,12 @@
 <dd>
 
 </dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
+</dd>
 </dl>
 
 
@@ -322,6 +330,12 @@
 </dt>
 <dd>
  The commission rate of the validator starting the next epoch, in basis point.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -584,7 +598,7 @@ Intended validator is not a candidate one.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="_String">string::String</a>, p2p_address: <a href="_String">string::String</a>, primary_address: <a href="_String">string::String</a>, worker_address: <a href="_String">string::String</a>): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new_metadata">new_metadata</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, image_url: <a href="url.md#0x2_url_Url">url::Url</a>, project_url: <a href="url.md#0x2_url_Url">url::Url</a>, net_address: <a href="_String">string::String</a>, p2p_address: <a href="_String">string::String</a>, primary_address: <a href="_String">string::String</a>, worker_address: <a href="_String">string::String</a>, extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a>): <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>
 </code></pre>
 
 
@@ -607,6 +621,7 @@ Intended validator is not a candidate one.
     p2p_address: String,
     primary_address: String,
     worker_address: String,
+    extra_fields: Bag,
 ): <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
     <b>let</b> metadata = <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a> {
         sui_address,
@@ -630,6 +645,7 @@ Intended validator is not a candidate one.
         next_epoch_p2p_address: <a href="_none">option::none</a>(),
         next_epoch_primary_address: <a href="_none">option::none</a>(),
         next_epoch_worker_address: <a href="_none">option::none</a>(),
+        extra_fields,
     };
     metadata
 }
@@ -645,7 +661,7 @@ Intended validator is not a candidate one.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, initial_stake_option: <a href="_Option">option::Option</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, gas_price: u64, commission_rate: u64, is_active_at_genesis: bool, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_new">new</a>(sui_address: <b>address</b>, protocol_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, network_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, worker_pubkey_bytes: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, image_url: <a href="">vector</a>&lt;u8&gt;, project_url: <a href="">vector</a>&lt;u8&gt;, net_address: <a href="">vector</a>&lt;u8&gt;, p2p_address: <a href="">vector</a>&lt;u8&gt;, primary_address: <a href="">vector</a>&lt;u8&gt;, worker_address: <a href="">vector</a>&lt;u8&gt;, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -668,10 +684,8 @@ Intended validator is not a candidate one.
     p2p_address: <a href="">vector</a>&lt;u8&gt;,
     primary_address: <a href="">vector</a>&lt;u8&gt;,
     worker_address: <a href="">vector</a>&lt;u8&gt;,
-    initial_stake_option: Option&lt;Balance&lt;SUI&gt;&gt;,
     gas_price: u64,
     commission_rate: u64,
-    is_active_at_genesis: bool,
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>assert</b>!(
@@ -699,16 +713,15 @@ Intended validator is not a candidate one.
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address)),
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address)),
         <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address)),
+        <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     );
 
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&metadata);
 
     <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
         metadata,
-        initial_stake_option,
         gas_price,
         commission_rate,
-        is_active_at_genesis,
         ctx
     )
 }
@@ -835,6 +848,51 @@ Request to add stake to the validator's staking pool, processed at the end of th
             amount: stake_amount,
         }
     );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_request_add_stake_at_genesis"></a>
+
+## Function `request_add_stake_at_genesis`
+
+Request to add stake to the validator's staking pool at genesis
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, staker_address: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(
+    self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>,
+    stake: Balance&lt;SUI&gt;,
+    staker_address: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, 0);
+    <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
+    <b>assert</b>!(stake_amount &gt; 0, 0);
+
+    <a href="staking_pool.md#0x2_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
+        &<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
+        stake,
+        self.metadata.sui_address,
+        staker_address,
+        0, // epoch 0 -- <a href="genesis.md#0x2_genesis">genesis</a>
+        ctx
+    );
+
+    // Process stake right away
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_stake">staking_pool::process_pending_stake</a>(&<b>mut</b> self.<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
+    self.next_epoch_stake = self.next_epoch_stake + stake_amount;
 }
 </code></pre>
 
@@ -2602,7 +2660,7 @@ Aborts if validator metadata is valid
 Create a new validator from the given <code><a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a></code>, called by both <code>new</code> and <code>new_for_testing</code>.
 
 
-<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>, initial_stake_option: <a href="_Option">option::Option</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, gas_price: u64, commission_rate: u64, is_active_at_genesis: bool, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>, gas_price: u64, commission_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -2613,53 +2671,29 @@ Create a new validator from the given <code><a href="validator.md#0x2_validator_
 
 <pre><code><b>fun</b> <a href="validator.md#0x2_validator_new_from_metadata">new_from_metadata</a>(
     metadata: <a href="validator.md#0x2_validator_ValidatorMetadata">ValidatorMetadata</a>,
-    initial_stake_option: Option&lt;Balance&lt;SUI&gt;&gt;,
     gas_price: u64,
     commission_rate: u64,
-    is_active_at_genesis: bool,
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>let</b> sui_address = metadata.sui_address;
 
-    <b>let</b> stake_amount =
-        <b>if</b> (<a href="_is_some">option::is_some</a>(&initial_stake_option)) <a href="balance.md#0x2_balance_value">balance::value</a>(<a href="_borrow">option::borrow</a>(&initial_stake_option))
-        <b>else</b> 0;
-
     <b>let</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a> = <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(ctx);
-
-    <b>if</b> (is_active_at_genesis) {
-        <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">staking_pool::activate_staking_pool</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>, 0);
-    };
-
-    // Add the <a href="validator.md#0x2_validator">validator</a>'s starting stake <b>to</b> the staking pool <b>if</b> there <b>exists</b> one.
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&initial_stake_option)) {
-        <a href="staking_pool.md#0x2_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
-            &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
-            <a href="_extract">option::extract</a>(&<b>mut</b> initial_stake_option),
-            sui_address,
-            sui_address,
-            <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
-            ctx
-        );
-        // We immediately process this stake <b>as</b> they are at <a href="validator.md#0x2_validator">validator</a> setup time and this is the <a href="validator.md#0x2_validator">validator</a> staking <b>with</b> itself.
-        <a href="staking_pool.md#0x2_staking_pool_process_pending_stake">staking_pool::process_pending_stake</a>(&<b>mut</b> <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>);
-    };
-    <a href="_destroy_none">option::destroy_none</a>(initial_stake_option);
 
     <b>let</b> operation_cap_id = <a href="validator_cap.md#0x2_validator_cap_new_unverified_validator_operation_cap_and_transfer">validator_cap::new_unverified_validator_operation_cap_and_transfer</a>(sui_address, ctx);
     <a href="validator.md#0x2_validator_Validator">Validator</a> {
         metadata,
-        // Initialize the voting power <b>to</b> be the same <b>as</b> the stake amount.
+        // Initialize the voting power <b>to</b> be 0.
         // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
         // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
-        <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>: 0,
         operation_cap_id,
         gas_price,
         <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>,
         commission_rate,
-        next_epoch_stake: stake_amount,
+        next_epoch_stake: 0,
         next_epoch_gas_price: gas_price,
         next_epoch_commission_rate: commission_rate,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     }
 }
 </code></pre>

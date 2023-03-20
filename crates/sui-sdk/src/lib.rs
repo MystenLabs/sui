@@ -22,7 +22,9 @@ use sui_json_rpc::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
 pub use sui_json_rpc_types as rpc_types;
-use sui_json_rpc_types::{CheckpointId, ObjectsPage, SuiObjectDataOptions, SuiObjectResponse};
+use sui_json_rpc_types::{
+    CheckpointId, ObjectsPage, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -250,13 +252,13 @@ impl DataReader for ReadApi {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectDataOptions>,
+        query: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         checkpoint: Option<CheckpointId>,
     ) -> Result<ObjectsPage, anyhow::Error> {
         Ok(self
-            .get_owned_objects(address, options, cursor, limit, checkpoint)
+            .get_owned_objects(address, query, cursor, limit, checkpoint)
             .await?)
     }
 

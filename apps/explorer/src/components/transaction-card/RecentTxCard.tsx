@@ -5,16 +5,16 @@ import { useRpcClient } from '@mysten/core';
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
 import Pagination from '../pagination/Pagination';
 import {
-    type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
+    type TxnData,
 } from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
@@ -255,15 +255,13 @@ export function LatestTxCard({
                                 rowCount={15}
                                 rowHeight="16px"
                                 colHeadings={[
-                                    'Type',
                                     'Transaction ID',
-                                    'Addresses',
+                                    'Sender',
                                     'Amount',
                                     'Gas',
                                     'Time',
                                 ]}
                                 colWidths={[
-                                    '85px',
                                     '100px',
                                     '120px',
                                     '204px',

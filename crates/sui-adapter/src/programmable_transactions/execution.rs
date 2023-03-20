@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 use move_binary_format::{
     access::ModuleAccess,
+    compatibility::Compatibility,
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
     CompiledModule,
@@ -33,9 +37,13 @@ use sui_types::{
     gas::SuiGasStatus,
     id::UID,
     messages::{
-        Argument, Command, CommandArgumentError, ProgrammableMoveCall, ProgrammableTransaction,
+        Argument, Command, CommandArgumentError, PackageUpgradeError, ProgrammableMoveCall,
+        ProgrammableTransaction,
     },
-    move_package::UpgradeCap,
+    move_package::{
+        is_valid_package_upgrade_policy, normalize_deserialized_modules, MovePackage, UpgradeCap,
+        UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
+    },
     SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::{
@@ -46,7 +54,10 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::{adapter::generate_package_id, execution_mode::ExecutionMode};
+use crate::{
+    adapter::{generate_package_id, substitute_package_id},
+    execution_mode::ExecutionMode,
+};
 
 use super::{context::*, types::*};
 
@@ -261,8 +272,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 /* is_init */ false,
             )?
         }
-        Command::Publish(modules) => {
-            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules)?
+        Command::Publish(modules, dep_ids) => {
+            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules, dep_ids)?
         }
         Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
             execute_move_upgrade::<_, _, Mode>(
@@ -384,6 +395,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
 ) -> Result<Vec<Value>, ExecutionError> {
     assert_invariant!(
         !module_bytes.is_empty(),
@@ -392,7 +404,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context
         .gas_status
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
-    let modules = publish_and_verify_modules::<_, _, Mode>(context, module_bytes)?;
+    let modules = publish_and_verify_new_modules::<_, _, Mode>(context, &module_bytes)?;
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
@@ -407,7 +419,10 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let package_id = context.new_package(modules)?;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+
+    // new_package also initializes type origin table in the package object
+    let package_id = context.new_package(modules, &dependencies, None)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, _, Mode>(
             context,
@@ -441,10 +456,10 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
 fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
-    _module_bytes: Vec<Vec<u8>>,
-    _dep_ids: Vec<ObjectID>,
-    _current_package_id: ObjectID,
-    _upgrade_ticket_arg: Argument,
+    module_bytes: Vec<Vec<u8>>,
+    dep_ids: Vec<ObjectID>,
+    current_package_id: ObjectID,
+    upgrade_ticket_arg: Argument,
 ) -> Result<Vec<Value>, ExecutionError> {
     // Check that package upgrades are supported.
     context
@@ -452,7 +467,200 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .check_package_upgrades_supported()
         .map_err(|_| ExecutionError::from_kind(ExecutionErrorKind::FeatureNotYetSupported))?;
 
-    invariant_violation!("Package upgrades are turned off. We should NEVER get here.")
+    assert_invariant!(
+        !module_bytes.is_empty(),
+        "empty package is checked in transaction input checker"
+    );
+
+    let upgrade_ticket: UpgradeTicket = {
+        let mut ticket_bytes = Vec::new();
+        let ticket_val: Value =
+            context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
+        let ticket_type = context
+            .session
+            .load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
+            .map_err(|e| context.convert_vm_error(e))?;
+        check_param_type::<_, _, Mode>(context, 0, &ticket_val, &ticket_type)?;
+        ticket_val.write_bcs_bytes(&mut ticket_bytes);
+        bcs::from_bytes(&ticket_bytes).map_err(|_| {
+            ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
+                arg_idx: 0,
+                kind: CommandArgumentError::InvalidBCSBytes,
+            })
+        })?
+    };
+
+    // Make sure the passed-in package ID matches the package ID in the `upgrade_ticket`.
+    if current_package_id != upgrade_ticket.package.bytes {
+        return Err(ExecutionError::from_kind(
+            ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
+                    package_id: current_package_id,
+                    ticket_id: upgrade_ticket.package.bytes,
+                },
+            },
+        ));
+    }
+
+    // Check digest.
+    let computed_digest =
+        MovePackage::compute_digest_for_modules_and_deps(&module_bytes, &dep_ids).to_vec();
+    if computed_digest != upgrade_ticket.digest {
+        return Err(ExecutionError::from_kind(
+            ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::DigestDoesNotMatch {
+                    digest: computed_digest,
+                },
+            },
+        ));
+    }
+
+    // Check that this package ID points to a package and get the package we're upgrading.
+    let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
+
+    // Run the move + sui verifier on the modules and publish them into the cache.
+    // NB: this will substitute in the original package id for the `self` address in all of these modules.
+    let upgraded_package_modules = publish_and_verify_upgraded_modules::<_, _, Mode>(
+        context,
+        &module_bytes,
+        current_package.original_package_id(),
+    )?;
+
+    // Full backwards compatibility except that we allow friend function signatures to change.
+    check_compatibility(
+        &current_package,
+        &upgraded_package_modules,
+        upgrade_ticket.policy,
+    )?;
+
+    // Read the package dependencies.
+    let dependency_packages = fetch_packages(context, &dep_ids)?;
+
+    let upgraded_object_id = context.upgrade_package(
+        &current_package,
+        upgraded_package_modules,
+        &dependency_packages,
+    )?;
+
+    let upgrade_receipt_type = context
+        .session
+        .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
+        .map_err(|e| context.convert_vm_error(e))?;
+
+    Ok(vec![Value::Raw(
+        RawValueType::Loaded {
+            ty: upgrade_receipt_type,
+            abilities: AbilitySet::EMPTY,
+            used_in_non_entry_move_call: false,
+        },
+        bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, upgraded_object_id)).unwrap(),
+    )])
+}
+
+fn check_compatibility<'a>(
+    existing_package: &MovePackage,
+    upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
+    policy: u8,
+) -> Result<(), ExecutionError> {
+    let check_struct_and_pub_function_linking = true;
+    let check_struct_layout = true;
+    let check_friend_linking = false;
+    let compatiblity_checker = Compatibility::new(
+        check_struct_and_pub_function_linking,
+        check_struct_layout,
+        check_friend_linking,
+    );
+    // Make sure this is a known upgrade policy.
+    if !is_valid_package_upgrade_policy(&policy) {
+        return Err(ExecutionError::from_kind(
+            ExecutionErrorKind::PackageUpgradeError {
+                upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy },
+            },
+        ));
+    }
+
+    // TODO(tzakian): We currently only support compatible upgrades. Need to add in support for
+    // additive and dep-only upgrades as well.
+    if policy != UPGRADE_POLICY_COMPATIBLE {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::FeatureNotYetSupported,
+            format!("Upgrade policy {policy} not yet supported"),
+        ));
+    }
+
+    let Ok(current_normalized) = existing_package.normalize() else {
+        invariant_violation!("Tried to normalize modules in existing package but failed")
+    };
+
+    let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
+
+    for (name, cur_module) in current_normalized {
+        let msg = format!("Existing module {name} not found in next version of package");
+        let Some(new_module) = new_normalized.remove(&name) else {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PackageUpgradeError {
+                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+                },
+                msg,
+            ));
+        };
+
+        if let Err(e) = compatiblity_checker.check(&cur_module, &new_module) {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PackageUpgradeError {
+                    upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+                },
+                e,
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
+    context: &'a ExecutionContext<E, S>,
+    package_id: &ObjectID,
+) -> Result<MovePackage, ExecutionError> {
+    let mut fetched_packages = fetch_packages(context, vec![package_id])?;
+    assert_invariant!(
+        fetched_packages.len() == 1,
+        "Number of fetched packages must match the number of package object IDs if successful."
+    );
+    match fetched_packages.pop() {
+        Some(pkg) => Ok(pkg),
+        None => invariant_violation!(
+            "We should always fetch a package for each object or return a dependency error."
+        ),
+    }
+}
+
+fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
+    context: &'a ExecutionContext<E, S>,
+    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+) -> Result<Vec<MovePackage>, ExecutionError> {
+    let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
+    match context.state_view.get_packages(package_ids) {
+        Err(e) => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::PublishUpgradeMissingDependency,
+            e,
+        )),
+        Ok(Err(missing_deps)) => {
+            let msg = format!(
+                "Missing dependencies: {}",
+                missing_deps
+                    .into_iter()
+                    .map(|dep| format!("{}", dep))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::PublishUpgradeMissingDependency,
+                msg,
+            ))
+        }
+        Ok(Ok(pkgs)) => Ok(pkgs),
+    }
 }
 
 /***************************************************************************************************
@@ -500,14 +708,11 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     Ok(result)
 }
 
-/// - Deserializes the modules
-/// - Publishes them into the VM, which invokes the Move verifier
-/// - Run the Sui Verifier
-fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
+fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
-    module_bytes: Vec<Vec<u8>>,
+    module_bytes: &[Vec<u8>],
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = module_bytes
+    let modules = module_bytes
         .iter()
         .map(|b| {
             CompiledModule::deserialize(b)
@@ -520,6 +725,17 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionM
         !modules.is_empty(),
         "input checker ensures package is not empty"
     );
+    Ok(modules)
+}
+
+/// - Deserializes the modules
+/// - Publishes them into the VM, which invokes the Move verifier
+/// - Run the Sui Verifier
+fn publish_and_verify_new_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<E, S>,
+    module_bytes: &[Vec<u8>],
+) -> Result<Vec<CompiledModule>, ExecutionError> {
+    let mut modules = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
@@ -530,6 +746,24 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionM
     } else {
         generate_package_id(&mut modules, context.tx_context)?
     };
+    publish_and_verify_modules(context, package_id, modules)
+}
+
+fn publish_and_verify_upgraded_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<E, S>,
+    module_bytes: &[Vec<u8>],
+    package_id: ObjectID,
+) -> Result<Vec<CompiledModule>, ExecutionError> {
+    let mut modules = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
+    substitute_package_id(&mut modules, package_id)?;
+    publish_and_verify_modules(context, package_id, modules)
+}
+
+fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
+    context: &mut ExecutionContext<E, S>,
+    package_id: ObjectID,
+    modules: Vec<CompiledModule>,
+) -> Result<Vec<CompiledModule>, ExecutionError> {
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -556,6 +790,7 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionM
         // bytecode verifier has passed.
         sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
     }
+
     Ok(modules)
 }
 
@@ -958,7 +1193,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     msg,
                 ));
             };
-            special_argument_validate(bytes, idx as u16, layout)?;
+            bcs_argument_validate(bytes, idx as u16, layout)?;
             return Ok(());
         }
         Value::Raw(RawValueType::Loaded { ty, abilities, .. }, _) => {
@@ -1031,24 +1266,24 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
 fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     param_ty: &Type,
-) -> Result<Option<SpecialArgumentLayout>, ExecutionError> {
+) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
         Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
             invariant_violation!("references and type parameters should be checked elsewhere")
         }
-        Type::Bool => Some(SpecialArgumentLayout::Bool),
-        Type::U8 => Some(SpecialArgumentLayout::U8),
-        Type::U16 => Some(SpecialArgumentLayout::U16),
-        Type::U32 => Some(SpecialArgumentLayout::U32),
-        Type::U64 => Some(SpecialArgumentLayout::U64),
-        Type::U128 => Some(SpecialArgumentLayout::U128),
-        Type::U256 => Some(SpecialArgumentLayout::U256),
-        Type::Address => Some(SpecialArgumentLayout::Address),
+        Type::Bool => Some(PrimitiveArgumentLayout::Bool),
+        Type::U8 => Some(PrimitiveArgumentLayout::U8),
+        Type::U16 => Some(PrimitiveArgumentLayout::U16),
+        Type::U32 => Some(PrimitiveArgumentLayout::U32),
+        Type::U64 => Some(PrimitiveArgumentLayout::U64),
+        Type::U128 => Some(PrimitiveArgumentLayout::U128),
+        Type::U256 => Some(PrimitiveArgumentLayout::U256),
+        Type::Address => Some(PrimitiveArgumentLayout::Address),
 
         Type::Vector(inner) => {
             let info_opt = primitive_serialization_layout(context, inner)?;
-            info_opt.map(|layout| SpecialArgumentLayout::Vector(Box::new(layout)))
+            info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
         Type::StructInstantiation(idx, targs) => {
             let Some(s) = context.session.get_struct_type(*idx) else {
@@ -1058,7 +1293,7 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             // is option of a string
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 let info_opt = primitive_serialization_layout(context, &targs[0])?;
-                info_opt.map(|layout| SpecialArgumentLayout::Option(Box::new(layout)))
+                info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else {
                 None
             }
@@ -1069,11 +1304,11 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             };
             let resolved_struct = get_struct_ident(&s);
             if resolved_struct == RESOLVED_SUI_ID {
-                Some(SpecialArgumentLayout::Address)
+                Some(PrimitiveArgumentLayout::Address)
             } else if resolved_struct == RESOLVED_ASCII_STR {
-                Some(SpecialArgumentLayout::Ascii)
+                Some(PrimitiveArgumentLayout::Ascii)
             } else if resolved_struct == RESOLVED_UTF8_STR {
-                Some(SpecialArgumentLayout::UTF8)
+                Some(PrimitiveArgumentLayout::UTF8)
             } else {
                 None
             }
@@ -1089,11 +1324,11 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
 /// There is validation to do on top of the BCS layout. Currently only needed for
 /// strings
 #[derive(Debug)]
-pub enum SpecialArgumentLayout {
+pub enum PrimitiveArgumentLayout {
     /// An option
-    Option(Box<SpecialArgumentLayout>),
+    Option(Box<PrimitiveArgumentLayout>),
     /// A vector
-    Vector(Box<SpecialArgumentLayout>),
+    Vector(Box<PrimitiveArgumentLayout>),
     /// An ASCII encoded string
     Ascii,
     /// A UTF8 encoded string
@@ -1108,42 +1343,40 @@ pub enum SpecialArgumentLayout {
     U256,
     Address,
 }
-impl SpecialArgumentLayout {
+
+impl PrimitiveArgumentLayout {
     /// returns true iff all BCS compatible bytes are actually values for this type.
     /// For example, this function returns false for Option and Strings since they need additional
     /// validation.
-    fn bcs_only(&self) -> bool {
+    pub fn bcs_only(&self) -> bool {
         match self {
             // have additional restrictions past BCS
-            SpecialArgumentLayout::Option(_)
-            | SpecialArgumentLayout::Ascii
-            | SpecialArgumentLayout::UTF8 => false,
+            PrimitiveArgumentLayout::Option(_)
+            | PrimitiveArgumentLayout::Ascii
+            | PrimitiveArgumentLayout::UTF8 => false,
             // Move primitives are BCS compatible and do not need additional validation
-            SpecialArgumentLayout::Bool
-            | SpecialArgumentLayout::U8
-            | SpecialArgumentLayout::U16
-            | SpecialArgumentLayout::U32
-            | SpecialArgumentLayout::U64
-            | SpecialArgumentLayout::U128
-            | SpecialArgumentLayout::U256
-            | SpecialArgumentLayout::Address => true,
+            PrimitiveArgumentLayout::Bool
+            | PrimitiveArgumentLayout::U8
+            | PrimitiveArgumentLayout::U16
+            | PrimitiveArgumentLayout::U32
+            | PrimitiveArgumentLayout::U64
+            | PrimitiveArgumentLayout::U128
+            | PrimitiveArgumentLayout::U256
+            | PrimitiveArgumentLayout::Address => true,
             // vector only needs validation if it's inner type does
-            SpecialArgumentLayout::Vector(inner) => inner.bcs_only(),
+            PrimitiveArgumentLayout::Vector(inner) => inner.bcs_only(),
         }
     }
 }
 
 /// Checks the bytes against the `SpecialArgumentLayout` using `bcs`. It does not actually generate
-/// the deserialized value, only walks the bytes
-pub fn special_argument_validate(
+/// the deserialized value, only walks the bytes. While not necessary if the layout does not contain
+/// special arguments (e.g. Option or String) we check the BCS bytes for predictability
+pub fn bcs_argument_validate(
     bytes: &[u8],
     idx: u16,
-    layout: SpecialArgumentLayout,
+    layout: PrimitiveArgumentLayout,
 ) -> Result<(), ExecutionError> {
-    if layout.bcs_only() {
-        // will be covered in the value is deserialized by the VM
-        return Ok(());
-    }
     bcs::from_bytes_seed(&layout, bytes).map_err(|_| {
         ExecutionError::new_with_source(
             ExecutionErrorKind::command_argument_error(CommandArgumentError::InvalidBCSBytes, idx),
@@ -1152,7 +1385,7 @@ pub fn special_argument_validate(
     })
 }
 
-impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
+impl<'d> serde::de::DeserializeSeed<'d> for &PrimitiveArgumentLayout {
     type Value = ();
     fn deserialize<D: serde::de::Deserializer<'d>>(
         self,
@@ -1160,7 +1393,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
     ) -> Result<Self::Value, D::Error> {
         use serde::de::Error;
         match self {
-            SpecialArgumentLayout::Ascii => {
+            PrimitiveArgumentLayout::Ascii => {
                 let s: &str = serde::Deserialize::deserialize(deserializer)?;
                 if !s.is_ascii() {
                     Err(D::Error::custom("not an ascii string"))
@@ -1168,47 +1401,47 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
                     Ok(())
                 }
             }
-            SpecialArgumentLayout::UTF8 => {
+            PrimitiveArgumentLayout::UTF8 => {
                 deserializer.deserialize_string(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::Option(layout) => {
+            PrimitiveArgumentLayout::Option(layout) => {
                 deserializer.deserialize_option(OptionElementVisitor(layout))
             }
-            SpecialArgumentLayout::Vector(layout) => {
+            PrimitiveArgumentLayout::Vector(layout) => {
                 deserializer.deserialize_seq(VectorElementVisitor(layout))
             }
             // primitive move value cases, which are hit to make sure the correct number of bytes
             // are removed for elements of an option/vector
-            SpecialArgumentLayout::Bool => {
+            PrimitiveArgumentLayout::Bool => {
                 deserializer.deserialize_bool(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U8 => {
+            PrimitiveArgumentLayout::U8 => {
                 deserializer.deserialize_u8(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U16 => {
+            PrimitiveArgumentLayout::U16 => {
                 deserializer.deserialize_u16(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U32 => {
+            PrimitiveArgumentLayout::U32 => {
                 deserializer.deserialize_u32(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U64 => {
+            PrimitiveArgumentLayout::U64 => {
                 deserializer.deserialize_u64(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U128 => {
+            PrimitiveArgumentLayout::U128 => {
                 deserializer.deserialize_u128(serde::de::IgnoredAny)?;
                 Ok(())
             }
-            SpecialArgumentLayout::U256 => {
+            PrimitiveArgumentLayout::U256 => {
                 U256::deserialize(deserializer)?;
                 Ok(())
             }
-            SpecialArgumentLayout::Address => {
+            PrimitiveArgumentLayout::Address => {
                 SuiAddress::deserialize(deserializer)?;
                 Ok(())
             }
@@ -1216,7 +1449,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &SpecialArgumentLayout {
     }
 }
 
-struct VectorElementVisitor<'a>(&'a SpecialArgumentLayout);
+struct VectorElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
 impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
     type Value = ();
@@ -1234,7 +1467,7 @@ impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
     }
 }
 
-struct OptionElementVisitor<'a>(&'a SpecialArgumentLayout);
+struct OptionElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
 impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
     type Value = ();
@@ -1258,29 +1491,29 @@ impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
     }
 }
 
-impl fmt::Display for SpecialArgumentLayout {
+impl fmt::Display for PrimitiveArgumentLayout {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SpecialArgumentLayout::Vector(inner) => {
+            PrimitiveArgumentLayout::Vector(inner) => {
                 write!(f, "vector<{inner}>")
             }
-            SpecialArgumentLayout::Option(inner) => {
+            PrimitiveArgumentLayout::Option(inner) => {
                 write!(f, "std::option::Option<{inner}>")
             }
-            SpecialArgumentLayout::Ascii => {
+            PrimitiveArgumentLayout::Ascii => {
                 write!(f, "std::{}::{}", RESOLVED_ASCII_STR.1, RESOLVED_ASCII_STR.2)
             }
-            SpecialArgumentLayout::UTF8 => {
+            PrimitiveArgumentLayout::UTF8 => {
                 write!(f, "std::{}::{}", RESOLVED_UTF8_STR.1, RESOLVED_UTF8_STR.2)
             }
-            SpecialArgumentLayout::Bool => write!(f, "bool"),
-            SpecialArgumentLayout::U8 => write!(f, "u8"),
-            SpecialArgumentLayout::U16 => write!(f, "u16"),
-            SpecialArgumentLayout::U32 => write!(f, "u32"),
-            SpecialArgumentLayout::U64 => write!(f, "u64"),
-            SpecialArgumentLayout::U128 => write!(f, "u128"),
-            SpecialArgumentLayout::U256 => write!(f, "u256"),
-            SpecialArgumentLayout::Address => write!(f, "address"),
+            PrimitiveArgumentLayout::Bool => write!(f, "bool"),
+            PrimitiveArgumentLayout::U8 => write!(f, "u8"),
+            PrimitiveArgumentLayout::U16 => write!(f, "u16"),
+            PrimitiveArgumentLayout::U32 => write!(f, "u32"),
+            PrimitiveArgumentLayout::U64 => write!(f, "u64"),
+            PrimitiveArgumentLayout::U128 => write!(f, "u128"),
+            PrimitiveArgumentLayout::U256 => write!(f, "u256"),
+            PrimitiveArgumentLayout::Address => write!(f, "address"),
         }
     }
 }

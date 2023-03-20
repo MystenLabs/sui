@@ -7,7 +7,6 @@
 
 -  [Resource `LockedCoin`](#0x2_locked_coin_LockedCoin)
 -  [Function `new_from_balance`](#0x2_locked_coin_new_from_balance)
--  [Function `into_balance`](#0x2_locked_coin_into_balance)
 -  [Function `value`](#0x2_locked_coin_value)
 -  [Function `lock_coin`](#0x2_locked_coin_lock_coin)
 -  [Function `unlock_coin`](#0x2_locked_coin_unlock_coin)
@@ -86,33 +85,6 @@ Create a LockedCoin from <code><a href="balance.md#0x2_balance">balance</a></cod
         locked_until_epoch
     };
     <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="locked_coin.md#0x2_locked_coin">locked_coin</a>, owner);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_locked_coin_into_balance"></a>
-
-## Function `into_balance`
-
-Destruct a LockedCoin wrapper and keep the balance.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_into_balance">into_balance</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">locked_coin::LockedCoin</a>&lt;T&gt;): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;, <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="locked_coin.md#0x2_locked_coin_into_balance">into_balance</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: <a href="locked_coin.md#0x2_locked_coin_LockedCoin">LockedCoin</a>&lt;T&gt;): (Balance&lt;T&gt;, EpochTimeLock) {
-    <b>let</b> <a href="locked_coin.md#0x2_locked_coin_LockedCoin">LockedCoin</a> { id, locked_until_epoch, <a href="balance.md#0x2_balance">balance</a> } = <a href="coin.md#0x2_coin">coin</a>;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    (<a href="balance.md#0x2_balance">balance</a>, locked_until_epoch)
 }
 </code></pre>
 

@@ -306,6 +306,10 @@ pub struct PrimaryMetrics {
     /// The latency of a batch between the time it has been
     /// created and until it has been included to a header proposal.
     pub proposer_batch_latency: Histogram,
+    /// The number of headers being resent because they will not get committed.
+    pub proposer_resend_headers: IntCounter,
+    /// The number of batches being resent because they will not get committed.
+    pub proposer_resend_batches: IntCounter,
     /// Time it takes for a header to be materialised to a certificate
     pub header_to_certificate_latency: Histogram,
 }
@@ -446,6 +450,16 @@ impl PrimaryMetrics {
                 "proposer_batch_latency",
                 "The latency of a batch between the time it has been created and until it has been included to a header proposal.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            proposer_resend_headers: register_int_counter_with_registry!(
+                "proposer_resend_headers",
+                "The number of headers being resent because they will not get committed.",
+                registry
+            ).unwrap(),
+            proposer_resend_batches: register_int_counter_with_registry!(
+                "proposer_resend_batches",
+                "The number of batches being resent because they will not get committed.",
                 registry
             ).unwrap(),
             header_to_certificate_latency: register_histogram_with_registry!(

@@ -1,6 +1,0 @@
-CREATE TABLE ERROR_LOGS (
-    id BIGSERIAL PRIMARY KEY,
-    error_type VARCHAR(63) NOT NULL,
-    error TEXT NOT NULL,
-    error_time TIMESTAMP NOT NULL
-);

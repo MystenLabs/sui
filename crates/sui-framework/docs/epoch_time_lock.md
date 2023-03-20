@@ -9,7 +9,6 @@
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_epoch_time_lock_new)
 -  [Function `destroy`](#0x2_epoch_time_lock_destroy)
--  [Function `destroy_unchecked`](#0x2_epoch_time_lock_destroy_unchecked)
 -  [Function `epoch`](#0x2_epoch_time_lock_epoch)
 
 
@@ -117,31 +116,6 @@ Destroys an epoch time lock. Aborts if the current epoch is less than the locked
 <pre><code><b>public</b> <b>fun</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy">destroy</a>(lock: <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">EpochTimeLock</a>, ctx: &TxContext) {
     <b>let</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">EpochTimeLock</a> { epoch } = lock;
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) &gt;= epoch, <a href="epoch_time_lock.md#0x2_epoch_time_lock_EEpochNotYetEnded">EEpochNotYetEnded</a>);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_epoch_time_lock_destroy_unchecked"></a>
-
-## Function `destroy_unchecked`
-
-Destroys an epoch time lock.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy_unchecked">destroy_unchecked</a>(lock: <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy_unchecked">destroy_unchecked</a>(lock: <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">EpochTimeLock</a>) {
-    <b>let</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">EpochTimeLock</a> { epoch: _ } = lock;
 }
 </code></pre>
 

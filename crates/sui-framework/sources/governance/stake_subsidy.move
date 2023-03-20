@@ -5,6 +5,9 @@ module sui::stake_subsidy {
     use sui::balance::{Self, Balance};
     use sui::math;
     use sui::sui::SUI;
+    use sui::bag::Bag;
+    use sui::bag;
+    use sui::tx_context::TxContext;
 
     friend sui::sui_system_state_inner;
 
@@ -17,6 +20,8 @@ module sui::stake_subsidy {
         /// The amount of stake subsidy to be drawn down per epoch.
         /// This amount decays and decreases over time.
         current_epoch_amount: u64,
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
@@ -25,11 +30,16 @@ module sui::stake_subsidy {
     const STAKE_SUBSIDY_DECREASE_RATE: u128 = 1000; // in basis point
     const STAKE_SUBSIDY_PERIOD_LENGTH: u64 = 10; // in number of epochs
 
-    public(friend) fun create(balance: Balance<SUI>, initial_stake_subsidy_amount: u64): StakeSubsidy {
+    public(friend) fun create(
+        balance: Balance<SUI>,
+        initial_stake_subsidy_amount: u64,
+        ctx: &mut TxContext,
+    ): StakeSubsidy {
         StakeSubsidy {
             epoch_counter: 0,
             balance,
             current_epoch_amount: initial_stake_subsidy_amount,
+            extra_fields: bag::new(ctx),
         }
     }
 

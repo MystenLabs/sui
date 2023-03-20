@@ -107,7 +107,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
             digest,
             worker_id,
             timestamp: created_at_ts,
-            ack_channel: tx_ack,
+            ack_channel: Some(tx_ack),
         })
         .await
         .unwrap();
@@ -133,7 +133,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
                 digest: batch_id,
                 worker_id,
                 timestamp: created_at,
-                ack_channel: tx_ack,
+                ack_channel: Some(tx_ack),
             })
             .await
             .unwrap();
@@ -228,7 +228,7 @@ async fn equivocation_protection() {
             digest,
             worker_id,
             timestamp: created_at_ts,
-            ack_channel: tx_ack,
+            ack_channel: Some(tx_ack),
         })
         .await
         .unwrap();
@@ -298,7 +298,7 @@ async fn equivocation_protection() {
             digest,
             worker_id,
             timestamp: 0,
-            ack_channel: tx_ack,
+            ack_channel: Some(tx_ack),
         })
         .await
         .unwrap();

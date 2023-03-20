@@ -42,7 +42,7 @@ impl ProgrammableTransactionBuilder {
         ProgrammableTransaction { inputs, commands }
     }
 
-    fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
+    pub fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
         let arg = if force_separate {
             BuilderArg::ForcedNonUniquePure(self.inputs.len())
         } else {
@@ -179,12 +179,16 @@ impl ProgrammableTransactionBuilder {
         })))
     }
 
-    pub fn publish_upgradeable(&mut self, modules: Vec<Vec<u8>>) -> Argument {
-        self.command(Command::Publish(modules))
+    pub fn publish_upgradeable(
+        &mut self,
+        modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
+    ) -> Argument {
+        self.command(Command::Publish(modules, dep_ids))
     }
 
-    pub fn publish_immutable(&mut self, modules: Vec<Vec<u8>>) {
-        let cap = self.publish_upgradeable(modules);
+    pub fn publish_immutable(&mut self, modules: Vec<Vec<u8>>, dep_ids: Vec<ObjectID>) {
+        let cap = self.publish_upgradeable(modules, dep_ids);
         self.commands
             .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package: SUI_FRAMEWORK_OBJECT_ID,

@@ -37,8 +37,11 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_framework::{
+    make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
+};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::clock::Clock;
 use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
 use sui_types::messages::CallArg;
@@ -58,7 +61,6 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
@@ -126,31 +128,10 @@ pub fn get_framework_object_ref() -> ObjectRef {
 
 /// Create and return objects wrapping the genesis modules for sui
 fn create_genesis_module_objects() -> Genesis {
-    let sui_modules = sui_framework::get_sui_framework();
-    let std_modules = sui_framework::get_move_stdlib();
-    let objects = vec![create_clock()];
-    // SAFETY: unwraps safe because genesis packages should never exceed max size
-    let packages = vec![
-        Object::new_package(
-            std_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-        Object::new_package(
-            sui_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-    ];
-    let modules = vec![std_modules, sui_modules];
     Genesis {
-        objects,
-        packages,
-        modules,
+        objects: vec![create_clock()],
+        packages: make_system_objects(),
+        modules: make_system_modules(),
     }
 }
 
@@ -308,6 +289,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             sender,
             upgradeable,
             view_gas_used,
+            dependencies,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -316,13 +298,26 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             buf
         };
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let mut dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
+                    bail!("There is no published module address corresponding to name address {d}");
+                };
+                let id: ObjectID = addr.into_inner().into();
+                Ok(id)
+            })
+            .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on the system packages, so these don't have to
+        // be provided explicitly as parameters
+        dependencies.extend(system_package_ids());
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                let cap = builder.publish_upgradeable(vec![module_bytes], dependencies);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish_immutable(vec![module_bytes]);
+                builder.publish_immutable(vec![module_bytes], dependencies);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
@@ -781,8 +776,8 @@ impl<'a> SuiTestAdapter<'a> {
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
-            sui_types::object::Data::Package(pkg) => pkg
+            object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
+            object::Data::Package(pkg) => pkg
                 .serialized_module_map()
                 .keys()
                 .map(|s| s.as_str())

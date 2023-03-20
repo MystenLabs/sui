@@ -58,10 +58,10 @@ it('can serialize enum with "kind" property', () => {
   expect(result).toEqual(command);
 });
 
-function ref(): { objectId: string; version: bigint; digest: string } {
+function ref(): { objectId: string; version: string; digest: string } {
   return {
     objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
-    version: BigInt((Math.random() * 10000).toFixed(0)),
+    version: String((Math.random() * 10000).toFixed(0)),
     digest: toB58(
       new Uint8Array([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
@@ -79,8 +79,8 @@ it('can serialize transaction data with a programmable transaction', () => {
       gasData: {
         payment: [ref()],
         owner: sui,
-        price: 1n,
-        budget: 1000000n,
+        price: '1',
+        budget: '1000000',
       },
       kind: {
         ProgrammableTransaction: {

@@ -3,7 +3,6 @@
 
 import {
   array,
-  bigint,
   boolean,
   Infer,
   integer,
@@ -19,7 +18,7 @@ const ObjectArg = union([
   object({
     Shared: object({
       objectId: string(),
-      initialSharedVersion: union([bigint(), integer()]),
+      initialSharedVersion: union([integer(), string()]),
       mutable: boolean(),
     }),
   }),
