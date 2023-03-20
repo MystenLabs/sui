@@ -5,7 +5,9 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::{cap_page_limit, ExtendedApiServer};
+use sui_json_rpc::api::{
+    cap_page_limit, validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{EpochInfo, EpochPage, Page};
 use sui_open_rpc::Module;
@@ -30,7 +32,7 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         cursor: Option<EpochId>,
         limit: Option<usize>,
     ) -> RpcResult<EpochPage> {
-        let limit = cap_page_limit(limit);
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
         let mut epochs = self.state.get_epochs(cursor, limit + 1)?;
 
         let has_next_page = epochs.len() > limit;
