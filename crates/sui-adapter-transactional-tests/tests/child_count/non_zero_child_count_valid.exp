@@ -21,11 +21,11 @@ created: object(112), object(113), object(114)
 written: object(111)
 
 task 5 'run'. lines 58-58:
-written: object(113), object(115)
+Error: Object 0x4ed62609e80f1a882d16311822ec560fbc1d81a2ab0bcb4fd6358910dee9573f is owned by object 0x0e1963f04364076254e2239b46ad24cccf0ce9c4adec48c942e5180ff59ed753. Objects owned by other objects cannot be used as input arguments.
 
 task 6 'view-object'. lines 60-64:
-Owner: Account Address ( B )
-Version: 3
+Owner: Object ID: ( fake(112) )
+Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
 
 task 7 'run'. lines 66-66:
@@ -33,9 +33,9 @@ created: object(117), object(118), object(119)
 written: object(116)
 
 task 8 'transfer-object'. lines 68-68:
-written: object(119), object(120)
+Error: Object 0x2fa713550aa15a388199f0a2a6e7dd56e3d2d1876c732a6f1b8d3a0148a3dab8 is owned by object 0xe3fa1ef69b72a69ab91b6dfdfbf386e4cded35c28274d88d10ac4e023472f1ca. Objects owned by other objects cannot be used as input arguments.
 
 task 9 'view-object'. lines 70-70:
-Owner: Account Address ( B )
-Version: 3
+Owner: Object ID: ( fake(117) )
+Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
