@@ -496,7 +496,7 @@ export class Transaction {
             const structVal = extractStructTag(param);
             if (
               structVal != null ||
-              (typeof param === 'object' && 'TypeParameter' in param)
+              (typeof param === 'object' && 'TypeParameter' === param.type)
             ) {
               if (typeof inputValue !== 'string') {
                 throw new Error(
