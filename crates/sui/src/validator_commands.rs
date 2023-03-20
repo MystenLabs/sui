@@ -9,7 +9,7 @@ use std::{
 };
 use sui_config::genesis::GenesisValidatorInfo;
 use sui_framework::{SuiFramework, SystemPackage};
-use sui_types::multiaddr::Multiaddr;
+use sui_types::{base_types::SuiAddress, multiaddr::Multiaddr};
 
 use crate::client_commands::{write_transaction_response, WalletContext};
 use crate::fire_drill::get_gas_obj_ref;
@@ -158,7 +158,7 @@ impl SuiValidatorCommand {
                         name,
                         protocol_key: keypair.public().into(),
                         worker_key: worker_keypair.public().clone(),
-                        account_key: account_keypair.public(),
+                        account_address: SuiAddress::from(&account_keypair.public()),
                         network_key: network_keypair.public().clone(),
                         gas_price,
                         commission_rate: 0,

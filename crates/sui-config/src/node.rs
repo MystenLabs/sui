@@ -23,7 +23,6 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::NetworkPublicKey;
-use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
@@ -350,7 +349,7 @@ pub struct DBCheckpointConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub account_key: AccountsPublicKey,
+    pub account_address: SuiAddress,
     pub protocol_key: AuthorityPublicKeyBytes,
     pub worker_key: NetworkPublicKey,
     pub network_key: NetworkPublicKey,
@@ -371,7 +370,7 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        self.account_key().into()
+        self.account_address
     }
 
     pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
@@ -384,10 +383,6 @@ impl ValidatorInfo {
 
     pub fn network_key(&self) -> &NetworkPublicKey {
         &self.network_key
-    }
-
-    pub fn account_key(&self) -> &AccountsPublicKey {
-        &self.account_key
     }
 
     pub fn gas_price(&self) -> u64 {
