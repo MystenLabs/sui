@@ -97,6 +97,9 @@ impl NativesCostTable {
                 ed25519_ed25519_verify_msg_cost_per_byte: protocol_config
                     .ed25519_ed25519_verify_msg_cost_per_byte()
                     .into(),
+                ed25519_ed25519_verify_msg_cost_per_block: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_block()
+                    .into(),
             },
             // hash
             hash_blake2b256_cost_params: HashBlake2b256CostParams {

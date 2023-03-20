@@ -15,7 +15,9 @@ use move_vm_types::{
     values::{Value, VectorRef},
 };
 use smallvec::smallvec;
-use std::{collections::VecDeque, ops::Mul};
+use std::collections::VecDeque;
+
+const ED25519_BLOCK_SIZE: usize = 128;
 
 #[derive(Clone)]
 pub struct Ed25519VerifyCostParams {
@@ -23,12 +25,15 @@ pub struct Ed25519VerifyCostParams {
     pub ed25519_ed25519_verify_cost_base: InternalGas,
     /// Cost per byte of `msg`
     pub ed25519_ed25519_verify_msg_cost_per_byte: InternalGas,
+    /// Cost per block of `data`, where a block is 128 bytes
+    pub ed25519_ed25519_verify_msg_cost_per_block: InternalGas,
 }
 /***************************************************************************************************
  * native fun ed25519_verify
  * Implementation of the Move native function `ed25519::ed25519_verify(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>): bool;`
- *   gas cost: ed25519_ed25519_verify_cost_base                         | base cost for function call and fixed opers
- *              + ed25519_ed25519_verify_msg_cost_per_byte * msg.len()  | cost depends on length of message
+ *   gas cost: ed25519_ed25519_verify_cost_base                          | base cost for function call and fixed opers
+ *              + ed25519_ed25519_verify_msg_cost_per_byte * msg.len()   | cost depends on length of message
+ *              + ed25519_ed25519_verify_msg_cost_per_block * block_size | cost depends on number of blocks in message
  **************************************************************************************************/
 pub fn ed25519_verify(
     context: &mut NativeContext,
@@ -57,12 +62,13 @@ pub fn ed25519_verify(
     let signature_bytes = pop_arg!(args, VectorRef);
     let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
-    // Charge the arg dependent costs
+    // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        ed25519_verify_cost_params
-            .ed25519_ed25519_verify_msg_cost_per_byte
-            .mul((msg_ref.len() as u64).into())
+        ed25519_verify_cost_params.ed25519_ed25519_verify_msg_cost_per_byte
+            * (msg_ref.len() as u64).into()
+            + ed25519_verify_cost_params.ed25519_ed25519_verify_msg_cost_per_block
+                * (((msg_ref.len() + ED25519_BLOCK_SIZE - 1) / ED25519_BLOCK_SIZE) as u64).into()
     );
     let cost = context.gas_used();
 
