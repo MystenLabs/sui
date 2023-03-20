@@ -19,6 +19,7 @@ custom coins with <code><a href="balance.md#0x2_balance_Supply">Supply</a></code
 -  [Function `zero`](#0x2_balance_zero)
 -  [Function `join`](#0x2_balance_join)
 -  [Function `split`](#0x2_balance_split)
+-  [Function `withdraw_all`](#0x2_balance_withdraw_all)
 -  [Function `destroy_zero`](#0x2_balance_destroy_zero)
 -  [Function `create_staking_rewards`](#0x2_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#0x2_balance_destroy_storage_rebates)
@@ -376,6 +377,44 @@ Split a <code><a href="balance.md#0x2_balance_Balance">Balance</a></code> and ta
 <pre><code><b>aborts_if</b> self.<a href="balance.md#0x2_balance_value">value</a> &lt; value <b>with</b> <a href="balance.md#0x2_balance_ENotEnough">ENotEnough</a>;
 <b>ensures</b> self.value == <b>old</b>(self.value) - value;
 <b>ensures</b> result.value == value;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_withdraw_all"></a>
+
+## Function `withdraw_all`
+
+Withdraw all balance. After this the remaining balance must be 0.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="balance.md#0x2_balance_withdraw_all">withdraw_all</a>&lt;T&gt;(self: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="balance.md#0x2_balance_withdraw_all">withdraw_all</a>&lt;T&gt;(self: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt;): <a href="balance.md#0x2_balance_Balance">Balance</a>&lt;T&gt; {
+    <b>let</b> value = self.value;
+    <a href="balance.md#0x2_balance_split">split</a>(self, value)
+}
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>ensures</b> self.value == 0;
 </code></pre>
 
 

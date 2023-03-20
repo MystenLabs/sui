@@ -25,7 +25,7 @@ use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
+    Argument, ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
     TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
@@ -301,11 +301,11 @@ fn execution_loop<
     }
 }
 
-pub fn construct_advance_epoch_pt(
-    params: AdvanceEpochParams,
-) -> Result<ProgrammableTransaction, ExecutionError> {
-    let mut builder = ProgrammableTransactionBuilder::new();
-    // Step 1: Create storage rewards.
+fn mint_epoch_rewards_in_pt(
+    builder: &mut ProgrammableTransactionBuilder,
+    params: &AdvanceEpochParams,
+) -> (Argument, Argument) {
+    // Create storage rewards.
     let storage_charge_arg = builder
         .input(CallArg::Pure(
             bcs::to_bytes(&params.storage_charge).unwrap(),
@@ -319,7 +319,7 @@ pub fn construct_advance_epoch_pt(
         vec![storage_charge_arg],
     );
 
-    // Step 2: Create computation rewards.
+    // Create computation rewards.
     let computation_charge_arg = builder
         .input(CallArg::Pure(
             bcs::to_bytes(&params.computation_charge).unwrap(),
@@ -332,8 +332,17 @@ pub fn construct_advance_epoch_pt(
         vec![GAS::type_tag()],
         vec![computation_charge_arg],
     );
+    (storage_rewards, computation_rewards)
+}
 
-    // Step 3: Advance the epoch.
+pub fn construct_advance_epoch_pt(
+    params: &AdvanceEpochParams,
+) -> Result<ProgrammableTransaction, ExecutionError> {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    // Step 1: Create storage and computation rewards.
+    let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
+
+    // Step 2: Advance the epoch.
     let mut arguments = vec![storage_rewards, computation_rewards];
     let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -374,7 +383,7 @@ pub fn construct_advance_epoch_pt(
         arguments,
     );
 
-    // Step 4: Destroy the storage rebates.
+    // Step 3: Destroy the storage rebates.
     builder.programmable_move_call(
         SUI_FRAMEWORK_OBJECT_ID,
         BALANCE_MODULE_NAME.to_owned(),
@@ -382,6 +391,53 @@ pub fn construct_advance_epoch_pt(
         vec![GAS::type_tag()],
         vec![storage_rebates],
     );
+    Ok(builder.finish())
+}
+
+pub fn construct_advance_epoch_safe_mode_pt(
+    params: &AdvanceEpochParams,
+) -> Result<ProgrammableTransaction, ExecutionError> {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    // Step 1: Create storage and computation rewards.
+    let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
+
+    // Step 2: Advance the epoch.
+    let mut arguments = vec![storage_rewards, computation_rewards];
+    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_SYSTEM_STATE_OBJECT_ID,
+        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+        mutable: true,
+    });
+    let call_arg_arguments = vec![
+        system_object_arg,
+        CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
+        CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
+        CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
+    ]
+    .into_iter()
+    .map(|a| builder.input(a))
+    .collect::<Result<_, _>>();
+
+    assert_invariant!(
+        call_arg_arguments.is_ok(),
+        "Unable to generate args for advance_epoch transaction!"
+    );
+
+    arguments.append(&mut call_arg_arguments.unwrap());
+
+    debug!(
+        "Call arguments to advance_epoch transaction: {:?}",
+        arguments
+    );
+
+    builder.programmable_move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned(),
+        vec![],
+        arguments,
+    );
+
     Ok(builder.finish())
 }
 
@@ -393,7 +449,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     gas_status: &mut SuiGasStatus,
     protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
-    let advance_epoch_pt = construct_advance_epoch_pt(AdvanceEpochParams {
+    let params = AdvanceEpochParams {
         epoch: change_epoch.epoch,
         next_protocol_version: change_epoch.protocol_version,
         storage_charge: change_epoch.storage_charge,
@@ -403,7 +459,8 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         reward_slashing_rate: protocol_config.reward_slashing_rate(),
         epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         new_system_state_version: get_sui_system_state_version(change_epoch.protocol_version),
-    })?;
+    };
+    let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
     let result = programmable_transactions::execution::execute::<_, _, execution_mode::System>(
         protocol_config,
         move_vm,
@@ -422,32 +479,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             change_epoch,
         );
         temporary_store.drop_writes();
-        let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
-        let safe_mode_pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
-                id: SUI_SYSTEM_STATE_OBJECT_ID,
-                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                mutable: true,
-            });
-            // TODO: Rewards should be kept in safe mode too.
-            let res = builder.move_call(
-                SUI_SYSTEM_PACKAGE_ID,
-                SUI_SYSTEM_MODULE_NAME.to_owned(),
-                function,
-                vec![],
-                vec![
-                    system_object_arg,
-                    CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
-                ],
-            );
-            assert_invariant!(
-                res.is_ok(),
-                "Unable to generate advance_epoch_safe_mode transaction!"
-            );
-            builder.finish()
-        };
+        let advance_epoch_safe_mode_pt = construct_advance_epoch_safe_mode_pt(&params)?;
         programmable_transactions::execution::execute::<_, _, execution_mode::System>(
             protocol_config,
             move_vm,
@@ -455,7 +487,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             tx_ctx,
             gas_status,
             None,
-            safe_mode_pt,
+            advance_epoch_safe_mode_pt,
         )?;
     }
 
