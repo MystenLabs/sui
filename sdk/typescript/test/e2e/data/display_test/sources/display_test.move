@@ -87,6 +87,6 @@ module display_test::boars {
             buyer: sender(ctx),
             full_url: url::new_unsafe_from_bytes(b"https://get-a-boar.fullurl.com/"),
         };
-        transfer::public_transfer(boar, sender(ctx))
+        transfer::transfer(boar, sender(ctx))
     }
 }

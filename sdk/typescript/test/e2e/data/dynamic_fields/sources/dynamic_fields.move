@@ -37,6 +37,6 @@ module dynamic_fields::dynamic_fields_test {
 
         dof::add(&mut test.id, object::id(&test2), test2);
 
-        transfer::public_transfer(test, tx_context::sender(ctx))
+        transfer::transfer(test, tx_context::sender(ctx))
     }
 }
