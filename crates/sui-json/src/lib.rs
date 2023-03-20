@@ -10,6 +10,8 @@ use fastcrypto::encoding::{Encoding, Hex};
 use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::IdentStr;
 use move_core_types::u256::U256;
 use move_core_types::value::MoveFieldLayout;
 pub use move_core_types::value::MoveTypeLayout;
@@ -21,12 +23,13 @@ use move_core_types::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Number, Value as JsonValue, Value};
+use serde_json::{json, Number, Value as JsonValue};
 
 use sui_types::base_types::{
-    ObjectID, SuiAddress, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_UTF8_MODULE_NAME,
-    STD_UTF8_STRUCT_NAME,
+    ObjectID, SuiAddress, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
+    STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
 };
+use sui_types::id::ID;
 use sui_types::move_package::MovePackage;
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_verifier::entry_points_verifier::{
@@ -245,6 +248,29 @@ impl SuiJsonValue {
             (JsonValue::String(s), MoveTypeLayout::Struct(MoveStructLayout::Runtime(inner))) => {
                 Self::handle_inner_struct_layout(inner, val, ty, s)?
             }
+            // For ascii and utf8 strings
+            (
+                JsonValue::String(s),
+                MoveTypeLayout::Struct(MoveStructLayout::WithTypes { type_, fields }),
+            ) if is_move_string_type(type_) => Self::handle_inner_struct_layout(
+                &fields.iter().map(|l| l.layout.clone()).collect::<Vec<_>>(),
+                val,
+                ty,
+                s,
+            )?,
+            // For ID
+            (
+                JsonValue::String(s),
+                MoveTypeLayout::Struct(MoveStructLayout::WithTypes { type_, fields }),
+            ) if type_ == &ID::type_() => {
+                if fields.len() != 1 {
+                    bail!(
+                        "Cannot convert string arg {s} to {type_} which is expected to be a struct with one field"
+                    );
+                };
+                let addr = SuiAddress::from_str(s)?;
+                MoveValue::Address(addr.into())
+            }
             (JsonValue::String(s), MoveTypeLayout::Vector(t)) => {
                 match &**t {
                     MoveTypeLayout::U8 => {
@@ -287,7 +313,7 @@ impl SuiJsonValue {
                 let addr = json_value_to_sui_address(v)?;
                 MoveValue::Address(addr.into())
             }
-            _ => bail!("Unexpected arg {val} for expected type {ty}"),
+            _ => bail!("Unexpected arg {val:?} for expected type {ty}"),
         })
     }
 }
@@ -308,7 +334,7 @@ fn json_value_to_sui_address(value: &JsonValue) -> anyhow::Result<SuiAddress> {
             Ok(SuiAddress::from_str(&s)?)
         }
         JsonValue::Array(bytes) => {
-            fn value_to_byte_array(v: &Vec<Value>) -> Option<Vec<u8>> {
+            fn value_to_byte_array(v: &Vec<JsonValue>) -> Option<Vec<u8>> {
                 let mut bytes = vec![];
                 for b in v {
                     let b = b.as_u64()?;
@@ -355,6 +381,24 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
                 let string: String = bcs::from_bytes(&v.simple_serialize()?).ok()?;
                 json!(string)
             }
+            MoveStruct::WithTypes { fields, type_ } if is_move_option_type(type_) => {
+                // option has a single vec field.
+                let (_, v) = fields.first()?;
+                if let MoveValue::Vector(v) = v {
+                    JsonValue::Array(v.iter().filter_map(move_value_to_json).collect::<Vec<_>>())
+                } else {
+                    return None;
+                }
+            }
+            MoveStruct::WithTypes { fields, type_ } if type_ == &ID::type_() => {
+                // option has a single vec field.
+                let (_, v) = fields.first()?;
+                if let MoveValue::Address(address) = v {
+                    json!(SuiAddress::from(*address))
+                } else {
+                    return None;
+                }
+            }
             // We only care about values here, assuming struct type information is known at the client side.
             MoveStruct::WithTypes { fields, .. } | MoveStruct::WithFields(fields) => {
                 let fields = fields
@@ -375,12 +419,26 @@ fn is_move_string_type(tag: &StructTag) -> bool {
             && tag.module.as_ident_str() == STD_ASCII_MODULE_NAME
             && tag.name.as_ident_str() == STD_ASCII_STRUCT_NAME)
 }
+fn is_move_option_type(tag: &StructTag) -> bool {
+    tag.address == MOVE_STDLIB_ADDRESS
+        && tag.module.as_ident_str() == STD_OPTION_MODULE_NAME
+        && tag.name.as_ident_str() == STD_OPTION_STRUCT_NAME
+}
 
-impl std::str::FromStr for SuiJsonValue {
+impl FromStr for SuiJsonValue {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
-        // Wrap input with json! if serde_json fails, the failure usually cause by missing quote escapes.
-        SuiJsonValue::new(serde_json::from_str(s).or_else(|_| serde_json::from_value(json!(s)))?)
+        fn try_escape_array(s: &str) -> JsonValue {
+            let s = s.trim();
+            if s.starts_with('[') && s.ends_with(']') {
+                if let Some(s) = s.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                    return JsonValue::Array(s.split(',').map(try_escape_array).collect());
+                }
+            }
+            json!(s)
+        }
+        // if serde_json fails, the failure usually cause by missing quote escapes, try parse array manually.
+        SuiJsonValue::new(serde_json::from_str(s).unwrap_or_else(|_| try_escape_array(s)))
     }
 }
 
@@ -516,12 +574,7 @@ pub fn primitive_type(
                 (
                     true,
                     Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
-                        type_: StructTag {
-                            address: *RESOLVED_ASCII_STR.0,
-                            module: RESOLVED_ASCII_STR.1.into(),
-                            name: RESOLVED_ASCII_STR.2.into(),
-                            type_params: vec![],
-                        },
+                        type_: resolved_to_struct(RESOLVED_ASCII_STR),
                         fields: vec![MoveFieldLayout::new(
                             ident_str!("bytes").into(),
                             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
@@ -533,12 +586,7 @@ pub fn primitive_type(
                 (
                     true,
                     Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
-                        type_: StructTag {
-                            address: *RESOLVED_UTF8_STR.0,
-                            module: RESOLVED_UTF8_STR.1.into(),
-                            name: RESOLVED_UTF8_STR.2.into(),
-                            type_params: vec![],
-                        },
+                        type_: resolved_to_struct(RESOLVED_UTF8_STR),
                         fields: vec![MoveFieldLayout::new(
                             ident_str!("bytes").into(),
                             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
@@ -548,9 +596,13 @@ pub fn primitive_type(
             } else if resolved_struct == RESOLVED_SUI_ID {
                 (
                     true,
-                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
-                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
-                    ]))),
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+                        type_: resolved_to_struct(RESOLVED_SUI_ID),
+                        fields: vec![MoveFieldLayout::new(
+                            ident_str!("bytes").into(),
+                            MoveTypeLayout::Address,
+                        )],
+                    })),
                 )
             } else {
                 (false, None)
@@ -582,6 +634,15 @@ pub fn primitive_type(
         SignatureToken::Signer
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => (false, None),
+    }
+}
+
+fn resolved_to_struct(resolved_type: (&AccountAddress, &IdentStr, &IdentStr)) -> StructTag {
+    StructTag {
+        address: *resolved_type.0,
+        module: resolved_type.1.into(),
+        name: resolved_type.2.into(),
+        type_params: vec![],
     }
 }
 
@@ -659,7 +720,7 @@ fn resolve_call_arg(
                         e
                     )
                     },
-                )?))
+                )?));
             }
             None => {
                 debug_assert!(

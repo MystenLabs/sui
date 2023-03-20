@@ -5,9 +5,11 @@ use std::path::Path;
 use std::str::FromStr;
 
 use fastcrypto::encoding::{Encoding, Hex};
+use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
+use move_core_types::value::{MoveFieldLayout, MoveStructLayout};
 use move_core_types::{
-    account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
+    account_address::AccountAddress, ident_str, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
 use sui_framework::make_system_packages;
@@ -15,8 +17,12 @@ use sui_framework_build::compiled_package::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
 use crate::ResolvedCallArg;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::base_types::{
+    ObjectID, SuiAddress, TransactionDigest, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
+    STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME,
+};
 use sui_types::object::Object;
+use sui_types::MOVE_STDLIB_ADDRESS;
 
 use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonValue};
@@ -789,4 +795,68 @@ fn test_from_str() {
         "0x0000000000000000000000000000000000000000000000000000000000000001",
         test.0.as_str().unwrap()
     );
+}
+
+#[test]
+fn test_sui_call_arg_string_type() {
+    let arg1 = bcs::to_bytes("Some String").unwrap();
+
+    let string_layout = Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("bytes").into(),
+            layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        }],
+    }));
+    let v = SuiJsonValue::from_bcs_bytes(string_layout.as_ref(), &arg1).unwrap();
+
+    assert_eq!(json! {"Some String"}, v.to_json_value());
+}
+
+#[test]
+fn test_sui_call_arg_option_type() {
+    let arg1 = bcs::to_bytes(&Some("Some String")).unwrap();
+
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("bytes").into(),
+            layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        }],
+    });
+
+    let option_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_OPTION_MODULE_NAME.into(),
+            name: STD_OPTION_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout {
+            name: ident_str!("vec").into(),
+            layout: MoveTypeLayout::Vector(Box::new(string_layout.clone())),
+        }],
+    });
+
+    let v = SuiJsonValue::from_bcs_bytes(Some(option_layout.clone()).as_ref(), &arg1).unwrap();
+
+    let bytes = v
+        .to_bcs_bytes(&MoveTypeLayout::Vector(Box::new(string_layout)))
+        .unwrap();
+
+    assert_eq!(json! {["Some String"]}, v.to_json_value());
+    assert_eq!(arg1, bytes);
+
+    let s = SuiJsonValue::from_str("[test, test2]").unwrap();
+    println!("{s:?}");
 }
