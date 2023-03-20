@@ -353,7 +353,7 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
             ]
             .join(" ");
-            ["export BENCH_MODE=true", "source $HOME/.cargo/env", &run].join(" && ")
+            ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
         let repo = self.settings.repository_name();
@@ -406,6 +406,9 @@ impl Orchestrator {
             }
 
             if aggregator.benchmark_duration() >= parameters.duration {
+                break;
+            } else if elapsed > (parameters.duration + Self::SCRAPE_INTERVAL).as_secs() {
+                display::warn("Maximum scraping duration exceeded");
                 break;
             }
         }

@@ -11,9 +11,10 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as tick
 from glob import glob
 from itertools import cycle
+from defaultlist import defaultlist
 
 # A simple python script to plot measurements results. This script requires
-# matplotlib as dependency: `pip install matplotlib`.
+# the following dependencies: `pip install matplotlib defaultlist`.
 
 
 def aggregate_tps(measurement, i=-1):
@@ -57,6 +58,8 @@ class PlotType(Enum):
     SCALABILITY = 3
     INSPECT_TPS = 4
     INSPECT_LATENCY = 5
+    DURATION_TPS = 6
+    DURATION_LATENCY = 7
 
 
 class PlotError(Exception):
@@ -120,10 +123,8 @@ class Plotter:
             f = '' if id.faults == 0 else f' ({id.faults} faulty)'
             l = f'{id.max_latency}s latency cap{f}'
             return f'{l} - {id.shared_objects_ratio}% shared objects'
-        elif plot_type in [PlotType.INSPECT_TPS, PlotType.INSPECT_LATENCY]:
-            return None
         else:
-            assert False
+            return None
 
     def _axes_labels(self, plot_type):
         if plot_type == PlotType.L_GRAPH:
@@ -132,9 +133,9 @@ class Plotter:
             return ('Input Load (tx/s)', 'Throughput (tx/s)')
         elif plot_type == PlotType.SCALABILITY:
             return ('Committee size', 'Throughput (tx/s)')
-        elif plot_type == PlotType.INSPECT_TPS:
+        elif plot_type in [PlotType.INSPECT_TPS, PlotType.DURATION_TPS]:
             return ('Duration (s)', 'Throughput (tx/s)')
-        elif plot_type == PlotType.INSPECT_LATENCY:
+        elif plot_type in [PlotType.INSPECT_LATENCY, PlotType.DURATION_LATENCY]:
             return ('Duration (s)', 'Latency (s)')
         else:
             assert False
@@ -163,12 +164,22 @@ class Plotter:
             plot_name = f'inspect-tps-{id}'
         elif plot_type == PlotType.INSPECT_LATENCY:
             plot_name = f'inspect-latency-{id}'
+        elif plot_type == PlotType.DURATION_TPS:
+            plot_name = f'inspect-aggregate-tps-{id}'
+        elif plot_type == PlotType.DURATION_LATENCY:
+            plot_name = f'inspect-aggregate-latency-{id}'
         else:
             assert False
 
         x_label, y_label = self._axes_labels(plot_type)
 
-        if data and (not plot_type in [PlotType.INSPECT_TPS, PlotType.INSPECT_LATENCY]):
+        skip_legend = plot_type in [
+            PlotType.INSPECT_TPS,
+            PlotType.INSPECT_LATENCY,
+            PlotType.DURATION_TPS,
+            PlotType.DURATION_LATENCY,
+        ]
+        if data and (not skip_legend):
             plt.legend(
                 loc=legend_location,
                 bbox_to_anchor=legend_anchor,
@@ -322,6 +333,64 @@ class Plotter:
         self._plot(plot_tps_data, PlotType.INSPECT_TPS)
         self._plot(plot_lat_data, PlotType.INSPECT_LATENCY)
 
+    def plot_duration(self, file, precision):
+        with open(file, 'r') as f:
+            try:
+                measurement = json.loads(f.read())
+            except json.JSONDecodeError as e:
+                raise PlotError(f'Failed to load file {file}: {e}')
+
+        total_duration = float(measurement['parameters']['duration']['secs'])
+        length = int(total_duration / precision)
+
+        scrapers_tps_data, scrapers_lat_data = [], []
+        for data in measurement['scrapers'].values():
+            all_y_tps_values = [[] for _ in range(length)]
+            all_y_lat_values = [[] for _ in range(length)]
+
+            for d in data:
+                print(all_y_tps_values)
+                count = float(d['count'])
+                duration = float(d['timestamp']['secs'])
+                total = float(d['sum']['secs'])
+
+                tps = (count / duration) if duration != 0 else 0
+                avg_latency = total / count if count != 0 else 0
+
+                if duration <= total_duration:
+                    i = int(duration / precision)
+                    all_y_tps_values[i] += [tps]
+                    all_y_lat_values[i] += [avg_latency]
+
+            aggregate_y_tps_values, aggregate_y_lat_values = [], []
+            for x in all_y_tps_values:
+                aggregate_y_tps_values += [
+                    sum(x) / len(x) if len(x) != 0 else 0
+                ]
+            for x in all_y_lat_values:
+                aggregate_y_lat_values += [
+                    sum(x) / len(x) if len(x) != 0 else 0
+                ]
+
+            scrapers_tps_data += [aggregate_y_tps_values]
+            scrapers_lat_data += [aggregate_y_lat_values]
+
+        x_values, e_values = [], []
+        y_tps_values, y_lat_values = [0]*length, [0]*length
+        for i in range(length):
+            x_values += [int((i*precision + (i+1)*precision)/2)]
+            y_tps_values[i] = sum(x[i] for x in scrapers_tps_data)
+            y_lat_values[i] = max(x[i] for x in scrapers_lat_data)
+            e_values += [0]
+
+        basename = os.path.basename(file)
+        id = '-'.join(basename.split('-')[1:]).split('.')[0]
+
+        plot_tps_data = [(id, x_values, y_tps_values, e_values)]
+        plot_lat_data = [(id, x_values, y_lat_values, e_values)]
+        self._plot(plot_tps_data, PlotType.DURATION_TPS)
+        self._plot(plot_lat_data, PlotType.DURATION_LATENCY)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -329,14 +398,14 @@ if __name__ == "__main__":
         description='Simple script to plot measurement data'
     )
     parser.add_argument(
-        '--dir', default='../../../results', help='Data directory'
+        '--dir', default='./', help='Data directory'
     )
     parser.add_argument(
         '--shared-objects-ratio', nargs='+', type=int, default=[0],
         help='The ratio of shared objects to plot (in separate graphs)'
     )
     parser.add_argument(
-        '--nodes', nargs='+', type=int, default=[4],
+        '--committee', nargs='+', type=int, default=[4],
         help='The committee sizes to plot on the same graph'
     )
     parser.add_argument(
@@ -356,10 +425,14 @@ if __name__ == "__main__":
         help='The number of columns of the legend'
     )
     parser.add_argument('--inspect', help='The measurement file to inspect')
+    parser.add_argument(
+        '--precision', type=float, default=60.0,
+        help='The granularity of the duration when aggregating results'
+    )
     args = parser.parse_args()
 
     for r in args.shared_objects_ratio:
-        parameters = PlotParameters(r, args.nodes, args.faults)
+        parameters = PlotParameters(r, args.committee, args.faults)
         plotter = Plotter(
             args.dir, parameters, args.y_max, args.legend_columns
         )
@@ -367,5 +440,6 @@ if __name__ == "__main__":
         plotter.plot_health()
         plotter.plot_scalability(args.max_latencies)
 
-        if args.inspect is not None:
-            plotter.plot_inspect(args.inspect)
+    if args.inspect is not None:
+        plotter.plot_inspect(args.inspect)
+        plotter.plot_duration(args.inspect, args.precision)
