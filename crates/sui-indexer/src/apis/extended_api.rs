@@ -30,7 +30,6 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         cursor: Option<EpochId>,
         limit: Option<usize>,
     ) -> RpcResult<EpochPage> {
-        let cursor = cursor.unwrap_or_default();
         let limit = cap_page_limit(limit);
         let mut epochs = self.state.get_epochs(cursor, limit + 1)?;
 
