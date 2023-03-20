@@ -19,8 +19,9 @@ use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -206,7 +207,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
-    pub consensus_handler_scores: Histogram,
+    pub consensus_handler_scores: IntGaugeVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -418,10 +419,10 @@ impl AuthorityMetrics {
                 "Number of low scoring authorities based on reputation scores from consensus", 
                 registry
             ).unwrap(),
-            consensus_handler_scores: register_histogram_with_registry!(
+            consensus_handler_scores: register_int_gauge_vec_with_registry!(
                 "consensus_handler_scores",
                 "Distribution of scores from consensus",
-                POSITIVE_INT_BUCKETS.to_vec(),
+                &["authority"],
                 registry,
             )
                 .unwrap(),
