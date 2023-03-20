@@ -272,6 +272,10 @@ export class Transaction {
    * Add a new non-object input to the transaction.
    */
   pure(
+    /**
+     * The pure value that will be used as the input value. If this is a Uint8Array, then the value
+     * is assumed to be raw bytes, and will be used directly.
+     */
     value: unknown,
     /**
      * The BCS type to serialize the value into. If not provided, the type will automatically be determined
@@ -280,7 +284,14 @@ export class Transaction {
     type?: string,
   ) {
     // TODO: we can also do some deduplication here
-    return this.#input('pure', type ? Inputs.Pure(type, value) : value);
+    return this.#input(
+      'pure',
+      value instanceof Uint8Array
+        ? Inputs.Pure(value)
+        : type
+        ? Inputs.Pure(value, type)
+        : value,
+    );
   }
 
   /** Add a command to the transaction. */
@@ -459,7 +470,7 @@ export class Transaction {
             objectsToResolve.push({ id: input.value, input });
           } else if (wellKnownEncoding.kind === 'pure') {
             // Pure encoding, so construct BCS bytes:
-            input.value = Inputs.Pure(wellKnownEncoding.type, input.value);
+            input.value = Inputs.Pure(input.value, wellKnownEncoding.type);
           } else {
             throw new Error('Unexpected input format.');
           }
@@ -518,7 +529,7 @@ export class Transaction {
             const serType = getPureSerializationType(param, inputValue);
 
             if (serType) {
-              input.value = Inputs.Pure(serType, inputValue);
+              input.value = Inputs.Pure(inputValue, serType);
               return;
             }
 
@@ -620,6 +631,13 @@ export class Transaction {
             overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
           }),
         });
+
+        if (dryRunResult.effects.status.status !== 'success') {
+          throw new Error(
+            'Dry run failed, could not automatically determine a budget',
+            { cause: dryRunResult },
+          );
+        }
 
         const coinOverhead =
           GAS_OVERHEAD_PER_COIN *

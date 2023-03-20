@@ -3,7 +3,7 @@
 
 import { toB58 } from '@mysten/bcs';
 import { describe, it, expect } from 'vitest';
-import { Transaction, Commands } from '..';
+import { Transaction, Commands, builder } from '..';
 import { Inputs } from '../Inputs';
 
 it('can construct and serialize an empty tranaction', () => {
@@ -54,13 +54,23 @@ describe('offline build', () => {
 
   it('builds a split command', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure('u64', 100))));
+    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure(100, 'u64'))));
     await tx.build();
   });
 
-  it('infers the type of inputs', async () => {
+  it('can determine the type of inputs for built-in commands', async () => {
     const tx = setup();
     tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    await tx.build();
+  });
+
+  it('supports pre-serialized inputs as Uint8Array', async () => {
+    const tx = setup();
+    const inputBytes = builder.ser('u64', 100n).toBytes();
+    // Use bytes directly in pure value:
+    tx.add(Commands.SplitCoin(tx.gas, tx.pure(inputBytes)));
+    // Use bytes in input helper:
+    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure(inputBytes))));
     await tx.build();
   });
 
@@ -75,9 +85,9 @@ describe('offline build', () => {
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          tx.pure(Inputs.Pure('string', 'foo')),
-          tx.pure(Inputs.Pure('string', 'bar')),
-          tx.pure(Inputs.Pure('string', 'baz')),
+          tx.pure(Inputs.Pure('foo', 'string')),
+          tx.pure(Inputs.Pure('bar', 'string')),
+          tx.pure(Inputs.Pure('baz', 'string')),
         ],
       }),
     );
@@ -95,9 +105,9 @@ describe('offline build', () => {
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          tx.pure(Inputs.Pure('string', 'foo')),
-          tx.pure(Inputs.Pure('string', 'bar')),
-          tx.pure(Inputs.Pure('string', 'baz')),
+          tx.pure(Inputs.Pure('foo', 'string')),
+          tx.pure(Inputs.Pure('bar', 'string')),
+          tx.pure(Inputs.Pure('baz', 'string')),
         ],
       }),
     );
