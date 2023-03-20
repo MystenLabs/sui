@@ -55,6 +55,7 @@
 -  [Function `validator_staking_pool_id`](#0x3_sui_system_state_inner_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x3_sui_system_state_inner_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
+-  [Function `get_storage_fund_balance`](#0x3_sui_system_state_inner_get_storage_fund_balance)
 -  [Function `upgrade_system_state`](#0x3_sui_system_state_inner_upgrade_system_state)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
 -  [Module Specification](#@Module_Specification_1)
@@ -248,6 +249,24 @@ The top-level object containing all information of the Sui system.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
  MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
+</dd>
+<dt>
+<code>safe_mode_storage_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>safe_mode_computation_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>safe_mode_storage_rebates: u64</code>
+</dt>
+<dd>
+
 </dd>
 <dt>
 <code>epoch_start_timestamp_ms: u64</code>
@@ -456,6 +475,15 @@ the epoch advancement transaction.
 
 
 
+<a name="0x3_sui_system_state_inner_ESafeModeGasNotProcessed"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>: u64 = 7;
+</code></pre>
+
+
+
 <a name="0x3_sui_system_state_inner_EStakedSuiFromWrongEpoch"></a>
 
 
@@ -513,6 +541,9 @@ This function will be called only once in genesis.
         validator_report_records: <a href="_empty">vec_map::empty</a>(),
         <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>,
         safe_mode: <b>false</b>,
+        safe_mode_storage_rewards: <a href="_zero">balance::zero</a>(),
+        safe_mode_computation_rewards: <a href="_zero">balance::zero</a>(),
+        safe_mode_storage_rebates: 0,
         epoch_start_timestamp_ms,
         extra_fields: <a href="_new">bag::new</a>(ctx),
     };
@@ -1750,6 +1781,14 @@ gas coins.
         <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>,
     );
 
+    // Accumulate the gas summary during safe_mode before processing any rewards:
+    <b>let</b> safe_mode_storage_rewards = <a href="_withdraw_all">balance::withdraw_all</a>(&<b>mut</b> self.safe_mode_storage_rewards);
+    <a href="_join">balance::join</a>(&<b>mut</b> storage_reward, safe_mode_storage_rewards);
+    <b>let</b> safe_mode_computation_rewards = <a href="_withdraw_all">balance::withdraw_all</a>(&<b>mut</b> self.safe_mode_computation_rewards);
+    <a href="_join">balance::join</a>(&<b>mut</b> computation_reward, safe_mode_computation_rewards);
+    storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
+    self.safe_mode_storage_rebates = 0;
+
     <b>let</b> total_validators_stake = <a href="validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
     <b>let</b> storage_fund_balance = <a href="_value">balance::value</a>(&self.storage_fund);
     <b>let</b> total_stake = storage_fund_balance + total_validators_stake;
@@ -1841,6 +1880,10 @@ gas coins.
         }
     );
     self.safe_mode = <b>false</b>;
+    // Double check that the gas from safe mode <b>has</b> been processed.
+    <b>assert</b>!(self.safe_mode_storage_rebates == 0
+        && <a href="_value">balance::value</a>(&self.safe_mode_storage_rewards) == 0
+        && <a href="_value">balance::value</a>(&self.safe_mode_computation_rewards) == 0, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>);
     storage_rebate
 }
 </code></pre>
@@ -1861,7 +1904,7 @@ system running and continue making epoch changes.
 version
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1874,6 +1917,9 @@ version
     self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>,
     new_epoch: u64,
     next_protocol_version: u64,
+    storage_reward: Balance&lt;SUI&gt;,
+    computation_reward: Balance&lt;SUI&gt;,
+    storage_rebate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
@@ -1881,7 +1927,11 @@ version
 
     self.epoch = new_epoch;
     self.protocol_version = next_protocol_version;
+
     self.safe_mode = <b>true</b>;
+    <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_storage_rewards, storage_reward);
+    <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_computation_rewards, computation_reward);
+    self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
 }
 </code></pre>
 
@@ -2090,6 +2140,30 @@ Returns all the validators who are currently reporting <code>addr</code>
     } <b>else</b> {
         <a href="_empty">vec_set::empty</a>()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_get_storage_fund_balance"></a>
+
+## Function `get_storage_fund_balance`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): u64 {
+    <a href="_value">balance::value</a>(&self.storage_fund)
 }
 </code></pre>
 
