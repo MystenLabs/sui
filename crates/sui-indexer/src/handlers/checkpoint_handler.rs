@@ -359,7 +359,9 @@ where
         // Index addresses
         let addresses = transactions
             .iter()
-            .flat_map(|tx| tx.get_addresses(checkpoint.epoch, checkpoint.sequence_number))
+            .flat_map(|tx| {
+                tx.get_addresses(checkpoint.epoch, <u64>::from(checkpoint.sequence_number))
+            })
             .collect();
 
         // Index epoch
