@@ -510,7 +510,7 @@ module sui::sui_system {
         storage_rebate
     }
 
-    // TODO: keep rewards for safe mode epoch change too and make this a private fun.
+    // TODO: Make this a private fun.
     /// An extremely simple version of advance_epoch.
     /// This is called in two situations:
     ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the

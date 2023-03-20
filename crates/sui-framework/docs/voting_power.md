@@ -161,7 +161,6 @@ at <code><a href="voting_power.md#0x2_voting_power_MAX_VOTING_POWER">MAX_VOTING_
     <b>let</b> (info_list, remaining_power) = <a href="voting_power.md#0x2_voting_power_init_voting_power_info">init_voting_power_info</a>(validators, threshold);
     <a href="voting_power.md#0x2_voting_power_adjust_voting_power">adjust_voting_power</a>(&<b>mut</b> info_list, threshold, remaining_power);
     <a href="voting_power.md#0x2_voting_power_update_voting_power">update_voting_power</a>(validators, info_list);
-    // TODO: We could consider removing this once we are confident about the code.
     <a href="voting_power.md#0x2_voting_power_check_invariants">check_invariants</a>(validators);
 }
 </code></pre>

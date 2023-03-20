@@ -107,8 +107,6 @@ A list of system config parameters.
 <dd>
  The starting epoch in which various on-chain governance features take effect:
  - stake subsidies are paid out
- - TODO validators with stake less than a 'validator_stake_threshold' are
-   kicked from the validator set
 </dd>
 <dt>
 <code>epoch_duration_ms: u64</code>
@@ -214,8 +212,7 @@ The top-level object containing all information of the Sui system.
  Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
- TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
- redistribute them.
+ MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
 </dd>
 <dt>
 <code>epoch_start_timestamp_ms: u64</code>
