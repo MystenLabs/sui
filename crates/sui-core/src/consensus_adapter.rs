@@ -184,7 +184,10 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         self.clone()
             .submit_transaction(TransactionProto { transaction: bytes })
             .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+            .map_err(|e| match e.code() {
+                sui_network::tonic::Code::ResourceExhausted => SuiError::ConsensusOverloaded,
+                _ => SuiError::ConsensusConnectionBroken(format!("{:?}", e)),
+            })
             .tap_err(|r| {
                 // Will be logged by caller as well.
                 warn!("Submit transaction failed with: {:?}", r);

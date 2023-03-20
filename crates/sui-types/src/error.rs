@@ -378,6 +378,8 @@ pub enum SuiError {
     FailedToHearBackFromConsensus(String),
     #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
     HandleConsensusTransactionFailure(String),
+    #[error("Consensus is overloaded")]
+    ConsensusOverloaded,
 
     // Cryptography errors.
     #[error("Signature seed invalid length, input byte size was: {0}")]
@@ -595,6 +597,7 @@ impl SuiError {
             // Overload errors
             SuiError::TooManyTransactionsPendingExecution { .. } => (false, true),
             SuiError::TooManyTransactionsPendingOnObject { .. } => (false, true),
+            SuiError::ConsensusOverloaded => (true, true),
             _ => (false, false),
         }
     }

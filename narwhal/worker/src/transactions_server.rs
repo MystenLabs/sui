@@ -8,6 +8,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::server::Server;
 use mysten_network::Multiaddr;
 use std::time::Duration;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use tonic::{Request, Response, Status};
@@ -151,10 +152,13 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
         // Send the transaction to the batch maker.
         let (notifier, when_done) = tokio::sync::oneshot::channel();
         self.tx_batch_maker
-            .send((message.to_vec(), notifier))
-            .await
-            .map_err(|_| DagError::ShuttingDown)
-            .map_err(|e| Status::not_found(e.to_string()))?;
+            .try_send((message.to_vec(), notifier))
+            .map_err(|e| match e {
+                TrySendError::Full(_) => {
+                    Status::resource_exhausted("reached maximum batches pending in BatchMaker")
+                }
+                TrySendError::Closed(_) => Status::not_found(DagError::ShuttingDown.to_string()),
+            })?;
 
         let _digest = when_done
             .await
@@ -179,10 +183,18 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
             }
             // Send the transaction to the batch maker.
             let (notifier, when_done) = tokio::sync::oneshot::channel();
-            self.tx_batch_maker
-                .send((txn.transaction.to_vec(), notifier))
-                .await
-                .expect("Failed to send transaction");
+            match self
+                .tx_batch_maker
+                .try_send((txn.transaction.to_vec(), notifier))
+            {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => {
+                    return Err(Status::resource_exhausted(
+                        "reached maximum batches pending in BatchMaker",
+                    ))
+                }
+                Err(e) => panic!("failed to send transaction: {e:?}"),
+            };
 
             // Note that here we do not wait for a response because this would
             // mean that we process only a single message from this stream at a
