@@ -26,7 +26,7 @@ export interface PageHeaderProps {
 const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
     Transaction: CallIcon,
     Checkpoint: Flag16,
-    Object:  FlagFill16,
+    Object: FlagFill16,
     Package: CallIcon,
     Address: () => (
         <SenderIcon
