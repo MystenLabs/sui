@@ -70,6 +70,7 @@ module sui::package_tests {
             &mut cap,
             package::dep_only_policy(),
             sui::hash::blake2b256(&b"package contents"),
+            false,
         );
 
         let receipt = package::test_upgrade(ticket);
@@ -104,6 +105,7 @@ module sui::package_tests {
             &mut cap,
             package::compatible_policy(),
             sui::hash::blake2b256(&b"package contents"),
+            false,
         );
 
         abort 0
@@ -119,6 +121,7 @@ module sui::package_tests {
             &mut cap,
             package::compatible_policy(),
             sui::hash::blake2b256(&b"package contents 0"),
+            false,
         );
 
         // It's an error to try and issue more than one simultaneous
@@ -127,6 +130,7 @@ module sui::package_tests {
             &mut cap,
             package::compatible_policy(),
             sui::hash::blake2b256(&b"package contents 1"),
+            false,
         );
 
         abort 0
@@ -143,6 +147,7 @@ module sui::package_tests {
             &mut cap1,
             package::dep_only_policy(),
             sui::hash::blake2b256(&b"package contents 1"),
+            false,
         );
 
         let receipt1 = package::test_upgrade(ticket1);
