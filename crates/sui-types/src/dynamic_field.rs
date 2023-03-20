@@ -20,6 +20,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use shared_crypto::intent::HashingIntentScope;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 
 /// Rust version of the Move sui::dynamic_field::Field type
@@ -241,16 +242,19 @@ pub fn get_dynamic_field_from_store<S, K, V>(
 ) -> Result<V, SuiError>
 where
     S: ObjectStore,
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
     V: Serialize + DeserializeOwned,
 {
     let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
     let object = object_store.get_object(&id)?.ok_or_else(|| {
-        SuiError::DynamicFieldReadError("Dynamic field not found on parent".to_owned())
+        SuiError::DynamicFieldReadError(format!(
+            "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
+            key, id, parent_id
+        ))
     })?;
     let move_object = object.data.try_as_move().ok_or_else(|| {
-        SuiError::DynamicFieldReadError("Dynamic field is not a Move object".to_owned())
+        SuiError::DynamicFieldReadError(format!("Dynamic field {:?} is not a Move object", id))
     })?;
     Ok(bcs::from_bytes::<Field<K, V>>(move_object.contents())
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?
