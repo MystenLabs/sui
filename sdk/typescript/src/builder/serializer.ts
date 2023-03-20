@@ -57,13 +57,14 @@ export function isTxContext(param: SuiMoveNormalizedType): boolean {
   );
 }
 
-function expectType(typeName: string, argVal?: SuiJsonValue) {
+function expectType(typeNames: string[], argVal?: SuiJsonValue) {
   if (typeof argVal === 'undefined') {
     return;
   }
-  if (typeof argVal !== typeName) {
+  const check = typeNames.some(typeName =>  typeof argVal === typeName);
+  if (check) {
     throw new Error(
-      `Expect ${argVal} to be ${typeName}, received ${typeof argVal}`,
+      `Expect ${argVal} to be  of type in ${typeNames}, received ${typeof argVal}`,
     );
   }
 }
@@ -89,11 +90,11 @@ export function getPureSerializationType(
         normalizedType.type,
       ) !== -1
     ) {
-      expectType('number', argVal);
+      expectType(['string', 'number'], argVal);
     } else if (normalizedType.type === 'Bool') {
-      expectType('boolean', argVal);
+      expectType(['boolean'], argVal);
     } else if (normalizedType.type === 'Address') {
-      expectType('string', argVal);
+      expectType(['string'], argVal);
       if (argVal && !isValidSuiAddress(argVal as string)) {
         throw new Error('Invalid Sui Address');
       }
