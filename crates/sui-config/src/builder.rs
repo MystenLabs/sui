@@ -24,7 +24,7 @@ use std::{
     sync::Arc,
 };
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::base_types::AuthorityName;
+use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -344,7 +344,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         protocol_key,
                         worker_key,
                         network_key,
-                        account_key,
+                        account_address: SuiAddress::from(&account_key),
                         gas_price: validator.genesis_info.gas_price,
                         commission_rate: validator.genesis_info.commission_rate,
                         network_address,

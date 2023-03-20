@@ -176,7 +176,7 @@ async fn init_genesis(
             name: format!("validator-{i}"),
             protocol_key: authority_name,
             worker_key: worker_name,
-            account_key: account_key_pair.public(),
+            account_address: SuiAddress::from(&account_key_pair.public()),
             network_key: network_key_pair.public().clone(),
             gas_price: 1,
             commission_rate: 0,

@@ -347,14 +347,12 @@ impl From<GenesisValidatorInfo> for GenesisValidatorMetadata {
             proof_of_possession,
         }: GenesisValidatorInfo,
     ) -> Self {
-        let sui_address = info.sui_address();
-
         Self {
             name: info.name,
             description: info.description,
             image_url: info.image_url,
             project_url: info.project_url,
-            sui_address,
+            sui_address: info.account_address,
             gas_price: info.gas_price,
             commission_rate: info.commission_rate,
             protocol_public_key: info.protocol_key.as_bytes().to_vec(),
@@ -1507,7 +1505,7 @@ mod test {
             name: "0".into(),
             protocol_key: key.public().into(),
             worker_key: worker_key.public().clone(),
-            account_key: account_key.public().clone().into(),
+            account_address: SuiAddress::from(account_key.public()),
             network_key: network_key.public().clone(),
             gas_price: 1,
             commission_rate: 0,
