@@ -718,7 +718,7 @@ export class JsonRpcProvider {
   }): Promise<DevInspectResults> {
     let devInspectTxBytes;
     if (Transaction.is(input.transaction)) {
-      input.transaction.setSender(input.sender);
+      input.transaction.setSenderIfNotSet(input.sender);
       devInspectTxBytes = toB64(
         await input.transaction.build({
           provider: this,
