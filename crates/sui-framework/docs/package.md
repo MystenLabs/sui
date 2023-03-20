@@ -721,7 +721,7 @@ the parent package must be compatible with the policy in the ticket
 for the upgrade to succeed.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, <a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, <a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;, _dummy_parameter: bool): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
 </code></pre>
 
 
@@ -733,7 +733,8 @@ for the upgrade to succeed.
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(
     cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>,
     policy: u8,
-    <a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;
+    <a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;,
+    _dummy_parameter: bool,
 ): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = <a href="object.md#0x2_object_id_from_address">object::id_from_address</a>(@0x0);
     <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a> != id_zero, <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
