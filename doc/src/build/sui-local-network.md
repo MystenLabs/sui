@@ -281,6 +281,11 @@ To resolve this, switch or update to Node.js 18 and then try again.
 
 For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
 
+When [installing sui-test-validator](#Install Sui), if you do not have libpq installed, you might see the following message:
+`ld: library not found for -lpq`
+To resolve this, you can install libpq by `brew install libpq`, and in your profile, add `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. If this doesn't work, try `brew link --force libpq`.
+
+
 ## Test with the Sui TypeScript SDK
 
 The published version of the Sui TypeScript SDK might be an earlier version than the version of Sui you installed for your local network. To make sure you're using the latest version of the SDK, use the `experimental`-tagged version (for example, `0.0.0-experimental-20230317184920`) in the [Current Tags](https://www.npmjs.com/package/@mysten/sui.js/v/0.0.0-experimental-20230127130009?activeTab=versions) section of the Sui NPM registry.
