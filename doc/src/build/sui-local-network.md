@@ -20,7 +20,29 @@ You have two options to install Sui:
  * Clone the Sui GitHub repository locally, and then install Sui from your local drive
  * Install Sui directly from the remote Sui repository.
 
- If you clone the repository and install Sui from your local drive, you can also start a local Sui Explorer and Sui Wallet that works with your local network.
+If you clone the repository and install Sui from your local drive, you can also start a local Sui Explorer and Sui Wallet that works with your local network.
+ 
+When you install `sui-test-validator` but don't have libpq installed, you might see the following message:
+
+`ld: library not found for -lpq`
+
+To resolve this, use Brew to install `libpq` with command: 
+
+```shell
+brew install libpq
+```
+
+Also add the path to your profile:
+
+```
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`
+```
+
+If you still have an issue, run the following command:
+
+```shell
+brew link --force libpq
+```
 
 ### Install Sui locally
 
@@ -270,6 +292,7 @@ Run the following command from the `sui` root folder:
 ```bash
 pnpm sdk test:e2e
 ```
+For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
 
 ## Troubleshooting
 
@@ -278,13 +301,6 @@ If you do not use [Node.js 18](https://nodejs.org/de/blog/announcements/v18-rele
 `Retrying requesting from faucet: Retry failed: fetch is not defined`
 
 To resolve this, switch or update to Node.js 18 and then try again. 
-
-For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
-
-When [installing sui-test-validator](#Install Sui), if you do not have libpq installed, you might see the following message:
-`ld: library not found for -lpq`
-To resolve this, you can install libpq by `brew install libpq`, and in your profile, add `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. If this doesn't work, try `brew link --force libpq`.
-
 
 ## Test with the Sui TypeScript SDK
 
