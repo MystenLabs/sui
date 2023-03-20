@@ -355,6 +355,11 @@ module sui::kiosk {
         assert!(object::id(self) == cap.for, ENotOwner);
         &mut self.profits
     }
+    
+    /// Check whether the an item is present in the `Kiosk`.
+    public fun has_item(self: &Kiosk, item_id: ID): bool {
+        dof::exists_(&self.id, Item { id: item_id })
+    }
 
     // === PurchaseCap fields access ===
 
