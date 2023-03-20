@@ -41,8 +41,8 @@ use sui_types::{
         ProgrammableTransaction,
     },
     move_package::{
-        is_valid_package_upgrade_policy, normalize_deserialized_modules, MovePackage, UpgradeCap,
-        UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
+        build_linkage_table, is_valid_package_upgrade_policy, normalize_deserialized_modules,
+        MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -59,7 +59,7 @@ use crate::{
     execution_mode::ExecutionMode,
 };
 
-use super::{context::*, types::*};
+use super::{context::*, storage_context::StorageContext, types::*};
 
 pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
@@ -71,14 +71,15 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     pt: ProgrammableTransaction,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
+    let mut storage_context = StorageContext::new(state_view);
     let mut context = ExecutionContext::new(
         protocol_config,
         vm,
-        state_view,
         tx_context,
         gas_status,
         gas_coin,
         inputs,
+        &mut storage_context,
     )?;
     // execute commands
     let mut mode_results = Mode::empty_results();
@@ -118,11 +119,20 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
+            if let TypeTag::Struct(s) = &tag {
+                context
+                    .storage_context
+                    .compute_context((s.address).into())?;
+            }
             let elem_ty = context
                 .session
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
+            if let TypeTag::Struct(_) = &tag {
+                context.storage_context.reset_context();
+            }
             let ty = Type::Vector(Box::new(elem_ty));
+            // TODO: set linkage context?
             let abilities = context
                 .session
                 .get_type_abilities(&ty)
@@ -162,12 +172,13 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty)?;
+                check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty, true)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                 value.write_bcs_bytes(&mut res);
             }
             let ty = Type::Vector(Box::new(elem_ty));
+            // TODO: set linkage context?
             let abilities = context
                 .session
                 .get_type_abilities(&ty)
@@ -279,6 +290,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 type_arguments,
                 arguments,
                 /* is_init */ false,
+                /* set_context */ true,
             )?
         }
         Command::Publish(modules, dep_ids) => {
@@ -309,7 +321,13 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     type_arguments: Vec<TypeTag>,
     arguments: Vec<Argument>,
     is_init: bool,
+    set_context: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
+    if set_context {
+        context
+            .storage_context
+            .compute_context((*module_id.address()).into())?;
+    }
     // check that the function is either an entry function or a valid public function
     let LoadedFunctionInfo {
         kind,
@@ -360,6 +378,10 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         return_value_kinds.len() == return_values.len(),
         "lost return value"
     );
+
+    if set_context {
+        context.storage_context.reset_context();
+    }
     return_value_kinds
         .into_iter()
         .zip(return_values)
@@ -384,7 +406,7 @@ fn make_value<E: fmt::Debug, S: StorageView<E>>(
             has_public_transfer,
         } => Value::Object(ObjectValue::new(
             context.vm,
-            context.state_view,
+            context.storage_context,
             &context.session,
             type_,
             has_public_transfer,
@@ -417,7 +439,36 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context
         .gas_status
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
-    let modules = publish_and_verify_new_modules::<_, _, Mode>(context, &module_bytes)?;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+
+    let mut modules = deserialize_modules::<_, _, Mode>(context, &module_bytes)?;
+
+    // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
+    // runtime does not to know about new packages created, since Move objects and Move packages
+    // cannot interact
+    let package_id = if Mode::packages_are_predefined() {
+        // do not calculate package id for genesis modules
+        (*modules[0].self_id().address()).into()
+    } else {
+        generate_package_id(&mut modules, context.tx_context)?
+    };
+
+    let mut immediate_dependencies = BTreeSet::new();
+    for module in &modules {
+        immediate_dependencies.extend(
+            module
+                .immediate_dependencies()
+                .into_iter()
+                .map(|dep| ObjectID::from(*dep.address())),
+        );
+    }
+    immediate_dependencies.remove(&package_id);
+    let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
+    context
+        .storage_context
+        .set_context(package_id, linkage_table)?;
+    let modules = publish_and_verify_modules(context, package_id, modules)?;
+
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
@@ -432,8 +483,6 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let dependencies = fetch_packages(context, &dep_ids)?;
-
     // new_package also initializes type origin table in the package object
     let package_id = context.new_package(modules, &dependencies, None)?;
     for module_id in &modules_to_init {
@@ -445,12 +494,15 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             vec![],
             vec![],
             /* is init */ true,
+            /* set_context */ false,
         )?;
         assert_invariant!(
             return_values.is_empty(),
             "init should not have return values"
         )
     }
+
+    context.storage_context.reset_context();
 
     let values = if Mode::packages_are_predefined() {
         // no upgrade cap for genesis modules
@@ -459,7 +511,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         let cap = &UpgradeCap::new(context.fresh_id()?, package_id);
         vec![Value::Object(ObjectValue::new(
             context.vm,
-            context.state_view,
+            context.storage_context,
             &context.session,
             UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
@@ -493,11 +545,15 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         let mut ticket_bytes = Vec::new();
         let ticket_val: Value =
             context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
+        context
+            .storage_context
+            .compute_context(UpgradeTicket::type_().address.into())?;
         let ticket_type = context
             .session
             .load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
             .map_err(|e| context.convert_vm_error(e))?;
-        check_param_type::<_, _, Mode>(context, 0, &ticket_val, &ticket_type)?;
+        context.storage_context.reset_context();
+        check_param_type::<_, _, Mode>(context, 0, &ticket_val, &ticket_type, true)?;
         ticket_val.write_bcs_bytes(&mut ticket_bytes);
         bcs::from_bytes(&ticket_bytes).map_err(|_| {
             ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
@@ -535,13 +591,31 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // Check that this package ID points to a package and get the package we're upgrading.
     let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
+    // Read the package dependencies.
+    let dependencies = fetch_packages(context, &dep_ids)?;
+
     // Run the move + sui verifier on the modules and publish them into the cache.
-    // NB: this will substitute in the original package id for the `self` address in all of these modules.
-    let upgraded_package_modules = publish_and_verify_upgraded_modules::<_, _, Mode>(
-        context,
-        &module_bytes,
-        current_package.original_package_id(),
-    )?;
+    let package_id = current_package.original_package_id();
+    let mut modules = deserialize_modules::<_, _, Mode>(context, &module_bytes)?;
+    // substitute in the original package id for the `self` address in all of these modules.
+    substitute_package_id(&mut modules, package_id)?;
+
+    let mut immediate_dependencies = BTreeSet::new();
+    for module in &modules {
+        immediate_dependencies.extend(
+            module
+                .immediate_dependencies()
+                .into_iter()
+                .map(|dep| ObjectID::from(*dep.address())),
+        );
+    }
+    immediate_dependencies.remove(&package_id);
+    let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
+    context
+        .storage_context
+        .set_context(package_id, linkage_table)?;
+
+    let upgraded_package_modules = publish_and_verify_modules(context, package_id, modules)?;
 
     // Full backwards compatibility except that we allow friend function signatures to change.
     check_compatibility(
@@ -551,19 +625,14 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         upgrade_ticket.policy,
     )?;
 
-    // Read the package dependencies.
-    let dependency_packages = fetch_packages(context, &dep_ids)?;
-
-    let upgraded_object_id = context.upgrade_package(
-        &current_package,
-        upgraded_package_modules,
-        &dependency_packages,
-    )?;
+    let upgraded_object_id =
+        context.upgrade_package(&current_package, upgraded_package_modules, &dependencies)?;
 
     let upgrade_receipt_type = context
         .session
         .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
         .map_err(|e| context.convert_vm_error(e))?;
+    context.storage_context.reset_context();
 
     Ok(vec![Value::Raw(
         RawValueType::Loaded {
@@ -641,7 +710,7 @@ fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
     context: &'a ExecutionContext<E, S>,
     package_id: &ObjectID,
 ) -> Result<MovePackage, ExecutionError> {
-    let mut fetched_packages = fetch_packages(context, vec![package_id])?;
+    let mut fetched_packages = fetch_packages(context, &[*package_id])?;
     assert_invariant!(
         fetched_packages.len() == 1,
         "Number of fetched packages must match the number of package object IDs if successful."
@@ -656,10 +725,13 @@ fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
 
 fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
     context: &'a ExecutionContext<E, S>,
-    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+    package_ids: &'a [ObjectID],
 ) -> Result<Vec<MovePackage>, ExecutionError> {
-    let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-    match context.state_view.get_packages(package_ids) {
+    match context
+        .storage_context
+        .storage_view
+        .get_packages(package_ids)
+    {
         Err(e) => Err(ExecutionError::new_with_source(
             ExecutionErrorKind::PublishUpgradeMissingDependency,
             e,
@@ -700,7 +772,10 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
             serialized_arguments.push(context.tx_context.to_vec());
         }
     }
+
     // script visibility checked manually for entry points
+
+    // no need to set linkage context as it was already set in the caller (execute_move_call)
     let mut result = context
         .session
         .execute_function_bypass_visibility(
@@ -750,37 +825,6 @@ fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     Ok(modules)
 }
 
-/// - Deserializes the modules
-/// - Publishes them into the VM, which invokes the Move verifier
-/// - Run the Sui Verifier
-fn publish_and_verify_new_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
-    module_bytes: &[Vec<u8>],
-) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
-
-    // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
-    // runtime does not to know about new packages created, since Move objects and Move packages
-    // cannot interact
-    let package_id = if Mode::packages_are_predefined() {
-        // do not calculate package id for genesis modules
-        (*modules[0].self_id().address()).into()
-    } else {
-        generate_package_id(&mut modules, context.tx_context)?
-    };
-    publish_and_verify_modules(context, package_id, modules)
-}
-
-fn publish_and_verify_upgraded_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
-    module_bytes: &[Vec<u8>],
-    package_id: ObjectID,
-) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
-    substitute_package_id(&mut modules, package_id)?;
-    publish_and_verify_modules(context, package_id, modules)
-}
-
 fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     package_id: ObjectID,
@@ -795,6 +839,7 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
             bytes
         })
         .collect();
+
     context
         .session
         .publish_module_bundle(
@@ -863,6 +908,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
     from_init: bool,
 ) -> Result<LoadedFunctionInfo, ExecutionError> {
     for (idx, ty) in type_arguments.iter().enumerate() {
+        // no need to set linkage context as it was already set in the caller (execute_move_call)
         context
             .session
             .load_type(ty)
@@ -872,6 +918,8 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         // the session is weird and does not load the module on publishing. This is a temporary
         // work around, since loading the function through the session will cause the module
         // to be loaded through the sessions data store.
+
+        // no need to set linkage context as it was already set in the caller (execute_move_call)
         let result = context
             .session
             .load_function(module_id, function, type_arguments);
@@ -882,7 +930,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
     }
     let module = context
         .vm
-        .load_module(module_id, context.state_view)
+        .load_module(module_id, context.storage_context)
         .map_err(|e| context.convert_vm_error(e))?;
     let Some((index, fdef)) = module.function_defs.iter().enumerate().find(|(_index, fdef)| {
         module.identifier_at(module.function_handle_at(fdef.function).name) == function
@@ -924,6 +972,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
             ));
         }
     };
+    // no need to set linkage context as it was already set in the caller (execute_move_call)
     let signature = context
         .session
         .load_function(module_id, function, type_arguments)
@@ -1004,6 +1053,8 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
                 }
                 t => t,
             };
+            // no need to set linkage context as it was already set in the caller
+            // (execute_move_call->check_visibility_and_signature)
             let abilities = context
                 .session
                 .get_type_abilities(return_type)
@@ -1012,6 +1063,8 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
                 Type::MutableReference(_) | Type::Reference(_) => unreachable!(),
                 Type::TyParam(_) => invariant_violation!("TyParam should have been substituted"),
                 Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
+                    // no need to set linkage context as it was already set in the caller
+                    // (execute_move_call->check_visibility_and_signature)
                     let type_tag = context
                         .session
                         .get_type_tag(return_type)
@@ -1154,6 +1207,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                         has_public_transfer: *has_public_transfer,
                     }
                 } else {
+                    // no need to set linkage context as it was already set in the caller
+                    // (execute_move_call)
                     let abilities = context
                         .session
                         .get_type_abilities(inner)
@@ -1179,7 +1234,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 idx,
             ));
         }
-        check_param_type::<_, _, Mode>(context, idx, &value, non_ref_param_ty)?;
+        check_param_type::<_, _, Mode>(context, idx, &value, non_ref_param_ty, false)?;
         let bytes = {
             let mut v = vec![];
             value.write_bcs_bytes(&mut v);
@@ -1196,6 +1251,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     idx: usize,
     value: &Value,
     param_ty: &Type,
+    set_linkage: bool,
 ) -> Result<(), ExecutionError> {
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
@@ -1264,6 +1320,8 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
         _ => return Ok(TxContextKind::None),
     };
     let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
+    // no need to set linkage context as it was already set in the caller
+    // (execute_move_call->build_move_args)
     let Some(s) = context.session.get_struct_type(*idx) else {
         invariant_violation!("Loaded struct not found")
     };
@@ -1306,6 +1364,7 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
         Type::StructInstantiation(idx, targs) => {
+            // TODO: set linkage context
             let Some(s) = context.session.get_struct_type(*idx) else {
                 invariant_violation!("Loaded struct not found")
             };
@@ -1319,6 +1378,7 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             }
         }
         Type::Struct(idx) => {
+            // TODO: set linkage context
             let Some(s) = context.session.get_struct_type(*idx) else {
                 invariant_violation!("Loaded struct not found")
             };

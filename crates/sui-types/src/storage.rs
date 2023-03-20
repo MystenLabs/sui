@@ -6,7 +6,7 @@ use crate::committee::{Committee, EpochId};
 use crate::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
-use crate::error::SuiError;
+use crate::error::{ExecutionError, SuiError};
 use crate::message_envelope::Message;
 use crate::messages::{
     SenderSignedData, TransactionDataAPI, TransactionEffects, TransactionEvents,
@@ -89,12 +89,12 @@ pub trait BackingPackageStore {
     /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
     /// `package_id` were found. If any package in `package_ids` was not found it returns Err(<list
     /// of any package ids that are unable to be found>).
-    fn get_package_objects<'a>(
+    fn get_package_objects(
         &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+        package_ids: &[ObjectID],
     ) -> SuiResult<PackageFetchResults<Object>> {
         let package_objects: Vec<Result<Object, ObjectID>> = package_ids
-            .into_iter()
+            .iter()
             .map(|id| match self.get_package_object(id) {
                 Ok(None) => Ok(Err(*id)),
                 Ok(Some(o)) => Ok(Ok(o)),
@@ -110,9 +110,9 @@ pub trait BackingPackageStore {
             Ok(Ok(fetched))
         }
     }
-    fn get_packages<'a>(
+    fn get_packages(
         &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+        package_ids: &[ObjectID],
     ) -> SuiResult<PackageFetchResults<MovePackage>> {
         let objects = self.get_package_objects(package_ids)?;
         Ok(objects.and_then(|objects| {
@@ -692,4 +692,18 @@ impl<T: ObjectStore> ObjectStore for Arc<T> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.as_ref().get_object(object_id)
     }
+}
+
+/// Initialize linkage information. The input is the ID of a package containing a function used as
+/// an entry point to programmable transaction's Move call command.
+pub trait LinkageInitializer {
+    /// Sets linkage contexts (makes it available to the linker)
+    fn compute_context(&self, id: ObjectID) -> Result<(), ExecutionError>;
+
+    /// Resets linkage contexts (makes it unavailable to the linker)
+    fn reset_context(&self);
+
+    /// Replaces linkage context but use sparingly as set_context/reset_context offers more
+    /// protection from undesirable linkage context changes
+    fn replace_context(&self, pkg_id: ObjectID) -> Option<ObjectID>;
 }

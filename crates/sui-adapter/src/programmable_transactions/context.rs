@@ -11,14 +11,18 @@ use move_binary_format::{
     errors::{Location, VMError},
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
-use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use move_core_types::{
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag, TypeTag},
+};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
@@ -26,11 +30,13 @@ use sui_types::{
     move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, WriteKind},
+    SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{
     adapter::{missing_unwrapped_msg, new_session},
     execution_mode::ExecutionMode,
+    programmable_transactions::storage_context::StorageContext,
 };
 
 use super::types::*;
@@ -42,14 +48,14 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     /// The MoveVM
     pub vm: &'vm MoveVM,
     /// The global state, used for resolving packages
-    pub state_view: &'state S,
+    pub storage_context: &'state StorageContext<'state, E, S>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: &'a mut TxContext,
     /// The gas status used for metering
     pub gas_status: &'a mut SuiGasStatus<'b>,
     /// The session used for interacting with Move types and calls
-    pub session: Session<'state, 'vm, S>,
+    pub session: Session<'state, 'vm, StorageContext<'state, E, S>>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
     /// Newly published packages
@@ -91,17 +97,17 @@ where
     pub fn new(
         protocol_config: &'a ProtocolConfig,
         vm: &'vm MoveVM,
-        state_view: &'state S,
         tx_context: &'a mut TxContext,
         gas_status: &'a mut SuiGasStatus<'b>,
         gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
+        storage_context: &'state mut StorageContext<'state, E, S>,
     ) -> Result<Self, ExecutionError> {
         // we need a new session just for loading types, which is sad
         // TODO remove this
         let tmp_session = new_session(
             vm,
-            state_view,
+            storage_context,
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -112,7 +118,7 @@ where
             .map(|call_arg| {
                 load_call_arg(
                     vm,
-                    state_view,
+                    storage_context,
                     &tmp_session,
                     &mut object_owner_map,
                     call_arg,
@@ -122,7 +128,7 @@ where
         let gas = if let Some(gas_coin) = gas_coin_opt {
             let mut gas = load_object(
                 vm,
-                state_view,
+                storage_context,
                 &tmp_session,
                 &mut object_owner_map,
                 /* imm override */ false,
@@ -158,21 +164,21 @@ where
         // exist. Plus, Sui Move does not use these changes or events
         let (change_set, move_events) = tmp_session
             .finish()
-            .map_err(|e| sui_types::error::convert_vm_error(e, vm, state_view))?;
+            .map_err(|e| sui_types::error::convert_vm_error(e, vm, storage_context))?;
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
         assert_invariant!(move_events.is_empty(), "Events must be empty");
         // make the real session
         let session = new_session(
             vm,
-            state_view,
-            object_owner_map,
+            storage_context,
+            object_owner_map.clone(),
             !gas_status.is_unmetered(),
             protocol_config,
         );
         Ok(Self {
             protocol_config,
             vm,
-            state_view,
+            storage_context,
             tx_context,
             gas_status,
             session,
@@ -190,6 +196,7 @@ where
     /// Create a new ID and update the state
     pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
         let object_id = self.tx_context.fresh_id();
+        // no need to set linkage context as session is only used to get native extensions
         let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
         object_runtime
             .new_id(object_id)
@@ -199,6 +206,7 @@ where
 
     /// Delete an ID and update the state
     pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
+        // no need to set linkage context as session is only used to get native extensions
         let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
         object_runtime
             .delete_id(object_id)
@@ -213,6 +221,7 @@ where
         function: FunctionDefinitionIndex,
         last_offset: CodeOffset,
     ) -> Result<(), ExecutionError> {
+        // no need to set linkage context as session is only used to get native extensions
         let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
         let events = object_runtime.take_user_events();
         let num_events = self.user_events.len() + events.len();
@@ -226,14 +235,15 @@ where
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
+                // no need to set linkage context as it was already set in the caller (execute_move_call)
                 let layout = self
                     .session
-                    .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
+                    .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))
+                    .map_err(|e| self.convert_vm_error(e))?;
                 let bytes = value.simple_serialize(&layout).unwrap();
                 Ok((module_id.clone(), tag, bytes))
             })
-            .collect::<Result<Vec<_>, VMError>>()
-            .map_err(|e| self.convert_vm_error(e))?;
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
         Ok(())
     }
@@ -459,7 +469,7 @@ where
         let Self {
             protocol_config,
             vm,
-            state_view,
+            storage_context,
             tx_context,
             gas_status,
             session,
@@ -562,7 +572,7 @@ where
 
         let (change_set, events, mut native_context_extensions) = session
             .finish_with_extensions()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+            .map_err(|e| convert_vm_error(e, vm, storage_context))?;
         // Sui Move programs should never touch global state, so resources should be empty
         assert_invariant!(
             change_set.resources().next().is_none(),
@@ -594,7 +604,7 @@ where
         // TODO remove this
         let tmp_session = new_session(
             vm,
-            state_view,
+            storage_context,
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -623,7 +633,7 @@ where
             let move_object = unsafe {
                 create_written_object(
                     vm,
-                    state_view,
+                    storage_context,
                     &tmp_session,
                     protocol_config,
                     &input_object_metadata,
@@ -641,19 +651,23 @@ where
         }
 
         for (id, (write_kind, recipient, ty, move_type, value)) in writes {
+            // TODO: set linkage context?
             let abilities = tmp_session
                 .get_type_abilities(&ty)
-                .map_err(|e| convert_vm_error(e, vm, state_view))?;
+                .map_err(|e| convert_vm_error(e, vm, storage_context))?;
             let has_public_transfer = abilities.has_store();
+            self.storage_context
+                .compute_context((move_type_address(&move_type)).into())?;
             let layout = tmp_session
                 .get_type_layout(&move_type.clone().into())
-                .map_err(|e| convert_vm_error(e, vm, state_view))?;
+                .map_err(|e| convert_vm_error(e, vm, storage_context))?;
+            self.storage_context.reset_context();
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
                 create_written_object(
                     vm,
-                    state_view,
+                    storage_context,
                     &tmp_session,
                     protocol_config,
                     &input_object_metadata,
@@ -672,7 +686,7 @@ where
         for (id, delete_kind) in deletions {
             let version = match input_object_metadata.get(&id) {
                 Some(metadata) => metadata.version,
-                None => match state_view.get_latest_parent_entry_ref(id) {
+                None => match storage_context.storage_view.get_latest_parent_entry_ref(id) {
                     Ok(Some((_, previous_version, _))) => previous_version,
                     // This object was not created this transaction but has never existed in
                     // storage, skip it.
@@ -684,7 +698,7 @@ where
         }
         let (change_set, move_events) = tmp_session
             .finish()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+            .map_err(|e| convert_vm_error(e, vm, storage_context))?;
         // the session was just used for ability and layout metadata fetching, no changes should
         // exist. Plus, Sui Move does not use these changes or events
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
@@ -698,7 +712,7 @@ where
 
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-        sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+        sui_types::error::convert_vm_error(error, self.vm, self.storage_context)
     }
 
     /// Special case errors for type arguments to Move functions
@@ -786,16 +800,38 @@ where
     }
 }
 
+fn struct_type_address(s: &StructTag) -> AccountAddress {
+    let addr = s.address;
+    if addr == SUI_FRAMEWORK_ADDRESS
+        && s.module == Identifier::new("dynamic_field").unwrap()
+        && s.name == Identifier::new("Field").unwrap()
+    {
+        if let TypeTag::Struct(inner) = &s.type_params[1] {
+            return inner.address;
+        }
+    }
+    addr
+}
+
+fn move_type_address(o: &MoveObjectType) -> AccountAddress {
+    match o {
+        MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => {
+            SUI_FRAMEWORK_ADDRESS
+        }
+        MoveObjectType::Other(s) => struct_type_address(s),
+    }
+}
+
 /// Load an input object from the state_view
 fn load_object<E: fmt::Debug, S: StorageView<E>>(
     vm: &MoveVM,
-    state_view: &S,
-    session: &Session<S>,
+    storage_context: &StorageContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     override_as_immutable: bool,
     id: ObjectID,
 ) -> Result<InputValue, ExecutionError> {
-    let Some(obj) = state_view.read_object(&id) else {
+    let Some(obj) = storage_context.storage_view.read_object(&id) else {
         // protected by transaction input checker
         invariant_violation!(format!("Object {} does not exist yet", id));
     };
@@ -822,22 +858,22 @@ fn load_object<E: fmt::Debug, S: StorageView<E>>(
     let prev = object_owner_map.insert(id, obj.owner);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), format!("Duplicate input object {}", id));
-    let obj_value = ObjectValue::from_object(vm, state_view, session, obj)?;
+    let obj_value = ObjectValue::from_object(vm, storage_context, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
 /// Load an a CallArg, either an object or a raw set of BCS bytes
 fn load_call_arg<E: fmt::Debug, S: StorageView<E>>(
     vm: &MoveVM,
-    state_view: &S,
-    session: &Session<S>,
+    storage_context: &StorageContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
         CallArg::Object(obj_arg) => {
-            load_object_arg(vm, state_view, session, object_owner_map, obj_arg)?
+            load_object_arg(vm, storage_context, session, object_owner_map, obj_arg)?
         }
     })
 }
@@ -845,15 +881,15 @@ fn load_call_arg<E: fmt::Debug, S: StorageView<E>>(
 /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
 fn load_object_arg<E: fmt::Debug, S: StorageView<E>>(
     vm: &MoveVM,
-    state_view: &S,
-    session: &Session<S>,
+    storage_context: &StorageContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
     match obj_arg {
         ObjectArg::ImmOrOwnedObject((id, _, _)) => load_object(
             vm,
-            state_view,
+            storage_context,
             session,
             object_owner_map,
             /* imm override */ false,
@@ -861,7 +897,7 @@ fn load_object_arg<E: fmt::Debug, S: StorageView<E>>(
         ),
         ObjectArg::SharedObject { id, mutable, .. } => load_object(
             vm,
-            state_view,
+            storage_context,
             session,
             object_owner_map,
             /* imm override */ !mutable,
@@ -930,8 +966,8 @@ fn refund_max_gas_budget(
 /// the StructTag, or from the runtime correctly propagating from the inputs
 unsafe fn create_written_object<E: fmt::Debug, S: StorageView<E>>(
     vm: &MoveVM,
-    state_view: &S,
-    session: &Session<S>,
+    storage_context: &StorageContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     protocol_config: &ProtocolConfig,
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
@@ -963,7 +999,7 @@ unsafe fn create_written_object<E: fmt::Debug, S: StorageView<E>>(
 
     let type_tag = session
         .get_type_tag(&type_)
-        .map_err(|e| sui_types::error::convert_vm_error(e, vm, state_view))?;
+        .map_err(|e| sui_types::error::convert_vm_error(e, vm, storage_context))?;
 
     let struct_tag = match type_tag {
         TypeTag::Struct(inner) => *inner,

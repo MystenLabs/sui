@@ -566,7 +566,7 @@ where
     normalized_modules
 }
 
-fn build_linkage_table<'p>(
+pub fn build_linkage_table<'p>(
     mut immediate_dependencies: BTreeSet<ObjectID>,
     transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
 ) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {

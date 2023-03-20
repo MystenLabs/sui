@@ -139,6 +139,22 @@ pub fn new_session<
     vm.new_session_with_extensions(state_view, extensions)
 }
 
+pub fn new_session_with_extensions<
+    'v,
+    'r,
+    E: Debug,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + LinkageResolver<Error = E>
+        + ChildObjectResolver,
+>(
+    vm: &'v MoveVM,
+    state_view: &'r S,
+    extensions: NativeContextExtensions<'r>,
+) -> Session<'r, 'v, S> {
+    vm.new_session_with_extensions(state_view, extensions)
+}
+
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
 /// Mutate each module's self ID (which must be 0) to the appropriate fresh ID and update its module handle tables
 /// to reflect the new ID's of its dependencies.

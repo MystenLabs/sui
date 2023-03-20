@@ -256,6 +256,7 @@ fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
             (TypeTag::Vector(Box::new(TypeTag::U8)), bytes.clone())
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
+            // TODO: set linkage context
             let tag = context
                 .session
                 .get_type_tag(ty)

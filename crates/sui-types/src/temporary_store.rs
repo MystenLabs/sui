@@ -8,7 +8,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{LinkageResolver, ModuleResolver, ResourceResolver};
+use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_protocol_config::ProtocolConfig;
@@ -996,9 +996,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
 
 impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     fn reset(&mut self) {
-        self.written.clear();
-        self.deleted.clear();
-        self.events.clear();
+        TemporaryStore::drop_writes(self)
     }
 
     fn log_event(&mut self, event: Event) {
@@ -1018,11 +1016,6 @@ impl<S: BackingPackageStore> BackingPackageStore for TemporaryStore<S> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         self.store.get_package_object(package_id)
     }
-}
-
-/// TODO: Proper implementation of re-linking (currently the default implementation does nothing).
-impl<S> LinkageResolver for TemporaryStore<S> {
-    type Error = SuiError;
 }
 
 impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
@@ -1074,7 +1067,6 @@ impl<S> ResourceResolver for TemporaryStore<S> {
                 }
             },
         };
-
         match &object.data {
             Data::Move(m) => {
                 assert!(

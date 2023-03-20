@@ -7,7 +7,7 @@ use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -22,10 +22,11 @@ use sui_types::{
     TypeTag,
 };
 
+use crate::programmable_transactions::storage_context::StorageContext;
+
 pub trait StorageView<E: std::fmt::Debug>:
     ResourceResolver<Error = E>
     + ModuleResolver<Error = E>
-    + LinkageResolver<Error = E>
     + BackingPackageStore
     + Storage
     + ParentSync
@@ -36,7 +37,6 @@ impl<
         E: std::fmt::Debug,
         T: ResourceResolver<Error = E>
             + ModuleResolver<Error = E>
-            + LinkageResolver<Error = E>
             + BackingPackageStore
             + Storage
             + ParentSync
@@ -190,8 +190,8 @@ impl Value {
 impl ObjectValue {
     pub fn new<E: fmt::Debug, S: StorageView<E>>(
         vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+        storage_context: &StorageContext<E, S>,
+        session: &Session<StorageContext<E, S>>,
         type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
@@ -208,7 +208,7 @@ impl ObjectValue {
         let tag: StructTag = type_.into();
         let type_ = session
             .load_type(&TypeTag::Struct(Box::new(tag)))
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+            .map_err(|e| convert_vm_error(e, vm, storage_context))?;
         Ok(Self {
             type_,
             has_public_transfer,
@@ -219,26 +219,28 @@ impl ObjectValue {
 
     pub fn from_object<E: fmt::Debug, S: StorageView<E>>(
         vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+        storage_context: &StorageContext<E, S>,
+        session: &Session<StorageContext<E, S>>,
         object: &Object,
     ) -> Result<Self, ExecutionError> {
         let Object { data, .. } = object;
         match data {
             Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(vm, state_view, session, move_object),
+            Data::Move(move_object) => {
+                Self::from_move_object(vm, storage_context, session, move_object)
+            }
         }
     }
 
     pub fn from_move_object<E: fmt::Debug, S: StorageView<E>>(
         vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+        storage_context: &StorageContext<E, S>,
+        session: &Session<StorageContext<E, S>>,
         object: &MoveObject,
     ) -> Result<Self, ExecutionError> {
         Self::new(
             vm,
-            state_view,
+            storage_context,
             session,
             object.type_().clone(),
             object.has_public_transfer(),
