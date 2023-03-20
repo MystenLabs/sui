@@ -375,6 +375,7 @@ impl TransactionManager {
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
         self.metrics.transaction_manager_num_ready.inc();
+        self.metrics.execution_driver_dispatch_queue.inc();
         let _ = self.tx_ready_certificates.send(Box::new(certificate));
     }
 

@@ -65,6 +65,7 @@ pub async fn execution_process(
             info!("Authority state has shutdown. Exiting ...");
             return;
         };
+        authority.metrics.execution_driver_dispatch_queue.dec();
 
         // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
