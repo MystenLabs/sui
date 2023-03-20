@@ -182,10 +182,16 @@
                     "kind": "ProgrammableTransaction",
                     "inputs": [
                       {
-                        "Pure": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80"
+                        "type": "pure",
+                        "valueType": "address",
+                        "value": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80"
                       },
                       {
-                        "Object": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc"
+                        "type": "object",
+                        "objectType": "immOrOwnedObject",
+                        "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
+                        "version": 2,
+                        "digest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
                       }
                     ],
                     "commands": [
@@ -1373,10 +1379,16 @@
                     "kind": "ProgrammableTransaction",
                     "inputs": [
                       {
-                        "Pure": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
+                        "type": "pure",
+                        "valueType": "address",
+                        "value": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
                       },
                       {
-                        "Object": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc"
+                        "type": "object",
+                        "objectType": "immOrOwnedObject",
+                        "objectId": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc",
+                        "version": 2,
+                        "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
                       }
                     ],
                     "commands": [
@@ -5163,6 +5175,103 @@
           }
         ]
       },
+      "SuiCallArg": {
+        "oneOf": [
+          {
+            "type": "object",
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "objectId",
+                  "objectType",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string",
+                    "enum": [
+                      "immOrOwnedObject"
+                    ]
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "initialSharedVersion",
+                  "mutable",
+                  "objectId",
+                  "objectType"
+                ],
+                "properties": {
+                  "initialSharedVersion": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "mutable": {
+                    "type": "boolean"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string",
+                    "enum": [
+                      "sharedObject"
+                    ]
+                  }
+                }
+              }
+            ],
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "object"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "value"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "pure"
+                ]
+              },
+              "value": {
+                "$ref": "#/components/schemas/SuiJsonValue"
+              },
+              "valueType": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
       "SuiCoinMetadata": {
         "type": "object",
         "required": [
@@ -5441,49 +5550,6 @@
             }
           }
         }
-      },
-      "SuiJsonCallArg": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Object"
-            ],
-            "properties": {
-              "Object": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "Pure"
-            ],
-            "properties": {
-              "Pure": {
-                "$ref": "#/components/schemas/SuiJsonValue"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "ObjVec"
-            ],
-            "properties": {
-              "ObjVec": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ObjectID"
-                }
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
       },
       "SuiJsonValue": {},
       "SuiMoveAbility": {
@@ -6800,7 +6866,7 @@
                 "description": "Input objects or primitive values",
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/SuiJsonCallArg"
+                  "$ref": "#/components/schemas/SuiCallArg"
                 }
               },
               "kind": {

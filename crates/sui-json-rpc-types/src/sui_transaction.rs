@@ -1424,6 +1424,7 @@ pub struct SuiPureValue {
 #[serde(tag = "objectType", rename_all = "camelCase")]
 pub enum SuiObjectArg {
     // A Move object, either immutable, or owned mutable.
+    #[serde(rename_all = "camelCase")]
     ImmOrOwnedObject {
         object_id: ObjectID,
         version: SequenceNumber,
@@ -1431,6 +1432,7 @@ pub enum SuiObjectArg {
     },
     // A Move object that's shared.
     // SharedObject::mutable controls whether caller asks for a mutable reference to shared object.
+    #[serde(rename_all = "camelCase")]
     SharedObject {
         object_id: ObjectID,
         initial_shared_version: SequenceNumber,
