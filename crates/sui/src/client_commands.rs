@@ -811,7 +811,6 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let address_object = client
                     .read_api()
-                    // TODO: (jian) fill in later
                     .get_owned_objects(
                         address,
                         Some(SuiObjectResponseQuery::new_with_options(
@@ -1350,7 +1349,6 @@ impl Display for SuiClientCommandResult {
                 )?;
                 writeln!(writer, "{}", ["-"; 165].join(""))?;
                 for oref in object_refs {
-                    // TODO (jian): fix unwrap and clone later
                     let obj = oref.clone().into_object().unwrap();
 
                     let owner_type = match obj.owner {

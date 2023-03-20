@@ -75,7 +75,6 @@ pub async fn get_gas_object_with_wallet_context(
     if res.is_empty() {
         None
     } else {
-        // TODO (jian): handle unwrap error
         Some(res.swap_remove(0).into_object().unwrap().object_ref())
     }
 }

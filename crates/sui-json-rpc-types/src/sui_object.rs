@@ -270,6 +270,10 @@ impl SuiObjectDataOptions {
         self.show_previous_transaction = true;
         self
     }
+
+    pub fn is_not_in_object_info(&self) -> bool {
+        self.show_bcs || self.show_content || self.show_display || self.show_storage_rebate
+    }
 }
 
 impl TryFrom<(ObjectRead, SuiObjectDataOptions)> for SuiObjectResponse {
