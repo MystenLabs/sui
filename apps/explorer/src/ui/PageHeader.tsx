@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CopyNew24, Flag16, FlagFill16 } from '@mysten/icons';
+import { CopyNew24, Flag16, Nft16 } from '@mysten/icons';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
@@ -26,7 +26,7 @@ export interface PageHeaderProps {
 const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
     Transaction: CallIcon,
     Checkpoint: Flag16,
-    Object: FlagFill16,
+    Object: Nft16,
     Package: CallIcon,
     Address: () => (
         <SenderIcon
