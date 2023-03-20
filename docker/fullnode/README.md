@@ -60,7 +60,7 @@ If you encounter errors or your Full node stops working, run the commands in the
 
 ### Start the Full node in detached mode
 
-First, try started the Full node in detached mode:
+First, try starting the Full node in detached mode:
 
 ```shell
 docker compose up -d
