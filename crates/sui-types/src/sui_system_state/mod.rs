@@ -205,7 +205,7 @@ impl PoolTokenExchangeRate {
     /// Rate of the staking pool, pool token amount : Sui amount
     pub fn rate(&self) -> f64 {
         if self.sui_amount == 0 {
-            1 as f64
+            1_f64
         } else {
             self.pool_token_amount as f64 / self.sui_amount as f64
         }
