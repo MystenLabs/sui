@@ -140,13 +140,18 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
+    env:
+      MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: cargo simtest
         run: |
-          MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
+          scripts/simtest/cargo-simtest simtest
+      - name: check new tests for flakiness
+        run: |
+          scripts/simtest/stress-new-tests.sh
 
   rosetta-validation:
     needs: diff
