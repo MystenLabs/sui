@@ -96,7 +96,7 @@ pub fn update_low_scoring_authorities(
         .iter()
         .for_each(|(a, s)| {
             let name = AuthorityName::from(a);
-            debug!("authority {} has score {}", name, s);
+            info!("authority {} has score {}", name, s);
             metrics
                 .consensus_handler_scores
                 .with_label_values(&[&format!("{:?}", name)])
@@ -112,7 +112,7 @@ pub fn update_low_scoring_authorities(
             .get(authority)
             .unwrap();
         final_low_scoring_map.insert(name, score);
-        debug!("low scoring authority {} has score {}", name, score);
+        info!("low scoring authority {} has score {}", name, score);
     }
 
     // make sure the rest have at least quorum
