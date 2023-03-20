@@ -32,7 +32,7 @@ pub mod certifier_tests;
 
 /// This component is responisble for proposing headers to peers, collecting votes on headers,
 /// and certifying headers into certificates.
-/// 
+///
 /// It receives headers to propose from Proposer via `rx_headers`, and sends out certificates to be
 /// broadcasted by calling `Synchronizer::accept_own_certificate()`.
 pub struct Certifier {

@@ -475,7 +475,7 @@ impl Primary {
         );
 
         // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
-        // `Core` for further processing.
+        // `Synchronizer` for further processing.
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             committee.clone(),
@@ -488,8 +488,8 @@ impl Primary {
             node_metrics.clone(),
         );
 
-        // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
-        // digests from our workers and sends it back to the `Core`.
+        // When the `Synchronizer` collects enough parent certificates, the `Proposer` generates
+        // a new header with new batch digests from our workers and sends it to the `Certifier`.
         let proposer_handle = Proposer::spawn(
             name.clone(),
             committee.clone(),
