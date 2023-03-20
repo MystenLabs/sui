@@ -69,7 +69,7 @@ pub struct Proposer {
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
     rx_our_digests: Receiver<OurDigestMessage>,
-    /// Sends newly created headers to the `Core`.
+    /// Sends newly created headers to the `Certifier`.
     tx_headers: Sender<Header>,
 
     /// The proposer store for persisting the last header.
@@ -169,7 +169,7 @@ impl Proposer {
 
         let num_of_included_digests = header.payload.len();
 
-        // Send the new header to the `Core` that will broadcast and process it.
+        // Send the new header to the `Certifier` that will broadcast and certify it.
         self.tx_headers
             .send(header.clone())
             .await

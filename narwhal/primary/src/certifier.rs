@@ -27,10 +27,15 @@ use types::{
 };
 
 #[cfg(test)]
-#[path = "tests/core_tests.rs"]
-pub mod core_tests;
+#[path = "tests/certifier_tests.rs"]
+pub mod certifier_tests;
 
-pub struct Core {
+/// This component is responisble for proposing headers to peers, collecting votes on headers,
+/// and certifying headers into certificates.
+///
+/// It receives headers to propose from Proposer via `rx_headers`, and sends out certificates to be
+/// broadcasted by calling `Synchronizer::accept_own_certificate()`.
+pub struct Certifier {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
@@ -61,7 +66,7 @@ pub struct Core {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl Core {
+impl Certifier {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn spawn(
@@ -95,7 +100,7 @@ impl Core {
                 .run_inner()
                 .await
             },
-            "CoreTask"
+            "CertifierTask"
         )
     }
 
@@ -239,7 +244,7 @@ impl Core {
     ) -> DagResult<Certificate> {
         if header.epoch != committee.epoch() {
             debug!(
-                "Core received mismatched header proposal for epoch {}, currently at epoch {}",
+                "Certifier received mismatched header proposal for epoch {}, currently at epoch {}",
                 header.epoch,
                 committee.epoch()
             );
@@ -328,7 +333,7 @@ impl Core {
         Ok(certificate)
     }
 
-    // Logs Core errors as appropriate.
+    // Logs Certifier errors as appropriate.
     fn process_result(result: &DagResult<()>) {
         match result {
             Ok(()) => (),
@@ -347,7 +352,7 @@ impl Core {
 
     // Main loop listening to incoming messages.
     pub async fn run(mut self) -> DagResult<Self> {
-        info!("Core on node {} has started successfully.", self.name);
+        info!("Certifier on node {} has started successfully.", self.name);
         loop {
             let result = tokio::select! {
                 // We also receive here our new headers created by the `Proposer`.
