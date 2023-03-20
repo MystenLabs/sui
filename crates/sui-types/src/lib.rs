@@ -9,10 +9,8 @@
 
 use base_types::SequenceNumber;
 use messages::{CallArg, ObjectArg};
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{StructTag, TypeTag},
-};
+pub use move_core_types::language_storage::TypeTag;
+use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use object::OBJECT_START_VERSION;
 
 use base_types::ObjectID;

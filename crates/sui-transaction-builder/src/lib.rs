@@ -16,7 +16,7 @@ use move_core_types::language_storage::TypeTag;
 use std::result::Result;
 use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
-use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataOptions,
     SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTypeTag,
@@ -420,11 +420,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let mut objects = BTreeMap::new();
         for (arg, expected_type) in json_args_and_tokens {
             check_args.push(match arg {
-                SuiJsonCallArg::Object(id) => CheckCallArg::Object(
+                ResolvedCallArg::Object(id) => CheckCallArg::Object(
                     self.get_object_arg(id, &mut objects, expected_type).await?,
                 ),
-                SuiJsonCallArg::Pure(p) => CheckCallArg::Pure(p),
-                SuiJsonCallArg::ObjVec(v) => {
+                ResolvedCallArg::Pure(p) => CheckCallArg::Pure(p),
+                ResolvedCallArg::ObjVec(v) => {
                     let mut object_ids = vec![];
                     for id in v {
                         object_ids.push(

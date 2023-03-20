@@ -3,24 +3,29 @@
 
 use std::fmt::{self, Display, Formatter, Write};
 
-use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
+use move_binary_format::access::ModuleAccess;
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::TypeTag;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::value::MoveTypeLayout;
 use serde_with::{serde_as, DisplayFromStr};
 
-use sui_json::SuiJsonValue;
+use enum_dispatch::enum_dispatch;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::digests::TransactionEventsDigest;
+use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    Argument, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
-    InputObjectKind, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
+    Argument, CallArg, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
+    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
     TransactionData, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, TransactionKind, VersionedProtocolMessage,
 };
@@ -288,10 +293,8 @@ impl Display for SuiTransactionKind {
     }
 }
 
-impl TryFrom<TransactionKind> for SuiTransactionKind {
-    type Error = anyhow::Error;
-
-    fn try_from(tx: TransactionKind) -> Result<Self, Self::Error> {
+impl SuiTransactionKind {
+    fn try_from(tx: TransactionKind, module_cache: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match tx {
             TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
                 epoch: e.epoch,
@@ -310,9 +313,9 @@ impl TryFrom<TransactionKind> for SuiTransactionKind {
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
-            TransactionKind::ProgrammableTransaction(p) => {
-                Self::ProgrammableTransaction(p.try_into()?)
-            }
+            TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
+                SuiProgrammableTransaction::try_from(p, module_cache)?,
+            ),
         })
     }
 }
@@ -826,10 +829,11 @@ impl Display for SuiTransactionData {
     }
 }
 
-impl TryFrom<TransactionData> for SuiTransactionData {
-    type Error = anyhow::Error;
-
-    fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
+impl SuiTransactionData {
+    pub fn try_from(
+        data: TransactionData,
+        module_cache: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
         let message_version = data
             .message_version()
             .expect("TransactionData defines message_version()");
@@ -844,7 +848,7 @@ impl TryFrom<TransactionData> for SuiTransactionData {
             price: data.gas_price(),
             budget: data.gas_budget(),
         };
-        let transaction = data.into_kind().try_into()?;
+        let transaction = SuiTransactionKind::try_from(data.into_kind(), module_cache)?;
         match message_version {
             1 => Ok(SuiTransactionData::V1(SuiTransactionDataV1 {
                 transaction,
@@ -866,12 +870,13 @@ pub struct SuiTransaction {
     pub tx_signatures: Vec<GenericSignature>,
 }
 
-impl TryFrom<SenderSignedData> for SuiTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
+impl SuiTransaction {
+    pub fn try_from(
+        data: SenderSignedData,
+        module_cache: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            data: data.intent_message().value.clone().try_into()?,
+            data: SuiTransactionData::try_from(data.intent_message().value.clone(), module_cache)?,
             tx_signatures: data.tx_signatures().to_vec(),
         })
     }
@@ -933,7 +938,7 @@ pub enum SuiInputObjectKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiProgrammableTransaction {
     /// Input objects or primitive values
-    pub inputs: Vec<SuiJsonValue>,
+    pub inputs: Vec<SuiCallArg>,
     /// The commands to be executed sequentially. A failure in any command will
     /// result in the failure of the entire transaction.
     pub commands: Vec<SuiCommand>,
@@ -951,18 +956,78 @@ impl Display for SuiProgrammableTransaction {
     }
 }
 
-impl TryFrom<ProgrammableTransaction> for SuiProgrammableTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(value: ProgrammableTransaction) -> Result<Self, Self::Error> {
+impl SuiProgrammableTransaction {
+    fn try_from(
+        value: ProgrammableTransaction,
+        module_cache: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
         let ProgrammableTransaction { inputs, commands } = value;
+        let input_types = Self::resolve_input_type(&inputs, &commands, module_cache);
         Ok(SuiProgrammableTransaction {
             inputs: inputs
                 .into_iter()
-                .map(|arg| arg.try_into())
+                .zip(input_types)
+                .map(|(arg, layout)| SuiCallArg::try_from(arg, layout.as_ref()))
                 .collect::<Result<_, _>>()?,
             commands: commands.into_iter().map(SuiCommand::from).collect(),
         })
+    }
+
+    fn resolve_input_type(
+        inputs: &Vec<CallArg>,
+        commands: &[Command],
+        module_cache: &impl GetModule,
+    ) -> Vec<Option<MoveTypeLayout>> {
+        let mut result_types = vec![None; inputs.len()];
+        for command in commands.iter() {
+            match command {
+                Command::MoveCall(c) => {
+                    let id = ModuleId::new(c.package.into(), c.module.clone());
+                    let Some(types) = get_signature_types(id, c.function.as_ident_str(), module_cache) else {
+                        return result_types;
+                    };
+                    for (arg, type_) in c.arguments.iter().zip(types) {
+                        if let &Argument::Input(i) = arg {
+                            result_types[i as usize] = type_;
+                        }
+                    }
+                }
+                Command::SplitCoin(_, Argument::Input(i)) => {
+                    result_types[(*i) as usize] = Some(MoveTypeLayout::U64);
+                }
+                Command::TransferObjects(_, Argument::Input(i)) => {
+                    result_types[(*i) as usize] = Some(MoveTypeLayout::Address);
+                }
+                _ => {}
+            }
+        }
+        result_types
+    }
+}
+
+fn get_signature_types(
+    id: ModuleId,
+    function: &IdentStr,
+    module_cache: &impl GetModule,
+) -> Option<Vec<Option<MoveTypeLayout>>> {
+    use std::borrow::Borrow;
+    if let Ok(Some(module)) = module_cache.get_module_by_id(&id) {
+        let module: &CompiledModule = module.borrow();
+        let view = BinaryIndexedView::Module(module);
+        let func = module
+            .function_handles
+            .iter()
+            .find(|f| module.identifier_at(f.name) == function)?;
+        Some(
+            module
+                .signature_at(func.parameters)
+                .0
+                .iter()
+                .map(|s| primitive_type(&view, &[], s).1)
+                .collect(),
+        )
+    } else {
+        None
     }
 }
 
@@ -1287,4 +1352,90 @@ impl TransactionBytes {
 pub struct OwnedObjectRef {
     pub owner: Owner,
     pub reference: SuiObjectRef,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum SuiCallArg {
+    // Needs to become an Object Ref or Object ID, depending on object type
+    Object(SuiObjectArg),
+    // pure value, bcs encoded
+    Pure(SuiPureValue),
+}
+
+impl SuiCallArg {
+    pub fn try_from(
+        value: CallArg,
+        layout: Option<&MoveTypeLayout>,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(match value {
+            CallArg::Pure(p) => SuiCallArg::Pure(SuiPureValue {
+                value_type: layout.map(|l| l.try_into()).transpose()?,
+                value: SuiJsonValue::from_bcs_bytes(layout, &p)?,
+            }),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, digest))) => {
+                SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject {
+                    object_id: id,
+                    version,
+                    digest,
+                })
+            }
+            CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => SuiCallArg::Object(SuiObjectArg::SharedObject {
+                object_id: id,
+                initial_shared_version,
+                mutable,
+            }),
+        })
+    }
+
+    pub fn pure(&self) -> Option<&SuiJsonValue> {
+        match self {
+            SuiCallArg::Pure(v) => Some(&v.value),
+            _ => None,
+        }
+    }
+
+    pub fn object(&self) -> Option<&ObjectID> {
+        match self {
+            SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. })
+            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
+                Some(object_id)
+            }
+            _ => None,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiPureValue {
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    value_type: Option<TypeTag>,
+    value: SuiJsonValue,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "objectType", rename_all = "camelCase")]
+pub enum SuiObjectArg {
+    // A Move object, either immutable, or owned mutable.
+    #[serde(rename_all = "camelCase")]
+    ImmOrOwnedObject {
+        object_id: ObjectID,
+        version: SequenceNumber,
+        digest: ObjectDigest,
+    },
+    // A Move object that's shared.
+    // SharedObject::mutable controls whether caller asks for a mutable reference to shared object.
+    #[serde(rename_all = "camelCase")]
+    SharedObject {
+        object_id: ObjectID,
+        initial_shared_version: SequenceNumber,
+        mutable: bool,
+    },
 }

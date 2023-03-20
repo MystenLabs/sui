@@ -7,8 +7,10 @@ use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
 use move_core_types::parser::parse_struct_tag;
+use move_core_types::resolver::ModuleResolver;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
@@ -17,6 +19,7 @@ use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
+use sui_json_rpc::error::Error;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
@@ -466,6 +469,13 @@ impl RpcExampleProvider {
             version: object_ref.1,
             digest: ObjectDigest::new(self.rng.gen()),
         };
+        struct NoOpsModuleResolver;
+        impl ModuleResolver for NoOpsModuleResolver {
+            type Error = Error;
+            fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+                Ok(None)
+            }
+        }
         let result = SuiTransactionResponse {
             digest: *tx_digest,
             effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
@@ -505,7 +515,7 @@ impl RpcExampleProvider {
             balance_changes: None,
             timestamp_ms: None,
             transaction: Some(SuiTransaction {
-                data: SuiTransactionData::try_from(data1).unwrap(),
+                data: SuiTransactionData::try_from(data1, &&mut NoOpsModuleResolver).unwrap(),
                 tx_signatures: signatures.clone(),
             }),
             raw_transaction,

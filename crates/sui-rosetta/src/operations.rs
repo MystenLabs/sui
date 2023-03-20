@@ -8,16 +8,15 @@ use std::vec;
 
 use anyhow::anyhow;
 use move_core_types::ident_str;
-use move_core_types::language_storage::StructTag;
-use move_core_types::value::MoveTypeLayout;
+use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::resolver::ModuleResolver;
 use serde::Deserialize;
 use serde::Serialize;
 
-use sui_json_rpc_types::SuiCommand;
 use sui_json_rpc_types::SuiProgrammableMoveCall;
 use sui_json_rpc_types::SuiProgrammableTransaction;
 use sui_json_rpc_types::{BalanceChange, SuiArgument};
-use sui_sdk::json::SuiJsonValue;
+use sui_json_rpc_types::{SuiCallArg, SuiCommand};
 use sui_sdk::rpc_types::{
     SuiTransactionData, SuiTransactionDataAPI, SuiTransactionEffectsAPI, SuiTransactionKind,
     SuiTransactionResponse,
@@ -241,19 +240,10 @@ impl Operations {
                 .get(i as usize)
                 .and_then(|inner| inner.get(j as usize))
         }
-        fn split_coin(inputs: &[SuiJsonValue], amount: SuiArgument) -> Option<Vec<KnownValue>> {
+        fn split_coin(inputs: &[SuiCallArg], amount: SuiArgument) -> Option<Vec<KnownValue>> {
             let amount: u64 = match amount {
                 SuiArgument::Input(i) => {
-                    let input = inputs[i as usize]
-                        .to_bcs_bytes(&MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)))
-                        .ok()?;
-                    let input = if input.len() == 8 {
-                        input
-                    } else {
-                        bcs::from_bytes::<Vec<u8>>(&input).ok()?
-                    };
-                    // convert to u64
-                    bcs::from_bytes(&input).ok()?
+                    u64::from_str(inputs[i as usize].pure()?.to_json_value().as_str()?).ok()?
                 }
                 SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
                     return None
@@ -263,13 +253,13 @@ impl Operations {
         }
         fn transfer_object(
             aggregated_recipients: &mut HashMap<SuiAddress, u64>,
-            inputs: &[SuiJsonValue],
+            inputs: &[SuiCallArg],
             known_results: &[Vec<KnownValue>],
             objs: &[SuiArgument],
             recipient: SuiArgument,
         ) -> Option<Vec<KnownValue>> {
             let addr = match recipient {
-                SuiArgument::Input(i) => inputs[i as usize].to_sui_address().ok()?,
+                SuiArgument::Input(i) => inputs[i as usize].pure()?.to_sui_address().ok()?,
                 SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
                     return None
                 }
@@ -292,7 +282,7 @@ impl Operations {
             Some(vec![])
         }
         fn stake_call(
-            inputs: &[SuiJsonValue],
+            inputs: &[SuiCallArg],
             known_results: &[Vec<KnownValue>],
             call: &SuiProgrammableMoveCall,
         ) -> Result<Option<(Option<u64>, SuiAddress)>, Error> {
@@ -311,20 +301,18 @@ impl Operations {
                         // We use the position of the validator arg as a indicator of if the rosetta stake
                         // transaction is staking the whole wallet or not, if staking whole wallet, 
                         // we have to omit the amount value in the final operation output.
-                        SuiArgument::Input(i) => (*i==1, inputs[*i as usize].to_sui_address()),
+                        SuiArgument::Input(i) => (*i==1, inputs[*i as usize].pure().map(|v|v.to_sui_address()).transpose()),
                         _=> return Ok(None),
                     };
                     (some_amount.then_some(*amount), validator)
                 },
                 _ => Err(anyhow!("Error encountered when extracting arguments from move call, expecting 3 elements, got {}", arguments.len()))?,
             };
-            let validator =
-                validator.map_err(|_| anyhow!("Error parsing Validator address from call arg."))?;
-            Ok(Some((amount, validator)))
+            Ok(validator.map(|v| v.map(|v| (amount, v)))?)
         }
 
         fn unstake_call(
-            inputs: &[SuiJsonValue],
+            inputs: &[SuiCallArg],
             call: &SuiProgrammableMoveCall,
         ) -> Result<Option<ObjectID>, Error> {
             let SuiProgrammableMoveCall { arguments, .. } = call;
@@ -332,8 +320,7 @@ impl Operations {
                 [_, stake_id] => {
                     match stake_id {
                         SuiArgument::Input(i) => {
-                            let id = inputs[*i as usize].to_json_value().as_str().ok_or_else(|| anyhow!("Cannot fin stake id from input args."))?.to_string();
-                            let id = ObjectID::from_str(&id).map_err(|e| anyhow!("Error parsing stake object id from call arg: {e}"))?;
+                            let id = inputs[*i as usize].object().ok_or_else(|| anyhow!("Cannot find stake id from input args."))?;
                             // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for a selected stake or None (all stakes).
                             // this hack is similar to the one in stake_call.
                             let some_id = i % 2 == 1;
@@ -344,7 +331,7 @@ impl Operations {
                 },
                 _ => Err(anyhow!("Error encountered when extracting arguments from move call, expecting 3 elements, got {}", arguments.len()))?,
             };
-            Ok(id)
+            Ok(id.cloned())
         }
         let SuiProgrammableTransaction { inputs, commands } = &pt;
         let mut known_results: Vec<Vec<KnownValue>> = vec![];
@@ -586,7 +573,15 @@ fn is_unstake_event(tag: &StructTag) -> bool {
 impl TryFrom<TransactionData> for Operations {
     type Error = Error;
     fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
-        SuiTransactionData::try_from(data)?.try_into()
+        struct NoOpsModuleResolver;
+        impl ModuleResolver for NoOpsModuleResolver {
+            type Error = Error;
+            fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+                Ok(None)
+            }
+        }
+        // Rosetta don't need the call args to be parsed into readable format
+        SuiTransactionData::try_from(data, &&mut NoOpsModuleResolver)?.try_into()
     }
 }
 
