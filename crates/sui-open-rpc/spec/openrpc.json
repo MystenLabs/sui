@@ -6370,6 +6370,7 @@
             ]
           },
           "nextEpochNetworkPubkeyBytes": {
+            "default": null,
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Base58"
@@ -6392,6 +6393,7 @@
             ]
           },
           "nextEpochProofOfPossession": {
+            "default": null,
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Base58"
@@ -6402,6 +6404,7 @@
             ]
           },
           "nextEpochProtocolPubkeyBytes": {
+            "default": null,
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Base58"
@@ -6423,6 +6426,7 @@
             ]
           },
           "nextEpochWorkerPubkeyBytes": {
+            "default": null,
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Base58"
