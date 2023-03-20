@@ -13,6 +13,7 @@ import {
 import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
 import { setup, TestToolbox } from './utils/setup';
+import { blake2b } from '@noble/hashes/blake2b';
 
 describe('RawSigner', () => {
   let toolbox: TestToolbox;
@@ -24,11 +25,12 @@ describe('RawSigner', () => {
   it('Ed25519 keypair signData', async () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
+    const digest = blake2b(signData, { dkLen: 32 });
     const signer = new RawSigner(keypair, toolbox.provider);
     const serializedSignature = await signer.signData(signData);
     const { signature, pubKey } = fromSerializedSignature(serializedSignature);
     const isValid = nacl.sign.detached.verify(
-      signData,
+      digest,
       signature,
       pubKey.toBytes(),
     );
@@ -59,7 +61,8 @@ describe('RawSigner', () => {
   it('Secp256k1 keypair signData', async () => {
     const keypair = new Secp256k1Keypair();
     const signData = new TextEncoder().encode('hello world');
-    const msgHash = await secp.utils.sha256(signData);
+    const digest = blake2b(signData, { dkLen: 32 });
+    const msgHash = await secp.utils.sha256(digest);
     const signer = new RawSigner(keypair, toolbox.provider);
     const serializedSignature = await signer.signData(signData);
     const { signature, pubKey } = fromSerializedSignature(serializedSignature);

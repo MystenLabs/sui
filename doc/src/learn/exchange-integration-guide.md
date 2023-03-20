@@ -92,7 +92,7 @@ The following code sample demonstrates how to derive a Sui address in Rust:
 ```rust
 let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = Multisig
 // Hash the [flag, public key] bytearray using Blake2b
-let mut hasher = UserHash::default();
+let mut hasher = DefaultHash::default();
 hasher.update([flag]);
 hasher.update(pk);
 let arr = hasher.finalize();

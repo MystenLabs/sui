@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    crypto::{CompressedSignature, SignatureScheme},
+    crypto::{CompressedSignature, DefaultHash, SignatureScheme},
     signature::AuthenticatorTrait,
     sui_serde::SuiBitmap,
 };
@@ -11,6 +11,7 @@ use fastcrypto::{
     ed25519::Ed25519PublicKey,
     encoding::Base64,
     error::FastCryptoError,
+    hash::HashFunction,
     secp256k1::Secp256k1PublicKey,
     secp256r1::Secp256r1PublicKey,
     traits::{ToFromBytes, VerifyingKey},
@@ -115,6 +116,9 @@ impl AuthenticatorTrait for MultiSig {
         }
         let mut weight_sum: u16 = 0;
         let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        let mut hasher = DefaultHash::default();
+        hasher.update(message);
+        let digest = hasher.finalize().digest;
 
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
@@ -133,7 +137,7 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, &s.try_into()?)
+                    pk.verify(&digest, &s.try_into()?)
                 }
                 CompressedSignature::Secp256k1(s) => {
                     let pk = Secp256k1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
@@ -141,7 +145,7 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, &s.try_into()?)
+                    pk.verify(&digest, &s.try_into()?)
                 }
                 CompressedSignature::Secp256r1(s) => {
                     let pk = Secp256r1PublicKey::from_bytes(pk_map.0.as_ref()).map_err(|_| {
@@ -149,7 +153,7 @@ impl AuthenticatorTrait for MultiSig {
                             error: "Invalid public key".to_string(),
                         }
                     })?;
-                    pk.verify(&message, &s.try_into()?)
+                    pk.verify(&digest, &s.try_into()?)
                 }
             };
             if res.is_ok() {
