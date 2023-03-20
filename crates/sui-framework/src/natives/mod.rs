@@ -29,7 +29,13 @@ use sui_protocol_config::ProtocolConfig;
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
-    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
+    crypto::{
+        bls12381, ecdsa_k1, ecdsa_r1, ecvrf,
+        ed25519::{self, Ed25519VerifyCostParams},
+        groth16,
+        hash::{self, HashBlake2b256CostParams, HashKeccak256CostParams},
+        hmac,
+    },
     event::EventEmitCostParams,
 };
 
@@ -39,6 +45,9 @@ pub struct NativesCostTable {
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
     pub event_emit_cost_params: EventEmitCostParams,
+    pub ed25519_verify_cost_params: Ed25519VerifyCostParams,
+    pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
+    pub hash_keccak256_cost_params: HashKeccak256CostParams,
 }
 
 impl NativesCostTable {
@@ -77,6 +86,39 @@ impl NativesCostTable {
                     .event_tag_size_derivation_cost_per_byte()
                     .into(),
                 event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
+            },
+
+            // Crypto
+            // ed25519
+            ed25519_verify_cost_params: Ed25519VerifyCostParams {
+                ed25519_ed25519_verify_cost_base: protocol_config
+                    .ed25519_ed25519_verify_cost_base()
+                    .into(),
+                ed25519_ed25519_verify_msg_cost_per_byte: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_byte()
+                    .into(),
+                ed25519_ed25519_verify_msg_cost_per_block: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_block()
+                    .into(),
+            },
+            // hash
+            hash_blake2b256_cost_params: HashBlake2b256CostParams {
+                hash_blake2b256_cost_base: protocol_config.hash_blake2b256_cost_base().into(),
+                hash_blake2b256_data_cost_per_byte: protocol_config
+                    .hash_blake2b256_data_cost_per_byte()
+                    .into(),
+                hash_blake2b256_data_cost_per_block: protocol_config
+                    .hash_blake2b256_data_cost_per_block()
+                    .into(),
+            },
+            hash_keccak256_cost_params: HashKeccak256CostParams {
+                hash_keccak256_cost_base: protocol_config.hash_keccak256_cost_base().into(),
+                hash_keccak256_data_cost_per_byte: protocol_config
+                    .hash_keccak256_data_cost_per_byte()
+                    .into(),
+                hash_keccak256_data_cost_per_block: protocol_config
+                    .hash_keccak256_data_cost_per_block()
+                    .into(),
             },
         }
     }
