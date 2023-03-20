@@ -464,9 +464,9 @@ pub mod pg_integration_test {
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
-        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
+        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32771".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
-        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
+        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}/sui_indexer");
 
         let test_cluster = if let Some(epoch) = epoch_duration_ms {
             TestClusterBuilder::new()
