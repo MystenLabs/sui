@@ -175,6 +175,16 @@ containing object's address)
 ## Constants
 
 
+<a name="0x2_object_ENotSystemAddress"></a>
+
+Sender is not @0x0 the system address.
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x2_object_SUI_CLOCK_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Clock Object.
@@ -329,7 +339,7 @@ Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singl
 This should only be called once from <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(): <a href="object.md#0x2_object_UID">object::UID</a>
+<pre><code><b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -338,7 +348,8 @@ This should only be called once from <code><a href="sui_system.md#0x2_sui_system
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(): <a href="object.md#0x2_object_UID">UID</a> {
+<pre><code><b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &TxContext): <a href="object.md#0x2_object_UID">UID</a> {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="object.md#0x2_object_UID">UID</a> {
         id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="object.md#0x2_object_SUI_SYSTEM_STATE_OBJECT_ID">SUI_SYSTEM_STATE_OBJECT_ID</a> },
     }

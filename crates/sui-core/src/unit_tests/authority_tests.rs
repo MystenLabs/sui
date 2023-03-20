@@ -3169,6 +3169,7 @@ async fn test_genesis_sui_system_state_object() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_sui_system_state_nop_upgrade() {
+    use sui_adapter::execution_engine::{construct_advance_epoch_pt, AdvanceEpochParams};
     use sui_adapter::programmable_transactions;
     use sui_types::sui_system_state::SUI_SYSTEM_STATE_TESTING_VERSION1;
     use sui_types::{
@@ -3199,39 +3200,25 @@ async fn test_sui_system_state_nop_upgrade() {
         TransactionDigest::genesis(),
         &protocol_config,
     );
-    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_SYSTEM_STATE_OBJECT_ID,
-        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-        mutable: true,
-    });
+
     let new_protocol_version = ProtocolVersion::MIN.as_u64() + 1;
     let new_system_state_version = SUI_SYSTEM_STATE_TESTING_VERSION1;
 
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                SUI_FRAMEWORK_ADDRESS.into(),
-                ident_str!("sui_system").to_owned(),
-                ident_str!("advance_epoch").to_owned(),
-                vec![],
-                vec![
-                    system_object_arg,
-                    CallArg::Pure(bcs::to_bytes(&1u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&new_protocol_version).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&0u64).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&new_system_state_version).unwrap()), // Upgrade sui system state, set new version to 1.
-                ],
-            )
-            .unwrap();
-        builder.finish()
-    };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Normal>(
+    // Dummy change epoch with the new protocol version and system state version.
+    let pt = construct_advance_epoch_pt(AdvanceEpochParams {
+        epoch: 1,
+        next_protocol_version: ProtocolVersion::from(new_protocol_version),
+        storage_charge: 0,
+        computation_charge: 0,
+        storage_rebate: 0,
+        storage_fund_reinvest_rate: 0,
+        reward_slashing_rate: 0,
+        epoch_start_timestamp_ms: 0,
+        new_system_state_version,
+    })
+    .unwrap();
+
+    programmable_transactions::execution::execute::<_, _, execution_mode::System>(
         &protocol_config,
         &move_vm,
         &mut temporary_store,

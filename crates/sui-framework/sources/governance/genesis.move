@@ -4,9 +4,9 @@
 module sui::genesis {
     use std::vector;
 
-    use sui::balance::{Balance, Self};
+    use sui::balance::{Self, Balance};
     use sui::coin;
-    use sui::clock;
+    use sui::object::UID;
     use sui::sui::{Self, SUI};
     use sui::sui_system;
     use sui::tx_context::{Self, TxContext};
@@ -63,6 +63,8 @@ module sui::genesis {
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
     fun create(
+        sui_system_state_id: UID,
+        sui_supply: Balance<SUI>,
         genesis_chain_parameters: GenesisChainParameters,
         genesis_validators: vector<GenesisValidatorMetadata>,
         token_distribution_schedule: TokenDistributionSchedule,
@@ -78,7 +80,6 @@ module sui::genesis {
             allocations,
         } = token_distribution_schedule;
 
-        let sui_supply = sui::new(ctx);
         let subsidy_fund = balance::split(
             &mut sui_supply,
             stake_subsidy_fund_mist,
@@ -150,6 +151,7 @@ module sui::genesis {
         activate_validators(&mut validators);
 
         sui_system::create(
+            sui_system_state_id,
             validators,
             subsidy_fund,
             storage_fund,
@@ -161,8 +163,6 @@ module sui::genesis {
             genesis_chain_parameters.epoch_duration_ms,
             ctx,
         );
-
-        clock::create();
     }
 
     fun allocate_tokens(

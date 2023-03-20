@@ -646,15 +646,15 @@ module sui::sui_system_state_inner {
         self: &mut SuiSystemStateInner,
         new_epoch: u64,
         next_protocol_version: u64,
-        storage_charge: u64,
-        computation_charge: u64,
-        storage_rebate: u64,
+        storage_reward: Balance<SUI>,
+        computation_reward: Balance<SUI>,
+        storage_rebate_amount: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
         epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
         ctx: &mut TxContext,
-    ) {
+    ) : Balance<SUI> {
         self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
         let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
@@ -669,8 +669,8 @@ module sui::sui_system_state_inner {
         let storage_fund_balance = balance::value(&self.storage_fund);
         let total_stake = storage_fund_balance + total_validators_stake;
 
-        let storage_reward = balance::create_staking_rewards(storage_charge);
-        let computation_reward = balance::create_staking_rewards(computation_charge);
+        let storage_charge = balance::value(&storage_reward);
+        let computation_charge = balance::value(&computation_reward);
 
         // Include stake subsidy in the rewards given out to validators and stakers.
         // Delay distributing any stake subsidies until after `governance_start_epoch`.
@@ -735,8 +735,8 @@ module sui::sui_system_state_inner {
         balance::join(&mut self.storage_fund, computation_reward);
 
         // Destroy the storage rebate.
-        assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
-        balance::destroy_storage_rebates(balance::split(&mut self.storage_fund, storage_rebate));
+        assert!(balance::value(&self.storage_fund) >= storage_rebate_amount, 0);
+        let storage_rebate = balance::split(&mut self.storage_fund, storage_rebate_amount);
 
         let new_total_stake = validator_set::total_stake(&self.validators);
 
@@ -748,7 +748,7 @@ module sui::sui_system_state_inner {
                 total_stake: new_total_stake,
                 storage_charge,
                 storage_fund_reinvestment: (storage_fund_reinvestment_amount as u64),
-                storage_rebate,
+                storage_rebate: storage_rebate_amount,
                 storage_fund_balance: balance::value(&self.storage_fund),
                 stake_subsidy_amount,
                 total_gas_fees: computation_charge,
@@ -757,6 +757,7 @@ module sui::sui_system_state_inner {
             }
         );
         self.safe_mode = false;
+        storage_rebate
     }
 
     /// An extremely simple version of advance_epoch.

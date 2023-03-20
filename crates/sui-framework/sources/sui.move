@@ -10,9 +10,9 @@ module sui::sui {
     use sui::transfer;
     use sui::coin;
 
-    friend sui::genesis;
-
     const EAlreadyMinted: u64 = 0;
+    /// Sender is not @0x0 the system address.
+    const ENotSystemAddress: u64 = 1;
 
     /// The amount of Mist per Sui token based on the the fact that mist is
     /// 10^-9 of a Sui token
@@ -29,11 +29,12 @@ module sui::sui {
 
     /// Register the `SUI` Coin to acquire its `Supply`.
     /// This should be called only once during genesis creation.
-    public(friend) fun new(ctx: &mut TxContext): Balance<SUI> {
+    fun new(ctx: &mut TxContext): Balance<SUI> {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         assert!(tx_context::epoch(ctx) == 0, EAlreadyMinted);
 
         let (treasury, metadata) = coin::create_currency(
-            SUI {}, 
+            SUI {},
             9,
             b"SUI",
             b"Sui",

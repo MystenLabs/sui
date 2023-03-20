@@ -1203,21 +1203,55 @@ pub fn generate_genesis_system_object(
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder
-            .move_call(
-                SUI_FRAMEWORK_ADDRESS.into(),
-                ident_str!("genesis").to_owned(),
-                ident_str!("create").to_owned(),
-                vec![],
-                vec![
-                    CallArg::Pure(bcs::to_bytes(&genesis_chain_parameters).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&genesis_validators).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&token_distribution_schedule).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
-                ],
-            )
-            .unwrap();
+        // Step 1: Create the SuiSystemState UID
+        let sui_system_state_uid = builder.programmable_move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("object").to_owned(),
+            ident_str!("sui_system_state").to_owned(),
+            vec![],
+            vec![],
+        );
+
+        // Step 2: Create and share the Clock.
+        builder.move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("clock").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            vec![],
+        )?;
+
+        // Step 3: Mint the supply of SUI.
+        let sui_supply = builder.programmable_move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("sui").to_owned(),
+            ident_str!("new").to_owned(),
+            vec![],
+            vec![],
+        );
+
+        // Step 4: Run genesis.
+        // The first argument is the system state uid we got from step 1 and the second one is the SUI supply we
+        // got from step 3.
+        let mut arguments = vec![sui_system_state_uid, sui_supply];
+        let mut call_arg_arguments = vec![
+            CallArg::Pure(bcs::to_bytes(&genesis_chain_parameters).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&genesis_validators).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&token_distribution_schedule).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&parameters.protocol_version.as_u64()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&system_state_version).unwrap()),
+        ]
+        .into_iter()
+        .map(|a| builder.input(a))
+        .collect::<Result<_, _>>()?;
+        arguments.append(&mut call_arg_arguments);
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("genesis").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            arguments,
+        );
         builder.finish()
     };
     programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
