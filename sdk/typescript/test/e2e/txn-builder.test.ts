@@ -77,6 +77,7 @@ describe('Transaction Builders', () => {
         ),
       ],
     });
+    tx.setGasBudget(1000);
     await validateTransaction(toolbox.signer, tx);
   });
 
