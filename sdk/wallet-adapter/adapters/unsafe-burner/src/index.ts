@@ -65,8 +65,8 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     async (transactionInput) => {
       return await this.#signer.signAndExecuteTransaction({
         transaction: transactionInput.transaction,
-        options: transactionInput.options?.contentOptions,
-        requestType: transactionInput.options?.requestType,
+        options: transactionInput.options,
+        requestType: transactionInput.requestType,
       });
     };
 

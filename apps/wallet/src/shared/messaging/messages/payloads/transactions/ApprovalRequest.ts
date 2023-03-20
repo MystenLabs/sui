@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    type SuiSignAndExecuteTransactionInput,
     type SuiSignMessageOutput,
-    type SuiSignMessageOptions,
-    type SuiSignAndExecuteTransactionOptions,
 } from '@mysten/wallet-standard';
 
 import type {
@@ -18,14 +17,14 @@ export type TransactionDataType = {
     data: string;
     account: SuiAddress;
     justSign?: boolean;
-    options?: SuiSignAndExecuteTransactionOptions;
+    requestType?: SuiSignAndExecuteTransactionInput['requestType'];
+    options?: SuiSignAndExecuteTransactionInput['options'];
 };
 
 export type SignMessageDataType = {
     type: 'sign-message';
     message: string;
     accountAddress: SuiAddress;
-    options?: SuiSignMessageOptions;
 };
 
 export type ApprovalRequest = {
