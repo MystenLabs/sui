@@ -349,7 +349,6 @@ class Plotter:
             all_y_lat_values = [[] for _ in range(length)]
 
             for d in data:
-                print(all_y_tps_values)
                 count = float(d['count'])
                 duration = float(d['timestamp']['secs'])
                 total = float(d['sum']['secs'])
