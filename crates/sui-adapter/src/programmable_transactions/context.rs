@@ -24,7 +24,7 @@ use sui_types::{
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
-    storage::{ObjectChange, Storage, WriteKind},
+    storage::{ObjectChange, WriteKind},
 };
 
 use crate::{
@@ -726,7 +726,7 @@ where
 }
 
 /// Load an input object from the state_view
-fn load_object<S: Storage>(
+fn load_object<E: fmt::Debug, S: StorageView<E>>(
     state_view: &S,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     override_as_immutable: bool,
@@ -759,12 +759,39 @@ fn load_object<S: Storage>(
     let prev = object_owner_map.insert(id, obj.owner);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), format!("Duplicate input object {}", id));
-    let obj_value = ObjectValue::from_object(obj)?;
+    let mut obj_value = ObjectValue::from_object(obj)?;
+    loaded_object_type_to_initial(state_view, &mut obj_value)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
+// For objects introduced by an upgraded package versions, replace the upgraded package ID in their
+// type definition with the ID of the initial version of the package to satisfy the runtime (which
+// only sees original package IDs).
+fn loaded_object_type_to_initial<E: fmt::Debug, S: StorageView<E>>(
+    state_view: &S,
+    obj: &mut ObjectValue,
+) -> Result<(), ExecutionError> {
+    if let MoveObjectType::Other(struct_tag) = &obj.type_ {
+        let upgraded_id: ObjectID = struct_tag.address.into();
+        let pkg_obj = state_view.get_package(&upgraded_id);
+        if pkg_obj.is_err() {
+            invariant_violation!(format!("Package object {} does not exist yet", upgraded_id));
+        }
+        let Some(move_pkg) = pkg_obj.unwrap() else {
+            invariant_violation!(format!("Object {} is not a Move package", upgraded_id));
+        };
+        let original_id = move_pkg.original_package_id();
+        let mut new_struct_tag = struct_tag.clone();
+        new_struct_tag.address = original_id.into();
+        obj.type_ = MoveObjectType::Other(new_struct_tag);
+    }
+    // TODO: Should we translate MoveObjectType::Coin as well? At this point, the framework assumes
+    // that it will always be at SUI_FRAMEWORK_ADDRESS (e.g., see coin::is_coin function)
+    Ok(())
+}
+
 /// Load an a CallArg, either an object or a raw set of BCS bytes
-fn load_call_arg<S: Storage>(
+fn load_call_arg<E: fmt::Debug, S: StorageView<E>>(
     state_view: &S,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     call_arg: CallArg,
@@ -776,7 +803,7 @@ fn load_call_arg<S: Storage>(
 }
 
 /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
-fn load_object_arg<S: Storage>(
+fn load_object_arg<E: fmt::Debug, S: StorageView<E>>(
     state_view: &S,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
