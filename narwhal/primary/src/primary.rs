@@ -922,11 +922,19 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 )
             })?;
         let certificate = request.into_body().certificate;
-        self.synchronizer
+        match self
+            .synchronizer
             .try_accept_certificate(certificate, &network)
             .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-        Ok(anemo::Response::new(SendCertificateResponse {}))
+        {
+            Ok(()) => Ok(anemo::Response::new(SendCertificateResponse {
+                accepted: true,
+            })),
+            Err(DagError::Suspended(_)) => Ok(anemo::Response::new(SendCertificateResponse {
+                accepted: false,
+            })),
+            Err(e) => Err(anemo::rpc::Status::internal(e.to_string())),
+        }
     }
 
     async fn request_vote(
