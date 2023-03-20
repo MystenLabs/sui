@@ -97,7 +97,10 @@ pub fn update_low_scoring_authorities(
         .for_each(|(a, s)| {
             let name = AuthorityName::from(a);
             debug!("authority {} has score {}", name, s);
-            metrics.consensus_handler_scores.observe(*s as f64);
+            metrics
+                .consensus_handler_scores
+                .with_label_values(&[&format!("{:?}", name)])
+                .set(*s as i64);
         });
 
     info!("{:?} low scoring authorities calculated", len_low_scoring);
