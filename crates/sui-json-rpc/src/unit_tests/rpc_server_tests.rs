@@ -277,6 +277,39 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+    let objects = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new().with_content().with_owner(),
+            )),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    for obj in objects {
+        let oref = obj.into_object().unwrap();
+        let result = http_client
+            .get_object_with_options(
+                oref.object_id,
+                Some(SuiObjectDataOptions::new().with_content().with_owner()),
+            )
+            .await?;
+        assert!(
+            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
+        );
+    }
+    Ok(())
+}
+
+#[sim_test]
 async fn test_get_coins() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();

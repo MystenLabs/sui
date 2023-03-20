@@ -1050,10 +1050,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         .get_owned_objects(
             addr1,
             Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
+                SuiObjectDataOptions::full_content(),
             )),
             None,
             None,
