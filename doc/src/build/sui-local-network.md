@@ -26,7 +26,7 @@ When you install `sui-test-validator` but don't have libpq installed, you might 
 
 `ld: library not found for -lpq`
 
-To resolve this, use Brew to install `libpq` with command: 
+To resolve this, use Brew to install `libpq` with the following command: 
 
 ```shell
 brew install libpq
