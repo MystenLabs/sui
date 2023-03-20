@@ -61,10 +61,10 @@ function expectType(typeNames: string[], argVal?: SuiJsonValue) {
   if (typeof argVal === 'undefined') {
     return;
   }
-  const check = typeNames.some(typeName =>  typeof argVal === typeName);
-  if (check) {
+  const check = typeNames.some((typeName) => typeof argVal === typeName);
+  if (!check) {
     throw new Error(
-      `Expect ${argVal} to be  of type in ${typeNames}, received ${typeof argVal}`,
+      `Expect ${argVal} to be of type: ${typeNames}, received: ${typeof argVal}`,
     );
   }
 }
