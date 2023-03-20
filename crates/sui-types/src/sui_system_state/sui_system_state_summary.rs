@@ -134,19 +134,27 @@ pub struct SuiValidatorSummary {
     pub worker_address: String,
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Option<Base58>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Option<Base58>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Option<Base58>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
     #[schemars(with = "Option<Base58>")]
     #[serde_as(as = "Option<Base58>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_net_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_p2p_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_primary_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_epoch_worker_address: Option<String>,
 
     pub voting_power: u64,
@@ -161,8 +169,10 @@ pub struct SuiValidatorSummary {
     /// ID of the staking pool object.
     pub staking_pool_id: ObjectID,
     /// The epoch at which this pool became active.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub staking_pool_activation_epoch: Option<u64>,
     /// The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub staking_pool_deactivation_epoch: Option<u64>,
     /// The total number of SUI tokens in this pool.
     pub staking_pool_sui_balance: u64,
