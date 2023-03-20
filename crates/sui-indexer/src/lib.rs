@@ -176,7 +176,7 @@ pub fn establish_connection(db_url: String) -> PgConnection {
 pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
-    Pool::builder().build(manager).map_err(|e| {
+    Pool::builder().max_size(700).build(manager).map_err(|e| {
         IndexerError::PgConnectionPoolInitError(format!(
             "Failed to initialize connection pool with error: {:?}",
             e
