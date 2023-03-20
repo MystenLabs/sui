@@ -21,9 +21,9 @@ import {
   SuiAddress,
   ObjectId,
   normalizeSuiObjectId,
+  FaucetRateLimitError,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
 
 const TEST_ENDPOINTS = localnetConnection;
 const DEFAULT_FAUCET_URL =
