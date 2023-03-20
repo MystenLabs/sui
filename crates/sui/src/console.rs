@@ -137,7 +137,6 @@ async fn handle_command(
             SuiClientCommandResult::Objects(ref objects) => {
                 let objects = objects
                     .iter()
-                    // TODO (jian): fix unwrap and clone later
                     .map(|oref| format!("{}", oref.clone().into_object().unwrap().object_id))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
