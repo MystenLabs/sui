@@ -3,7 +3,7 @@
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::encoding::{decode_bytes_hex, Base58, Base64, Encoding};
 use fastcrypto::traits::KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs;
@@ -43,8 +43,14 @@ pub enum KeyToolCommand {
     },
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
-    /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
-    Show { file: PathBuf },
+    /// (Base64 encoded `privkey`).
+    /// If base_58_no_key_scheme_flag is true, print its Base58 encoded public key. Otherwise,
+    /// print base64 encoded public key (with key scheme flag) and the key scheme flag.
+    Show {
+        file: PathBuf,
+        #[clap(long)]
+        base58_no_key_scheme_flag: Option<bool>,
+    },
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory, and prints out its Sui
     /// address, Base64 encoded public key, and the key scheme flag.
@@ -129,12 +135,27 @@ impl KeyToolCommand {
                     );
                 }
             }
-            KeyToolCommand::Show { file } => {
+            KeyToolCommand::Show {
+                file,
+                base58_no_key_scheme_flag,
+            } => {
                 let res = read_keypair_from_file(&file);
                 match res {
                     Ok(keypair) => {
-                        println!("Public Key: {}", keypair.public().encode_base64());
-                        println!("Flag: {}", keypair.public().flag());
+                        // If not option is provided or set as false
+                        match base58_no_key_scheme_flag {
+                            Some(true) => println!(
+                                "Public Key (Base58): {}",
+                                Base58::encode(keypair.public().as_ref())
+                            ),
+                            _ => {
+                                println!(
+                                    "Public Key (Base64 with flag): {}",
+                                    keypair.public().encode_base64()
+                                );
+                                println!("Flag: {}", keypair.public().flag());
+                            }
+                        }
                         if let PublicKey::Ed25519(public_key) = keypair.public() {
                             let peer_id = anemo::PeerId(public_key.0.into());
                             println!("PeerId: {}", peer_id);
