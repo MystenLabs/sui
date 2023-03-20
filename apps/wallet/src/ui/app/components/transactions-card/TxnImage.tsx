@@ -24,7 +24,12 @@ export function TxnImage({
             )}
         >
             {actionLabel ? (
-                <Text variant="body" weight="medium" color="steel-darker">
+                <Text
+                    variant="body"
+                    weight="medium"
+                    color="steel-darker"
+                    truncate
+                >
                     {actionLabel}
                 </Text>
             ) : null}

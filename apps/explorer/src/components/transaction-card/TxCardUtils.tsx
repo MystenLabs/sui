@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
+import { useFormatCoin, getAmount } from '@mysten/core';
 import { X12 } from '@mysten/icons';
 import {
     type ExecutionStatusType,
@@ -19,7 +19,6 @@ import {
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
-import { getAmount } from '../../utils/getAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';

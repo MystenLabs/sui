@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, useFormatCoin } from '@mysten/core';
+import { CoinFormat, useFormatCoin, getAmount } from '@mysten/core';
 import {
     getTransactionKindName,
     getTransactionKind,
@@ -22,7 +22,6 @@ import { useMemo, useState } from 'react';
 //     getAddressesLinks,
 // } from '../../components/events/eventDisplay';
 import Pagination from '../../components/pagination/Pagination';
-import { getAmount } from '../../utils/getAmount';
 import { Signatures } from './Signatures';
 import TxLinks from './TxLinks';
 
@@ -234,7 +233,9 @@ export function TransactionView({
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {formattedAmount ? (
+                                {transferAmount &&
+                                transferAmount.amount > 0 &&
+                                formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={formattedAmount}

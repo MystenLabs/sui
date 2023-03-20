@@ -24,7 +24,7 @@ import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
-// import { TxnImage } from '_components/transactions-card/TxnImage';
+import { TxnImage } from '_components/transactions-card/TxnImage';
 import { notEmpty } from '_helpers';
 import {
     UNSTAKE_REQUEST_EVENT_TYPE,
@@ -41,11 +41,25 @@ type ReceiptCardProps = {
 };
 
 export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    const { events, balanceChanges } = txn;
+    const { events, balanceChanges, objectChanges } = txn;
     const timestamp = txn.timestampMs;
     const executionStatus = getExecutionStatusType(txn);
     const error = getExecutionStatusError(txn);
     const isSuccessful = executionStatus === 'success';
+
+    const objectId = useMemo(() => {
+        const resp = objectChanges?.find((item) => {
+            if (
+                'owner' in item &&
+                item.owner !== 'Immutable' &&
+                'AddressOwner' in item.owner
+            ) {
+                return item.owner.AddressOwner === activeAddress;
+            }
+            return false;
+        });
+        return resp && 'objectId' in resp ? resp.objectId : null;
+    }, [activeAddress, objectChanges]);
 
     const amountChange = useMemo(() => {
         return balanceChanges
@@ -147,7 +161,13 @@ export function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                     {unstakeTxn ? <UnStakeTxnCard event={unstakeTxn} /> : null}
                     {!stakedTxn && !unstakeTxn ? (
                         <>
-                            {/* {objectId && <TxnImage id={objectId} />} */}
+                            {objectId && (
+                                <TxnImage
+                                    id={objectId}
+                                    actionLabel={activeAddress}
+                                />
+                            )}
+
                             {amountChange?.map(
                                 ({ amount, coinType, address, isSender }) => {
                                     return (

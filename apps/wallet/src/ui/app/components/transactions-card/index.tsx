@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getAmount } from '@mysten/core';
 import {
     getExecutionStatusError,
     getExecutionStatusType,
@@ -13,7 +14,7 @@ import { Link } from 'react-router-dom';
 
 import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
-// import { TxnImage } from './TxnImage';
+import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
@@ -32,27 +33,31 @@ export function TransactionCard({
     address: SuiAddress;
 }) {
     const executionStatus = getExecutionStatusType(txn);
-    const { events, balanceChanges } = txn;
-
-    /*const objectId = useMemo(() => {
+    const { events, objectChanges } = txn;
+    const objectId = useMemo(() => {
         const resp = objectChanges?.find((item) => {
-            if ('owner' in item) {
-                return item.owner === address;
+            if (
+                'owner' in item &&
+                item.owner !== 'Immutable' &&
+                'AddressOwner' in item.owner
+            ) {
+                return item.owner.AddressOwner === address;
             }
             return false;
         });
         return resp && 'objectId' in resp ? resp.objectId : null;
-    }, [address, objectChanges]);*/
+    }, [address, objectChanges]);
 
+    const transferCoin = getAmount(txn);
     // we only show Sui Transfer amount or the first non-Sui transfer amount
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
-        const amountTransfersSui = balanceChanges?.find(
+        const amountTransfersSui = transferCoin?.find(
             ({ coinType }) => coinType === SUI_TYPE_ARG
         );
 
         // Find non-SUI transfer amount
-        const amountTransfersNonSui = balanceChanges?.find(
+        const amountTransfersNonSui = transferCoin?.find(
             ({ coinType }) => coinType !== SUI_TYPE_ARG
         );
 
@@ -66,25 +71,11 @@ export function TransactionCard({
                 amountTransfersNonSui?.coinType ||
                 null,
         };
-    }, [balanceChanges]);
+    }, [transferCoin]);
 
-    const recipientAddress = useMemo(() => {
-        if (balanceChanges) {
-            const resp = balanceChanges.find(
-                ({ owner }) =>
-                    owner !== 'Immutable' &&
-                    'AddressOwner' in owner &&
-                    owner.AddressOwner !== address
-            );
-            return resp &&
-                resp.owner !== 'Immutable' &&
-                'AddressOwner' in resp.owner
-                ? resp.owner.AddressOwner
-                : null;
-        }
-        // TODO: handle Object transfer
-        return null;
-    }, [balanceChanges, address]);
+    const recipientAddress = transferCoin?.filter(
+        ({ address: receipt }) => receipt !== address
+    )[0]?.address;
 
     const isSender = address === getTransactionSender(txn);
 
@@ -179,7 +170,7 @@ export function TransactionCard({
                                 isSender={isSender}
                                 isTransfer={!!recipientAddress}
                             />
-                            {/* {objectId && <TxnImage id={objectId} />} */}
+                            {objectId && <TxnImage id={objectId} />}
                         </>
                     )}
 
