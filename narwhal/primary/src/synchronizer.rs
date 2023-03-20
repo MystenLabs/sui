@@ -618,12 +618,12 @@ impl Synchronizer {
         // so to make a successful proposal, our proposer must use parents at least at round r-1.
         //
         // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
-        let minimal_round_for_parents = certificate.round().saturating_sub(1);
-        self.inner
-            .tx_parents
-            .send((vec![], minimal_round_for_parents, certificate.epoch()))
-            .await
-            .map_err(|_| DagError::ShuttingDown)?;
+        // let minimal_round_for_parents = certificate.round().saturating_sub(1);
+        // self.inner
+        //     .tx_parents
+        //     .send((vec![], minimal_round_for_parents, certificate.epoch()))
+        //     .await
+        //     .map_err(|_| DagError::ShuttingDown)?;
 
         // Instruct workers to download any missing batches referenced in this certificate.
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches) are available.

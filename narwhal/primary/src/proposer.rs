@@ -99,6 +99,8 @@ pub struct Proposer {
     /// our own headers have been committed.
     rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
 
+    proposing_header: Option<Round>,
+
     rx_created_certificates: mpsc::UnboundedReceiver<Certificate>,
 
     /// Metrics handler
@@ -154,6 +156,7 @@ impl Proposer {
                     digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
                     proposed_headers: BTreeMap::new(),
                     rx_committed_own_headers,
+                    proposing_header: None,
                     rx_created_certificates,
                     metrics,
                 }
@@ -188,6 +191,8 @@ impl Proposer {
             .await
             .map_err(|_| DagError::ShuttingDown)?;
 
+        self.proposing_header = Some(header.round);
+
         Ok((header, num_of_included_digests))
     }
 
@@ -195,7 +200,7 @@ impl Proposer {
     // If we detect that a different header has been already produced for the same round, then
     // this method returns the earlier header. Otherwise the newly created header will be returned.
     async fn create_new_header(&mut self) -> DagResult<Header> {
-        let this_round = self.round;
+        let this_round = self.round + 1;
         let this_epoch = self.committee.epoch();
 
         // Check if we already have stored a header for this round.
@@ -475,6 +480,7 @@ impl Proposer {
             // (ii) we have enough digests (header_num_of_batches_threshold) and we are on the happy path (we can vote for
             // the leader or the leader has enough votes to enable a commit). The latter condition only matters
             // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
+            let has_last_certificate = self.proposing_header.is_none();
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
             let max_delay_timed_out = max_delay_timer.is_elapsed();
@@ -482,6 +488,7 @@ impl Proposer {
 
             if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
                 && enough_parents
+                && has_last_certificate
             {
                 if max_delay_timed_out
                     && matches!(self.network_model, NetworkModel::PartiallySynchronous)
@@ -493,15 +500,12 @@ impl Proposer {
                     debug!("Timer expired for round {}", self.round);
                 }
 
-                // Advance to the next round.
-                self.round += 1;
-                let _ = self.tx_narwhal_round_updates.send(self.round);
-                self.metrics.current_round.set(self.round as i64);
-                debug!("Dag moved to round {}", self.round);
-
                 // Make a new header.
                 match self.make_header().await {
-                    Err(e @ DagError::ShuttingDown) => debug!("{e}"),
+                    Err(e @ DagError::ShuttingDown) => {
+                        debug!("{e}");
+                        return;
+                    }
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok((header, digests)) => {
                         let reason = if max_delay_timed_out {
@@ -520,6 +524,19 @@ impl Proposer {
                             .num_of_batch_digests_in_header
                             .with_label_values(&[reason])
                             .observe(digests as f64);
+
+                        // Advance to the next round.
+                        if self.pending_parents.is_empty() {
+                            self.round += 1;
+                        } else {
+                            self.round = self.pending_parents.first().unwrap().round();
+                            self.last_parents.clear();
+                            self.last_parents.append(&mut self.pending_parents);
+                        }
+                        advance = self.ready();
+                        let _ = self.tx_narwhal_round_updates.send(self.round);
+                        self.metrics.current_round.set(self.round as i64);
+                        debug!("Dag moved to round {}", self.round);
                     }
                 }
 
@@ -623,22 +640,38 @@ impl Proposer {
                     // Compare the parents' round number with our current round.
                     match round.cmp(&self.round) {
                         Ordering::Greater => {
-                            // We accept round bigger than our current round to jump ahead in case we were
-                            // late (or just joined the network).
-                            self.round = round;
-                            let _ = self.tx_narwhal_round_updates.send(self.round);
-                            self.last_parents = parents;
+                            if self.last_parents.is_empty() {
+                                // We accept round bigger than our current round to jump ahead in case we were
+                                // late (or just joined the network).
+                                self.round = round;
+                                let _ = self.tx_narwhal_round_updates.send(self.round);
+                                self.last_parents = parents;
+                                self.pending_parents.clear();
 
-                            // we re-calculate the timeout to give the opportunity to the node
-                            // to propose earlier if it's a leader for the round
-                            // Reschedule the timer.
-                            let timer_start = Instant::now();
-                            max_delay_timer
-                                .as_mut()
-                                .reset(timer_start + self.max_delay());
-                            min_delay_timer
-                                .as_mut()
-                                .reset(timer_start + self.min_delay());
+                                // we re-calculate the timeout to give the opportunity to the node
+                                // to propose earlier if it's a leader for the round
+                                // Reschedule the timer.
+                                let timer_start = Instant::now();
+                                max_delay_timer
+                                    .as_mut()
+                                    .reset(timer_start + self.max_delay());
+                                min_delay_timer
+                                    .as_mut()
+                                    .reset(timer_start + self.min_delay());
+                            } else {
+                                if self.pending_parents.is_empty() {
+                                    self.pending_parents = parents;
+                                } else {
+                                    let pending_round = self.pending_parents.first().as_ref().unwrap().round();
+                                    let parent_round = parents.first().as_ref().unwrap().round();
+                                    match pending_round.cmp(&parent_round) {
+                                        Ordering::Less => self.pending_parents = parents,
+                                        Ordering::Equal => self.pending_parents.extend(parents),
+                                        Ordering::Greater => {},
+                                    };
+                                }
+                                continue;
+                            }
                         },
                         Ordering::Less => {
                             // Ignore parents from older rounds.
@@ -647,24 +680,11 @@ impl Proposer {
                         Ordering::Equal => {
                             // The core gives us the parents the first time they are enough to form a quorum.
                             // Then it keeps giving us all the extra parents.
-                            self.last_parents.extend(parents)
+                            self.last_parents.extend(parents);
                         }
-                    }
-
-                    // Check whether we can advance to the next round. Note that if we timeout,
-                    // we ignore this check and advance anyway.
-                    advance = self.ready();
-
-                    let round_type = if self.round % 2 == 0 {
-                        "even"
-                    } else {
-                        "odd"
                     };
 
-                    self.metrics
-                    .proposer_ready_to_advance
-                    .with_label_values(&[&advance.to_string(), round_type])
-                    .inc();
+                    advance = self.ready();
                 }
 
                 // Receive digests from our workers.
@@ -679,6 +699,14 @@ impl Proposer {
                     self.digests.push_back(message);
                 }
 
+                Some(certificate) = self.rx_created_certificates.recv() => {
+                    if let Some(round) = self.proposing_header.as_ref() {
+                        if certificate.round() == *round {
+                            self.proposing_header = None;
+                        }
+                    }
+                }
+
                 // Check whether any timer expired.
                 () = &mut max_delay_timer, if !max_delay_timed_out => {
                     // Continue to next iteration of the loop.
@@ -691,6 +719,13 @@ impl Proposer {
                     return
                 }
             }
+
+            let round_type = if self.round % 2 == 0 { "even" } else { "odd" };
+
+            self.metrics
+                .proposer_ready_to_advance
+                .with_label_values(&[&advance.to_string(), round_type])
+                .inc();
 
             // update metrics
             self.metrics
