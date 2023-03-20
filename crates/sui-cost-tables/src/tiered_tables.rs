@@ -664,41 +664,53 @@ pub fn unit_cost_schedule() -> CostTable {
 }
 
 pub fn initial_cost_schedule() -> CostTable {
-    let instruction_tiers: BTreeMap<u64, u64> = vec![
-        (0, 1),
-        (1000, 2),
-        (2000, 4),
-        (2500, 16),
-        (3000, 256), // After this all instructions get charged this amount.
-    ]
-    .into_iter()
-    .collect();
+    let var = std::env::var("COST_TABLES").unwrap();
+    let ct = std::env::var("COST_TABLE").unwrap();
+    let path = std::path::Path::new(&var).join(std::path::Path::new("tables")).join(std::path::Path::new(&ct));
+    let x = cost_table_from_path(&path);
+    //let instruction_tiers: BTreeMap<u64, u64> = vec![
+        //(0, 1),
+        //(1000, 2),
+        //(2000, 4),
+        //(2500, 16),
+        //(3000, 256), // After this all instructions get charged this amount.
+    //]
+    //.into_iter()
+    //.collect();
 
-    let stack_height_tiers: BTreeMap<u64, u64> = vec![
-        (0, 1),
-        (200, 2),
-        (400, 4),
-        (800, 16),
-        (1200, 256), // After this all increases to the stack height get charged this amount.
-    ]
-    .into_iter()
-    .collect();
+    //let stack_height_tiers: BTreeMap<u64, u64> = vec![
+        //(0, 1),
+        //(200, 2),
+        //(400, 4),
+        //(800, 16),
+        //(1200, 256), // After this all increases to the stack height get charged this amount.
+    //]
+    //.into_iter()
+    //.collect();
 
-    let stack_size_tiers: BTreeMap<u64, u64> = vec![
-        (0, 1),
-        (5000, 2),
-        (7000, 4),
-        (10000, 16),
-        (15000, 256), // After this all increases to the stack height get charged this amount.
-    ]
-    .into_iter()
-    .collect();
+    //let stack_size_tiers: BTreeMap<u64, u64> = vec![
+        //(0, 1),
+        //(5000, 2),
+        //(7000, 4),
+        //(10000, 16),
+        //(15000, 256), // After this all increases to the stack height get charged this amount.
+    //]
+    //.into_iter()
+    //.collect();
 
-    CostTable {
-        instruction_tiers,
-        stack_size_tiers,
-        stack_height_tiers,
-    }
+    //let x = CostTable {
+        //instruction_tiers,
+        //stack_size_tiers,
+        //stack_height_tiers,
+    //};
+    println!("{}", serde_json::to_string_pretty(&x).unwrap());
+    x
+}
+
+/// Used for iterating on different cost tables.
+pub fn cost_table_from_path(path: &std::path::Path) -> CostTable {
+    let json_string = std::fs::read_to_string(path).unwrap();
+    serde_json::from_str(&json_string).unwrap()
 }
 
 // Convert from our representation of gas costs to the type that the MoveVM expects for unit tests.

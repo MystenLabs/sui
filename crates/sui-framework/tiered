@@ -1,0 +1,922 @@
+{
+  "instruction_tiers": {
+    "0": 1,
+    "1000": 2,
+    "2000": 4,
+    "2500": 16,
+    "3000": 256
+  },
+  "stack_height_tiers": {
+    "0": 1,
+    "200": 2,
+    "400": 4,
+    "800": 16,
+    "1200": 256
+  },
+  "stack_size_tiers": {
+    "0": 1,
+    "5000": 2,
+    "7000": 4,
+    "10000": 16,
+    "15000": 256
+  }
+}
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING Sui
+Running Move unit tests
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_add
+[ PASS    ] 0x2::groth16_tests::test_prepare_verifying_key_bls12381
+[ PASS    ] 0x2::address_tests::from_bytes_ok
+[ PASS    ] 0x2::clock_tests::creating_a_clock_and_incrementing_it
+[ PASS    ] 0x2::coin_tests::coin_tests_metadata
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_add__baseline
+[ PASS    ] 0x2::linked_table_tests::borrow_missing
+[ PASS    ] 0x2::display_tests::capy_init
+[ PASS    ] 0x2::address_tests::from_bytes_too_few_bytes
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_and
+[ PASS    ] 0x2::address_tests::from_u256_ok
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_and__baseline
+[ PASS    ] 0x2::coin_balance_tests::test_locked_coin_invalid
+[ PASS    ] 0x2::groth16_tests::test_prepare_verifying_key_bn254
+[ PASS    ] 0x2::dynamic_field_tests::add_duplicate
+[ PASS    ] 0x2::coin_tests::coin_tests_mint
+[ PASS    ] 0x2::groth16_tests::test_prepare_verifying_key_invalid_bls12381
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_bitand
+[ PASS    ] 0x2::linked_table_tests::borrow_mut_missing
+[ PASS    ] 0x2::address_tests::from_u256_tests_max_bytes
+[ PASS    ] 0x2::groth16_tests::test_prepare_verifying_key_invalid_bn254
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_bitand__baseline
+[ PASS    ] 0x2::groth16_tests::test_too_many_public_inputs_bls12381
+[ PASS    ] 0x2::groth16_tests::test_too_many_public_inputs_bn254
+[ PASS    ] 0x2::dynamic_field_tests::add_duplicate_mismatched_type
+[ PASS    ] 0x2::address_tests::test_from_bytes_too_many_bytes
+[ PASS    ] 0x2::coin_balance_tests::test_locked_coin_valid
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_bitor
+[ PASS    ] 0x2::linked_table_tests::destroy_non_empty
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_bitor__baseline
+[ PASS    ] 0x2::groth16_tests::test_verify_groth_16_proof_bls12381
+[ PASS    ] 0x2::dynamic_field_tests::borrow_missing
+[ PASS    ] 0x2::collectible_tests::init_and_mint_boars
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_cast_u128
+[ PASS    ] 0x2::coin_balance_tests::type_morphing
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_cast_u128__baseline
+[ PASS    ] 0x2::dynamic_field_tests::borrow_mut_missing
+[ PASS    ] 0x2::linked_table_tests::front_back_empty
+[ PASS    ] 0x2::devnet_nftTests::mint_transfer_update
+[ PASS    ] 0x2::digest_tests::test_good_hash
+[ PASS    ] 0x2::digest_tests::test_too_long_hash
+[ PASS    ] 0x2::digest_tests::test_too_short_hash
+[ PASS    ] 0x2::address_tests::to_ascii_string_ok
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_cast_u64
+[ PASS    ] 0x2::ecdsa_k1_tests::test_ecrecover_eth_address
+[ PASS    ] 0x2::ecdsa_k1_tests::test_ecrecover_pubkey
+[ PASS    ] 0x2::package_tests::test_failure_to_authorize_multiple_upgrades
+[ PASS    ] 0x2::ecdsa_k1_tests::test_ecrecover_pubkey_fail_to_recover
+[ PASS    ] 0x2::ecdsa_k1_tests::test_ecrecover_pubkey_invalid_sig
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_cast_u64__baseline
+[ PASS    ] 0x2::ecdsa_k1_tests::test_secp256k1_invalid
+[ PASS    ] 0x2::dynamic_field_tests::borrow_mut_wrong_type
+[ PASS    ] 0x2::address_tests::to_bytes_ok
+[ PASS    ] 0x2::ecdsa_k1_tests::test_secp256k1_verify_fails_with_recoverable_sig
+[ PASS    ] 0x2::ecdsa_k1_tests::test_secp256k1_verify_success_with_nonrecoverable_sig
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_cast_u8
+[ PASS    ] 0x2::ecdsa_r1_tests::test_ecrecover_pubkey
+[ PASS    ] 0x2::ecdsa_r1_tests::test_ecrecover_pubkey_invalid_sig
+[ PASS    ] 0x2::ecdsa_r1_tests::test_secp256r1_invalid_public_key_length
+[ PASS    ] 0x2::ecdsa_r1_tests::test_secp256r1_verify_fails_with_recoverable_sig
+[ PASS    ] 0x2::linked_table_tests::pop_back_empty
+[ PASS    ] 0x2::package_tests::test_failure_to_authorize_overly_permissive_upgrade
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_cast_u8__baseline
+[ PASS    ] 0x2::ecdsa_r1_tests::test_secp256r1_verify_success_with_nonrecoverable_sig
+[ PASS    ] 0x2::ecvrf_tests::test_ecvrf_invalid
+[ PASS    ] 0x2::ecvrf_tests::test_ecvrf_verify
+[ PASS    ] 0x2::ecvrf_tests::test_invalid_length
+[ PASS    ] 0x2::dynamic_field_tests::borrow_wrong_type
+[ PASS    ] 0x2::ecvrf_tests::test_invalid_proof
+[ PASS    ] 0x2::ecvrf_tests::test_invalid_public_key
+[ PASS    ] 0x2::ed25519_tests::test_ed25519_invalid_pubkey
+[ PASS    ] 0x2::groth16_tests::test_verify_groth_16_proof_bn254
+[ PASS    ] 0x2::hash_tests::test_blake2b256_hash
+[ PASS    ] 0x2::ed25519_tests::test_ed25519_valid_sig
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_copy_loc
+[ PASS    ] 0x2::hash_tests::test_keccak256_hash
+[ PASS    ] 0x2::sui_system_tests::test_active_validator_update_metadata
+[ PASS    ] 0x2::hmac_tests::test_hmac_sha3_256
+[ PASS    ] 0x2::hex::test_hex_decode__hex_literal
+[ PASS    ] 0x2::hex::test_hex_decode__invalid_length
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_copy_loc__baseline
+[ PASS    ] 0x2::package_tests::test_failure_to_commit_upgrade_to_wrong_cap
+[ PASS    ] 0x2::linked_table_tests::pop_front_empty
+[ PASS    ] 0x2::hex::test_hex_decode__invalid_string_literal
+[ PASS    ] 0x2::id_tests::test_get_id
+[ PASS    ] 0x2::hex::test_hex_decode_string_literal
+[ PASS    ] 0x2::address_tests::to_string_ok
+[ PASS    ] 0x2::dynamic_field_tests::delete_uid_with_fields
+[ PASS    ] 0x2::hex::test_hex_decode_string_literal__long_hex
+[ PASS    ] 0x2::immutable_external_resource_tests::test_init
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_div
+[ PASS    ] 0x2::hex::test_hex_decode_string_literal__lowercase_and_uppercase
+[ PASS    ] 0x2::hex::test_hex_encode_hex_literal
+[ PASS    ] 0x2::address_tests::to_u256_ok
+[ PASS    ] 0x2::hex::test_hex_encode_string_literal
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_div__baseline
+[ PASS    ] 0x2::priority_queue::test_pq
+[ PASS    ] 0x2::package_tests::test_failure_to_widen_upgrade_policy
+[ PASS    ] 0x2::dynamic_field_tests::remove_missing
+[ PASS    ] 0x2::linked_table_tests::push_back_duplicate
+[ PASS    ] 0x2::priority_queue::test_swap_remove_edge_case
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_eq
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_eq__baseline
+[ PASS    ] 0x2::kiosk_tests::test_kiosk_has_items
+[ PASS    ] 0x2::bag_tests::add_duplicate
+[ PASS    ] 0x2::dynamic_field_tests::remove_wrong_type
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ge
+[ PASS    ] 0x2::package_tests::test_from_module
+[ PASS    ] 0x2::linked_table_tests::push_back_singleton
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ge__baseline
+[ PASS    ] 0x2::dynamic_field_tests::sanity_check_exists
+[ PASS    ] 0x2::bag_tests::add_duplicate_mismatched_type
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_gt
+[ PASS    ] 0x2::kiosk_tests::test_place_and_take
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_gt__baseline
+[ PASS    ] 0x2::linked_table_tests::push_front_duplicate
+[ PASS    ] 0x2::dynamic_field_tests::simple_all_functions
+[ PASS    ] 0x2::package_tests::test_from_package
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_field
+[ PASS    ] 0x2::bag_tests::borrow_missing
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_field__baseline
+[ PASS    ] 0x2::dynamic_object_field_tests::add_duplicate
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_loc
+[ PASS    ] 0x2::linked_table_tests::push_front_singleton
+[ PASS    ] 0x2::bag_tests::borrow_mut_missing
+[ PASS    ] 0x2::sui_system_tests::test_add_validator_candidate_failure_double_register
+[ PASS    ] 0x2::package_tests::test_full_upgrade_flow
+[ PASS    ] 0x2::kiosk_tests::test_purchase
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_loc__baseline
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ld_const
+[ PASS    ] 0x2::dynamic_object_field_tests::add_duplicate_mismatched_type
+[ PASS    ] 0x2::linked_table_tests::push_mixed_duplicate
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ld_const__baseline
+[ PASS    ] 0x2::bag_tests::borrow_mut_wrong_type
+[ PASS    ] 0x2::package_tests::test_restrict_upgrade_policy
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ldu128
+[ PASS    ] 0x2::dynamic_object_field_tests::borrow_missing
+[ PASS    ] 0x2::kiosk_tests::test_purchase_cap
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ldu128__baseline
+[ PASS    ] 0x2::bag_tests::borrow_wrong_type
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ldu64
+[ PASS    ] 0x2::package_tests::test_upgrade_policy_reflected_in_ticket
+[ PASS    ] 0x2::linked_table_tests::remove_missing
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ldu64__baseline
+[ PASS    ] 0x2::dynamic_object_field_tests::borrow_mut_missing
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ldu8
+[ PASS    ] 0x2::bag_tests::destroy_non_empty
+[ PASS    ] 0x2::kiosk_tests::test_purchase_cap_already_listed_fail
+[ PASS    ] 0x2::pay_tests::test_coin_split_n
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_ldu8__baseline
+[ PASS    ] 0x2::linked_table_tests::sanity_check_contains
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_le
+[ PASS    ] 0x2::dynamic_object_field_tests::borrow_mut_wrong_type
+[ PASS    ] 0x2::bag_tests::remove_missing
+[ PASS    ] 0x2::pay_tests::test_coin_split_n_to_vec
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_le__baseline
+[ PASS    ] 0x2::rewards_distribution_tests::test_mul_rewards_withdraws_at_same_epoch
+[ PASS    ] 0x2::kiosk_tests::test_purchase_cap_issued_list_fail
+[ PASS    ] 0x2::sui_system_tests::test_add_validator_candidate_failure_duplicate_with_active
+[ PASS    ] 0x2::linked_table_tests::sanity_check_drop
+[ PASS    ] 0x2::dynamic_object_field_tests::borrow_wrong_type
+[ PASS    ] 0x2::bag_tests::remove_wrong_type
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_lt
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_lt__baseline
+[ PASS    ] 0x2::pay_tests::test_join_vec_and_transfer
+[ PASS    ] 0x2::bag_tests::sanity_check_contains
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mod
+[ PASS    ] 0x2::dynamic_object_field_tests::delete_uid_with_fields
+[ PASS    ] 0x2::linked_table_tests::sanity_check_size
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mod__baseline
+[ PASS    ] 0x2::kiosk_tests::test_purchase_cap_return
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mul
+[ PASS    ] 0x2::bag_tests::sanity_check_size
+[ PASS    ] 0x2::dynamic_object_field_tests::remove_missing
+[ PASS    ] 0x2::pay_tests::test_split_and_transfer
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mul__baseline
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_field
+[ PASS    ] 0x2::linked_table_tests::simple_all_functions
+[ PASS    ] 0x2::bag_tests::simple_all_functions
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_field__baseline
+[ PASS    ] 0x2::dynamic_object_field_tests::remove_wrong_type
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_loc
+[ PASS    ] 0x2::pay_tests::test_split_and_transfer_fail
+[ PASS    ] 0x2::balance_tests::test_balance
+[ PASS    ] 0x2::kiosk_tests::test_purchase_wrong_amount
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_loc__baseline
+[ PASS    ] 0x2::dynamic_object_field_tests::sanity_check_exists
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_100x2000
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_2000x100
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_neq
+[ PASS    ] 0x2::linked_table_tests::test_all_orderings
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_2000x200
+[ PASS    ] 0x2::bcs::test_bcs
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_neq__baseline
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_2000x300
+[ PASS    ] 0x2::dynamic_object_field_tests::sanity_check_exists_with_type
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_200x1000
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_not
+[ PASS    ] 0x2::pay_tests::test_split_vec
+[ PASS    ] 0x2::sui_system_tests::test_add_validator_candidate_failure_invalid_metadata
+[ PASS    ] 0x2::bcs::test_bool_fail
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_not__baseline
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_200x2000
+[ PASS    ] 0x2::bcs::test_option
+[ PASS    ] 0x2::dynamic_object_field_tests::simple_all_functions
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_or
+[ PASS    ] 0x2::object_bag_tests::add_duplicate
+[ PASS    ] 0x2::bcs::test_uleb_len_fail
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_300x2000
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_pk_invalid_public_key_length
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_or__baseline
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_pk_invalid_signature_key_length
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_pk_valid_and_invalid_sig
+[ PASS    ] 0x2::dynamic_object_field_tests::transfer_object
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_pack
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_400x1000
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_sig_invalid_public_key_length
+[ PASS    ] 0x2::rewards_distribution_tests::test_rewards_slashing
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_sig_invalid_sig
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_pack__baseline
+[ PASS    ] 0x2::perverse_tests::do_vector_ops_600x1000
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_sig_invalid_signature_key_length
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_event_emit
+[ PASS    ] 0x2::object_bag_tests::borrow_missing
+[ PASS    ] 0x2::bls12381_tests::test_bls12381_min_sig_valid_sig
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall10
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_read_ref
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall100
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_read_ref__baseline
+[ PASS    ] 0x2::borrow::test_borrow
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_event_emit__baseline
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall1000
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_shl
+[ PASS    ] 0x2::object_bag_tests::borrow_mut_missing
+[ PASS    ] 0x2::borrow::test_borrow_fail
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_shl__baseline
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_id_address_from_bytes
+[ PASS    ] 0x2::borrow::test_object_swap
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_shr
+[ PASS    ] 0x2::object_bag_tests::destroy_non_empty
+[ PASS    ] 0x2::url_tests::test_basic_url
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_shr__baseline
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_id_address_from_bytes__baseline
+[ PASS    ] 0x2::sui_system_tests::test_report_non_validator_failure
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_sub
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_id_borrow_uid
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_sub__baseline
+[ PASS    ] 0x2::object_bag_tests::remove_missing
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_id_borrow_uid__baseline
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_unpack
+[ PASS    ] 0x2::math_tests::test_imperfect_sqrt
+[ PASS    ] 0x2::math_tests::test_max
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall10000
+[ PASS    ] 0x2::math_tests::test_min
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall200
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_unpack__baseline
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall500
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_imm_borrow
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_pop
+[ PASS    ] 0x2::object_bag_tests::sanity_check_contains
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_imm_borrow__baseline
+[ PASS    ] 0x2::validator_set_tests::test_add_candidate_then_remove
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_len
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_pop__baseline
+[ PASS    ] 0x2::perverse_tests::test_calibrate_generic_funcall5000
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_len__baseline
+[ PASS    ] 0x2::object_bag_tests::sanity_check_contains_with_type
+[ PASS    ] 0x2::rewards_distribution_tests::test_rewards_slashing_with_storage_fund
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_tx_context_derive_id
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_mut_borrow
+[ PASS    ] 0x2::natives_calibration_tests::test_calibrate_tx_context_derive_id__baseline
+[ PASS    ] 0x2::object_bag_tests::sanity_check_size
+[ PASS    ] 0x2::safe_tests::test_safe_attempt_to_over_withdraw
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_mut_borrow__baseline
+[ PASS    ] 0x2::vec_map_tests::destroy_empty
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_pack
+[ PASS    ] 0x2::vec_map_tests::destroy_non_empty
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_pack__baseline
+[ PASS    ] 0x2::vec_map_tests::duplicate_key_abort
+[ PASS    ] 0x2::safe_tests::test_safe_create_and_withdraw_funds_as_delegatee
+[ PASS    ] 0x2::object_bag_tests::simple_all_functions
+[ PASS    ] 0x2::vec_map_tests::nonexistent_key_get
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_pop_back
+[ PASS    ] 0x2::vec_map_tests::nonexistent_key_get_idx_or_abort
+[ PASS    ] 0x2::sui_system_tests::test_report_self_failure
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_pop_back__baseline
+[ PASS    ] 0x2::validator_set_tests::test_add_validator_failure_below_min_stake
+[ PASS    ] 0x2::vec_map_tests::out_of_bounds_get_entry_by_idx
+[ PASS    ] 0x2::object_bag_tests::transfer_object
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_push_back
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_push_back__baseline
+[ PASS    ] 0x2::vec_map_tests::out_of_bounds_remove_entry_by_idx
+[ PASS    ] 0x2::safe_tests::test_safe_create_and_withdraw_funds_as_owner
+[ PASS    ] 0x2::vec_map_tests::remove_entry_by_idx
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_swap
+[ PASS    ] 0x2::vec_map_tests::return_list_of_keys
+[ PASS    ] 0x2::object_table_tests::add_duplicate
+[ PASS    ] 0x2::math_tests::test_perfect_sqrt
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_swap__baseline
+[ PASS    ] 0x2::vec_map_tests::smoke
+[ PASS    ] 0x2::vec_set_tests::duplicate_key_abort
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_unpack
+[ PASS    ] 0x2::math_tests::test_pow
+[ PASS    ] 0x2::vec_set_tests::nonexistent_key_remove
+[ PASS    ] 0x2::math_tests::test_pow_overflow
+[ PASS    ] 0x2::safe_tests::test_safe_withdraw_revoked
+[ PASS    ] 0x2::math_tests::test_sqrt_big_numbers
+[ PASS    ] 0x2::object_table_tests::borrow_missing
+[ PASS    ] 0x2::vec_set_tests::smoke
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_vec_unpack__baseline
+[ PASS    ] 0x2::verifier_tests::test_init
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_write_ref
+[ PASS    ] 0x2::object_table_tests::borrow_mut_missing
+[ PASS    ] 0x2::safe_tests::test_safe_withdraw_self_revoked
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_write_ref__baseline
+[ PASS    ] 0x2::verifier_tests::test_otw
+[ PASS    ] 0x2::validator_set_tests::test_add_validator_with_nonzero_min_stake
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_xor
+[ PASS    ] 0x2::bytecode_calibration_tests::test_calibrate_xor__baseline
+[ PASS    ] 0x2::object_table_tests::destroy_non_empty
+[ PASS    ] 0x2::object_tests::test_bytes_address_roundtrip
+[ PASS    ] 0x2::test_random_tests::test_next_bool
+[ PASS    ] 0x2::object_table_tests::remove_missing
+[ PASS    ] 0x2::validator_tests::test_metadata
+[ PASS    ] 0x2::object_table_tests::sanity_check_contains
+[ PASS    ] 0x2::rewards_distribution_tests::test_stake_rewards
+[ PASS    ] 0x2::test_random_tests::test_next_bytes
+[ PASS    ] 0x2::test_random_tests::test_next_u128
+[ PASS    ] 0x2::sui_system_tests::test_report_validator
+[ PASS    ] 0x2::test_random_tests::test_next_u128_in_range
+[ PASS    ] 0x2::object_table_tests::sanity_check_size
+[ PASS    ] 0x2::stake_tests::test_add_preactive_candidate_drop_out
+[ PASS    ] 0x2::test_random_tests::test_next_u16
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_consensus_addr
+[ PASS    ] 0x2::object_table_tests::simple_all_functions
+[ PASS    ] 0x2::test_random_tests::test_next_u16_in_range
+[ PASS    ] 0x2::test_random_tests::test_next_u256
+[ PASS    ] 0x2::validator_set_tests::test_low_stake_departure
+[ PASS    ] 0x2::object_table_tests::transfer_object
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_net_addr
+[ PASS    ] 0x2::test_random_tests::test_next_u256_in_range
+[ PASS    ] 0x2::test_random_tests::test_next_u32
+[ PASS    ] 0x2::table_tests::add_duplicate
+[ PASS    ] 0x2::rewards_distribution_tests::test_stake_subsidy
+[ PASS    ] 0x2::test_random_tests::test_next_u32_in_range
+[ PASS    ] 0x2::table_tests::borrow_missing
+[ PASS    ] 0x2::sui_system_tests::test_report_validator_by_stakee_revoked
+[ PASS    ] 0x2::test_random_tests::test_next_u64
+[ PASS    ] 0x2::voting_power_tests::test_medium_validator_sets
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_net_pubkey
+[ PASS    ] 0x2::table_tests::borrow_mut_missing
+[ PASS    ] 0x2::test_random_tests::test_next_u64_in_range
+[ PASS    ] 0x2::validator_set_tests::test_reference_gas_price_derivation
+[ PASS    ] 0x2::table_tests::destroy_non_empty
+[ PASS    ] 0x2::test_random_tests::test_next_u8
+[ PASS    ] 0x2::test_random_tests::test_next_u8_in_range
+[ PASS    ] 0x2::stake_tests::test_add_preactive_remove_active
+[ PASS    ] 0x2::table_tests::remove_missing
+[ PASS    ] 0x2::table_tests::sanity_check_contains
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_p2p_addr
+[ PASS    ] 0x2::test_scenarioTests::test_double_remove
+[ PASS    ] 0x2::table_tests::sanity_check_drop
+[ PASS    ] 0x2::table_tests::sanity_check_size
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_field_immutable_misuse
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_pubkey
+[ PASS    ] 0x2::sui_system_tests::test_set_reference_gas_price_by_stakee_revoked
+[ PASS    ] 0x2::table_tests::simple_all_functions
+[ PASS    ] 0x2::rewards_distribution_tests::test_stake_tiny_rewards
+[ PASS    ] 0x2::validator_set_tests::test_validator_set_flow
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_field_shared_misuse
+[ PASS    ] 0x2::stake_tests::test_add_preactive_remove_pending_failure
+[ PASS    ] 0x2::table_vec_tests::borrow_mut_out_of_bounds_aborts
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_field_still_borrowed
+[ PASS    ] 0x2::transfer_policy_test::test_default_flow
+[ PASS    ] 0x2::table_vec_tests::borrow_out_of_bounds_aborts
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_worker_addr
+[ PASS    ] 0x2::table_vec_tests::destroy_non_empty_aborts
+[ PASS    ] 0x2::voting_power_tests::test_medium_validator_sets_2
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_object_field_immutable_misuse
+[ PASS    ] 0x2::transfer_policy_test::test_rule_completed
+[ PASS    ] 0x2::table_vec_tests::pop_back_empty_aborts
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_object_field_not_retrievable
+[ PASS    ] 0x2::table_vec_tests::simple_all_functions
+[ PASS    ] 0x2::transfer_policy_test::test_rule_exists
+[ PASS    ] 0x2::validator_tests::test_metadata_invalid_worker_pubkey
+[ PASS    ] 0x2::tx_context_tests::test_id_generation
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_object_field_shared_misuse
+[ PASS    ] 0x2::sui_system_tests::test_staking_pool_mappings
+[ PASS    ] 0x2::transfer_policy_test::test_rule_ignored
+[ PASS    ] 0x2::test_scenarioTests::test_dynamic_object_field_still_borrowed
+[ PASS    ] 0x2::validator_tests::test_pending_validator_flow
+[ PASS    ] 0x2::transfer_policy_test::test_rule_swap
+[ PASS    ] 0x2::test_scenarioTests::test_empty_inventory
+[ PASS    ] 0x2::stake_tests::test_add_preactive_remove_post_active
+[ PASS    ] 0x2::test_scenarioTests::test_empty_inventory_immutable
+[ PASS    ] 0x2::validator_tests::test_validator_owner_flow
+[ PASS    ] 0x2::rewards_distribution_tests::test_validator_commission
+[ PASS    ] 0x2::test_scenarioTests::test_empty_inventory_shared
+[ PASS    ] 0x2::sui_system_tests::test_undo_report_failure
+[ PASS    ] 0x2::test_scenarioTests::test_get_last_created_object_id
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_consensus_addr
+[ PASS    ] 0x2::test_scenarioTests::test_get_owned_obj_ids
+[ PASS    ] 0x2::stake_tests::test_add_preactive_remove_preactive
+[ PASS    ] 0x2::test_scenarioTests::test_invalid_address_return
+[ PASS    ] 0x2::voting_power_tests::test_small_validator_sets
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_network_addr
+[ PASS    ] 0x2::test_scenarioTests::test_invalid_immutable_return
+[ PASS    ] 0x2::sui_system_tests::test_validator_candidate_update
+[ PASS    ] 0x2::test_scenarioTests::test_invalid_immutable_usage
+[ PASS    ] 0x2::rewards_distribution_tests::test_validator_rewards
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_network_key
+[ PASS    ] 0x2::test_scenarioTests::test_invalid_shared_return
+[ PASS    ] 0x2::stake_tests::test_add_remove_stake_flow
+[ PASS    ] 0x2::test_scenarioTests::test_invalid_shared_usage
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_p2p_address
+[ PASS    ] 0x2::test_scenarioTests::test_later_epoch
+[ PASS    ] 0x2::test_scenarioTests::test_modify_immutable
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_proof_of_possession
+[ PASS    ] 0x2::sui_system_tests::test_validator_ops_by_stakee_ok
+[ PASS    ] 0x2::test_scenarioTests::test_object_not_found
+[ PASS    ] 0x2::test_scenarioTests::test_object_not_found_immutable
+[ PASS    ] 0x2::stake_tests::test_add_stake_post_active_flow
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_worker_addr
+[ PASS    ] 0x2::test_scenarioTests::test_object_not_found_shared
+[ PASS    ] 0x2::test_scenarioTests::test_remove_during_tx
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_invalid_worker_key
+[ PASS    ] 0x2::test_scenarioTests::test_remove_then_return
+[ PASS    ] 0x2::test_scenarioTests::test_return_and_update
+[ PASS    ] 0x2::test_scenarioTests::test_take_immutable
+[ PASS    ] 0x2::stake_tests::test_earns_rewards_at_last_epoch
+[ PASS    ] 0x2::validator_tests::test_validator_update_metadata_ok
+[ PASS    ] 0x2::test_scenarioTests::test_take_immutable_by_id
+[ PASS    ] 0x2::test_scenarioTests::test_take_owned_by_id
+[ PASS    ] 0x2::test_scenarioTests::test_take_shared
+[ PASS    ] 0x2::test_scenarioTests::test_take_shared_by_id
+[ PASS    ] 0x2::stake_tests::test_join_different_epochs
+[ PASS    ] 0x2::test_scenarioTests::test_three_owners
+[ PASS    ] 0x2::test_scenarioTests::test_transfer_then_delete
+[ PASS    ] 0x2::test_scenarioTests::test_unreturned_objects
+[ PASS    ] 0x2::test_scenarioTests::test_wrap_unwrap
+[ PASS    ] 0x2::stake_tests::test_remove_stake_post_active_flow_no_rewards
+[ PASS    ] 0x2::test_scenarioTests::test_wrong_object_type
+[ PASS    ] 0x2::test_scenarioTests::test_wrong_object_type_immutable
+[ PASS    ] 0x2::test_scenarioTests::test_wrong_object_type_shared
+[ PASS    ] 0x2::stake_tests::test_remove_stake_post_active_flow_with_rewards
+[ PASS    ] 0x2::stake_tests::test_split_join_staked_sui
+[ PASS    ] 0x2::stake_tests::test_stake_during_safe_mode
+name,nanos,gas
+0x2::address_tests::from_bytes_ok,34251166,4
+0x2::address_tests::from_bytes_too_few_bytes,26608375,2
+0x2::address_tests::from_u256_ok,33845916,13
+0x2::address_tests::from_u256_tests_max_bytes,28131750,2
+0x2::address_tests::test_from_bytes_too_many_bytes,29902625,2
+0x2::address_tests::to_ascii_string_ok,112827875,114734
+0x2::address_tests::to_bytes_ok,34467083,2
+0x2::address_tests::to_string_ok,133829041,97689
+0x2::address_tests::to_u256_ok,27589458,13
+0x2::bag_tests::add_duplicate,54212208,4
+0x2::bag_tests::add_duplicate_mismatched_type,59963041,4
+0x2::bag_tests::borrow_missing,48732791,3
+0x2::bag_tests::borrow_mut_missing,46338500,3
+0x2::bag_tests::borrow_mut_wrong_type,60292958,4
+0x2::bag_tests::borrow_wrong_type,56928541,4
+0x2::bag_tests::destroy_non_empty,47634416,3
+0x2::bag_tests::remove_missing,44115333,3
+0x2::bag_tests::remove_wrong_type,42515458,4
+0x2::bag_tests::sanity_check_contains,43401166,6
+0x2::bag_tests::sanity_check_size,46437416,7
+0x2::bag_tests::simple_all_functions,44310250,13
+0x2::balance_tests::test_balance,34238458,2
+0x2::bcs::test_bcs,56473500,73460
+0x2::bcs::test_bool_fail,28766833,1
+0x2::bcs::test_option,29771333,51
+0x2::bcs::test_uleb_len_fail,28192041,4
+0x2::bls12381_tests::test_bls12381_min_pk_invalid_public_key_length,6378041,4
+0x2::bls12381_tests::test_bls12381_min_pk_invalid_signature_key_length,6258500,4
+0x2::bls12381_tests::test_bls12381_min_pk_valid_and_invalid_sig,9494333,18
+0x2::bls12381_tests::test_bls12381_min_sig_invalid_public_key_length,15645416,1
+0x2::bls12381_tests::test_bls12381_min_sig_invalid_sig,7314791,1
+0x2::bls12381_tests::test_bls12381_min_sig_invalid_signature_key_length,13757333,1
+0x2::bls12381_tests::test_bls12381_min_sig_valid_sig,7193666,1
+0x2::borrow::test_borrow,29079875,3
+0x2::borrow::test_borrow_fail,34125500,4
+0x2::borrow::test_object_swap,30287291,4
+0x2::bytecode_calibration_tests::test_calibrate_add,20057250,1
+0x2::bytecode_calibration_tests::test_calibrate_add__baseline,34632875,1
+0x2::bytecode_calibration_tests::test_calibrate_and,19915458,1
+0x2::bytecode_calibration_tests::test_calibrate_and__baseline,21910458,1
+0x2::bytecode_calibration_tests::test_calibrate_bitand,19853125,1
+0x2::bytecode_calibration_tests::test_calibrate_bitand__baseline,19751666,1
+0x2::bytecode_calibration_tests::test_calibrate_bitor,21255916,1
+0x2::bytecode_calibration_tests::test_calibrate_bitor__baseline,26046875,1
+0x2::bytecode_calibration_tests::test_calibrate_cast_u128,22766708,1
+0x2::bytecode_calibration_tests::test_calibrate_cast_u128__baseline,21322666,1
+0x2::bytecode_calibration_tests::test_calibrate_cast_u64,40707625,1
+0x2::bytecode_calibration_tests::test_calibrate_cast_u64__baseline,29190333,1
+0x2::bytecode_calibration_tests::test_calibrate_cast_u8,51836125,1
+0x2::bytecode_calibration_tests::test_calibrate_cast_u8__baseline,29714625,1
+0x2::bytecode_calibration_tests::test_calibrate_copy_loc,27478833,1
+0x2::bytecode_calibration_tests::test_calibrate_copy_loc__baseline,27965333,1
+0x2::bytecode_calibration_tests::test_calibrate_div,27311541,1
+0x2::bytecode_calibration_tests::test_calibrate_div__baseline,25028291,1
+0x2::bytecode_calibration_tests::test_calibrate_eq,19935916,1
+0x2::bytecode_calibration_tests::test_calibrate_eq__baseline,19808958,1
+0x2::bytecode_calibration_tests::test_calibrate_ge,19868208,1
+0x2::bytecode_calibration_tests::test_calibrate_ge__baseline,23900625,1
+0x2::bytecode_calibration_tests::test_calibrate_gt,25953291,1
+0x2::bytecode_calibration_tests::test_calibrate_gt__baseline,20124375,1
+0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_field,20529291,1
+0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_field__baseline,19859208,1
+0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_loc,20975333,1
+0x2::bytecode_calibration_tests::test_calibrate_imm_borrow_loc__baseline,20156708,1
+0x2::bytecode_calibration_tests::test_calibrate_ld_const,19694333,1
+0x2::bytecode_calibration_tests::test_calibrate_ld_const__baseline,26806666,1
+0x2::bytecode_calibration_tests::test_calibrate_ldu128,20176666,1
+0x2::bytecode_calibration_tests::test_calibrate_ldu128__baseline,20081083,1
+0x2::bytecode_calibration_tests::test_calibrate_ldu64,19868041,1
+0x2::bytecode_calibration_tests::test_calibrate_ldu64__baseline,19806875,1
+0x2::bytecode_calibration_tests::test_calibrate_ldu8,19949291,1
+0x2::bytecode_calibration_tests::test_calibrate_ldu8__baseline,20791333,1
+0x2::bytecode_calibration_tests::test_calibrate_le,22667291,1
+0x2::bytecode_calibration_tests::test_calibrate_le__baseline,30017083,1
+0x2::bytecode_calibration_tests::test_calibrate_lt,24977583,1
+0x2::bytecode_calibration_tests::test_calibrate_lt__baseline,20259666,1
+0x2::bytecode_calibration_tests::test_calibrate_mod,19843000,1
+0x2::bytecode_calibration_tests::test_calibrate_mod__baseline,20520875,1
+0x2::bytecode_calibration_tests::test_calibrate_mul,20164875,1
+0x2::bytecode_calibration_tests::test_calibrate_mul__baseline,20555166,1
+0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_field,19813791,1
+0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_field__baseline,19797041,1
+0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_loc,19634458,1
+0x2::bytecode_calibration_tests::test_calibrate_mut_borrow_loc__baseline,19973125,1
+0x2::bytecode_calibration_tests::test_calibrate_neq,19819500,1
+0x2::bytecode_calibration_tests::test_calibrate_neq__baseline,19733166,1
+0x2::bytecode_calibration_tests::test_calibrate_not,20452375,1
+0x2::bytecode_calibration_tests::test_calibrate_not__baseline,21942333,1
+0x2::bytecode_calibration_tests::test_calibrate_or,27093666,1
+0x2::bytecode_calibration_tests::test_calibrate_or__baseline,26655541,1
+0x2::bytecode_calibration_tests::test_calibrate_pack,19660250,1
+0x2::bytecode_calibration_tests::test_calibrate_pack__baseline,19855458,1
+0x2::bytecode_calibration_tests::test_calibrate_read_ref,27355875,1
+0x2::bytecode_calibration_tests::test_calibrate_read_ref__baseline,19777208,1
+0x2::bytecode_calibration_tests::test_calibrate_shl,23256166,1
+0x2::bytecode_calibration_tests::test_calibrate_shl__baseline,23804791,1
+0x2::bytecode_calibration_tests::test_calibrate_shr,26450291,1
+0x2::bytecode_calibration_tests::test_calibrate_shr__baseline,19829666,1
+0x2::bytecode_calibration_tests::test_calibrate_sub,27857666,1
+0x2::bytecode_calibration_tests::test_calibrate_sub__baseline,27423375,1
+0x2::bytecode_calibration_tests::test_calibrate_unpack,31715500,1
+0x2::bytecode_calibration_tests::test_calibrate_unpack__baseline,48020833,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_imm_borrow,34981333,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_imm_borrow__baseline,28871250,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_len,25289958,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_len__baseline,29054916,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_mut_borrow,34883250,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_mut_borrow__baseline,36105041,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_pack,26810208,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_pack__baseline,36061125,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_pop_back,53930000,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_pop_back__baseline,19756083,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_push_back,27157291,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_push_back__baseline,37597833,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_swap,45698375,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_swap__baseline,67902916,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_unpack,26636416,1
+0x2::bytecode_calibration_tests::test_calibrate_vec_unpack__baseline,40714541,1
+0x2::bytecode_calibration_tests::test_calibrate_write_ref,48084958,1
+0x2::bytecode_calibration_tests::test_calibrate_write_ref__baseline,22859083,1
+0x2::bytecode_calibration_tests::test_calibrate_xor,19651625,1
+0x2::bytecode_calibration_tests::test_calibrate_xor__baseline,33969666,1
+0x2::clock_tests::creating_a_clock_and_incrementing_it,36942458,10
+0x2::coin_balance_tests::test_locked_coin_invalid,60572875,15
+0x2::coin_balance_tests::test_locked_coin_valid,58328541,63
+0x2::coin_balance_tests::type_morphing,56371500,5
+0x2::coin_tests::coin_tests_metadata,53278708,330
+0x2::coin_tests::coin_tests_mint,52864333,313
+0x2::collectible_tests::init_and_mint_boars,91850041,15906
+0x2::devnet_nftTests::mint_transfer_update,48588416,318
+0x2::digest_tests::test_good_hash,3004583,1
+0x2::digest_tests::test_too_long_hash,1922250,1
+0x2::digest_tests::test_too_short_hash,2628375,1
+0x2::display_tests::capy_init,57054291,7676
+0x2::dynamic_field_tests::add_duplicate,47310750,3
+0x2::dynamic_field_tests::add_duplicate_mismatched_type,43940833,3
+0x2::dynamic_field_tests::borrow_missing,40525666,3
+0x2::dynamic_field_tests::borrow_mut_missing,49643125,3
+0x2::dynamic_field_tests::borrow_mut_wrong_type,75973666,3
+0x2::dynamic_field_tests::borrow_wrong_type,79577541,3
+0x2::dynamic_field_tests::delete_uid_with_fields,58742000,4
+0x2::dynamic_field_tests::remove_missing,45816375,3
+0x2::dynamic_field_tests::remove_wrong_type,41334916,3
+0x2::dynamic_field_tests::sanity_check_exists,41367958,5
+0x2::dynamic_field_tests::simple_all_functions,41893041,18
+0x2::dynamic_object_field_tests::add_duplicate,52215958,5
+0x2::dynamic_object_field_tests::add_duplicate_mismatched_type,51183500,5
+0x2::dynamic_object_field_tests::borrow_missing,52130166,3
+0x2::dynamic_object_field_tests::borrow_mut_missing,65292916,3
+0x2::dynamic_object_field_tests::borrow_mut_wrong_type,47140250,5
+0x2::dynamic_object_field_tests::borrow_wrong_type,46537166,5
+0x2::dynamic_object_field_tests::delete_uid_with_fields,49586416,5
+0x2::dynamic_object_field_tests::remove_missing,45846791,3
+0x2::dynamic_object_field_tests::remove_wrong_type,53599000,5
+0x2::dynamic_object_field_tests::sanity_check_exists,46440083,6
+0x2::dynamic_object_field_tests::sanity_check_exists_with_type,46501916,8
+0x2::dynamic_object_field_tests::simple_all_functions,50204958,648
+0x2::dynamic_object_field_tests::transfer_object,46746083,17
+0x2::ecdsa_k1_tests::test_ecrecover_eth_address,8752541,24
+0x2::ecdsa_k1_tests::test_ecrecover_pubkey,6100708,1
+0x2::ecdsa_k1_tests::test_ecrecover_pubkey_fail_to_recover,6273875,1
+0x2::ecdsa_k1_tests::test_ecrecover_pubkey_invalid_sig,4773333,1
+0x2::ecdsa_k1_tests::test_secp256k1_invalid,11778291,1
+0x2::ecdsa_k1_tests::test_secp256k1_verify_fails_with_recoverable_sig,7950916,1
+0x2::ecdsa_k1_tests::test_secp256k1_verify_success_with_nonrecoverable_sig,7410458,1
+0x2::ecdsa_r1_tests::test_ecrecover_pubkey,21396666,1
+0x2::ecdsa_r1_tests::test_ecrecover_pubkey_invalid_sig,2237083,1
+0x2::ecdsa_r1_tests::test_secp256r1_invalid_public_key_length,2168916,1
+0x2::ecdsa_r1_tests::test_secp256r1_verify_fails_with_recoverable_sig,2167875,1
+0x2::ecdsa_r1_tests::test_secp256r1_verify_success_with_nonrecoverable_sig,21775958,1
+0x2::ecvrf_tests::test_ecvrf_invalid,3562833,1
+0x2::ecvrf_tests::test_ecvrf_verify,3391041,1
+0x2::ecvrf_tests::test_invalid_length,5180166,1
+0x2::ecvrf_tests::test_invalid_proof,4581375,1
+0x2::ecvrf_tests::test_invalid_public_key,2603833,1
+0x2::ed25519_tests::test_ed25519_invalid_pubkey,3861791,1
+0x2::ed25519_tests::test_ed25519_valid_sig,1404916,1
+0x2::groth16_tests::test_prepare_verifying_key_bls12381,24886375,8
+0x2::groth16_tests::test_prepare_verifying_key_bn254,79583625,5
+0x2::groth16_tests::test_prepare_verifying_key_invalid_bls12381,11998208,1
+0x2::groth16_tests::test_prepare_verifying_key_invalid_bn254,9694208,1
+0x2::groth16_tests::test_too_many_public_inputs_bls12381,10271416,4
+0x2::groth16_tests::test_too_many_public_inputs_bn254,7913416,3
+0x2::groth16_tests::test_verify_groth_16_proof_bls12381,39541666,8
+0x2::groth16_tests::test_verify_groth_16_proof_bn254,222075791,5
+0x2::hash_tests::test_blake2b256_hash,903750,1
+0x2::hash_tests::test_keccak256_hash,851916,1
+0x2::hex::test_hex_decode__hex_literal,8394750,1
+0x2::hex::test_hex_decode__invalid_length,11574916,1
+0x2::hex::test_hex_decode__invalid_string_literal,9716833,1
+0x2::hex::test_hex_decode_string_literal,8208916,3
+0x2::hex::test_hex_decode_string_literal__long_hex,8421583,101
+0x2::hex::test_hex_decode_string_literal__lowercase_and_uppercase,6968958,3
+0x2::hex::test_hex_encode_hex_literal,7643958,5
+0x2::hex::test_hex_encode_string_literal,8207208,10
+0x2::hmac_tests::test_hmac_sha3_256,7355750,1
+0x2::id_tests::test_get_id,30349666,2
+0x2::immutable_external_resource_tests::test_init,15484500,4
+0x2::kiosk_tests::test_kiosk_has_items,68799041,6
+0x2::kiosk_tests::test_place_and_take,73636958,8559
+0x2::kiosk_tests::test_purchase,95435333,9819
+0x2::kiosk_tests::test_purchase_cap,83018791,9959
+0x2::kiosk_tests::test_purchase_cap_already_listed_fail,78798083,418
+0x2::kiosk_tests::test_purchase_cap_issued_list_fail,76639375,8
+0x2::kiosk_tests::test_purchase_cap_return,82133083,9313
+0x2::kiosk_tests::test_purchase_wrong_amount,90936125,8656
+0x2::linked_table_tests::borrow_missing,55719333,3
+0x2::linked_table_tests::borrow_mut_missing,61665125,3
+0x2::linked_table_tests::destroy_non_empty,57752625,4
+0x2::linked_table_tests::front_back_empty,68946958,3
+0x2::linked_table_tests::pop_back_empty,122429833,3
+0x2::linked_table_tests::pop_front_empty,74633583,3
+0x2::linked_table_tests::push_back_duplicate,58666583,5
+0x2::linked_table_tests::push_back_singleton,64120125,7
+0x2::linked_table_tests::push_front_duplicate,56925416,5
+0x2::linked_table_tests::push_front_singleton,59508333,7
+0x2::linked_table_tests::push_mixed_duplicate,64768958,5
+0x2::linked_table_tests::remove_missing,63708333,3
+0x2::linked_table_tests::sanity_check_contains,64125291,6
+0x2::linked_table_tests::sanity_check_drop,65471708,5
+0x2::linked_table_tests::sanity_check_size,63451583,7
+0x2::linked_table_tests::simple_all_functions,66588541,5279
+0x2::linked_table_tests::test_all_orderings,81484250,25584
+0x2::math_tests::test_imperfect_sqrt,384414583,1183993
+0x2::math_tests::test_max,3999666,1
+0x2::math_tests::test_min,24301541,1
+0x2::math_tests::test_perfect_sqrt,527846916,1194587
+0x2::math_tests::test_pow,14210500,2
+0x2::math_tests::test_pow_overflow,3994000,1
+0x2::math_tests::test_sqrt_big_numbers,16829958,8
+0x2::natives_calibration_tests::test_calibrate_event_emit,35269000,175
+0x2::natives_calibration_tests::test_calibrate_event_emit__baseline,43855125,1
+0x2::natives_calibration_tests::test_calibrate_id_address_from_bytes,43528500,1
+0x2::natives_calibration_tests::test_calibrate_id_address_from_bytes__baseline,43781791,1
+0x2::natives_calibration_tests::test_calibrate_id_borrow_uid,39244125,3
+0x2::natives_calibration_tests::test_calibrate_id_borrow_uid__baseline,40869625,3
+0x2::natives_calibration_tests::test_calibrate_pop,94917708,1
+0x2::natives_calibration_tests::test_calibrate_pop__baseline,45095375,1
+0x2::natives_calibration_tests::test_calibrate_tx_context_derive_id,45698666,1
+0x2::natives_calibration_tests::test_calibrate_tx_context_derive_id__baseline,38658625,1
+0x2::object_bag_tests::add_duplicate,63297041,5
+0x2::object_bag_tests::borrow_missing,69850666,3
+0x2::object_bag_tests::borrow_mut_missing,55120291,3
+0x2::object_bag_tests::destroy_non_empty,55875166,5
+0x2::object_bag_tests::remove_missing,80227958,3
+0x2::object_bag_tests::sanity_check_contains,127499791,9
+0x2::object_bag_tests::sanity_check_contains_with_type,59128041,12
+0x2::object_bag_tests::sanity_check_size,49081208,16
+0x2::object_bag_tests::simple_all_functions,118246541,99
+0x2::object_bag_tests::transfer_object,50350666,27
+0x2::object_table_tests::add_duplicate,131069458,5
+0x2::object_table_tests::borrow_missing,88872458,3
+0x2::object_table_tests::borrow_mut_missing,63152458,3
+0x2::object_table_tests::destroy_non_empty,86010916,5
+0x2::object_table_tests::remove_missing,86089208,3
+0x2::object_table_tests::sanity_check_contains,103197000,9
+0x2::object_table_tests::sanity_check_size,93837416,16
+0x2::object_table_tests::simple_all_functions,67428375,71
+0x2::object_table_tests::transfer_object,56851041,27
+0x2::object_tests::test_bytes_address_roundtrip,60439666,3
+0x2::package_tests::test_failure_to_authorize_multiple_upgrades,67472916,4
+0x2::package_tests::test_failure_to_authorize_overly_permissive_upgrade,87522000,3
+0x2::package_tests::test_failure_to_commit_upgrade_to_wrong_cap,71713250,14
+0x2::package_tests::test_failure_to_widen_upgrade_policy,58472666,3
+0x2::package_tests::test_from_module,61803208,13637
+0x2::package_tests::test_from_package,67952833,25457
+0x2::package_tests::test_full_upgrade_flow,65161875,18
+0x2::package_tests::test_restrict_upgrade_policy,57120125,4
+0x2::package_tests::test_upgrade_policy_reflected_in_ticket,57168458,1701
+0x2::pay_tests::test_coin_split_n,54529708,46
+0x2::pay_tests::test_coin_split_n_to_vec,54561833,7
+0x2::pay_tests::test_join_vec_and_transfer,63191666,19
+0x2::pay_tests::test_split_and_transfer,62184708,10
+0x2::pay_tests::test_split_and_transfer_fail,64626708,5
+0x2::pay_tests::test_split_vec,77596208,23
+0x2::perverse_tests::do_vector_ops_100x2000,24621166,440292
+0x2::perverse_tests::do_vector_ops_2000x100,9568083,415038
+0x2::perverse_tests::do_vector_ops_2000x200,10349208,826035
+0x2::perverse_tests::do_vector_ops_2000x300,11199791,1237377
+0x2::perverse_tests::do_vector_ops_200x1000,16421166,422979
+0x2::perverse_tests::do_vector_ops_200x2000,33334625,849997
+0x2::perverse_tests::do_vector_ops_300x2000,40879416,1259844
+0x2::perverse_tests::do_vector_ops_400x1000,26066083,833439
+0x2::perverse_tests::do_vector_ops_600x1000,24229416,1243080
+0x2::perverse_tests::test_calibrate_generic_funcall10,19294125,1
+0x2::perverse_tests::test_calibrate_generic_funcall100,9109625,8
+0x2::perverse_tests::test_calibrate_generic_funcall1000,28542916,9859
+0x2::perverse_tests::test_calibrate_generic_funcall10000,175198291,138973
+0x2::perverse_tests::test_calibrate_generic_funcall200,23498458,82
+0x2::perverse_tests::test_calibrate_generic_funcall500,15034208,2686
+0x2::perverse_tests::test_calibrate_generic_funcall5000,114175041,67243
+0x2::priority_queue::test_pq,11887500,4649
+0x2::priority_queue::test_swap_remove_edge_case,11305625,3929
+0x2::rewards_distribution_tests::test_mul_rewards_withdraws_at_same_epoch,419924125,195116
+0x2::rewards_distribution_tests::test_rewards_slashing,376266166,149247
+0x2::rewards_distribution_tests::test_rewards_slashing_with_storage_fund,417293750,156020
+0x2::rewards_distribution_tests::test_stake_rewards,784093208,197800
+0x2::rewards_distribution_tests::test_stake_subsidy,340936250,90156
+0x2::rewards_distribution_tests::test_stake_tiny_rewards,421814875,136596
+0x2::rewards_distribution_tests::test_validator_commission,822317291,229400
+0x2::rewards_distribution_tests::test_validator_rewards,348472333,146905
+0x2::safe_tests::test_safe_attempt_to_over_withdraw,67479208,595
+0x2::safe_tests::test_safe_create_and_withdraw_funds_as_delegatee,108645833,91
+0x2::safe_tests::test_safe_create_and_withdraw_funds_as_owner,123077208,41
+0x2::safe_tests::test_safe_withdraw_revoked,131541083,480
+0x2::safe_tests::test_safe_withdraw_self_revoked,85589625,48
+0x2::stake_tests::test_add_preactive_candidate_drop_out,460392916,90536
+0x2::stake_tests::test_add_preactive_remove_active,375908333,124257
+0x2::stake_tests::test_add_preactive_remove_pending_failure,373831250,34631
+0x2::stake_tests::test_add_preactive_remove_post_active,607132375,94271
+0x2::stake_tests::test_add_preactive_remove_preactive,307282875,63992
+0x2::stake_tests::test_add_remove_stake_flow,255615291,52399
+0x2::stake_tests::test_add_stake_post_active_flow,261899291,50196
+0x2::stake_tests::test_earns_rewards_at_last_epoch,280063458,65248
+0x2::stake_tests::test_join_different_epochs,249493291,36614
+0x2::stake_tests::test_remove_stake_post_active_flow_no_rewards,376287250,74438
+0x2::stake_tests::test_remove_stake_post_active_flow_with_rewards,383410833,80382
+0x2::stake_tests::test_split_join_staked_sui,335888958,24024
+0x2::stake_tests::test_stake_during_safe_mode,305096083,91859
+0x2::sui_system_tests::test_active_validator_update_metadata,415036708,107494
+0x2::sui_system_tests::test_add_validator_candidate_failure_double_register,281383875,49847
+0x2::sui_system_tests::test_add_validator_candidate_failure_duplicate_with_active,244735541,17489
+0x2::sui_system_tests::test_add_validator_candidate_failure_invalid_metadata,253741500,37434
+0x2::sui_system_tests::test_report_non_validator_failure,276892333,31318
+0x2::sui_system_tests::test_report_self_failure,430560958,31778
+0x2::sui_system_tests::test_report_validator,628487791,115358
+0x2::sui_system_tests::test_report_validator_by_stakee_revoked,341321541,25931
+0x2::sui_system_tests::test_set_reference_gas_price_by_stakee_revoked,313328375,25766
+0x2::sui_system_tests::test_staking_pool_mappings,628963250,95590
+0x2::sui_system_tests::test_undo_report_failure,296131583,31472
+0x2::sui_system_tests::test_validator_candidate_update,313055166,68605
+0x2::sui_system_tests::test_validator_ops_by_stakee_ok,290308125,53818
+0x2::table_tests::add_duplicate,81009208,4
+0x2::table_tests::borrow_missing,47957625,3
+0x2::table_tests::borrow_mut_missing,49521583,3
+0x2::table_tests::destroy_non_empty,47460916,3
+0x2::table_tests::remove_missing,41334958,3
+0x2::table_tests::sanity_check_contains,41733375,5
+0x2::table_tests::sanity_check_drop,68939291,4
+0x2::table_tests::sanity_check_size,63910500,5
+0x2::table_tests::simple_all_functions,77630250,13
+0x2::table_vec_tests::borrow_mut_out_of_bounds_aborts,127999125,4
+0x2::table_vec_tests::borrow_out_of_bounds_aborts,50254166,4
+0x2::table_vec_tests::destroy_non_empty_aborts,89958125,4
+0x2::table_vec_tests::pop_back_empty_aborts,89168000,3
+0x2::table_vec_tests::simple_all_functions,79685750,6
+0x2::test_random_tests::test_next_bool,35807666,3
+0x2::test_random_tests::test_next_bytes,122432375,61669
+0x2::test_random_tests::test_next_u128,20745458,4047
+0x2::test_random_tests::test_next_u128_in_range,46650041,72303
+0x2::test_random_tests::test_next_u16,37101750,4047
+0x2::test_random_tests::test_next_u16_in_range,52647125,72279
+0x2::test_random_tests::test_next_u256,20428458,3907
+0x2::test_random_tests::test_next_u256_in_range,80786875,71113
+0x2::test_random_tests::test_next_u32,22085666,4047
+0x2::test_random_tests::test_next_u32_in_range,60583500,72283
+0x2::test_random_tests::test_next_u64,27382833,4047
+0x2::test_random_tests::test_next_u64_in_range,58005875,72289
+0x2::test_random_tests::test_next_u8,21012583,3
+0x2::test_random_tests::test_next_u8_in_range,24934958,2157
+0x2::test_scenarioTests::test_double_remove,121781791,5
+0x2::test_scenarioTests::test_dynamic_field_immutable_misuse,73117750,9
+0x2::test_scenarioTests::test_dynamic_field_shared_misuse,127060000,9
+0x2::test_scenarioTests::test_dynamic_field_still_borrowed,92964291,4
+0x2::test_scenarioTests::test_dynamic_object_field_immutable_misuse,152930458,10
+0x2::test_scenarioTests::test_dynamic_object_field_not_retrievable,93114666,14
+0x2::test_scenarioTests::test_dynamic_object_field_shared_misuse,142764125,10
+0x2::test_scenarioTests::test_dynamic_object_field_still_borrowed,74290041,5
+0x2::test_scenarioTests::test_empty_inventory,82682541,2
+0x2::test_scenarioTests::test_empty_inventory_immutable,76462166,2
+0x2::test_scenarioTests::test_empty_inventory_shared,67506166,2
+0x2::test_scenarioTests::test_get_last_created_object_id,77112125,3
+0x2::test_scenarioTests::test_get_owned_obj_ids,61721791,7
+0x2::test_scenarioTests::test_invalid_address_return,57516166,3
+0x2::test_scenarioTests::test_invalid_immutable_return,57226375,2
+0x2::test_scenarioTests::test_invalid_immutable_usage,66860458,7
+0x2::test_scenarioTests::test_invalid_shared_return,54791958,2
+0x2::test_scenarioTests::test_invalid_shared_usage,57085500,7
+0x2::test_scenarioTests::test_later_epoch,61156583,25
+0x2::test_scenarioTests::test_modify_immutable,68081083,16
+0x2::test_scenarioTests::test_object_not_found,53365083,3
+0x2::test_scenarioTests::test_object_not_found_immutable,55868333,2
+0x2::test_scenarioTests::test_object_not_found_shared,54758208,2
+0x2::test_scenarioTests::test_remove_during_tx,53581791,3
+0x2::test_scenarioTests::test_remove_then_return,54233208,10
+0x2::test_scenarioTests::test_return_and_update,55984500,13
+0x2::test_scenarioTests::test_take_immutable,55718458,6
+0x2::test_scenarioTests::test_take_immutable_by_id,54427250,8
+0x2::test_scenarioTests::test_take_owned_by_id,54684583,14
+0x2::test_scenarioTests::test_take_shared,54664333,6
+0x2::test_scenarioTests::test_take_shared_by_id,67717625,8
+0x2::test_scenarioTests::test_three_owners,82354750,71
+0x2::test_scenarioTests::test_transfer_then_delete,76241875,10
+0x2::test_scenarioTests::test_unreturned_objects,79478166,52
+0x2::test_scenarioTests::test_wrap_unwrap,88228250,10
+0x2::test_scenarioTests::test_wrong_object_type,93917000,3
+0x2::test_scenarioTests::test_wrong_object_type_immutable,90668333,3
+0x2::test_scenarioTests::test_wrong_object_type_shared,120505875,3
+0x2::transfer_policy_test::test_default_flow,120064333,7742
+0x2::transfer_policy_test::test_rule_completed,161632250,8835
+0x2::transfer_policy_test::test_rule_exists,118293083,7620
+0x2::transfer_policy_test::test_rule_ignored,132559958,7756
+0x2::transfer_policy_test::test_rule_swap,87312416,8083
+0x2::tx_context_tests::test_id_generation,58736041,2
+0x2::url_tests::test_basic_url,15885791,2
+0x2::validator_set_tests::test_add_candidate_then_remove,226754041,10224
+0x2::validator_set_tests::test_add_validator_failure_below_min_stake,266151041,10115
+0x2::validator_set_tests::test_add_validator_with_nonzero_min_stake,322950916,11436
+0x2::validator_set_tests::test_low_stake_departure,450707416,129541
+0x2::validator_set_tests::test_reference_gas_price_derivation,241890791,99004
+0x2::validator_set_tests::test_validator_set_flow,350568416,62807
+0x2::validator_tests::test_metadata,216782291,2099
+0x2::validator_tests::test_metadata_invalid_consensus_addr,172960208,1150
+0x2::validator_tests::test_metadata_invalid_net_addr,124863583,1150
+0x2::validator_tests::test_metadata_invalid_net_pubkey,140544916,1868
+0x2::validator_tests::test_metadata_invalid_p2p_addr,149431708,1150
+0x2::validator_tests::test_metadata_invalid_pubkey,137660041,1802
+0x2::validator_tests::test_metadata_invalid_worker_addr,284541375,1147
+0x2::validator_tests::test_metadata_invalid_worker_pubkey,262631250,1868
+0x2::validator_tests::test_pending_validator_flow,194508541,10573
+0x2::validator_tests::test_validator_owner_flow,120189458,5335
+0x2::validator_tests::test_validator_update_metadata_invalid_consensus_addr,148301666,4843
+0x2::validator_tests::test_validator_update_metadata_invalid_network_addr,126170500,4843
+0x2::validator_tests::test_validator_update_metadata_invalid_network_key,121697625,4602
+0x2::validator_tests::test_validator_update_metadata_invalid_p2p_address,123202000,4843
+0x2::validator_tests::test_validator_update_metadata_invalid_proof_of_possession,128157083,4874
+0x2::validator_tests::test_validator_update_metadata_invalid_worker_addr,115486166,4843
+0x2::validator_tests::test_validator_update_metadata_invalid_worker_key,117861833,4602
+0x2::validator_tests::test_validator_update_metadata_ok,144923041,23031
+0x2::vec_map_tests::destroy_empty,27531708,1
+0x2::vec_map_tests::destroy_non_empty,27381166,1
+0x2::vec_map_tests::duplicate_key_abort,32338041,1
+0x2::vec_map_tests::nonexistent_key_get,35411583,1
+0x2::vec_map_tests::nonexistent_key_get_idx_or_abort,16845958,1
+0x2::vec_map_tests::out_of_bounds_get_entry_by_idx,28851916,1
+0x2::vec_map_tests::out_of_bounds_remove_entry_by_idx,42498666,1
+0x2::vec_map_tests::remove_entry_by_idx,36765500,3
+0x2::vec_map_tests::return_list_of_keys,47181625,2
+0x2::vec_map_tests::smoke,32819166,13684
+0x2::vec_set_tests::duplicate_key_abort,21853791,1
+0x2::vec_set_tests::nonexistent_key_remove,11854583,1
+0x2::vec_set_tests::smoke,27761791,4606
+0x2::verifier_tests::test_init,33058875,2
+0x2::verifier_tests::test_otw,55446958,1
+0x2::voting_power_tests::test_medium_validator_sets,639256416,421917
+0x2::voting_power_tests::test_medium_validator_sets_2,644430916,398342
+0x2::voting_power_tests::test_small_validator_sets,768414125,643548
+Test result: OK. Total tests: 447; passed: 447; failed: 0

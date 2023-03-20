@@ -8778,6 +8778,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "serde 1.0.152",
+ "serde_json",
  "workspace-hack",
 ]
 
