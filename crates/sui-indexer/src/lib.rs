@@ -45,6 +45,15 @@ pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 // TODO: placeholder, read from env or config file.
 pub const FAKE_PKG_VERSION: &str = "0.0.0";
+pub const MIGRATED_METHODS: [&str; 7] = [
+    "get_checkpoint",
+    "get_latest_checkpoint_sequence_number",
+    "get_object_with_options",
+    "get_total_transaction_number",
+    "get_transaction",
+    "multi_get_transactions_with_options",
+    "query_transactions",
+];
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -81,6 +90,12 @@ impl IndexerConfig {
             url.host_str().unwrap_or_default(),
             url.port().unwrap_or_default()
         )
+    }
+
+    /// returns all endpoints for which we have implemented on the indexer
+    /// NOTE: we only use this for integration testing
+    pub fn all_migrated_methods() -> Vec<String> {
+        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
     }
 }
 

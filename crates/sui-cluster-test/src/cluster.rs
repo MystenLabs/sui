@@ -205,6 +205,7 @@ impl Cluster for LocalNewCluster {
                 rpc_client_url: fullnode_url.clone(),
                 rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
                 rpc_server_port: indexer_address.as_ref().unwrap().port(),
+                migrated_methods: IndexerConfig::all_migrated_methods(),
                 ..Default::default()
             };
             start_test_indexer(config, /* reset_db */ true)
