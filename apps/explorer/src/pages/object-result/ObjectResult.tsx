@@ -38,7 +38,7 @@ export function ObjectResult() {
     }
 
     // TODO: Handle status better NotExists, Deleted, Other
-    if (!data || data.status !== 'Exists') {
+    if (data?.status !== 'Exists') {
         return <Fail objID={objID} />;
     }
 
