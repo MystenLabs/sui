@@ -34,10 +34,17 @@ module test::m1 {
 //# programmable --sender A --inputs object(109) 10001 @B
 //> 0: SplitCoins(Input(0), [Input(1)]);
 
+// split off more than it's available using vector of amounts
+//# programmable --sender A --inputs object(109) 333 333 335
+//> 0: SplitCoins(Input(0), [Input(1), Input(2), Input(3)]);
 
-// use incorrect arg type for split
+// use incorrect amount type for split
 //# programmable --sender A --inputs object(109) @C
 //> 0: SplitCoins(Input(0), [Input(1)]);
+
+// use incorrect amount type for split with the first one being correct
+//# programmable --sender A --inputs object(109) 100 @C
+//> 0: SplitCoins(Input(0), [Input(1), Input(2)]);
 
 // use incorrect arg type for split coming from a Move function
 //# programmable --sender A --inputs object(109)

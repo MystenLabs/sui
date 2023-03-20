@@ -29,51 +29,51 @@ module test::m1 {
 // let's get ourselves a coin worth 1000
 //# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(100) 1000 @A --sender A
 
-//# view-object 109
+//# view-object 108
 
 // split 100 off the freshly created coin
-//# programmable --sender A --inputs object(109) 100 @B
+//# programmable --sender A --inputs object(108) 100 @B
 //> 0: SplitCoins(Input(0), [Input(1)]);
 //> TransferObjects([NestedResult(0,0)], Input(2));
 
-//# view-object 109
+//# view-object 108
 
-//# view-object 111
+//# view-object 110
 
 
 // split 100 off the freshly created coin twice
-//# programmable --sender A --inputs object(109) 100 @B
+//# programmable --sender A --inputs object(108) 100 @B
 //> 0: SplitCoins(Input(0), [Input(1), Input(1)]);
 //> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2));
 
-//# view-object 109
+//# view-object 108
+
+//# view-object 112
 
 //# view-object 113
 
-//# view-object 114
-
 // split 100 off the freshly created coin twice taking one input from Move call
-//# programmable --sender A --inputs object(109) 100 @B
+//# programmable --sender A --inputs object(108) 100 @B
 //> 0: test::m1::ret_one_amount();
 //> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
 //> TransferObjects([NestedResult(1,0), NestedResult(1,1)], Input(2));
 
-//# view-object 109
+//# view-object 108
+
+//# view-object 115
 
 //# view-object 116
 
-//# view-object 117
-
 // split 100 off the freshly created coin twice taking one input from Move call and transfer them
 // using another Move call
-//# programmable --sender A --inputs object(109) 100 @B
+//# programmable --sender A --inputs object(108) 100 @B
 //> 0: test::m1::ret_one_amount();
 //> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
 //> 2: MakeMoveVec<sui::coin::Coin<sui::sui::SUI>>([NestedResult(1,0), NestedResult(1,1)]);
 //> test::m1::transfer(Result(2), Input(2));
 
-//# view-object 109
+//# view-object 108
+
+//# view-object 118
 
 //# view-object 119
-
-//# view-object 120

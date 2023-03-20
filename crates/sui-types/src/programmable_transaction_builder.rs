@@ -302,14 +302,10 @@ impl ProgrammableTransactionBuilder {
 
         // collect recipients in the case where they are non-unique in order
         // to minimize the number of transfers that must be performed
-        let mut recipient_map = IndexMap::new();
+        let mut recipient_map: IndexMap<SuiAddress, Vec<usize>> = IndexMap::new();
         let mut amt_args = vec![];
-        for (recipient, amount) in recipients.into_iter().zip(amounts) {
-            let cur = amt_args.len();
-            recipient_map
-                .entry(recipient)
-                .or_insert_with(Vec::new)
-                .push(cur);
+        for (i, (recipient, amount)) in recipients.into_iter().zip(amounts).enumerate() {
+            recipient_map.entry(recipient).or_default().push(i);
             amt_args.push(self.pure(amount)?);
         }
         let Argument::Result(split_primary) = self.command(Command::SplitCoins(coin, amt_args))
