@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::Mutex;
+use std::cmp::Ordering;
 use std::sync::Arc;
 use tokio::sync::futures::Notified;
 use tokio::sync::Notify;
@@ -21,6 +22,26 @@ use tokio::sync::Notify;
 #[derive(Debug)]
 pub struct NotifyOnce {
     notify: Mutex<Option<Arc<Notify>>>,
+}
+
+impl PartialEq for NotifyOnce {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for NotifyOnce {}
+
+impl PartialOrd for NotifyOnce {
+    fn partial_cmp(&self, _other: &Self) -> Option<Ordering> {
+        Some(Ordering::Equal)
+    }
+}
+
+impl Ord for NotifyOnce {
+    fn cmp(&self, _other: &Self) -> Ordering {
+        Ordering::Equal
+    }
 }
 
 impl NotifyOnce {

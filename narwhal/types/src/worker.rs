@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
-use crate::{Batch, BatchDigest};
+use crate::{Batch, BatchDigest, Round};
 
-use config::WorkerId;
 use crypto::NetworkPublicKey;
 use mysten_common::notify_once::NotifyOnce;
 use serde::{Deserialize, Serialize};
@@ -21,10 +20,14 @@ mod batch_serde;
 #[derive(Debug)]
 pub struct WorkerFetchBatchMessage {
     pub digest: BatchDigest,
-    pub worker_id: WorkerId,
     // workers who should have the batch available for fetching.
-    pub fetch_candidates: Vec<NetworkPublicKey>,
+    pub fetch_candidates: HashSet<NetworkPublicKey>,
+    // if true batch contents need to be validated else just the digest.
     pub validate: bool,
+    // if true an immediate request for the batch should be sent.
+    pub fetch_now: bool,
+    // Maximum age of the batch.
+    pub max_age: Round,
     pub notify_sender: Sender<Arc<NotifyOnce>>,
 }
 
