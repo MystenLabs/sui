@@ -800,7 +800,9 @@ pub struct SendCertificateRequest {
 
 /// Response from peers after receiving a certificate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SendCertificateResponse {}
+pub struct SendCertificateResponse {
+    pub accepted: bool,
+}
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
