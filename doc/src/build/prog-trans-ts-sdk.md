@@ -224,7 +224,7 @@ const tx = new Transaction();
 
 const kindBytes = await tx.build({ provider, onlyTransactionKind: true });
 
-// Construct a sponsored transaciton from the kind bytes:
+// Construct a sponsored transaction from the kind bytes:
 const sponsoredTx = Transaction.fromKind(kindBytes);
 
 // You can now set the sponsored transaction data that is required:
