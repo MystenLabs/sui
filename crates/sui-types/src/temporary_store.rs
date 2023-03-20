@@ -8,7 +8,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::resolver::{LinkageResolver, ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -879,6 +879,10 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
             self.store.get_module_by_id(module_id)
         }
     }
+}
+
+impl<S> LinkageResolver for TemporaryStore<S> {
+    type Error = SuiError;
 }
 
 /// Create an empty `TemporaryStore` with no backing storage for module resolution.

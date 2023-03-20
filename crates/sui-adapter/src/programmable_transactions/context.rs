@@ -12,7 +12,7 @@ use move_binary_format::{
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use move_vm_runtime::{move_vm::MoveVM, session::Session};
+use move_vm_runtime::session::Session;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -30,6 +30,7 @@ use sui_types::{
 use crate::{
     adapter::{missing_unwrapped_msg, new_session},
     execution_mode::ExecutionMode,
+    move_vm::MoveVM,
 };
 
 use super::types::*;
@@ -405,7 +406,7 @@ where
 
     /// Determine the object changes and collect all user events
     pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
-        use sui_types::error::convert_vm_error;
+        use crate::programmable_transactions::errors::convert_vm_error;
         let Self {
             protocol_config,
             vm,
@@ -621,13 +622,6 @@ where
             };
             object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
         }
-        let (change_set, move_events) = tmp_session
-            .finish()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
-        // the session was just used for ability and layout metadata fetching, no changes should
-        // exist. Plus, Sui Move does not use these changes or events
-        assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-        assert_invariant!(move_events.is_empty(), "Events must be empty");
 
         Ok(ExecutionResults {
             object_changes,
@@ -637,7 +631,7 @@ where
 
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-        sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+        crate::programmable_transactions::errors::convert_vm_error(error, self.vm, self.state_view)
     }
 
     /// Special case errors for type arguments to Move functions

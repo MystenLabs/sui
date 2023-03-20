@@ -20,11 +20,14 @@ use move_binary_format::{
         StructDefinition, StructFieldInformation,
     },
 };
-use move_bytecode_verifier::absint::{
-    AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions,
+use move_bytecode_verifier::{
+    meter::{DummyMeter, Meter},
+    absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use std::collections::BTreeMap;
+use move_binary_format::errors::PartialVMResult;
+use move_core_types::vm_status::StatusCode;
 use sui_types::{
     clock::CLOCK_MODULE_NAME, error::ExecutionError, id::OBJECT_MODULE_NAME,
     messages::ExecutionFailureStatus, sui_system_state::SUI_SYSTEM_MODULE_NAME,
@@ -102,20 +105,8 @@ fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
             continue;
         }
         verifier
-            .analyze_function(initial_state, &func_view)
-            .map_err(|err| {
-                if let Some(message) = err.source().as_ref() {
-                    let function_name = binary_view
-                        .identifier_at(binary_view.function_handle_at(func_def.function).name);
-                    let module_name = module.self_id();
-                    verification_failure(format!(
-                        "{} Found in {module_name}::{function_name}",
-                        message
-                    ))
-                } else {
-                    err
-                }
-            })?;
+            .analyze_function(initial_state, &func_view, &mut DummyMeter)
+            .map_err(|_| ExecutionError::invariant_violation("whatever"))?;
     }
 
     Ok(())
@@ -145,7 +136,7 @@ impl AbstractState {
 
 impl AbstractDomain for AbstractState {
     /// attempts to join state to self and returns the result
-    fn join(&mut self, state: &AbstractState) -> JoinResult {
+    fn join(&mut self, state: &AbstractState, _meter: &mut impl Meter) -> PartialVMResult<JoinResult> {
         let mut changed = false;
         for (local, value) in &state.locals {
             let old_value = *self.locals.get(local).unwrap_or(&AbstractValue::Other);
@@ -153,9 +144,9 @@ impl AbstractDomain for AbstractState {
             self.locals.insert(*local, value.join(&old_value));
         }
         if changed {
-            JoinResult::Changed
+            Ok(JoinResult::Changed)
         } else {
-            JoinResult::Unchanged
+            Ok(JoinResult::Unchanged)
         }
     }
 }
@@ -213,8 +204,10 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-    ) -> Result<(), ExecutionError> {
-        execute_inner(self, state, bytecode, index)?;
+        _meter: &mut impl Meter,
+    ) -> PartialVMResult<()> {
+        execute_inner(self, state, bytecode, index)
+            .map_err(|_| PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION))?;
         // invariant: the stack should be empty at the end of the block
         // If it is not, something is wrong with the implementation, so throw an invariant
         // violation
@@ -223,9 +216,10 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
                 false,
                 "Invalid stack transitions. Non-zero stack size at the end of the block",
             );
-            return Err(ExecutionError::from_kind(
-                ExecutionFailureStatus::InvariantViolation,
-            ));
+            return Err(PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION))
+            // return Err(ExecutionError::from_kind(
+            //     ExecutionFailureStatus::InvariantViolation,
+            // ));
         }
         Ok(())
     }

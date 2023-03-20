@@ -9,6 +9,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
+use move_core_types::resolver::LinkageResolver;
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
@@ -23,6 +24,7 @@ use sui_types::{
 pub trait StorageView<E: std::fmt::Debug>:
     ResourceResolver<Error = E>
     + ModuleResolver<Error = E>
+    + LinkageResolver<Error = E>
     + BackingPackageStore
     + Storage
     + ParentSync
@@ -33,6 +35,7 @@ impl<
         E: std::fmt::Debug,
         T: ResourceResolver<Error = E>
             + ModuleResolver<Error = E>
+            + LinkageResolver<Error = E>
             + BackingPackageStore
             + Storage
             + ParentSync

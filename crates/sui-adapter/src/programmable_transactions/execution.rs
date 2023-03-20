@@ -19,10 +19,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     u256::U256,
 };
-use move_vm_runtime::{
-    move_vm::MoveVM,
-    session::{LoadedFunctionInstantiation, SerializedReturnValues},
-};
+use move_vm_runtime::session::{LoadedFunctionInstantiation, SerializedReturnValues};
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
 use serde::{de::DeserializeSeed, Deserialize};
 use sui_protocol_config::ProtocolConfig;
@@ -57,6 +54,7 @@ use sui_verifier::{
 use crate::{
     adapter::{generate_package_id, substitute_package_id},
     execution_mode::ExecutionMode,
+    move_vm::MoveVM,
 };
 
 use super::{context::*, types::*};
@@ -565,7 +563,7 @@ fn check_compatibility<'a>(
     let check_struct_and_pub_function_linking = true;
     let check_struct_layout = true;
     let check_friend_linking = false;
-    let compatiblity_checker = Compatibility::new(
+    let compatibility_checker = Compatibility::new(
         check_struct_and_pub_function_linking,
         check_struct_layout,
         check_friend_linking,
@@ -605,7 +603,7 @@ fn check_compatibility<'a>(
             ));
         };
 
-        if let Err(e) = compatiblity_checker.check(&cur_module, &new_module) {
+        if let Err(e) = compatibility_checker.check(&cur_module, &new_module) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
@@ -823,7 +821,7 @@ struct LoadedFunctionInfo {
     signature: LoadedFunctionInstantiation,
     /// Object or type information for the return values
     return_value_kinds: Vec<ValueKind>,
-    /// Definitio index of the function
+    /// Definition index of the function
     index: FunctionDefinitionIndex,
     /// The length of the function used for setting error information, or 0 if native
     last_instr: CodeOffset,

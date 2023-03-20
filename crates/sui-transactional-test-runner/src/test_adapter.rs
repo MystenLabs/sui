@@ -25,7 +25,7 @@ use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
-use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
+use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::Write;
@@ -34,8 +34,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use sui_adapter::execution_engine;
-use sui_adapter::{adapter::new_move_vm, execution_mode};
+use sui_adapter::{adapter::new_move_vm, execution_engine, execution_mode, move_vm::MoveVM};
 use sui_core::transaction_input_checker::check_objects;
 use sui_framework::{
     make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,

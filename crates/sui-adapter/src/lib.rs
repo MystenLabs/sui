@@ -21,4 +21,5 @@ macro_rules! assert_invariant {
 pub mod adapter;
 pub mod execution_engine;
 pub mod execution_mode;
+pub mod move_vm;
 pub mod programmable_transactions;
