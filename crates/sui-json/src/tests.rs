@@ -848,7 +848,7 @@ fn test_sui_call_arg_option_type() {
         }],
     });
 
-    let v = SuiJsonValue::from_bcs_bytes(Some(option_layout.clone()).as_ref(), &arg1).unwrap();
+    let v = SuiJsonValue::from_bcs_bytes(Some(option_layout).as_ref(), &arg1).unwrap();
 
     let bytes = v
         .to_bcs_bytes(&MoveTypeLayout::Vector(Box::new(string_layout)))
