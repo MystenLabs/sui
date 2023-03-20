@@ -497,7 +497,7 @@ impl Orchestrator {
 
         // Run all benchmarks.
         let mut i = 1;
-        let mut latest_comittee_size = 0;
+        let mut latest_committee_size = 0;
         while let Some(parameters) = generator.next() {
             display::header(format!("Starting benchmark {i}"));
             display::config(
@@ -511,9 +511,9 @@ impl Orchestrator {
             self.cleanup(true).await?;
 
             // Configure all instances (if needed).
-            if !self.skip_testbed_configuration && latest_comittee_size != parameters.nodes {
+            if !self.skip_testbed_configuration && latest_committee_size != parameters.nodes {
                 self.configure(&parameters).await?;
-                latest_comittee_size = parameters.nodes;
+                latest_committee_size = parameters.nodes;
             }
 
             // Deploy the validators.
