@@ -440,15 +440,7 @@ pub mod pg_integration_test {
         let config = IndexerConfig {
             db_url,
             rpc_client_url: test_cluster.rpc_url().to_string(),
-            migrated_methods: vec![
-                "get_checkpoint".to_string(),
-                "get_latest_checkpoint_sequence_number".to_string(),
-                "get_object_with_options".to_string(),
-                "get_total_transaction_number".to_string(),
-                "get_transaction".to_string(),
-                "multi_get_transactions_with_options".to_string(),
-                "query_transactions".to_string(),
-            ],
+            migrated_methods: IndexerConfig::all_migrated_methods(),
             ..Default::default()
         };
 
