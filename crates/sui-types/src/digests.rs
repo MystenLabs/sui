@@ -292,6 +292,10 @@ impl CertificateDigest {
     pub fn random() -> Self {
         Self(Digest::random())
     }
+
+    pub fn to_digest(self) -> Digest {
+        self.0
+    }
 }
 
 impl fmt::Debug for CertificateDigest {

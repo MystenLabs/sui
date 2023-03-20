@@ -1643,6 +1643,13 @@ impl SenderSignedData {
     pub fn tx_signatures_mut_for_testing(&mut self) -> &mut Vec<GenericSignature> {
         &mut self.inner_mut().tx_signatures
     }
+
+    fn sender_signed_data_digest(&self) -> Self::DigestType {
+        let mut digest = DefaultHash::default();
+        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        let hash = digest.finalize();
+        Self::DigestType::new(hash.into())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
@@ -1896,9 +1903,9 @@ impl CertifiedTransaction {
         CertificateDigest::new(hash.into())
     }
 
-    pub fn verify_sender_signatures(&self) -> SuiResult {
-        self.data().verify(None)
-    }
+    // pub fn verify_sender_signatures(&self) -> SuiResult {
+    //     self.data().verify(None)
+    // }
 }
 
 pub type TxCertAndSignedEffects = (

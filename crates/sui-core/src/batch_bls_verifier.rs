@@ -24,6 +24,8 @@ use tokio::{
     time::{timeout, Duration},
 };
 use tracing::error;
+use sui_types::digests::Digest;
+use sui_types::messages::SenderSignedData;
 
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
@@ -76,7 +78,7 @@ impl CertBuffer {
 
 pub struct BatchCertificateVerifier {
     committee: Arc<Committee>,
-    cache: VerifiedCertificateCache,
+    cache: VerifiedDigestCache,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<BatchCertificateVerifierMetrics>,
@@ -90,7 +92,7 @@ impl BatchCertificateVerifier {
     ) -> Self {
         Self {
             committee,
-            cache: VerifiedCertificateCache::new(metrics.clone()),
+            cache: VerifiedDigestCache::new(metrics.clone()),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
         }
@@ -108,13 +110,13 @@ impl BatchCertificateVerifier {
     ) -> SuiResult {
         let certs: Vec<_> = certs
             .into_iter()
-            .filter(|cert| !self.cache.is_cert_verified(&cert.certificate_digest()))
+            .filter(|cert| !self.cache.is_cached(&cert.certificate_digest().to_digest()))
             .collect();
 
         // Note: this verifies user sigs
         batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints).tap_ok(
             |_| {
-                self.cache.cache_certs_verified(
+                self.cache.cache_verified_digests(
                     certs.into_iter().map(|c| c.certificate_digest()).collect(),
                 )
             },
@@ -123,13 +125,13 @@ impl BatchCertificateVerifier {
 
     /// Verifies one cert asynchronously, in a batch.
     pub async fn verify_cert(&self, cert: CertifiedTransaction) -> SuiResult<VerifiedCertificate> {
-        let cert_digest = cert.certificate_digest();
-        if self.cache.is_cert_verified(&cert_digest) {
+        let cert_digest = cert.certificate_digest().to_digest();
+        if self.cache.is_cached(&cert_digest) {
             return Ok(VerifiedCertificate::new_unchecked(cert));
         }
         self.verify_cert_skip_cache(cert)
             .await
-            .tap_ok(|_| self.cache.cache_cert_verified(cert_digest))
+            .tap_ok(|_| self.cache.cache_verified_digest(cert_digest))
     }
 
     /// exposed as a public method for the benchmarks
@@ -146,7 +148,7 @@ impl BatchCertificateVerifier {
             });
         }
 
-        cert.verify_sender_signatures()?;
+        self.verify_tx(cert.data())?;
         self.verify_cert_inner(cert).await
     }
 
@@ -219,8 +221,18 @@ impl BatchCertificateVerifier {
             .ok();
         });
     }
+
+    pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
+        let digest = signed_tx.sender_signed_data_digest().to_digest();
+        if !self.cache.is_cached(&digest) {
+            signed_tx.verify()?;
+            self.cache.cache_verified_digest(digest);
+        }
+        Ok(())
+    }
 }
 
+// TODO: update names...
 pub struct BatchCertificateVerifierMetrics {
     certificate_signatures_cache_hits: IntCounter,
     certificate_signatures_cache_evictions: IntCounter,
@@ -285,9 +297,11 @@ pub fn batch_verify_all_certificates_and_checkpoints(
     committee: &Committee,
     certs: &[CertifiedTransaction],
     checkpoints: &[SignedCheckpointSummary],
+    cache: &mut VerifiedDigestCache,
 ) -> SuiResult {
     for cert in certs {
-        cert.verify_sender_signatures()?;
+        cache.
+        cert.data().verify()?;
     }
     for ckpt in checkpoints {
         ckpt.data().verify(Some(committee.epoch()))?;
@@ -355,27 +369,27 @@ fn batch_verify_certificates_impl(
     obligation.verify_all()
 }
 
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
+// Cache up to 40000 verified digests. We will need to tune this number in the future - a decent
 // guess to start with is that it should be 10-20 times larger than peak transactions per second,
-// on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
+// on the assumption that we should see most certs and user signatures twice within about 10-20 seconds at most: Once via RPC, once via consensus.
+const VERIFIED_DIGEST_CACHE_SIZE: usize = 40000;
 
-pub struct VerifiedCertificateCache {
-    inner: RwLock<LruCache<CertificateDigest, ()>>,
+pub struct VerifiedDigestCache {
+    inner: RwLock<LruCache<Digest, ()>>,
     metrics: Arc<BatchCertificateVerifierMetrics>,
 }
 
-impl VerifiedCertificateCache {
+impl VerifiedDigestCache {
     pub fn new(metrics: Arc<BatchCertificateVerifierMetrics>) -> Self {
         Self {
             inner: RwLock::new(LruCache::new(
-                std::num::NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
+                std::num::NonZeroUsize::new(VERIFIED_DIGEST_CACHE_SIZE).unwrap(),
             )),
             metrics,
         }
     }
 
-    pub fn is_cert_verified(&self, digest: &CertificateDigest) -> bool {
+    pub fn is_cached(&self, digest: &Digest) -> bool {
         let inner = self.inner.read();
         if inner.contains(digest) {
             self.metrics.certificate_signatures_cache_hits.inc();
@@ -385,7 +399,7 @@ impl VerifiedCertificateCache {
         }
     }
 
-    pub fn cache_cert_verified(&self, digest: CertificateDigest) {
+    pub fn cache_verified_digest(&self, digest: Digest) {
         let mut inner = self.inner.write();
         if let Some(old) = inner.push(digest, ()) {
             if old.0 != digest {
@@ -394,7 +408,7 @@ impl VerifiedCertificateCache {
         }
     }
 
-    pub fn cache_certs_verified(&self, digests: Vec<CertificateDigest>) {
+    pub fn cache_verified_digests(&self, digests: Vec<Digest>) {
         let mut inner = self.inner.write();
         digests.into_iter().for_each(|d| {
             if let Some(old) = inner.push(d, ()) {
@@ -403,5 +417,18 @@ impl VerifiedCertificateCache {
                 }
             }
         });
+    }
+
+    pub fn is_verified<F>(&self, digest: Digest, verify: F) -> bool
+    where
+        F: FnOnce() -> bool,
+    {
+        if !self.is_cached(&digest) {
+            if verify().is_err() {
+                return false;
+            }
+            self.cache_verified_digest(digest);
+        }
+        true
     }
 }
