@@ -224,7 +224,7 @@ impl Worker {
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
             // Allow more concurrent streams for burst activity.
-            quic_config.max_concurrent_bidi_streams = Some(1_000);
+            quic_config.max_concurrent_bidi_streams = Some(10_000);
             // Increase send and receive buffer sizes on the worker, since the worker is
             // responsible for broadcasting and fetching payloads.
             // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB.
