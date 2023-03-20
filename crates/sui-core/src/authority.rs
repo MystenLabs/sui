@@ -421,7 +421,7 @@ impl AuthorityMetrics {
             ).unwrap(),
             consensus_handler_scores: register_int_gauge_vec_with_registry!(
                 "consensus_handler_scores",
-                "Distribution of scores from consensus",
+                "scores from consensus for each authority",
                 &["authority"],
                 registry,
             )
