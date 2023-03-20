@@ -494,6 +494,20 @@ impl GenesisCeremonyParameters {
         // 10% in basis points
         10000
     }
+
+    fn to_genesis_chain_parameters(&self) -> GenesisChainParameters {
+        GenesisChainParameters {
+            protocol_version: self.protocol_version.as_u64(),
+            system_state_version: get_sui_system_state_version(self.protocol_version),
+            governance_start_epoch: self.governance_start_epoch,
+            chain_start_timestamp_ms: self.timestamp_ms,
+            epoch_duration_ms: self.epoch_duration_ms,
+            initial_stake_subsidy_distribution_amount: self
+                .initial_stake_subsidy_distribution_amount,
+            stake_subsidy_period_length: self.stake_subsidy_period_length,
+            stake_subsidy_decrease_rate: self.stake_subsidy_decrease_rate,
+        }
+    }
 }
 
 impl Default for GenesisCeremonyParameters {
@@ -856,10 +870,31 @@ impl Builder {
     }
 }
 
-fn get_genesis_context(epoch_data: &EpochData) -> TxContext {
+// Create a Genesis Txn Context to be used when generating genesis objects by hashing all of the
+// inputs into genesis ans using that as our "Txn Digest". This is done to ensure that coin objects
+// created between chains are unique
+fn create_genesis_context(
+    epoch_data: &EpochData,
+    genesis_chain_parameters: &GenesisChainParameters,
+    genesis_validators: &[GenesisValidatorMetadata],
+    token_distribution_schedule: &TokenDistributionSchedule,
+    move_framework: Vec<Vec<u8>>,
+    sui_framework: Vec<Vec<u8>>,
+) -> TxContext {
+    let mut hasher = DefaultHash::default();
+    hasher.update(b"sui-genesis");
+    hasher.update(&bcs::to_bytes(genesis_chain_parameters).unwrap());
+    hasher.update(&bcs::to_bytes(genesis_validators).unwrap());
+    hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
+    hasher.update(&bcs::to_bytes(&move_framework).unwrap());
+    hasher.update(&bcs::to_bytes(&sui_framework).unwrap());
+
+    let hash = hasher.finalize();
+    let genesis_transaction_digest = TransactionDigest::new(hash.into());
+
     TxContext::new(
         &SuiAddress::default(),
-        &TransactionDigest::genesis(),
+        &genesis_transaction_digest,
         epoch_data,
     )
 }
@@ -874,10 +909,28 @@ fn build_unsigned_genesis_data(
         panic!("insertion of extra objects at genesis time is prohibited due to 'allow_insertion_of_extra_objects' parameter");
     }
 
-    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
-    let epoch_data = EpochData::new_genesis(parameters.timestamp_ms);
+    let genesis_chain_parameters = parameters.to_genesis_chain_parameters();
+    let genesis_validators = validators
+        .iter()
+        .cloned()
+        .map(GenesisValidatorMetadata::from)
+        .collect::<Vec<_>>();
 
-    let mut genesis_ctx = get_genesis_context(&epoch_data);
+    token_distribution_schedule.validate();
+    token_distribution_schedule.check_all_stake_operations_are_for_valid_validators(
+        genesis_validators.iter().map(|v| v.sui_address),
+    );
+
+    let epoch_data = EpochData::new_genesis(genesis_chain_parameters.chain_start_timestamp_ms);
+
+    let mut genesis_ctx = create_genesis_context(
+        &epoch_data,
+        &genesis_chain_parameters,
+        &genesis_validators,
+        token_distribution_schedule,
+        MoveStdlib::as_bytes(),
+        SuiFramework::as_bytes(),
+    );
 
     // Get Move and Sui Framework
     let modules = [
@@ -895,10 +948,12 @@ fn build_unsigned_genesis_data(
         &mut genesis_ctx,
         &modules,
         objects,
-        validators,
-        parameters,
+        &genesis_validators,
+        &genesis_chain_parameters,
         token_distribution_schedule,
     );
+
+    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, &epoch_data);
@@ -1037,12 +1092,13 @@ fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
     modules: &[(Vec<CompiledModule>, Vec<ObjectID>)],
     input_objects: &[Object],
-    validators: &[GenesisValidatorInfo],
-    parameters: &GenesisCeremonyParameters,
+    validators: &[GenesisValidatorMetadata],
+    parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
-    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+    let protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -1118,7 +1174,6 @@ fn process_package(
         })
         .collect();
 
-    debug_assert!(ctx.digest() == TransactionDigest::genesis());
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(loaded_dependencies),
@@ -1162,42 +1217,20 @@ fn process_package(
 pub fn generate_genesis_system_object(
     store: &mut InMemoryStorage,
     move_vm: &MoveVM,
-    committee: &[GenesisValidatorInfo],
+    genesis_validators: &[GenesisValidatorMetadata],
     genesis_ctx: &mut TxContext,
-    parameters: &GenesisCeremonyParameters,
+    genesis_chain_parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
-    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
-    let system_state_version = get_sui_system_state_version(parameters.protocol_version);
+    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::new(
+        genesis_chain_parameters.protocol_version,
+    ));
     let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),
         genesis_digest,
         &protocol_config,
-    );
-
-    let genesis_chain_parameters = GenesisChainParameters {
-        protocol_version: parameters.protocol_version.as_u64(),
-        system_state_version,
-        governance_start_epoch: parameters.governance_start_epoch,
-        chain_start_timestamp_ms: parameters.timestamp_ms,
-        epoch_duration_ms: parameters.epoch_duration_ms,
-        initial_stake_subsidy_distribution_amount: parameters
-            .initial_stake_subsidy_distribution_amount,
-        stake_subsidy_period_length: parameters.stake_subsidy_period_length,
-        stake_subsidy_decrease_rate: parameters.stake_subsidy_decrease_rate,
-    };
-
-    let genesis_validators = committee
-        .iter()
-        .cloned()
-        .map(GenesisValidatorMetadata::from)
-        .collect::<Vec<_>>();
-
-    token_distribution_schedule.validate();
-    token_distribution_schedule.check_all_stake_operations_are_for_valid_validators(
-        genesis_validators.iter().map(|v| v.sui_address),
     );
 
     let pt = {
@@ -1424,7 +1457,7 @@ pub struct TokenAllocation {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use crate::{utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -1466,9 +1499,6 @@ mod test {
     fn ceremony() {
         let dir = tempfile::TempDir::new().unwrap();
 
-        let genesis_config = GenesisConfig::for_local_testing();
-        let (_account_keys, objects) = genesis_config.generate_accounts(rand::rngs::OsRng).unwrap();
-
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
@@ -1490,9 +1520,12 @@ mod test {
             project_url: String::new(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
-        let builder = Builder::new()
-            .add_objects(objects)
-            .add_validator(validator, pop);
+        let mut builder = Builder::new().add_validator(validator, pop);
+
+        let genesis = builder.build_unsigned_genesis_checkpoint();
+        for object in genesis.objects() {
+            println!("ObjectID: {} Type: {:?}", object.id(), object.type_());
+        }
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
     }
